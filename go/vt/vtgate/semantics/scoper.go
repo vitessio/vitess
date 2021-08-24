@@ -16,20 +16,32 @@ limitations under the License.
 
 package semantics
 
-import "vitess.io/vitess/go/vt/sqlparser"
+import (
+	"reflect"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+)
 
 // scoper is responsible for figuring out the scoping for the query,
 // and keeps the current scope when walking the tree
 type scoper struct {
-	rScope map[*sqlparser.Select]*scope
-	wScope map[*sqlparser.Select]*scope
-	scopes []*scope
+	rScope       map[*sqlparser.Select]*scope
+	wScope       map[*sqlparser.Select]*scope
+	sqlNodeScope map[scopeKey]*scope
+	scopes       []*scope
+}
+
+type scopeKey struct {
+	orderBy bool
+	groupBy bool
+	node    sqlparser.SQLNode
 }
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope: map[*sqlparser.Select]*scope{},
-		wScope: map[*sqlparser.Select]*scope{},
+		rScope:       map[*sqlparser.Select]*scope{},
+		wScope:       map[*sqlparser.Select]*scope{},
+		sqlNodeScope: map[scopeKey]*scope{},
 	}
 }
 
@@ -44,6 +56,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
+		s.sqlNodeScope[scopeKey{node: node}] = currScope
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
@@ -53,8 +66,12 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			nScope := newScope(nil)
 			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
-
+			s.sqlNodeScope[scopeKey{node: node}] = nScope
 		}
+	case *sqlparser.Union:
+		scope := newScope(s.currentScope())
+		s.push(scope)
+		s.sqlNodeScope[scopeKey{node: node}] = scope
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
 		if !parentIsSelect {
@@ -67,18 +84,16 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		}
 
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
-	case sqlparser.OrderBy, sqlparser.GroupBy:
-		// ORDER BY and GROUP BY live in a special scope where they can access the SELECT expressions declared,
-		// but also the tables in the FROM clause
-		s.changeScopeForOrderBy(cursor)
-	case *sqlparser.Union:
-		s.push(newScope(s.currentScope()))
+	case sqlparser.OrderBy:
+		s.changeScopeForOrderBy(cursor, scopeKey{node: cursor.Parent(), orderBy: true})
+	case sqlparser.GroupBy:
+		s.changeScopeForOrderBy(cursor, scopeKey{node: cursor.Parent(), groupBy: true})
 	}
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	switch cursor.Node().(type) {
-	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+	case sqlparser.SelectStatement, sqlparser.OrderBy, sqlparser.GroupBy:
 		s.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
@@ -97,7 +112,51 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
+func (s *scoper) downPost(cursor *sqlparser.Cursor) {
+	var scope *scope
+	var found bool
+
+	switch node := cursor.Node().(type) {
+	case sqlparser.OrderBy:
+		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), orderBy: true}]
+	case sqlparser.GroupBy:
+		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), groupBy: true}]
+	default:
+		if validAsMapKey(node) {
+			scope, found = s.sqlNodeScope[scopeKey{node: node}]
+		}
+	}
+
+	if found {
+		s.push(scope)
+	}
+}
+
+func validAsMapKey(s sqlparser.SQLNode) bool {
+	return reflect.TypeOf(s).Comparable()
+}
+
+func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
+	var found bool
+
+	switch node := cursor.Node().(type) {
+	case sqlparser.OrderBy:
+		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), orderBy: true}]
+	case sqlparser.GroupBy:
+		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), groupBy: true}]
+	default:
+		if validAsMapKey(node) {
+			_, found = s.sqlNodeScope[scopeKey{node: node}]
+		}
+	}
+
+	if found {
+		s.popScope()
+	}
+	return nil
+}
+
+func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor, k scopeKey) {
 	sel, ok := cursor.Parent().(*sqlparser.Select)
 	if !ok {
 		return
@@ -107,6 +166,7 @@ func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor) {
 	incomingScope := s.currentScope()
 	nScope := newScope(incomingScope)
 	s.push(nScope)
+	s.sqlNodeScope[k] = nScope
 	wScope := s.wScope[sel]
 	nScope.tables = append(nScope.tables, wScope.tables...)
 	nScope.selectStmt = incomingScope.selectStmt

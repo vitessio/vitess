@@ -25,16 +25,20 @@ import (
 )
 
 type (
-	expandStarInfo struct {
-		proceed   bool
-		tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
-	}
 	rewriter struct {
 		err          error
 		semTable     *semantics.SemTable
 		reservedVars *sqlparser.ReservedVars
 	}
 )
+
+func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
+	r := rewriter{
+		semTable: semTable,
+	}
+	sqlparser.Rewrite(statement, r.starRewrite, nil)
+	return r.err
+}
 
 func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
@@ -47,60 +51,74 @@ func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			colNames, expStar, err := expandTableColumns(tables, starExpr)
+			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
 			if err != nil {
 				r.err = err
 				return false
 			}
-			if !expStar.proceed {
+			if !starExpanded {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
 			selExprs = append(selExprs, colNames...)
-			for tbl, cols := range expStar.tblColMap {
-				r.semTable.AddExprs(tbl, cols)
-			}
 		}
 		node.SelectExprs = selExprs
 	}
 	return true
 }
 
-func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
-	expStar := &expandStarInfo{
-		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
-	}
-
+	starExpanded := true
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
 			continue
 		}
 		unknownTbl = false
 		if !tbl.Authoritative() {
-			expStar.proceed = false
+			starExpanded = false
 			break
 		}
-		expStar.proceed = true
 		tblName, err := tbl.Name()
 		if err != nil {
-			return nil, nil, err
+			return false, nil, err
 		}
+
+		withAlias := len(tables) > 1
+		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
 		for _, col := range tbl.GetColumns() {
-			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name, tblName),
-				As:   sqlparser.NewColIdent(col.Name),
-			})
+			var colName *sqlparser.ColName
+			var alias sqlparser.ColIdent
+			if withQualifier {
+				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
+			} else {
+				colName = sqlparser.NewColName(col.Name)
+			}
+			if withAlias {
+				alias = sqlparser.NewColIdent(col.Name)
+			}
+			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 		}
-		expStar.tblColMap[tbl.GetExpr()] = colNames
 	}
 
 	if unknownTbl {
 		// This will only happen for case when starExpr has qualifier.
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
 	}
-	return colNames, expStar, nil
+	return starExpanded, colNames, nil
+}
+
+func subqueryRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) error {
+	if len(semTable.SubqueryMap) == 0 {
+		return nil
+	}
+	r := rewriter{
+		semTable:     semTable,
+		reservedVars: reservedVars,
+	}
+	sqlparser.Rewrite(statement, r.subqueryRewrite, nil)
+	return nil
 }
 
 func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
@@ -135,18 +153,4 @@ func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 		}
 	}
 	return true
-}
-
-func (r *rewriter) rewriterPre(cursor *sqlparser.Cursor) bool {
-	return r.starRewrite(cursor) && (len(r.semTable.SubqueryMap) == 0 || r.subqueryRewrite(cursor))
-}
-
-func rewrite(sel *sqlparser.Select, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) (*sqlparser.Select, error) {
-	r := &rewriter{semTable: semTable, reservedVars: reservedVars}
-
-	_ = sqlparser.Rewrite(sel, r.rewriterPre, nil)
-	if r.err != nil {
-		return nil, r.err
-	}
-	return sel, nil
 }

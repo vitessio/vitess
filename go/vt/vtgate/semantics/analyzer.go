@@ -39,6 +39,8 @@ type analyzer struct {
 	inProjection int
 
 	projErr error
+
+	hasRewritten bool
 }
 
 // newAnalyzer create the semantic analyzer
@@ -55,26 +57,55 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return a
 }
 
+type rewriteFunc = func(statement sqlparser.SelectStatement, semTable *SemTable) error
+
+// NoRewrite is a helper implementation for tests
+var NoRewrite = func(statement sqlparser.SelectStatement, semTable *SemTable) error {
+	return nil
+}
+
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite rewriteFunc) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
-	// Initial scope
+
+	// Analysis for initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
+
+	// Creation of the semantic table
+	semTable := analyzer.newSemTable(statement)
+
+	// Rewriting operation (expand star)
+	if err = rewrite(statement, semTable); err != nil {
+		return nil, err
+	}
+	analyzer.hasRewritten = true
+
+	// Analysis post rewriting
+	err = analyzer.analyze(statement)
+	if err != nil {
+		return nil, err
+	}
+
+	semTable.ProjectionErr = analyzer.projErr
+	return semTable, nil
+}
+
+func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 	return &SemTable{
-		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
-		ExprDeps:          analyzer.binder.exprDeps,
-		exprTypes:         analyzer.typer.exprTypes,
-		Tables:            analyzer.tables.Tables,
-		selectScope:       analyzer.scoper.rScope,
-		ProjectionErr:     analyzer.projErr,
+		ExprBaseTableDeps: a.binder.exprRecursiveDeps,
+		ExprDeps:          a.binder.exprDeps,
+		exprTypes:         a.typer.exprTypes,
+		Tables:            a.tables.Tables,
+		selectScope:       a.scoper.rScope,
+		ProjectionErr:     a.projErr,
 		Comments:          statement.GetComments(),
-		SubqueryMap:       analyzer.binder.subqueryMap,
-		SubqueryRef:       analyzer.binder.subqueryRef,
+		SubqueryMap:       a.binder.subqueryMap,
+		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-	}, nil
+	}
 }
 
 func (a *analyzer) setError(err error) {
@@ -98,25 +129,23 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 
-	if err := checkForInvalidConstructs(cursor); err != nil {
-		a.setError(err)
-		return true
+	if !a.hasRewritten {
+		if err := checkForInvalidConstructs(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
+
+		a.scoper.down(cursor)
+	} else { // after expand star
+		a.scoper.downPost(cursor)
+
+		if err := a.binder.down(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
 	}
 
-	a.scoper.down(cursor)
-
-	if err := a.binder.down(cursor); err != nil {
-		a.setError(err)
-		return true
-	}
-
-	_, ok := cursor.Node().(sqlparser.SelectExprs)
-	if ok && isParentSelect(cursor) {
-		// errors that happen when we are evaluating SELECT expressions are saved until we know
-		// if we can merge everything into a single route or not
-		a.inProjection++
-	}
-
+	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
@@ -128,29 +157,46 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if err := a.scoper.up(cursor); err != nil {
-		a.setError(err)
-		return false
+	if !a.hasRewritten {
+		if err := a.scoper.up(cursor); err != nil {
+			a.setError(err)
+			return false
+		}
+		if err := a.tables.up(cursor); err != nil {
+			a.setError(err)
+			return false
+		}
+	} else { // after expand star
+		if err := a.scoper.upPost(cursor); err != nil {
+			a.setError(err)
+			return false
+		}
+		if err := a.typer.up(cursor); err != nil {
+			a.setError(err)
+			return false
+		}
 	}
 
-	if err := a.tables.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
+	a.leaveProjection(cursor)
+	return a.shouldContinue()
+}
 
-	if err := a.typer.up(cursor); err != nil {
-		a.setError(err)
-		return false
-	}
-
+/*
+	errors that happen when we are evaluating SELECT expressions are saved until we know
+	if we can merge everything into a single route or not
+*/
+func (a *analyzer) enterProjection(cursor *sqlparser.Cursor) {
 	_, ok := cursor.Node().(sqlparser.SelectExprs)
 	if ok && isParentSelect(cursor) {
-		// errors that happen when we are evaluating SELECT expressions are saved until we know
-		// if we can merge everything into a single route or not
+		a.inProjection++
+	}
+}
+
+func (a *analyzer) leaveProjection(cursor *sqlparser.Cursor) {
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
 		a.inProjection--
 	}
-
-	return a.shouldContinue()
 }
 
 func isParentSelect(cursor *sqlparser.Cursor) bool {
