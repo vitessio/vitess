@@ -348,7 +348,7 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 		return hp.plan, nil
 	}
 
-	qp2, err := abstract.CreateQPFromSelect(hp.sel)
+	qp2, err := abstract.CreateQPFromSelect(hp.sel, hp.semTable)
 	if err != nil {
 		return nil, err
 	}
