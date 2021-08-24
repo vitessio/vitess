@@ -1,10 +1,3 @@
-2021-04-14T16:10:53Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/748980556
-2021-04-14T16:10:53Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/748980564
-2021-04-14T16:10:53Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/748980585
-2021-04-14T16:10:53Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/748980560
-2021-04-14T16:10:53Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/748980570
-2021-04-14T16:10:53Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/748980547
-2021-04-14T16:10:53Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/748980580
 2021-04-14T16:10:53Z,endtoend,https://github.com/vitessio/vitess/actions/runs/748980551
 2021-04-14T16:10:53Z,local_example,https://github.com/vitessio/vitess/actions/runs/748980553
 2021-04-14T16:10:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/748980557
@@ -9998,3 +9991,10 @@
 2021-08-24T15:36:04Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1163214115
 2021-08-24T15:36:04Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1163214122
 2021-08-24T15:36:04Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1163214157
+2021-08-24T16:26:13Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1163379964
+2021-08-24T16:26:13Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1163379966
+2021-08-24T16:26:13Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1163379932
+2021-08-24T16:43:24Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1163429306
+2021-08-24T16:43:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1163429309
+2021-08-24T16:43:24Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1163429369
+2021-08-24T16:46:04Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1163436692
