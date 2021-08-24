@@ -77,7 +77,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 	}
 }
 
-func (s *scoper) downTwo(cursor *sqlparser.Cursor) {
+func (s *scoper) downPost(cursor *sqlparser.Cursor) {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		s.push(s.sqlNodeScope[node])
@@ -115,7 +115,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) upTwo(cursor *sqlparser.Cursor) error {
+func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
 	switch cursor.Node().(type) {
 	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
 		s.popScope()
