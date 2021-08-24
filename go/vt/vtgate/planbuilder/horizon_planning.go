@@ -90,6 +90,24 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *pulloutSubquery:
 		// push projection to the outer query
 		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
+	case *subquery:
+		offset, _, err := pushProjection(expr, node.input, semTable, inner, reuseCol)
+		if err != nil {
+			return 0, false, err
+		}
+		node.esubquery.Cols = append(node.esubquery.Cols, offset)
+		return len(node.esubquery.Cols) - 1, true, nil
+	case *orderedAggregate:
+		colName, isColName := expr.Expr.(*sqlparser.ColName)
+		for _, aggregate := range node.eaggr.Aggregates {
+			if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
+				return aggregate.Col, false, nil
+			}
+			if isColName && colName.Name.EqualString(aggregate.Alias) {
+				return aggregate.Col, false, nil
+			}
+		}
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
@@ -245,6 +263,11 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 ) (*sqlparser.AliasedExpr, string, engine.AggregateOpcode) {
 	pushExpr := expr.Col
 	var alias string
+	if expr.Col.As.IsEmpty() {
+		alias = sqlparser.String(expr.Col.Expr)
+	} else {
+		alias = expr.Col.As.String()
+	}
 	if handleDistinct {
 		pushExpr = innerAliased
 
@@ -253,11 +276,6 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 			opcode = engine.AggregateCountDistinct
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
-		}
-		if expr.Col.As.IsEmpty() {
-			alias = sqlparser.String(expr.Col.Expr)
-		} else {
-			alias = expr.Col.As.String()
 		}
 
 		oa.eaggr.PreProcess = true

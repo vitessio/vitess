@@ -240,7 +240,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "count(1) AS k",
         "GroupBy": "(2|3)",
         "Inputs": [
           {

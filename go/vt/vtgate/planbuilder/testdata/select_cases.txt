@@ -95,7 +95,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # select limit with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10"
@@ -165,7 +186,29 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
 "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -192,7 +235,29 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
