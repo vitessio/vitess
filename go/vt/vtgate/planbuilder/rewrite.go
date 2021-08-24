@@ -84,11 +84,21 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 		if err != nil {
 			return false, nil, err
 		}
+
+		withAlias := len(tables) > 1
+		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
 		for _, col := range tbl.GetColumns() {
-			colNames = append(colNames, &sqlparser.AliasedExpr{
-				Expr: sqlparser.NewColNameWithQualifier(col.Name, tblName),
-				As:   sqlparser.NewColIdent(col.Name),
-			})
+			var colName *sqlparser.ColName
+			var alias sqlparser.ColIdent
+			if withQualifier {
+				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
+			} else {
+				colName = sqlparser.NewColName(col.Name)
+			}
+			if withAlias {
+				alias = sqlparser.NewColIdent(col.Name)
+			}
+			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
 		}
 	}
 

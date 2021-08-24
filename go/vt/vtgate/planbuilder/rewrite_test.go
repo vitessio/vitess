@@ -73,16 +73,16 @@ func TestExpandStar(t *testing.T) {
 		expErr string
 	}{{
 		sql:    "select * from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c from t1",
 	}, {
 		sql:    "select t1.* from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c from t1",
 	}, {
 		sql:    "select *, 42, t1.* from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, 42, t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c, 42, a, b, c from t1",
 	}, {
 		sql:    "select 42, t1.* from t1",
-		expSQL: "select 42, t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select 42, a, b, c from t1",
 	}, {
 		sql:    "select * from t1, t2",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
@@ -143,7 +143,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		expandedCol int
 	}{{
 		sql:      "select a, * from t1",
-		expSQL:   "select a, t1.a as a from t1",
+		expSQL:   "select a, a from t1",
 		otherTbl: -1, sameTbl: 0, expandedCol: 1,
 	}, {
 		sql:      "select t2.a, t1.a, t1.* from t1, t2",
