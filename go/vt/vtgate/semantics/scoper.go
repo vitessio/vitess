@@ -21,15 +21,17 @@ import "vitess.io/vitess/go/vt/sqlparser"
 // scoper is responsible for figuring out the scoping for the query,
 // and keeps the current scope when walking the tree
 type scoper struct {
-	rScope map[*sqlparser.Select]*scope
-	wScope map[*sqlparser.Select]*scope
-	scopes []*scope
+	rScope       map[*sqlparser.Select]*scope
+	wScope       map[*sqlparser.Select]*scope
+	sqlNodeScope map[sqlparser.SQLNode]*scope
+	scopes       []*scope
 }
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope: map[*sqlparser.Select]*scope{},
-		wScope: map[*sqlparser.Select]*scope{},
+		rScope:       map[*sqlparser.Select]*scope{},
+		wScope:       map[*sqlparser.Select]*scope{},
+		sqlNodeScope: map[sqlparser.SQLNode]*scope{},
 	}
 }
 
@@ -44,6 +46,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
+		s.sqlNodeScope[node] = currScope
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
@@ -53,8 +56,12 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			nScope := newScope(nil)
 			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
-
+			s.sqlNodeScope[node] = nScope
 		}
+	case *sqlparser.Union:
+		scope := newScope(s.currentScope())
+		s.push(scope)
+		s.sqlNodeScope[node] = scope
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
 		if !parentIsSelect {
@@ -67,18 +74,29 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		}
 
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
+	}
+}
+
+func (s *scoper) downTwo(cursor *sqlparser.Cursor) {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		s.push(s.sqlNodeScope[node])
+	case sqlparser.TableExpr:
+		if isParentSelect(cursor) {
+			s.push(s.sqlNodeScope[node])
+		}
+	case *sqlparser.Union:
+		s.push(s.sqlNodeScope[node])
 	case sqlparser.OrderBy, sqlparser.GroupBy:
 		// ORDER BY and GROUP BY live in a special scope where they can access the SELECT expressions declared,
 		// but also the tables in the FROM clause
 		s.changeScopeForOrderBy(cursor)
-	case *sqlparser.Union:
-		s.push(newScope(s.currentScope()))
 	}
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	switch cursor.Node().(type) {
-	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+	case *sqlparser.Union, *sqlparser.Select:
 		s.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
@@ -92,6 +110,18 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 					return err
 				}
 			}
+		}
+	}
+	return nil
+}
+
+func (s *scoper) upTwo(cursor *sqlparser.Cursor) error {
+	switch cursor.Node().(type) {
+	case *sqlparser.Union, *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
+		s.popScope()
+	case sqlparser.TableExpr:
+		if isParentSelect(cursor) {
+			s.popScope()
 		}
 	}
 	return nil
