@@ -299,23 +299,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from authoritative order by user_id",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative where 1 != 1",
-    "OrderBy": "(0|3) ASC",
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative order by user_id asc",
-    "ResultColumns": 3,
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
@@ -336,23 +320,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from authoritative order by col1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative where 1 != 1",
-    "OrderBy": "(1|3) ASC",
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative order by col1 asc",
-    "ResultColumns": 3,
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"

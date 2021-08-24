@@ -272,21 +272,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from authoritative",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative where 1 != 1",
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2 from authoritative",
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # select * from join of authoritative tables
 "select * from authoritative a join authoritative b on a.user_id=b.user_id"
@@ -343,21 +329,7 @@ Gen4 error: Unknown table 'a'
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select a.* from authoritative a",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2 from authoritative as a where 1 != 1",
-    "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2 from authoritative as a",
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # select * from intermixing of authoritative table with non-authoritative results in no expansion
 "select * from authoritative join user on authoritative.user_id=user.id"
