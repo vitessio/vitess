@@ -205,8 +205,20 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return Gen4NotSupportedF("HAVING")
 		}
 	case *sqlparser.Subquery:
-		if _, ok := node.Select.(*sqlparser.Select); !ok {
+		sel, ok := node.Select.(*sqlparser.Select)
+		if !ok {
 			return Gen4NotSupportedF("%T in subquery", node.Select)
+		}
+		if sel.Into != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+		}
+	case *sqlparser.DerivedTable:
+		sel, ok := node.Select.(*sqlparser.Select)
+		if !ok {
+			return nil
+		}
+		if sel.Into != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {

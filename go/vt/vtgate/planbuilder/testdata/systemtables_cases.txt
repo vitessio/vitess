@@ -624,6 +624,7 @@ Gen4 plan same as above
     "Table": "information_schema.a"
   }
 }
+Gen4 plan same as above
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
