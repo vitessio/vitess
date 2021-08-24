@@ -25,10 +25,6 @@ import (
 )
 
 type (
-	expandStarInfo struct {
-		proceed   bool
-		tblColMap map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs
-	}
 	rewriter struct {
 		err          error
 		semTable     *semantics.SemTable
@@ -55,12 +51,12 @@ func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
-			colNames, expStar, err := expandTableColumns(tables, starExpr)
+			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
 			if err != nil {
 				r.err = err
 				return false
 			}
-			if !expStar.proceed {
+			if !starExpanded {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
@@ -71,26 +67,22 @@ func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (sqlparser.SelectExprs, *expandStarInfo, error) {
+func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
 	unknownTbl := true
 	var colNames sqlparser.SelectExprs
-	expStar := &expandStarInfo{
-		tblColMap: map[*sqlparser.AliasedTableExpr]sqlparser.SelectExprs{},
-	}
-
+	starExpanded := true
 	for _, tbl := range tables {
 		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
 			continue
 		}
 		unknownTbl = false
 		if !tbl.Authoritative() {
-			expStar.proceed = false
+			starExpanded = false
 			break
 		}
-		expStar.proceed = true
 		tblName, err := tbl.Name()
 		if err != nil {
-			return nil, nil, err
+			return false, nil, err
 		}
 		for _, col := range tbl.GetColumns() {
 			colNames = append(colNames, &sqlparser.AliasedExpr{
@@ -98,14 +90,13 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 				As:   sqlparser.NewColIdent(col.Name),
 			})
 		}
-		expStar.tblColMap[tbl.GetExpr()] = colNames
 	}
 
 	if unknownTbl {
 		// This will only happen for case when starExpr has qualifier.
-		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
 	}
-	return colNames, expStar, nil
+	return starExpanded, colNames, nil
 }
 
 func subqueryRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) error {
