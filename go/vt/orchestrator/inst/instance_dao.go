@@ -874,7 +874,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		clusterNameByCoPrimaryKey := instance.SourceKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoPrimaryKey {
 			// Can be caused by a co-primary topology failover
-			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
+			log.Errorf("ReadInstanceClusterAttributes: in co-primary topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.SourceKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 		}
 		if clusterName == clusterNameByInstanceKey {
@@ -1790,7 +1790,7 @@ func InjectUnseenPrimaries() error {
 		primaryKey := primaryKey
 
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
-			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", primaryKey)
+			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnorePrimaryHostnameFilters", primaryKey)
 			continue
 		}
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
@@ -1806,7 +1806,7 @@ func InjectUnseenPrimaries() error {
 		}
 	}
 
-	AuditOperation("inject-unseen-masters", nil, fmt.Sprintf("Operations: %d", operations))
+	AuditOperation("inject-unseen-primaries", nil, fmt.Sprintf("Operations: %d", operations))
 	return err
 }
 
@@ -1899,7 +1899,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 		UpdateResolvedHostname(hostname, resolvedHostname)
 	}
 
-	AuditOperation("resolve-unknown-masters", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
+	AuditOperation("resolve-unknown-primaries", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
 	return err
 }
 
@@ -2086,7 +2086,7 @@ func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (insta
 		return nil, err
 	}
 	if len(primaries) != 1 {
-		return nil, fmt.Errorf("Found %+v potential master for cluster %+v", len(primaries), clusterName)
+		return nil, fmt.Errorf("found %+v potential primary for cluster %+v", len(primaries), clusterName)
 	}
 	instanceKey = &primaries[0].Key
 	return instanceKey, attributes.SetGeneralAttribute(clusterInfo.ClusterDomain, instanceKey.StringCode())
