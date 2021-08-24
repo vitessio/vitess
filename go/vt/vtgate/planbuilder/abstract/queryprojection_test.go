@@ -93,7 +93,7 @@ func TestQP(t *testing.T) {
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, func(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error { return nil })
 			require.NoError(t, err)
 
 			qp, err := CreateQPFromSelect(sel)
@@ -200,7 +200,7 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			ast, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 			sel := ast.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, func(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error { return nil })
 			require.NoError(t, err)
 
 			qp, err := CreateQPFromSelect(sel)

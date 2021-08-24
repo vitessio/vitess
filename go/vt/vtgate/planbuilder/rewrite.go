@@ -36,6 +36,14 @@ type (
 	}
 )
 
+func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
+	r := rewriter{
+		semTable: semTable,
+	}
+	sqlparser.Rewrite(statement, r.starRewrite, nil)
+	return r.err
+}
+
 func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
@@ -57,9 +65,6 @@ func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				continue
 			}
 			selExprs = append(selExprs, colNames...)
-			for tbl, cols := range expStar.tblColMap {
-				r.semTable.AddExprs(tbl, cols)
-			}
 		}
 		node.SelectExprs = selExprs
 	}
@@ -103,6 +108,18 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 	return colNames, expStar, nil
 }
 
+func subqueryRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) error {
+	if len(semTable.SubqueryMap) == 0 {
+		return nil
+	}
+	r := rewriter{
+		semTable:     semTable,
+		reservedVars: reservedVars,
+	}
+	sqlparser.Rewrite(statement, r.subqueryRewrite, nil)
+	return nil
+}
+
 func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.ExistsExpr:
@@ -135,18 +152,4 @@ func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
 		}
 	}
 	return true
-}
-
-func (r *rewriter) rewriterPre(cursor *sqlparser.Cursor) bool {
-	return r.starRewrite(cursor) && (len(r.semTable.SubqueryMap) == 0 || r.subqueryRewrite(cursor))
-}
-
-func rewrite(sel *sqlparser.Select, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) (*sqlparser.Select, error) {
-	r := &rewriter{semTable: semTable, reservedVars: reservedVars}
-
-	_ = sqlparser.Rewrite(sel, r.rewriterPre, nil)
-	if r.err != nil {
-		return nil, r.err
-	}
-	return sel, nil
 }

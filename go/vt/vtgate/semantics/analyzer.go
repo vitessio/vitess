@@ -56,14 +56,15 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 }
 
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite func(statement sqlparser.SelectStatement, semTable *SemTable) error) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 	// Initial scope
 	err := analyzer.analyze(statement)
 	if err != nil {
 		return nil, err
 	}
-	return &SemTable{
+
+	semTable := &SemTable{
 		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
 		ExprDeps:          analyzer.binder.exprDeps,
 		exprTypes:         analyzer.typer.exprTypes,
@@ -74,7 +75,30 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		SubqueryMap:       analyzer.binder.subqueryMap,
 		SubqueryRef:       analyzer.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-	}, nil
+	}
+
+	if err = rewrite(statement, semTable); err != nil {
+		return nil, err
+	}
+
+	err = analyzer.analyzeTwo(statement)
+	if err != nil {
+		return nil, err
+	}
+
+	semTable = &SemTable{
+		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
+		ExprDeps:          analyzer.binder.exprDeps,
+		exprTypes:         analyzer.typer.exprTypes,
+		Tables:            analyzer.tables.Tables,
+		selectScope:       analyzer.scoper.rScope,
+		ProjectionErr:     analyzer.projErr,
+		Comments:          statement.GetComments(),
+		SubqueryMap:       analyzer.binder.subqueryMap,
+		SubqueryRef:       analyzer.binder.subqueryRef,
+		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+	}
+	return semTable, nil
 }
 
 func (a *analyzer) setError(err error) {
@@ -91,7 +115,7 @@ func (a *analyzer) setError(err error) {
 	}
 }
 
-func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
+func (a *analyzer) analyzeDownOne(cursor *sqlparser.Cursor) bool {
 	// If we have an error we keep on going down the tree without checking for anything else
 	// this way we can abort when we come back up.
 	if !a.shouldContinue() {
@@ -104,6 +128,28 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	}
 
 	a.scoper.down(cursor)
+
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		// errors that happen when we are evaluating SELECT expressions are saved until we know
+		// if we can merge everything into a single route or not
+		a.inProjection++
+	}
+
+	// this is the visitor going down the tree. Returning false here would just not visit the children
+	// to the current node, but that is not what we want if we have encountered an error.
+	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
+	return true
+}
+
+func (a *analyzer) analyzeDownTwo(cursor *sqlparser.Cursor) bool {
+	// If we have an error we keep on going down the tree without checking for anything else
+	// this way we can abort when we come back up.
+	if !a.shouldContinue() {
+		return true
+	}
+
+	a.scoper.downTwo(cursor)
 
 	if err := a.binder.down(cursor); err != nil {
 		a.setError(err)
@@ -134,6 +180,26 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	}
 
 	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+
+	_, ok := cursor.Node().(sqlparser.SelectExprs)
+	if ok && isParentSelect(cursor) {
+		// errors that happen when we are evaluating SELECT expressions are saved until we know
+		// if we can merge everything into a single route or not
+		a.inProjection--
+	}
+
+	return a.shouldContinue()
+}
+
+func (a *analyzer) analyzeUpTwo(cursor *sqlparser.Cursor) bool {
+	if !a.shouldContinue() {
+		return false
+	}
+
+	if err := a.scoper.upTwo(cursor); err != nil {
 		a.setError(err)
 		return false
 	}
@@ -187,7 +253,12 @@ func (v *vTableInfo) checkForDuplicates() error {
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
-	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
+	_ = sqlparser.Rewrite(statement, a.analyzeDownOne, a.analyzeUp)
+	return a.err
+}
+
+func (a *analyzer) analyzeTwo(statement sqlparser.Statement) error {
+	_ = sqlparser.Rewrite(statement, a.analyzeDownTwo, a.analyzeUpTwo)
 	return a.err
 }
 

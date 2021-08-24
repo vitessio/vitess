@@ -98,12 +98,12 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(sel, ksName, vschema)
+	semTable, err := semantics.Analyze(sel, ksName, vschema, starRewrite)
 	if err != nil {
 		return nil, err
 	}
 
-	sel, err = rewrite(sel, semTable, reservedVars)
+	err = subqueryRewrite(sel, semTable, reservedVars)
 	if err != nil {
 		return nil, err
 	}
