@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"reflect"
-
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -497,7 +495,7 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
-		if !ok || !reflect.TypeOf(expr).Comparable() {
+		if !ok || !validAsMapKey(expr) {
 			// if this is not an expression, or it is an expression we can't use as a map-key,
 			// just carry on down the tree
 			return true, nil
