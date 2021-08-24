@@ -73,16 +73,16 @@ func TestExpandStar(t *testing.T) {
 		expErr string
 	}{{
 		sql:    "select * from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c from t1",
 	}, {
 		sql:    "select t1.* from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c from t1",
 	}, {
 		sql:    "select *, 42, t1.* from t1",
-		expSQL: "select t1.a as a, t1.b as b, t1.c as c, 42, t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select a, b, c, 42, a, b, c from t1",
 	}, {
 		sql:    "select 42, t1.* from t1",
-		expSQL: "select 42, t1.a as a, t1.b as b, t1.c as c from t1",
+		expSQL: "select 42, a, b, c from t1",
 	}, {
 		sql:    "select * from t1, t2",
 		expSQL: "select t1.a as a, t1.b as b, t1.c as c, t2.c1 as c1, t2.c2 as c2 from t1, t2",
@@ -114,12 +114,10 @@ func TestExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := semantics.Analyze(selectStatement, cDB, schemaInfo)
-			require.NoError(t, err)
-			expandedSelect, err := rewrite(selectStatement, semTable, nil)
+			_, err = semantics.Analyze(selectStatement, cDB, schemaInfo, starRewrite)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
-				assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			} else {
 				require.EqualError(t, err, tcase.expErr)
 			}
@@ -145,7 +143,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 		expandedCol int
 	}{{
 		sql:      "select a, * from t1",
-		expSQL:   "select a, t1.a as a from t1",
+		expSQL:   "select a, a from t1",
 		otherTbl: -1, sameTbl: 0, expandedCol: 1,
 	}, {
 		sql:      "select t2.a, t1.a, t1.* from t1, t2",
@@ -162,21 +160,19 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo)
+			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo, starRewrite)
 			require.NoError(t, err)
-			expandedSelect, err := rewrite(selectStatement, semTable, nil)
-			require.NoError(t, err)
-			assert.Equal(t, tcase.expSQL, sqlparser.String(expandedSelect))
+			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			if tcase.otherTbl != -1 {
 				assert.NotEqual(t,
-					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 			if tcase.sameTbl != -1 {
 				assert.Equal(t,
-					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.BaseTableDependencies(expandedSelect.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 		})
@@ -226,15 +222,16 @@ func TestSubqueryRewrite(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			ast, err := sqlparser.Parse(tcase.input)
+			ast, vars, err := sqlparser.Parse2(tcase.input)
 			require.NoError(t, err)
+			reservedVars := sqlparser.NewReservedVars("vtg", vars)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{})
+			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
-			rewrittenAST, err := rewrite(selectStatement, semTable, sqlparser.NewReservedVars("vtg", map[string]struct{}{}))
+			err = subqueryRewrite(selectStatement, semTable, reservedVars)
 			require.NoError(t, err)
-			assert.Equal(t, tcase.output, sqlparser.String(rewrittenAST))
+			assert.Equal(t, tcase.output, sqlparser.String(selectStatement))
 		})
 	}
 }

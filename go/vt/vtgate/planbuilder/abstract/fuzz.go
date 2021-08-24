@@ -50,7 +50,7 @@ func FuzzAnalyse(data []byte) int {
 	}
 	switch stmt := tree.(type) {
 	case *sqlparser.Select:
-		semTable, err := semantics.Analyze(stmt, "", &fakeFuzzSI{})
+		semTable, err := semantics.Analyze(stmt, "", &fakeFuzzSI{}, semantics.NoRewrite)
 		if err != nil {
 			return 0
 		}
