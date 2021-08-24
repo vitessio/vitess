@@ -43,7 +43,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		sel := node.Select.(*sqlparser.Select)
 		if reuseCol {
-			if i := checkIfAlreadyExists(expr, sel); i != -1 {
+			if i := checkIfAlreadyExists(expr, sel, semTable); i != -1 {
 				return i, false, nil
 			}
 		}
@@ -122,7 +122,9 @@ func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedE
 	return expr
 }
 
-func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) int {
+func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select, semTable *semantics.SemTable) int {
+	exprDep := semTable.BaseTableDependencies(expr.Expr)
+
 	for i, selectExpr := range sel.SelectExprs {
 		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -131,6 +133,12 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select) in
 
 		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
 		exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
+		selectExprDep := semTable.BaseTableDependencies(selectExpr.Expr)
+
+		// Check that the two expressions have the same dependencies
+		if selectExprDep != exprDep {
+			continue
+		}
 
 		if selectExpr.As.IsEmpty() {
 			// we don't have an alias
@@ -645,6 +653,7 @@ func (hp *horizonPlanning) addDistinct() error {
 		var inner sqlparser.Expr
 		if !sExpr.Col.As.IsEmpty() {
 			inner = sqlparser.NewColName(sExpr.Col.As.String())
+			hp.semTable.CopyDependencies(sExpr.Col.Expr, inner)
 		} else {
 			inner = sExpr.Col.Expr
 		}

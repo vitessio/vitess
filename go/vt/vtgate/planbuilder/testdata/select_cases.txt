@@ -1786,3 +1786,76 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Add two tables with the same column in a join
+"select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2",
+    "TableName": "`user`, user_extra_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id, s.id from `user` as t join user_extra as s on t.id = s.user_id where 1 != 1",
+        "Query": "select t.id, s.id from `user` as t join user_extra as s on t.id = s.user_id",
+        "Table": "`user`, user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id, s.id from user t join user_extra s on t.id = s.user_id join unsharded",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2",
+    "TableName": "unsharded_`user`, user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 from unsharded where 1 != 1",
+        "Query": "select 1 from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.id, s.id from `user` as t, user_extra as s where 1 != 1",
+        "Query": "select t.id, s.id from `user` as t, user_extra as s where t.id = s.user_id",
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+
+

@@ -62,7 +62,7 @@ type (
 )
 
 // CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
+func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -89,7 +89,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 	}
 
 	for _, group := range sel.GroupBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, "group statement")
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +101,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 
 	canPushDownSorting := true
 	for _, order := range sel.OrderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, "order clause")
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +184,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
 // column offsets, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
+func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// Order by is the column offset to be used from the select expressions
 	// Eg - select id from music order by 1
 	literalExpr, isLiteral := e.(*sqlparser.Literal)
@@ -200,6 +200,7 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, caller string) (e
 			expr = &sqlparser.ColName{
 				Name: aliasedExpr.As,
 			}
+			semTable.CopyDependencies(e, expr)
 		}
 
 		return expr, aliasedExpr.Expr, nil
