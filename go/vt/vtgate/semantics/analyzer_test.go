@@ -128,7 +128,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 		})
 	}
@@ -275,7 +275,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 					Tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
-				}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+				}, NoRewrite)
 				require.Error(t, err)
 			})
 		}
@@ -375,7 +375,7 @@ func TestBindingMultiTable(t *testing.T) {
 						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
-				}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+				}, NoRewrite)
 				require.Error(t, err)
 			})
 		}
@@ -406,7 +406,7 @@ func TestNotUniqueTableName(t *testing.T) {
 				t.Skip("derived tables not implemented")
 			}
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -421,7 +421,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
@@ -521,7 +521,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
 			require.NoError(t, err)
 
 			if test.err {
@@ -560,7 +560,7 @@ func TestUnknownPredicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -588,7 +588,7 @@ func TestScoping(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			}, NoRewrite)
 			if query.errorMessage == "" {
 				require.NoError(t, err)
 			} else {
@@ -652,7 +652,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+			}, NoRewrite)
 			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
 			} else {
@@ -688,7 +688,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
 			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
 		},
-	}, func(statement sqlparser.SelectStatement, semTable *SemTable) error { return nil })
+	}, NoRewrite)
 	require.NoError(t, err)
 	return parse, semTable
 }

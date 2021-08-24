@@ -57,8 +57,15 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return a
 }
 
+type rewriteFunc = func(statement sqlparser.SelectStatement, semTable *SemTable) error
+
+// NoRewrite is a helper implementation for tests
+var NoRewrite = func(statement sqlparser.SelectStatement, semTable *SemTable) error {
+	return nil
+}
+
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite func(statement sqlparser.SelectStatement, semTable *SemTable) error) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite rewriteFunc) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
