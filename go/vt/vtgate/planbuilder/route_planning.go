@@ -1019,6 +1019,11 @@ func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.T
 		}
 	}
 
+	vindex := aRoute.vindex
+	if aRoute.vindex == nil && bRoute.routeOpCode == engine.SelectEqualUnique {
+		vindex = bRoute.vindex
+	}
+
 	return &routeTree{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
@@ -1028,6 +1033,8 @@ func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.T
 			joinPredicates...),
 		keyspace:            aRoute.keyspace,
 		vindexPreds:         append(aRoute.vindexPreds, bRoute.vindexPreds...),
+		vindex:              vindex,
+		vindexValues:        append(aRoute.vindexValues, bRoute.vindexValues...),
 		leftJoins:           append(aRoute.leftJoins, bRoute.leftJoins...),
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
