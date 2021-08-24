@@ -106,7 +106,10 @@ func NewAuthServerServiceCert(file string, reloadInterval time.Duration) *AuthSe
 		reloadInterval: reloadInterval,
 		entries:        make(map[string]*AuthServerServiceCertEntry),
 	}
-	a.methods = []AuthMethod{NewMysqlClearAuthMethod(a, a)}
+	a.methods = []AuthMethod{
+		&mysqlSocketAuthMethod{a, a},  // For sockets
+		NewMysqlClearAuthMethod(a, a), // For TLS
+	}
 
 	a.reload()
 	a.installHangUpSignalHandlers()
@@ -136,20 +139,25 @@ func (assc *AuthServerServiceCert) HandleUser(user string) bool {
 
 // UserEntryWithPassword is part of the PlaintextStorage interface
 func (assc *AuthServerServiceCert) UserEntryWithPassword(userCerts []*x509.Certificate, user string, password string, remoteAddr net.Addr) (Getter, error) {
-	// This code depends on the fact that golang's tls server enforces client cert verification.
-	// Note that the -mysql_server_ssl_ca flag must be set in order for the vtgate to accept client certs.
-	// If not set, the vtgate will effectively deny all incoming mysql connections, since they will all lack certificates.
-	// For more info, check out go/vt/vtttls/vttls.go
-	if len(userCerts) == 0 {
-		log.Errorf("No client certs from address '%v'", remoteAddr.String())
-		return &ServiceCertUserData{}, fmt.Errorf("no client certs from address %v", remoteAddr.String())
-	}
+	_, isUnixSocket := remoteAddr.(*net.UnixAddr)
 
-	commonName := userCerts[0].Subject.CommonName
+	// We trust unix sockets (and they won't pass a client cert anyway)
+	if !isUnixSocket {
+		// This code depends on the fact that golang's tls server enforces client cert verification.
+		// Note that the -mysql_server_ssl_ca flag must be set in order for the vtgate to accept client certs.
+		// If not set, the vtgate will effectively deny all incoming mysql connections, since they will all lack certificates.
+		// For more info, check out go/vt/vtttls/vttls.go
+		if len(userCerts) == 0 {
+			log.Errorf("No client certs from address '%v'", remoteAddr.String())
+			return &ServiceCertUserData{}, fmt.Errorf("no client certs from address %v", remoteAddr.String())
+		}
 
-	if user != commonName {
-		log.Errorf("No client certs from address '%v'", remoteAddr.String())
-		return &ServiceCertUserData{}, fmt.Errorf("MySQL connection username '%v' does not match client cert common name '%v'", user, commonName)
+		commonName := userCerts[0].Subject.CommonName
+
+		if user != commonName {
+			log.Errorf("No client certs from address '%v'", remoteAddr.String())
+			return &ServiceCertUserData{}, fmt.Errorf("MySQL connection username '%v' does not match client cert common name '%v'", user, commonName)
+		}
 	}
 
 	assc.mu.Lock()
@@ -163,7 +171,7 @@ func (assc *AuthServerServiceCert) UserEntryWithPassword(userCerts []*x509.Certi
 
 	log.Infof("Access granted: user %v address '%v'", user, remoteAddr.String())
 	return &ServiceCertUserData{
-		username: commonName,
+		username: user,
 		groups:   entry.Groups,
 	}, nil
 }
@@ -240,4 +248,32 @@ func (assc *AuthServerServiceCert) validateConfig(config map[string]*AuthServerS
 // ValidateHash is unimplemented.
 func (assc *AuthServerServiceCert) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	panic("unimplemented")
+}
+
+type mysqlSocketAuthMethod struct {
+	storage   PlainTextStorage
+	validator UserValidator
+}
+
+func (n *mysqlSocketAuthMethod) Name() AuthMethodDescription {
+	return "socket_auth"
+}
+
+func (n *mysqlSocketAuthMethod) HandleUser(conn *Conn, user string) bool {
+	if !conn.IsUnixSocket() {
+		return false
+	}
+	return n.validator.HandleUser(user)
+}
+
+func (n *mysqlSocketAuthMethod) AuthPluginData() ([]byte, error) {
+	return nil, nil
+}
+
+func (n *mysqlSocketAuthMethod) AllowClearTextWithoutTLS() bool {
+	return true
+}
+
+func (n *mysqlSocketAuthMethod) HandleAuthPluginData(conn *Conn, user string, serverAuthPluginData []byte, clientAuthPluginData []byte, remoteAddr net.Addr) (Getter, error) {
+	return n.storage.UserEntryWithPassword(conn.GetTLSClientCerts(), user, string(clientAuthPluginData[:len(clientAuthPluginData)-1]), remoteAddr)
 }
