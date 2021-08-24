@@ -64,18 +64,7 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		return nil, err
 	}
 
-	semTable := &SemTable{
-		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
-		ExprDeps:          analyzer.binder.exprDeps,
-		exprTypes:         analyzer.typer.exprTypes,
-		Tables:            analyzer.tables.Tables,
-		selectScope:       analyzer.scoper.rScope,
-		ProjectionErr:     analyzer.projErr,
-		Comments:          statement.GetComments(),
-		SubqueryMap:       analyzer.binder.subqueryMap,
-		SubqueryRef:       analyzer.binder.subqueryRef,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
-	}
+	semTable := analyzer.newSemTable(statement)
 
 	if err = rewrite(statement, semTable); err != nil {
 		return nil, err
@@ -86,19 +75,23 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 		return nil, err
 	}
 
-	semTable = &SemTable{
-		ExprBaseTableDeps: analyzer.binder.exprRecursiveDeps,
-		ExprDeps:          analyzer.binder.exprDeps,
-		exprTypes:         analyzer.typer.exprTypes,
-		Tables:            analyzer.tables.Tables,
-		selectScope:       analyzer.scoper.rScope,
-		ProjectionErr:     analyzer.projErr,
+	semTable.ProjectionErr = analyzer.projErr
+	return semTable, nil
+}
+
+func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
+	return &SemTable{
+		ExprBaseTableDeps: a.binder.exprRecursiveDeps,
+		ExprDeps:          a.binder.exprDeps,
+		exprTypes:         a.typer.exprTypes,
+		Tables:            a.tables.Tables,
+		selectScope:       a.scoper.rScope,
+		ProjectionErr:     a.projErr,
 		Comments:          statement.GetComments(),
-		SubqueryMap:       analyzer.binder.subqueryMap,
-		SubqueryRef:       analyzer.binder.subqueryRef,
+		SubqueryMap:       a.binder.subqueryMap,
+		SubqueryRef:       a.binder.subqueryRef,
 		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
 	}
-	return semTable, nil
 }
 
 func (a *analyzer) setError(err error) {
