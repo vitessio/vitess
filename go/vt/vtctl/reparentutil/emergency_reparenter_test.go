@@ -986,6 +986,12 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
 
+			for i, tablet := range tt.tablets {
+				tablet.Type = topodatapb.TabletType_REPLICA
+				tt.tablets[i] = tablet
+			}
+			tt.tmc.TopoServer = tt.vtctlReparentFunctions.ts
+
 			testutil.AddShards(ctx, t, tt.vtctlReparentFunctions.ts, tt.shards...)
 			testutil.AddTablets(ctx, t, tt.vtctlReparentFunctions.ts, nil, tt.tablets...)
 
