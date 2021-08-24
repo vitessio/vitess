@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -402,9 +401,6 @@ func TestNotUniqueTableName(t *testing.T) {
 
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
-			if strings.Contains(query, ") as") {
-				t.Skip("derived tables not implemented")
-			}
 			parse, _ := sqlparser.Parse(query)
 			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{}, NoRewrite)
 			require.Error(t, err)
