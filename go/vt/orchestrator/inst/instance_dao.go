@@ -725,7 +725,7 @@ Cleanup:
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
 		}
 		// Add replication group ancestry UUID as well. Otherwise, Orchestrator thinks there are errant GTIDs in group
-		// members and its slaves, even though they are not.
+		// members and its replicas, even though they are not.
 		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ReplicationGroupName)
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
 		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
