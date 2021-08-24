@@ -59,6 +59,7 @@ type VtOrcReparentFunctions struct {
 	promotedReplica      *inst.Instance
 	lostReplicas         [](*inst.Instance)
 	recoveryAttempted    bool
+	hasBestPromotionRule bool
 	postponedAll         bool
 }
 
@@ -158,29 +159,30 @@ func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandid
 // FindPrimaryCandidates implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
 	vtorcReparent.postponedAll = false
-	promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
-		if promoted == nil {
-			return false
-		}
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", promoted.Key))
-		if vtorcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
-			return promoted.Key.Equals(vtorcReparent.candidateInstanceKey)
-		}
-		if promoted.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
-			promoted.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
-			if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
-				(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
-				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
-				vtorcReparent.postponedAll = true
-				return true
-			}
-		}
-		return false
-	}
+	//promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
+	//	if promoted == nil {
+	//		return false
+	//	}
+	//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", promoted.Key))
+	//	if vtorcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
+	//		return promoted.Key.Equals(vtorcReparent.candidateInstanceKey)
+	//	}
+	//	if promoted.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
+	//		promoted.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
+	//		if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
+	//			(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
+	//			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
+	//			vtorcReparent.postponedAll = true
+	//			return true
+	//		}
+	//	}
+	//	return false
+	//}
 
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
-	lostReplicas, promotedReplica, err := ChooseCandidate(tmc, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, &vtorcReparent.topologyRecovery.PostponedFunctionsContainer, promotedReplicaIsIdeal, validCandidates, tabletMap)
+	lostReplicas, promotedReplica, hasBestPromotionRule, err := ChooseCandidate(tmc, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, validCandidates, tabletMap)
 	vtorcReparent.topologyRecovery.AddError(err)
+	vtorcReparent.hasBestPromotionRule = hasBestPromotionRule
 	if err != nil {
 		return nil, err
 	}
@@ -228,13 +230,12 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 func ChooseCandidate(
 	tmc tmclient.TabletManagerClient,
 	masterKey *inst.InstanceKey,
-	postponedFunctionsContainer *inst.PostponedFunctionsContainer,
-	postponeAllMatchOperations func(*inst.Instance, bool) bool,
 	validCandidates map[string]mysql.Position,
 	tabletMap map[string]*topo.TabletInfo,
 ) (
 	lostReplicas [](*inst.Instance),
 	candidateReplica *inst.Instance,
+	hasBestPromotionRule bool,
 	err error,
 ) {
 	var emptyReplicas [](*inst.Instance)
@@ -251,7 +252,7 @@ func ChooseCandidate(
 	for candidate := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
 		if !ok {
-			return emptyReplicas, candidateReplica, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+			return emptyReplicas, candidateReplica, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
 		}
 		candidateInstance, _, err := inst.ReadInstance(&inst.InstanceKey{
 			Hostname: candidateInfo.MysqlHostname,
@@ -259,7 +260,7 @@ func ChooseCandidate(
 		})
 		if err != nil {
 			log.Errorf("%v", err)
-			return emptyReplicas, candidateReplica, err
+			return emptyReplicas, candidateReplica, false, err
 		}
 		replicas = append(replicas, candidateInstance)
 	}
@@ -271,7 +272,7 @@ func ChooseCandidate(
 
 	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := inst.ChooseCandidateReplica(replicas)
 	if err != nil {
-		return emptyReplicas, candidateReplica, err
+		return emptyReplicas, candidateReplica, false, err
 	}
 	if candidateReplica != nil {
 		mostUpToDateReplica := replicas[0]
@@ -281,15 +282,15 @@ func ChooseCandidate(
 	}
 	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
 
-	//replicasToMove := append(equalReplicas, laterReplicas...)
-	//hasBestPromotionRule := true
-	//if candidateReplica != nil {
-	//	for _, replica := range replicasToMove {
-	//		if replica.PromotionRule.BetterThan(candidateReplica.PromotionRule) {
-	//			hasBestPromotionRule = false
-	//		}
-	//	}
-	//}
+	replicasToMove := append(equalReplicas, laterReplicas...)
+	hasBestPromotionRule = true
+	if candidateReplica != nil {
+		for _, replica := range replicasToMove {
+			if replica.PromotionRule.BetterThan(candidateReplica.PromotionRule) {
+				hasBestPromotionRule = false
+			}
+		}
+	}
 
 	//now := time.Now().UnixNano()
 	//if err := inst.SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
@@ -348,7 +349,38 @@ func ChooseCandidate(
 	//
 	//log.Debugf("RegroupReplicasGTID: done")
 	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
-	return unmovedReplicas, candidateReplica, err
+	return unmovedReplicas, candidateReplica, hasBestPromotionRule, err
+}
+
+// PromotedReplicaIsIdeal implements the ReparentFunctions interface
+func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, primaryStatus map[string]*replicationdatapb.PrimaryStatus, validCandidates map[string]mysql.Position) bool {
+	AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", newPrimary.Alias))
+	newPrimaryKey := &inst.InstanceKey{
+		Hostname: newPrimary.MysqlHostname,
+		Port:     int(newPrimary.MysqlPort),
+	}
+	newPrimaryInst, _, _ := inst.ReadInstance(newPrimaryKey)
+	if vtOrcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
+		return newPrimaryKey.Equals(vtOrcReparent.candidateInstanceKey)
+	}
+	if newPrimaryInst.DataCenter == vtOrcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
+		newPrimaryInst.PhysicalEnvironment == vtOrcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
+		if newPrimaryInst.PromotionRule == inst.MustPromoteRule || newPrimaryInst.PromotionRule == inst.PreferPromoteRule ||
+			(vtOrcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != inst.MustNotPromoteRule) {
+			AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", newPrimaryInst.Key))
+			vtOrcReparent.postponedAll = true
+			return true
+		}
+	}
+	return false
+}
+
+// PostReplicationChangeHook implements the ReparentFunctions interface
+func (vtOrcReparent *VtOrcReparentFunctions) PostReplicationChangeHook(tablet *topodatapb.Tablet) {
+	inst.ReadTopologyInstance(&inst.InstanceKey{
+		Hostname: tablet.MysqlHostname,
+		Port:     int(tablet.MysqlPort),
+	})
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface

@@ -61,6 +61,8 @@ type (
 		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, error)
+		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
+		PostReplicationChangeHook(*topodatapb.Tablet)
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
 		GetNewPrimary() *topodatapb.Tablet
@@ -199,6 +201,34 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 	return newPrimaryAlias.Tablet, nil
 }
 
+// 	PostReplicationChangeHook implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) PostReplicationChangeHook(*topodatapb.Tablet) {
+	return
+}
+
+// 	PromotedReplicaIsIdeal implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, primaryStatus map[string]*replicationdatapb.PrimaryStatus, validCandidates map[string]mysql.Position) bool {
+	if vtctlReparent.NewPrimaryAlias != nil {
+		//explicit request to promote a specific tablet
+		return true
+	}
+	if len(primaryStatus) == 1 {
+		var prevPrimary *topo.TabletInfo
+		for tablet := range primaryStatus {
+			prevPrimary = tabletMap[tablet]
+		}
+		if (newPrimary.Type == topodatapb.TabletType_PRIMARY || newPrimary.Type == topodatapb.TabletType_REPLICA) && newPrimary.Alias.Cell == prevPrimary.Alias.Cell {
+			return true
+		}
+		return false
+	}
+
+	if newPrimary.Type == topodatapb.TabletType_PRIMARY || newPrimary.Type == topodatapb.TabletType_REPLICA {
+		return true
+	}
+	return false
+}
+
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	return nil
@@ -306,12 +336,12 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	return reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent)
+	return reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent, false)
 }
 
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger,
 	tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction, rp string,
-	tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions) error {
+	tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions, waitForAllReplicas bool) error {
 	replCtx, replCancel := context.WithTimeout(ctx, reparentFunctions.GetWaitReplicasTimeout())
 	defer replCancel()
 
@@ -343,7 +373,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		defer replWg.Done()
 		logger.Infof("setting new master on replica %v", alias)
 
-		err := tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, now, "", true)
+		err := tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", true)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -351,8 +381,13 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 			return
 		}
 
+		reparentFunctions.PostReplicationChangeHook(ti.Tablet)
+
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
-		replSuccessCancel()
+		// We do this only when we do not want to wair for all the replicas
+		if !waitForAllReplicas {
+			replSuccessCancel()
+		}
 	}
 
 	numReplicas := 0
@@ -478,12 +513,13 @@ func ChooseNewPrimary(
 
 // PromotePrimaryCandidateAndStartReplication promotes the primary candidate that we have, but it does not set to start accepting writes
 func PromotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions) error {
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions, isIdeal bool) error {
 	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
 		return err
 	}
 
-	if err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, reparentFunctions); err != nil {
+	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
+	if err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, reparentFunctions, !isIdeal); err != nil {
 		return err
 	}
 
@@ -512,6 +548,8 @@ func promotePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 	if err != nil {
 		return err
 	}
+	ti, err := ts.GetTablet(ctx, newPrimary.Alias)
+	newPrimary = ti.Tablet
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()
 	_, err = ts.UpdateShardFields(ctx, newPrimary.Keyspace, newPrimary.Shard, func(si *topo.ShardInfo) error {
