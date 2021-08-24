@@ -1227,6 +1227,43 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where :user_id \u003c user_extra.user_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # sharded join, non-col reference RHS
 "select user.col from user join user_extra on user.id = 5"
@@ -1561,6 +1598,21 @@ Gen4 plan same as above
     "Table": "`user`, ref"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select ref.col from ref join user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select ref.col from ref, `user` where 1 != 1",
+    "Query": "select ref.col from ref, `user`",
+    "Table": "`user`, ref"
+  }
+}
 
 # reference table can merge with other opcodes left to right and vindex value is in the plan.
 # This tests that route.Merge also copies the condition to the LHS.
@@ -1577,6 +1629,25 @@ Gen4 plan same as above
     },
     "FieldQuery": "select ref.col from ref join (select aa from `user` where 1 != 1) as `user` where 1 != 1",
     "Query": "select ref.col from ref join (select aa from `user` where `user`.id = 1) as `user`",
+    "Table": "`user`, ref",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select ref.col from ref join (select aa from user where user.id=1) user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select ref.col from ref, (select aa from `user` where 1 != 1) as `user` where 1 != 1",
+    "Query": "select ref.col from ref, (select aa from `user` where `user`.id = 1) as `user`",
     "Table": "`user`, ref",
     "Values": [
       1
