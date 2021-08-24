@@ -578,7 +578,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
 			a.Description = "Master is reachable but none of its replicas is replicating"
 			//
-		} else /* co-master */ if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		} else /* co-primary */ if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadCoPrimary
 			a.Description = "Co-master cannot be reached by orchestrator and none of its replicas is replicating"
 			//
@@ -594,7 +594,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = AllCoPrimaryReplicasNotReplicating
 			a.Description = "Co-master is reachable but none of its replicas is replicating"
 			//
-		} else /* intermediate-master */ if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountReplicasFailingToConnectToPrimary == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		} else /* intermediate-primary */ if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountReplicasFailingToConnectToPrimary == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimaryWithSingleReplicaFailingToConnect
 			a.Description = "Intermediate master cannot be reached by orchestrator and its (single) replica is failing to connect"
 			//
@@ -645,8 +645,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
-		//			a.Analysis = MasterWithoutReplicas
-		//			a.Description = "Master has no replicas"
+		//			a.Analysis = PrimaryWithoutReplicas
+		//			a.Description = "Primary has no replicas"
 		//		}
 
 		appendAnalysis := func(analysis *ReplicationAnalysis) {
