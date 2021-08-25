@@ -63,6 +63,7 @@ type (
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, error)
 		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
 		PostReplicationChangeHook(*topodatapb.Tablet)
+		GetBetterCandidate(*topodatapb.Tablet, []*topodatapb.Tablet, map[string]*replicationdatapb.PrimaryStatus, map[string]*topo.TabletInfo) *topodatapb.Tablet
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
 		GetNewPrimary() *topodatapb.Tablet
@@ -229,6 +230,28 @@ func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary *
 	return false
 }
 
+// 	GetBetterCandidate implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, primaryStatus map[string]*replicationdatapb.PrimaryStatus, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+	if len(primaryStatus) == 1 {
+		var prevPrimary *topo.TabletInfo
+		for tablet := range primaryStatus {
+			prevPrimary = tabletMap[tablet]
+		}
+		// find one which is of the correct type and matches the cell of the previous primary
+		for _, candidate := range validCandidates {
+			if (candidate.Type == topodatapb.TabletType_PRIMARY || candidate.Type == topodatapb.TabletType_REPLICA) && prevPrimary.Alias.Cell == candidate.Alias.Cell {
+				return candidate
+			}
+		}
+	}
+	for _, candidate := range validCandidates {
+		if candidate.Type == topodatapb.TabletType_PRIMARY || candidate.Type == topodatapb.TabletType_REPLICA {
+			return candidate
+		}
+	}
+	return newPrimary
+}
+
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	return nil
@@ -336,12 +359,16 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	return reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent.statusMap, vtctlReparent, false)
+	return err
 }
 
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger,
 	tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction, rp string,
-	tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions, waitForAllReplicas bool) error {
+	tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
+
+	var replicasStartedReplication []*topodatapb.Tablet
+
 	replCtx, replCancel := context.WithTimeout(ctx, reparentFunctions.GetWaitReplicasTimeout())
 	defer replCancel()
 
@@ -373,7 +400,20 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		defer replWg.Done()
 		logger.Infof("setting new master on replica %v", alias)
 
-		err := tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", true)
+		forceStart := false
+		if status, ok := statusMap[alias]; ok {
+			fs, err := ReplicaWasRunning(status)
+			if err != nil {
+				err = vterrors.Wrapf(err, "tablet %v could not determine StopReplicationStatus: %v", alias, err)
+				rec.RecordError(err)
+
+				return
+			}
+
+			forceStart = fs
+		}
+
+		err := tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -381,6 +421,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 			return
 		}
 
+		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
 		reparentFunctions.PostReplicationChangeHook(ti.Tablet)
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
@@ -422,13 +463,13 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		logger.Warningf("master failed to PopulateReparentJournal")
 		replCancel()
 
-		return vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on master: %v", primaryErr)
+		return nil, vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on master: %v", primaryErr)
 	}
 
 	select {
 	case <-replSuccessCtx.Done():
 		// At least one replica was able to SetMaster successfully
-		return nil
+		return replicasStartedReplication, nil
 	case <-allReplicasDoneCtx.Done():
 		// There are certain timing issues between replSuccessCtx.Done firing
 		// and allReplicasDoneCtx.Done firing, so we check again if truly all
@@ -441,11 +482,11 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 			// Technically, rec.Errors should never be greater than numReplicas,
 			// but it's better to err on the side of caution here, but also
 			// we're going to be explicit that this is doubly unexpected.
-			return vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
+			return nil, vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
 		case errCount == numReplicas:
-			return vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
+			return nil, vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
 		default:
-			return nil
+			return replicasStartedReplication, nil
 		}
 	}
 }
@@ -513,14 +554,15 @@ func ChooseNewPrimary(
 
 // PromotePrimaryCandidateAndStartReplication promotes the primary candidate that we have, but it does not set to start accepting writes
 func PromotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, reparentFunctions ReparentFunctions, isIdeal bool) error {
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool) ([]*topodatapb.Tablet, error) {
 	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
-		return err
+		return nil, err
 	}
 
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	if err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, reparentFunctions, !isIdeal); err != nil {
-		return err
+	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, !isIdeal)
+	if err != nil {
+		return nil, err
 	}
 
 	// TODO := add as a postponed function
@@ -530,14 +572,14 @@ func PromotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclien
 	//	err = moveGTIDFunc()
 	//}
 
-	err := tmc.StartReplication(ctx, newPrimary)
+	err = tmc.StartReplication(ctx, newPrimary)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	//log.Debugf("RegroupReplicasGTID: done")
 	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
-	return nil //unmovedReplicas, candidateReplica, err
+	return replicasStartedReplication, nil //unmovedReplicas, candidateReplica, err
 }
 
 // promotePrimary makes the new tablet the primary and proactively performs

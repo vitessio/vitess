@@ -383,6 +383,10 @@ func (vtOrcReparent *VtOrcReparentFunctions) PostReplicationChangeHook(tablet *t
 	})
 }
 
+func (vtorcReparent *VtOrcReparentFunctions) GetBetterCandidate(newPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, primaryStatus map[string]*replicationdatapb.PrimaryStatus, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+	return newPrimary
+}
+
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePrimary() error {
 	if vtorcReparent.promotedReplica != nil && !vtorcReparent.postponedAll {
