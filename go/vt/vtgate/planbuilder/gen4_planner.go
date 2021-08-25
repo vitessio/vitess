@@ -163,13 +163,12 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 
 func planHorizon(ctx planningContext, plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
 	hp := horizonPlanning{
-		sel:  sel,
-		plan: plan,
+		sel: sel,
 	}
 
 	replaceSubQuery(ctx.sqToReplace, sel)
-
-	plan, err := hp.planHorizon(ctx)
+	var err error
+	plan, err = hp.planHorizon(ctx, plan)
 	if err != nil {
 		return nil, err
 	}

@@ -31,21 +31,20 @@ import (
 
 type horizonPlanning struct {
 	sel             *sqlparser.Select
-	plan            logicalPlan
 	qp              *abstract.QueryProjection
 	needsTruncation bool
 	vtgateGrouping  bool
 }
 
-func (hp *horizonPlanning) planHorizon(ctx planningContext) (logicalPlan, error) {
-	rb, ok := hp.plan.(*route)
+func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
+	rb, ok := plan.(*route)
 	if !ok && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
 	}
 
 	if ok && rb.isSingleShard() {
 		createSingleShardRoutePlan(hp.sel, rb)
-		return hp.plan, nil
+		return plan, nil
 	}
 
 	qp, err := abstract.CreateQPFromSelect(hp.sel, ctx.semTable)
@@ -60,50 +59,50 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext) (logicalPlan, error)
 	}
 
 	if hp.qp.NeedsAggregation() {
-		err = hp.planAggregations(ctx)
+		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		_, isOA := hp.plan.(*orderedAggregate)
+		_, isOA := plan.(*orderedAggregate)
 		if isOA {
-			hp.plan = &simpleProjection{
-				logicalPlanCommon: newBuilderCommon(hp.plan),
+			plan = &simpleProjection{
+				logicalPlanCommon: newBuilderCommon(plan),
 				primitive:         &engine.SimpleProjection{},
 			}
 		}
 		for _, e := range hp.qp.SelectExprs {
-			if _, _, err := pushProjection(e.Col, hp.plan, ctx.semTable, true, false); err != nil {
+			if _, _, err := pushProjection(e.Col, plan, ctx.semTable, true, false); err != nil {
 				return nil, err
 			}
 		}
 	}
 
 	if len(hp.qp.OrderExprs) > 0 {
-		hp.plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, hp.plan)
+		plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
-		hp.plan, err = hp.planOrderByUsingGroupBy(ctx)
+		plan, err = hp.planOrderByUsingGroupBy(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = hp.planDistinct(ctx)
+	plan, err = hp.planDistinct(ctx, plan)
 	if err != nil {
 		return nil, err
 	}
 
-	err = hp.truncateColumnsIfNeeded(hp.plan)
+	err = hp.truncateColumnsIfNeeded(plan)
 	if err != nil {
 		return nil, err
 	}
 
-	return hp.plan, nil
+	return plan, nil
 }
 
 func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
@@ -123,7 +122,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	case *pulloutSubquery:
 		return hp.truncateColumnsIfNeeded(p.underlying)
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", hp.plan)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
 	}
 
 	return nil
@@ -262,16 +261,16 @@ func (hp *horizonPlanning) haveToTruncate(v bool) {
 	hp.needsTruncation = hp.needsTruncation || v
 }
 
-func (hp *horizonPlanning) planAggregations(ctx planningContext) error {
-	newPlan := hp.plan
+func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
+	newPlan := plan
 	var oa *orderedAggregate
 	uniqVindex := hasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.GroupByExprs)
-	_, joinPlan := hp.plan.(*joinGen4)
+	_, joinPlan := plan.(*joinGen4)
 	if !uniqVindex || joinPlan {
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
-				logicalPlanCommon: newBuilderCommon(hp.plan),
+				logicalPlanCommon: newBuilderCommon(plan),
 				weightStrings:     make(map[*resultColumn]int),
 				truncater:         eaggr,
 			},
@@ -284,30 +283,30 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext) error {
 	for _, e := range hp.qp.SelectExprs {
 		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
 		if !e.Aggr || oa == nil {
-			_, _, err := pushProjection(e.Col, hp.plan, ctx.semTable, true, false)
+			_, _, err := pushProjection(e.Col, plan, ctx.semTable, true, false)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
 
 		fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
 		if !isFunc {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
 		opcode, found := engine.SupportedAggregates[fExpr.Name.Lowered()]
 		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
-		handleDistinct, innerAliased, err := hp.needDistinctHandling(ctx, fExpr, opcode, oa.input)
+		handleDistinct, innerAliased, err := hp.needDistinctHandling(ctx, fExpr, opcode, plan)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
-		offset, _, err := pushProjection(pushExpr, oa.input, ctx.semTable, true, false)
+		offset, _, err := pushProjection(pushExpr, plan, ctx.semTable, true, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
 			Opcode: opcode,
@@ -320,7 +319,7 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext) error {
 	for _, groupExpr := range hp.qp.GroupByExprs {
 		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		hp.haveToTruncate(added)
 	}
@@ -335,29 +334,29 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext) error {
 			)
 		}
 		if len(orderExprs) > 0 {
-			newInput, err := hp.planOrderBy(ctx, orderExprs, hp.plan)
+			newInput, err := hp.planOrderBy(ctx, orderExprs, plan)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			oa.input = newInput
-			hp.plan = oa
+			plan = oa
 		}
 	} else {
-		hp.plan = newPlan
+		plan = newPlan
 	}
 
 	// done with aggregation planning. let's check if we should fail the query
-	if _, planIsRoute := hp.plan.(*route); !planIsRoute {
+	if _, planIsRoute := plan.(*route); !planIsRoute {
 		// if we had to build up additional operators around the route, we have to fail this query
 		for _, expr := range hp.qp.SelectExprs {
 			colExpr := expr.Col.Expr
 			if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
-				return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 			}
 		}
 	}
 
-	return nil
+	return plan, nil
 }
 
 // createPushExprAndAlias creates the expression that should be pushed down to the leaves,
@@ -439,7 +438,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 	}
 }
 
-func (hp *horizonPlanning) planOrderByUsingGroupBy(ctx planningContext) (logicalPlan, error) {
+func (hp *horizonPlanning) planOrderByUsingGroupBy(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
 	var orderExprs []abstract.OrderBy
 	for _, groupExpr := range hp.qp.GroupByExprs {
 		addExpr := true
@@ -457,9 +456,9 @@ func (hp *horizonPlanning) planOrderByUsingGroupBy(ctx planningContext) (logical
 		}
 	}
 	if len(orderExprs) > 0 {
-		return hp.planOrderBy(ctx, orderExprs, hp.plan)
+		return hp.planOrderBy(ctx, orderExprs, plan)
 	}
-	return hp.plan, nil
+	return plan, nil
 }
 
 func (hp *horizonPlanning) planOrderBy(ctx planningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
@@ -675,33 +674,34 @@ func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTab
 	return true
 }
 
-func (hp *horizonPlanning) planDistinct(ctx planningContext) error {
+func (hp *horizonPlanning) planDistinct(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
 	if !hp.qp.NeedsDistinct() {
-		return nil
+		return plan, nil
 	}
-	switch p := hp.plan.(type) {
+	switch p := plan.(type) {
 	case *route:
 		// we always make the underlying query distinct,
 		// and then we might also add a distinct operator on top if it is needed
 		p.Select.MakeDistinct()
-		if !p.isSingleShard() && !selectHasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.SelectExprs) {
-			return hp.addDistinct(ctx)
+		if p.isSingleShard() || selectHasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.SelectExprs) {
+			return plan, nil
 		}
-		return nil
+
+		return hp.addDistinct(ctx, plan)
 	case *joinGen4:
-		return hp.addDistinct(ctx)
+		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
 		return hp.planDistinctOA(p)
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", hp.plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
 	}
 }
 
-func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
+func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{
-			logicalPlanCommon: newBuilderCommon(hp.plan),
+			logicalPlanCommon: newBuilderCommon(currPlan),
 			weightStrings:     make(map[*resultColumn]int),
 			truncater:         eaggr,
 		},
@@ -727,24 +727,23 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) error {
 			}
 		}
 		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
 		}
 	}
-	hp.plan = oa
-	return nil
+	return oa, nil
 }
 
-func (hp *horizonPlanning) addDistinct(ctx planningContext) error {
+func (hp *horizonPlanning) addDistinct(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	var orderExprs []abstract.OrderBy
 	for index, sExpr := range hp.qp.SelectExprs {
 		if isAmbiguousOrderBy(index, sExpr.Col.As, hp.qp.SelectExprs) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(sExpr.Col.As))
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(sExpr.Col.As))
 		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
-		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, hp.plan, ctx.semTable)
+		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, plan, ctx.semTable)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		hp.needsTruncation = hp.needsTruncation || added
 		grpParam.WeightStringCol = wOffset
@@ -762,11 +761,11 @@ func (hp *horizonPlanning) addDistinct(ctx planningContext) error {
 			WeightStrExpr: sExpr.Col.Expr},
 		)
 	}
-	innerPlan, err := hp.planOrderBy(ctx, orderExprs, hp.plan)
+	innerPlan, err := hp.planOrderBy(ctx, orderExprs, plan)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	hp.plan = &orderedAggregate{
+	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{
 			logicalPlanCommon: newBuilderCommon(innerPlan),
 			weightStrings:     make(map[*resultColumn]int),
@@ -774,7 +773,7 @@ func (hp *horizonPlanning) addDistinct(ctx planningContext) error {
 		},
 		eaggr: eaggr,
 	}
-	return nil
+	return oa, nil
 }
 
 func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.SelectExpr) bool {
