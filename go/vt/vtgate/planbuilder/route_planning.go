@@ -21,6 +21,8 @@ import (
 	"io"
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -650,17 +652,9 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
 	if sameKeyspace {
-		// if either side is a reference table, we can just merge it and use the opcode of the other side
-		opCode := engine.NumRouteOpcodes
-		if aRoute.routeOpCode == engine.SelectReference {
-			opCode = bRoute.routeOpCode
-		} else if bRoute.routeOpCode == engine.SelectReference {
-			opCode = aRoute.routeOpCode
-		}
-		if opCode != engine.NumRouteOpcodes {
-			r := merger(aRoute, bRoute)
-			r.routeOpCode = opCode
-			return r, nil
+		tree := tryMergeReferenceTable(aRoute, bRoute, merger)
+		if tree != nil {
+			return tree, nil
 		}
 	}
 
@@ -698,6 +692,30 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 		return r, nil
 	}
 	return nil, nil
+}
+
+func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFunc) queryTree {
+	// if either side is a reference table, we can just merge it and use the opcode of the other side
+	var vindex vindexes.Vindex
+	vindexValues := []sqltypes.PlanValue{}
+	opCode := engine.NumRouteOpcodes
+	if aRoute.routeOpCode == engine.SelectReference {
+		opCode = bRoute.routeOpCode
+		vindex = bRoute.vindex
+		vindexValues = bRoute.vindexValues
+	} else if bRoute.routeOpCode == engine.SelectReference {
+		opCode = aRoute.routeOpCode
+		vindex = aRoute.vindex
+		vindexValues = aRoute.vindexValues
+	}
+	if opCode != engine.NumRouteOpcodes {
+		r := merger(aRoute, bRoute)
+		r.routeOpCode = opCode
+		r.vindex = vindex
+		r.vindexValues = vindexValues
+		return r
+	}
+	return nil
 }
 
 func makeRoute(j queryTree) *routeTree {
@@ -761,7 +779,7 @@ func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.T
 		}
 	}
 
-	return &routeTree{
+	r := &routeTree{
 		routeOpCode: aRoute.routeOpCode,
 		solved:      newTabletSet,
 		tables:      tables,
@@ -774,6 +792,13 @@ func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.T
 		SysTableTableSchema: append(aRoute.SysTableTableSchema, bRoute.SysTableTableSchema...),
 		SysTableTableName:   sysTableName,
 	}
+
+	if aRoute.vindex == bRoute.vindex {
+		r.vindex = aRoute.vindex
+		r.vindexValues = append(r.vindexValues, aRoute.vindexValues...)
+	}
+
+	return r
 }
 
 func findTables(deps semantics.TableSet, tables parenTables) (relation, relation, parenTables) {
