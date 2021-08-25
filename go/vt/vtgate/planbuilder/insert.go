@@ -146,7 +146,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	case sqlparser.Values:
 		rows = insertValues
 		if hasSubquery(rows) {
-			return nil, errors.New("unsupported: subquery in insert values")
+			return nil, errors.New("unsupported: simpleProjection in insert values")
 		}
 	default:
 		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)

@@ -1702,7 +1702,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "count(0) AS count(id)",
     "GroupBy": "(1|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1768,7 +1768,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "count(0) AS count(id)",
         "GroupBy": "(1|2)",
         "Inputs": [
           {
