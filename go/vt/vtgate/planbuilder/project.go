@@ -140,7 +140,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 
 		// colNumber should already be set for subquery columns.
 		inner := col.Metadata.(*column).colNumber
-		node.primitive.Cols = append(node.primitive.Cols, inner)
+		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, inner)
 
 		// Build a new column reference to represent the result column.
 		rc := newResultColumn(expr, node)
