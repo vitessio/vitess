@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -151,17 +153,27 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, tabletMap, primaryStatusMap, validCandidates)
 
 	// TODO := LockAction and RP
-	if err := PromotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, reparentFunctions, isIdeal); err != nil {
-		return err
-	}
-
-	if err := reparentFunctions.CheckIfNeedToOverridePrimary(); err != nil {
+	validReplacementCandidates, err := PromotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal)
+	if err != nil {
 		return err
 	}
 
 	// Check (again) we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
+	}
+
+	betterCandidate := newPrimary
+	if !isIdeal {
+		betterCandidate = reparentFunctions.GetBetterCandidate(newPrimary, validReplacementCandidates, primaryStatusMap, tabletMap)
+	}
+
+	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
+
+	}
+
+	if err := reparentFunctions.CheckIfNeedToOverridePrimary(); err != nil {
+		return err
 	}
 
 	if err := reparentFunctions.StartReplication(ctx, ev, erp.logger, erp.tmc); err != nil {
