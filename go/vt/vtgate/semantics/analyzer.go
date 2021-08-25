@@ -246,10 +246,6 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
 		}
-	case *sqlparser.Select:
-		if node.Having != nil {
-			return Gen4NotSupportedF("HAVING")
-		}
 	case *sqlparser.Subquery:
 		sel, ok := node.Select.(*sqlparser.Select)
 		if !ok {

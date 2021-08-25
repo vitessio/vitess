@@ -72,7 +72,7 @@ type (
 	}
 
 	// vTableInfo is used to represent projected results, not real tables. It is used for
-	// ORDER BY and GROUP BY that need to access result columns, and also for derived tables.
+	// ORDER BY, GROUP BY and HAVING that need to access result columns, and also for derived tables.
 	vTableInfo struct {
 		tableName   string
 		ASTNode     *sqlparser.AliasedTableExpr

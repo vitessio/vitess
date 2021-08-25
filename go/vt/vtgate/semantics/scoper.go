@@ -32,10 +32,18 @@ type scoper struct {
 }
 
 type scopeKey struct {
-	orderBy bool
-	groupBy bool
-	node    sqlparser.SQLNode
+	typ  keyType
+	node sqlparser.SQLNode
 }
+
+type keyType int8
+
+const (
+	_ keyType = iota
+	orderBy
+	groupBy
+	having
+)
 
 func newScoper() *scoper {
 	return &scoper{
@@ -85,15 +93,25 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
 	case sqlparser.OrderBy:
-		s.changeScopeForOrderBy(cursor, scopeKey{node: cursor.Parent(), orderBy: true})
+		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
 	case sqlparser.GroupBy:
-		s.changeScopeForOrderBy(cursor, scopeKey{node: cursor.Parent(), groupBy: true})
+		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			break
+		}
+		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
 	}
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
-	switch cursor.Node().(type) {
+	switch node := cursor.Node().(type) {
 	case sqlparser.SelectStatement, sqlparser.OrderBy, sqlparser.GroupBy:
+		s.popScope()
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			break
+		}
 		s.popScope()
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
@@ -118,9 +136,14 @@ func (s *scoper) downPost(cursor *sqlparser.Cursor) {
 
 	switch node := cursor.Node().(type) {
 	case sqlparser.OrderBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), orderBy: true}]
+		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
 	case sqlparser.GroupBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), groupBy: true}]
+		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			break
+		}
+		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
 	default:
 		if validAsMapKey(node) {
 			scope, found = s.sqlNodeScope[scopeKey{node: node}]
@@ -141,9 +164,14 @@ func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
 
 	switch node := cursor.Node().(type) {
 	case sqlparser.OrderBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), orderBy: true}]
+		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
 	case sqlparser.GroupBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), groupBy: true}]
+		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
+	case *sqlparser.Where:
+		if node.Type != sqlparser.HavingClause {
+			break
+		}
+		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
 	default:
 		if validAsMapKey(node) {
 			_, found = s.sqlNodeScope[scopeKey{node: node}]
@@ -156,12 +184,12 @@ func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) changeScopeForOrderBy(cursor *sqlparser.Cursor, k scopeKey) {
+func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) {
 	sel, ok := cursor.Parent().(*sqlparser.Select)
 	if !ok {
 		return
 	}
-	// In ORDER BY, we can see both the scope in the FROM part of the query, and the SELECT columns created
+	// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
 	// so before walking the rest of the tree, we change the scope to match this behaviour
 	incomingScope := s.currentScope()
 	nScope := newScope(incomingScope)
