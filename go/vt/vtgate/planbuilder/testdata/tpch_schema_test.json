@@ -1,112 +1,115 @@
 {
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    },
-    "partsupp_map": {
-      "type": "lookup_hash_unique",
-      "owner": "partsupp",
-      "params": {
-        "table": "partsupp_map",
-        "from": "ps_partkey",
-        "to": "ps_suppkey"
+  "keyspaces": {
+    "ks": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        },
+        "partsupp_map": {
+          "type": "lookup_hash_unique",
+          "owner": "partsupp_map",
+          "params": {
+            "table": "partsupp_map",
+            "from": "ps_partkey",
+            "to": "ps_suppkey"
+          }
+        },
+        "lineitem_map": {
+          "type": "lookup_hash_unique",
+          "owner": "lineitem_map",
+          "params": {
+            "table": "lineitem_map",
+            "from": "l_orderkey",
+            "to": "l_linenumber"
+          }
+        },
+        "md5": {
+          "type": "unicode_loose_md5"
+        }
+      },
+      "tables": {
+        "nation": {
+          "column_vindexes": [
+            {
+              "column": "n_nationkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "region": {
+          "column_vindexes": [
+            {
+              "column": "r_regionkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "part": {
+          "column_vindexes": [
+            {
+              "column": "p_partkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "supplier": {
+          "column_vindexes": [
+            {
+              "column": "s_suppkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "partsupp": {
+          "column_vindexes": [
+            {
+              "column": "ps_partkey",
+              "name": "partsupp_map"
+            }
+          ]
+        },
+        "partsupp_map": {
+          "column_vindexes": [
+            {
+              "column": "ps_partkey",
+              "name": "md5"
+            }
+          ]
+        },
+        "customer": {
+          "column_vindexes": [
+            {
+              "column": "c_custkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "orders": {
+          "column_vindexes": [
+            {
+              "column": "o_orderkey",
+              "name": "hash"
+            }
+          ]
+        },
+        "lineitem": {
+          "column_vindexes": [
+            {
+              "column": "l_orderkey",
+              "name": "lineitem_map"
+            }
+          ]
+        },
+        "lineitem_map": {
+          "column_vindexes": [
+            {
+              "column": "l_orderkey",
+              "name": "md5"
+            }
+          ]
+        }
       }
-    },
-    "lineitem_map": {
-      "type": "lookup_hash_unique",
-      "owner": "lineitem",
-      "params": {
-        "table": "lineitem_map",
-        "from": "l_orderkey",
-        "to": "l_linenumber"
-      }
-    },
-    "md5": {
-      "type": "unicode_loose_md5"
-    }
-  },
-  "tables": {
-    "nation": {
-      "column_vindexes": [
-        {
-          "column": "n_nationkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "region": {
-      "column_vindexes": [
-        {
-          "column": "r_regionkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "part": {
-      "column_vindexes": [
-        {
-          "column": "p_partkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "supplier": {
-      "column_vindexes": [
-        {
-          "column": "s_suppkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "partsupp": {
-      "column_vindexes": [
-        {
-          "column": "ps_partkey",
-          "name": "partsupp_map"
-        }
-      ]
-    },
-    "partsupp_map": {
-      "column_vindexes": [
-        {
-          "column": "ps_partkey",
-          "name": "md5"
-        }
-      ]
-    },
-    "customer": {
-      "column_vindexes": [
-        {
-          "column": "c_custkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "orders": {
-      "column_vindexes": [
-        {
-          "column": "o_orderkey",
-          "name": "hash"
-        }
-      ]
-    },
-    "lineitem": {
-      "column_vindexes": [
-        {
-          "column": "l_orderkey",
-          "name": "lineitem_map"
-        }
-      ]
-    },
-    "lineitem_map": {
-      "column_vindexes": [
-        {
-          "column": "l_orderkey",
-          "name": "md5"
-        }
-      ]
     }
   }
 }
-
