@@ -68,7 +68,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		if isOA {
 			plan = &simpleProjection{
 				logicalPlanCommon: newBuilderCommon(plan),
-				primitive:         &engine.SimpleProjection{},
+				eSimpleProj:       &engine.SimpleProjection{},
 			}
 		}
 		for _, e := range hp.qp.SelectExprs {
@@ -194,8 +194,8 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if err != nil {
 			return 0, false, err
 		}
-		node.primitive.Cols = append(node.primitive.Cols, offset)
-		return len(node.primitive.Cols) - 1, true, nil
+		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
+		return len(node.eSimpleProj.Cols) - 1, true, nil
 	case *orderedAggregate:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)
 		for _, aggregate := range node.eaggr.Aggregates {

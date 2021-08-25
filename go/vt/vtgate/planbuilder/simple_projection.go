@@ -38,14 +38,14 @@ var _ logicalPlan = (*simpleProjection)(nil)
 type simpleProjection struct {
 	logicalPlanCommon
 	resultColumns []*resultColumn
-	primitive     *engine.SimpleProjection
+	eSimpleProj   *engine.SimpleProjection
 }
 
 // newSimpleProjection builds a new simpleProjection.
 func newSimpleProjection(alias sqlparser.TableIdent, plan logicalPlan) (*simpleProjection, *symtab, error) {
 	sq := &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(plan),
-		primitive:         &engine.SimpleProjection{},
+		eSimpleProj:       &engine.SimpleProjection{},
 	}
 
 	// Create a 'table' that represents the derived table.
@@ -70,8 +70,8 @@ func newSimpleProjection(alias sqlparser.TableIdent, plan logicalPlan) (*simpleP
 
 // Primitive implements the logicalPlan interface
 func (sq *simpleProjection) Primitive() engine.Primitive {
-	sq.primitive.Input = sq.input.Primitive()
-	return sq.primitive
+	sq.eSimpleProj.Input = sq.input.Primitive()
+	return sq.eSimpleProj
 }
 
 // ResultColumns implements the logicalPlan interface
@@ -90,7 +90,7 @@ func (sq *simpleProjection) SupplyCol(col *sqlparser.ColName) (rc *resultColumn,
 
 	// columns that reference subqueries will have their colNumber set.
 	// Let's use it here.
-	sq.primitive.Cols = append(sq.primitive.Cols, c.colNumber)
+	sq.eSimpleProj.Cols = append(sq.eSimpleProj.Cols, c.colNumber)
 	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }
