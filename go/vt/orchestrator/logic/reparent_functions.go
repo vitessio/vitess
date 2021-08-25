@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -384,17 +386,175 @@ func (vtOrcReparent *VtOrcReparentFunctions) PostReplicationChangeHook(tablet *t
 }
 
 func (vtorcReparent *VtOrcReparentFunctions) GetBetterCandidate(newPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, primaryStatus map[string]*replicationdatapb.PrimaryStatus, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+	if vtorcReparent.candidateInstanceKey != nil {
+		candidateTablet, _ := inst.ReadTablet(*vtorcReparent.candidateInstanceKey)
+		// return the requested candidate as long as it is valid
+		for _, validCandidate := range validCandidates {
+			if topoproto.TabletAliasEqual(validCandidate.Alias, candidateTablet.Alias) {
+				return validCandidate
+			}
+		}
+	}
+	var oldPrimary *topodatapb.Tablet
+	if len(primaryStatus) == 1 {
+		for tablet := range primaryStatus {
+			ti := tabletMap[tablet]
+			oldPrimary = ti.Tablet
+		}
+	}
+	replacementCandidate := getReplacementForPromotedReplica(vtorcReparent.topologyRecovery, newPrimary, oldPrimary, validCandidates)
+	vtorcReparent.promotedReplica = getInstanceFromTablet(replacementCandidate)
+
+	return replacementCandidate
+}
+
+func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPrimary, oldPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet) *topodatapb.Tablet {
+	var preferredCandidates []*topodatapb.Tablet
+	var neutralReplicas []*topodatapb.Tablet
+	for _, candidate := range validCandidates {
+		promotionRule := inst.PromotionRule(candidate)
+		if promotionRule == inst.MustPromoteRule || promotionRule == inst.PreferPromoteRule {
+			preferredCandidates = append(preferredCandidates, candidate)
+		}
+		if promotionRule == inst.NeutralPromoteRule {
+			neutralReplicas = append(neutralReplicas, candidate)
+		}
+	}
+
+	// So we've already promoted a replica.
+	// However, can we improve on our choice? Are there any replicas marked with "is_candidate"?
+	// Maybe we actually promoted such a replica. Does that mean we should keep it?
+	// Maybe we promoted a "neutral", and some "prefer" server is available.
+	// Maybe we promoted a "prefer_not"
+	// Maybe we promoted a server in a different DC than the primary
+	// There's many options. We may wish to replace the server we promoted with a better one.
+	AuditTopologyRecovery(topologyRecovery, "checking if should replace promoted replica with a better candidate")
+	AuditTopologyRecovery(topologyRecovery, "+ checking if promoted replica is the ideal candidate")
+	if oldPrimary != nil {
+		for _, candidateReplica := range preferredCandidates {
+			if topoproto.TabletAliasEqual(newPrimary.Alias, candidateReplica.Alias) &&
+				newPrimary.Alias.Cell == oldPrimary.Alias.Cell {
+				// Seems like we promoted a candidate in the same cell as dead IM! Ideal! We're happy!
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoted replica %+v is the ideal candidate", newPrimary.Alias))
+				return newPrimary
+			}
+		}
+	}
+	// We didn't pick the ideal candidate; let's see if we can replace with a candidate from same DC and ENV
+
+	// Try a candidate replica that is in same DC & env as the dead instance
+	AuditTopologyRecovery(topologyRecovery, "+ searching for an ideal candidate")
+	if oldPrimary != nil {
+		for _, candidateReplica := range preferredCandidates {
+			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
+				candidateReplica.Alias.Cell == oldPrimary.Alias.Cell {
+				// This would make a great candidate
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("orchestrator picks %+v as candidate replacement, based on being in same cell as failed instance", candidateReplica.Alias))
+				return candidateReplica
+			}
+		}
+	}
+
+	// We cannot find a candidate in same DC and ENV as dead primary
+	AuditTopologyRecovery(topologyRecovery, "+ checking if promoted replica is an OK candidate")
+	for _, candidateReplica := range preferredCandidates {
+		if topoproto.TabletAliasEqual(newPrimary.Alias, candidateReplica.Alias) {
+			// Seems like we promoted a candidate replica (though not in same DC and ENV as dead primary)
+			if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
+				// Good enough. No further action required.
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoted replica %+v is a good candidate", newPrimary.Alias))
+				return newPrimary
+			} else {
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Alias, reason))
+			}
+		}
+	}
+
+	// Still nothing?
+	// Try a candidate replica that is in same DC & env as the promoted replica (our promoted replica is not an "is_candidate")
+	AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
+	for _, candidateReplica := range preferredCandidates {
+		if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
+			newPrimary.Alias.Cell == candidateReplica.Alias.Cell {
+			// OK, better than nothing
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", newPrimary.Alias, candidateReplica.Alias))
+			return candidateReplica
+		}
+	}
+
+	// Still nothing?
+	// Try a candidate replica (our promoted replica is not an "is_candidate")
+	AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
+	for _, candidateReplica := range preferredCandidates {
+		if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) {
+			if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
+				// OK, better than nothing
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement", newPrimary.Alias, candidateReplica.Alias))
+				return candidateReplica
+			} else {
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", candidateReplica.Alias, reason))
+			}
+		}
+	}
+
+	keepSearchingHint := ""
+	if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(newPrimary)); !satisfied {
+		keepSearchingHint = fmt.Sprintf("Will keep searching; %s", reason)
+	} else if inst.PromotionRule(newPrimary) == inst.PreferNotPromoteRule {
+		keepSearchingHint = fmt.Sprintf("Will keep searching because we have promoted a server with prefer_not rule: %+v", newPrimary.Alias)
+	}
+	if keepSearchingHint != "" {
+		AuditTopologyRecovery(topologyRecovery, keepSearchingHint)
+		// Still nothing? Then we didn't find a replica marked as "candidate". OK, further down the stream we have:
+		// find neutral instance in same dv&env as dead primary
+		if oldPrimary != nil {
+			AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as dead master")
+			for _, neutralReplica := range neutralReplicas {
+				if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
+					oldPrimary.Alias.Cell == neutralReplica.Alias.Cell {
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as dead master", newPrimary.Alias, neutralReplica.Alias))
+					return neutralReplica
+				}
+			}
+		}
+
+		// find neutral instance in same dv&env as promoted replica
+		AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as promoted replica")
+		for _, neutralReplica := range neutralReplicas {
+			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
+				newPrimary.Alias.Cell == neutralReplica.Alias.Cell {
+				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", newPrimary.Alias, neutralReplica.Alias))
+				return neutralReplica
+			}
+		}
+
+		AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace a prefer_not")
+		for _, neutralReplica := range neutralReplicas {
+			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) {
+				if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(neutralReplica)); satisfied {
+					// OK, better than nothing
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on promoted instance having prefer_not promotion rule", newPrimary.Alias, neutralReplica.Alias))
+					return neutralReplica
+				} else {
+					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("skipping %+v; %s", neutralReplica.Alias, reason))
+				}
+			}
+		}
+	}
+
 	return newPrimary
+}
+
+func getInstanceFromTablet(tablet *topodatapb.Tablet) *inst.Instance {
+	instance, _, _ := inst.ReadInstance(&inst.InstanceKey{
+		Hostname: tablet.MysqlHostname,
+		Port:     int(tablet.MysqlPort),
+	})
+	return instance
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePrimary() error {
-	if vtorcReparent.promotedReplica != nil && !vtorcReparent.postponedAll {
-		var err error
-		vtorcReparent.promotedReplica, err = replacePromotedReplicaWithCandidate(vtorcReparent.topologyRecovery, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, vtorcReparent.promotedReplica, vtorcReparent.candidateInstanceKey)
-		vtorcReparent.topologyRecovery.AddError(err)
-	}
-
 	if vtorcReparent.promotedReplica == nil {
 		err := TabletUndoDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemoteMaster: %v", err))
