@@ -33,10 +33,8 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *seman
 	switch n := tree.(type) {
 	case *routeTree:
 		return transformRoutePlan(n, semTable, ctx.sqToReplace)
-
 	case *joinTree:
 		return transformJoinPlan(ctx, n, semTable)
-
 	case *derivedTree:
 		return transformDerivedPlan(ctx, n, semTable)
 	case *subqueryTree:
@@ -83,7 +81,10 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semanti
 
 	rb, isRoute := plan.(*route)
 	if !isRoute {
-		return plan, nil
+		return &simpleProjection{
+			logicalPlanCommon: newBuilderCommon(plan),
+			eSimpleProj:       &engine.SimpleProjection{},
+		}, nil
 	}
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}

@@ -2300,7 +2300,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2",
+    "JoinColumnIndexes": "-1",
     "JoinVars": {
       "t_col1": 0,
       "t_id": 1
@@ -2308,32 +2308,40 @@ Gen4 plan same as above
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          1
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
           }
         ]
       },
@@ -2469,7 +2477,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "2",
+    "JoinColumnIndexes": "1",
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
       {
@@ -2484,32 +2492,40 @@ Gen4 plan same as above
         "Table": "unsharded_a"
       },
       {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          1
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
           }
         ]
       }
@@ -2526,7 +2542,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "2",
+    "JoinColumnIndexes": "1",
     "JoinVars": {
       "ua_id": 0
     },
@@ -2544,35 +2560,43 @@ Gen4 plan same as above
         "Table": "unsharded_a"
       },
       {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "TableName": "`user`_user_extra",
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          1
+        ],
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2",
+            "JoinVars": {
+              "user_id": 0
             },
-            "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where :user_id = :ua_id",
-            "Table": "user_extra"
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra where :user_id = :ua_id",
+                "Table": "user_extra"
+              }
+            ]
           }
         ]
       }
@@ -3259,6 +3283,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # database call in ON clause.
 # The on clause is weird because the substitution must even for root expressions.
