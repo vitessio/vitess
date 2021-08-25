@@ -153,7 +153,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, tabletMap, primaryStatusMap, validCandidates)
 
 	// TODO := LockAction and RP
-	validReplacementCandidates, err := PromotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal)
+	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal)
 	if err != nil {
 		return err
 	}
