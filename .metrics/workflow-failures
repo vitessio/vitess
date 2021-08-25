@@ -1,10 +1,3 @@
-2021-04-18T04:05:56Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/759938001
-2021-04-18T04:05:56Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/759938021
-2021-04-18T04:05:56Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/759938044
-2021-04-18T04:10:17Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/759944829
-2021-04-18T04:10:17Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/759944832
-2021-04-18T04:10:17Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/759944805
-2021-04-18T04:10:17Z,unit_race,https://github.com/vitessio/vitess/actions/runs/759944822
 2021-04-18T04:16:20Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/759953835
 2021-04-18T04:16:20Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/759953821
 2021-04-18T04:31:04Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/759974958
@@ -9998,3 +9991,10 @@
 2021-08-25T21:07:47Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1168115135
 2021-08-25T21:07:47Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1168115147
 2021-08-25T21:07:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1168115142
+2021-08-25T21:10:14Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1168122532
+2021-08-25T21:19:01Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1168153717
+2021-08-25T21:19:01Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/1168153693
+2021-08-25T21:19:01Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1168153729
+2021-08-25T21:19:01Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1168153754
+2021-08-25T21:19:01Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1168153720
+2021-08-25T21:19:01Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1168153771
