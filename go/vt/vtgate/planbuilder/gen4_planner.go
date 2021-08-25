@@ -162,7 +162,6 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 }
 
 type postProcessor struct {
-	inDerived   bool
 	semTable    *semantics.SemTable
 	vschema     ContextVSchema
 	sqToReplace map[string]*sqlparser.Select
@@ -170,11 +169,10 @@ type postProcessor struct {
 
 func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select, sqToReplace map[string]*sqlparser.Select) (logicalPlan, error) {
 	hp := horizonPlanning{
-		sel:       sel,
-		plan:      plan,
-		semTable:  pp.semTable,
-		vschema:   pp.vschema,
-		inDerived: pp.inDerived,
+		sel:      sel,
+		plan:     plan,
+		semTable: pp.semTable,
+		vschema:  pp.vschema,
 	}
 
 	replaceSubQuery(sqToReplace, hp.sel)

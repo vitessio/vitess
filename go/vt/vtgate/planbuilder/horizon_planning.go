@@ -35,7 +35,6 @@ type horizonPlanning struct {
 	semTable        *semantics.SemTable
 	vschema         ContextVSchema
 	qp              *abstract.QueryProjection
-	inDerived       bool
 	needsTruncation bool
 	vtgateGrouping  bool
 }
