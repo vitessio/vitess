@@ -109,13 +109,13 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 	return starExpanded, colNames, nil
 }
 
-func subqueryRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars) error {
-	if len(semTable.SubqueryMap) == 0 {
+func subqueryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
+	if len(ctx.semTable.SubqueryMap) == 0 {
 		return nil
 	}
 	r := rewriter{
-		semTable:     semTable,
-		reservedVars: reservedVars,
+		semTable:     ctx.semTable,
+		reservedVars: ctx.reservedVars,
 	}
 	sqlparser.Rewrite(statement, r.subqueryRewrite, nil)
 	return nil

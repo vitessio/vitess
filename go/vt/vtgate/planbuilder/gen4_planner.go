@@ -73,7 +73,8 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	err = subqueryRewrite(sel, semTable, reservedVars)
+	ctx := newPlanningContext(reservedVars, semTable, vschema)
+	err = subqueryRewrite(ctx, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -83,28 +84,17 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 		return nil, err
 	}
 
-	ctx := optimizeContext{
-		reservedVars: reservedVars,
-		semTable:     semTable,
-		vschema:      vschema,
-		sqToReplace:  map[string]*sqlparser.Select{},
-	}
 	tree, err := optimizeQuery(ctx, opTree)
 	if err != nil {
 		return nil, err
 	}
 
-	postProcessing := &postProcessor{
-		semTable:    semTable,
-		vschema:     vschema,
-		sqToReplace: ctx.sqToReplace,
-	}
-	plan, err := transformToLogicalPlan(tree, semTable, postProcessing)
+	plan, err := transformToLogicalPlan(ctx, tree, semTable)
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err = postProcessing.planHorizon(plan, sel, postProcessing.sqToReplace)
+	plan, err = planHorizon(ctx, plan, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -129,6 +119,16 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	}
 
 	return plan, nil
+}
+
+func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) planningContext {
+	ctx := planningContext{
+		reservedVars: reservedVars,
+		semTable:     semTable,
+		vschema:      vschema,
+		sqToReplace:  map[string]*sqlparser.Select{},
+	}
+	return ctx
 }
 
 func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
@@ -161,23 +161,15 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	return nil
 }
 
-type postProcessor struct {
-	semTable    *semantics.SemTable
-	vschema     ContextVSchema
-	sqToReplace map[string]*sqlparser.Select
-}
-
-func (pp *postProcessor) planHorizon(plan logicalPlan, sel *sqlparser.Select, sqToReplace map[string]*sqlparser.Select) (logicalPlan, error) {
+func planHorizon(ctx planningContext, plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
 	hp := horizonPlanning{
-		sel:      sel,
-		plan:     plan,
-		semTable: pp.semTable,
-		vschema:  pp.vschema,
+		sel:  sel,
+		plan: plan,
 	}
 
-	replaceSubQuery(sqToReplace, hp.sel)
+	replaceSubQuery(ctx.sqToReplace, sel)
 
-	plan, err := hp.planHorizon()
+	plan, err := hp.planHorizon(ctx)
 	if err != nil {
 		return nil, err
 	}
