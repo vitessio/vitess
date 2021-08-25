@@ -38,57 +38,63 @@ func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, proces
 		return transformJoinPlan(n, semTable, processing)
 
 	case *derivedTree:
-		// transforming the inner part of the derived table into a logical plan
-		// so that we can do horizon planning on the inner. If the logical plan
-		// we've produced is a Route, we set its Select.From field to be an aliased
-		// expression containing our derived table's inner select and the derived
-		// table's alias.
-
-		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
-		if err != nil {
-			return nil, err
-		}
-		processing.inDerived = true
-		plan, err = processing.planHorizon(plan, n.query, nil)
-		if err != nil {
-			return nil, err
-		}
-		processing.inDerived = false
-
-		rb, isRoute := plan.(*route)
-		if !isRoute {
-			return plan, nil
-		}
-		innerSelect := rb.Select
-		derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
-		tblExpr := &sqlparser.AliasedTableExpr{
-			Expr: derivedTable,
-			As:   sqlparser.NewTableIdent(n.alias),
-		}
-		rb.Select = &sqlparser.Select{
-			From: []sqlparser.TableExpr{tblExpr},
-		}
-		return plan, nil
+		return transformDerivedPlan(n, semTable, processing)
 	case *subqueryTree:
-		innerPlan, err := transformToLogicalPlan(n.inner, semTable, processing)
-		if err != nil {
-			return nil, err
-		}
-		innerPlan, err = processing.planHorizon(innerPlan, n.subquery, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
-		outerPlan, err := transformToLogicalPlan(n.outer, semTable, processing)
-		if err != nil {
-			return nil, err
-		}
-		plan.underlying = outerPlan
-		return plan, err
+		return transformSubqueryTree(n, semTable, processing)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
+}
+
+func transformSubqueryTree(n *subqueryTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(n.inner, semTable, processing)
+	if err != nil {
+		return nil, err
+	}
+	innerPlan, err = processing.planHorizon(innerPlan, n.subquery, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
+	outerPlan, err := transformToLogicalPlan(n.outer, semTable, processing)
+	if err != nil {
+		return nil, err
+	}
+	plan.underlying = outerPlan
+	return plan, err
+}
+
+func transformDerivedPlan(n *derivedTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+	// transforming the inner part of the derived table into a logical plan
+	// so that we can do horizon planning on the inner. If the logical plan
+	// we've produced is a Route, we set its Select.From field to be an aliased
+	// expression containing our derived table's inner select and the derived
+	// table's alias.
+
+	plan, err := transformToLogicalPlan(n.inner, semTable, processing)
+	if err != nil {
+		return nil, err
+	}
+	plan, err = processing.planHorizon(plan, n.query, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	rb, isRoute := plan.(*route)
+	if !isRoute {
+		return plan, nil
+	}
+	innerSelect := rb.Select
+	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
+	tblExpr := &sqlparser.AliasedTableExpr{
+		Expr: derivedTable,
+		As:   sqlparser.NewTableIdent(n.alias),
+	}
+	rb.Select = &sqlparser.Select{
+		From: []sqlparser.TableExpr{tblExpr},
+	}
+	return plan, nil
 }
 
 func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace map[string]*sqlparser.Select) (*route, error) {
