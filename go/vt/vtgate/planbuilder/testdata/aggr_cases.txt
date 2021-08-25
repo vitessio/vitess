@@ -525,6 +525,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex should use a simple route
 "select id, count(*) from user group by id"
@@ -2228,47 +2229,7 @@ Gen4 plan same as above
 # Aggregates and joins
 "select count(*) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
-{
-  "QueryType": "SELECT",
-  "Original": "select count(*) from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(0) AS count(*)",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Grouping on join
 "select user.a from user join user_extra group by user.a"
@@ -2320,50 +2281,7 @@ Gen4 plan same as above
 # Aggregate on join
 "select user.a, count(*) from user join user_extra group by user.a"
 "unsupported: cross-shard query with aggregates"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.a, count(*) from user join user_extra group by user.a",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a, count(*), weight_string(`user`.a) from `user` where 1 != 1",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select `user`.a, count(*), weight_string(`user`.a) from `user` order by `user`.a asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Aggregate on other table in join
 "select user.a, count(user_extra.a) from user join user_extra group by user.a"

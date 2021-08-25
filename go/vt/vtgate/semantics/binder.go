@@ -101,6 +101,21 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		if typ != nil {
 			b.typer.setTypeFor(node, *typ)
 		}
+	case *sqlparser.FuncExpr:
+		// need special handling so that any lingering `*` expressions are bound to all local tables
+		if len(node.Exprs) != 1 {
+			break
+		}
+		if _, isStar := node.Exprs[0].(*sqlparser.StarExpr); !isStar {
+			break
+		}
+		scope := b.scoper.currentScope()
+		ts := TableSet(0)
+		for _, table := range scope.tables {
+			ts |= b.tc.tableSetFor(table.GetExpr())
+		}
+		b.exprRecursiveDeps[node] = ts
+		b.exprDeps[node] = ts
 	}
 	return nil
 }
