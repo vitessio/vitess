@@ -132,7 +132,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 			return nil, nil, 0, err
 		}
 		return node, rc, idx, nil
-	case *subquery:
+	case *simpleProjection:
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {
 			return nil, nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
@@ -140,7 +140,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 
 		// colNumber should already be set for subquery columns.
 		inner := col.Metadata.(*column).colNumber
-		node.esubquery.Cols = append(node.esubquery.Cols, inner)
+		node.primitive.Cols = append(node.primitive.Cols, inner)
 
 		// Build a new column reference to represent the result column.
 		rc := newResultColumn(expr, node)

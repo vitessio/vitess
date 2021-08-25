@@ -1247,7 +1247,7 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0,
       1

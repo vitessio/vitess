@@ -335,14 +335,6 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 		return nil, hp.semTable.ProjectionErr
 	}
 
-	//if hp.inDerived {
-	//	for _, expr := range hp.sel.SelectExprs {
-	//		if sqlparser.ContainsAggregation(expr) {
-	//			return nil, semantics.Gen4NotSupportedF("aggregation inside of derived table")
-	//		}
-	//	}
-	//}
-
 	if ok && rb.isSingleShard() {
 		createSingleShardRoutePlan(hp.sel, rb)
 		return hp.plan, nil
@@ -367,9 +359,9 @@ func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
 	} else {
 		_, isOA := hp.plan.(*orderedAggregate)
 		if isOA {
-			hp.plan = &subquery{
+			hp.plan = &simpleProjection{
 				logicalPlanCommon: newBuilderCommon(hp.plan),
-				esubquery:         &engine.Subquery{},
+				primitive:         &engine.SimpleProjection{},
 			}
 		}
 		for _, e := range hp.qp.SelectExprs {
