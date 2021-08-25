@@ -29,6 +29,109 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
+type horizonPlanning struct {
+	sel             *sqlparser.Select
+	plan            logicalPlan
+	semTable        *semantics.SemTable
+	vschema         ContextVSchema
+	qp              *abstract.QueryProjection
+	inDerived       bool
+	needsTruncation bool
+	vtgateGrouping  bool
+}
+
+func (hp *horizonPlanning) planHorizon() (logicalPlan, error) {
+	rb, ok := hp.plan.(*route)
+	if !ok && hp.semTable.ProjectionErr != nil {
+		return nil, hp.semTable.ProjectionErr
+	}
+
+	if ok && rb.isSingleShard() {
+		createSingleShardRoutePlan(hp.sel, rb)
+		return hp.plan, nil
+	}
+
+	qp, err := abstract.CreateQPFromSelect(hp.sel, hp.semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	hp.qp = qp
+
+	if err := checkUnsupportedConstructs(hp.sel); err != nil {
+		return nil, err
+	}
+
+	if hp.qp.NeedsAggregation() {
+		err = hp.planAggregations()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		_, isOA := hp.plan.(*orderedAggregate)
+		if isOA {
+			hp.plan = &simpleProjection{
+				logicalPlanCommon: newBuilderCommon(hp.plan),
+				primitive:         &engine.SimpleProjection{},
+			}
+		}
+		for _, e := range hp.qp.SelectExprs {
+			if _, _, err := pushProjection(e.Col, hp.plan, hp.semTable, true, false); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if len(hp.qp.OrderExprs) > 0 {
+		hp.plan, err = hp.planOrderBy(hp.qp.OrderExprs, hp.plan)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
+		hp.plan, err = hp.planOrderByUsingGroupBy()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = hp.planDistinct()
+	if err != nil {
+		return nil, err
+	}
+
+	err = hp.truncateColumnsIfNeeded(hp.plan)
+	if err != nil {
+		return nil, err
+	}
+
+	return hp.plan, nil
+}
+
+func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
+	if !hp.needsTruncation {
+		return nil
+	}
+
+	switch p := plan.(type) {
+	case *route:
+		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *joinGen4:
+		// since this is a join, we can safely add extra columns and not need to truncate them
+	case *orderedAggregate:
+		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *memorySort:
+		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
+	case *pulloutSubquery:
+		return hp.truncateColumnsIfNeeded(p.underlying)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", hp.plan)
+	}
+
+	return nil
+}
+
 func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool) (int, bool, error) {
 	switch node := plan.(type) {
 	case *route:
