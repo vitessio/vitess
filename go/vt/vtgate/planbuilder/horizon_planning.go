@@ -190,7 +190,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		// push projection to the outer query
 		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
 	case *simpleProjection:
-		offset, _, err := pushProjection(expr, node.input, semTable, inner, reuseCol)
+		offset, _, err := pushProjection(expr, node.input, semTable, inner, true)
 		if err != nil {
 			return 0, false, err
 		}
