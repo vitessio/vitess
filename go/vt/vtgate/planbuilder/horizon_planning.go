@@ -90,13 +90,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *pulloutSubquery:
 		// push projection to the outer query
 		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
-	case *subquery:
+	case *simpleProjection:
 		offset, _, err := pushProjection(expr, node.input, semTable, inner, reuseCol)
 		if err != nil {
 			return 0, false, err
 		}
-		node.esubquery.Cols = append(node.esubquery.Cols, offset)
-		return len(node.esubquery.Cols) - 1, true, nil
+		node.primitive.Cols = append(node.primitive.Cols, offset)
+		return len(node.primitive.Cols) - 1, true, nil
 	case *orderedAggregate:
 		colName, isColName := expr.Expr.(*sqlparser.ColName)
 		for _, aggregate := range node.eaggr.Aggregates {

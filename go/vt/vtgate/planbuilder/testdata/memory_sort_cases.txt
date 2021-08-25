@@ -273,7 +273,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "ResultColumns": 1,
     "Inputs": [
       {
-        "OperatorType": "Subquery",
+        "OperatorType": "SimpleProjection",
         "Columns": [
           0
         ],

@@ -23,31 +23,32 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-var _ logicalPlan = (*subquery)(nil)
+var _ logicalPlan = (*simpleProjection)(nil)
 
-// subquery is a logicalPlan that wraps a subquery.
-// This primitive wraps any subquery that results
+// simpleProjection is used for wrapping a derived table.
+// This primitive wraps any derived table that results
 // in something that's not a route. It builds a
-// 'table' for the subquery allowing higher level
-// constructs to reference its columns. If a subquery
+// 'table' for the derived table allowing higher level
+// constructs to reference its columns. If a derived table
 // results in a route primitive, we instead build
 // a new route that keeps the subquery in the FROM
 // clause, because a route is more versatile than
-// a subquery.
-type subquery struct {
+// a simpleProjection.
+// this should not be used by the gen4 planner
+type simpleProjection struct {
 	logicalPlanCommon
 	resultColumns []*resultColumn
-	esubquery     *engine.Subquery
+	primitive     *engine.SimpleProjection
 }
 
-// newSubquery builds a new subquery.
-func newSubquery(alias sqlparser.TableIdent, plan logicalPlan) (*subquery, *symtab, error) {
-	sq := &subquery{
+// newSimpleProjection builds a new simpleProjection.
+func newSimpleProjection(alias sqlparser.TableIdent, plan logicalPlan) (*simpleProjection, *symtab, error) {
+	sq := &simpleProjection{
 		logicalPlanCommon: newBuilderCommon(plan),
-		esubquery:         &engine.Subquery{},
+		primitive:         &engine.SimpleProjection{},
 	}
 
-	// Create a 'table' that represents the subquery.
+	// Create a 'table' that represents the derived table.
 	t := &table{
 		alias:  sqlparser.TableName{Name: alias},
 		origin: sq,
@@ -68,18 +69,18 @@ func newSubquery(alias sqlparser.TableIdent, plan logicalPlan) (*subquery, *symt
 }
 
 // Primitive implements the logicalPlan interface
-func (sq *subquery) Primitive() engine.Primitive {
-	sq.esubquery.Subquery = sq.input.Primitive()
-	return sq.esubquery
+func (sq *simpleProjection) Primitive() engine.Primitive {
+	sq.primitive.Input = sq.input.Primitive()
+	return sq.primitive
 }
 
 // ResultColumns implements the logicalPlan interface
-func (sq *subquery) ResultColumns() []*resultColumn {
+func (sq *simpleProjection) ResultColumns() []*resultColumn {
 	return sq.resultColumns
 }
 
 // SupplyCol implements the logicalPlan interface
-func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
+func (sq *simpleProjection) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {
 		if rc.column == c {
@@ -89,7 +90,7 @@ func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumb
 
 	// columns that reference subqueries will have their colNumber set.
 	// Let's use it here.
-	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colNumber)
+	sq.primitive.Cols = append(sq.primitive.Cols, c.colNumber)
 	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }

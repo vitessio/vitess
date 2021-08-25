@@ -2204,7 +2204,7 @@ Gen4 plan same as above
     "TableName": "`user`_user_extra_unsharded",
     "Inputs": [
       {
-        "OperatorType": "Subquery",
+        "OperatorType": "SimpleProjection",
         "Columns": [
           1,
           0
@@ -2320,7 +2320,7 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0
     ],
@@ -2385,7 +2385,7 @@ Gen4 plan same as above
         "Table": "unsharded_a"
       },
       {
-        "OperatorType": "Subquery",
+        "OperatorType": "SimpleProjection",
         "Columns": [
           1
         ],
@@ -3182,7 +3182,7 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select id, t.id from (select user.id from user join user_extra) as t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0,
       0

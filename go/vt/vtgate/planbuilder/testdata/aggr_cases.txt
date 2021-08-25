@@ -802,7 +802,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "QueryType": "SELECT",
   "Original": "select a from (select count(*) as a from user) t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0
     ],
@@ -832,7 +832,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "QueryType": "SELECT",
   "Original": "select a from (select count(*) as a from user) t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0
     ],
