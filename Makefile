@@ -16,7 +16,6 @@ MAKEFLAGS = -s
 GIT_STATUS := $(shell git status --porcelain)
 
 export GOBIN=$(PWD)/bin
-export GO111MODULE=on
 export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
@@ -60,7 +59,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
 
 # build the vitess binaries statically
@@ -70,15 +69,15 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	# build all the binaries by default with CGO disabled
-	CGO_ENABLED=0 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	CGO_ENABLED=0 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# embed local resources in the vttablet executable
 	(cd go/cmd/vttablet && go run github.com/GeertJohan/go.rice/rice append --exec=../../../bin/vttablet)
 	# build vtorc with CGO, because it depends on sqlite
-	CGO_ENABLED=1 go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
+	CGO_ENABLED=1 go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/cmd/vtorc/...
 
-# xbuild can be used to cross-compile Vitess client binaries
+# cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
-# Usage: GOOS=darwin GOARCH=amd64 make xbuild
+# Usage: GOOS=darwin GOARCH=amd64 make cross-build
 cross-build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
@@ -87,7 +86,7 @@ endif
 	# In order to cross-compile, go install requires GOBIN to be unset
 	export GOBIN=""
 	# For the specified GOOS + GOARCH, build all the binaries by default with CGO disabled
-	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 	# unset GOOS and embed local resources in the vttablet executable
 	(cd go/cmd/vttablet && unset GOOS && go run github.com/GeertJohan/go.rice/rice --verbose append --exec=$${HOME}/go/bin/${GOOS}_${GOARCH}/vttablet)
 	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it 
@@ -97,7 +96,7 @@ ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
-	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
+	go install -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.
 # This target is optimized for docker images. It only installs the files needed for running vitess in docker
@@ -133,7 +132,7 @@ grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 parser:
 	make -C go/vt/sqlparser
 
-codegen: asthelpergen sizegen parser
+codegen: asthelpergen sizegen parser astfmtgen
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
@@ -211,7 +210,9 @@ java_test:
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
-	go install github.com/gogo/protobuf/protoc-gen-gofast
+	go install google.golang.org/protobuf/cmd/protoc-gen-go
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
+	go install github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
@@ -225,11 +226,14 @@ ifndef NOBANNER
 endif
 
 $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
-	for name in $(PROTO_SRC_NAMES); do \
-		$(VTROOT)/bin/protoc --gofast_out=plugins=grpc:. --plugin protoc-gen-gofast="${GOBIN}/protoc-gen-gofast" \
-		-I${PWD}/dist/vt-protoc-3.6.1/include:proto proto/$${name}.proto && \
-		goimports -w vitess.io/vitess/go/vt/proto/$${name}/$${name}.pb.go; \
-	done
+	$(VTROOT)/bin/protoc \
+		--go_out=. --plugin protoc-gen-go="${GOBIN}/protoc-gen-go" \
+		--go-grpc_out=. --plugin protoc-gen-go-grpc="${GOBIN}/protoc-gen-go-grpc" \
+		--go-vtproto_out=. --plugin protoc-gen-go-vtproto="${GOBIN}/protoc-gen-go-vtproto" \
+		--go-vtproto_opt=features=marshal+unmarshal+size+pool \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/query.Row \
+		--go-vtproto_opt=pool=vitess.io/vitess/go/vt/proto/binlogdata.VStreamRowsResponse \
+		-I${PWD}/dist/vt-protoc-3.6.1/include:proto $(PROTO_SRCS)
 	cp -Rf vitess.io/vitess/go/vt/proto/* go/vt/proto
 	rm -rf vitess.io/vitess/go/vt/proto/
 
@@ -239,7 +243,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql56 mysql57 mysql80 percona percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=1
+BOOTSTRAP_VERSION=2
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -346,6 +350,7 @@ endif
 	git add --all
 	git commit -n -s -m "Release commit for $(RELEASE_VERSION)" 
 	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+	git tag -a v$(GODOC_RELEASE_VERSION) -m "Tagging $(RELEASE_VERSION) also as $(GODOC_RELEASE_VERSION) for godoc/go modules"
 	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
 	echo package servenv > go/vt/servenv/version.go
 	echo  >> go/vt/servenv/version.go
@@ -353,8 +358,8 @@ endif
 	git add --all
 	git commit -n -s -m "Back to dev mode"
 	echo "Release preparations successful" 
-	echo "A git tag was created, you can push it with:"
-	echo "   git push upstream v$(RELEASE_VERSION)"
+	echo "Two git tags were created, you can push them with:"
+	echo "   git push upstream v$(RELEASE_VERSION) && git push upstream v$(GODOC_RELEASE_VERSION)"
 	echo "The git branch has also been updated. You need to push it and get it merged"
 
 tools:
@@ -458,4 +463,4 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from $(FROM) -to $(TO)
+	go run ./go/tools/release-notes -from $(FROM) -to $(TO) -release-branch $(RELEASE_BRANCH)

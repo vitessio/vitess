@@ -50,11 +50,11 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 // a session context. It's only when we Execute() the primitive that we have that context.
 // This is why we return a compound primitive (DDL) which contains fully populated primitives (Send & OnlineDDL),
 // and which chooses which of the two to invoke at runtime.
-func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
 	}
-	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema)
+	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(sql, ddlStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -68,12 +68,14 @@ func buildGeneralDDLPlan(sql string, ddlStatement sqlparser.DDLStatement, reserv
 	}
 
 	return &engine.DDL{
-		Keyspace:         normalDDLPlan.Keyspace,
-		SQL:              normalDDLPlan.Query,
-		DDL:              ddlStatement,
-		NormalDDL:        normalDDLPlan,
-		OnlineDDL:        onlineDDLPlan,
-		OnlineDDLEnabled: *enableOnlineDDL,
+		Keyspace:  normalDDLPlan.Keyspace,
+		SQL:       normalDDLPlan.Query,
+		DDL:       ddlStatement,
+		NormalDDL: normalDDLPlan,
+		OnlineDDL: onlineDDLPlan,
+
+		DirectDDLEnabled: enableDirectDDL,
+		OnlineDDLEnabled: enableOnlineDDL,
 
 		CreateTempTable: ddlStatement.IsTemporary(),
 	}, nil
@@ -91,7 +93,7 @@ func buildByPassDDLPlan(sql string, vschema ContextVSchema) (engine.Primitive, e
 	}, nil
 }
 
-func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, enableOnlineDDL, enableDirectDDL bool) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -106,9 +108,9 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 		// We should find the target of the query from this tables location
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 	case *sqlparser.CreateView:
-		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars)
+		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
-		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars)
+		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.CreateTable:
 		err = checkFKError(vschema, ddlStatement)
 		if err != nil {
@@ -161,7 +163,7 @@ func checkFKError(vschema ContextVSchema, ddlStatement sqlparser.DDLStatement) e
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraint is not allowed")
+			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
 		}
 	}
 	return nil
@@ -192,7 +194,7 @@ func findTableDestinationAndKeyspace(vschema ContextVSchema, ddlStatement sqlpar
 	return destination, keyspace, nil
 }
 
-func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars) (key.Destination, *vindexes.Keyspace, error) {
+func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -201,7 +203,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVa
 	}
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,7 +229,7 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVa
 	return destination, keyspace, nil
 }
 
-func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars *sqlparser.ReservedVars) (key.Destination, *vindexes.Keyspace, error) {
+func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
 	// For Create View, we require that the keyspace exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, _, err := vschema.TargetDestination(ddl.ViewName.Qualifier.String())
@@ -237,7 +239,7 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reserved
 	ddl.ViewName.Qualifier = sqlparser.NewTableIdent("")
 
 	var selectPlan engine.Primitive
-	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema)
+	selectPlan, err = createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
 	}

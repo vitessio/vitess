@@ -40,7 +40,7 @@ VReplication state: Open</br>
     <th>State</th>
     <th>Stop Position</th>
     <th>Last Position</th>
-    <th>Seconds Behind Master</th>
+    <th>VReplication Lag</th>
     <th>Counts</th>
     <th>Rates</th>
     <th>Last Message</th>
@@ -79,7 +79,7 @@ func TestStatusHtml(t *testing.T) {
 
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
-	blpStats.SecondsBehindMaster.Set(2)
+	blpStats.ReplicationLagSeconds.Set(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 
@@ -88,7 +88,7 @@ func TestStatusHtml(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},
@@ -98,7 +98,7 @@ func TestStatusHtml(t *testing.T) {
 		},
 		2: {
 			id: 2,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "1",
 			},
@@ -127,7 +127,7 @@ func TestVReplicationStats(t *testing.T) {
 	testStats.controllers = map[int]*controller{
 		1: {
 			id: 1,
-			source: binlogdata.BinlogSource{
+			source: &binlogdata.BinlogSource{
 				Keyspace: "ks",
 				Shard:    "0",
 			},

@@ -19,12 +19,11 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route) error {
-	isTableSchema, out, err := extractInfoSchemaRoutingPredicate(expr)
+func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
+	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
 	if err != nil {
 		return err
 	}
@@ -36,9 +35,35 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	if isTableSchema {
 		rut.eroute.SysTableTableSchema = append(rut.eroute.SysTableTableSchema, out)
 	} else {
-		rut.eroute.SysTableTableName = append(rut.eroute.SysTableTableName, out)
+		if rut.eroute.SysTableTableName == nil {
+			rut.eroute.SysTableTableName = map[string]evalengine.Expr{}
+		}
+		rut.eroute.SysTableTableName[bvName] = out
 	}
 
+	return nil
+}
+
+func (rp *routeTree) findSysInfoRoutingPredicatesGen4(reservedVars *sqlparser.ReservedVars) error {
+	for _, pred := range rp.predicates {
+		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
+		if err != nil {
+			return err
+		}
+		if out == nil {
+			// we didn't find a predicate to use for routing, continue to look for next predicate
+			continue
+		}
+
+		if isTableSchema {
+			rp.SysTableTableSchema = append(rp.SysTableTableSchema, out)
+		} else {
+			if rp.SysTableTableName == nil {
+				rp.SysTableTableName = map[string]evalengine.Expr{}
+			}
+			rp.SysTableTableName[bvName] = out
+		}
+	}
 	return nil
 }
 
@@ -73,7 +98,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 	return col.Name.EqualString("table_name")
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
 	switch cmp := in.(type) {
 	case *sqlparser.ComparisonExpr:
 		if cmp.Operator == sqlparser.EqualOp {
@@ -84,22 +109,22 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr) (bool, evalengine.Expr
 					if err == sqlparser.ErrExprNotSupported {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
-						return false, nil, nil
+						return false, "", nil, nil
 					}
-					return false, nil, err
+					return false, "", nil, err
 				}
 				var name string
 				if isSchemaName {
 					name = sqltypes.BvSchemaName
 				} else {
-					name = engine.BvTableName
+					name = reservedVars.ReserveColName(col.(*sqlparser.ColName))
 				}
 				replaceOther(sqlparser.NewArgument(name))
-				return isSchemaName, evalExpr, nil
+				return isSchemaName, name, evalExpr, nil
 			}
 		}
 	}
-	return false, nil, nil
+	return false, "", nil, nil
 }
 
 func shouldRewrite(e sqlparser.Expr) bool {

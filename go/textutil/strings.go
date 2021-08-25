@@ -17,6 +17,7 @@ limitations under the License.
 package textutil
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 )
@@ -36,4 +37,30 @@ func SplitDelimitedList(s string) (list []string) {
 		list = append(list, token)
 	}
 	return list
+}
+
+// EscapeJoin acts like strings.Join, except it first escapes elements via net/url
+func EscapeJoin(elems []string, sep string) string {
+	escapedElems := []string{}
+	for i := range elems {
+		escapedElems = append(escapedElems, url.QueryEscape(elems[i]))
+	}
+	return strings.Join(escapedElems, sep)
+}
+
+// SplitUnescape acts like strings.Split, except it then unescapes tokens via net/url
+func SplitUnescape(s string, sep string) ([]string, error) {
+	if s == "" {
+		return nil, nil
+	}
+	elems := strings.Split(s, sep)
+	unescapedElems := []string{}
+	for i := range elems {
+		d, err := url.QueryUnescape(elems[i])
+		if err != nil {
+			return unescapedElems, err
+		}
+		unescapedElems = append(unescapedElems, d)
+	}
+	return unescapedElems, nil
 }

@@ -54,4 +54,12 @@ service Vitess {
 
   // VStream streams binlog events from the requested sources.
   rpc VStream(vtgate.VStreamRequest) returns (stream vtgate.VStreamResponse) {};
+
+  // Prepare is used by the MySQL server plugin as part of supporting prepared statements.
+  rpc Prepare(vtgate.PrepareRequest) returns (vtgate.PrepareResponse) {};
+
+  // CloseSession closes the session, rolling back any implicit transactions.
+  // This has the same effect as if a "rollback" statement was executed,
+  // but does not affect the query statistics.
+  rpc CloseSession(vtgate.CloseSessionRequest) returns (vtgate.CloseSessionResponse) {};
 }

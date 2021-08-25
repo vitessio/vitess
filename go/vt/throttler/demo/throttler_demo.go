@@ -45,16 +45,16 @@ import (
 // throttler adapts its throttling rate to the replication lag.
 //
 // The throttler is necessary because replicas apply transactions at a slower
-// rate than masters and fall behind at high write throughput.
+// rate than primaries and fall behind at high write throughput.
 // (Mostly they fall behind because MySQL replication is single threaded but
-//  the write throughput on the master does not have to.)
+//  the write throughput on the primary does not have to.)
 //
-// This demo simulates a client (writer), a master and a replica.
-// The client writes to the master which in turn replicas everything to the
+// This demo simulates a client (writer), a primary and a replica.
+// The client writes to the primary which in turn replicas everything to the
 // replica.
 // The replica measures its replication lag via the timestamp which is part of
 // each message.
-// While the master has no rate limit, the replica is limited to
+// While the primary has no rate limit, the replica is limited to
 // --rate (see below) transactions/second. The client runs the resharding
 // throttler which tries to throttle the client based on the observed
 // replication lag.
@@ -67,25 +67,25 @@ var (
 	replicaDegrationDuration = flag.Duration("replica_degration_duration", 10*time.Second, "duration a simulated degration should take")
 )
 
-// master simulates an *unthrottled* MySQL master which replicates every
+// primary simulates an *unthrottled* MySQL primary which replicates every
 // received "execute" call to a known "replica".
-type master struct {
+type primary struct {
 	replica *replica
 }
 
 // execute is the simulated RPC which is called by the client.
-func (m *master) execute(msg time.Time) {
+func (m *primary) execute(msg time.Time) {
 	m.replica.replicate(msg)
 }
 
 // replica simulates a *throttled* MySQL replica.
-// If it cannot keep up with applying the master writes, it will report a
+// If it cannot keep up with applying the primary writes, it will report a
 // replication lag > 0 seconds.
 type replica struct {
 	fakeTablet *testlib.FakeTablet
 	qs         *fakes.StreamHealthQueryService
 
-	// replicationStream is the incoming stream of messages from the master.
+	// replicationStream is the incoming stream of messages from the primary.
 	replicationStream chan time.Time
 
 	// throttler is used to enforce the maximum rate at which replica applies
@@ -111,7 +111,7 @@ func newReplica(lagUpdateInterval, degrationInterval, degrationDuration time.Dur
 		topodatapb.TabletType_REPLICA, nil, testlib.TabletKeyspaceShard(t, "ks", "-80"))
 	fakeTablet.StartActionLoop(t, wr)
 
-	target := querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   "ks",
 		Shard:      "-80",
 		TabletType: topodatapb.TabletType_REPLICA,
@@ -172,7 +172,7 @@ func (r *replica) processReplicationStream() {
 			// Display lag with a higher precision as well.
 			lag := now.Sub(msg).Seconds()
 			log.Infof("current lag: %1ds (%1.1fs) replica rate: % 7.1f chan len: % 6d", lagTruncated, lag, float64(actualRate)/r.lagUpdateInterval.Seconds(), len(r.replicationStream))
-			r.qs.AddHealthResponseWithSecondsBehindMaster(lagTruncated)
+			r.qs.AddHealthResponseWithReplicationLag(lagTruncated)
 			r.lastHealthUpdate = now
 			actualRate = 0
 		}
@@ -211,7 +211,7 @@ func (r *replica) stop() {
 // client simulates a client which should throttle itself based on the
 // replication lag of all replicas.
 type client struct {
-	master *master
+	primary *primary
 
 	healthCheck discovery.LegacyHealthCheck
 	throttler   *throttler.Throttler
@@ -220,7 +220,7 @@ type client struct {
 	wg       sync.WaitGroup
 }
 
-func newClient(master *master, replica *replica) *client {
+func newClient(primary *primary, replica *replica) *client {
 	t, err := throttler.NewThrottler("client", "TPS", 1, throttler.MaxRateModuleDisabled, 5 /* seconds */)
 	if err != nil {
 		log.Fatal(err)
@@ -228,7 +228,7 @@ func newClient(master *master, replica *replica) *client {
 
 	healthCheck := discovery.NewLegacyHealthCheck(5*time.Second, 1*time.Minute)
 	c := &client{
-		master:      master,
+		primary:     primary,
 		healthCheck: healthCheck,
 		throttler:   t,
 		stopChan:    make(chan struct{}),
@@ -261,7 +261,7 @@ func (c *client) loop() {
 			time.Sleep(backoff)
 		}
 
-		c.master.execute(time.Now())
+		c.primary.execute(time.Now())
 	}
 }
 
@@ -295,8 +295,8 @@ func main() {
 
 	log.Infof("start rate set to: %v", *rate)
 	replica := newReplica(*lagUpdateInterval, *replicaDegrationInterval, *replicaDegrationDuration)
-	master := &master{replica: replica}
-	client := newClient(master, replica)
+	primary := &primary{replica: replica}
+	client := newClient(primary, replica)
 	client.run()
 
 	time.Sleep(*duration)

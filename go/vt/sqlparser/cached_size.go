@@ -36,8 +36,6 @@ func (cached *AddColumns) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -391,8 +389,6 @@ func (cached *ChangeColumn) CachedSize(alloc bool) int64 {
 	size += cached.OldColumn.CachedSize(true)
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -516,7 +512,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(96)
 	}
 	// field Null *bool
 	size += int64(1)
@@ -528,8 +524,14 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.OnUpdate.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	// field As vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.As.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	// field Comment *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Comment.CachedSize(true)
+	// field Reference *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
+	size += cached.Reference.CachedSize(true)
 	return size
 }
 func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
@@ -947,7 +949,7 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(72)
 	}
 	// field Source vitess.io/vitess/go/vt/sqlparser.Columns
 	{
@@ -956,15 +958,10 @@ func (cached *ForeignKeyDefinition) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field ReferencedTable vitess.io/vitess/go/vt/sqlparser.TableName
-	size += cached.ReferencedTable.CachedSize(false)
-	// field ReferencedColumns vitess.io/vitess/go/vt/sqlparser.Columns
-	{
-		size += int64(cap(cached.ReferencedColumns)) * int64(40)
-		for _, elem := range cached.ReferencedColumns {
-			size += elem.CachedSize(false)
-		}
-	}
+	// field IndexName vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.IndexName.CachedSize(false)
+	// field ReferenceDefinition *vitess.io/vitess/go/vt/sqlparser.ReferenceDefinition
+	size += cached.ReferenceDefinition.CachedSize(true)
 	return size
 }
 func (cached *FuncExpr) CachedSize(alloc bool) int64 {
@@ -1175,10 +1172,10 @@ func (cached *IsExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(17)
 	}
-	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Left vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size
@@ -1324,8 +1321,6 @@ func (cached *ModifyColumn) CachedSize(alloc bool) int64 {
 	}
 	// field NewColDefinition *vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	size += cached.NewColDefinition.CachedSize(true)
-	// field First *vitess.io/vitess/go/vt/sqlparser.ColName
-	size += cached.First.CachedSize(true)
 	// field After *vitess.io/vitess/go/vt/sqlparser.ColName
 	size += cached.After.CachedSize(true)
 	return size
@@ -1534,6 +1529,25 @@ func (cached *RangeCond) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(72)
+	}
+	// field ReferencedTable vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.ReferencedTable.CachedSize(false)
+	// field ReferencedColumns vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += int64(cap(cached.ReferencedColumns)) * int64(40)
+		for _, elem := range cached.ReferencedColumns {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *Release) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1656,6 +1670,15 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Cache *bool
 	size += int64(1)
+	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
+	{
+		size += int64(cap(cached.From)) * int64(16)
+		for _, elem := range cached.From {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
 	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
 	{
 		size += int64(cap(cached.Comments)) * int64(16)
@@ -1667,15 +1690,6 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.SelectExprs)) * int64(16)
 		for _, elem := range cached.SelectExprs {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
-	// field From vitess.io/vitess/go/vt/sqlparser.TableExprs
-	{
-		size += int64(cap(cached.From)) * int64(16)
-		for _, elem := range cached.From {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}
@@ -1878,6 +1892,25 @@ func (cached *ShowLegacy) CachedSize(alloc bool) int64 {
 	// field ShowCollationFilterOpt vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.ShowCollationFilterOpt.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(40)
+	}
+	// field UUID string
+	size += int64(len(cached.UUID))
+	// field Comments vitess.io/vitess/go/vt/sqlparser.Comments
+	{
+		size += int64(cap(cached.Comments)) * int64(16)
+		for _, elem := range cached.Comments {
+			size += int64(len(elem))
+		}
 	}
 	return size
 }

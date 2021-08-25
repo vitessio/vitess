@@ -60,7 +60,7 @@ func createRoute() *Route {
 		FieldQuery:        "more query",
 		Vindex:            hash.(*vindexes.Hash),
 		Values:            []sqltypes.PlanValue{},
-		OrderBy:           []OrderbyParams{},
+		OrderBy:           []OrderByParams{},
 	}
 }
 

@@ -275,7 +275,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	case keywordStrings[MULTIPOLYGON]:
 		return sqltypes.Geometry
 	}
-	panic("unimplemented type " + ct.Type)
+	return sqltypes.Null
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -457,6 +457,16 @@ func NewBitLiteral(in string) *Literal {
 // NewArgument builds a new ValArg.
 func NewArgument(in string) Argument {
 	return Argument(in)
+}
+
+// NewListArg builds a new ListArg.
+func NewListArg(in string) ListArg {
+	return ListArg(in)
+}
+
+// String returns ListArg as a string.
+func (node ListArg) String() string {
+	return string(node)
 }
 
 // Bytes return the []byte
@@ -744,6 +754,21 @@ func (node *Select) MakeDistinct() {
 	node.Distinct = true
 }
 
+// GetColumnCount return SelectExprs count.
+func (node *Select) GetColumnCount() int {
+	return len(node.SelectExprs)
+}
+
+// SetComments implements the SelectStatement interface
+func (node *Select) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Select) GetComments() Comments {
+	return node.Comments
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Select) AddWhere(expr Expr) {
@@ -796,6 +821,21 @@ func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
 }
 
+// GetColumnCount implements the SelectStatement interface
+func (node *ParenSelect) GetColumnCount() int {
+	return node.Select.GetColumnCount()
+}
+
+// SetComments implements the SelectStatement interface
+func (node *ParenSelect) SetComments(comments Comments) {
+	node.Select.SetComments(comments)
+}
+
+// GetComments implements the SelectStatement interface
+func (node *ParenSelect) GetComments() Comments {
+	return node.Select.GetComments()
+}
+
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -830,6 +870,21 @@ func (node *Union) SetLock(lock Lock) {
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+}
+
+// GetColumnCount implements the SelectStatement interface
+func (node *Union) GetColumnCount() int {
+	return node.FirstStatement.GetColumnCount()
+}
+
+// SetComments implements the SelectStatement interface
+func (node *Union) SetComments(comments Comments) {
+	node.FirstStatement.SetComments(comments)
+}
+
+// GetComments implements the SelectStatement interface
+func (node *Union) GetComments() Comments {
+	return node.FirstStatement.GetComments()
 }
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
@@ -1259,6 +1314,8 @@ func (ty ShowCommandType) ToString() string {
 		return VGtidExecGlobalStr
 	case VitessMigrations:
 		return VitessMigrationsStr
+	case Warnings:
+		return WarningsStr
 	case Keyspace:
 		return KeyspaceStr
 	default:
@@ -1305,6 +1362,17 @@ func (node *ColName) CompliantName() string {
 	return node.Name.CompliantName()
 }
 
+// isExprAliasForCurrentTimeStamp returns true if the Expr provided is an alias for CURRENT_TIMESTAMP
+func isExprAliasForCurrentTimeStamp(expr Expr) bool {
+	switch node := expr.(type) {
+	case *FuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	case *CurTimeFuncExpr:
+		return node.Name.EqualString("current_timestamp") || node.Name.EqualString("now") || node.Name.EqualString("localtimestamp") || node.Name.EqualString("localtime")
+	}
+	return false
+}
+
 // AtCount represents the '@' count in ColIdent
 type AtCount int
 
@@ -1319,7 +1387,7 @@ const (
 
 // handleUnaryMinus handles the case when a unary minus operator is seen in the parser. It takes 1 argument which is the expr to which the unary minus has been added to.
 func handleUnaryMinus(expr Expr) Expr {
-	if num, ok := expr.(*Literal); ok && num.Type == IntVal {
+	if num, ok := expr.(*Literal); ok && (num.Type == IntVal || num.Type == FloatVal) {
 		// Handle double negative
 		if num.Val[0] == '-' {
 			num.Val = num.Val[1:]
@@ -1336,4 +1404,40 @@ func handleUnaryMinus(expr Expr) Expr {
 // encodeSQLString encodes the string as a SQL string.
 func encodeSQLString(val string) string {
 	return sqltypes.EncodeStringSQL(val)
+}
+
+// ToString prints the list of table expressions as a string
+// To be used as an alternate for String for []TableExpr
+func ToString(exprs []TableExpr) string {
+	buf := NewTrackedBuffer(nil)
+	prefix := ""
+	for _, expr := range exprs {
+		buf.astPrintf(nil, "%s%v", prefix, expr)
+		prefix = ", "
+	}
+	return buf.String()
+}
+
+// ContainsAggregation returns true if the expression contains aggregation
+func ContainsAggregation(e SQLNode) bool {
+	hasAggregates := false
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		if IsAggregation(node) {
+			hasAggregates = true
+			return false, nil
+		}
+		return true, nil
+	}, e)
+	return hasAggregates
+}
+
+// IsAggregation returns true if the node is an aggregation expression
+func IsAggregation(node SQLNode) bool {
+	switch node := node.(type) {
+	case *FuncExpr:
+		return node.IsAggregate()
+	case *GroupConcatExpr:
+		return true
+	}
+	return false
 }

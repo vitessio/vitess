@@ -107,7 +107,7 @@ func TestFilterLegacyStatsByReplicationLag(t *testing.T) {
 			lts[i] = &LegacyTabletStats{
 				Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%vs-behind", lag)),
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{SecondsBehindMaster: lag},
+				Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: lag},
 			}
 		}
 		got := FilterLegacyStatsByReplicationLag(lts)
@@ -116,7 +116,7 @@ func TestFilterLegacyStatsByReplicationLag(t *testing.T) {
 			continue
 		}
 		for i, elag := range tc.output {
-			if got[i].Stats.SecondsBehindMaster != elag {
+			if got[i].Stats.ReplicationLagSeconds != elag {
 				t.Errorf("FilterLegacyStatsByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
 			}
 		}
@@ -216,7 +216,7 @@ func TestFilterLegacyStatysByReplicationLagWithLegacyAlgorithm(t *testing.T) {
 			lts[i] = &LegacyTabletStats{
 				Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%vs-behind", lag)),
 				Serving: true,
-				Stats:   &querypb.RealtimeStats{SecondsBehindMaster: lag},
+				Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: lag},
 			}
 		}
 		got := FilterLegacyStatsByReplicationLag(lts)
@@ -225,7 +225,7 @@ func TestFilterLegacyStatysByReplicationLagWithLegacyAlgorithm(t *testing.T) {
 			continue
 		}
 		for i, elag := range tc.output {
-			if got[i].Stats.SecondsBehindMaster != elag {
+			if got[i].Stats.ReplicationLagSeconds != elag {
 				t.Errorf("FilterLegacyStatsByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
 			}
 		}
@@ -239,22 +239,22 @@ func TestFilterLegacyStatsByReplicationLagThreeTabletMin(t *testing.T) {
 	ts1 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts2 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts3 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10 * 60},
 	}
 	ts4 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 11 * 60},
 	}
 	got := FilterLegacyStatsByReplicationLag([]*LegacyTabletStats{ts1, ts2, ts3, ts4})
 	if len(got) != 3 || !got[0].DeepEqual(ts1) || !got[1].DeepEqual(ts2) || !got[2].DeepEqual(ts3) {
@@ -264,22 +264,22 @@ func TestFilterLegacyStatsByReplicationLagThreeTabletMin(t *testing.T) {
 	ts1 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 11 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 11 * 60},
 	}
 	ts2 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 10 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 10 * 60},
 	}
 	ts3 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(3, "cell", "host3"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts4 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(4, "cell", "host4"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	got = FilterLegacyStatsByReplicationLag([]*LegacyTabletStats{ts1, ts2, ts3, ts4})
 	if len(got) != 3 || !got[0].DeepEqual(ts3) || !got[1].DeepEqual(ts4) || !got[2].DeepEqual(ts2) {
@@ -296,12 +296,12 @@ func TestFilterByReplicationLagOneTabletMin(t *testing.T) {
 	ts1 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1},
 	}
 	ts2 := &LegacyTabletStats{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 100 * 60},
 	}
 	got := FilterLegacyStatsByReplicationLag([]*LegacyTabletStats{ts1, ts2})
 	if len(got) != 1 || !got[0].DeepEqual(ts1) {
@@ -311,12 +311,12 @@ func TestFilterByReplicationLagOneTabletMin(t *testing.T) {
 	ts1 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(1, "cell", "host1"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 1 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1 * 60},
 	}
 	ts2 = &LegacyTabletStats{
 		Tablet:  topo.NewTablet(2, "cell", "host2"),
 		Serving: true,
-		Stats:   &querypb.RealtimeStats{SecondsBehindMaster: 100 * 60},
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 100 * 60},
 	}
 	got = FilterLegacyStatsByReplicationLag([]*LegacyTabletStats{ts1, ts2})
 	if len(got) != 1 || !got[0].DeepEqual(ts1) {
@@ -354,12 +354,12 @@ func TestTrivialLegacyStatsUpdate(t *testing.T) {
 	for _, c := range cases {
 		o := &LegacyTabletStats{
 			Stats: &querypb.RealtimeStats{
-				SecondsBehindMaster: c.o,
+				ReplicationLagSeconds: c.o,
 			},
 		}
 		n := &LegacyTabletStats{
 			Stats: &querypb.RealtimeStats{
-				SecondsBehindMaster: c.n,
+				ReplicationLagSeconds: c.n,
 			},
 		}
 		got := o.TrivialStatsUpdate(n)

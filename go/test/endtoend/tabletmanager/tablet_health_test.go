@@ -41,30 +41,30 @@ func TestTabletReshuffle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer conn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, masterConn, "delete from t1")
-	exec(t, masterConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	//Create new tablet
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// mycnf_server_id prevents vttablet from reading the mycnf
-	// Pointing to masterTablet's socket file
+	// Pointing to primaryTablet's socket file
 	// We have to disable active reparenting to prevent the tablet from trying to fix replication.
-	// We also have to disable replication reporting because we're pointed at the master.
+	// We also have to disable replication reporting because we're pointed at the primary.
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
-		"-db_socket", fmt.Sprintf("%s/mysql.sock", masterTablet.VttabletProcess.Directory),
+		"-db_socket", fmt.Sprintf("%s/mysql.sock", primaryTablet.VttabletProcess.Directory),
 		"-disable_active_reparents",
 		"-enable_replication_reporter=false",
 	}
@@ -109,21 +109,21 @@ func TestHealthCheck(t *testing.T) {
 	// Create database in mysql
 	exec(t, replicaConn, fmt.Sprintf("create database vt_%s", keyspaceName))
 
-	// start vttablet process, should be in SERVING state as we already have a master
+	// start vttablet process, should be in SERVING state as we already have a primary
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer conn.Close()
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
 	require.NoError(t, err)
 	checkHealth(t, rTablet.HTTPPort, false)
 
-	// Make sure the master is still master
-	checkTabletType(t, masterTablet.Alias, "MASTER")
-	exec(t, masterConn, "stop slave")
+	// Make sure the primary is still primary
+	checkTabletType(t, primaryTablet.Alias, "PRIMARY")
+	exec(t, conn, "stop slave")
 
 	// stop replication, make sure we don't go unhealthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rTablet.Alias)
@@ -190,11 +190,11 @@ func verifyStreamHealth(t *testing.T, result string) {
 	serving := streamHealthResponse.GetServing()
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
-	secondsBehindMaster := realTimeStats.GetSecondsBehindMaster()
+	replicationLagSeconds := realTimeStats.GetReplicationLagSeconds()
 	assert.True(t, serving, "Tablet should be in serving state")
 	assert.True(t, UID > 0, "Tablet should contain uid")
-	// secondsBehindMaster varies till 7200 so setting safe limit
-	assert.True(t, secondsBehindMaster < 10000, "replica should not be behind master")
+	// replicationLagSeconds varies till 7200 so setting safe limit
+	assert.True(t, replicationLagSeconds < 10000, "replica should not be behind primary")
 }
 
 func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
@@ -205,7 +205,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 
 	//Wait if tablet is not in service state
 	defer cluster.PanicHandler(t)
-	err := rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
+	err := rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
 	// Check tablet health
@@ -231,7 +231,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	checkTabletType(t, rdonlyTablet.Alias, "DRAINED")
 
 	// Query service is still running.
-	err = rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
+	err = rdonlyTablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 
 	// Restart replication. Tablet will become healthy again.

@@ -28,7 +28,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
@@ -59,15 +59,17 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu                sync.Mutex
-	isOpen            bool
-	isResharding      bool
-	isInSrvKeyspace   bool
-	isShardServing    map[topodatapb.TabletType]bool
-	tabletControls    map[topodatapb.TabletType]bool
-	blacklistedTables map[topodatapb.TabletType][]string
-	tablet            *topodatapb.Tablet
-	isPublishing      bool
+	mu                       sync.Mutex
+	isOpen                   bool
+	isOpening                bool
+	isResharding             bool
+	isInSrvKeyspace          bool
+	isShardServing           map[topodatapb.TabletType]bool
+	tabletControls           map[topodatapb.TabletType]bool
+	deniedTables             map[topodatapb.TabletType][]string
+	tablet                   *topodatapb.Tablet
+	isPublishing             bool
+	hasCreatedMetadataTables bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -95,7 +97,9 @@ func (ts *tmState) Open() {
 	}
 
 	ts.isOpen = true
+	ts.isOpening = true
 	ts.updateLocked(ts.ctx)
+	ts.isOpening = false
 	ts.publishStateLocked(ts.ctx)
 }
 
@@ -132,10 +136,10 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	if shardInfo != nil {
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
-		ts.blacklistedTables = make(map[topodatapb.TabletType][]string)
+		ts.deniedTables = make(map[topodatapb.TabletType][]string)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
-				ts.blacklistedTables[tc.TabletType] = tc.BlacklistedTables
+				ts.deniedTables[tc.TabletType] = tc.DeniedTables
 			}
 		}
 	}
@@ -171,27 +175,27 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 	defer ts.mu.Unlock()
 	log.Infof("Changing Tablet Type: %v", tabletType)
 
-	if tabletType == topodatapb.TabletType_MASTER {
-		masterTermStartTime := logutil.TimeToProto(time.Now())
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, masterTermStartTime)
+		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
 		if err != nil {
 			return err
 		}
 		if action == DBActionSetReadWrite {
 			// We call SetReadOnly only after the topo has been updated to avoid
-			// situations where two tablets are master at the DB level but not at the vitess level
+			// situations where two tablets are primary at the DB level but not at the vitess level
 			if err := ts.tm.MysqlDaemon.SetReadOnly(false); err != nil {
 				return err
 			}
 		}
 
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = masterTermStartTime
+		ts.tablet.PrimaryTermStartTime = PrimaryTermStartTime
 	} else {
 		ts.tablet.Type = tabletType
-		ts.tablet.MasterTermStartTime = nil
+		ts.tablet.PrimaryTermStartTime = nil
 	}
 
 	s := topoproto.TabletTypeLString(tabletType)
@@ -229,7 +233,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		return
 	}
 
-	terTime := logutil.ProtoToTime(ts.tablet.MasterTermStartTime)
+	terTime := logutil.ProtoToTime(ts.tablet.PrimaryTermStartTime)
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -241,8 +245,8 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		}
 	}
 
-	if err := ts.applyBlacklist(ctx); err != nil {
-		log.Errorf("Cannot update blacklisted tables rule: %v", err)
+	if err := ts.applyDenyList(ctx); err != nil {
+		log.Errorf("Cannot update denied tables rule: %v", err)
 	}
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
@@ -256,7 +260,7 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 
 	if ts.tm.VREngine != nil {
-		if ts.tablet.Type == topodatapb.TabletType_MASTER {
+		if ts.tablet.Type == topodatapb.TabletType_PRIMARY {
 			ts.tm.VREngine.Open(ts.tm.BatchCtx)
 		} else {
 			ts.tm.VREngine.Close()
@@ -279,6 +283,33 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 	}
 }
 
+func (ts *tmState) populateLocalMetadataLocked() {
+	if ts.tm.MetadataManager == nil {
+		return
+	}
+
+	if ts.isOpening && !*initPopulateMetadata {
+		return
+	}
+
+	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
+	dbName := topoproto.TabletDbName(ts.tablet)
+
+	if !ts.hasCreatedMetadataTables {
+		if err := ts.tm.MetadataManager.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
+			return
+		}
+
+		ts.hasCreatedMetadataTables = true
+		return
+	}
+
+	if err := ts.tm.MetadataManager.UpsertLocalMetadata(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
+		log.Errorf("UpsertMetadataTables(%v) failed: %v", localMetadata, err)
+	}
+}
+
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if !topo.IsRunningQueryService(tabletType) {
 		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
@@ -286,36 +317,36 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"
 	}
-	if tabletType == topodatapb.TabletType_MASTER && ts.isResharding {
-		return "master tablet with filtered replication on"
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
+		return "primary tablet with filtered replication on"
 	}
 	return ""
 }
 
-func (ts *tmState) applyBlacklist(ctx context.Context) (err error) {
-	blacklistRules := rules.New()
-	blacklistedTables := ts.blacklistedTables[ts.tablet.Type]
-	if len(blacklistedTables) > 0 {
-		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), blacklistedTables)
+func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
+	denyListRules := rules.New()
+	deniedTables := ts.deniedTables[ts.tablet.Type]
+	if len(deniedTables) > 0 {
+		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
 		if err != nil {
 			return err
 		}
 
 		// Verify that at least one table matches the wildcards, so
-		// that we don't add a rule to blacklist all tables
+		// that we don't add a rule to deny all tables
 		if len(tables) > 0 {
-			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-			qr := rules.NewQueryRule("enforce blacklisted tables", "blacklisted_table", rules.QRFailRetry)
+			log.Infof("Denying tables %v", strings.Join(tables, ", "))
+			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
 			}
-			blacklistRules.Add(qr)
+			denyListRules.Add(qr)
 		}
 	}
 
-	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr)
 	}
 	return nil
 }
@@ -334,7 +365,8 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 			log.Error(err)
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
-		*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+		proto.Reset(tablet)
+		proto.Merge(tablet, ts.tablet)
 		return nil
 	})
 	if err != nil {
@@ -365,7 +397,8 @@ func (ts *tmState) retryPublish() {
 				log.Error(err)
 				return topo.NewError(topo.NoUpdateNeeded, "")
 			}
-			*tablet = *proto.Clone(ts.tablet).(*topodatapb.Tablet)
+			proto.Reset(tablet)
+			proto.Merge(tablet, ts.tablet)
 			return nil
 		})
 		cancel()
@@ -391,9 +424,9 @@ func (ts *tmState) retryPublish() {
 // of tmState may not be accessible due to longer mutex holds.
 // tmState uses publishForDisplay to keep these values uptodate.
 type displayState struct {
-	mu                sync.Mutex
-	tablet            *topodatapb.Tablet
-	blackListedTables []string
+	mu           sync.Mutex
+	tablet       *topodatapb.Tablet
+	deniedTables []string
 }
 
 // Note that the methods for displayState are all in tmState.
@@ -402,7 +435,7 @@ func (ts *tmState) publishForDisplay() {
 	defer ts.displayState.mu.Unlock()
 
 	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
-	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
+	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
@@ -411,10 +444,10 @@ func (ts *tmState) Tablet() *topodatapb.Tablet {
 	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
 }
 
-func (ts *tmState) BlacklistedTables() []string {
+func (ts *tmState) DeniedTables() []string {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return ts.displayState.blackListedTables
+	return ts.displayState.deniedTables
 }
 
 func (ts *tmState) Keyspace() string {

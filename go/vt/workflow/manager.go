@@ -87,7 +87,7 @@ type Manager struct {
 	// set if the manager is inside the Run() method. Outside of
 	// the Run method, ctx will be nil. It means the Manager is
 	// shut down, either at startup or shutdown, or is not the
-	// elected master.
+	// elected primary.
 	ctx context.Context
 	// started is used to signal that the manager is running i.e. Run() has been
 	// successfully called and the manager can start workflows.
@@ -515,7 +515,7 @@ func (m *Manager) isRunning() bool {
 
 // getAndWatchFullTree returns the initial tree and a channel to watch
 // the changes.
-// If this manager is not the master, and we have a redirectFunc
+// If this manager is not the primary, and we have a redirectFunc
 // defined, the initial bytes will be set, but the channel will be nil,
 // and the index is undefined.
 // So return can have one of three combinations:

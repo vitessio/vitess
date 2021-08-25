@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/config"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"vitess.io/vitess/go/vt/orchestrator/config"
 
 	"vitess.io/vitess/go/vt/orchestrator/db"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
@@ -40,8 +42,10 @@ import (
 )
 
 var (
-	ts              *topo.Server
-	clustersToWatch = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	ts                *topo.Server
+	clustersToWatch   = flag.String("clusters_to_watch", "", "Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: \"ks1,ks2/-80\"")
+	shutdownWaitTime  = flag.Duration("shutdown_wait_time", 30*time.Second, "maximum time to wait for vtorc to release all the locks that it is holding before shutting down on SIGTERM")
+	shardsLockCounter int32
 )
 
 // OpenTabletDiscovery opens the vitess topo if enables and returns a ticker
@@ -171,7 +175,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 		if tablet.MysqlHostname == "" {
 			continue
 		}
-		if tablet.Type != topodatapb.TabletType_MASTER && !topo.IsReplicaType(tablet.Type) {
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
 		instanceKey := inst.InstanceKey{
@@ -204,7 +208,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 		}
 		if !latestInstances[curKey] {
 			tablet := &topodatapb.Tablet{}
-			if err := proto.UnmarshalText(row.GetString("info"), tablet); err != nil {
+			if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
 				log.Errore(err)
 				return nil
 			}
@@ -239,6 +243,10 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	if instanceKey.Hostname == "" {
 		return nil, errors.New("Can't lock shard: instance is unspecified")
 	}
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return nil, errors.New("Can't lock shard: SIGTERM received")
+	}
 
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
@@ -246,8 +254,16 @@ func LockShard(instanceKey inst.InstanceKey) (func(*error), error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	defer cancel()
+	atomic.AddInt32(&shardsLockCounter, 1)
 	_, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
-	return unlock, err
+	if err != nil {
+		atomic.AddInt32(&shardsLockCounter, -1)
+		return nil, err
+	}
+	return func(e *error) {
+		defer atomic.AddInt32(&shardsLockCounter, -1)
+		unlock(e)
+	}, nil
 }
 
 // TabletRefresh refreshes the tablet info.
@@ -268,17 +284,17 @@ func TabletRefresh(instanceKey inst.InstanceKey) (*topodatapb.Tablet, error) {
 	return ti.Tablet, nil
 }
 
-// TabletDemoteMaster requests the master tablet to stop accepting transactions.
-func TabletDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, true)
+// TabletDemotePrimary requests the primary tablet to stop accepting transactions.
+func TabletDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, true)
 }
 
-// TabletUndoDemoteMaster requests the master tablet to undo the demote.
-func TabletUndoDemoteMaster(instanceKey inst.InstanceKey) error {
-	return tabletDemoteMaster(instanceKey, false)
+// TabletUndoDemotePrimary requests the primary tablet to undo the demote.
+func TabletUndoDemotePrimary(instanceKey inst.InstanceKey) error {
+	return tabletDemotePrimary(instanceKey, false)
 }
 
-func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
+func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if instanceKey.Hostname == "" {
 		return errors.New("Can't demote/undo master: instance is unspecified")
 	}
@@ -292,14 +308,14 @@ func tabletDemoteMaster(instanceKey inst.InstanceKey, forward bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	if forward {
-		_, err = tmc.DemoteMaster(ctx, tablet)
+		_, err = tmc.DemotePrimary(ctx, tablet)
 	} else {
-		err = tmc.UndoDemoteMaster(ctx, tablet)
+		err = tmc.UndoDemotePrimary(ctx, tablet)
 	}
 	return err
 }
 
-func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, err error) {
+func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, err error) {
 	tablet, err := inst.ReadTablet(*instanceKey)
 	if err != nil {
 		return nil, err
@@ -310,17 +326,17 @@ func ShardMaster(instanceKey *inst.InstanceKey) (masterKey *inst.InstanceKey, er
 	if err != nil {
 		return nil, err
 	}
-	if !si.HasMaster() {
+	if !si.HasPrimary() {
 		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tCancel()
-	master, err := ts.GetTablet(tCtx, si.MasterAlias)
+	primary, err := ts.GetTablet(tCtx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
 	return &inst.InstanceKey{
-		Hostname: master.MysqlHostname,
-		Port:     int(master.MysqlPort),
+		Hostname: primary.MysqlHostname,
+		Port:     int(primary.MysqlPort),
 	}, nil
 }

@@ -228,7 +228,7 @@ func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (ins *Insert) execInsertSharded(vcursor VCursor, bindVars map[string]*query
 	}
 
 	autocommit := (len(rss) == 1 || ins.MultiShardAutocommit) && vcursor.AutocommitApproval()
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -394,6 +394,9 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
+	if len(vindexRowsValues) == 0 || len(ins.Table.ColumnVindexes) == 0 {
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, ins.Table.Name)
+	}
 	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
 	if err != nil {
 		return nil, nil, err
@@ -623,7 +626,7 @@ func (ins *Insert) description() PrimitiveDescription {
 		OperatorType:     "Insert",
 		Keyspace:         ins.Keyspace,
 		Variant:          ins.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

@@ -21,6 +21,7 @@ Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes 
 * Bug fix regression in /healthz #7090
 * Fix metadata related operation hangs when zk down #7228
 * Fix accidentally-broken legacy vtctl output format #7285
+* Healthcheck: use isIncluded correctly to fix replica/rdonly routing bug #6904
 
 ## Functionality Added or Changed
 
@@ -68,30 +69,38 @@ Vitess 9.0 is not compatible with the previous release of the Vitess Kubernetes 
 * VTGate: Cache only dml and select plans #7196
 * VTGate: Planning and Parsing Support for Alter Table #7199
 * VTGate: Add FindAllShardsInKeyspace to vtctldserver #7201
+* VTGate: Initial implementation of vtctld service #7128
 * VTGate: improve-log: FAILED_PRECONDITION #7215
-* VTGate: Planner refactoring #7103
-* VTGate: Migrate `vtctlclient InitShardMaster` => `vtctldclient InitShardPrimary` #7220
-* VTGate: Add Planning and Parsing Support for Truncate, Rename, Drop Index and Flush #7242
-* VTGate: Fix create table format function to include if not exists #7250
-* VTGate: Added default databases when calling 'show databases' #7256
-* VTGate : Add Update.AddWhere to mirror Select.AddWhere #7277
-* VTGate :Rremoved resolver usage from StreamExecute #7281
-* VTGate: Adding a MySQL connection at Vtgate to run queries on it directly in case of testing mode #7291
-* VTGate: Added vitess_version as variable #7295
 * VTGate: Default to false for system settings to be changed per session at the database connection level #7299
-* VTGate: Gen4: Add Limit clause support #7312
-* VTGate: Gen4: Handling subquery in query graph #7313
-* VTGate: Addition of @@enable_system_settings #7300
 * VTGate: Route INFORMATION_SCHEMA queries #6932
 * VTGate: Adds Planning and Parsing Support for Create Index of MySQL 5.7 #7024
 * VTGate: Log sql which exceeds max memory rows #7055
+* VTGate: Enable Client Session Tracking feature in mysql protocol #6783
+* VTGate: Show columns from table_name targeted like select queries #6825
+* VTGate: This PR adds logic to simplify subquery expressions that are simple to
+* VTGate: Adding MySQL Check Constraints #6865
+* VTGate: Manage read your own writes system settings #6871
+* VTGate: Allow table_schema comparisons #6887
+* VTGate: Additional options support for SELECT INTO and LOAD DATA #6872
+* VTGate: Fixes vtgate which throws an error in case of empty statements #6947
+* VTGate: [Forward Port] #6940 - Fix error handling in olap mode #6949
+* VTGate: Adds Planning and Parsing Support for Create View of MySQL 5.7 #7060
+* VTGate: fix error: cannot run Select on table "dual" #7118
+* VTGate: Allow system table to be set as default database #7150
+* VTGate: Move auto_increment from reserved to non reserved keyword #7162
+* VTGate: Add only expr of aliasedExpr to weightstring function #7165
+* VTGate: [9.0] don't try to compare varchars in vtgate #7271
+* VTGate: Load Data From S3 #6823
+* VTGate: Unnest simple subqueries #6831
+* VTGate: Adding MySQL Check Constraints #6869
 * VTExplain: Add sequence table support for vtexplain #7186
 * VSchema: Support back-quoted names #7073
 * Healthcheck: healthy list should be recomputed when a tablet is removed #7176
+* Healthcheck: Hellcatlk wants to merge 1 commit into master from master #6953
 
 ### Set Statement Support 
 
-Set statement support has been added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/master/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate. These system variables are set on the mysql server. Because they change the mysql session, using them leads to the Vitess connection no longer using the connection pool and forcing dedicated connections.
+Set statement support has been added in Vitess. There are [some system variables](https://github.com/vitessio/vitess/blob/main/go/vt/sysvars/sysvars.go#L147,L190) which are disabled by default and can be enabled using flag `-enable_system_settings` on VTGate. These system variables are set on the mysql server. Because they change the mysql session, using them leads to the Vitess connection no longer using the connection pool and forcing dedicated connections.
 
 
 ### VReplication
@@ -108,18 +117,19 @@ Set statement support has been added in Vitess. There are [some system variables
 * VReplication: MoveTables: delete routing rules and update vschema on Complete and Abort #7234
 * VReplication: V2 Workflow Start: wait for streams to start and report errors if any while starting a workflow #7248
 * VReplication: Ignore temp tables created by onlineddl #7159
-* VReplication V2 Workflows: rename Abort to Cancel #7276
-* VReplication DryRun: Report current dry run results for v2 commands #7255
-* VReplication: Miscellaneous improvements #7275
-* VReplication: Tablet throttle support "/throttle/check-self" available on all tablets #7319
-* VStreamer Events: remove preceding zeroes from decimals in Row Events #7297
-* Workflow Show: use timeUpdated to calculate vreplication lag #7342
-* vtctl: Add missing err checks for VReplication v2 #7361
+* VReplication: Set time zone to UTC while streaming rows #6845
+* VReplication: Materialization and character sets: Add test to verify/demo a workaround for charset issues while using string functions in filters #6847
+* VReplication: Tool to diagnose vreplication issues in production #6892
+* VReplication: Allow multiple blacklists for master #6816
 * VStreamer Field Event: add allowed values for set/enum #6981
 * VDiff: lock keyspace while snapshoting, restart target in case of errors #7012
+* VDiff: make enums comparable #6880
+* VDiff: add ability to limit number of rows to compare #6890
+* VDiff/Tablet Picker: fix issue where vdiff sleeps occasionally for tablet picker retry interval #6944
 * [vtctld]: fix error state in Workflow Show #6970
 * [vtctld] Workflow command: minor fixes #7008
-* [vtctl] Add missing err checks for VReplication v2 #7361
+* MoveTables: validate that source tables exist, move all tables #7018
+* SwitchWrites bug: reverse replication workflows can have wrong start positions #7169
 
 ### VTTablet
 
@@ -129,7 +139,6 @@ Set statement support has been added in Vitess. There are [some system variables
 * VTTablet: Adds better errors when there are timeouts in resource pools #7002
 * VTTablet: Return to re-using server IDs for binlog connections #6941
 * VTTablet: Correctly initialize the TabletType stats #6989
-* Backup: Use provided xtrabackup_root_path to find xbstream #7359
 * Backup: Use pargzip instead of pgzip for compression. #7037
 * Backup: Add s3 server-side encryption and decryption with customer provided key #7088
 
@@ -155,7 +164,12 @@ Automatically terminate migrations run by a failed tablet
 * Online DDL: Adding @@session_uuid to vtgate; used as 'context' #7263
 * Online DDL: ignore errors if extracted gh-ost binary is identical to installed binary #6928
 * Online DDL: Table lifecycle: skip time hint for unspecified states #7151
-
+* Online DDL: Migration uses low priority throttling #6830
+* Online DDL: Fix parsing of online-ddl command line options #6900
+* OnlineDDL bugfix: make sure schema is applied on tablet #6910
+* OnlineDDL: request_context/migration_context #7082
+* OnlineDDL: Fix missed rename in onlineddl_test #7148
+* OnlineDDL: Online DDL endtoend tests to support MacOS #7168
 
 ### VTadmin
 
@@ -164,21 +178,8 @@ Automatically terminate migrations run by a failed tablet
 * VTadmin: Add cluster protos to discovery and vtsql package constructors #7224
 * VTadmin: Add static file service discovery implementation #7229
 * VTadmin: Query vtadmin-api from vtadmin-web with fetch + react-query #7239
-* VTadmin: Add vtctld proxy to vtadmin API, add GetKeyspaces endpoint #7266
-* VTadmin: [vtctld] Expose vtctld gRPC port in local Docker example + update VTAdmin README #7306
-* VTadmin: Add CSS variables + fonts to VTAdmin #7309
-* VTadmin: Add React Router + a skeleton /debug page to VTAdmin #7310
-* VTadmin: Add NavRail component #7316
-* VTadmin: Add Button + Icon components #7350
+* VTadmin: Move allow_alias option in MySqlFlag enum to precede the aliased IDs #7166
 * [vtctld]:  vtctldclient generator #7238
-* [vtctld] Migrate cell getters #7302
-* [vtctld] Migrate tablet getters #7311
-* [vtctld] Migrate GetSchema #7346
-* [vtctld] vtctldclient command pkg #7321
-* [vtctld] Add GetSrvVSchema command #7334
-* [vtctld] Migrate ListBackups as GetBackups in new vtctld server #7352
- Merged
-* [vtctld] Migrate GetVSchema to VtctldServer #7360
 
 ### Other
 
@@ -187,12 +188,13 @@ Automatically terminate migrations run by a failed tablet
 * Fix incorrect comments #7257
 * Fix comment for IDPool #7212
 * IsInternalOperationTableName: see if a table is used internally by vitess #7104
+* Add timeout for mysqld_shutdown #6849
+* Should receive healthcheck updates from all tablets in cells_to_watch #6852
+* Workflow listall with no workflows was missing newline #6853
+* Allow incomplete SNAPSHOT keyspaces #6863
 
 ## Examples / Tutorials
 
-* Update demo #7205
-* Delete select_commerce_data.sql #7245
-* Docker/vttestserver: Add MYSQL_BIND_HOST env #7293
 * Examples/operator: fix tags and add vtorc example #7358
 * local docker: copy examples/common into /vt/common to match MoveTables user guide #7252
 * Update docker-compose examples to take advantage of improvements in Vitess #7009
@@ -202,7 +204,18 @@ Automatically terminate migrations run by a failed tablet
 * Vitess Slack Guidelines v1.0 #6961
 * Do vschema_customer_sharded.json before create_customer_sharded.sql #7210
 * Added readme for the demo example #7226
-* Pull Request template: link to contribution guide #7314
+* Adding @shlomi-noach to CODEOWNERS #6855
+* Add Rohit Nayak to maintainers #6903
+* 7.0.3 Release Notes #6902
+* 8_0_0 Release Notes #6958
+* Update maintainers of Vitess #7093
+* Updating Email Address #7095
+* Update morgo changes #7105
+* Move PR template to .github directory #7126
+* Fix trivial typo #7179
+* Add @ajm188 + @doeg to CODEOWNERS for vtctld service files #7202
+* Add @ajm188 + @doeg as vtadmin codeowners #7223:w
+
 
 ## Build Environment Changes
 
@@ -224,16 +237,24 @@ Automatically terminate migrations run by a failed tablet
 * Add unit test case to improve test coverage for go/sqltypes/result.go #7227
 * Update Golang to 1.15 #7204
 * Add linter configuration #7247
-* Tracking failed check runs #7026
-* Github Actions CI Builds: convert matrix strategy for unit and cluster tests to individual tests #7258
-* Add Update.AddWhere to mirror Select.AddWhere #7277
-* Descriptive names for CI checks #7289
-* Testing upgrade path from / downgrade path to v8.0.0 #7294
-* Add mysqlctl to docker images #7326
+* Modify targets to restore behavior of make install #6842
+* Download zookeeper 3.4.14 from archive site #6865
+* Bump junit from 4.12 to 4.13.1 in /java #6870
+* Fix ListBackups for gcp and az to work with root directory #6873
+* Pulling bootstrap resources from vitess-resources #6875
+* [Java] Bump SNAPSHOT version to 9.0 after Vitess release 8.0 #6907
+* Change dependencies for lite builds #6933
+* Truncate logged query in dbconn.go. #6959
+* [GO] go mod tidy #7137
+* goimport proto files correctly #7264
+* Cherry pick version of #7233 for release-9.0 #7265
+* Update Java version to 9.0 #7369
+* Adding curl as dependency #6965
 
 ## Functionality Neutral Changes
 
 * Healthcheck: add unit test for multi-cell replica configurations #6978
+* Healthcheck: Correct Health Check for Non-Serving Types #6908
 * Adds timeout to checking for tablets. #7106
 * Remove deprecated vtctl commands, flags and vttablet rpcs #7115
 * Fixes comment to mention the existence of reference tables. #7122
@@ -242,4 +263,26 @@ Automatically terminate migrations run by a failed tablet
 * action_repository: no need for http.Request #7124
 * Testing version upgrade/downgrade path from/to 8.0 #7323
 * Use `context` from Go's standard library #7235
+* Update `operator.yaml` backup engine description #6832
+* Docker - upgrade to Debian Buster #6833
+* Updating azblob to remove directory after removing backup #6836
+* Fixing some flaky tests #6874
+* Flaky test: attempt to fix TestConnection in go/test/endtoend/messaging #6879
+* Stabilize test #6882
+* Tablet streaming health fix: never silently skip health state changes #6885
+* Add owners to /go/mysql #6886
+* Fixes a bug in Load From statement #6911
+* Query consolidator: fix to ignore leading margin comments #6917
+* Updates to Contacts section as Reporting #7023
+* Create pull_request_template #7027
+* Fixed pull request template path #7062
 
+## Backport
+* Backport: [vtctld] Fix accidentally-broken legacy vtctl output format #7292
+* Backport #7276: Vreplication V2 Workflows: rename Abort to Cancel #7339
+* Backport #7297: VStreamer Events: remove preceding zeroes from decimals in Row Events
+* Backport #7255: VReplication DryRun: Report current dry run results for v2 commands #7345
+* Backport #7275: VReplication: Miscellaneous improvements #7349
+* Backport 7342: Workflow Show: use timeUpdated to calculate vreplication lag #7354
+* Backport 7361: vtctl: Add missing err checks for VReplication v2 #7363
+* Backport 7297: VStreamer Events: remove preceding zeroes from decimals in Row Events #7340

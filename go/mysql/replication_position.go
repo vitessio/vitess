@@ -37,7 +37,7 @@ const (
 
 // Position represents the information necessary to describe which
 // transactions a server has seen, so that it can request a replication stream
-// from a new master that picks up where it left off.
+// from a new source that picks up where it left off.
 //
 // This must be a concrete struct because custom Unmarshalers can't be
 // registered on an interface.

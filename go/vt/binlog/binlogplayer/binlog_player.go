@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package binlogplayer contains the code that plays a vreplication
-// stream on a client database. It usually runs inside the destination master
+// stream on a client database. It usually runs inside the destination primary
 // vttablet process.
 package binlogplayer
 
@@ -30,11 +30,11 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
@@ -86,8 +86,8 @@ type Stats struct {
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
 
-	SecondsBehindMaster sync2.AtomicInt64
-	History             *history.History
+	ReplicationLagSeconds sync2.AtomicInt64
+	History               *history.History
 
 	State sync2.AtomicString
 
@@ -98,6 +98,9 @@ type Stats struct {
 	CopyLoopCount  *stats.Counter
 	ErrorCounts    *stats.CountersWithMultiLabels
 	NoopQueryCount *stats.CountersWithSingleLabel
+
+	VReplicationLags     *stats.Timings
+	VReplicationLagRates *stats.Rates
 }
 
 // RecordHeartbeat updates the time the last heartbeat from vstreamer was seen
@@ -146,7 +149,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
-	bps.SecondsBehindMaster.Set(math.MaxInt64)
+	bps.ReplicationLagSeconds.Set(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
@@ -154,6 +157,8 @@ func NewStats() *Stats {
 	bps.CopyLoopCount = stats.NewCounter("", "")
 	bps.ErrorCounts = stats.NewCountersWithMultiLabels("", "", []string{"type"})
 	bps.NoopQueryCount = stats.NewCountersWithSingleLabel("", "", "Statement", "")
+	bps.VReplicationLags = stats.NewTimings("", "", "")
+	bps.VReplicationLagRates = stats.NewRates("", bps.VReplicationLags, 15*60/5, 5*time.Second)
 	return bps
 }
 
@@ -418,10 +423,10 @@ func (blp *BinlogPlayer) processTransaction(tx *binlogdatapb.BinlogTransaction) 
 				// needed during event playback. Here we also adjust so that playback
 				// proceeds, but in Vitess-land this usually means a misconfigured
 				// server or a misbehaving client, so we spam the logs with warnings.
-				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, *tx)
+				log.Warningf("BinlogPlayer changing charset from %v to %v for statement %d in transaction %v", blp.currentCharset, stmtCharset, i, tx)
 				err = mysql.SetCharset(dbClient.dbConn, stmtCharset)
 				if err != nil {
-					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, *tx, err)
+					return false, fmt.Errorf("can't set charset for statement %d in transaction %v: %v", i, tx, err)
 				}
 				blp.currentCharset = stmtCharset
 			}
@@ -468,10 +473,10 @@ func (blp *BinlogPlayer) exec(sql string) (*sqltypes.Result, error) {
 // It also tries to get the timestamp for the transaction. Two cases:
 // - we have statements, and they start with a SET TIMESTAMP that we
 //   can parse: then we update transaction_timestamp in vreplication
-//   with it, and set SecondsBehindMaster to now() - transaction_timestamp
+//   with it, and set ReplicationLagSeconds to now() - transaction_timestamp
 // - otherwise (the statements are probably filtered out), we leave
 //   transaction_timestamp alone (keeping the old value), and we don't
-//   change SecondsBehindMaster
+//   change ReplicationLagSeconds
 func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransaction) error {
 	position, err := DecodePosition(tx.EventToken.Position)
 	if err != nil {
@@ -493,7 +498,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.SecondsBehindMaster.Set(now - tx.EventToken.Timestamp)
+		blp.blplStats.ReplicationLagSeconds.Set(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }
@@ -525,7 +530,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 // cell: optional column that overrides the current cell to replicate from.
 // tablet_types: optional column that overrides the tablet types to look to replicate from.
 // time_update: last time an event was applied.
-// transaction_timestamp: timestamp of the transaction (from the master).
+// transaction_timestamp: timestamp of the transaction (from the primary).
 // state: Running, Error or Stopped.
 // message: Reason for current state.
 func CreateVReplicationTable() []string {
@@ -558,6 +563,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication MODIFY source BLOB NOT NULL",
 	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
 	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
 }
 
 // WithDDLInitialQueries contains the queries to be expected by the mock db client during tests
@@ -648,6 +654,11 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 		"update _vt.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v", strGTID, timeUpdated, rowsCopied, uid)
 }
 
+// GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
+func GenerateUpdateRowsCopied(uid uint32, rowsCopied int64) string {
+	return fmt.Sprintf("update _vt.vreplication set rows_copied=%v where id=%v", rowsCopied, uid)
+}
+
 // GenerateUpdateTime returns a statement to update time_updated in the _vt.vreplication table.
 func GenerateUpdateTime(uid uint32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
@@ -685,10 +696,7 @@ func DeleteVReplication(uid uint32) string {
 // MessageTruncate truncates the message string to a safe length.
 func MessageTruncate(msg string) string {
 	// message length is 1000 bytes.
-	if len(msg) > 950 {
-		return msg[:950] + "..."
-	}
-	return msg
+	return LimitString(msg, 950)
 }
 
 func encodeString(in string) string {

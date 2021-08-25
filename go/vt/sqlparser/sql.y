@@ -153,6 +153,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   orderDirection  OrderDirection
   explainType 	  ExplainType
   lockType LockType
+  referenceDefinition *ReferenceDefinition
+
+  columnStorage ColumnStorage
 
   boolean bool
   boolVal BoolVal
@@ -162,8 +165,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token LEX_ERROR
 %left <str> UNION
 %token <str> SELECT STREAM VSTREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS DO CALL
-%token <str> DISTINCTROW PARSER
+%token <str> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS DO CALL
+%token <str> DISTINCTROW PARSER GENERATED ALWAYS
 %token <str> OUTFILE S3 DATA LOAD LINES TERMINATED ESCAPED ENCLOSED
 %token <str> DUMPFILE CSV HEADER MANIFEST OVERWRITE STARTING OPTIONALLY
 %token <str> VALUES LAST_INSERT_ID
@@ -175,12 +178,17 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
+%token <str> VIRTUAL STORED
 
 // Precedence dictated by mysql. But the vitess grammar is simplified.
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
 // * NOTE: If you change anything here, update precedence.go as well *
+%nonassoc <str> LOWER_THAN_CHARSET
+%nonassoc <str> CHARSET
+// Resolve column attribute ambiguity.
+%right <str> UNIQUE KEY
 %left <str> OR
 %left <str> XOR
 %left <str> AND
@@ -207,7 +215,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY
 %token <str> REVERT
-%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
+%token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE
 %token <str> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -239,7 +247,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
-%token <str> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
+%token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
 
 // Functions
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
@@ -291,7 +299,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <alterDatabase> alter_database_prefix
 %type <collateAndCharset> collate character_set
 %type <collateAndCharsets> create_options create_options_opt
-%type <boolean> default_optional
+%type <boolean> default_optional first_opt
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
@@ -309,7 +317,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selectExpr> select_expression
 %type <strs> select_options flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
-%type <str> definer_opt user
+%type <str> definer_opt user generated_always_opt
 %type <expr> expression
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
@@ -334,7 +342,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <expr> tuple_expression
 %type <subquery> subquery
 %type <derivedTable> derived_table
-%type <colName> column_name first_opt after_opt
+%type <colName> column_name after_opt
 %type <whens> when_expression_list
 %type <when> when_expression
 %type <expr> expression_opt else_expression_opt
@@ -345,11 +353,11 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt
 %type <selectInto> into_option
-%type <columnTypeOptions> column_type_options
+%type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> lock_opt
-%type <columns> ins_column_list column_list column_list_opt
+%type <columns> ins_column_list column_list column_list_opt index_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
@@ -414,7 +422,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
-
+%type <columnStorage> column_storage
+%type <colKeyOpt> keys
+%type <referenceDefinition> reference_definition reference_definition_opt
 
 %start any_command
 
@@ -932,6 +942,7 @@ create_options:
   }
 
 default_optional:
+  /* empty */ %prec LOWER_THAN_CHARSET 
   {
     $$ = false
   }
@@ -1015,71 +1026,133 @@ table_column_list:
   }
 
 column_definition:
-  sql_id column_type column_type_options
+  sql_id column_type column_attribute_list_opt reference_definition_opt
   {
     $2.Options = $3
+    $2.Options.Reference = $4
+    $$ = &ColumnDefinition{Name: $1, Type: $2}
+  }
+| sql_id column_type generated_always_opt AS '(' value_expression ')' generated_column_attribute_list_opt reference_definition_opt
+  {
+    $2.Options = $8
+    $2.Options.As = $6
+    $2.Options.Reference = $9
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
 
+generated_always_opt:
+  {
+    $$ = ""
+  }
+|  GENERATED ALWAYS
+  {
+    $$ = ""
+  }
+
 // There is a shift reduce conflict that arises here because UNIQUE and KEY are column_type_option and so is UNIQUE KEY.
-// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict.
+// So in the state "column_type_options UNIQUE. KEY" there is a shift-reduce conflict(resovled by "%rigth <str> UNIQUE KEY").
 // This has been added to emulate what MySQL does. The previous architecture was such that the order of the column options
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
-column_type_options:
+column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil}
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil}
   }
-| column_type_options NULL
+| column_attribute_list_opt NULL
   {
     val := true
     $1.Null = &val
     $$ = $1
   }
-| column_type_options NOT NULL
+| column_attribute_list_opt NOT NULL
   {
     val := false
     $1.Null = &val
     $$ = $1
   }
-| column_type_options DEFAULT value_expression
+| column_attribute_list_opt DEFAULT value_expression
   {
     $1.Default = $3
     $$ = $1
   }
-| column_type_options ON UPDATE function_call_nonkeyword
+| column_attribute_list_opt ON UPDATE function_call_nonkeyword
   {
     $1.OnUpdate = $4
     $$ = $1
   }
-| column_type_options AUTO_INCREMENT
+| column_attribute_list_opt AUTO_INCREMENT
   {
     $1.Autoincrement = true
     $$ = $1
   }
-| column_type_options COMMENT_KEYWORD STRING
+| column_attribute_list_opt COMMENT_KEYWORD STRING
   {
     $1.Comment = NewStrLiteral($3)
     $$ = $1
   }
-| column_type_options PRIMARY KEY
+| column_attribute_list_opt keys
   {
-    $1.KeyOpt = colKeyPrimary
+    $1.KeyOpt = $2
     $$ = $1
   }
-| column_type_options KEY
+
+column_storage:
+  VIRTUAL
+{
+  $$ = VirtualStorage
+}
+| STORED
+{
+  $$ = StoredStorage
+}
+
+generated_column_attribute_list_opt:
   {
-    $1.KeyOpt = colKey
+    $$ = &ColumnTypeOptions{}
+  }
+| generated_column_attribute_list_opt column_storage
+  {
+    $1.Storage = $2
     $$ = $1
   }
-| column_type_options UNIQUE KEY
+| generated_column_attribute_list_opt NULL
   {
-    $1.KeyOpt = colKeyUniqueKey
+    val := true
+    $1.Null = &val
     $$ = $1
   }
-| column_type_options UNIQUE
+| generated_column_attribute_list_opt NOT NULL
   {
-    $1.KeyOpt = colKeyUnique
+    val := false
+    $1.Null = &val
     $$ = $1
+  }
+| generated_column_attribute_list_opt COMMENT_KEYWORD STRING
+  {
+    $1.Comment = NewStrLiteral($3)
+    $$ = $1
+  }
+| generated_column_attribute_list_opt keys
+  {
+    $1.KeyOpt = $2
+    $$ = $1
+  }
+
+keys:
+  PRIMARY KEY
+  {
+    $$ = colKeyPrimary
+  }
+| UNIQUE
+  {
+    $$ = colKeyUnique
+  }
+| UNIQUE KEY
+  {
+    $$ = colKeyUniqueKey
+  }
+| KEY
+  {
+    $$ = colKey
   }
 
 column_type:
@@ -1351,6 +1424,10 @@ unsigned_opt:
   {
     $$ = true
   }
+| SIGNED
+  {
+    $$ = false
+  }
 
 zero_fill_opt:
   {
@@ -1447,7 +1524,7 @@ equal_opt:
   }
 
 index_info:
-  constraint_name_opt PRIMARY KEY
+  constraint_name_opt PRIMARY KEY name_opt
   {
     $$ = &IndexInfo{Type: string($2) + " " + string($3), ConstraintName: NewColIdent($1), Name: NewColIdent("PRIMARY"), Primary: true, Unique: true}
   }
@@ -1567,21 +1644,36 @@ check_constraint_definition:
   }
 
 constraint_info:
-  FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')'
+  FOREIGN KEY name_opt '(' column_list ')' reference_definition
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9}
+    $$ = &ForeignKeyDefinition{IndexName: NewColIdent($3), Source: $5, ReferenceDefinition: $7}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete
+
+reference_definition:
+  REFERENCES table_name '(' column_list ')'
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_on_delete
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnUpdate: $11}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6}
   }
-| FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+| REFERENCES table_name '(' column_list ')' fk_on_update
   {
-    $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnUpdate: $6}
+  }
+| REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
+  {
+    $$ = &ReferenceDefinition{ReferencedTable: $2, ReferencedColumns: $4, OnDelete: $6, OnUpdate: $7}
+  }
+
+reference_definition_opt:
+  {
+    $$ = nil
+  }
+| reference_definition
+  {
+    $$ = $1
   }
 
 check_constraint_info:
@@ -1732,13 +1824,9 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
-| ENGINE equal_opt id_or_var
+| ENGINE equal_opt table_alias
   {
     $$ = &TableOption{Name:string($1), String:$3.String()}
-  }
-| ENGINE equal_opt STRING
-  {
-    $$ = &TableOption{Name:string($1), Value:NewStrLiteral($3)}
   }
 | INSERT_METHOD equal_opt insert_method_options
   {
@@ -1849,11 +1937,11 @@ column_opt:
 
 first_opt:
   {
-    $$ = nil
+    $$ = false
   }
-| FIRST column_name
+| FIRST
   {
-    $$ = $2
+    $$ = true
   }
 
 after_opt:
@@ -2332,9 +2420,9 @@ drop_statement:
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+      $$ = &AlterTable{FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-      $$ = &AlterTable{Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+      $$ = &AlterTable{FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
@@ -2515,6 +2603,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
   }
+| SHOW VITESS_MIGRATION STRING LOGS
+  {
+    $$ = &ShowMigrationLogs{UUID: string($3)}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
@@ -2529,7 +2621,7 @@ show_statement:
   }
 | SHOW WARNINGS
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    $$ = &Show{&ShowBasic{Command: Warnings}}
   }
 /* vitess_topo supports SHOW VITESS_SHARDS / SHOW VITESS_TABLETS */
 | SHOW vitess_topo like_or_where_opt
@@ -3199,6 +3291,24 @@ column_list:
     $$ = append($$, $3)
   }
 
+index_list:
+  sql_id
+  {
+    $$ = Columns{$1}
+  }
+| PRIMARY
+  {
+    $$ = Columns{NewColIdent(string($1))}
+  }
+| index_list ',' sql_id
+  {
+    $$ = append($$, $3)
+  }
+| index_list ',' PRIMARY
+  {
+    $$ = append($$, NewColIdent(string($3)))
+  }
+
 partition_list:
   sql_id
   {
@@ -3359,7 +3469,7 @@ index_hint_list:
   {
     $$ = nil
   }
-| USE INDEX openb column_list closeb
+| USE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: UseOp, Indexes: $4}
   }
@@ -3367,11 +3477,11 @@ index_hint_list:
   {
     $$ = &IndexHints{Type: UseOp}
   }
-| IGNORE INDEX openb column_list closeb
+| IGNORE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: IgnoreOp, Indexes: $4}
   }
-| FORCE INDEX openb column_list closeb
+| FORCE INDEX openb index_list closeb
   {
     $$ = &IndexHints{Type: ForceOp, Indexes: $4}
   }
@@ -3408,7 +3518,7 @@ expression:
   }
 | expression IS is_suffix
   {
-    $$ = &IsExpr{Operator: $3, Expr: $1}
+    $$ = &IsExpr{Left: $1, Right: $3}
   }
 | value_expression
   {
@@ -4737,6 +4847,7 @@ table_id:
   }
 
 table_id_opt:
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = NewTableIdent("")
   }
@@ -4798,7 +4909,6 @@ reserved_keyword:
 | DIV
 | DROP
 | ELSE
-| END
 | ESCAPE
 | EXISTS
 | EXPLAIN
@@ -4809,6 +4919,7 @@ reserved_keyword:
 | FOREIGN
 | FROM
 | FULLTEXT
+| GENERATED
 | GROUP
 | GROUPING
 | GROUPS
@@ -4874,6 +4985,7 @@ reserved_keyword:
 | SET
 | SHOW
 | SPATIAL
+| STORED
 | STRAIGHT_JOIN
 | SYSTEM
 | TABLE
@@ -4892,6 +5004,7 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VIRTUAL
 | WITH
 | WHEN
 | WHERE
@@ -4913,6 +5026,7 @@ non_reserved_keyword:
 | ADMIN
 | AFTER
 | ALGORITHM
+| ALWAYS
 | AUTO_INCREMENT
 | AVG_ROW_LENGTH
 | BEGIN
@@ -4957,6 +5071,7 @@ non_reserved_keyword:
 | DISABLE
 | DISCARD
 | DISK
+| DO
 | DOUBLE
 | DUMPFILE
 | DUPLICATE
@@ -4964,6 +5079,7 @@ non_reserved_keyword:
 | ENABLE
 | ENCLOSED
 | ENCRYPTION
+| END
 | ENFORCED
 | ENGINE
 | ENGINES
@@ -4984,6 +5100,7 @@ non_reserved_keyword:
 | FLUSH
 | FOLLOWING
 | FORMAT
+| FULL
 | FUNCTION
 | GENERAL
 | GEOMCOLLECTION
@@ -5126,6 +5243,7 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
+| STREAM
 | TABLES
 | TABLESPACE
 | TEMPORARY
@@ -5173,6 +5291,7 @@ non_reserved_keyword:
 | VSCHEMA
 | WARNINGS
 | WITHOUT
+| WORK
 | YEAR
 | ZEROFILL
 

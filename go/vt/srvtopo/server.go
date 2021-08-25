@@ -45,5 +45,5 @@ type Server interface {
 	// WatchSrvVSchema starts watching the SrvVSchema object for
 	// the provided cell.  It will call the callback when
 	// a new value or an error occurs.
-	WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error))
+	WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool)
 }

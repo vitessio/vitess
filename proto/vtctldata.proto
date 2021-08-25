@@ -43,6 +43,18 @@ message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
 
+// MaterializationIntent describes the reason for creating the Materialize flow
+enum MaterializationIntent {
+  // CUSTOM is the default value
+  CUSTOM = 0;
+
+  // MOVETABLES is when we are creating a MoveTables flow
+  MOVETABLES = 1;
+
+  // CREATELOOKUPINDEX is when we are creating a CreateLookupIndex flow
+  CREATELOOKUPINDEX = 2;
+}
+
 // TableMaterializeSttings contains the settings for one table.
 message TableMaterializeSettings {
   string target_table = 1;
@@ -69,7 +81,8 @@ message MaterializeSettings {
   // ExternalCluster is the name of the mounted cluster which has the source keyspace/db for this workflow
   // it is of the type <cluster_type.cluster_name>
   string external_cluster = 8;
-
+  // MaterializationIntent is used to identify the reason behind the materialization workflow: eg. MoveTables, CreateLookupVindex
+  MaterializationIntent materialization_intent = 9;
 }
 
 /* Data types for VtctldServer */
@@ -117,15 +130,82 @@ message Workflow {
     vttime.Time time_updated = 10;
     string message = 11;
     repeated CopyState copy_states = 12;
+    repeated Log logs = 13;
+    // LogFetchError is set if we fail to fetch some logs for this stream. We
+    // will never fail to fetch workflows because we cannot fetch the logs, but
+    // we will still forward log-fetch errors to the caller, should that be
+    // relevant to the context in which they are fetching workflows.
+    //
+    // Note that this field being set does not necessarily mean that Logs is nil;
+    // if there are N logs that exist for the stream, and we fail to fetch the
+    // ith log, we will still return logs in [0, i) + (i, N].
+    string log_fetch_error = 14;
+    repeated string tags = 15;
 
     message CopyState {
       string table = 1;
       string last_pk = 2;
     }
+
+    message Log {
+      int64 id = 1;
+      int64 stream_id = 2;
+      string type = 3;
+      string state = 4;
+      vttime.Time created_at = 5;
+      vttime.Time updated_at = 6;
+      string message = 7;
+      int64 count = 8;
+    }
   }
 }
 
 /* Request/response types for VtctldServer */
+
+
+message AddCellInfoRequest {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message AddCellInfoResponse {
+}
+
+message AddCellsAliasRequest {
+  string name = 1;
+  repeated string cells = 2;
+}
+
+message AddCellsAliasResponse {
+}
+
+message ApplyRoutingRulesRequest {
+  vschema.RoutingRules routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyRoutingRulesResponse {
+}
+
+message ApplyVSchemaRequest {
+  string keyspace = 1;
+  bool skip_rebuild = 2;
+  bool dry_run = 3;
+  repeated string cells = 4;
+  vschema.Keyspace v_schema = 5;
+  string sql = 6;
+}
+
+message ApplyVSchemaResponse {
+  vschema.Keyspace v_schema = 1;
+}
 
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
@@ -196,6 +276,21 @@ message CreateShardResponse {
   bool shard_already_exists = 3;
 }
 
+message DeleteCellInfoRequest {
+  string name = 1;
+  bool force = 2;
+}
+
+message DeleteCellInfoResponse {
+}
+
+message DeleteCellsAliasRequest {
+  string name = 1;
+}
+
+message DeleteCellsAliasResponse {
+}
+
 message DeleteKeyspaceRequest {
   // Keyspace is the name of the keyspace to delete.
   string keyspace = 1;
@@ -227,7 +322,7 @@ message DeleteShardsResponse {
 message DeleteTabletsRequest {
   // TabletAliases is the list of tablets to delete.
   repeated topodata.TabletAlias tablet_aliases = 1;
-  // AllowPrimary allows for the master/primary tablet of a shard to be deleted.
+  // AllowPrimary allows for the primary tablet of a shard to be deleted.
   // Use with caution.
   bool allow_primary = 2;
 }
@@ -277,17 +372,24 @@ message FindAllShardsInKeyspaceResponse {
 message GetBackupsRequest {
   string keyspace = 1;
   string shard = 2;
+  // Limit, if nonzero, will return only the most N recent backups.
+  uint32 limit = 3;
+  // Detailed indicates whether to use the backupengine, if supported, to
+  // populate additional fields, such as Engine and Status, on BackupInfo
+  // objects in the response. If not set, or if the backupengine does not
+  // support populating these fields, Engine will always be empty, and Status
+  // will always be UNKNOWN.
+  bool detailed = 4;
+  // DetailedLimit, if nonzero, will only populate additional fields (see Detailed)
+  // on the N most recent backups. The Limit field still dictates the total
+  // number of backup info objects returned, so, in reality, min(Limit, DetailedLimit)
+  // backup infos will have additional fields set, and any remaining backups
+  // will not.
+  uint32 detailed_limit = 5;
 }
 
 message GetBackupsResponse {
   repeated mysqlctl.BackupInfo backups = 1;
-}
-
-message GetCellInfoNamesRequest {
-}
-
-message GetCellInfoNamesResponse {
-  repeated string names = 1;
 }
 
 message GetCellInfoRequest {
@@ -296,6 +398,13 @@ message GetCellInfoRequest {
 
 message GetCellInfoResponse {
   topodata.CellInfo cell_info = 1;
+}
+
+message GetCellInfoNamesRequest {
+}
+
+message GetCellInfoNamesResponse {
+  repeated string names = 1;
 }
 
 message GetCellsAliasesRequest {
@@ -318,6 +427,13 @@ message GetKeyspaceRequest {
 
 message GetKeyspaceResponse {
   Keyspace keyspace = 1;
+}
+
+message GetRoutingRulesRequest {
+}
+
+message GetRoutingRulesResponse {
+  vschema.RoutingRules routing_rules = 1;
 }
 
 message GetSchemaRequest {
@@ -370,6 +486,15 @@ message GetSrvVSchemaRequest {
 
 message GetSrvVSchemaResponse {
   vschema.SrvVSchema srv_v_schema = 1;
+}
+
+message GetSrvVSchemasRequest {
+  repeated string cells = 2;
+}
+
+message GetSrvVSchemasResponse {  
+  // SrvVSchemas is a mapping of cell name to SrvVSchema
+  map<string, vschema.SrvVSchema> srv_v_schemas = 1;
 }
 
 message GetTabletRequest {
@@ -473,6 +598,32 @@ message PlannedReparentShardResponse {
   repeated logutil.Event events = 4;
 }
 
+message RebuildVSchemaGraphRequest {
+  // Cells specifies the cells to rebuild the SrvVSchema objects for. If empty,
+  // RebuildVSchemaGraph rebuilds the SrvVSchema for every cell in the topo.
+  repeated string cells = 1;
+}
+
+message RebuildVSchemaGraphResponse {
+}
+
+message RefreshStateRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message RefreshStateResponse {
+}
+
+message RefreshStateByShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  repeated string cells = 3;
+}
+
+message RefreshStateByShardResponse {
+  bool is_partial_refresh = 1;
+}
+
 message RemoveKeyspaceCellRequest {
   string keyspace = 1;
   string cell = 2;
@@ -548,4 +699,24 @@ message TabletExternallyReparentedResponse {
   string shard = 2;
   topodata.TabletAlias new_primary = 3;
   topodata.TabletAlias old_primary = 4;
+}
+
+message UpdateCellInfoRequest {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message UpdateCellInfoResponse {
+  string name = 1;
+  topodata.CellInfo cell_info = 2;
+}
+
+message UpdateCellsAliasRequest {
+  string name = 1;
+  topodata.CellsAlias cells_alias = 2;
+}
+
+message UpdateCellsAliasResponse {
+  string name = 1;
+  topodata.CellsAlias cells_alias = 2;
 }

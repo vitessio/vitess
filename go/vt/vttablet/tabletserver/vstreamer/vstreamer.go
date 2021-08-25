@@ -24,9 +24,9 @@ import (
 	"strings"
 	"time"
 
-	vtschema "vitess.io/vitess/go/vt/schema"
+	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/golang/protobuf/proto"
+	vtschema "vitess.io/vitess/go/vt/schema"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -102,7 +102,7 @@ type streamerPlan struct {
 //   "select * from t where in_keyrange(col1, 'hash', '-80')",
 //   "select col1, col2 from t where...",
 //   "select col1, keyspace_id() from t where...".
-//   Only "in_keyrange" expressions are supported in the where clause.
+//   Only "in_keyrange" and limited comparison operators (see enum Opcode in planbuilder.go) are supported in the where clause.
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
@@ -271,16 +271,31 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		for {
 			// check throttler.
 			if !vs.vse.throttlerClient.ThrottleCheckOKOrWait(ctx) {
+				select {
+				// make sure to leave if context is cancelled
+				case <-ctx.Done():
+					return
+				default:
+					// do nothing special
+				}
 				continue
 			}
-
-			ev, ok := <-events
-			if ok {
-				throttledEvents <- ev
-			} else {
-				close(throttledEvents)
+			select {
+			case ev, ok := <-events:
+				if ok {
+					select {
+					case throttledEvents <- ev:
+					case <-ctx.Done():
+						return
+					}
+				} else {
+					close(throttledEvents)
+					return
+				}
+			case <-ctx.Done():
 				return
 			}
+
 		}
 	}()
 	for {
@@ -362,7 +377,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	// tells us the size of the event header.
 	if vs.format.IsZero() {
 		// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-		// is a fake ROTATE_EVENT, which the master sends to tell us the name
+		// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 		// of the current log file.
 		if ev.IsRotate() {
 			return nil, nil
@@ -463,7 +478,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
-			vs.se.ReloadAt(context.Background(), vs.pos)
+			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName()) {
+				vs.se.ReloadAt(context.Background(), vs.pos)
+			}
 		case sqlparser.StmtSavepoint:
 			mustSend := mustSendStmt(q, vs.cp.DBName())
 			if mustSend {
@@ -664,6 +681,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		FieldEvent: &binlogdatapb.FieldEvent{
 			TableName: plan.Table.Name,
 			Fields:    plan.fields(),
+			Keyspace:  vs.vse.keyspace,
+			Shard:     vs.vse.shard,
 		},
 	}, nil
 }
@@ -782,7 +801,7 @@ nextrow:
 				continue
 			}
 			journal := &binlogdatapb.Journal{}
-			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+			if err := prototext.Unmarshal(afterValues[i].ToBytes(), journal); err != nil {
 				return nil, err
 			}
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -823,6 +842,8 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			RowEvent: &binlogdatapb.RowEvent{
 				TableName:  plan.Table.Name,
 				RowChanges: rowChanges,
+				Keyspace:   vs.vse.keyspace,
+				Shard:      vs.vse.shard,
 			},
 		})
 	}
@@ -868,6 +889,8 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
 		if err != nil {
+			log.Errorf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v",
+				err, plan.Table.Name, colNum, plan.Table.Fields, values)
 			return false, nil, err
 		}
 		pos += l

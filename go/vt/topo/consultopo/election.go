@@ -90,7 +90,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 		return nil, err
 	}
 
-	// We have the lock, keep mastership until we lose it.
+	// We have the lock, keep primaryship until we lose it.
 	lockCtx, lockCancel := context.WithCancel(context.Background())
 	go func() {
 		select {
@@ -103,7 +103,7 @@ func (mp *consulMasterParticipation) WaitForMastership() (context.Context, error
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
 			// so the running process is not thinking it
-			// is the master any more, then we unlock.
+			// is the primary any more, then we unlock.
 			lockCancel()
 			if err := l.Unlock(); err != nil {
 				log.Errorf("master election(%v) Unlock failed: %v", mp.name, err)

@@ -212,6 +212,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
+	case *ReferenceDefinition:
+		return a.rewriteRefOfReferenceDefinition(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameIndex:
@@ -252,6 +254,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowFilter(parent, node, replacer)
 	case *ShowLegacy:
 		return a.rewriteRefOfShowLegacy(parent, node, replacer)
+	case *ShowMigrationLogs:
+		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
@@ -339,11 +343,6 @@ func (a *application) rewriteRefOfAddColumns(parent SQLNode, node *AddColumns, r
 		}(x)) {
 			return false
 		}
-	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*AddColumns).First = newNode.(*ColName)
-	}) {
-		return false
 	}
 	if !a.rewriteRefOfColName(node, node.After, func(newNode, parent SQLNode) {
 		parent.(*AddColumns).After = newNode.(*ColName)
@@ -936,11 +935,6 @@ func (a *application) rewriteRefOfChangeColumn(parent SQLNode, node *ChangeColum
 	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ChangeColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*ChangeColumn).First = newNode.(*ColName)
 	}) {
 		return false
 	}
@@ -1940,23 +1934,13 @@ func (a *application) rewriteRefOfForeignKeyDefinition(parent SQLNode, node *For
 	}) {
 		return false
 	}
-	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
+	if !a.rewriteColIdent(node, node.IndexName, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).IndexName = newNode.(ColIdent)
 	}) {
 		return false
 	}
-	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
-	}) {
-		return false
-	}
-	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
-	}) {
-		return false
-	}
-	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
-		parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
+	if !a.rewriteRefOfReferenceDefinition(node, node.ReferenceDefinition, func(newNode, parent SQLNode) {
+		parent.(*ForeignKeyDefinition).ReferenceDefinition = newNode.(*ReferenceDefinition)
 	}) {
 		return false
 	}
@@ -2256,8 +2240,8 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 			return true
 		}
 	}
-	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
-		parent.(*IsExpr).Expr = newNode.(Expr)
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*IsExpr).Left = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -2535,11 +2519,6 @@ func (a *application) rewriteRefOfModifyColumn(parent SQLNode, node *ModifyColum
 	}
 	if !a.rewriteRefOfColumnDefinition(node, node.NewColDefinition, func(newNode, parent SQLNode) {
 		parent.(*ModifyColumn).NewColDefinition = newNode.(*ColumnDefinition)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfColName(node, node.First, func(newNode, parent SQLNode) {
-		parent.(*ModifyColumn).First = newNode.(*ColName)
 	}) {
 		return false
 	}
@@ -3059,6 +3038,48 @@ func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, rep
 	}
 	return true
 }
+func (a *application) rewriteRefOfReferenceDefinition(parent SQLNode, node *ReferenceDefinition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableName(node, node.ReferencedTable, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).ReferencedTable = newNode.(TableName)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.ReferencedColumns, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).ReferencedColumns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteReferenceAction(node, node.OnDelete, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).OnDelete = newNode.(ReferenceAction)
+	}) {
+		return false
+	}
+	if !a.rewriteReferenceAction(node, node.OnUpdate, func(newNode, parent SQLNode) {
+		parent.(*ReferenceDefinition).OnUpdate = newNode.(ReferenceAction)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfRelease(parent SQLNode, node *Release, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3286,6 +3307,15 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
+	for x, el := range node.From {
+		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*Select).From[idx] = newNode.(TableExpr)
+			}
+		}(x)) {
+			return false
+		}
+	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(Comments)
 	}) {
@@ -3293,11 +3323,6 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}
 	if !a.rewriteSelectExprs(node, node.SelectExprs, func(newNode, parent SQLNode) {
 		parent.(*Select).SelectExprs = newNode.(SelectExprs)
-	}) {
-		return false
-	}
-	if !a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
-		parent.(*Select).From = newNode.(TableExprs)
 	}) {
 		return false
 	}
@@ -3674,6 +3699,33 @@ func (a *application) rewriteRefOfShowLegacy(parent SQLNode, node *ShowLegacy, r
 	}
 	if !a.rewriteExpr(node, node.ShowCollationFilterOpt, func(newNode, parent SQLNode) {
 		parent.(*ShowLegacy).ShowCollationFilterOpt = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMigrationLogs, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ShowMigrationLogs).Comments = newNode.(Comments)
 	}) {
 		return false
 	}
@@ -5048,6 +5100,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
 		return a.rewriteRefOfShow(parent, node, replacer)
+	case *ShowMigrationLogs:
+		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:

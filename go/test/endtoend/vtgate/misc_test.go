@@ -640,6 +640,83 @@ func TestShowGtid(t *testing.T) {
 	}
 }
 
+func TestQueryAndSubQWithLimit(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
+	result := exec(t, conn, `select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
+	assert.Equal(t, 10, len(result.Rows))
+}
+
+func TestDeleteAlias(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where id1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.id1 = 1")
+}
+
+func TestFunctionInDefault(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// set the sql mode ALLOW_INVALID_DATES
+	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
+
+	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
+	// this query fails because mysql57 does not support functions in default clause
+	require.Error(t, err)
+
+	// verify that currenet_timestamp and it's aliases work as default values
+	exec(t, conn, `create table function_default (
+ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+dt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+dt2 DATETIME DEFAULT CURRENT_TIMESTAMP,
+ts3 TIMESTAMP DEFAULT 0,
+dt3 DATETIME DEFAULT 0,
+ts4 TIMESTAMP DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+dt4 DATETIME DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+ts5 TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts6 TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+dt5 DATETIME ON UPDATE CURRENT_TIMESTAMP,
+dt6 DATETIME NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+ts7 TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ts8 TIMESTAMP DEFAULT NOW(),
+ts9 TIMESTAMP DEFAULT LOCALTIMESTAMP,
+ts10 TIMESTAMP DEFAULT LOCALTIME,
+ts11 TIMESTAMP DEFAULT LOCALTIMESTAMP(),
+ts12 TIMESTAMP DEFAULT LOCALTIME()
+)`)
+	exec(t, conn, "drop table function_default")
+
+	_, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
+	// this query fails because utc_timestamp is not supported in default clause
+	require.Error(t, err)
+
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
+	exec(t, conn, "drop table function_default")
+}
+
+func TestSubqueryInINClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
+	assertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
@@ -649,6 +726,7 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
 }
+
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

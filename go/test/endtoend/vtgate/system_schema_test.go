@@ -29,28 +29,6 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-// TestCheckConstraint test check constraints on CREATE TABLE
-// This feature is supported from MySQL 8.0.16 and MariaDB 10.2.1.
-func TestCheckConstraint(t *testing.T) {
-	// Skipping as tests are run against MySQL 5.7
-	t.Skip()
-
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	query := `CREATE TABLE t7 (CHECK (c1 <> c2), c1 INT CHECK (c1 > 10), c2 INT CONSTRAINT c2_positive CHECK (c2 > 0), c3 INT CHECK (c3 < 100), CONSTRAINT c1_nonzero CHECK (c1 <> 0), CHECK (c1 > c3));`
-	exec(t, conn, query)
-
-	checkQuery := `SELECT CONSTRAINT_NAME FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = 't7';`
-	expected := `[[VARCHAR("t7_chk_1")] [VARCHAR("t7_chk_2")] [VARCHAR("c2_positive")] [VARCHAR("t7_chk_3")] [VARCHAR("c1_nonzero")] [VARCHAR("t7_chk_4")]]`
-
-	assertMatches(t, conn, checkQuery, expected)
-
-	cleanup := `DROP TABLE t7`
-	exec(t, conn, cleanup)
-}
-
 func TestDbNameOverride(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -78,6 +56,8 @@ func TestInformationSchemaQuery(t *testing.T) {
 	assertResultIsEmpty(t, conn, "table_schema = 'PERFORMANCE_SCHEMA'")
 	assertSingleRowIsReturned(t, conn, "table_schema = 'performance_schema' and table_name = 'users'", "performance_schema")
 	assertResultIsEmpty(t, conn, "table_schema = 'performance_schema' and table_name = 'foo'")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'vt_ks' and table_name = 't1'", "vt_ks")
+	assertSingleRowIsReturned(t, conn, "table_schema = 'ks' and table_name = 't1'", "vt_ks")
 }
 
 func assertResultIsEmpty(t *testing.T, conn *mysql.Conn, pre string) {
@@ -167,15 +147,17 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
+		"where t.table_schema = '%s' and c.table_schema = '%s' "+
+		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
 	qr1 := exec(t, conn, queryWithQualifier)
 
+	exec(t, conn, "use information_schema")
 	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
 		"from tables t "+
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName)
-	exec(t, conn, "use information_schema")
+		"where t.table_schema = '%s' and c.table_schema = '%s' "+
+		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
 	qr2 := exec(t, conn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 

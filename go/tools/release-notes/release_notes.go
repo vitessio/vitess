@@ -59,10 +59,15 @@ type (
 		Name       string
 		Components []sortedPRComponent
 	}
+
+	knownIssue struct {
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+	}
 )
 
 const (
-	markdownTemplate = `
+	markdownTemplatePR = `
 {{- range $type := . }}
 ## {{ $type.Name }}
 {{- range $component := $type.Components }} 
@@ -74,11 +79,32 @@ const (
 {{- end }}
 `
 
+	markdownTemplateKnownIssues = `
+## Known issues
+{{- range $issue := . }}
+ * {{ $issue.Title }} #{{ $issue.Number }} 
+{{- end }}
+`
+
 	prefixType        = "Type: "
 	prefixComponent   = "Component: "
 	numberOfThreads   = 10
 	lengthOfSingleSHA = 40
 )
+
+func loadKnownIssues(release string) ([]knownIssue, error) {
+	label := fmt.Sprintf("Known issue: %s", release)
+	out, err := execCmd("gh", "issue", "list", "--repo", "vitessio/vitess", "--label", label, "--json", "title,number")
+	if err != nil {
+		return nil, err
+	}
+	var knownIssues []knownIssue
+	err = json.Unmarshal(out, &knownIssues)
+	if err != nil {
+		return nil, err
+	}
+	return knownIssues, nil
+}
 
 func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount int, err error) {
 	// load the git log with "author \t title \t parents"
@@ -94,6 +120,7 @@ func loadMergedPRs(from, to string) (prs []string, authors []string, commitCount
 func parseGitLog(s string) (prs []string, authorCommits []string, commitCount int, err error) {
 	rx := regexp.MustCompile(`(.+)\t(.+)\t(.+)\t(.+)`)
 	mergePR := regexp.MustCompile(`Merge pull request #(\d+)`)
+	squashPR := regexp.MustCompile(`\(#(\d+)\)`)
 	authMap := map[string]string{} // here we will store email <-> gh user mappings
 	lines := strings.Split(s, "\n")
 	for _, line := range lines {
@@ -112,13 +139,19 @@ func parseGitLog(s string) (prs []string, authorCommits []string, commitCount in
 			continue
 		}
 
-		if len(parents) > lengthOfSingleSHA {
-			// if we have two parents, it means this is a merge commit. we only count non-merge commits
-			continue
+		if len(parents) <= lengthOfSingleSHA {
+			// we have a single parent, and the commit counts
+			commitCount++
+			if _, exists := authMap[authorEmail]; !exists {
+				authMap[authorEmail] = sha
+			}
 		}
-		commitCount++
-		if _, exists := authMap[authorEmail]; !exists {
-			authMap[authorEmail] = sha
+
+		squashed := squashPR.FindStringSubmatch(title)
+		if len(squashed) == 2 {
+			// this is a merged PR. remember the PR #
+			prs = append(prs, squashed[1])
+			continue
 		}
 	}
 
@@ -344,8 +377,20 @@ func getOutput(fileout string) (*os.File, error) {
 func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
 	data := createSortedPrTypeSlice(prPerType)
 
-	t := template.Must(template.New("markdownTemplate").Parse(markdownTemplate))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplate", data)
+	t := template.Must(template.New("markdownTemplatePR").Parse(markdownTemplatePR))
+	err = t.ExecuteTemplate(writeTo, "markdownTemplatePR", data)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeKnownIssues(writeTo *os.File, issues []knownIssue) (err error) {
+	if len(issues) == 0 {
+		return nil
+	}
+	t := template.Must(template.New("markdownTemplateKnownIssues").Parse(markdownTemplateKnownIssues))
+	err = t.ExecuteTemplate(writeTo, "markdownTemplateKnownIssues", issues)
 	if err != nil {
 		return err
 	}
@@ -355,6 +400,7 @@ func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
+	releaseBranch := flag.String("release-branch", "", "name of the release branch")
 	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
 
 	flag.Parse()
@@ -379,6 +425,16 @@ func main() {
 	}()
 
 	err = writePrInfos(out, prPerType)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// known issues
+	knownIssues, err := loadKnownIssues(*releaseBranch)
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = writeKnownIssues(out, knownIssues)
 	if err != nil {
 		log.Fatal(err)
 	}

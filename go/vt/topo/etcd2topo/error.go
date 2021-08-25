@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/coreos/etcd/etcdserver/api/v3rpc/rpctypes"
+	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -58,7 +58,7 @@ func convertError(err error, nodePath string) error {
 			// seem to be using the codes.Unavailable
 			// category. So changing all of them to ErrTimeout.
 			// The other reasons for codes.Unavailable are when
-			// etcd master election is failing, so timeout
+			// etcd primary election is failing, so timeout
 			// also sounds reasonable there.
 			return topo.NewError(topo.Timeout, nodePath)
 		}

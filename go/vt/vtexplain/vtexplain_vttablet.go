@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/vt/vttablet/onlineddl"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -101,9 +103,10 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		config.TwoPCAbandonAge = 1.0
 		config.TwoPCEnable = true
 	}
+	config.EnableOnlineDDL = false
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), *t.Alias)
+	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -124,9 +127,9 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	target := querypb.Target{
 		Keyspace:   t.Keyspace,
 		Shard:      t.Shard,
-		TabletType: topodatapb.TabletType_MASTER,
+		TabletType: topodatapb.TabletType_PRIMARY,
 	}
-	tsv.StartService(target, dbcfgs, nil /* mysqld */)
+	tsv.StartService(&target, dbcfgs, nil /* mysqld */)
 
 	// clear all the schema initialization queries out of the tablet
 	// to avoid clutttering the output
@@ -393,6 +396,13 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		),
 	}
 
+	for _, query := range onlineddl.ApplyDDL {
+		tEnv.schemaQueries[query] = &sqltypes.Result{
+			Fields: []*querypb.Field{{Type: sqltypes.Uint64}},
+			Rows:   [][]sqltypes.Value{},
+		}
+	}
+
 	showTableRows := make([][]sqltypes.Value, 0, 4)
 	for _, ddl := range ddls {
 		table := ddl.GetTable().Name.String()
@@ -600,8 +610,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet, sqlparser.StmtShow:
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet:
 		result = &sqltypes.Result{}
+	case sqlparser.StmtShow:
+		result = &sqltypes.Result{Fields: sqltypes.MakeTestFields("", "")}
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		result = &sqltypes.Result{
 			RowsAffected: 1,

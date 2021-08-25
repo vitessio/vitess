@@ -112,8 +112,11 @@ type TabletManagerClient interface {
 	// Replication related methods
 	//
 
-	// MasterStatus returns the tablet's mysql master status.
-	MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error)
+	// Deprecated MasterStatus returns the tablet's mysql primary status.
+	MasterStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+
+	// PrimaryStatus returns the tablet's mysql primary status.
+	PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 
 	// ReplicationStatus returns the tablet's mysql replication status.
 	ReplicationStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.Status, error)
@@ -134,8 +137,11 @@ type TabletManagerClient interface {
 	// GetReplicas returns the addresses of the replicas
 	GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error)
 
-	// MasterPosition returns the tablet's master position
+	// Deprecated MasterPosition returns the tablet's primary position
 	MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+
+	// PrimaryPosition returns the tablet's primary position
+	PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
 	// WaitForPosition waits for the position to be reached
 	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
@@ -156,44 +162,62 @@ type TabletManagerClient interface {
 	// replication positions are reset.
 	ResetReplication(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// InitMaster tells a tablet to make itself the new master,
+	// Deprecated InitMaster tells a tablet to make itself the new primary,
 	// and return the replication position the replicas should use to
 	// reparent to it.
 	InitMaster(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
-	// PopulateReparentJournal asks the master to insert a row in
+	// InitPrimary tells a tablet to make itself the new primary,
+	// and return the replication position the replicas should use to
+	// reparent to it.
+	InitPrimary(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
+
+	// PopulateReparentJournal asks the primary to insert a row in
 	// its reparent_journal table.
-	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, masterAlias *topodatapb.TabletAlias, pos string) error
+	PopulateReparentJournal(ctx context.Context, tablet *topodatapb.Tablet, timeCreatedNS int64, actionName string, tabletAlias *topodatapb.TabletAlias, pos string) error
 
 	// InitReplica tells a tablet to start replicating from the
-	// passed in master tablet alias, and wait for the row in the
+	// passed in primary tablet alias, and wait for the row in the
 	// reparent_journal table.
 	InitReplica(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, replicationPosition string, timeCreatedNS int64) error
 
-	// DemoteMaster tells the soon-to-be-former master it's going to change,
+	// Deprecated DemoteMaster tells the soon-to-be-former primary it's going to change,
 	// and it should go read-only and return its current position.
-	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error)
+	DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
 
-	// UndoDemoteMaster reverts all changes made by DemoteMaster
-	// To be used if we are unable to promote the chosen new master
+	// Deprecated UndoDemoteMaster reverts all changes made by DemoteMaster
+	// To be used if we are unable to promote the chosen new primary
 	UndoDemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// ReplicaWasPromoted tells the remote tablet it is now the master
+	// DemotePrimary tells the soon-to-be-former primary it's going to change,
+	// and it should go read-only and return its current position.
+	DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error)
+
+	// UndoDemotePrimary reverts all changes made by DemotePrimary
+	// To be used if we are unable to promote the chosen new primary
+	UndoDemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) error
+
+	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, tablet *topodatapb.Tablet) error
 
-	// SetMaster tells a tablet to start replicating from the
-	// passed in master tablet alias, and wait for the row in the
+	// Deprecated SetMaster tells a tablet to start replicating from the
+	// passed in primary tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
 	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
 
-	// ReplicaWasRestarted tells the replica tablet its master has changed
+	// SetReplicationSource tells a tablet to start replicating from the
+	// passed in tablet alias, and wait for the row in the
+	// reparent_journal table (if timeCreatedNS is non-zero).
+	SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error
+
+	// ReplicaWasRestarted tells the replica tablet its primary has changed
 	ReplicaWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error
 
 	// StopReplicationAndGetStatus stops replication and returns the
 	// current position.
 	StopReplicationAndGetStatus(ctx context.Context, tablet *topodatapb.Tablet, stopReplicationMode replicationdatapb.StopReplicationMode) (*replicationdatapb.Status, *replicationdatapb.StopReplicationStatus, error)
 
-	// PromoteReplica makes the tablet the new master
+	// PromoteReplica makes the tablet the new primary
 	PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
 	//
@@ -201,7 +225,7 @@ type TabletManagerClient interface {
 	//
 
 	// Backup creates a database backup
-	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) (logutil.EventStream, error)
+	Backup(ctx context.Context, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) (logutil.EventStream, error)
 
 	// RestoreFromBackup deletes local data and restores database from backup
 	RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error)

@@ -115,6 +115,14 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
+// CharsetConversion represent a conversion of text from one charset to another
+message CharsetConversion {
+  // FromCharset is the charset name from which we convert the text (e.g. latin1)
+  string from_charset = 1;
+  // ToCharset is the charset name to which we convert the text (e.g. utf8mb4)
+  string to_charset = 2;
+}
+
 // Rule represents one rule in a Filter.
 message Rule {
   // Match can be a table name or a regular expression.
@@ -138,6 +146,31 @@ message Rule {
   // to be excluded.
   // TODO(sougou): support this on vstreamer side also.
   string filter = 2;
+  // ConvertEnumToText: optional, list per enum column name, the list of textual values.
+  // When reading the binary log, all enum values are numeric. But sometimes it
+  // is useful/needed to know what the textual mapping are.
+  // Online DDL provides such use case.
+
+  // Example: key="color", value="'red','green','blue'"
+  map<string, string> convert_enum_to_text = 3;
+
+  // ConvertCharset: optional mapping, between column name and a CharsetConversion.
+  // This hints to vreplication that columns are encoded from/to non-trivial charsets
+  // The map is only populated when either "from" or "to" charset of a column are non-trivial
+  // trivial charsets are utf8 and ascii variants.
+  map<string, CharsetConversion> convert_charset = 4;
+
+  // SourceUniqueKeyColumns represents the ordered columns in the index used by rowstreamer to iterate the table
+  // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
+   string source_unique_key_columns = 5;
+
+  // TargetUniqueKeyColumns represents the ordered columns in that index used by vcopier and vplayer to apply rows
+  // It is comma delimited, as in col1,col2,col3 (tokens are escaped via net/url)
+  string target_unique_key_columns = 6;
+
+  // SourceUniqueKeyTargetColumns represents the names of columns in target table, mapped from the chosen unique
+  // key on source tables (some columns may be renamed from source to target)
+  string source_unique_key_target_columns = 7;
 }
 
 // Filter represents a list of ordered rules. The first
@@ -252,12 +285,16 @@ message RowChange {
 message RowEvent {
   string table_name = 1;
   repeated RowChange row_changes = 2;
+  string keyspace = 3;
+  string shard = 4;
 }
 
 // FieldEvent represents the field info for a table.
 message FieldEvent {
   string table_name = 1;
   repeated query.Field fields = 2;
+  string keyspace = 3;
+  string shard = 4;
 }
 
 // ShardGtid contains the GTID position for one shard.

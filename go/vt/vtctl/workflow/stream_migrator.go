@@ -23,7 +23,7 @@ import (
 	"sync"
 	"text/template"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -227,7 +227,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		}
 
 		var bls binlogdatapb.BinlogSource
-		if err := proto.UnmarshalText(row[2].ToString(), &bls); err != nil {
+		if err := prototext.Unmarshal(row[2].ToBytes(), &bls); err != nil {
 			return nil, err
 		}
 
@@ -237,7 +237,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		}
 
 		if isReference {
-			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", bls)
+			sm.ts.Logger().Infof("readTabletStreams: ignoring reference table %+v", &bls)
 			continue
 		}
 
@@ -441,7 +441,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 					return
 				}
 
-				primary, err := sm.ts.TopoServer().GetTablet(ctx, si.MasterAlias)
+				primary, err := sm.ts.TopoServer().GetTablet(ctx, si.PrimaryAlias)
 				if err != nil {
 					allErrors.RecordError(err)
 					return

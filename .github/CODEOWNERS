@@ -7,7 +7,7 @@ bootstrap.sh @deepthi
 /examples/local @rohit-nayak-ps
 /examples/operator @askdba
 /examples/region_sharding @deepthi
-/java/ @harshit-gangal
+/java/ @harshit-gangal @pH14
 /go/cache @vmg
 /go/cmd/vtadmin @ajm188 @doeg
 /go/cmd/vtctldclient @ajm188 @doeg

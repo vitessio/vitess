@@ -19,6 +19,7 @@ package cluster
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -26,8 +27,10 @@ import (
 	"text/template"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -35,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
+	"vitess.io/vitess/go/vt/vtadmin/debug"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient"
@@ -63,6 +67,14 @@ type Cluster struct {
 
 	// Fields for generating FQDNs for tablets
 	TabletFQDNTmpl *template.Template
+
+	backupReadPool   *pools.RPCPool
+	schemaReadPool   *pools.RPCPool
+	topoRWPool       *pools.RPCPool
+	topoReadPool     *pools.RPCPool
+	workflowReadPool *pools.RPCPool
+
+	cfg Config
 }
 
 // New creates a new Cluster from a Config.
@@ -70,6 +82,7 @@ func New(cfg Config) (*Cluster, error) {
 	cluster := &Cluster{
 		ID:   cfg.ID,
 		Name: cfg.Name,
+		cfg:  cfg,
 	}
 
 	discoargs := buildPFlagSlice(cfg.DiscoveryFlagsByImpl[cfg.DiscoveryImpl])
@@ -106,6 +119,12 @@ func New(cfg Config) (*Cluster, error) {
 			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
 		}
 	}
+
+	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
+	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
+	cluster.topoRWPool = cfg.TopoRWPoolConfig.NewRWPool()
+	cluster.topoReadPool = cfg.TopoReadPoolConfig.NewReadPool()
+	cluster.workflowReadPool = cfg.WorkflowReadPoolConfig.NewReadPool()
 
 	return cluster, nil
 }
@@ -154,7 +173,7 @@ func (c *Cluster) parseTablets(rows *sql.Rows) ([]*vtadminpb.Tablet, error) {
 }
 
 // Fields are:
-// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | MasterTermStartTime.
+// Cell | Keyspace | Shard | TabletType (string) | ServingState (string) | Alias | Hostname | PrimaryTermStartTime.
 func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	var (
 		cell            string
@@ -208,10 +227,10 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	if mtstStr != "" {
 		timeTime, err := time.Parse(time.RFC3339, mtstStr)
 		if err != nil {
-			return nil, fmt.Errorf("failed parsing master_term_start_time %s: %w", mtstStr, err)
+			return nil, fmt.Errorf("failed parsing primary_term_start_time %s: %w", mtstStr, err)
 		}
 
-		topotablet.MasterTermStartTime = logutil.TimeToProto(timeTime)
+		topotablet.PrimaryTermStartTime = logutil.TimeToProto(timeTime)
 	}
 
 	if c.TabletFQDNTmpl != nil {
@@ -224,12 +243,76 @@ func (c *Cluster) parseTablet(rows *sql.Rows) (*vtadminpb.Tablet, error) {
 	return tablet, nil
 }
 
+// CreateKeyspace creates a keyspace in the given cluster, proxying a
+// CreateKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKeyspaceRequest) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CreateKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Name == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Name)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	resp, err := c.Vtctld.CreateKeyspace(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   map[string]*vtctldatapb.Shard{},
+	}, nil
+}
+
+// DeleteKeyspace deletes a keyspace in the given cluster, proxying a
+// DeleteKeyspaceRequest to a vtctld in that cluster.
+func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteKeyspace(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.DeleteKeyspace(ctx, req)
+}
+
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's
 // FindAllShardsInKeyspace method.
 type FindAllShardsInKeyspaceOptions struct {
 	// SkipDial indicates that the cluster can assume the vtctldclient has
 	// already dialed up a connection to a vtctld.
 	SkipDial bool
+	// skipPool indicates that the caller has already made a successful call to
+	// Acquire on the topoReadPool. It is not exported, because the cluster
+	// pools are not exported, so it's not possible to manually Acquire from
+	// outside this package.
+	skipPool bool
 }
 
 // FindAllShardsInKeyspace proxies a FindAllShardsInKeyspace RPC to a cluster's
@@ -248,6 +331,13 @@ func (c *Cluster) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 		if err := c.Vtctld.Dial(ctx); err != nil {
 			return nil, fmt.Errorf("failed to Dial vtctld for cluster = %s for FindAllShardsInKeyspace: %w", c.ID, err)
 		}
+	}
+
+	if !opts.skipPool {
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			return nil, fmt.Errorf("FindAllShardsInKeyspace(%s) failed to acquire topoReadPool: %w", keyspace, err)
+		}
+		defer c.topoReadPool.Release()
 	}
 
 	resp, err := c.Vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{
@@ -309,7 +399,14 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
 		AnnotateSpan(c, span)
 
+		if err := c.topoReadPool.Acquire(ctx); err != nil {
+			span.Finish()
+			return nil, fmt.Errorf("findWorkflows(keyspaces = %v, opts = %+v) failed to acquire topoReadPool: %w", keyspaces, opts, err)
+		}
+
 		resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+		c.topoReadPool.Release()
+
 		if err != nil {
 			span.Finish()
 			return nil, fmt.Errorf("GetKeyspaces(cluster = %s) failed: %w", c.ID, err)
@@ -361,12 +458,21 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 			span.Annotate("keyspace", ks)
 			span.Annotate("active_only", opts.ActiveOnly)
 
+			if err := c.workflowReadPool.Acquire(ctx); err != nil {
+				err = fmt.Errorf("GetWorkflows(keyspace = %s, active_only = %v) failed to acquire workflowReadPool: %w", ks, opts.ActiveOnly, err)
+				rec.RecordError(err)
+
+				return
+			}
+
 			resp, err := c.Vtctld.GetWorkflows(ctx, &vtctldatapb.GetWorkflowsRequest{
 				Keyspace:   ks,
 				ActiveOnly: opts.ActiveOnly,
 			})
+			c.workflowReadPool.Release()
+
 			if err != nil {
-				err = fmt.Errorf("GetWorkflows(cluster = %s, keyspace = %s, active_only = %v) failed: %w", c.ID, ks, opts.ActiveOnly, err)
+				err = fmt.Errorf("GetWorkflows(keyspace = %s, active_only = %v) failed: %w", ks, opts.ActiveOnly, err)
 				rec.RecordError(err)
 
 				return
@@ -406,6 +512,197 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	}, nil
 }
 
+// GetBackups returns a ClusterBackups object for all backups in the cluster.
+func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest) ([]*vtadminpb.ClusterBackup, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetBackups")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	shardsByKeyspace, err := c.getShardSets(ctx, req.Keyspaces, req.KeyspaceShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		backups      []*vtadminpb.ClusterBackup
+		clusterProto = c.ToProto()
+	)
+
+	for ks, shardSet := range shardsByKeyspace {
+		for _, shard := range shardSet.List() {
+			wg.Add(1)
+
+			go func(keyspace, shard string) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "Cluster.getBackupsForShard")
+				defer span.Finish()
+
+				AnnotateSpan(c, span)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
+
+				if err := c.backupReadPool.Acquire(ctx); err != nil {
+					rec.RecordError(fmt.Errorf("GetBackups(%s/%s) failed to acquire backupReadPool: %w", keyspace, shard, err))
+					return
+				}
+
+				resp, err := c.Vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+					Keyspace:      keyspace,
+					Shard:         shard,
+					Limit:         req.RequestOptions.Limit,
+					Detailed:      req.RequestOptions.Detailed,
+					DetailedLimit: req.RequestOptions.DetailedLimit,
+				})
+				c.backupReadPool.Release()
+
+				if err != nil {
+					rec.RecordError(fmt.Errorf("GetBackups(%s/%s): %w", keyspace, shard, err))
+					return
+				}
+
+				shardBackups := make([]*vtadminpb.ClusterBackup, len(resp.Backups))
+				for i, backup := range resp.Backups {
+					shardBackups[i] = &vtadminpb.ClusterBackup{
+						Cluster: clusterProto,
+						Backup:  backup,
+					}
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				backups = append(backups, shardBackups...)
+			}(ks, shard)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return backups, nil
+}
+
+func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspaceShards []string) (map[string]sets.String, error) {
+	shardsByKeyspace := map[string]sets.String{}
+
+	if len(keyspaces) == 0 && len(keyspaceShards) == 0 {
+		// Special case: if nothing was explicitly passed, get all shards in
+		// all keyspaces.
+		kss, err := c.GetKeyspaces(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ks := range kss {
+			shardsByKeyspace[ks.Keyspace.Name] = sets.NewString()
+			for _, shard := range ks.Shards {
+				shardsByKeyspace[ks.Keyspace.Name].Insert(shard.Name)
+			}
+		}
+
+		return shardsByKeyspace, nil
+	}
+
+	for _, ksShard := range keyspaceShards {
+		ks, shard, err := topoproto.ParseKeyspaceShard(ksShard)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := shardsByKeyspace[ks]; !ok {
+			shardsByKeyspace[ks] = sets.NewString(shard)
+			continue
+		}
+
+		shardsByKeyspace[ks].Insert(shard)
+	}
+
+	for _, ks := range keyspaces {
+		// For each keyspace specified, if it was also one of the keyspaceShards,
+		// we added the set in the above loop, so nothing to do. If not, add an
+		// empty set to indicate we should take all shards in the GetKeyspace
+		// section below.
+		if _, ok := shardsByKeyspace[ks]; !ok {
+			shardsByKeyspace[ks] = sets.NewString()
+		}
+	}
+
+	var (
+		m   sync.Mutex
+		wg  sync.WaitGroup
+		rec concurrency.AllErrorRecorder
+	)
+
+	m.Lock() // lock the map while we're iterating over it
+
+	for ksName, shardSet := range shardsByKeyspace {
+		wg.Add(1)
+
+		go func(ksName string, shardSet sets.String) {
+			defer wg.Done()
+
+			keyspace, err := c.GetKeyspace(ctx, ksName)
+			if err != nil {
+				if strings.Contains(err.Error(), "node doesn't exist") {
+					// (TODO:@ajm188) Make better use of error codes on the
+					// vtctld side, and we can do better checking here.
+					// Since this is on the client-side of an RPC we can't
+					// even use topo.IsErrType(topo.NoNode) :(
+					log.Warningf("getShardSets(): keyspace %s does not exist in cluster %s", ksName, c.ID)
+					m.Lock()
+					defer m.Unlock()
+
+					delete(shardsByKeyspace, ksName)
+					return
+				}
+
+				rec.RecordError(err)
+				return
+			}
+
+			fullShardSet := sets.NewString()
+			for _, shard := range keyspace.Shards {
+				fullShardSet.Insert(shard.Name)
+			}
+
+			if shardSet.Len() == 0 {
+				m.Lock()
+				defer m.Unlock()
+
+				shardsByKeyspace[ksName] = fullShardSet
+				return
+			}
+
+			overlap := shardSet.Intersection(fullShardSet)
+			if overlap.Len() != shardSet.Len() {
+				log.Warningf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, shardSet.Difference(overlap).List())
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			shardsByKeyspace[ksName] = overlap
+		}(ksName, shardSet)
+	}
+
+	m.Unlock()
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return shardsByKeyspace, nil
+}
+
 // GetGates returns the list of all VTGates in the cluster.
 func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	// (TODO|@ajm188) Support tags in the vtadmin RPC request and pass them
@@ -424,6 +721,105 @@ func (c *Cluster) GetGates(ctx context.Context) ([]*vtadminpb.VTGate, error) {
 	}
 
 	return gates, nil
+}
+
+// GetKeyspace returns a single keyspace in the cluster.
+func (c *Cluster) GetKeyspace(ctx context.Context, name string) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspace")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("keyspace", name)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial failed for cluster = %s: %w", c.ID, err)
+	}
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetKeyspace(%s) failed to acquire topoReadPool: %w", name, err)
+	}
+	defer c.topoReadPool.Release()
+
+	resp, err := c.Vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{
+		Keyspace: name,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	shards, err := c.FindAllShardsInKeyspace(ctx, name, FindAllShardsInKeyspaceOptions{
+		SkipDial: true,
+		skipPool: true, // we already acquired before making the GetKeyspace call
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.Keyspace{
+		Cluster:  c.ToProto(),
+		Keyspace: resp.Keyspace,
+		Shards:   shards,
+	}, nil
+}
+
+// GetKeyspaces returns all keyspaces, with their shard maps, in the cluster.
+func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetKeyspaces() failed to acquire topoReadPool: %w", err)
+	}
+
+	resp, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
+	c.topoReadPool.Release()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		keyspaces = make([]*vtadminpb.Keyspace, len(resp.Keyspaces))
+	)
+
+	for i, ks := range resp.Keyspaces {
+		wg.Add(1)
+		go func(i int, ks *vtctldatapb.Keyspace) {
+			defer wg.Done()
+
+			shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, FindAllShardsInKeyspaceOptions{SkipDial: true})
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			keyspace := &vtadminpb.Keyspace{
+				Cluster:  c.ToProto(),
+				Keyspace: ks,
+				Shards:   shards,
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			keyspaces[i] = keyspace
+		}(i, ks)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return keyspaces, nil
 }
 
 // GetTablets returns all tablets in the cluster.
@@ -506,7 +902,7 @@ type GetSchemaOptions struct {
 //
 // (2.1) If, in size aggregation mode, opts.SizeOpts.IncludeNonServingShards is
 // false (the default), then we will filter out any shards for which
-// IsMasterServing is false in the topo, and make GetSchema RPCs to one tablet
+// IsPrimaryServing is false in the topo, and make GetSchema RPCs to one tablet
 // in every _serving_ shard. Otherwise we will make a GetSchema RPC to one
 // tablet in _every_ shard.
 //
@@ -596,16 +992,24 @@ func (c *Cluster) getSchemaFromTablets(ctx context.Context, keyspace string, tab
 			span, ctx := trace.NewSpan(ctx, "Vtctld.GetSchema")
 			defer span.Finish()
 
-			req := *opts.BaseRequest
+			req := proto.Clone(opts.BaseRequest).(*vtctldatapb.GetSchemaRequest)
 			req.TableSizesOnly = sizesOnly
 			req.TabletAlias = tablet.Tablet.Alias
 
 			AnnotateSpan(c, span)
-			annotateGetSchemaRequest(&req, span)
+			annotateGetSchemaRequest(req, span)
 			span.Annotate("keyspace", keyspace)
 			span.Annotate("shard", tablet.Tablet.Shard)
 
-			resp, err := c.Vtctld.GetSchema(ctx, &req)
+			if err := c.schemaReadPool.Acquire(ctx); err != nil {
+				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed to acquire schemaReadPool: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
+				rec.RecordError(err)
+				return
+			}
+
+			resp, err := c.Vtctld.GetSchema(ctx, req)
+			c.schemaReadPool.Release()
+
 			if err != nil {
 				err = fmt.Errorf("GetSchema(cluster = %s, keyspace = %s, tablet = %s) failed: %w", c.ID, keyspace, tablet.Tablet.Alias, err)
 				rec.RecordError(err)
@@ -684,8 +1088,8 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 			// provide a contiguous keyspace so that certain keyspace-level
 			// operations will work. In our case, we care about whether the
 			// shard is truly serving, which we define as also having a known
-			// primary (via MasterAlias) in addition to the IsMasterServing bit.
-			if !shard.Shard.IsMasterServing || shard.Shard.MasterAlias == nil {
+			// primary (via PrimaryAlias) in addition to the IsPrimaryServing bit.
+			if !shard.Shard.IsPrimaryServing || shard.Shard.PrimaryAlias == nil {
 				if !opts.TableSizeOptions.IncludeNonServingShards {
 					log.Infof("%s/%s is not serving; ignoring because IncludeNonServingShards = false", keyspace, shard.Name)
 					continue
@@ -721,6 +1125,75 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 
+// GetSrvVSchema returns the SrvVSchema for a given cell in the cluster.
+func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+	span.Annotate("cell", cell)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetSrvVSchema(%s) failed to acquire topoReadPool: %w", cell, err)
+	}
+	defer c.topoReadPool.Release()
+
+	sv, err := c.Vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{
+		Cell: cell,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.SrvVSchema{
+		Cell:       cell,
+		Cluster:    c.ToProto(),
+		SrvVSchema: sv.SrvVSchema,
+	}, nil
+}
+
+// GetSrvVSchemas returns the SrvVSchema for all cells in the cluster,
+// optionally filtered by cell.
+func (c *Cluster) GetSrvVSchemas(ctx context.Context, cells []string) ([]*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchemas")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, fmt.Errorf("Vtctld.Dial(cluster=%s) failed: %w", c.ID, err)
+	}
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetSrvVSchema(cluster = %s, cells = %v) failed to acquire topoReadPool: %w", c.ID, cells, err)
+	}
+	resp, err := c.Vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{
+		Cells: cells,
+	})
+	c.topoReadPool.Release()
+
+	if err != nil {
+		return nil, err
+	}
+
+	svs := make([]*vtadminpb.SrvVSchema, 0, len(resp.SrvVSchemas))
+
+	for cell, s := range resp.SrvVSchemas {
+		svs = append(svs, &vtadminpb.SrvVSchema{
+			Cell:       cell,
+			Cluster:    c.ToProto(),
+			SrvVSchema: s,
+		})
+	}
+
+	return svs, nil
+}
+
 // GetVSchema returns the vschema for a given keyspace in this cluster. The
 // caller is responsible for making at least one call to c.Vtctld.Dial prior to
 // calling this function.
@@ -730,6 +1203,11 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 
 	AnnotateSpan(c, span)
 	span.Annotate("keyspace", keyspace)
+
+	if err := c.topoReadPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("GetVSchema(%s) failed to acquire topoReadPool: %w", keyspace, err)
+	}
+	defer c.topoReadPool.Release()
 
 	vschema, err := c.Vtctld.GetVSchema(ctx, &vtctldatapb.GetVSchemaRequest{
 		Keyspace: keyspace,
@@ -871,4 +1349,29 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 	}
 
 	return vtadminproto.FilterTablets(filter, tablets, n), nil
+}
+
+// Debug returns a map of debug information for a cluster.
+func (c *Cluster) Debug() map[string]interface{} {
+	m := map[string]interface{}{
+		"cluster": c.ToProto(),
+		"config":  c.cfg,
+		"pools": map[string]json.RawMessage{
+			"backup_read_pool":   json.RawMessage(c.backupReadPool.StatsJSON()),
+			"schema_read_pool":   json.RawMessage(c.schemaReadPool.StatsJSON()),
+			"topo_read_pool":     json.RawMessage(c.topoReadPool.StatsJSON()),
+			"topo_rw_pool":       json.RawMessage(c.topoRWPool.StatsJSON()),
+			"workflow_read_pool": json.RawMessage(c.workflowReadPool.StatsJSON()),
+		},
+	}
+
+	if vtsql, ok := c.DB.(debug.Debuggable); ok {
+		m["vtsql"] = vtsql.Debug()
+	}
+
+	if vtctld, ok := c.Vtctld.(debug.Debuggable); ok {
+		m["vtctld"] = vtctld.Debug()
+	}
+
+	return m
 }

@@ -7,13 +7,15 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC",
+    "OrderBy": "(1|3) ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -23,7 +25,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|4) ASC",
             "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a order by a asc",
             "ResultColumns": 4,
             "Table": "`user`"
@@ -33,6 +35,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate order by references aggregate expression
 "select a, b, count(*) k from user group by a order by k"
@@ -58,7 +61,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|3) ASC",
             "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
             "ResultColumns": 3,
             "Table": "`user`"
@@ -68,6 +71,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate order by references multiple non-group-by expressions
 "select a, b, count(*) k from user group by a order by b, a, k"
@@ -77,13 +81,15 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC, 0 ASC, 2 ASC",
+    "OrderBy": "(1|3) ASC, (0|4) ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 5,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -93,7 +99,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|4) ASC",
             "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a order by a asc",
             "ResultColumns": 5,
             "Table": "`user`"
@@ -103,6 +109,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and limit
 "select a, b, count(*) k from user group by a order by k desc limit 10"
@@ -132,7 +139,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-                "OrderBy": "0 ASC",
+                "OrderBy": "(0|3) ASC",
                 "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
                 "ResultColumns": 3,
                 "Table": "`user`"
@@ -144,6 +151,7 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and order by number
 "select a, b, count(*) k from user group by a order by 1,3"
@@ -153,13 +161,15 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 2 ASC",
+    "OrderBy": "(0|3) ASC, 2 ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(2)",
         "GroupBy": "0",
+        "ResultColumns": 4,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -169,7 +179,7 @@
               "Sharded": true
             },
             "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|3) ASC",
             "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by 1 asc",
             "ResultColumns": 4,
             "Table": "`user`"
@@ -179,9 +189,10 @@
     ]
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'b' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # scatter aggregate with memory sort and order by number, reuse weight_string
-# we have to use a meaningless construct to test this.
+# we have to use a meaningless construct to test this. TODO: improve to do ordering once for textcol1
 "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
 {
   "QueryType": "SELECT",
@@ -189,13 +200,15 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 1 ASC, 0 ASC",
+    "OrderBy": "(0|2) ASC, 1 ASC, (0|2) ASC",
+    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1)",
         "GroupBy": "2",
+        "ResultColumns": 3,
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -205,7 +218,7 @@
               "Sharded": true
             },
             "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
-            "OrderBy": "0 ASC, 0 ASC",
+            "OrderBy": "(0|2) ASC, (0|2) ASC",
             "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc, textcol1 asc",
             "ResultColumns": 3,
             "Table": "`user`"
@@ -215,8 +228,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select textcol1 as t, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(2|3) ASC, 1 ASC, (2|3) ASC",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(1)",
+        "GroupBy": "(2|3)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
+            "OrderBy": "(2|3) ASC",
+            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
-# order by on a cross-shard subquery
+# order by on a cross-shard derived table
 "select id from (select user.id, user.col from user join user_extra) as t order by id"
 {
   "QueryType": "SELECT",
@@ -224,7 +269,8 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC",
+    "OrderBy": "(0|2) ASC",
+    "ResultColumns": 1,
     "Inputs": [
       {
         "OperatorType": "Subquery",
@@ -276,12 +322,16 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "2 ASC",
+    "OrderBy": "(2|3) ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,2",
+        "JoinVars": {
+          "user_id": 2
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -319,6 +369,59 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(2|3) ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,-3,1,2",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 as a, `user`.col2 as b from `user` where `user`.id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.col3 as c, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3 as c, weight_string(music.col3) from music where music.id = :user_id",
+            "Table": "music",
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Order by for join, with mixed cross-shard ordering
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
@@ -328,12 +431,16 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "0 ASC, 2 DESC, 1 ASC",
+    "OrderBy": "(0|3) ASC, (2|4) DESC, (1|5) ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "-1,-2,1,-3,2,-4",
+        "JoinVars": {
+          "user_id": 4
+        },
         "TableName": "`user`_music",
         "Inputs": [
           {
@@ -371,6 +478,59 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(0|3) ASC, (2|4) DESC, (1|5) ASC",
+    "ResultColumns": 3,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,-3,1,-4,2,-5",
+        "JoinVars": {
+          "user_id": 0
+        },
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col1 as a, `user`.col2, weight_string(`user`.col1), weight_string(`user`.col2) from `user` where `user`.id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select music.col3, weight_string(music.col3) from music where 1 != 1",
+            "Query": "select music.col3, weight_string(music.col3) from music where music.id = :user_id",
+            "Table": "music",
+            "Values": [
+              ":user_id"
+            ],
+            "Vindex": "music_user_map"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Order by for join, on text column in LHS.
 "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2"
@@ -380,7 +540,8 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC, 2 ASC",
+    "OrderBy": "(1|3) ASC, (2|4) ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -415,6 +576,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # Order by for join, on text column in RHS.
 "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
@@ -424,7 +586,8 @@
   "Instructions": {
     "OperatorType": "Sort",
     "Variant": "Memory",
-    "OrderBy": "1 ASC, 2 ASC",
+    "OrderBy": "(1|3) ASC, (2|4) ASC",
+    "ResultColumns": 3,
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -459,6 +622,7 @@
     ]
   }
 }
+Gen4 plan same as above
 
 # order by for vindex func
 "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
@@ -505,7 +669,7 @@
       "Sharded": true
     },
     "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
-    "OrderBy": "0 DESC",
+    "OrderBy": "(0|1) DESC",
     "Query": "select a, weight_string(a) from `user` order by binary a desc",
     "ResultColumns": 1,
     "Table": "`user`"
@@ -521,6 +685,9 @@
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_a": 0
+    },
     "TableName": "`user`_music",
     "Inputs": [
       {
@@ -531,7 +698,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u.a, weight_string(u.a) from `user` as u where 1 != 1",
-        "OrderBy": "0 DESC",
+        "OrderBy": "(0|1) DESC",
         "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
         "ResultColumns": 1,
         "Table": "`user`"
@@ -570,3 +737,24 @@
   }
 }
 Gen4 plan same as above
+
+# scatter order by with order by column not present
+"select col from user order by id"
+"unsupported: in scatter query: order by must reference a column in the select list: id asc"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user order by id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col, id, weight_string(id) from `user` where 1 != 1",
+    "OrderBy": "(1|2) ASC",
+    "Query": "select col, id, weight_string(id) from `user` order by id asc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}

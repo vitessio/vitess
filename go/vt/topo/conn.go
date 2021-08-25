@@ -156,7 +156,7 @@ type Conn interface {
 
 	//
 	// Master election methods. This is meant to have a small
-	// number of processes elect a master within a group. The
+	// number of processes elect a primary within a group. The
 	// backend storage for this can either be the global topo
 	// server, or a resilient quorum of individual cells, to
 	// reduce the load / dependency on the global topo server.
@@ -198,7 +198,7 @@ type DirEntry struct {
 
 	// Ephemeral is set if the directory / file only contains
 	// data that was not set by the file API, like lock files
-	// or master-election related files.
+	// or primary-election related files.
 	// Only filled in if full is true.
 	Ephemeral bool
 }
@@ -284,7 +284,7 @@ type WatchData struct {
 //     case topo.ErrInterrupted:
 //       return
 //     default:
-//       log.Errorf("Got error while waiting for master, will retry in 5s: %v", err)
+//       log.Errorf("Got error while waiting for primary, will retry in 5s: %v", err)
 //       time.Sleep(5 * time.Second)
 //     }
 //   }
@@ -303,16 +303,16 @@ type WatchData struct {
 // })
 type MasterParticipation interface {
 	// WaitForMastership makes the current process a candidate
-	// for election, and waits until this process is the master.
-	// After we become the master, we may lose mastership. In that case,
+	// for election, and waits until this process is the primary.
+	// After we become the primary, we may lose primaryship. In that case,
 	// the returned context will be canceled. If Stop was called,
 	// WaitForMastership will return nil, ErrInterrupted.
 	WaitForMastership() (context.Context, error)
 
 	// Stop is called when we don't want to participate in the
-	// master election any more. Typically, that is when the
+	// primary election any more. Typically, that is when the
 	// hosting process is terminating.  We will relinquish
-	// mastership at that point, if we had it. Stop should
+	// primaryship at that point, if we had it. Stop should
 	// not return until everything has been done.
 	// The MasterParticipation object should be discarded
 	// after Stop has been called. Any call to WaitForMastership
@@ -321,7 +321,7 @@ type MasterParticipation interface {
 	// nil, ErrInterrupted as soon as possible.
 	Stop()
 
-	// GetCurrentMasterID returns the current master id.
+	// GetCurrentMasterID returns the current primary id.
 	// This may not work after Stop has been called.
 	GetCurrentMasterID(ctx context.Context) (string, error)
 }

@@ -20,14 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 const (
-	vreplicationLogTableName = "_vt.vreplication_log"
-	createVReplicationLog    = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
+	vreplicationLogTableName   = "_vt.vreplication_log"
+	createVReplicationLogTable = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
 		id BIGINT(20) AUTO_INCREMENT,
 		vrepl_id INT NOT NULL,
 		type VARBINARY(256) NOT NULL,
@@ -68,41 +71,43 @@ const (
 	LogError = "Error"
 )
 
-func getLastLog(dbClient *vdbClient, vreplID uint32) (int64, string, string, string, error) {
+func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
-	var err error
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
 	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
 		return 0, "", "", "", err
 	}
-	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 4 {
+	if len(qr.Rows) != 1 {
 		return 0, "", "", "", nil
 	}
 	row := qr.Rows[0]
-	id, _ := evalengine.ToInt64(row[0])
-	typ := row[1].ToString()
-	state := row[2].ToString()
-	message := row[3].ToString()
+	id, _ = evalengine.ToInt64(row[0])
+	typ = row[1].ToString()
+	state = row[2].ToString()
+	message = row[3].ToString()
 	return id, typ, state, message, nil
 }
 
 func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message string) error {
-	var query string
-
-	// getLastLog returns the last log for a stream. During insertion, if the id/type/state/message match we do not insert
+	// getLastLog returns the last log for a stream. During insertion, if the type/state/message match we do not insert
 	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
-	id, currentType, currentState, currentMessage, err := getLastLog(dbClient, vreplID)
+	id, _, lastLogState, lastLogMessage, err := getLastLog(dbClient, vreplID)
 	if err != nil {
 		return err
 	}
-
-	if id > 0 && typ == currentType && state == currentState && message == currentMessage {
+	if typ == LogStateChange && state == lastLogState {
+		// handles case where current state is Running, controller restarts after an error and initializes the state Running
+		return nil
+	}
+	var query string
+	if id > 0 && message == lastLogMessage {
 		query = fmt.Sprintf("update _vt.vreplication_log set count = count + 1 where id = %d", id)
 	} else {
-		query = `insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%d, '%s', '%s', %s)`
-		query = fmt.Sprintf(query, vreplID, typ, state, encodeString(message))
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("insert into _vt.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
+			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
+		query = buf.ParsedQuery().Query
 	}
-
 	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}

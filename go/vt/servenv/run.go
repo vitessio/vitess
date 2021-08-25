@@ -69,7 +69,7 @@ func Run(port int) {
 	}
 
 	log.Info("Shutting down gracefully")
-	Close()
+	fireOnCloseHooks(*onCloseTimeout)
 }
 
 // Close runs any registered exit hooks in parallel.

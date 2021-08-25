@@ -94,7 +94,7 @@ create table test_partitioned (
 		t.Errorf("expected HasPrimary && t1.PKColumns == [0] got %v", t1.PKColumns)
 	}
 	pkCol := t1.GetPKColumn(0)
-	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64 ` {
+	if pkCol == nil || pkCol.String() != `name:"id" type:UINT64` {
 		t.Errorf("expected pkCol[0] == id, got %v", pkCol)
 	}
 

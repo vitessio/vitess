@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.GroupBy) (logicalPlan, error) {
@@ -68,7 +69,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 					return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: group by column must reference column in SELECT list")
 				}
 			case *sqlparser.Literal:
-				num, err := ResultFromNumber(node.resultColumns, e)
+				num, err := ResultFromNumber(node.resultColumns, e, "group statement")
 				if err != nil {
 					return nil, err
 				}
@@ -76,7 +77,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			default:
 				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: only simple references allowed")
 			}
-			node.eaggr.Keys = append(node.eaggr.Keys, colNumber)
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1})
 		}
 		// Append the distinct aggregate if any.
 		if node.extraDistinct != nil {
@@ -109,7 +110,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 			if rc.column.Origin() == node {
 				return newDistinct(node), nil
 			}
-			node.eaggr.Keys = append(node.eaggr.Keys, i)
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1})
 		}
 		newInput, err := planDistinct(node.input)
 		if err != nil {

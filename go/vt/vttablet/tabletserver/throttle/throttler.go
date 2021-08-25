@@ -439,7 +439,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					// sparse
 					shouldBeLeader := int64(0)
 					if atomic.LoadInt64(&throttler.isOpen) > 0 {
-						if throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+						if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
 							shouldBeLeader = 1
 						}
 					}

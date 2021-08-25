@@ -72,7 +72,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 
 	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
 	assert.NotEmpty(t, healthCheckConnection, "Atleast one healthy tablet needs to be present")
-	assert.True(t, isMasterTabletPresent(healthCheckConnection), "Atleast one master tablet needs to be present")
+	assert.True(t, isPrimaryTabletPresent(healthCheckConnection), "Atleast one primary tablet needs to be present")
 }
 
 func retryNTimes(t *testing.T, maxRetries int, f func() bool) {
@@ -96,99 +96,99 @@ func TestReplicaTransactions(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	ctx := context.Background()
-	masterConn, err := mysql.Connect(ctx, &vtParams)
+	writeConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer masterConn.Close()
+	defer writeConn.Close()
 
-	replicaConn, err := mysql.Connect(ctx, &vtParams)
+	readConn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer replicaConn.Close()
+	defer readConn.Close()
 
-	replicaConn2, err := mysql.Connect(ctx, &vtParams)
+	readConn2, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	defer replicaConn2.Close()
+	defer readConn2.Close()
 
 	fetchAllCustomers := "select id, email from customer"
 	checkCustomerRows := func(expectedRows int) func() bool {
 		return func() bool {
-			result := exec(t, replicaConn2, fetchAllCustomers, "")
+			result := exec(t, readConn2, fetchAllCustomers, "")
 			return len(result.Rows) == expectedRows
 		}
 	}
 
 	// point the replica connections to the replica target
-	exec(t, replicaConn, "use @replica", "")
-	exec(t, replicaConn2, "use @replica", "")
+	exec(t, readConn, "use @replica", "")
+	exec(t, readConn2, "use @replica", "")
 
-	// insert a row using master
-	exec(t, masterConn, "insert into customer(id, email) values(1,'email1')", "")
+	// insert a row using primary
+	exec(t, writeConn, "insert into customer(id, email) values(1,'email1')", "")
 
 	// we'll run this query a number of times, and then give up if the row count never reaches this value
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(1))
 
 	// after a short pause, SELECT the data inside a tx on a replica
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
-	qr := exec(t, replicaConn, fetchAllCustomers, "")
+	exec(t, readConn, "begin", "")
+	qr := exec(t, readConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")]]`, fmt.Sprintf("%v", qr.Rows), "select returned wrong result")
 
-	// insert more data on master using a transaction
-	exec(t, masterConn, "begin", "")
-	exec(t, masterConn, "insert into customer(id, email) values(2,'email2')", "")
-	exec(t, masterConn, "commit", "")
+	// insert more data on primary using a transaction
+	exec(t, writeConn, "begin", "")
+	exec(t, writeConn, "insert into customer(id, email) values(2,'email2')", "")
+	exec(t, writeConn, "commit", "")
 
 	retryNTimes(t, 10 /*maxRetries*/, checkCustomerRows(2))
 
 	// replica doesn't see new row because it is in a transaction
-	qr2 := exec(t, replicaConn, fetchAllCustomers, "")
+	qr2 := exec(t, readConn, fetchAllCustomers, "")
 	assert.Equal(t, qr.Rows, qr2.Rows)
 
 	// replica should see new row after closing the transaction
-	exec(t, replicaConn, "commit", "")
+	exec(t, readConn, "commit", "")
 
-	qr3 := exec(t, replicaConn, fetchAllCustomers, "")
+	qr3 := exec(t, readConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr3.Rows), "we are not seeing the updates after closing the replica transaction")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	exec(t, readConn, "begin", "")
 	// try to delete a row, should fail
-	exec(t, replicaConn, "delete from customer where id=1", "supported only for master tablet type, current type: replica")
-	exec(t, replicaConn, "commit", "")
+	exec(t, readConn, "delete from customer where id=1", "supported only for primary tablet type, current type: replica")
+	exec(t, readConn, "commit", "")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	exec(t, readConn, "begin", "")
 	// try to update a row, should fail
-	exec(t, replicaConn, "update customer set email='emailn' where id=1", "supported only for master tablet type, current type: replica")
-	exec(t, replicaConn, "commit", "")
+	exec(t, readConn, "update customer set email='emailn' where id=1", "supported only for primary tablet type, current type: replica")
+	exec(t, readConn, "commit", "")
 
 	// begin transaction on replica
-	exec(t, replicaConn, "begin", "")
+	exec(t, readConn, "begin", "")
 	// try to insert a row, should fail
-	exec(t, replicaConn, "insert into customer(id, email) values(1,'email1')", "supported only for master tablet type, current type: replica")
+	exec(t, readConn, "insert into customer(id, email) values(1,'email1')", "supported only for primary tablet type, current type: replica")
 	// call rollback just for fun
-	exec(t, replicaConn, "rollback", "")
+	exec(t, readConn, "rollback", "")
 
 	// start another transaction
-	exec(t, replicaConn, "begin", "")
-	exec(t, replicaConn, fetchAllCustomers, "")
+	exec(t, readConn, "begin", "")
+	exec(t, readConn, fetchAllCustomers, "")
 	// bring down the tablet and try to select again
 	replicaTablet := clusterInstance.Keyspaces[0].Shards[0].Replica()
 	// this gives us a "signal: killed" error, ignore it
 	_ = replicaTablet.VttabletProcess.TearDown()
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	exec(t, replicaConn, fetchAllCustomers, "is either down or nonexistent")
+	exec(t, readConn, fetchAllCustomers, "is either down or nonexistent")
 
 	// bring up tablet again
 	// query using same transaction will fail
 	_ = replicaTablet.VttabletProcess.Setup()
-	exec(t, replicaConn, fetchAllCustomers, "not found")
-	exec(t, replicaConn, "commit", "")
+	exec(t, readConn, fetchAllCustomers, "not found")
+	exec(t, readConn, "commit", "")
 	// create a new connection, should be able to query again
-	replicaConn, err = mysql.Connect(ctx, &vtParams)
+	readConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
-	exec(t, replicaConn, "begin", "")
-	qr4 := exec(t, replicaConn, fetchAllCustomers, "")
+	exec(t, readConn, "begin", "")
+	qr4 := exec(t, readConn, fetchAllCustomers, "")
 	assert.Equal(t, `[[INT64(1) VARCHAR("email1")] [INT64(2) VARCHAR("email2")]]`, fmt.Sprintf("%v", qr4.Rows), "we are not able to reconnect after restart")
 }
 
@@ -204,9 +204,9 @@ func getMapFromJSON(JSON map[string]interface{}, key string) map[string]interfac
 	return result
 }
 
-func isMasterTabletPresent(tablets map[string]interface{}) bool {
+func isPrimaryTabletPresent(tablets map[string]interface{}) bool {
 	for key := range tablets {
-		if strings.Contains(key, "master") {
+		if strings.Contains(key, "primary") {
 			return true
 		}
 	}

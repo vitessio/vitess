@@ -1,7 +1,10 @@
 name: {{.Name}}
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{"{{"}} github.ref {{"}}"}}, '{{.Name}}')
+  cancel-in-progress: true
 
+jobs:
   test:
     {{if (eq .Platform "percona56")}}runs-on: ubuntu-18.04{{else}}runs-on: ubuntu-20.04{{end}}
 
@@ -9,7 +12,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.15
+        go-version: 1.16
 
     - name: Tune the OS
       run: |

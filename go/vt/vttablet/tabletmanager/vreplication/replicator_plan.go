@@ -22,16 +22,18 @@ import (
 	"sort"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/bytes2"
-
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 // ReplicatorPlan is the execution plan for the replicator. It contains
@@ -51,7 +53,7 @@ type ReplicatorPlan struct {
 	VStreamFilter *binlogdatapb.Filter
 	TargetTables  map[string]*TablePlan
 	TablePlans    map[string]*TablePlan
-	PKInfoMap     map[string][]*PrimaryKeyInfo
+	ColInfoMap    map[string][]*ColumnInfo
 	stats         *binlogplayer.Stats
 }
 
@@ -72,9 +74,9 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		// bind var names.
 		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
 		for _, fld := range fieldEvent.Fields {
-			trimmed := *fld
+			trimmed := proto.Clone(fld).(*querypb.Field)
 			trimmed.Name = strings.Trim(trimmed.Name, "`")
-			tplanv.Fields = append(tplanv.Fields, &trimmed)
+			tplanv.Fields = append(tplanv.Fields, trimmed)
 		}
 		return &tplanv, nil
 	}
@@ -92,13 +94,26 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // requires us to wait for the field info sent by the source.
 func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name:    sqlparser.NewTableIdent(tableName),
-		lastpk:  lastpk,
-		pkInfos: rp.PKInfoMap[tableName],
-		stats:   rp.stats,
+		name:     sqlparser.NewTableIdent(tableName),
+		lastpk:   lastpk,
+		colInfos: rp.ColInfoMap[tableName],
+		stats:    rp.stats,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
+		isGenerated := false
+		for _, colInfo := range tpb.colInfos {
+			if !strings.EqualFold(colInfo.Name, field.Name) {
+				continue
+			}
+			if colInfo.IsGenerated {
+				isGenerated = true
+			}
+			break
+		}
+		if isGenerated {
+			continue
+		}
 		cexpr := &colExpr{
 			colName: colName,
 			colType: field.Type,
@@ -112,7 +127,7 @@ func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Res
 		tpb.colExprs = append(tpb.colExprs, cexpr)
 	}
 	// The following actions are a subset of buildTablePlan.
-	if err := tpb.analyzePK(rp.PKInfoMap); err != nil {
+	if err := tpb.analyzePK(rp.ColInfoMap[tableName]); err != nil {
 		return nil, err
 	}
 	return tpb.generate(), nil
@@ -173,14 +188,18 @@ type TablePlan struct {
 	// If the plan is an insertIgnore type, then Insert
 	// and Update contain 'insert ignore' statements and
 	// Delete is nil.
-	Insert *sqlparser.ParsedQuery
-	Update *sqlparser.ParsedQuery
-	Delete *sqlparser.ParsedQuery
-	Fields []*querypb.Field
+	Insert        *sqlparser.ParsedQuery
+	Update        *sqlparser.ParsedQuery
+	Delete        *sqlparser.ParsedQuery
+	Fields        []*querypb.Field
+	EnumValuesMap map[string](map[string]string)
 	// PKReferences is used to check if an event changed
 	// a primary key column (row move).
-	PKReferences []string
-	Stats        *binlogplayer.Stats
+	PKReferences            []string
+	Stats                   *binlogplayer.Stats
+	FieldsToSkip            map[string]bool
+	ConvertCharset          map[string](*binlogdatapb.CharsetConversion)
+	HasExtraSourcePkColumns bool
 }
 
 // MarshalJSON performs a custom JSON Marshalling.
@@ -218,7 +237,7 @@ func (tp *TablePlan) applyBulkInsert(sqlbuffer *bytes2.Buffer, rows *binlogdatap
 		if i > 0 {
 			sqlbuffer.WriteString(", ")
 		}
-		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row); err != nil {
+		if err := tp.BulkInsertValues.AppendFromRow(sqlbuffer, tp.Fields, row, tp.FieldsToSkip); err != nil {
 			return nil, err
 		}
 	}
@@ -272,6 +291,45 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 	return false
 }
 
+// bindFieldVal returns a bind variable based on given field and value.
+// Most values will just bind directly. But some values may need manipulation:
+// - text values with charset conversion
+// - enum values converted to text via Online DDL
+// - ...any other future possible values
+func (tp *TablePlan) bindFieldVal(field *querypb.Field, val *sqltypes.Value) (*querypb.BindVariable, error) {
+	if conversion, ok := tp.ConvertCharset[field.Name]; ok && !val.IsNull() {
+		// Non-null string value, for which we have a charset conversion instruction
+		valString := val.ToString()
+		fromEncoding, encodingOK := mysql.CharacterSetEncoding[conversion.FromCharset]
+		if !encodingOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Character set %s not supported for column %s", conversion.FromCharset, field.Name)
+		}
+		if fromEncoding != nil {
+			// As reminder, encoding can be nil for trivial charsets, like utf8 or ascii.
+			// encoding will be non-nil for charsets like latin1, gbk, etc.
+			var err error
+			valString, err = fromEncoding.NewDecoder().String(valString)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return sqltypes.StringBindVariable(valString), nil
+	}
+	if enumValues, ok := tp.EnumValuesMap[field.Name]; ok && !val.IsNull() {
+		// The fact that this fielkd has a EnumValuesMap entry, means we must
+		// use the enum's text value as opposed to the enum's numerical value.
+		// Once known use case is with Online DDL, when a column is converted from
+		// ENUM to a VARCHAR/TEXT.
+		enumValue, enumValueOK := enumValues[val.ToString()]
+		if !enumValueOK {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Invalid enum value: %v for field %s", val, field.Name)
+		}
+		// get the enum text fir this val
+		return sqltypes.StringBindVariable(enumValue), nil
+	}
+	return sqltypes.ValueBindVariable(*val), nil
+}
+
 func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
@@ -280,14 +338,22 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
-			bindvars["b_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["b_"+field.Name] = bindVar
 		}
 	}
 	if rowChange.After != nil {
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindVar, err := tp.bindFieldVal(field, &vals[i])
+			if err != nil {
+				return nil, err
+			}
+			bindvars["a_"+field.Name] = bindVar
 		}
 	}
 	switch {
@@ -303,13 +369,16 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		}
 		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
-		if !tp.pkChanged(bindvars) {
+		if !tp.pkChanged(bindvars) && !tp.HasExtraSourcePkColumns {
 			return execParsedQuery(tp.Update, bindvars, executor)
 		}
 		if tp.Delete != nil {
 			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
+		}
+		if tp.isOutsidePKRange(bindvars, before, after, "insert") {
+			return nil, nil
 		}
 		return execParsedQuery(tp.Insert, bindvars, executor)
 	}

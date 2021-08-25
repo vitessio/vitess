@@ -49,7 +49,7 @@ type Controller interface {
 	Stats() *tabletenv.Stats
 
 	// InitDBConfig sets up the db config vars.
-	InitDBConfig(target querypb.Target, dbConfigs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon) error
+	InitDBConfig(target *querypb.Target, dbConfigs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon) error
 
 	// SetServingType transitions the query service to the required serving type.
 	// Returns true if the state of QueryService or the tablet type changed.

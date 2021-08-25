@@ -36,8 +36,8 @@ func buildStreamPlan(stmt *sqlparser.Stream, vschema ContextVSchema) (engine.Pri
 	if err != nil {
 		return nil, err
 	}
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for master tablet type, current type: %v", destTabletType)
+	if destTabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "stream is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if dest == nil {
 		dest = key.DestinationExactKeyRange{}
@@ -54,8 +54,8 @@ func buildVStreamPlan(stmt *sqlparser.VStream, vschema ContextVSchema) (engine.P
 	if err != nil {
 		return nil, err
 	}
-	if destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream is supported only for master tablet type, current type: %v", destTabletType)
+	if destTabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if dest == nil {
 		dest = key.DestinationAllShards{}

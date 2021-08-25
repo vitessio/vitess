@@ -130,9 +130,6 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 	case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
 		num = ERQueryInterrupted
 		ss = SSQueryInterrupted
-	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_NOT_FOUND, vtrpcpb.Code_ALREADY_EXISTS,
-		vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_OUT_OF_RANGE, vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_DATA_LOSS:
-		num = ERUnknownError
 	case vtrpcpb.Code_PERMISSION_DENIED, vtrpcpb.Code_UNAUTHENTICATED:
 		num = ERAccessDeniedError
 		ss = SSAccessDeniedError
@@ -163,10 +160,12 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
 	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
 	vterrors.BadFieldError:                {num: ERBadFieldError, state: SSBadFieldError},
+	vterrors.BadTableError:                {num: ERBadTable, state: SSUnknownTable},
 	vterrors.CantUseOptionHere:            {num: ERCantUseOptionHere, state: SSClientError},
 	vterrors.DataOutOfRange:               {num: ERDataOutOfRange, state: SSDataOutOfRange},
 	vterrors.DbCreateExists:               {num: ERDbCreateExists, state: SSUnknownSQLState},
 	vterrors.DbDropExists:                 {num: ERDbDropExists, state: SSUnknownSQLState},
+	vterrors.DupFieldName:                 {num: ERDupFieldName, state: SSDupFieldName},
 	vterrors.EmptyQuery:                   {num: EREmptyQuery, state: SSClientError},
 	vterrors.IncorrectGlobalLocalVar:      {num: ERIncorrectGlobalLocalVar, state: SSUnknownSQLState},
 	vterrors.InnodbReadOnly:               {num: ERInnodbReadOnly, state: SSUnknownSQLState},
@@ -175,9 +174,11 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.NoSuchTable:                  {num: ERNoSuchTable, state: SSUnknownTable},
 	vterrors.NotSupportedYet:              {num: ERNotSupportedYet, state: SSClientError},
 	vterrors.ForbidSchemaChange:           {num: ERForbidSchemaChange, state: SSUnknownSQLState},
+	vterrors.MixOfGroupFuncAndFields:      {num: ERMixOfGroupFuncAndFields, state: SSClientError},
 	vterrors.NetPacketTooLarge:            {num: ERNetPacketTooLarge, state: SSNetError},
 	vterrors.NonUniqError:                 {num: ERNonUniq, state: SSConstraintViolation},
 	vterrors.NonUniqTable:                 {num: ERNonUniqTable, state: SSClientError},
+	vterrors.NonUpdateableTable:           {num: ERNonUpdateableTable, state: SSUnknownSQLState},
 	vterrors.QueryInterrupted:             {num: ERQueryInterrupted, state: SSQueryInterrupted},
 	vterrors.SPDoesNotExist:               {num: ERSPDoesNotExist, state: SSClientError},
 	vterrors.SyntaxError:                  {num: ERSyntaxError, state: SSClientError},
@@ -188,8 +189,10 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.WrongNumberOfColumnsInSelect: {num: ERWrongNumberOfColumnsInSelect, state: SSWrongNumberOfColumns},
 	vterrors.WrongTypeForVar:              {num: ERWrongTypeForVar, state: SSClientError},
 	vterrors.WrongValueForVar:             {num: ERWrongValueForVar, state: SSClientError},
+	vterrors.WrongFieldWithGroup:          {num: ERWrongFieldWithGroup, state: SSClientError},
 	vterrors.ServerNotAvailable:           {num: ERServerIsntAvailable, state: SSNetError},
 	vterrors.CantDoThisInTransaction:      {num: ERCantDoThisDuringAnTransaction, state: SSCantDoThisDuringAnTransaction},
+	vterrors.RequiresPrimaryKey:           {num: ERRequiresPrimaryKey, state: SSClientError},
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 }
 

@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package sqlparser
 
 import (
@@ -65,6 +81,7 @@ var keywords = []keyword{
 	{"algorithm", ALGORITHM},
 	{"all", ALL},
 	{"alter", ALTER},
+	{"always", ALWAYS},
 	{"analyze", ANALYZE},
 	{"and", AND},
 	{"as", AS},
@@ -119,6 +136,7 @@ var keywords = []keyword{
 	{"continue", UNUSED},
 	{"convert", CONVERT},
 	{"copy", COPY},
+	{"cume_dist", UNUSED},
 	{"substr", SUBSTR},
 	{"substring", SUBSTRING},
 	{"create", CREATE},
@@ -146,6 +164,7 @@ var keywords = []keyword{
 	{"delay_key_write", DELAY_KEY_WRITE},
 	{"delayed", UNUSED},
 	{"delete", DELETE},
+	{"dense_rank", UNUSED},
 	{"desc", DESC},
 	{"describe", DESCRIBE},
 	{"deterministic", UNUSED},
@@ -165,6 +184,7 @@ var keywords = []keyword{
 	{"each", UNUSED},
 	{"else", ELSE},
 	{"elseif", UNUSED},
+	{"empty", UNUSED},
 	{"enable", ENABLE},
 	{"enclosed", ENCLOSED},
 	{"encryption", ENCRYPTION},
@@ -189,6 +209,7 @@ var keywords = []keyword{
 	{"fetch", UNUSED},
 	{"fields", FIELDS},
 	{"first", FIRST},
+	{"first_value", UNUSED},
 	{"fixed", FIXED},
 	{"float", FLOAT_TYPE},
 	{"float4", UNUSED},
@@ -203,7 +224,7 @@ var keywords = []keyword{
 	{"fulltext", FULLTEXT},
 	{"function", FUNCTION},
 	{"general", GENERAL},
-	{"generated", UNUSED},
+	{"generated", GENERATED},
 	{"geometry", GEOMETRY},
 	{"geometrycollection", GEOMETRYCOLLECTION},
 	{"get", UNUSED},
@@ -211,6 +232,8 @@ var keywords = []keyword{
 	{"gtid_executed", GTID_EXECUTED},
 	{"grant", UNUSED},
 	{"group", GROUP},
+	{"grouping", UNUSED},
+	{"groups", UNUSED},
 	{"group_concat", GROUP_CONCAT},
 	{"having", HAVING},
 	{"header", HEADER},
@@ -248,14 +271,19 @@ var keywords = []keyword{
 	{"invoker", INVOKER},
 	{"join", JOIN},
 	{"json", JSON},
+	{"json_table", UNUSED},
 	{"key", KEY},
 	{"keys", KEYS},
 	{"keyspaces", KEYSPACES},
 	{"key_block_size", KEY_BLOCK_SIZE},
 	{"kill", UNUSED},
-	{"last", LAST},
+	{"lag", UNUSED},
 	{"language", LANGUAGE},
+	{"last", LAST},
+	{"last_value", UNUSED},
 	{"last_insert_id", LAST_INSERT_ID},
+	{"lateral", UNUSED},
+	{"lead", UNUSED},
 	{"leading", UNUSED},
 	{"leave", UNUSED},
 	{"left", LEFT},
@@ -307,8 +335,11 @@ var keywords = []keyword{
 	{"none", NONE},
 	{"not", NOT},
 	{"no_write_to_binlog", NO_WRITE_TO_BINLOG},
+	{"nth_value", UNUSED},
+	{"ntile", UNUSED},
 	{"null", NULL},
 	{"numeric", NUMERIC},
+	{"of", UNUSED},
 	{"off", OFF},
 	{"offset", OFFSET},
 	{"on", ON},
@@ -323,12 +354,14 @@ var keywords = []keyword{
 	{"out", UNUSED},
 	{"outer", OUTER},
 	{"outfile", OUTFILE},
+	{"over", UNUSED},
 	{"overwrite", OVERWRITE},
 	{"pack_keys", PACK_KEYS},
 	{"parser", PARSER},
 	{"partition", PARTITION},
 	{"partitioning", PARTITIONING},
 	{"password", PASSWORD},
+	{"percent_rank", UNUSED},
 	{"plugins", PLUGINS},
 	{"point", POINT},
 	{"polygon", POLYGON},
@@ -345,6 +378,7 @@ var keywords = []keyword{
 	{"read_write", UNUSED},
 	{"real", REAL},
 	{"rebuild", REBUILD},
+	{"recursive", UNUSED},
 	{"redundant", REDUNDANT},
 	{"references", REFERENCES},
 	{"regexp", REGEXP},
@@ -367,7 +401,10 @@ var keywords = []keyword{
 	{"right", RIGHT},
 	{"rlike", REGEXP},
 	{"rollback", ROLLBACK},
+	{"row", UNUSED},
 	{"row_format", ROW_FORMAT},
+	{"row_number", UNUSED},
+	{"rows", UNUSED},
 	{"s3", S3},
 	{"savepoint", SAVEPOINT},
 	{"schema", SCHEMA},
@@ -407,9 +444,10 @@ var keywords = []keyword{
 	{"stats_sample_pages", STATS_SAMPLE_PAGES},
 	{"status", STATUS},
 	{"storage", STORAGE},
-	{"stored", UNUSED},
+	{"stored", STORED},
 	{"straight_join", STRAIGHT_JOIN},
 	{"stream", STREAM},
+	{"system", UNUSED},
 	{"vstream", VSTREAM},
 	{"table", TABLE},
 	{"tables", TABLES},
@@ -461,7 +499,7 @@ var keywords = []keyword{
 	{"varcharacter", UNUSED},
 	{"varying", UNUSED},
 	{"vgtid_executed", VGTID_EXECUTED},
-	{"virtual", UNUSED},
+	{"virtual", VIRTUAL},
 	{"vindex", VINDEX},
 	{"vindexes", VINDEXES},
 	{"view", VIEW},
@@ -477,6 +515,7 @@ var keywords = []keyword{
 	{"when", WHEN},
 	{"where", WHERE},
 	{"while", UNUSED},
+	{"window", UNUSED},
 	{"with", WITH},
 	{"without", WITHOUT},
 	{"work", WORK},

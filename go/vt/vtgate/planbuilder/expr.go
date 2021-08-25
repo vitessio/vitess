@@ -18,27 +18,13 @@ package planbuilder
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
-
-// splitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters, which can be shuffled and recombined
-// as needed.
-func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		filters = splitAndExpression(filters, node.Left)
-		return splitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
 
 type subqueryInfo struct {
 	ast    *sqlparser.Subquery
@@ -71,8 +57,8 @@ type subqueryInfo struct {
 // origin is chosen as the default.
 func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (pullouts []*pulloutSubquery, origin logicalPlan, pushExpr sqlparser.Expr, err error) {
 	// highestOrigin tracks the highest origin referenced by the expression.
-	// Default is the First.
-	highestOrigin := First(pb.plan)
+	// Default is the first.
+	highestOrigin := first(pb.plan)
 
 	// subqueries tracks the list of subqueries encountered.
 	var subqueries []subqueryInfo
@@ -112,7 +98,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 					return false, err
 				}
 			default:
-				return false, fmt.Errorf("BUG: unexpected SELECT type: %T", node)
+				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected SELECT type: %T", node)
 			}
 			sqi := subqueryInfo{
 				ast:  node,
@@ -149,7 +135,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 			continue
 		}
 		if sqi.origin != nil {
-			return nil, nil, nil, errors.New("unsupported: cross-shard correlated subquery")
+			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
 
 		sqName, hasValues := pb.jt.GenerateSubqueryVars()
@@ -208,13 +194,15 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 	return pullouts, highestOrigin, expr, nil
 }
 
+var dummyErr = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "dummy")
+
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.DerivedTable, *sqlparser.Subquery:
 			has = true
-			return false, errors.New("dummy")
+			return false, dummyErr
 		}
 		return true, nil
 	}, node)
@@ -250,11 +238,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				for _, sub := range innerRoute.substitutions {
 					*sub.oldExpr = *sub.newExpr
@@ -271,11 +259,11 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 				innerRoute, ok := spb.plan.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 				if innerRoute.eroute.Keyspace.Name != keyspace {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false, dummyErr
 				}
 			}
 

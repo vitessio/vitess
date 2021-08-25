@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -492,7 +492,7 @@ func TestFilterTables(t *testing.T) {
 			},
 		},
 		{
-			desc: "filter based on excludeTables (blacklist)",
+			desc: "filter based on excludeTables (denylist)",
 			input: &tabletmanagerdatapb.SchemaDefinition{
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					basicTable1,

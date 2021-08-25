@@ -23,6 +23,9 @@ import (
 	"io/ioutil"
 	"sort"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,7 +38,7 @@ import (
 // TabletTypeSuffix maps the tablet type to its suffix string.
 var TabletTypeSuffix = map[topodatapb.TabletType]string{
 	0: "@unknown",
-	1: "@master",
+	1: "@primary",
 	2: "@replica",
 	3: "@rdonly",
 	4: "@spare",
@@ -159,7 +162,7 @@ type AutoIncrement struct {
 }
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
-func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
+func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
 		uniqueTables:   make(map[string]*Table),
@@ -170,7 +173,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema, err error) {
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
 	buildRoutingRule(source, vschema)
-	return vschema, nil
+	return vschema
 }
 
 // BuildKeyspaceSchema builds the vschema portion for one keyspace.
@@ -481,7 +484,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, fmt.Errorf("keyspace %s not found in vschema", keyspace)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
@@ -500,8 +503,8 @@ func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType t
 		qualified = keyspace + "." + tablename
 	}
 	fqtn := qualified + TabletTypeSuffix[tabletType]
-	// First look for a fully qualified table name: ks.t@master.
-	// Then look for one without tablet type: ks.t.
+	// First look for a fully qualified table name: keyspace.table@tablet_type.
+	// Then look for one without tablet type: keyspace.table.
 	for _, name := range []string{fqtn, qualified} {
 		rr, ok := vschema.RoutingRules[name]
 		if ok {
@@ -559,7 +562,7 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, fmt.Errorf("keyspace %s not found in vschema", keyspace)
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspace)
 	}
 	return ks.Vindexes[name], nil
 }

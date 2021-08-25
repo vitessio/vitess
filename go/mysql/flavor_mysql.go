@@ -43,8 +43,8 @@ var _ flavor = (*mysqlFlavor56)(nil)
 var _ flavor = (*mysqlFlavor57)(nil)
 var _ flavor = (*mysqlFlavor80)(nil)
 
-// masterGTIDSet is part of the Flavor interface.
-func (mysqlFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
+// primaryGTIDSet is part of the Flavor interface.
+func (mysqlFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	// keep @@global as lowercase, as some servers like the Ripple binlog server only honors a lowercase `global` value
 	qr, err := c.ExecuteFetch("SELECT @@global.gtid_executed", 1, false)
 	if err != nil {
@@ -96,7 +96,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Posi
 func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
 	resetCommands := []string{
 		"STOP SLAVE",
-		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
+		"RESET SLAVE ALL", // "ALL" makes it forget source host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
 	}
 	if c.SemiSyncExtensionLoaded() {
@@ -114,7 +114,7 @@ func (mysqlFlavor) setReplicationPositionCommands(pos Position) []string {
 }
 
 // setReplicationPositionCommands is part of the Flavor interface.
-func (mysqlFlavor) changeMasterArg() string {
+func (mysqlFlavor) changeReplicationSourceArg() string {
 	return "MASTER_AUTO_POSITION = 1"
 }
 
@@ -144,9 +144,9 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	if uuidString != "" {
 		sid, err := ParseSID(uuidString)
 		if err != nil {
-			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode MasterUUID")
+			return ReplicationStatus{}, vterrors.Wrapf(err, "cannot decode SourceUUID")
 		}
-		status.MasterUUID = sid
+		status.SourceUUID = sid
 	}
 
 	var err error
@@ -166,32 +166,32 @@ func parseMysqlReplicationStatus(resultMap map[string]string) (ReplicationStatus
 	return status, nil
 }
 
-// masterStatus is part of the Flavor interface.
-func (mysqlFlavor) masterStatus(c *Conn) (MasterStatus, error) {
+// primaryStatus is part of the Flavor interface.
+func (mysqlFlavor) primaryStatus(c *Conn) (PrimaryStatus, error) {
 	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 	if len(qr.Rows) == 0 {
 		// The query returned no data. We don't know how this could happen.
-		return MasterStatus{}, ErrNoMasterStatus
+		return PrimaryStatus{}, ErrNoPrimaryStatus
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
-		return MasterStatus{}, err
+		return PrimaryStatus{}, err
 	}
 
-	return parseMysqlMasterStatus(resultMap)
+	return parseMysqlPrimaryStatus(resultMap)
 }
 
-func parseMysqlMasterStatus(resultMap map[string]string) (MasterStatus, error) {
-	status := parseMasterStatus(resultMap)
+func parseMysqlPrimaryStatus(resultMap map[string]string) (PrimaryStatus, error) {
+	status := parsePrimaryStatus(resultMap)
 
 	var err error
 	status.Position.GTIDSet, err = parseMysql56GTIDSet(resultMap["Executed_Gtid_Set"])
 	if err != nil {
-		return MasterStatus{}, vterrors.Wrapf(err, "MasterStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
+		return PrimaryStatus{}, vterrors.Wrapf(err, "PrimaryStatus can't parse MySQL 5.6 GTID (Executed_Gtid_Set: %#v)", resultMap["Executed_Gtid_Set"])
 	}
 
 	return status, nil

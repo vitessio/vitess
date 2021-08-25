@@ -206,12 +206,12 @@ type JoinOpcode int
 
 // This is the list of JoinOpcode values.
 const (
-	NormalJoin = JoinOpcode(iota)
+	InnerJoin = JoinOpcode(iota)
 	LeftJoin
 )
 
 func (code JoinOpcode) String() string {
-	if code == NormalJoin {
+	if code == InnerJoin {
 		return "Join"
 	}
 	return "LeftJoin"
@@ -261,6 +261,9 @@ func (jn *Join) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
+	}
+	if len(jn.Vars) > 0 {
+		other["JoinVars"] = jn.Vars
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

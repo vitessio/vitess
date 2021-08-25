@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -72,7 +74,7 @@ func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
 	allddls = append(allddls, binlogplayer.AlterVReplicationTable...)
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
-	allddls = append(allddls, createVReplicationLog)
+	allddls = append(allddls, createVReplicationLogTable)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
@@ -80,7 +82,7 @@ func init() {
 
 // this are the default tablet_types that will be used by the tablet picker to find sources for a vreplication stream
 // it can be overridden by passing a different list to the MoveTables or Reshard commands
-var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "comma separated list of tablet types used as a source")
+var tabletTypesStr = flag.String("vreplication_tablet_type", "PRIMARY,REPLICA", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
 // A VReplication stream can be created by sending an insert statement
@@ -90,6 +92,9 @@ var tabletTypesStr = flag.String("vreplication_tablet_type", "MASTER,REPLICA", "
 // For example, setting the state to 'Stopped' will cause that stream to
 // stop replicating.
 var waitRetryTime = 1 * time.Second
+
+// How frequently vcopier will update _vt.vreplication rows_copied
+var rowsCopiedUpdateInterval = 30 * time.Second
 
 // Engine is the engine for handling vreplication.
 type Engine struct {
@@ -140,6 +145,7 @@ func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, cell string, mys
 		ec:              newExternalConnector(config.ExternalConnections),
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckPrimaryWrite),
 	}
+
 	return vre
 }
 
@@ -345,7 +351,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	}
 
 	dbClient := vre.getDBClient(runAsAdmin)
-	vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
 	}
@@ -367,6 +372,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
@@ -411,6 +417,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			params, err := readRow(dbClient, id)
 			if err != nil {
@@ -437,6 +444,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return &sqltypes.Result{}, nil
 		}
 		// Stop and delete the current controllers.
+		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 		for _, id := range ids {
 			if ct := vre.controllers[id]; ct != nil {
 				ct.Stop()
@@ -626,10 +634,10 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	var newids []int
 	for _, shard := range shardGTIDs {
 		sgtid := je.shardGTIDs[shard]
-		bls := vre.controllers[refid].source
+		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"])
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -731,8 +739,11 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
-			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			err = fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v: %s",
+				pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
+				"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
+			log.Error(err.Error())
+			return err
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:

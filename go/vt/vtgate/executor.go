@@ -77,7 +77,7 @@ const (
 )
 
 func init() {
-	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_MASTER, "The default tablet type to set for queries, when one is not explicitly selected")
+	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -98,7 +98,11 @@ type Executor struct {
 	normalize       bool
 	warnShardedOnly bool
 
-	vm *VSchemaManager
+	vm            *VSchemaManager
+	schemaTracker SchemaInfo
+
+	// allowScatter will fail planning if set to false and a plan contains any scatter queries
+	allowScatter bool
 }
 
 var executorOnce sync.Once
@@ -108,7 +112,17 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config) *Executor {
+func NewExecutor(
+	ctx context.Context,
+	serv srvtopo.Server,
+	cell string,
+	resolver *Resolver,
+	normalize, warnOnShardedOnly bool,
+	streamSize int,
+	cacheCfg *cache.Config,
+	schemaTracker SchemaInfo,
+	noScatter bool,
+) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -119,11 +133,19 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:       normalize,
 		warnShardedOnly: warnOnShardedOnly,
 		streamSize:      streamSize,
+		schemaTracker:   schemaTracker,
+		allowScatter:    !noScatter,
 	}
 
 	vschemaacl.Init()
-	e.vm = &VSchemaManager{e: e}
-	e.vm.watchSrvVSchema(ctx, cell)
+	// we subscribe to update from the VSchemaManager
+	e.vm = &VSchemaManager{
+		subscriber: e.SaveVSchema,
+		serv:       serv,
+		cell:       cell,
+		schema:     e.schemaTracker,
+	}
+	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 
 	executorOnce.Do(func() {
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
@@ -191,7 +213,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 }
 
 func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	//Start an implicit transaction if necessary.
+	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return 0, nil, err
@@ -205,9 +227,9 @@ func (e *Executor) legacyExecute(ctx context.Context, safeSession *SafeSession, 
 
 	logStats.Keyspace = destKeyspace
 	logStats.TabletType = destTabletType.String()
-	// Legacy gateway allows transactions only on MASTER
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", destTabletType)
+	// Legacy gateway allows transactions only on PRIMARY
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
+		return 0, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -381,7 +403,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, l
 	return &sqltypes.Result{}, err
 }
 
-//Commit commits the existing transactions
+// Commit commits the existing transactions
 func (e *Executor) Commit(ctx context.Context, safeSession *SafeSession) error {
 	return e.txConn.Commit(ctx, safeSession)
 }
@@ -535,7 +557,7 @@ func getValueFor(expr *sqlparser.SetExpr) (interface{}, error) {
 }
 
 func (e *Executor) handleSetVitessMetadata(ctx context.Context, name, value string) (*sqltypes.Result, error) {
-	//TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
+	// TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
 	user := callerid.ImmediateCallerIDFromContext(ctx)
 	allowed := vschemaacl.Authorized(user)
 	if !allowed {
@@ -836,28 +858,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 			Rows:   rows,
 		}, nil
-	case sqlparser.KeywordString(sqlparser.WARNINGS):
-		fields := []*querypb.Field{
-			{Name: "Level", Type: sqltypes.VarChar},
-			{Name: "Code", Type: sqltypes.Uint16},
-			{Name: "Message", Type: sqltypes.VarChar},
-		}
-		rows := make([][]sqltypes.Value, 0)
-
-		if safeSession.Warnings != nil {
-			for _, warning := range safeSession.Warnings {
-				rows = append(rows, []sqltypes.Value{
-					sqltypes.NewVarChar("Warning"),
-					sqltypes.NewUint32(warning.Code),
-					sqltypes.NewVarChar(warning.Message),
-				})
-			}
-		}
-
-		return &sqltypes.Result{
-			Fields: fields,
-			Rows:   rows,
-		}, nil
 	}
 
 	// Any other show statement is passed through
@@ -879,7 +879,7 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		if filter.Like != "" {
 			tabletRegexp := sqlparser.LikeToRegexp(filter.Like)
 
-			f := func(tablet *topodatapb.Tablet, servingState string, masterTermStartTime int64) bool {
+			f := func(tablet *topodatapb.Tablet, servingState string, PrimaryTermStartTime int64) bool {
 				return tabletRegexp.MatchString(tablet.Hostname)
 			}
 
@@ -944,10 +944,10 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 				if !ts.Serving {
 					state = "NOT_SERVING"
 				}
-				mtst := ts.MasterTermStartTime
+				mtst := ts.PrimaryTermStartTime
 				mtstStr := ""
 				if mtst > 0 {
-					// this code depends on the fact that MasterTermStartTime is the seconds since epoch start
+					// this code depends on the fact that PrimaryTermStartTime is the seconds since epoch start
 					mtstStr = time.Unix(mtst, 0).UTC().Format(time.RFC3339)
 				}
 
@@ -977,7 +977,7 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 		}
 	}
 	return &sqltypes.Result{
-		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "MasterTermStartTime"),
+		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
 		Rows:   rows,
 	}, nil
 }
@@ -1024,7 +1024,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
+func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target *querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	defer logStats.Send()
 
@@ -1162,7 +1162,9 @@ func (e *Executor) VSchema() *vindexes.VSchema {
 func (e *Executor) SaveVSchema(vschema *vindexes.VSchema, stats *VSchemaStats) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	e.vschema = vschema
+	if vschema != nil {
+		e.vschema = vschema
+	}
 	e.vschemaStats = stats
 	e.plans.Clear()
 
@@ -1232,7 +1234,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return plan.(*engine.Plan), nil
 	}
 
-	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds)
+	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, *enableOnlineDDL, *enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
@@ -1243,7 +1245,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, nil
+
+	return e.checkThatPlanIsValid(stmt, plan)
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1392,8 +1395,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 		return nil, err
 	}
 
-	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for master tablet type, current type: %v", destTabletType)
+	if UsingLegacyGateway() && safeSession.InTransaction() && destTabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "transaction is supported only for primary tablet type, current type: %v", destTabletType)
 	}
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
@@ -1460,7 +1463,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	var errCount uint64
 	if err != nil {
 		logStats.Error = err
-		errCount = 1 //nolint
+		errCount = 1 // nolint
 		return nil, err
 	}
 	logStats.RowsAffected = qr.RowsAffected
@@ -1476,7 +1479,7 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
 }
 
@@ -1510,11 +1513,31 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 	}
 	vs := &vstream{
 		vgtid:      vgtid,
-		tabletType: topodatapb.TabletType_MASTER,
+		tabletType: topodatapb.TabletType_PRIMARY,
 		filter:     filter,
 		send:       callback,
 		rss:        rss,
 	}
 	vs.stream(ctx)
 	return nil
+}
+
+func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.Plan) (*engine.Plan, error) {
+	if e.allowScatter || sqlparser.AllowScatterDirective(stmt) {
+		return plan, nil
+	}
+	// we go over all the primitives in the plan, searching for a route that is of SelectScatter opcode
+	badPrimitive := engine.Find(func(node engine.Primitive) bool {
+		router, ok := node.(*engine.Route)
+		if !ok {
+			return false
+		}
+		return router.Opcode == engine.SelectScatter
+	}, plan.Instructions)
+
+	if badPrimitive == nil {
+		return plan, nil
+	}
+
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
 }

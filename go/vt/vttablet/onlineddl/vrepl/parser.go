@@ -18,7 +18,7 @@ var (
 	renameColumnRegexp   = regexp.MustCompile(`(?i)\bchange\s+(column\s+|)([\S]+)\s+([\S]+)\s+`)
 	dropColumnRegexp     = regexp.MustCompile(`(?i)\bdrop\s+(column\s+|)([\S]+)$`)
 	renameTableRegexp    = regexp.MustCompile(`(?i)\brename\s+(to|as)\s+`)
-	autoIncrementRegexp  = regexp.MustCompile(`(?i)\bauto_increment[\s]*=[\s]*([0-9]+)`)
+	autoIncrementRegexp  = regexp.MustCompile(`(?i)\bauto_increment[\s]*[=]?[\s]*([0-9]+)`)
 )
 
 // AlterTableParser is a parser tool for ALTER TABLE statements

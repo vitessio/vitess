@@ -28,10 +28,11 @@ var (
 )
 
 const (
-	declarativeFlag      = "declarative"
-	skipTopoFlag         = "skip-topo"
-	singletonFlag        = "singleton"
-	singletonContextFlag = "singleton-context"
+	declarativeFlag       = "declarative"
+	skipTopoFlag          = "skip-topo"
+	singletonFlag         = "singleton"
+	singletonContextFlag  = "singleton-context"
+	vreplicationTestSuite = "vreplication-test-suite"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -129,6 +130,11 @@ func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
 }
 
+// IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
+func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
+	return setting.hasFlag(vreplicationTestSuite)
+}
+
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
@@ -139,6 +145,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
+		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)
 		}
@@ -148,13 +155,10 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 
 // IsSkipTopo suggests that DDL should apply to tables bypassing global topo request
 func (setting *DDLStrategySetting) IsSkipTopo() bool {
-	switch {
-	case setting.IsSingleton(), setting.IsSingletonContext():
-		return true
-	case setting.hasFlag(skipTopoFlag):
-		return true
-	}
-	return false
+	// Vitess 11 introduced the flag -skip-topo. starting Vitess 12 the flag is _always_ considered 'true'.
+	// Ideally the flag should be gone, but for backwards compatibility we allow users to still specify it
+	// (and we stil ignore the value, it's always set to true)
+	return true
 }
 
 // ToString returns a simple string representation of this instance

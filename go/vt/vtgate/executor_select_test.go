@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/test/utils"
 
@@ -70,21 +72,128 @@ func TestSelectDBA(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
-	sbc1.Queries = nil
 
-	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE table_schema = 'performance_schema' AND table_name = 'foo'"
+	sbc1.Queries = nil
+	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
 	_, err = executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` where table_schema = :__vtschemaname and table_name = :__vttablename",
+	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
-			"__vttablename":  sqltypes.StringBindVariable("foo"),
+			"ist_table_name": sqltypes.StringBindVariable("foo"),
 		}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname and table_name = :table_name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+			"table_name":     sqltypes.StringBindVariable("user"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select 1 from information_schema.table_constraints where constraint_schema = :__vtschemaname",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
+func TestGen4SelectDBA(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	query := "select * from INFORMATION_SCHEMA.foo"
+	_, err := executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES ist WHERE ist.table_schema = 'performance_schema' AND ist.table_name = 'foo'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select COUNT(*) from INFORMATION_SCHEMA.`TABLES` as ist where ist.table_schema = :__vtschemaname and ist.table_name = :ist_table_name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.StringBindVariable("performance_schema"),
+			"vtg2":           sqltypes.StringBindVariable("foo"),
+			"__vtschemaname": sqltypes.StringBindVariable("performance_schema"),
+			"ist_table_name": sqltypes.StringBindVariable("foo"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks' and table_name = 'user'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname and table_name = :table_name",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.Int64BindVariable(1),
+			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
+			"vtg3":           sqltypes.StringBindVariable("user"),
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+			"table_name":     sqltypes.StringBindVariable("user"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select 1 from information_schema.table_constraints where constraint_schema = 'vt_ks'"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select :vtg1 from information_schema.table_constraints where constraint_schema = :__vtschemaname",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":           sqltypes.Int64BindVariable(1),
+			"vtg2":           sqltypes.StringBindVariable("vt_ks"),
+			"__vtschemaname": sqltypes.StringBindVariable("vt_ks"),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+
+	sbc1.Queries = nil
+	query = "select t.table_schema,t.table_name,c.column_name,c.column_type from tables t join columns c on c.table_schema = t.table_schema and c.table_name = t.table_name where t.table_schema = 'TestExecutor' and c.table_schema = 'TestExecutor' order by t.table_schema,t.table_name,c.column_name"
+	_, err = executor.Execute(context.Background(), "TestSelectDBA",
+		NewSafeSession(&vtgatepb.Session{TargetString: "information_schema"}),
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{Sql: "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":                  sqltypes.StringBindVariable("TestExecutor"),
+			"__replacevtschemaname": sqltypes.Int64BindVariable(1),
+		}}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
 }
 
 func TestUnsharded(t *testing.T) {
@@ -178,11 +287,11 @@ func TestStreamBuffering(t *testing.T) {
 	err := executor.StreamExecute(
 		context.Background(),
 		"TestStreamBuffering",
-		NewSafeSession(masterSession),
+		NewSafeSession(primarySession),
 		"select id from music_user_map where id = 1",
 		nil,
-		querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
+		&querypb.Target{
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
@@ -253,11 +362,11 @@ func TestStreamLimitOffset(t *testing.T) {
 	err := executor.StreamExecute(
 		context.Background(),
 		"TestStreamLimitOffset",
-		NewSafeSession(masterSession),
+		NewSafeSession(primarySession),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
-		querypb.Target{
-			TabletType: topodatapb.TabletType_MASTER,
+		&querypb.Target{
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
@@ -292,7 +401,7 @@ func TestStreamLimitOffset(t *testing.T) {
 }
 
 func TestSelectLastInsertId(t *testing.T) {
-	masterSession.LastInsertId = 52
+	primarySession.LastInsertId = 52
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
@@ -313,7 +422,7 @@ func TestSelectLastInsertId(t *testing.T) {
 }
 
 func TestSelectSystemVariables(t *testing.T) {
-	masterSession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
+	primarySession.ReadAfterWrite = &vtgatepb.ReadAfterWrite{
 		ReadAfterWriteGtid:    "a fine gtid",
 		ReadAfterWriteTimeout: 13,
 		SessionTrackGtids:     true,
@@ -370,12 +479,12 @@ func TestSelectInitializedVitessAwareVariable(t *testing.T) {
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
-	masterSession.Autocommit = true
-	masterSession.EnableSystemSettings = true
+	primarySession.Autocommit = true
+	primarySession.EnableSystemSettings = true
 
 	defer func() {
-		masterSession.Autocommit = false
-		masterSession.EnableSystemSettings = false
+		primarySession.Autocommit = false
+		primarySession.EnableSystemSettings = false
 	}()
 
 	sql := "select @@autocommit, @@enable_system_settings"
@@ -414,7 +523,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	}
 	utils.MustMatch(t, wantResult, result, "Mismatch")
 
-	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
+	primarySession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	result, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantResult = &sqltypes.Result{
@@ -536,10 +645,10 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	executor.normalize = true
-	masterSession.LastInsertId = 12345
+	primarySession.LastInsertId = 12345
 	defer func() {
 		// clean up global state
-		masterSession.LastInsertId = 0
+		primarySession.LastInsertId = 0
 	}()
 	rs, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
 	require.NoError(t, err)
@@ -562,9 +671,9 @@ func TestSelectDatabase(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	executor.normalize = true
 	sql := "select database()"
-	newSession := *masterSession
-	session := NewSafeSession(&newSession)
-	session.TargetString = "TestExecutor@master"
+	newSession := proto.Clone(primarySession).(*vtgatepb.Session)
+	session := NewSafeSession(newSession)
+	session.TargetString = "TestExecutor@primary"
 	result, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
@@ -576,7 +685,7 @@ func TestSelectDatabase(t *testing.T) {
 			{Name: "database()", Type: sqltypes.VarBinary},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("TestExecutor@master"),
+			sqltypes.NewVarBinary("TestExecutor@primary"),
 		}},
 	}
 	require.NoError(t, err)
@@ -812,7 +921,7 @@ func TestSelectNormalize(t *testing.T) {
 	sbc1.Queries = nil
 
 	// Force the query to go to the "wrong" shard and ensure that normalization still happens
-	masterSession.TargetString = "TestExecutor/40-60"
+	primarySession.TargetString = "TestExecutor/40-60"
 	_, err = executorExec(executor, "/* leading */ select id from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
@@ -824,7 +933,7 @@ func TestSelectNormalize(t *testing.T) {
 	require.Empty(t, sbc1.Queries)
 	utils.MustMatch(t, wantQueries, sbc2.Queries, "sbc2.Queries")
 	sbc2.Queries = nil
-	masterSession.TargetString = ""
+	primarySession.TargetString = ""
 }
 
 func TestSelectCaseSensitivity(t *testing.T) {
@@ -1020,6 +1129,10 @@ func TestStreamSelectIN(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
+func createExecutor(serv *sandboxTopo, cell string, resolver *Resolver) *Executor {
+	return NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil, false)
+}
+
 func TestSelectScatter(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
@@ -1032,10 +1145,10 @@ func TestSelectScatter(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -1064,18 +1177,18 @@ func TestSelectScatterPartial(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		conns = append(conns, sbc)
 	}
 
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	// Fail 1 of N without the directive fails the whole operation
 	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	results, err := executorExec(executor, "select id from user", nil)
-	wantErr := "TestExecutor.40-60.master"
+	wantErr := "TestExecutor.40-60.primary"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("want error %v, got %v", wantErr, err)
 	}
@@ -1095,7 +1208,7 @@ func TestSelectScatterPartial(t *testing.T) {
 	}
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
 
-	// Even if all shards fail the operation succeeds with 0 rows
+	// When all shards fail, the execution should also fail
 	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	conns[1].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	conns[3].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
@@ -1104,12 +1217,119 @@ func TestSelectScatterPartial(t *testing.T) {
 	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
 
-	results, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
-	require.NoError(t, err)
-	if results == nil || len(results.Rows) != 0 {
-		t.Errorf("want 0 result rows, got %v", results)
-	}
+	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", nil)
+	require.Error(t, err)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	_, err = executorExec(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", nil)
+	require.Error(t, err)
+}
+
+func TestSelectScatterPartialOLAP(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeLegacyHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestLegacyResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+
+	executor := createExecutor(serv, cell, resolver)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// Fail 1 of N without the directive fails the whole operation
+	conns[2].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	results, err := executorStream(executor, "select id from user")
+	assert.EqualError(t, err, "target: TestExecutor.40-60.primary: RESOURCE_EXHAUSTED error")
+	assert.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+	assert.Nil(t, results)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+
+	// Fail 1 of N with the directive succeeds with 7 rows
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	// If all shards fail, the operation should also fail
+	conns[0].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[1].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[3].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[4].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[5].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[6].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+	conns[7].MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1000
+
+	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.Error(t, err)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	_, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
+	require.Error(t, err)
+}
+
+func TestSelectScatterPartialOLAP2(t *testing.T) {
+	// Special setup: Don't use createLegacyExecutorEnv.
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+	}
+
+	executor := createExecutor(serv, cell, resolver)
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// Fail 1 of N without the directive fails the whole operation
+	tablet0 := conns[2].Tablet()
+	ths := hc.GetHealthyTabletStats(&querypb.Target{
+		Keyspace:   tablet0.GetKeyspace(),
+		Shard:      tablet0.GetShard(),
+		TabletType: tablet0.GetType(),
+	})
+	sbc0Th := ths[0]
+	sbc0Th.Serving = false
+
+	results, err := executorStream(executor, "select id from user")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestExecutor" shard:"40-60"`)
+	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
+	assert.Nil(t, results)
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select id from user", 8)
+
+	// Fail 1 of N with the directive succeeds with 7 rows
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user", 8)
+
+	// order by
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id")
+	require.NoError(t, err)
+	assert.EqualValues(t, 7, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id", 8)
+
+	// order by and limit
+	results, err = executorStream(executor, "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5")
+	require.NoError(t, err)
+	assert.EqualValues(t, 5, len(results.Rows))
+	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ id from user order by id limit 5", 8)
 }
 
 func TestStreamSelectScatter(t *testing.T) {
@@ -1123,9 +1343,9 @@ func TestStreamSelectScatter(t *testing.T) {
 	resolver := newTestLegacyResolver(hc, serv, cell)
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	for _, shard := range shards {
-		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		_ = hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	sql := "select id from user"
 	result, err := executorStream(executor, sql)
@@ -1161,7 +1381,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
@@ -1180,7 +1400,7 @@ func TestSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col1, col2 from user order by col2 desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1227,7 +1447,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
@@ -1245,7 +1465,7 @@ func TestSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col1, textcol from user order by textcol desc"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1291,7 +1511,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32},
@@ -1307,7 +1527,7 @@ func TestStreamSelectScatterOrderBy(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select id, col from user order by col desc"
 	gotResult, err := executorStream(executor, query)
@@ -1349,7 +1569,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "id", Type: sqltypes.Int32},
@@ -1364,7 +1584,7 @@ func TestStreamSelectScatterOrderByVarChar(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select id, textcol from user order by textcol desc"
 	gotResult, err := executorStream(executor, query)
@@ -1407,7 +1627,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
@@ -1423,7 +1643,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1466,7 +1686,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col", Type: sqltypes.Int32},
@@ -1482,7 +1702,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col, sum(foo) from user group by col"
 	gotResult, err := executorStream(executor, query)
@@ -1526,7 +1746,7 @@ func TestSelectScatterLimit(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
@@ -1542,7 +1762,7 @@ func TestSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorExec(executor, query, nil)
@@ -1594,7 +1814,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	var conns []*sandboxconn.SandboxConn
 	for i, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{{
 			Fields: []*querypb.Field{
 				{Name: "col1", Type: sqltypes.Int32},
@@ -1610,7 +1830,7 @@ func TestStreamSelectScatterLimit(t *testing.T) {
 		}})
 		conns = append(conns, sbc)
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig)
+	executor := createExecutor(serv, cell, resolver)
 
 	query := "select col1, col2 from user order by col2 desc limit 3"
 	gotResult, err := executorStream(executor, query)
@@ -1773,7 +1993,7 @@ func TestVarJoin(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -1808,7 +2028,7 @@ func TestVarJoinStream(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -2082,7 +2302,7 @@ func TestCrossShardSubquery(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries: %s, want %s\n", got, want)
 	}
@@ -2098,6 +2318,48 @@ func TestCrossShardSubquery(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
+}
+
+func TestSubQueryAndQueryWithLimit(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	result2 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		InsertID: 0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(111),
+			sqltypes.NewInt32(333),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	sbc2.SetResults(result2)
+
+	exec(executor, NewSafeSession(&vtgatepb.Session{
+		TargetString: "@primary",
+	}), "select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100")
+	require.Equal(t, 2, len(sbc1.Queries))
+	require.Equal(t, 2, len(sbc2.Queries))
+
+	// sub query is evaluated first, and sees a limit of 1
+	assert.Equal(t, `type:INT64 value:"1"`, sbc1.Queries[0].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"1"`, sbc2.Queries[0].BindVariables["__upper_limit"].String())
+
+	// outer limit is only applied to the outer query
+	assert.Equal(t, `type:INT64 value:"100"`, sbc1.Queries[1].BindVariables["__upper_limit"].String())
+	assert.Equal(t, `type:INT64 value:"100"`, sbc2.Queries[1].BindVariables["__upper_limit"].String())
 }
 
 func TestCrossShardSubqueryStream(t *testing.T) {
@@ -2123,7 +2385,7 @@ func TestCrossShardSubqueryStream(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 	// We have to use string representation because bindvars type is too complex.
 	got := fmt.Sprintf("%+v", sbc2.Queries)
-	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:<key:"u1_col" value:<type:INT32 value:"3" > > ]`
+	want := `[sql:"select u2.id from ` + "`user`" + ` as u2 where u2.id = :u1_col" bind_variables:{key:"u1_col" value:{type:INT32 value:"3"}}]`
 	if got != want {
 		t.Errorf("sbc2.Queries:\n%s, want\n%s\n", got, want)
 	}
@@ -2271,7 +2533,7 @@ func TestSelectLock(t *testing.T) {
 		Target: &querypb.Target{
 			Keyspace:   "TestExecutor",
 			Shard:      "-20",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		},
 		TransactionId: 12345,
 		TabletAlias:   sbc1.Tablet().Alias,
@@ -2287,13 +2549,13 @@ func TestSelectLock(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecutor",
 				Shard:      "-20",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			TransactionId: 12345,
 			TabletAlias:   sbc1.Tablet().Alias,
 		}},
 		LockSession: &vtgatepb.Session_ShardSession{
-			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_MASTER},
+			Target:      &querypb.Target{Keyspace: "TestExecutor", Shard: "-20", TabletType: topodatapb.TabletType_PRIMARY},
 			TabletAlias: sbc1.Tablet().Alias,
 			ReservedId:  1,
 		},
@@ -2351,14 +2613,15 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
 	count := 1
 	for _, shard := range shards {
-		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 		sbc.SetResults([]*sqltypes.Result{
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count, count)),
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id|col|weight_string(id)", "int32|int32|varchar"), fmt.Sprintf("%d|%d|NULL", count+10, count)),
 		})
 		count++
 	}
-	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig)
+
+	executor := NewExecutor(context.Background(), serv, cell, resolver, true, false, testBufferSize, cache.DefaultConfig, nil, false)
 	before := runtime.NumGoroutine()
 
 	query := "select id, col from user order by id limit 2"
@@ -2370,4 +2633,45 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// some sleep to close all goroutines.
 	time.Sleep(100 * time.Millisecond)
 	assert.GreaterOrEqual(t, before, runtime.NumGoroutine(), "left open goroutines lingering")
+}
+
+func TestSelectScatterFails(t *testing.T) {
+	sess := &vtgatepb.Session{}
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := new(sandboxTopo)
+	resolver := newTestResolver(hc, serv, cell)
+
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	for i, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		sbc.SetResults([]*sqltypes.Result{{
+			Fields: []*querypb.Field{
+				{Name: "col1", Type: sqltypes.Int32},
+				{Name: "col2", Type: sqltypes.Int32},
+				{Name: "weight_string(col2)", Type: sqltypes.VarBinary},
+			},
+			InsertID: 0,
+			Rows: [][]sqltypes.Value{{
+				sqltypes.NewInt32(1),
+				sqltypes.NewInt32(int32(i % 4)),
+				sqltypes.NULL,
+			}},
+		}})
+	}
+
+	executor := createExecutor(serv, cell, resolver)
+	executor.allowScatter = false
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorExecSession(executor, "select id from user", nil, sess)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scatter")
+
+	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
+	require.NoError(t, err)
 }

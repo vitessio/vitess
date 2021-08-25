@@ -32,10 +32,11 @@ import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 import { DataFilter } from '../dataTable/DataFilter';
 import { Tooltip } from '../tooltip/Tooltip';
+import { KeyspaceLink } from '../links/KeyspaceLink';
 
 export const Workflows = () => {
     useDocumentTitle('Workflows');
-    const { data } = useWorkflows({ refetchInterval: 1000 });
+    const { data } = useWorkflows();
     const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const sortedData = React.useMemo(() => {
@@ -71,7 +72,9 @@ export const Workflows = () => {
                     <DataCell>
                         {row.source ? (
                             <>
-                                <div>{row.source}</div>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.source}>
+                                    {row.source}
+                                </KeyspaceLink>
                                 <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
                             </>
                         ) : (
@@ -81,7 +84,9 @@ export const Workflows = () => {
                     <DataCell>
                         {row.target ? (
                             <>
-                                <div>{row.target}</div>
+                                <KeyspaceLink clusterID={row.clusterID} name={row.target}>
+                                    {row.target}
+                                </KeyspaceLink>
                                 <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
                             </>
                         ) : (
@@ -102,14 +107,18 @@ export const Workflows = () => {
                                     ].join(' ');
 
                                     return (
-                                        <Tooltip text={tooltip}>
+                                        <Tooltip key={streamState} text={tooltip}>
                                             <span className={style.stream}>
                                                 <StreamStatePip state={streamState} /> {streamCount}
                                             </span>
                                         </Tooltip>
                                     );
                                 }
-                                return <span className={style.streamPlaceholder}>-</span>;
+                                return (
+                                    <span key={streamState} className={style.streamPlaceholder}>
+                                        -
+                                    </span>
+                                );
                             })}
                         </div>
                     </DataCell>

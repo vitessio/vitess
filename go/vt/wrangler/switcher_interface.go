@@ -38,12 +38,12 @@ type iswitcher interface {
 	changeRouting(ctx context.Context) error
 	streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error
 	startReverseVReplication(ctx context.Context) error
-	switchTableReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction TrafficSwitchDirection) error
-	switchShardReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction TrafficSwitchDirection) error
+	switchTableReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error
+	switchShardReads(ctx context.Context, cells []string, servedType []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error
 	validateWorkflowHasCompleted(ctx context.Context) error
-	removeSourceTables(ctx context.Context, removalType TableRemovalType) error
+	removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error
 	dropSourceShards(ctx context.Context) error
-	dropSourceBlacklistedTables(ctx context.Context) error
+	dropSourceDeniedTables(ctx context.Context) error
 	freezeTargetVReplication(ctx context.Context) error
 	dropSourceReverseVReplicationStreams(ctx context.Context) error
 	dropTargetVReplicationStreams(ctx context.Context) error

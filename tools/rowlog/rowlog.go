@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -132,7 +133,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 			log.Errorf("Invalid flavor for %s", keyspace)
 			return "", "", false, false, nil
 		}
-		startPos, stopPos, err = getPositions(ctx, vtctld, tablet)
+		startPos, stopPos, _ = getPositions(ctx, vtctld, tablet)
 		startPos = flavor + "/" + startPos
 		stopPos = flavor + "/" + stopPos
 	}
@@ -157,7 +158,7 @@ func startStreaming(ctx context.Context, vtgate, vtctld, keyspace, tablet, table
 		log.Fatal(err)
 	}
 	defer conn.Close()
-	reader, err := conn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, &vtgatepb.VStreamFlags{})
+	reader, _ := conn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, &vtgatepb.VStreamFlags{})
 	var fields []*query.Field
 	var gtid string
 	var plan *TablePlan
@@ -251,7 +252,7 @@ func getHeader(plan *TablePlan) string {
 	for _, field := range plan.fields {
 		s += field.Name + "\t"
 	}
-	s += fmt.Sprintf("op\ttimestamp\tgtid")
+	s += "op\ttimestamp\tgtid"
 	return s
 }
 
@@ -371,7 +372,7 @@ func getFlavor(ctx context.Context, server, keyspace string) string {
 }
 
 func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace string) string {
-	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "master")
+	picker, err := discovery.NewTabletPicker(ts, cells, keyspace, "0", "primary")
 	if err != nil {
 		return ""
 	}
@@ -478,7 +479,7 @@ func execVtctl(ctx context.Context, server string, args []string) ([]string, err
 	}
 	if client == nil {
 		fmt.Printf("Unable to contact %s\n", server)
-		return nil, fmt.Errorf("unable to contact %s\n", server)
+		return nil, fmt.Errorf("unable to contact %s", server)
 	}
 	defer client.Close()
 

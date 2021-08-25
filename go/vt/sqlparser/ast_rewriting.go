@@ -28,6 +28,13 @@ import (
 	"vitess.io/vitess/go/vt/sysvars"
 )
 
+var (
+	subQueryBaseArgName = []byte("__sq")
+
+	// HasValueSubQueryBaseName is the prefix of each parameter representing an EXISTS subquery
+	HasValueSubQueryBaseName = []byte("__sq_has_values")
+)
+
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
@@ -42,6 +49,7 @@ type ReservedVars struct {
 	next         []byte
 	counter      int
 	fast, static bool
+	sqNext       int64
 }
 
 // ReserveAll tries to reserve all the given variable names. If they're all available,
@@ -73,10 +81,35 @@ func (r *ReservedVars) ReserveColName(col *ColName) string {
 
 	for {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
 			return string(joinVar)
 		}
 		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
 		i++
+	}
+}
+
+// ReserveSubQuery returns the next argument name to replace subquery with pullout value.
+func (r *ReservedVars) ReserveSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
+	}
+}
+
+// ReserveHasValuesSubQuery returns the next argument name to replace subquery with has value.
+func (r *ReservedVars) ReserveHasValuesSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
 	}
 }
 
@@ -405,15 +438,16 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 		return
 	}
 
-	if !(len(sel.SelectExprs) != 1 ||
+	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
 		len(sel.GroupBy) != 0 ||
 		len(sel.From) != 1 ||
-		sel.Where == nil ||
-		sel.Having == nil ||
-		sel.Limit == nil) && sel.Lock == NoLock {
+		sel.Where != nil ||
+		sel.Having != nil ||
+		sel.Limit != nil || sel.Lock != NoLock {
 		return
 	}
+
 	aliasedTable, ok := sel.From[0].(*AliasedTableExpr)
 	if !ok {
 		return
@@ -429,8 +463,25 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
-	cursor.Replace(rewrittenExpr)
+	rewritten := Rewrite(expr.Expr, er.rewrite, nil)
+
+	// Here we need to handle the subquery rewrite in case in occurs in an IN clause
+	// For example, SELECT id FROM user WHERE id IN (SELECT 1 FROM DUAL)
+	// Here we cannot rewrite the query to SELECT id FROM user WHERE id IN 1, since that is syntactically wrong
+	// We must rewrite it to SELECT id FROM user WHERE id IN (1)
+	// Find more cases in the test file
+	rewrittenExpr, isExpr := rewritten.(Expr)
+	_, isColTuple := rewritten.(ColTuple)
+	comparisonExpr, isCompExpr := cursor.Parent().(*ComparisonExpr)
+	// Check that the parent is a comparison operator with IN or NOT IN operation.
+	// Also, if rewritten is already a ColTuple (like a subquery), then we do not need this
+	// We also need to check that rewritten is an Expr, if it is then we can rewrite it as a ValTuple
+	if isCompExpr && (comparisonExpr.Operator == InOp || comparisonExpr.Operator == NotInOp) && !isColTuple && isExpr {
+		cursor.Replace(ValTuple{rewrittenExpr})
+		return
+	}
+
+	cursor.Replace(rewritten)
 }
 
 func bindVarExpression(name string) Expr {

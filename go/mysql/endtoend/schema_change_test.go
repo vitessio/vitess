@@ -18,7 +18,11 @@ package endtoend
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/require"
 
@@ -79,6 +83,9 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	}, {
 		name:    "change PK",
 		changeQ: "alter table vttest.product drop primary key, add primary key (name)",
+	}, {
+		name:    "two tables changes",
+		changeQ: "create table vttest.new_table2 (id bigint(20) primary key);alter table vttest.product drop column name",
 	}}
 
 	for _, test := range tests {
@@ -99,16 +106,35 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 			require.NoError(t, err)
 			require.Empty(t, rs.Rows)
 
-			// make the schema change
-			_, err = conn.ExecuteFetch(test.changeQ, 1000, true)
-			require.NoError(t, err)
+			for _, q := range strings.Split(test.changeQ, ";") {
+				// make the schema change
+				_, err = conn.ExecuteFetch(q, 1000, true)
+				require.NoError(t, err)
+			}
 
 			// make sure the change is detected
 			rs, err = conn.ExecuteFetch(mysql.DetectSchemaChange, 1000, true)
 			require.NoError(t, err)
 			require.NotEmpty(t, rs.Rows)
+
+			var tables []string
+			for _, row := range rs.Rows {
+				apa := sqlparser.NewStrLiteral(row[0].ToString())
+				tables = append(tables, "table_name = "+sqlparser.String(apa))
+			}
+			tableNamePredicates := strings.Join(tables, " OR ")
+			del := fmt.Sprintf("%s AND %s", mysql.ClearSchemaCopy, tableNamePredicates)
+			upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicates)
+
+			_, err = conn.ExecuteFetch(del, 1000, true)
+			require.NoError(t, err)
+			_, err = conn.ExecuteFetch(upd, 1000, true)
+			require.NoError(t, err)
+
+			// make sure the change is detected
+			rs, err = conn.ExecuteFetch(mysql.DetectSchemaChange, 1000, true)
+			require.NoError(t, err)
+			require.Empty(t, rs.Rows)
 		})
-
 	}
-
 }

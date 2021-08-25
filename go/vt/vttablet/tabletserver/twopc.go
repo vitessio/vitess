@@ -197,6 +197,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 		}
 	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	log.Infof("TwoPC: Engine open succeeded")
 	return nil
 }
 
@@ -430,7 +431,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		participants = append(participants, &querypb.Target{
 			Keyspace:   row[0].ToString(),
 			Shard:      row[1].ToString(),
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}
 	result.Participants = participants

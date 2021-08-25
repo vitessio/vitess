@@ -39,7 +39,7 @@ const (
 )
 
 // replManager runs a poller to ensure mysql is replicating from
-// the master. If necessary, it invokes tm.repairReplication to get it
+// the primary. If necessary, it invokes tm.repairReplication to get it
 // fixed. On state change, SetTabletType must be called before changing
 // the tabletserver state. This will ensure that replication is fixed
 // upfront, allowing tabletserver to start off healthy.
@@ -115,18 +115,18 @@ func (rm *replManager) checkActionLocked() {
 	}
 
 	if !rm.failed {
-		log.Infof("Replication is stopped, reconnecting to master.")
+		log.Infof("Replication is stopped, reconnecting to primary.")
 	}
 	ctx, cancel := context.WithTimeout(rm.ctx, 5*time.Second)
 	defer cancel()
 	if err := rm.tm.repairReplication(ctx); err != nil {
 		if !rm.failed {
 			rm.failed = true
-			log.Infof("Failed to reconnect to master: %v, will keep retrying.", err)
+			log.Infof("Failed to reconnect to primary: %v, will keep retrying.", err)
 		}
 		return
 	}
-	log.Info("Successfully reconnected to master.")
+	log.Info("Successfully reconnected to primary.")
 	rm.failed = false
 }
 

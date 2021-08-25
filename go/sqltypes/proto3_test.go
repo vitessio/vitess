@@ -19,8 +19,8 @@ package sqltypes
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -229,9 +229,8 @@ func TestQueryReponses(t *testing.T) {
 			},
 		}, {
 			Error: &vtrpcpb.RPCError{
-				LegacyCode: vtrpcpb.LegacyErrorCode_DEADLINE_EXCEEDED_LEGACY,
-				Message:    "deadline exceeded",
-				Code:       vtrpcpb.Code_DEADLINE_EXCEEDED,
+				Message: "deadline exceeded",
+				Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
 			},
 			Result: nil,
 		},

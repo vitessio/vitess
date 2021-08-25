@@ -35,7 +35,7 @@ var _ Primitive = (*MemorySort)(nil)
 // MemorySort is a primitive that performs in-memory sorting.
 type MemorySort struct {
 	UpperLimit sqltypes.PlanValue
-	OrderBy    []OrderbyParams
+	OrderBy    []OrderByParams
 	Input      Primitive
 
 	// TruncateColumnCount specifies the number of columns to return
@@ -183,6 +183,9 @@ func (ms *MemorySort) description() PrimitiveDescription {
 	if !value.IsNull() {
 		other["UpperLimit"] = value.String()
 	}
+	if ms.TruncateColumnCount > 0 {
+		other["ResultColumns"] = ms.TruncateColumnCount
+	}
 	return PrimitiveDescription{
 		OperatorType: "Sort",
 		Variant:      "Memory",
@@ -191,7 +194,7 @@ func (ms *MemorySort) description() PrimitiveDescription {
 }
 
 func orderByParamsToString(i interface{}) string {
-	return i.(OrderbyParams).String()
+	return i.(OrderByParams).String()
 }
 
 //GenericJoin will iterate over arrays, slices or maps, and executes the f function to get a

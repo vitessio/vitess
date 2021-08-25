@@ -349,7 +349,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewAutocommitSession(masterSession)
+			session := NewAutocommitSession(primarySession)
 			session.TargetString = KsTestUnsharded
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
@@ -368,7 +368,7 @@ func TestExecutorSetOp(t *testing.T) {
 
 func TestExecutorSetMetadata(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -380,7 +380,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	}()
 
 	executor, _, _, _ = createLegacyExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -464,15 +464,15 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 		),
 	})
 
-	masterSession.TargetString = "TestExecutor"
+	primarySession.TargetString = "TestExecutor"
 	defer func() {
-		masterSession.TargetString = ""
+		primarySession.TargetString = ""
 	}()
 	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
 	require.NoError(t, err)
 
 	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
-	utils.MustMatch(t, want, masterSession.UserDefinedVariables, "")
+	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
 }
 
 func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {

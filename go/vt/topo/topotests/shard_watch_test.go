@@ -23,7 +23,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -84,17 +84,17 @@ func TestWatchShard(t *testing.T) {
 
 	// Starting the watch should now work, and return an empty
 	// Shard.
-	// Shards are always created with IsMasterServing true
-	wanted := &topodatapb.Shard{IsMasterServing: true}
+	// Shards are always created with IsPrimaryServing true
+	wanted := &topodatapb.Shard{IsPrimaryServing: true}
 	current, changes, cancel := waitForInitialShard(t, ts, keyspace, shard)
 	if !proto.Equal(current.Value, wanted) {
 		t.Fatalf("got bad data: %v expected: %v", current.Value, wanted)
 	}
 
 	// Update the value with good data, wait until we see it
-	wanted.IsMasterServing = false
+	wanted.IsPrimaryServing = false
 	if _, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsMasterServing = false
+		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
 		t.Fatalf("Update(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
@@ -223,10 +223,10 @@ func TestWatchShardCancel(t *testing.T) {
 		t.Fatalf("Create(/keyspaces/ks1/shards/0/Shard) failed: %v", err)
 	}
 	wanted := &topodatapb.Shard{
-		IsMasterServing: false,
+		IsPrimaryServing: false,
 	}
 	if _, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsMasterServing = false
+		si.IsPrimaryServing = false
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields() failed: %v", err)

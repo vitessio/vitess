@@ -179,8 +179,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		masterProcess := clusterInstance.Keyspaces[0].Shards[0].MasterTablet().VttabletProcess
-		if _, err := masterProcess.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
+		primaryTablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+		if _, err := primaryTablet.QueryTablet(createProcSQL, KeyspaceName, false); err != nil {
 			log.Fatal(err.Error())
 			return 1
 		}
@@ -307,7 +307,7 @@ func TestCallProcedure(t *testing.T) {
 		Host:   "localhost",
 		Port:   clusterInstance.VtgateMySQLPort,
 		Flags:  mysql.CapabilityClientMultiResults,
-		DbName: "@master",
+		DbName: "@primary",
 	}
 	time.Sleep(5 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -434,6 +434,33 @@ func TestNumericPrecisionScale(t *testing.T) {
 	assert.True(t, qr.Fields[1].Type == querypb.Type_UINT64 || qr.Fields[1].Type == querypb.Type_UINT32)
 	assert.True(t, qr.Rows[0][0].Type() == sqltypes.Uint64 || qr.Rows[0][0].Type() == sqltypes.Uint32)
 	assert.True(t, qr.Rows[0][1].Type() == sqltypes.Uint64 || qr.Rows[0][1].Type() == sqltypes.Uint32)
+}
+
+func TestDeleteAlias(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where c1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.c1 = 1")
+}
+
+func TestFloatValueDefault(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1);`)
+	defer exec(t, conn, `drop table test_float_default`)
+	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default'", `[[VARCHAR("test_float_default") VARCHAR("pos_f") TEXT("2.1")] [VARCHAR("test_float_default") VARCHAR("neg_f") TEXT("-2.1")]]`)
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {

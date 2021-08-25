@@ -154,7 +154,7 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 	qr := checkedExec(t, conn, "select connection_id() from test where id = 80")
 
 	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // 80-
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet() // 80-
 	vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
 
 	// transaction fails on commit - we should no longer be in a transaction
@@ -273,7 +273,7 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	qr := checkedExec(t, conn, "select connection_id() from test where id = 1")
 
 	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].MasterTablet() // -80
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet() // -80
 	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
 	require.NoError(t, err)
 
@@ -305,7 +305,7 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 	checkedExec(t, conn, "insert into test (id, val1) values (2, null)")
 
 	// kill the mysql connection shard which has transaction open.
-	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].MasterTablet() // 80-
+	vttablet1 := clusterInstance.Keyspaces[0].Shards[1].PrimaryTablet() // 80-
 	_, err = vttablet1.VttabletProcess.QueryTablet(fmt.Sprintf("kill %s", qr.Rows[0][0].ToString()), keyspaceName, false)
 	require.NoError(t, err)
 

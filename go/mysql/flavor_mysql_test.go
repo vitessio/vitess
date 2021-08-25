@@ -23,14 +23,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMysql56SetMasterCommands(t *testing.T) {
+func TestMysql56SetReplicationSourceCommand(t *testing.T) {
 	params := &ConnParams{
 		Uname: "username",
 		Pass:  "password",
 	}
-	masterHost := "localhost"
-	masterPort := 123
-	masterConnectRetry := 1234
+	host := "localhost"
+	port := 123
+	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -40,13 +40,13 @@ func TestMysql56SetMasterCommands(t *testing.T) {
   MASTER_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	if got != want {
-		t.Errorf("mysqlFlavor.SetMasterCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 	}
 }
 
-func TestMysql56SetMasterCommandsSSL(t *testing.T) {
+func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
 	params := &ConnParams{
 		Uname:     "username",
 		Pass:      "password",
@@ -56,9 +56,9 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
 		SslKey:    "ssl-key",
 	}
 	params.EnableSSL()
-	masterHost := "localhost"
-	masterPort := 123
-	masterConnectRetry := 1234
+	host := "localhost"
+	port := 123
+	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
   MASTER_PORT = 123,
@@ -73,21 +73,21 @@ func TestMysql56SetMasterCommandsSSL(t *testing.T) {
   MASTER_AUTO_POSITION = 1`
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
-	got := conn.SetMasterCommand(params, masterHost, masterPort, masterConnectRetry)
+	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
 	if got != want {
-		t.Errorf("mysqlFlavor.SetMasterCommands(%#v, %#v, %#v, %#v) = %#v, want %#v", params, masterHost, masterPort, masterConnectRetry, got, want)
+		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
 	}
 }
 
-func TestMysqlRetrieveMasterServerId(t *testing.T) {
+func TestMysqlRetrieveSourceServerId(t *testing.T) {
 	resultMap := map[string]string{
 		"Master_Server_Id": "1",
 	}
 
-	want := ReplicationStatus{MasterServerID: 1}
+	want := ReplicationStatus{SourceServerID: 1}
 	got, err := parseMysqlReplicationStatus(resultMap)
 	require.NoError(t, err)
-	assert.Equalf(t, got.MasterServerID, want.MasterServerID, "got MasterServerID: %v; want MasterServerID: %v", got.MasterServerID, want.MasterServerID)
+	assert.Equalf(t, got.SourceServerID, want.SourceServerID, "got SourceServerID: %v; want SourceServerID: %v", got.SourceServerID, want.SourceServerID)
 }
 
 func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
@@ -128,7 +128,7 @@ func TestMysqlShouldGetRelayLogPosition(t *testing.T) {
 	assert.Equalf(t, got.RelayLogPosition.GTIDSet.String(), want.RelayLogPosition.GTIDSet.String(), "got RelayLogPosition: %v; want RelayLogPosition: %v", got.RelayLogPosition.GTIDSet, want.RelayLogPosition.GTIDSet)
 }
 
-func TestMysqlShouldGetMasterPosition(t *testing.T) {
+func TestMysqlShouldGetPosition(t *testing.T) {
 	resultMap := map[string]string{
 		"Executed_Gtid_Set": "3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
 		"Position":          "1307",
@@ -136,11 +136,11 @@ func TestMysqlShouldGetMasterPosition(t *testing.T) {
 	}
 
 	sid, _ := ParseSID("3e11fa47-71ca-11e1-9e33-c80aa9429562")
-	want := MasterStatus{
+	want := PrimaryStatus{
 		Position:     Position{GTIDSet: Mysql56GTIDSet{sid: []interval{{start: 1, end: 5}}}},
 		FilePosition: Position{GTIDSet: filePosGTID{file: "source-bin.000003", pos: 1307}},
 	}
-	got, err := parseMysqlMasterStatus(resultMap)
+	got, err := parseMysqlPrimaryStatus(resultMap)
 	require.NoError(t, err)
 	assert.Equalf(t, got.Position.GTIDSet.String(), want.Position.GTIDSet.String(), "got Position: %v; want Position: %v", got.Position.GTIDSet, want.Position.GTIDSet)
 	assert.Equalf(t, got.FilePosition.GTIDSet.String(), want.FilePosition.GTIDSet.String(), "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)

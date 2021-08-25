@@ -95,6 +95,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit 10"
@@ -121,10 +122,10 @@ Gen4 plan same as above
 }
 
 # select with partial scatter directive
-"select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user"
+"select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
+  "Original": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
@@ -133,7 +134,8 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select * from `user` where 1 != 1",
-    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user`",
+    "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from `user`",
+    "ScatterErrorsAsWarnings": true,
     "Table": "`user`"
   }
 }
@@ -157,11 +159,13 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
 "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -182,11 +186,13 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from `user`",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
@@ -206,6 +212,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select * from `user` where 1 != 1",
         "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from `user` limit :__upper_limit",
+        "ScatterErrorsAsWarnings": true,
         "Table": "`user`"
       }
     ]
@@ -265,6 +272,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+Gen4 plan same as above
 
 # select * from join of authoritative tables
 "select * from authoritative a join authoritative b on a.user_id=b.user_id"
@@ -283,10 +291,26 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from authoritative a join authoritative b on a.user_id=b.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where 1 != 1",
+    "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a, authoritative as b where a.user_id = b.user_id",
+    "Table": "authoritative"
+  }
+}
 
 # test table lookup failure for authoritative code path
 "select a.* from authoritative"
 "table a not found"
+Gen4 error: Unknown table 'a'
 
 # select * from qualified authoritative table
 "select a.* from authoritative a"
@@ -305,6 +329,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
+Gen4 plan same as above
 
 # select * from intermixing of authoritative table with non-authoritative results in no expansion
 "select * from authoritative join user on authoritative.user_id=user.id"
@@ -320,7 +345,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from authoritative join `user` on authoritative.user_id = `user`.id where 1 != 1",
     "Query": "select * from authoritative join `user` on authoritative.user_id = `user`.id",
-    "Table": "authoritative"
+    "Table": "authoritative, `user`"
   }
 }
 
@@ -338,7 +363,22 @@ Gen4 plan same as above
     },
     "FieldQuery": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id where 1 != 1",
     "Query": "select `user`.id, a.user_id, a.col1, a.col2, `user`.col1 from authoritative as a join `user` on a.user_id = `user`.id",
-    "Table": "authoritative"
+    "Table": "authoritative, `user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where 1 != 1",
+    "Query": "select `user`.id, a.user_id as user_id, a.col1 as col1, a.col2 as col2, `user`.col1 from authoritative as a, `user` where a.user_id = `user`.id",
+    "Table": "`user`, authoritative"
   }
 }
 
@@ -356,13 +396,29 @@ Gen4 plan same as above
     },
     "FieldQuery": "select col from `user` join user_extra on `user`.id = user_extra.user_id where 1 != 1",
     "Query": "select col from `user` join user_extra on `user`.id = user_extra.user_id",
-    "Table": "`user`"
+    "Table": "`user`, user_extra"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user join user_extra on user.id = user_extra.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user`, user_extra where 1 != 1",
+    "Query": "select col from `user`, user_extra where `user`.id = user_extra.user_id",
+    "Table": "`user`, user_extra"
   }
 }
 
 # Cannot auto-resolve for cross-shard joins
 "select col from user join user_extra"
 "symbol col not found"
+Gen4 error: Column 'col' in field list is ambiguous
 
 # Auto-resolve should work if unique vindex columns are referenced
 "select id, user_id from user join user_extra"
@@ -400,6 +456,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # database calls should be substituted
 "select database() from dual"
@@ -421,6 +478,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # nextval for simple route
 "select next value from user"
@@ -693,6 +751,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # for update
 "select user.col from user join user_extra for update"
@@ -730,6 +789,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Field query should work for joins select bind vars
 "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm"
@@ -740,6 +800,9 @@ Gen4 plan same as above
     "OperatorType": "Join",
     "Variant": "Join",
     "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "user_id": 0
+    },
     "TableName": "`user`_unsharded",
     "Inputs": [
       {
@@ -847,7 +910,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_id, weight_string(user_id) from music where 1 != 1",
-        "OrderBy": "0 ASC",
+        "OrderBy": "(0|1) ASC",
         "Query": "select user_id, weight_string(user_id) from music order by user_id asc limit :__upper_limit",
         "ResultColumns": 1,
         "Table": "music"
@@ -1075,6 +1138,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sub-expression subquery in select
 "select a, 1+(select col from user) from unsharded"
@@ -1110,8 +1174,9 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
-# select * from subquery expands specific columns
+# select * from derived table expands specific columns
 "select * from (select user.id id1, user_extra.id id2 from user join user_extra) as t"
 {
   "QueryType": "SELECT",
@@ -1157,31 +1222,13 @@ Gen4 plan same as above
   }
 }
 
-# duplicate columns not allowed in subquery
+# duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
 "duplicate column names in subquery: id"
 
-# non-existent symbol in cross-shard subquery
+# non-existent symbol in cross-shard derived table
 "select t.col from (select user.id from user join user_extra) as t"
 "symbol t.col not found in table or subquery"
-
-# union of information_schema
-"select * from information_schema.a union select * from information_schema.b"
-{
-  "QueryType": "SELECT",
-  "Original": "select * from information_schema.a union select * from information_schema.b",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1",
-    "Query": "select * from information_schema.a union select * from information_schema.b"
-  }
-}
-Gen4 plan same as above
 
 # union with the same target shard
 "select * from music where user_id = 1 union select * from user where id = 1"
@@ -1374,6 +1421,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # don't filter on the vtgate
 "select 42 from dual where false"
@@ -1392,6 +1440,7 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
+Gen4 plan same as above
 
 # testing SingleRow Projection with arithmetics
 "select 42+2"
@@ -1413,6 +1462,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sql_calc_found_rows without limit
 "select sql_calc_found_rows * from music where user_id = 1"
@@ -1546,7 +1596,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
-            "OrderBy": "0 ASC",
+            "OrderBy": "(0|2) ASC",
             "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
             "ResultColumns": 2,
             "Table": "music"
@@ -1600,6 +1650,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # select from unsharded keyspace into outfile
 "select * from main.unsharded into outfile 'x.txt' character set binary fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n'"
@@ -1618,12 +1669,13 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # select from unsharded keyspace into outfile s3
-"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off"
+"select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off"
 {
   "QueryType": "SELECT",
-  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\\n' manifest on overwrite off",
+  "Original": "select * from main.unsharded into outfile s3 'out_file_name' character set binary format csv header fields terminated by 'term' optionally enclosed by 'c' escaped by 'e' lines starting by 'a' terminated by '\n' manifest on overwrite off",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectUnsharded",
@@ -1636,6 +1688,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 # Union after into outfile is incorrect
 "select id from user into outfile 'out_file_name' union all select id from music"
@@ -1645,157 +1698,26 @@ Gen4 plan same as above
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
 "Incorrect usage/placement of 'INTO'"
+Gen4 plan same as above
 
-# Distinct with cross shard query
-"select distinct user.a from user join user_extra"
+"select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1"
 {
   "QueryType": "SELECT",
-  "Original": "select distinct user.a from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a from `user` where 1 != 1",
-            "Query": "select `user`.a from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
-
-# Select from information schema query with two tables that route should be merged
-"SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
+  "Original": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "SelectEqualUnique",
     "Keyspace": {
-      "Name": "main",
-      "Sharded": false
+      "Name": "user",
+      "Sharded": true
     },
-    "FieldQuery": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-    "Query": "select DELETE_RULE, UPDATE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-    "SysTableTableName": "[VARBINARY(\"data_type_table\")]",
-    "SysTableTableSchema": "[VARBINARY(\"test\")]"
+    "FieldQuery": "select (select u.id from `user` as u where 1 != 1), a.id from `user` as a where 1 != 1",
+    "Query": "select (select u.id from `user` as u where u.id = 1), a.id from `user` as a where a.id = 1",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
   }
 }
-
-# Select from information schema query with three tables such that route for 2 should be merged but not for the last.
-"SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT KCU.DELETE_RULE, S.UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME, INFORMATION_SCHEMA.K AS S WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.TABLE_NAME = 'data_type_table' AND S.TABLE_SCHEMA = 'test' AND S.TABLE_NAME = 'sc' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
-    "TableName": "_",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-        "Query": "select KCU.DELETE_RULE from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :__vttablename and KCU.TABLE_NAME = :__vttablename order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
-        "SysTableTableName": "[VARBINARY(\"data_type_table\"), VARBINARY(\"data_type_table\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where 1 != 1",
-        "Query": "select S.UPDATE_RULE from INFORMATION_SCHEMA.K as S where S.TABLE_SCHEMA = :__vtschemaname and S.TABLE_NAME = :__vttablename",
-        "SysTableTableName": "[VARBINARY(\"sc\")]",
-        "SysTableTableSchema": "[VARBINARY(\"test\")]"
-      }
-    ]
-  }
-}
-
-#information_schema.routines
-"SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT routine_name AS name, routine_definition AS definition FROM information_schema.routines WHERE ROUTINE_SCHEMA = ? AND ROUTINE_TYPE = 'PROCEDURE'",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select routine_name as `name`, routine_definition as definition from information_schema.routines where 1 != 1",
-    "Query": "select routine_name as `name`, routine_definition as definition from information_schema.routines where ROUTINE_SCHEMA = :__vtschemaname and ROUTINE_TYPE = 'PROCEDURE'",
-    "SysTableTableSchema": "[:v1]"
-  }
-}
-
-#information_schema table sizes
-"SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT SUM(data_length + index_length) as size FROM information_schema.TABLES WHERE table_schema = ?",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where 1 != 1",
-    "Query": "select SUM(data_length + index_length) as size from information_schema.`TABLES` where table_schema = :__vtschemaname",
-    "SysTableTableSchema": "[:v1]"
-  }
-}
-
-#information_schema referential contraints
-"SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT kcu.constraint_name constraint_name, kcu.column_name column_name, kcu.referenced_table_name referenced_table_name, kcu.referenced_column_name referenced_column_name, kcu.ordinal_position ordinal_position, kcu.table_name table_name, rc.delete_rule delete_rule, rc.update_rule update_rule FROM information_schema.key_column_usage AS kcu INNER JOIN information_schema.referential_constraints AS rc ON kcu.constraint_name = rc.constraint_name WHERE kcu.table_schema = ? AND rc.constraint_schema = ? AND kcu.referenced_column_name IS NOT NULL ORDER BY ordinal_position",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where 1 != 1",
-    "Query": "select kcu.constraint_name as constraint_name, kcu.column_name as column_name, kcu.referenced_table_name as referenced_table_name, kcu.referenced_column_name as referenced_column_name, kcu.ordinal_position as ordinal_position, kcu.table_name as table_name, rc.delete_rule as delete_rule, rc.update_rule as update_rule from information_schema.key_column_usage as kcu join information_schema.referential_constraints as rc on kcu.constraint_name = rc.constraint_name where kcu.table_schema = :__vtschemaname and rc.constraint_schema = :__vtschemaname and kcu.referenced_column_name is not null order by ordinal_position asc",
-    "SysTableTableSchema": "[:v1, :v2]"
-  }
-}
+Gen4 plan same as above

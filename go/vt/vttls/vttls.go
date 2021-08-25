@@ -30,28 +30,97 @@ import (
 // Updated list of acceptable cipher suits to address
 // Fixed upstream in https://github.com/golang/go/issues/13385
 // This removed CBC mode ciphers that are suseptiable to Lucky13 style attacks
-func newTLSConfig() *tls.Config {
-	return &tls.Config{
-		// MySQL Community edition has some problems with TLS1.2
-		// TODO: Validate this will not break servers using mysql community edition < 5.7.10
-		// MinVersion: tls.VersionTLS12,
+func newTLSConfig(minVersion uint16) *tls.Config {
 
-		// Default ordering taken from
-		// go 1.11 crypto/tls/cipher_suites.go
-		CipherSuites: []uint16{
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+	ciphers := []uint16{
+		tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+		tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+		tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
+		tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+	}
+
+	if minVersion < tls.VersionTLS12 {
+		ciphers = append(ciphers, []uint16{
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
 			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
 			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-		},
+		}...)
+	}
+
+	return &tls.Config{
+		MinVersion:   minVersion,
+		CipherSuites: ciphers,
+	}
+}
+
+// SslMode indicates the type of SSL mode to use. This matches
+// the MySQL SSL modes as mentioned at:
+// https://dev.mysql.com/doc/refman/8.0/en/connection-options.html#option_general_ssl-mode
+type SslMode string
+
+// Disabled disables SSL and connects over plain text
+const Disabled SslMode = "disabled"
+
+// Preferred establishes an SSL connection if the server supports it.
+// It does not validate the certificate provided by the server.
+const Preferred SslMode = "preferred"
+
+// Required requires an SSL connection to the server.
+// It does not validate the certificate provided by the server.
+const Required SslMode = "required"
+
+// VerifyCA requires an SSL connection to the server.
+// It validates the CA against the configured CA certificate(s).
+const VerifyCA SslMode = "verify_ca"
+
+// VerifyIdentity requires an SSL connection to the server.
+// It validates the CA against the configured CA certificate(s) and
+// also validates the certificate based on the hostname.
+// This is the setting you want when you want to connect safely to
+// a MySQL server and want to be protected against man-in-the-middle
+// attacks.
+const VerifyIdentity SslMode = "verify_identity"
+
+// String returns the string representation, part of the Value interface
+// for allowing this to be retrieved for a flag.
+func (mode *SslMode) String() string {
+	return string(*mode)
+}
+
+// Set updates the value of the SslMode pointer, part of the Value interface
+// for allowing to update a flag.
+func (mode *SslMode) Set(value string) error {
+	parsedMode := SslMode(strings.ToLower(value))
+	switch parsedMode {
+	case "":
+		*mode = Preferred
+		return nil
+	case Disabled, Preferred, Required, VerifyCA, VerifyIdentity:
+		*mode = parsedMode
+		return nil
+	}
+	return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid SSL mode specified: %s. Allowed options are disabled, preferred, required, verify_ca, verify_identity", value)
+}
+
+// TLSVersionToNumber converts a text description of the TLS protocol
+// to the internal Go number representation.
+func TLSVersionToNumber(tlsVersion string) (uint16, error) {
+	switch strings.ToLower(tlsVersion) {
+	case "tlsv1.3":
+		return tls.VersionTLS13, nil
+	case "", "tlsv1.2":
+		return tls.VersionTLS12, nil
+	case "tlsv1.1":
+		return tls.VersionTLS11, nil
+	case "tlsv1.0":
+		return tls.VersionTLS10, nil
+	default:
+		return tls.VersionTLS12, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Invalid TLS version specified: %s. Allowed options are TLSv1.0, TLSv1.1, TLSv1.2 & TLSv1.3", tlsVersion)
 	}
 }
 
@@ -59,8 +128,8 @@ var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters.
-func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
-	config := newTLSConfig()
+func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16) (*tls.Config, error) {
+	config := newTLSConfig(minTLSVersion)
 
 	// Load the client-side cert & key if any.
 	if cert != "" && key != "" {
@@ -89,13 +158,45 @@ func ClientConfig(cert, key, ca, name string) (*tls.Config, error) {
 		config.ServerName = name
 	}
 
+	switch mode {
+	case Disabled:
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't create config for disabled mode")
+	case Preferred, Required:
+		config.InsecureSkipVerify = true
+	case VerifyCA:
+		config.InsecureSkipVerify = true
+		config.VerifyConnection = func(cs tls.ConnectionState) error {
+			caRoots := config.RootCAs
+			if caRoots == nil {
+				var err error
+				caRoots, err = x509.SystemCertPool()
+				if err != nil {
+					return err
+				}
+			}
+			opts := x509.VerifyOptions{
+				Roots:         caRoots,
+				Intermediates: x509.NewCertPool(),
+			}
+			for _, cert := range cs.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(cert)
+			}
+			_, err := cs.PeerCertificates[0].Verify(opts)
+			return err
+		}
+	case VerifyIdentity:
+		// Nothing to do here, default config is the strictest and correct.
+	default:
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
+	}
+
 	return config, nil
 }
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca, serverCA string) (*tls.Config, error) {
-	config := newTLSConfig()
+func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+	config := newTLSConfig(minTLSVersion)
 
 	var certificates *[]tls.Certificate
 	var err error
@@ -210,11 +311,11 @@ func doLoadTLSCertificate(cert, key string) error {
 	return nil
 }
 
-var combinedTlsCertificates = sync.Map{}
+var combinedTLSCertificates = sync.Map{}
 
 func combineAndLoadTLSCertificates(ca, cert, key string) (*[]tls.Certificate, error) {
-	combinedTlsIdentifier := tlsCertificatesIdentifier(ca, cert, key)
-	once, _ := onceByKeys.LoadOrStore(combinedTlsIdentifier, &sync.Once{})
+	combinedTLSIdentifier := tlsCertificatesIdentifier(ca, cert, key)
+	once, _ := onceByKeys.LoadOrStore(combinedTLSIdentifier, &sync.Once{})
 
 	var err error
 	once.(*sync.Once).Do(func() {
@@ -225,7 +326,7 @@ func combineAndLoadTLSCertificates(ca, cert, key string) (*[]tls.Certificate, er
 		return nil, err
 	}
 
-	result, ok := combinedTlsCertificates.Load(combinedTlsIdentifier)
+	result, ok := combinedTLSCertificates.Load(combinedTLSIdentifier)
 
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "Cannot find loaded tls certificate chain with ca: %s, cert: %s, key: %s", ca, cert, key)
@@ -235,36 +336,36 @@ func combineAndLoadTLSCertificates(ca, cert, key string) (*[]tls.Certificate, er
 }
 
 func doLoadAndCombineTLSCertificates(ca, cert, key string) error {
-	combinedTlsIdentifier := tlsCertificatesIdentifier(ca, cert, key)
+	combinedTLSIdentifier := tlsCertificatesIdentifier(ca, cert, key)
 
 	// Read CA certificates chain
-	ca_b, err := ioutil.ReadFile(ca)
+	caB, err := ioutil.ReadFile(ca)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 	}
 
 	// Read server certificate
-	cert_b, err := ioutil.ReadFile(cert)
+	certB, err := ioutil.ReadFile(cert)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read server cert file: %s", cert)
 	}
 
 	// Read server key file
-	key_b, err := ioutil.ReadFile(key)
+	keyB, err := ioutil.ReadFile(key)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read key file: %s", key)
 	}
 
 	// Load CA, server cert and key.
 	var certificate []tls.Certificate
-	crt, err := tls.X509KeyPair(append(cert_b, ca_b...), key_b)
+	crt, err := tls.X509KeyPair(append(certB, caB...), keyB)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load and merge tls certificate with CA, ca %s, cert %s, key: %s", ca, cert, key)
 	}
 
 	certificate = []tls.Certificate{crt}
 
-	combinedTlsCertificates.Store(combinedTlsIdentifier, &certificate)
+	combinedTLSCertificates.Store(combinedTLSIdentifier, &certificate)
 
 	return nil
 }

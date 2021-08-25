@@ -210,8 +210,8 @@ func TestNewOnlineDDL(t *testing.T) {
 		NewDDLStrategySetting(DDLStrategyOnline, ""),
 		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
 	}
-	require.False(t, strategies[0].IsSkipTopo())
-	require.False(t, strategies[1].IsSkipTopo())
+	require.True(t, strategies[0].IsSkipTopo())
+	require.True(t, strategies[1].IsSkipTopo())
 	require.True(t, strategies[2].IsSkipTopo())
 
 	for _, ts := range tt {
@@ -224,16 +224,11 @@ func TestNewOnlineDDL(t *testing.T) {
 						return
 					}
 					assert.NoError(t, err)
-					if stgy.IsSkipTopo() {
-						// onlineDDL.SQL enriched with /*vt+ ... */ comment
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
-						assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
-					} else {
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
-						assert.NotContains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
-					}
+					require.True(t, stgy.IsSkipTopo(), "IsSkipTopo() should always be true")
+					// onlineDDL.SQL enriched with /*vt+ ... */ comment
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
+					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
 				})
 			}
 		})
@@ -242,10 +237,11 @@ func TestNewOnlineDDL(t *testing.T) {
 
 func TestNewOnlineDDLs(t *testing.T) {
 	type expect struct {
-		sqls       []string
-		notDDL     bool
-		parseError bool
-		isError    bool
+		sqls            []string
+		notDDL          bool
+		parseError      bool
+		isError         bool
+		expectErrorText string
 	}
 	tests := map[string]expect{
 		"alter table t add column i int, drop column d": {sqls: []string{"alter table t add column i int, drop column d"}},
@@ -265,6 +261,10 @@ func TestNewOnlineDDLs(t *testing.T) {
 		"truncate table t":                              {isError: true},
 		"drop view t":                                   {isError: true},
 		"rename table t to t1":                          {isError: true},
+		"alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)":                                                                                      {isError: true, expectErrorText: "syntax error"},
+		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)":                                                                                     {isError: true, expectErrorText: "foreign key constraints are not supported"},
+		"alter table corder rename as something_else":                                                                                                                                {isError: true, expectErrorText: "RENAME is not supported in online DDL"},
+		"CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB": {isError: true, expectErrorText: "near"},
 	}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for query, expect := range tests {
@@ -282,16 +282,18 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext)
 			if expect.isError {
 				assert.Error(t, err)
+				assert.Contains(t, err.Error(), expect.expectErrorText)
 				return
 			}
 			assert.NoError(t, err)
 
 			sqls := []string{}
 			for _, onlineDDL := range onlineDDLs {
-				sql := onlineDDL.SQL
+				sql, err := onlineDDL.sqlWithoutComments()
+				assert.NoError(t, err)
 				sql = strings.ReplaceAll(sql, "\n", "")
 				sql = strings.ReplaceAll(sql, "\t", "")
 				sqls = append(sqls, sql)

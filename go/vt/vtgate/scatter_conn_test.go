@@ -46,15 +46,15 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeHealthCheck()
 	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc0,
 		},
@@ -62,7 +62,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc1,
 		},
@@ -89,7 +89,7 @@ func TestExecuteFailOnAutocommit(t *testing.T) {
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
 				TransactionId: 123,
 				TabletAlias:   nil,
 			},
@@ -326,7 +326,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "operation not allowed in state NOT_SERVING during query: query1")
+	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, "operation not allowed in state NOT_SERVING during query: query1")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -334,7 +334,7 @@ func TestReservedConnFail(t *testing.T) {
 	oldRId = session.Session.ShardSessions[0].ReservedId
 
 	sbc0.Queries = nil
-	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: MASTER or MASTER")
+	sbc0.EphemeralShardErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "invalid tablet type: REPLICA, want: PRIMARY or MASTER")
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
 	assert.Equal(t, 2, len(sbc0.Queries), "one for the failed attempt, and one for the retry")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -351,12 +351,15 @@ func TestReservedConnFail(t *testing.T) {
 	})
 	sbc0Th := ths[0]
 	sbc0Th.Serving = false
+	sbc0.NotServing = true
 	sbc0Rep := hc.AddTestTablet("aa", "0", 2, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	sbc0.Queries = nil
+	sbc0.ExecCount.Set(0)
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 0, len(sbc0.Queries), "no attempt should be made as the tablet is not serving")
-	assert.Equal(t, 1, len(sbc0Rep.Queries), "first attempt should pass as it is healthy")
+	assert.EqualValues(t, 1, sbc0.ExecCount.Get(), "first attempt should be made on original tablet")
+	assert.EqualValues(t, 0, len(sbc0.Queries), "no query should be executed on it")
+	assert.Equal(t, 1, len(sbc0Rep.Queries), "this attempt on new healthy tablet should pass")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")
@@ -376,12 +379,17 @@ func TestReservedConnFail(t *testing.T) {
 		Shard:      tablet0Rep.GetShard(),
 		TabletType: topodatapb.TabletType_SPARE,
 	}
+	sbc0Rep.Tablet().Type = topodatapb.TabletType_SPARE
 	sbc0Th.Serving = true
+	sbc0.NotServing = false
+	sbc0.ExecCount.Set(0)
 
 	sbc0Rep.Queries = nil
+	sbc0Rep.ExecCount.Set(0)
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.Equal(t, 1, len(sbc0.Queries), "first attempt should pass as it is healthy and matches the target")
-	assert.Equal(t, 0, len(sbc0Rep.Queries), " no attempt should be made as the tablet target is changed")
+	assert.EqualValues(t, 1, sbc0Rep.ExecCount.Get(), "first attempt should be made on the changed tablet type")
+	assert.EqualValues(t, 0, len(sbc0Rep.Queries), "no query should be executed on it")
+	assert.Equal(t, 1, len(sbc0.Queries), "this attempt should pass as it is on new healthy tablet and matches the target")
 	require.Equal(t, 1, len(session.ShardSessions))
 	assert.NotEqual(t, oldRId, session.Session.ShardSessions[0].ReservedId, "should have recreated a reserved connection since the last connection was lost")
 	assert.NotEqual(t, oldAlias, session.Session.ShardSessions[0].TabletAlias, "tablet alias should have changed as this is a different tablet")

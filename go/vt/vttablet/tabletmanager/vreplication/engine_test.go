@@ -53,7 +53,7 @@ func TestEngineOpen(t *testing.T) {
 			"id|state|source",
 			"int64|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
@@ -161,7 +161,7 @@ func TestEngineExec(t *testing.T) {
 			"id|state|source",
 			"int64|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
@@ -203,7 +203,7 @@ func TestEngineExec(t *testing.T) {
 			"id|state|source",
 			"int64|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
@@ -349,7 +349,7 @@ func TestEngineSelect(t *testing.T) {
 			"id|state|source|pos",
 			"int64|varchar|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > |MariaDB/0-1-1083`, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}|MariaDB/0-1-1083`, env.KeyspaceName),
 	)
 	dbClient.ExpectRequest(wantQuery, wantResult, nil)
 	qr, err := vre.Exec(wantQuery)
@@ -499,6 +499,7 @@ func TestCreateDBAndTable(t *testing.T) {
 		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication MODIFY source.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD KEY.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN rows_copied.*", &sqltypes.Result{}, nil)
+		dbClient.ExpectRequestRE("ALTER TABLE _vt.vreplication ADD COLUMN tags.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 		dbClient.ExpectRequestRE("create table if not exists _vt.copy_state.*", &sqltypes.Result{}, nil)
 	}
@@ -522,7 +523,7 @@ func TestCreateDBAndTable(t *testing.T) {
 			"id|state|source",
 			"int64|varchar|varchar",
 		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	), nil)
 	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)

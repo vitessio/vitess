@@ -26,7 +26,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -50,6 +50,39 @@ var (
 	// target keyspace.
 	ErrNoStreams = errors.New("no streams found")
 )
+
+// TrafficSwitchDirection specifies the switching direction.
+type TrafficSwitchDirection int
+
+// The following constants define the switching direction.
+const (
+	DirectionForward = TrafficSwitchDirection(iota)
+	DirectionBackward
+)
+
+// TableRemovalType specifies the way the a table will be removed during a
+// DropSource for a MoveTables workflow.
+type TableRemovalType int
+
+// The following consts define if DropSource will drop or rename the table.
+const (
+	DropTable = TableRemovalType(iota)
+	RenameTable
+)
+
+var tableRemovalTypeStrs = [...]string{
+	"DROP TABLE",
+	"RENAME TABLE",
+}
+
+// String returns a string representation of a TableRemovalType
+func (trt TableRemovalType) String() string {
+	if trt < DropTable || trt > RenameTable {
+		return "Unknown"
+	}
+
+	return tableRemovalTypeStrs[trt]
+}
 
 // ITrafficSwitcher is a temporary hack to allow us to move streamMigrater out
 // of package wrangler without also needing to move trafficSwitcher in the same
@@ -166,12 +199,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			return nil, err
 		}
 
-		if si.MasterAlias == nil {
+		if si.PrimaryAlias == nil {
 			// This can happen if bad inputs are given.
 			return nil, fmt.Errorf("shard %v/%v doesn't have a primary set", targetKeyspace, targetShard)
 		}
 
-		primary, err := ts.GetTablet(ctx, si.MasterAlias)
+		primary, err := ts.GetTablet(ctx, si.PrimaryAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +236,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 			}
 
 			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+			if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
 				return nil, err
 			}
 

@@ -37,9 +37,9 @@ import (
 var (
 	clusterInstance     *cluster.LocalProcessCluster
 	tmClient            *tmc.Client
-	masterTabletParams  mysql.ConnParams
+	primaryTabletParams mysql.ConnParams
 	replicaTabletParams mysql.ConnParams
-	masterTablet        cluster.Vttablet
+	primaryTablet       cluster.Vttablet
 	replicaTablet       cluster.Vttablet
 	rdonlyTablet        cluster.Vttablet
 	hostname            = "localhost"
@@ -122,8 +122,9 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			if tablet.Type == "master" {
-				masterTablet = *tablet
+			// TODO(deepthi): fix after v12.0
+			if tablet.Type == "primary" || tablet.Type == "master" {
+				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
 			} else {
@@ -132,10 +133,10 @@ func TestMain(m *testing.M) {
 		}
 
 		// Set mysql tablet params
-		masterTabletParams = mysql.ConnParams{
+		primaryTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID)),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", primaryTablet.TabletUID)),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
@@ -178,9 +179,9 @@ func tmcStartReplication(ctx context.Context, tabletGrpcPort int) error {
 	return tmClient.StartReplication(ctx, vtablet)
 }
 
-func tmcMasterPosition(ctx context.Context, tabletGrpcPort int) (string, error) {
+func tmcPrimaryPosition(ctx context.Context, tabletGrpcPort int) (string, error) {
 	vtablet := getTablet(tabletGrpcPort)
-	return tmClient.MasterPosition(ctx, vtablet)
+	return tmClient.PrimaryPosition(ctx, vtablet)
 }
 
 func tmcStartReplicationUntilAfter(ctx context.Context, tabletGrpcPort int, positon string, waittime time.Duration) error {

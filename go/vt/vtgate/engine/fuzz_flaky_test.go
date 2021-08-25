@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 /*
 	DEPENDENCIES:
@@ -36,6 +35,7 @@ limitations under the License.
 	continuously by OSS-fuzz. Needless to say, more
 	APIs can be added with ease.
 */
+// +build gofuzz
 
 package engine
 
@@ -81,7 +81,7 @@ func createVSchema() (vschema *vindexes.VSchema, err error) {
 			},
 		},
 	}
-	vs, err := vindexes.BuildVSchema(invschema)
+	vs := vindexes.BuildVSchema(invschema)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +220,7 @@ func execRouteSelectDBA(query, field, tablename, schema, shards string) {
 		Query:               query,
 		FieldQuery:          field,
 		SysTableTableSchema: stringToExpr(schema),
-		SysTableTableName:   stringToExpr(tablename),
+		SysTableTableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte(tablename))},
 	}
 	vc := &loggingVCursor{
 		shards:  []string{shards},
@@ -324,5 +324,5 @@ func execCommand(index int, c *fuzz.ConsumeFuzzer, vc *loggingVCursor, vs *vinde
 }
 
 func newFuzzDMLTestVCursor(shards ...string) *loggingVCursor {
-	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_MASTER}
+	return &loggingVCursor{shards: shards, resolvedTargetTabletType: topodatapb.TabletType_PRIMARY}
 }

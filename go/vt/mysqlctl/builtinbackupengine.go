@@ -142,10 +142,10 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 	// Save initial state so we can restore.
 	replicaStartRequired := false
-	sourceIsMaster := false
+	sourceIsPrimary := false
 	readOnly := true //nolint
 	var replicationPosition mysql.Position
-	semiSyncMaster, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
+	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
 	params.Logger.Infof("getting current replication status")
@@ -154,8 +154,8 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	case nil:
 		replicaStartRequired = replicaStatus.ReplicationRunning() && !*DisableActiveReparents
 	case mysql.ErrNotReplica:
-		// keep going if we're the master, might be a degenerate case
-		sourceIsMaster = true
+		// keep going if we're the primary, might be a degenerate case
+		sourceIsPrimary = true
 	default:
 		return false, vterrors.Wrap(err, "can't get replica status")
 	}
@@ -167,16 +167,16 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// get the replication position
-	if sourceIsMaster {
+	if sourceIsPrimary {
 		if !readOnly {
-			params.Logger.Infof("turning master read-only before backup")
+			params.Logger.Infof("turning primary read-only before backup")
 			if err = params.Mysqld.SetReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
-		replicationPosition, err = params.Mysqld.MasterPosition()
+		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
-			return false, vterrors.Wrap(err, "can't get master position")
+			return false, vterrors.Wrap(err, "can't get position on primary")
 		}
 	} else {
 		if err = params.Mysqld.StopReplication(params.HookExtraEnv); err != nil {
@@ -216,12 +216,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Restore original mysqld state that we saved above.
-	if semiSyncMaster || semiSyncReplica {
+	if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, replica=%v",
-			semiSyncMaster, semiSyncReplica)
-		err := params.Mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncReplica)
+		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
+			semiSyncSource, semiSyncReplica)
+		err := params.Mysqld.SetSemiSyncEnabled(semiSyncSource, semiSyncReplica)
 		if err != nil {
 			return usable, err
 		}
@@ -237,11 +237,11 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return usable, vterrors.Wrap(err, "replica is not restarting")
 		}
 
-		// Wait for a reliable value for SecondsBehindMaster from ReplicationStatus()
+		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
 
 		// We know that we stopped at replicationPosition.
-		// If MasterPosition is the same, that means no writes
-		// have happened to master, so we are up-to-date.
+		// If PrimaryPosition is the same, that means no writes
+		// have happened to primary, so we are up-to-date.
 		// Otherwise, we wait for replica's Position to change from
 		// the saved replicationPosition before proceeding
 		tmc := tmclient.NewTabletManagerClient()
@@ -249,12 +249,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
-		masterPos, err := getMasterPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
-		// If we are unable to get master position, return error.
+		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
+		// If we are unable to get the primary's position, return error.
 		if err != nil {
 			return usable, err
 		}
-		if !replicationPosition.Equal(masterPos) {
+		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
 					return usable, err
@@ -621,25 +621,26 @@ func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
 	return true
 }
 
-func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
 	si, err := ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
 	}
-	if topoproto.TabletAliasIsZero(si.MasterAlias) {
-		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
-	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
+	// TODO(deepthi): fix after v12.0
 	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
 	pos, err := mysql.DecodePosition(posStr)
 	if err != nil {
-		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+		return mysql.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
 }

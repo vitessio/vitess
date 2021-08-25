@@ -11,9 +11,7 @@ FLAVOR="$1"
 export DEBIAN_FRONTEND=noninteractive
 
 KEYSERVERS=(
-    ha.pool.sks-keyservers.net
     keyserver.ubuntu.com
-    hkp://p80.pool.sks-keyservers.net:80
     hkp://keyserver.ubuntu.com:80
 )
 
@@ -49,6 +47,7 @@ BASE_PACKAGES=(
     libatomic1
     libcurl4
     libdbd-mysql-perl
+    libwww-perl
     libev4
     libjemalloc2
     libtcmalloc-minimal4

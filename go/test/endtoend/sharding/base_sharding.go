@@ -127,20 +127,24 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string,
 	return isFound
 }
 
-// CheckDestinationMaster performs multiple checks on a destination master.
-func CheckDestinationMaster(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, ci cluster.LocalProcessCluster) {
+// CheckDestinationPrimary performs multiple checks on a destination primary.
+func CheckDestinationPrimary(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, ci cluster.LocalProcessCluster) {
 	_ = vttablet.VttabletProcess.WaitForBinLogPlayerCount(len(sourceShards))
 	CheckBinlogPlayerVars(t, vttablet, sourceShards, 0)
 	checkStreamHealthEqualsBinlogPlayerVars(t, vttablet, len(sourceShards), ci)
 }
 
 // CheckBinlogPlayerVars Checks the binlog player variables are correctly exported.
-func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, secondBehindMaster int64) {
+func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, replicationLagSeconds int64) {
 	tabletVars := vttablet.VttabletProcess.GetVars()
 
 	assert.Contains(t, tabletVars, "VReplicationStreamCount")
+	// DEPRECATED, can be deleted after v12.0
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMasterMax")
 	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMaster")
+
+	assert.Contains(t, tabletVars, "VReplicationLagSecondsMax")
+	assert.Contains(t, tabletVars, "VReplicationLagSeconds")
 	assert.Contains(t, tabletVars, "VReplicationSource")
 	assert.Contains(t, tabletVars, "VReplicationSourceTablet")
 
@@ -162,17 +166,17 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 		assert.Containsf(t, replicationSourceValue, shard, "Source shard is not matched with vReplication shard value")
 	}
 
-	if secondBehindMaster != 0 {
-		secondBehindMaserMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
-		secondBehindMaserMax, _ := strconv.ParseFloat(secondBehindMaserMaxStr, 64)
+	if replicationLagSeconds != 0 {
+		vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationLagSecondsMax"]))
+		vreplicationLagMax, _ := strconv.ParseFloat(vreplicationLagMaxStr, 64)
 
-		assert.True(t, secondBehindMaserMax < float64(secondBehindMaster))
+		assert.True(t, vreplicationLagMax < float64(replicationLagSeconds))
 
-		replicationSecondBehindMasterObj := reflect.ValueOf(tabletVars["VReplicationSecondsBehindMaster"])
+		replicationLagObj := reflect.ValueOf(tabletVars["VReplicationLagSeconds"])
 		for _, key := range replicationSourceObj.MapKeys() {
-			str := fmt.Sprintf("%v", replicationSecondBehindMasterObj.MapIndex(key))
+			str := fmt.Sprintf("%v", replicationLagObj.MapIndex(key))
 			flt, _ := strconv.ParseFloat(str, 64)
-			assert.True(t, flt < float64(secondBehindMaster))
+			assert.True(t, flt < float64(replicationLagSeconds))
 		}
 	}
 }
@@ -183,9 +187,9 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 
 	streamCountStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationStreamCount"]))
 	streamCount, _ := strconv.Atoi(streamCountStr)
-
-	secondBehindMaserMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
-	secondBehindMaserMax, _ := strconv.ParseFloat(secondBehindMaserMaxStr, 64)
+	log.Infof(">>>>>>>>>>>>>>>>>> tabletVars are %+v", tabletVars)
+	vreplicationLagMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationLagSecondsMax"]))
+	vreplicationLagMax, _ := strconv.ParseFloat(vreplicationLagMaxStr, 64)
 
 	assert.Equal(t, streamCount, count)
 	// Enforce health check because it's not running by default as
@@ -203,7 +207,8 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.NotNil(t, streamHealthResponse.RealtimeStats.BinlogPlayersCount)
 
 	assert.Equal(t, streamCount, int(streamHealthResponse.RealtimeStats.BinlogPlayersCount))
-	assert.Equal(t, secondBehindMaserMax, float64(streamHealthResponse.RealtimeStats.SecondsBehindMasterFilteredReplication))
+	log.Infof(">>>>>>>>> vreplicationLagMax %v, FilteredReplicationLagSeconds %v", vreplicationLagMax, streamHealthResponse.RealtimeStats.FilteredReplicationLagSeconds)
+	assert.Equal(t, vreplicationLagMax, float64(streamHealthResponse.RealtimeStats.FilteredReplicationLagSeconds))
 }
 
 // CheckBinlogServerVars checks the binlog server variables are correctly exported.
@@ -253,7 +258,7 @@ func executeQueryInTransaction(t *testing.T, query string, dbConn *mysql.Conn) {
 }
 
 // ExecuteOnTablet executes a write query on specified vttablet
-// It should always be called with a master tablet for the keyspace/shard
+// It should always be called with a primary tablet for the keyspace/shard
 func ExecuteOnTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
