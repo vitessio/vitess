@@ -1636,6 +1636,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select ref.col from ref join (select aa from user where user.id=1) user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select ref.col from ref, (select aa from `user` where 1 != 1) as `user` where 1 != 1",
+    "Query": "select ref.col from ref, (select aa from `user` where `user`.id = 1) as `user`",
+    "Table": "`user`, ref",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # routing rules for join, unsharded route wins if we can't find a merged route
 "select route2.col from route2 join user_extra"
@@ -2104,6 +2123,25 @@ Gen4 error: symbol t.col not found
     },
     "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u join (select col from user_extra where 1 != 1) as e where 1 != 1",
     "Query": "select u.col, e.col from (select col from `user` where id = 5) as u join (select col from user_extra where user_id = 5) as e",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.col, e.col from (select col from user where id = 5) as u join (select col from user_extra where user_id = 5) as e",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.col, e.col from (select col from `user` where 1 != 1) as u, (select col from user_extra where 1 != 1) as e where 1 != 1",
+    "Query": "select u.col, e.col from (select col from `user` where id = 5) as u, (select col from user_extra where user_id = 5) as e",
     "Table": "`user`, user_extra",
     "Values": [
       5
