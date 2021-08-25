@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -58,6 +59,11 @@ func (r *RenameFields) GetKeyspaceName() string {
 // GetTableName implements the primitive interface
 func (r *RenameFields) GetTableName() string {
 	return r.Input.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (r *RenameFields) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return r.Input.GetExecShards(vcursor, bindVars, each)
 }
 
 // Execute implements the primitive interface

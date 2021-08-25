@@ -235,6 +235,18 @@ func (route *Route) GetTableName() string {
 	return route.TableName
 }
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (route *Route) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	rss, _, err := route.resolveShards(vcursor, bindVars)
+	if err != nil {
+		return err
+	}
+	for _, rs := range rss {
+		each(rs)
+	}
+	return nil
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
@@ -253,29 +265,29 @@ func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
+func (route *Route) resolveShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	switch route.Opcode {
 	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
+		return route.paramsSystemQuery(vcursor, bindVars)
 	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
+		return route.paramsAnyShard(vcursor, bindVars)
 	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
+		return route.paramsAllShards(vcursor, bindVars)
 	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
+		return route.paramsSelectEqual(vcursor, bindVars)
 	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
+		return route.paramsSelectIn(vcursor, bindVars)
 	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
+		return route.paramsSelectMultiEqual(vcursor, bindVars)
 	case SelectNone:
-		rss, bvs, err = nil, nil, nil
+		return nil, nil, nil
 	default:
-		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unsupported query route: %v", route)
 	}
+}
+
+func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	rss, bvs, err := route.resolveShards(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -324,35 +336,14 @@ func filterOutNilErrors(errs []error) []error {
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	var rss []*srvtopo.ResolvedShard
-	var bvs []map[string]*querypb.BindVariable
-	var err error
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
-	switch route.Opcode {
-	case SelectDBA:
-		rss, bvs, err = route.paramsSystemQuery(vcursor, bindVars)
-	case SelectUnsharded, SelectNext, SelectReference:
-		rss, bvs, err = route.paramsAnyShard(vcursor, bindVars)
-	case SelectScatter:
-		rss, bvs, err = route.paramsAllShards(vcursor, bindVars)
-	case SelectEqual, SelectEqualUnique:
-		rss, bvs, err = route.paramsSelectEqual(vcursor, bindVars)
-	case SelectIN:
-		rss, bvs, err = route.paramsSelectIn(vcursor, bindVars)
-	case SelectMultiEqual:
-		rss, bvs, err = route.paramsSelectMultiEqual(vcursor, bindVars)
-	case SelectNone:
-		rss, bvs, err = nil, nil, nil
-	default:
-		return fmt.Errorf("query %q cannot be used for streaming", route.Query)
-	}
+	rss, bvs, err := route.resolveShards(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-
 	// No route.
 	if len(rss) == 0 {
 		if wantfields {

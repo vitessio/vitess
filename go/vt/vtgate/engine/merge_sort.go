@@ -18,11 +18,11 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"io"
 
 	"vitess.io/vitess/go/mysql"
-
-	"context"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -64,6 +64,18 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 
 // GetTableName satisfies Primitive.
 func (ms *MergeSort) GetTableName() string { return "" }
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (ms *MergeSort) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	for _, merge := range ms.Primitives {
+		if primitive, ok := merge.(Primitive); ok {
+			if err := primitive.GetExecShards(vcursor, bindVars, each); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
 
 // Execute is not supported.
 func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {

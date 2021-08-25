@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -56,6 +57,19 @@ func (l *Lock) GetKeyspaceName() string {
 // GetTableName is part of the Primitive interface
 func (l *Lock) GetTableName() string {
 	return "dual"
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (l *Lock) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
+	if err != nil {
+		return err
+	}
+	if len(rss) != 1 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
+	}
+	each(rss[0])
+	return nil
 }
 
 // Execute is part of the Primitive interface

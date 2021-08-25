@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -49,6 +50,11 @@ func (l *Limit) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (l *Limit) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return l.Input.GetExecShards(vcursor, bindVars, each)
 }
 
 // Execute satisfies the Primtive interface.

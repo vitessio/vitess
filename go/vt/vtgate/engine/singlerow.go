@@ -19,6 +19,8 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/query"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
 
 var _ Primitive = (*SingleRow)(nil)
@@ -42,6 +44,10 @@ func (s *SingleRow) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (s *SingleRow) GetTableName() string {
 	return ""
+}
+
+func (s *SingleRow) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return nil
 }
 
 // Execute performs a non-streaming exec.

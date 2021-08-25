@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -57,6 +58,11 @@ func (ms *MemorySort) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (ms *MemorySort) GetTableName() string {
 	return ms.Input.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (ms *MemorySort) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return ms.Input.GetExecShards(vcursor, bindVars, each)
 }
 
 // SetTruncateColumnCount sets the truncate column count.

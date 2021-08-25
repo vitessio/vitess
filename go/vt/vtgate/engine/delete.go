@@ -68,6 +68,60 @@ func (del *Delete) GetTableName() string {
 	return ""
 }
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (del *Delete) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	switch del.Opcode {
+	case Unsharded:
+		rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err != nil {
+			return err
+		}
+		each(rss[0])
+		return nil
+	case Equal:
+		key, err := del.Values[0].ResolveValue(bindVars)
+		if err != nil {
+			return err
+		}
+		rs, _, err := resolveSingleShard(vcursor, del.Vindex, del.Keyspace, key)
+		if err != nil {
+			return err
+		}
+		each(rs)
+		return nil
+	case In:
+		rss, _, err := resolveMultiValueShards(vcursor, del.Keyspace, del.Query, bindVars, del.Values[0], del.Vindex)
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	case Scatter:
+		rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	case ByDestination:
+		rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{del.TargetDestination})
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	default:
+		// Unreachable.
+		return fmt.Errorf("unsupported opcode: %v", del)
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {

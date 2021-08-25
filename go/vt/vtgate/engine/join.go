@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
 
 var _ Primitive = (*Join)(nil)
@@ -166,6 +167,17 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	}
 	result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
 	return result, nil
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (jn *Join) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	if err := jn.Left.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	if err := jn.Right.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Inputs returns the input primitives for this join

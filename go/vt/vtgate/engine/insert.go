@@ -187,6 +187,30 @@ func (ins *Insert) GetTableName() string {
 	return ""
 }
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (ins *Insert) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	switch ins.Opcode {
+	case InsertUnsharded:
+		rss, _, err := vcursor.ResolveDestinations(ins.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err != nil {
+			return err
+		}
+		each(rss[0])
+		return nil
+	case InsertSharded, InsertShardedIgnore:
+		rss, _, err := ins.getInsertShardedRoute(vcursor, bindVars)
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported query route: %v", ins)
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {

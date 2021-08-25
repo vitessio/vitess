@@ -22,6 +22,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -76,6 +77,15 @@ func (ddl *DDL) GetTableName() string {
 	return ddl.DDL.GetTable().Name.String()
 }
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (ddl *DDL) GetExecShards(vcursor VCursor, bindVars map[string]*query.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	primitiveDDL, err := ddl.getPrimitiveToExecute(vcursor, false)
+	if err != nil {
+		return err
+	}
+	return primitiveDDL.GetExecShards(vcursor, bindVars, each)
+}
+
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {
@@ -85,12 +95,13 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 	return false
 }
 
-// Execute implements the Primitive interface
-func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (ddl *DDL) getPrimitiveToExecute(vcursor VCursor, updateSession bool) (Primitive, error) {
 	if ddl.CreateTempTable {
-		vcursor.Session().HasCreatedTempTable()
-		vcursor.Session().NeedsReservedConn()
-		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
+		if updateSession {
+			vcursor.Session().HasCreatedTempTable()
+			vcursor.Session().NeedsReservedConn()
+		}
+		return ddl.NormalDDL, nil
 	}
 
 	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
@@ -104,13 +115,22 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 		if !ddl.OnlineDDLEnabled {
 			return nil, schema.ErrOnlineDDLDisabled
 		}
-		return ddl.OnlineDDL.Execute(vcursor, bindVars, wantfields)
+		return ddl.OnlineDDL, nil
 	default: // non online-ddl
 		if !ddl.DirectDDLEnabled {
 			return nil, schema.ErrDirectDDLDisabled
 		}
-		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
+		return ddl.NormalDDL, nil
 	}
+}
+
+// Execute implements the Primitive interface
+func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+	primitiveDDL, err := ddl.getPrimitiveToExecute(vcursor, true)
+	if err != nil {
+		return nil, err
+	}
+	return primitiveDDL.Execute(vcursor, bindVars, wantfields)
 }
 
 // StreamExecute implements the Primitive interface

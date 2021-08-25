@@ -19,6 +19,7 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 )
 
 var _ Primitive = (*Rows)(nil)
@@ -50,6 +51,12 @@ func (r *Rows) GetKeyspaceName() string {
 //GetTableName implements the Primitive interface
 func (r *Rows) GetTableName() string {
 	return ""
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (r *Rows) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// No shards are accessed
+	return nil
 }
 
 //Execute implements the Primitive interface

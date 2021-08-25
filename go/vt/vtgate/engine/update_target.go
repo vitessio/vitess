@@ -18,6 +18,7 @@ package engine
 
 import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -56,6 +57,11 @@ func (updTarget *UpdateTarget) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (updTarget *UpdateTarget) GetTableName() string {
 	return ""
+}
+
+func (updTarget *UpdateTarget) GetExecShards(vcursor VCursor, bindVars map[string]*query.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// This is a memory-only operation
+	return nil
 }
 
 // Execute implements the Primitive interface

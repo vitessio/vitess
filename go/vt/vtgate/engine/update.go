@@ -80,6 +80,59 @@ func (upd *Update) GetTableName() string {
 	return ""
 }
 
+func (upd *Update) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	switch upd.Opcode {
+	case Unsharded:
+		rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err != nil {
+			return err
+		}
+		each(rss[0])
+		return nil
+	case Equal:
+		key, err := upd.Values[0].ResolveValue(bindVars)
+		if err != nil {
+			return err
+		}
+		rs, _, err := resolveSingleShard(vcursor, upd.Vindex, upd.Keyspace, key)
+		if err != nil {
+			return err
+		}
+		each(rs)
+		return nil
+	case In:
+		rss, _, err := resolveMultiValueShards(vcursor, upd.Keyspace, upd.Query, bindVars, upd.Values[0], upd.Vindex)
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	case Scatter:
+		rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	case ByDestination:
+		rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{upd.TargetDestination})
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	default:
+		// Unreachable.
+		return fmt.Errorf("unsupported opcode: %v", upd)
+	}
+}
+
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {

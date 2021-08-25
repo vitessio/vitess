@@ -26,6 +26,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -67,6 +68,17 @@ func (v *RevertMigration) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (v *RevertMigration) GetTableName() string {
 	return ""
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (v *RevertMigration) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// In Vitess 12, IsSkipTopo() is always true for all strategies
+	rss, _, err := vcursor.ResolveDestinations(v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
+	if err != nil {
+		return err
+	}
+	each(rss[0])
+	return nil
 }
 
 // Execute implements the Primitive interface

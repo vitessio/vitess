@@ -53,6 +53,7 @@ type (
 	// SetOp is an interface that different type of set operations implements.
 	SetOp interface {
 		Execute(vcursor VCursor, env evalengine.ExpressionEnv) error
+		GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error
 		VariableName() string
 	}
 
@@ -107,6 +108,18 @@ func (s *Set) GetKeyspaceName() string {
 //GetTableName implements the Primitive interface method.
 func (s *Set) GetTableName() string {
 	return ""
+}
+
+func (s *Set) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	if err := s.Input.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	for _, setOp := range s.Ops {
+		if err := setOp.GetAffectedShards(vcursor, each); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 //Execute implements the Primitive interface method.
@@ -181,6 +194,10 @@ func (u *UserDefinedVariable) VariableName() string {
 	return u.Name
 }
 
+func (u *UserDefinedVariable) GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error {
+	return nil
+}
+
 //Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	value, err := u.Expr.Evaluate(env)
@@ -209,6 +226,10 @@ func (svi *SysVarIgnore) VariableName() string {
 	return svi.Name
 }
 
+func (svi *SysVarIgnore) GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error {
+	return nil
+}
+
 //Execute implements the SetOp interface method.
 func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
 	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
@@ -232,6 +253,18 @@ func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 //VariableName implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) VariableName() string {
 	return svci.Name
+}
+
+func (svci *SysVarCheckAndIgnore) GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error {
+	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
+	if err != nil {
+		return err
+	}
+	if len(rss) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
+	}
+	each(rss[0])
+	return nil
 }
 
 //Execute implements the SetOp interface method
@@ -276,6 +309,24 @@ func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 //VariableName implements the SetOp interface method
 func (svs *SysVarReservedConn) VariableName() string {
 	return svs.Name
+}
+
+func (svs *SysVarReservedConn) GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error {
+	if svs.TargetDestination != nil {
+		rss, _, err := vcursor.ResolveDestinations(svs.Keyspace.Name, nil, []key.Destination{svs.TargetDestination})
+		if err != nil {
+			return err
+		}
+		for _, rs := range rss {
+			each(rs)
+		}
+		return nil
+	}
+
+	for _, rs := range vcursor.Session().ShardSession() {
+		each(rs)
+	}
+	return nil
 }
 
 //Execute implements the SetOp interface method
@@ -360,6 +411,10 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 		Name: svss.Name,
 		Expr: svss.Expr.String(),
 	})
+}
+
+func (svss *SysVarSetAware) GetAffectedShards(vcursor VCursor, each func(rs *srvtopo.ResolvedShard)) error {
+	return nil
 }
 
 //Execute implements the SetOp interface method

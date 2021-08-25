@@ -21,6 +21,7 @@ import (
 	"io"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -58,6 +59,18 @@ func (v *VStream) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (v *VStream) GetTableName() string {
 	return v.TableName
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (v *VStream) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	rss, _, err := vcursor.ResolveDestinations(v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
+	if err != nil {
+		return err
+	}
+	for _, rs := range rss {
+		each(rs)
+	}
+	return nil
 }
 
 // Execute implements the Primitive interface

@@ -19,6 +19,7 @@ package engine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -152,6 +153,11 @@ func (d *Distinct) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (d *Distinct) GetTableName() string {
 	return d.Source.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (d *Distinct) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return d.Source.GetExecShards(vcursor, bindVars, each)
 }
 
 // GetFields implements the Primitive interface

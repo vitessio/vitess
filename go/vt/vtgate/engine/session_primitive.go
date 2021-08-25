@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -56,6 +57,13 @@ func (s *SessionPrimitive) GetKeyspaceName() string {
 // GetTableName implements the Primitive interface
 func (s *SessionPrimitive) GetTableName() string {
 	return ""
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (s *SessionPrimitive) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// the SessionPrimitive only changes the state on the current Session, it
+	// does not reach out to any shards
+	return nil
 }
 
 // Execute implements the Primitive interface

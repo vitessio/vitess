@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	"google.golang.org/protobuf/proto"
 
@@ -180,6 +181,11 @@ func (oa *OrderedAggregate) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (oa *OrderedAggregate) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return oa.Input.GetExecShards(vcursor, bindVars, each)
 }
 
 // SetTruncateColumnCount sets the truncate column count.

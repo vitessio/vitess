@@ -94,6 +94,12 @@ func (c *DBDDL) GetTableName() string {
 	return ""
 }
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (c *DBDDL) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// The DBDDL primitive is not shard-aware, it acts globally on the cluster
+	return nil
+}
+
 // Execute implements the Primitive interface
 func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()

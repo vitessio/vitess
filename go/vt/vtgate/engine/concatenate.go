@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -54,6 +55,16 @@ func (c *Concatenate) GetTableName() string {
 		res = formatTwoOptionsNicely(res, c.Sources[i].GetTableName())
 	}
 	return res
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (c *Concatenate) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	for _, src := range c.Sources {
+		if err := src.GetExecShards(vcursor, bindVars, each); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func formatTwoOptionsNicely(a, b string) string {

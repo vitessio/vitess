@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -81,21 +82,38 @@ func (s *Send) GetTableName() string {
 	return ""
 }
 
-// Execute implements Primitive interface
-func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (s *Send) resolveShards(vcursor VCursor) ([]*srvtopo.ResolvedShard, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, err
 	}
-
 	if !s.Keyspace.Sharded && len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-
 	if s.SingleShardOnly && len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
 	}
+	return rss, nil
+}
 
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (s *Send) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	rss, err := s.resolveShards(vcursor)
+	if err != nil {
+		return err
+	}
+	for _, rs := range rss {
+		each(rs)
+	}
+	return nil
+}
+
+// Execute implements Primitive interface
+func (s *Send) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	rss, err := s.resolveShards(vcursor)
+	if err != nil {
+		return nil, err
+	}
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i, rs := range rss {
 		bv := bindVars
@@ -133,19 +151,10 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 
 // StreamExecute implements Primitive interface
 func (s *Send) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
+	rss, err := s.resolveShards(vcursor)
 	if err != nil {
 		return err
 	}
-
-	if !s.Keyspace.Sharded && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
-	}
-
-	if s.SingleShardOnly && len(rss) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %s, got: %v", s.Query, s.TargetDestination)
-	}
-
 	multiBindVars := make([]map[string]*querypb.BindVariable, len(rss))
 	for i, rs := range rss {
 		bv := bindVars

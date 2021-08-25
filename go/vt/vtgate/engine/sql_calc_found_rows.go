@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -45,6 +46,17 @@ func (s SQLCalcFoundRows) GetKeyspaceName() string {
 //GetTableName implements the Primitive interface
 func (s SQLCalcFoundRows) GetTableName() string {
 	return s.LimitPrimitive.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (s SQLCalcFoundRows) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	if err := s.LimitPrimitive.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	if err := s.CountPrimitive.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	return nil
 }
 
 //Execute implements the Primitive interface

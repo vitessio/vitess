@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,6 +60,17 @@ func (ps *PulloutSubquery) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (ps *PulloutSubquery) GetTableName() string {
 	return ps.Underlying.GetTableName()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (ps *PulloutSubquery) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	if err := ps.Subquery.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	if err := ps.Underlying.GetExecShards(vcursor, bindVars, each); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Execute satisfies the Primitive interface.

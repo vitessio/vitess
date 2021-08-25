@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -61,6 +62,10 @@ func (f *fakePrimitive) GetKeyspaceName() string {
 
 func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
+}
+
+func (f *fakePrimitive) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	return nil
 }
 
 func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {

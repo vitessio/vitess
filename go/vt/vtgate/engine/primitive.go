@@ -186,6 +186,7 @@ type (
 		RouteType() string
 		GetKeyspaceName() string
 		GetTableName() string
+		GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(*srvtopo.ResolvedShard)) error
 		Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 		StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 		GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)

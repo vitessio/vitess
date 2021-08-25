@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -83,6 +84,12 @@ func (vf *VindexFunc) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (vf *VindexFunc) GetTableName() string {
 	return ""
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (vf *VindexFunc) GetExecShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// This Vindex query is resolved without accessing any shards
+	return nil
 }
 
 // Execute performs a non-streaming exec.

@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -61,6 +62,12 @@ func (v *AlterVSchema) GetKeyspaceName() string {
 //GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
 	return v.AlterVschemaDDL.Table.Name.String()
+}
+
+// GetExecShards lists all the shards that would be accessed by this primitive
+func (v *AlterVSchema) GetExecShards(vcursor VCursor, bindVars map[string]*query.BindVariable, each func(rs *srvtopo.ResolvedShard)) error {
+	// AlterVSchema is a topo operation so it doesn't reach out to any shards
+	return nil
 }
 
 //Execute implements the Primitive interface
