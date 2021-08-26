@@ -2683,6 +2683,38 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select unsharded_a.col from unsharded_a join unsharded_b on (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
+        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq1",
+        "Table": "unsharded_a, unsharded_b"
+      }
+    ]
+  }
+}
 
 # subquery in ON clause as sub-expression
 "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user)"

@@ -899,7 +899,7 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node JoinCondition) Format(buf *TrackedBuffer) {
+func (node *JoinCondition) Format(buf *TrackedBuffer) {
 	if node.On != nil {
 		buf.astPrintf(node, " on %v", node.On)
 	}
