@@ -266,7 +266,7 @@ func TestTPCH(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "onecase.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
