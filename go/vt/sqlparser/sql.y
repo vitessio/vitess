@@ -290,11 +290,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Partitions tokens
 %token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS
-%token <str> linear_opt range_or_list partitions_opt subpartitions_opt
-%token <partitionOption> partitions_options_opt
-%token <exprOrColumns> expr_or_col
-%token <subPartition> subpartition_opt
 
+%type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
 %type <statement> explain_statement explainable_statement
@@ -320,6 +317,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
+%type <partitionOption> partitions_options_opt
+%type <exprOrColumns> expr_or_col
+%type <subPartition> subpartition_opt
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -420,8 +420,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
-%type <partDefs> partition_definitions
-%type <partDef> partition_definition partition_definition_opt
+%type <partDefs> partition_definitions partition_definition_opt
+%type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -2296,8 +2296,15 @@ partitions_options_opt:
 | PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
     partitions_opt subpartition_opt partition_definition_opt
     {
-      $$ = &PartitionOption{Linear: $3, isKEY: true, KeyAlgorithm: $5,
-                KeyColList: $7, Partitions: $9, SubPartition: $10, Definitions: $11}
+      $$ = &PartitionOption{
+	      Linear: $3,
+	      isKEY: true,
+	      KeyAlgorithm: $5,
+	      KeyColList: $7,
+	      Partitions: $9,
+	      SubPartition: $10,
+	      Definitions: $11,
+      }
     }
 | PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
     partition_definition_opt
@@ -2732,7 +2739,7 @@ show_statement:
 | SHOW VSCHEMA VINDEXES ON table_name
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
-  }$$ = &
+  }
 | SHOW WARNINGS
   {
     $$ = &Show{&ShowBasic{Command: Warnings}}

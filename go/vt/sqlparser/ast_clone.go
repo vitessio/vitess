@@ -691,6 +691,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
 	out.Comments = CloneComments(n.Comments)
+	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	return &out
 }
 
@@ -2312,6 +2313,21 @@ func CloneSliceOfString(n []string) []string {
 	return res
 }
 
+// CloneRefOfPartitionOption creates a deep clone of the input.
+func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.HASH = CloneColIdent(n.HASH)
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.Expr_or_Col = CloneRefOfExprOrColumns(n.Expr_or_Col)
+	out.Expr = CloneExpr(n.Expr)
+	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
+	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	return &out
+}
+
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.
 func CloneSliceOfRefOfIndexColumn(n []*IndexColumn) []*IndexColumn {
 	res := make([]*IndexColumn, 0, len(n))
@@ -2485,6 +2501,29 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 // CloneCollateAndCharset creates a deep clone of the input.
 func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
 	return *CloneRefOfCollateAndCharset(&n)
+}
+
+// CloneRefOfExprOrColumns creates a deep clone of the input.
+func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.ColumnList = CloneColumns(n.ColumnList)
+	return &out
+}
+
+// CloneRefOfSubPartition creates a deep clone of the input.
+func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.HASH = CloneColIdent(n.HASH)
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.Expr = CloneExpr(n.Expr)
+	return &out
 }
 
 // CloneRefOfIndexColumn creates a deep clone of the input.

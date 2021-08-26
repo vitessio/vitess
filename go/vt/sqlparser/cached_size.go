@@ -654,7 +654,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(89)
+		size += int64(104)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -669,6 +669,8 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 			size += int64(len(elem))
 		}
 	}
+	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
+	size += cached.PartitionOption.CachedSize(true)
 	return size
 }
 func (cached *CreateView) CachedSize(alloc bool) int64 {
@@ -917,6 +919,27 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	// field Wild string
 	size += int64(len(cached.Wild))
+	return size
+}
+func (cached *ExprOrColumns) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(40)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ColumnList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += int64(cap(cached.ColumnList)) * int64(40)
+		for _, elem := range cached.ColumnList {
+			size += elem.CachedSize(false)
+		}
+	}
 	return size
 }
 func (cached *Flush) CachedSize(alloc bool) int64 {
@@ -1479,6 +1502,48 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PartitionOption) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(192)
+	}
+	// field Linear string
+	size += int64(len(cached.Linear))
+	// field HASH vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.HASH.CachedSize(false)
+	// field KeyAlgorithm string
+	size += int64(len(cached.KeyAlgorithm))
+	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += int64(cap(cached.KeyColList)) * int64(40)
+		for _, elem := range cached.KeyColList {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field RANGE_or_LIST string
+	size += int64(len(cached.RANGE_or_LIST))
+	// field Expr_or_Col *vitess.io/vitess/go/vt/sqlparser.ExprOrColumns
+	size += cached.Expr_or_Col.CachedSize(true)
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Partitions string
+	size += int64(len(cached.Partitions))
+	// field SubPartition *vitess.io/vitess/go/vt/sqlparser.SubPartition
+	size += cached.SubPartition.CachedSize(true)
+	// field Definitions []*vitess.io/vitess/go/vt/sqlparser.PartitionDefinition
+	{
+		size += int64(cap(cached.Definitions)) * int64(8)
+		for _, elem := range cached.Definitions {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1963,6 +2028,35 @@ func (cached *Stream) CachedSize(alloc bool) int64 {
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
+	return size
+}
+func (cached *SubPartition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(136)
+	}
+	// field Linear string
+	size += int64(len(cached.Linear))
+	// field HASH vitess.io/vitess/go/vt/sqlparser.ColIdent
+	size += cached.HASH.CachedSize(false)
+	// field KeyAlgorithm string
+	size += int64(len(cached.KeyAlgorithm))
+	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += int64(cap(cached.KeyColList)) * int64(40)
+		for _, elem := range cached.KeyColList {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SubPartitions string
+	size += int64(len(cached.SubPartitions))
 	return size
 }
 func (cached *Subquery) CachedSize(alloc bool) int64 {

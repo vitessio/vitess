@@ -464,13 +464,13 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp        bool
-		Table       TableName
-		IfNotExists bool
-		TableSpec   *TableSpec
-		OptLike     *OptLike
-		Comments    Comments
-		FullyParsed bool
+		Temp            bool
+		Table           TableName
+		IfNotExists     bool
+		TableSpec       *TableSpec
+		OptLike         *OptLike
+		Comments        Comments
+		FullyParsed     bool
 		PartitionOption *PartitionOption
 	}
 
@@ -1474,32 +1474,32 @@ type PartitionDefinition struct {
 
 // PartitionOptions describes partitioning control (for create table statements)
 type PartitionOption struct {
-	Linear			 	string
-	HASH				 	colIdent
-	isKEY 			 	bool
-	KeyAlgorithm 	string
-	KeyColList	 	columns
+	Linear        string
+	HASH          ColIdent
+	isKEY         bool
+	KeyAlgorithm  string
+	KeyColList    Columns
 	RANGE_or_LIST string
-	Expr_or_Col	 	ExprOrColumns
-	Expr				 	expr
-	Partitions	 	string
-	SubPartition 	*SubPartition
-	Definitions		[]*PartitionDefinition
+	Expr_or_Col   *ExprOrColumns
+	Expr          Expr
+	Partitions    string
+	SubPartition  *SubPartition
+	Definitions   []*PartitionDefinition
 }
 
 type ExprOrColumns struct {
-	Expr				expr
-	ColumnList  columns
+	Expr       Expr
+	ColumnList Columns
 }
 
 type SubPartition struct {
-	Linear			  string
-	HASH				  colIdent
-	isKEY 			  bool
-	KeyAlgorithm  KeyAlgorithm
-	KeyColList	  columns
-	Expr					expr
-	SubPartitions	string
+	Linear        string
+	HASH          ColIdent
+	isKEY         bool
+	KeyAlgorithm  string
+	KeyColList    Columns
+	Expr          Expr
+	SubPartitions string
 }
 
 // TableOptions specifies a list of table options
