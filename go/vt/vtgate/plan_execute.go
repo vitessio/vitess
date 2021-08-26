@@ -141,7 +141,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 		}
 		// The defer acts as a failsafe. If commit was successful,
 		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession)
+		defer e.txConn.Rollback(ctx, safeSession) // nolint:errcheck
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.

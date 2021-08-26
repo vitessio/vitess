@@ -1062,7 +1062,7 @@ func TestCellAliases(t *testing.T) {
 		Cells: []string{"cell1", "cell2"},
 	}
 	assert.Nil(t, ts.CreateCellsAlias(context.Background(), "region1", cellsAlias), "failed to create cell alias")
-	defer ts.DeleteCellsAlias(context.Background(), "region1")
+	defer deleteCellsAlias(t, ts, "region1")
 
 	// add a tablet as replica in diff cell, same region
 	tablet := createTestTablet(1, "cell2", "host2")
@@ -1311,3 +1311,9 @@ func createTestTablet(uid uint32, cell, host string) *topodatapb.Tablet {
 }
 
 var mustMatch = utils.MustMatchFn(".Conn" /* ignored fields*/)
+
+func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
+	if err := ts.DeleteCellsAlias(context.Background(), alias); err != nil {
+		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
+	}
+}
