@@ -1,0 +1,62 @@
+# OLTP simple select
+"SELECT c FROM sbtest34 WHERE id=15"
+{
+}
+{
+}
+
+# OLTP simple range select
+"SELECT c FROM sbtest12 WHERE id BETWEEN 1 AND 10"
+{
+}
+{
+}
+
+# OLTP sum range select
+"SELECT SUM(k) FROM sbtest43 WHERE id BETWEEN 90 AND 990"
+{
+}
+{
+}
+
+# OLTP order range select
+"SELECT c FROM sbtest1 WHERE id BETWEEN 50 AND 235 ORDER BY c"
+{
+}
+{
+}
+
+# OLTP distinct range select
+"SELECT DISTINCT c FROM sbtest30 WHERE id BETWEEN 1 AND 10 ORDER BY c"
+{
+}
+{
+}
+
+# OLTP index udpate
+"UPDATE sbtest6 SET k=k+1 WHERE id=5"
+{
+}
+{
+}
+
+# OLTP non index update
+"UPDATE sbtest9 SET c=7 WHERE id=8"
+{
+}
+{
+}
+
+# OLTP delete
+"DELETE FROM sbtest15 WHERE id=7525"
+{
+}
+{
+}
+
+# OLTP insert
+"INSERT INTO sbtest16 (id, k, c, pad) VALUES (42, 1, 2, 50)"
+{
+}
+{
+}
