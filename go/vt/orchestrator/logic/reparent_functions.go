@@ -596,6 +596,7 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePromotion(newP
 	}
 	if err := overrideMasterPromotion(); err != nil {
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, err.Error())
+		vtorcReparent.promotedReplica = nil
 		return err
 	}
 	return nil
