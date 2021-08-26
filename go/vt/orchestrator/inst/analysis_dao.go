@@ -162,7 +162,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				':',
 				replica_instance.Port
 			)
-		) as slave_hosts,
+		) as replica_hosts,
 		MIN(
 			master_instance.replica_sql_running = 1
 			AND master_instance.replica_io_running = 0
@@ -195,8 +195,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			master_instance.semi_sync_master_enabled
 		) AS semi_sync_master_enabled,
 		MIN(
-			master_instance.semi_sync_master_wait_for_slave_count
-		) AS semi_sync_master_wait_for_slave_count,
+			master_instance.semi_sync_primary_wait_for_replica_count
+		) AS semi_sync_primary_wait_for_replica_count,
 		MIN(
 			master_instance.semi_sync_master_clients
 		) AS semi_sync_master_clients,
@@ -422,7 +422,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.ClusterDetails.ReadRecoveryInfo()
 
 		a.Replicas = *NewInstanceKeyMap()
-		a.Replicas.ReadCommaDelimitedList(m.GetString("slave_hosts"))
+		a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
@@ -435,7 +435,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
+		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
 
 		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")

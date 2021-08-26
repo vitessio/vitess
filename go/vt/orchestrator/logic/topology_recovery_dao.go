@@ -61,8 +61,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					analysis,
 					cluster_name,
 					cluster_alias,
-					count_affected_slaves,
-					slave_hosts,
+					count_affected_replicas,
+					replica_hosts,
 					is_actionable,
 					start_active_period
 				) values (
@@ -153,8 +153,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					analysis,
 					cluster_name,
 					cluster_alias,
-					count_affected_slaves,
-					slave_hosts,
+					count_affected_replicas,
+					replica_hosts,
 					last_detection_id
 				) values (
 					?,
@@ -480,7 +480,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 				successor_hostname = ?,
 				successor_port = ?,
 				successor_alias = ?,
-				lost_slaves = ?,
+				lost_replicas = ?,
 				participating_instances = ?,
 				all_errors = ?,
 				end_recovery = NOW()
@@ -517,10 +517,10 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
       analysis,
       cluster_name,
       cluster_alias,
-      count_affected_slaves,
-      slave_hosts,
+      count_affected_replicas,
+      replica_hosts,
       participating_instances,
-      lost_slaves,
+      lost_replicas,
       all_errors,
       acknowledged,
       acknowledged_at,
@@ -551,8 +551,8 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
-		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_slaves")
-		topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("slave_hosts"))
+		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
+		topologyRecovery.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 
 		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
 		topologyRecovery.SuccessorKey.Hostname = m.GetString("successor_hostname")
@@ -562,7 +562,7 @@ func readRecoveries(whereCondition string, limit string, args []interface{}) ([]
 		topologyRecovery.AnalysisEntry.ClusterDetails.ReadRecoveryInfo()
 
 		topologyRecovery.AllErrors = strings.Split(m.GetString("all_errors"), "\n")
-		topologyRecovery.LostReplicas.ReadCommaDelimitedList(m.GetString("lost_slaves"))
+		topologyRecovery.LostReplicas.ReadCommaDelimitedList(m.GetString("lost_replicas"))
 		topologyRecovery.ParticipatingInstanceKeys.ReadCommaDelimitedList(m.GetString("participating_instances"))
 
 		topologyRecovery.Acknowledged = m.GetBool("acknowledged")
@@ -699,8 +699,8 @@ func readFailureDetections(whereCondition string, limit string, args []interface
       analysis,
       cluster_name,
       cluster_alias,
-      count_affected_slaves,
-      slave_hosts,
+      count_affected_replicas,
+      replica_hosts,
       (select max(recovery_id) from topology_recovery where topology_recovery.last_detection_id = detection_id) as related_recovery_id
 		from
 			topology_failure_detection
@@ -723,8 +723,8 @@ func readFailureDetections(whereCondition string, limit string, args []interface
 		failureDetection.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
 		failureDetection.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
 		failureDetection.AnalysisEntry.ClusterDetails.ClusterAlias = m.GetString("cluster_alias")
-		failureDetection.AnalysisEntry.CountReplicas = m.GetUint("count_affected_slaves")
-		failureDetection.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("slave_hosts"))
+		failureDetection.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
+		failureDetection.AnalysisEntry.ReadReplicaHostsFromString(m.GetString("replica_hosts"))
 		failureDetection.AnalysisEntry.StartActivePeriod = m.GetString("start_active_period")
 
 		failureDetection.RelatedRecoveryId = m.GetInt64("related_recovery_id")
