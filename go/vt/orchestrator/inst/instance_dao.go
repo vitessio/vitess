@@ -964,12 +964,12 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.Binlog_format = m.GetString("binlog_format")
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
-	instance.LogReplicationUpdatesEnabled = m.GetBool("log_slave_updates")
+	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
 	instance.SourceKey.Hostname = m.GetString("master_host")
 	instance.SourceKey.Port = m.GetInt("master_port")
 	instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
-	instance.ReplicationSQLThreadRuning = m.GetBool("slave_sql_running")
-	instance.ReplicationIOThreadRuning = m.GetBool("slave_io_running")
+	instance.ReplicationSQLThreadRuning = m.GetBool("replica_sql_running")
+	instance.ReplicationIOThreadRuning = m.GetBool("replica_io_running")
 	instance.ReplicationSQLThreadState = ReplicationThreadState(m.GetInt("replication_sql_thread_state"))
 	instance.ReplicationIOThreadState = ReplicationThreadState(m.GetInt("replication_io_thread_state"))
 	instance.HasReplicationFilters = m.GetBool("has_replication_filters")
@@ -995,7 +995,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
 	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_master")
-	instance.ReplicationLagSeconds = m.GetNullInt64("slave_lag_seconds")
+	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
 	replicasJSON := m.GetString("slave_hosts")
 	instance.ClusterName = m.GetString("cluster_name")
@@ -1259,7 +1259,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
 				or (abs(cast(seconds_behind_master as signed) - cast(sql_delay as signed)) > ?)
-				or (abs(cast(slave_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
+				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (gtid_errant != '')
 				or (replication_group_name != '' and replication_group_member_state != 'ONLINE')
 			)
@@ -1744,7 +1744,7 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 			    and slave_instance.master_host != ''
 			    and slave_instance.master_host != '_'
 			    and slave_instance.master_port > 0
-			    and slave_instance.slave_io_running = 1
+			    and slave_instance.replica_io_running = 1
 			`, func(m sqlutils.RowMap) error {
 		instanceKey, _ := NewResolveInstanceKey(m.GetString("master_host"), m.GetInt("master_port"))
 		// we ignore the error. It can be expected that we are unable to resolve the hostname.
@@ -2274,13 +2274,13 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"binlog_format",
 		"binlog_row_image",
 		"log_bin",
-		"log_slave_updates",
+		"log_replica_updates",
 		"binary_log_file",
 		"binary_log_pos",
 		"master_host",
 		"master_port",
-		"slave_sql_running",
-		"slave_io_running",
+		"replica_sql_running",
+		"replica_io_running",
 		"replication_sql_thread_state",
 		"replication_io_thread_state",
 		"has_replication_filters",
@@ -2303,7 +2303,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"last_sql_error",
 		"last_io_error",
 		"seconds_behind_master",
-		"slave_lag_seconds",
+		"replica_lag_seconds",
 		"sql_delay",
 		"num_slave_hosts",
 		"slave_hosts",
