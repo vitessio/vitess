@@ -140,7 +140,7 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 		}
 		joinExpr := &sqlparser.JoinTableExpr{
 			Join: sqlparser.LeftJoinType,
-			Condition: sqlparser.JoinCondition{
+			Condition: &sqlparser.JoinCondition{
 				On: leftJoin.pred,
 			},
 			RightExpr: rightExpr,
@@ -263,7 +263,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			LeftExpr:  lExpr,
 			Join:      sqlparser.NormalJoinType,
 			RightExpr: rExpr,
-			Condition: sqlparser.JoinCondition{
+			Condition: &sqlparser.JoinCondition{
 				On: t.pred,
 			},
 		}, nil
