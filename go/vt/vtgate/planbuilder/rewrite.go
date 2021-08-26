@@ -124,6 +124,33 @@ func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		if node.GroupBy != nil || node.Having == nil {
 			break
 		}
+
+		selectExprMap := map[string]sqlparser.Expr{}
+		for _, selectExpr := range node.SelectExprs {
+			aliasedExpr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
+			if !isAliased || aliasedExpr.As.IsEmpty() {
+				continue
+			}
+			selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
+		}
+
+		sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
+			rewriteNode := cursor.Node()
+			switch x := rewriteNode.(type) {
+			case *sqlparser.ColName:
+				if !x.Qualifier.IsEmpty() {
+					return false
+				}
+				originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
+				if isInMap {
+					cursor.Replace(originalExpr)
+					return false
+				}
+				return false
+			}
+			return true
+		}, nil)
+
 		exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 		for _, expr := range exprs {
 			node.AddWhere(expr)
