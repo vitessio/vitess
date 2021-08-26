@@ -232,7 +232,7 @@ func TestOLTP(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "onecase.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "oltp_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
 func TestTPCC(t *testing.T) {
