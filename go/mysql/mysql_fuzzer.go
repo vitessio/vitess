@@ -1,4 +1,6 @@
+//go:build gofuzz
 // +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 

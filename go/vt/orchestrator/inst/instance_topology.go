@@ -233,7 +233,7 @@ func MoveUp(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if !primary.IsReplica() {
-		return instance, fmt.Errorf("master is not a replica itself: %+v", primary.Key)
+		return instance, fmt.Errorf("primary is not a replica itself: %+v", primary.Key)
 	}
 
 	if canReplicate, err := instance.CanReplicateFrom(primary); !canReplicate {
@@ -293,7 +293,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("move-up", instanceKey, fmt.Sprintf("moved up %+v. Previous master: %+v", *instanceKey, primary.Key))
+	AuditOperation("move-up", instanceKey, fmt.Sprintf("moved up %+v. Previous primary: %+v", *instanceKey, primary.Key))
 
 	return instance, err
 }
@@ -422,7 +422,7 @@ Cleanup:
 		// All returned with error
 		return res, instance, log.Error("Error on all operations"), errs
 	}
-	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New master: %+v", len(res), len(replicas), *instanceKey, instance.SourceKey))
+	AuditOperation("move-up-replicas", instanceKey, fmt.Sprintf("moved up %d/%d replicas of %+v. New primary: %+v", len(res), len(replicas), *instanceKey, instance.SourceKey))
 
 	return res, instance, err, errs
 }
@@ -756,7 +756,7 @@ func Repoint(instanceKey *InstanceKey, primaryKey *InstanceKey, gtidHint Operati
 		}
 	}
 
-	log.Infof("Will repoint %+v to master %+v", *instanceKey, *primaryKey)
+	log.Infof("Will repoint %+v to primary %+v", *instanceKey, *primaryKey)
 
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "repoint"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
@@ -787,7 +787,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v repointed to master: %+v", *instanceKey, *primaryKey))
+	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v repointed to primary: %+v", *instanceKey, *primaryKey))
 
 	return instance, err
 
@@ -894,19 +894,19 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	if instance.IsReplicationGroupSecondary() {
 		return instance, fmt.Errorf("MakeCoPrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
 	}
-	log.Debugf("Will check whether %+v's master (%+v) can become its co-master", instance.Key, primary.Key)
+	log.Debugf("Will check whether %+v's primary (%+v) can become its co-primary", instance.Key, primary.Key)
 	if canMove, merr := primary.CanMoveAsCoPrimary(); !canMove {
 		return instance, merr
 	}
 	if instanceKey.Equals(&primary.SourceKey) {
-		return instance, fmt.Errorf("instance %+v is already co master of %+v", instance.Key, primary.Key)
+		return instance, fmt.Errorf("instance %+v is already co primary of %+v", instance.Key, primary.Key)
 	}
 	if !instance.ReadOnly {
-		return instance, fmt.Errorf("instance %+v is not read-only; first make it read-only before making it co-master", instance.Key)
+		return instance, fmt.Errorf("instance %+v is not read-only; first make it read-only before making it co-primary", instance.Key)
 	}
 	if primary.IsCoPrimary {
 		// We allow breaking of an existing co-primary replication. Here's the breakdown:
-		// Ideally, this would not eb allowed, and we would first require the user to RESET SLAVE on 'master'
+		// Ideally, this would not eb allowed, and we would first require the user to RESET SLAVE on 'primary'
 		// prior to making it participate as co-primary with our 'instance'.
 		// However there's the problem that upon RESET SLAVE we lose the replication's user/password info.
 		// Thus, we come up with the following rule:
@@ -917,33 +917,33 @@ func MakeCoPrimary(instanceKey *InstanceKey) (*Instance, error) {
 		// And so we will be replacing one read-only co-primary with another.
 		otherCoPrimary, found, _ := ReadInstance(&primary.SourceKey)
 		if found && otherCoPrimary.IsLastCheckValid && !otherCoPrimary.ReadOnly {
-			return instance, fmt.Errorf("master %+v is already co-master with %+v, and %+v is alive, and not read-only; cowardly refusing to demote it. Please set it as read-only beforehand", primary.Key, otherCoPrimary.Key, otherCoPrimary.Key)
+			return instance, fmt.Errorf("primary %+v is already co-primary with %+v, and %+v is alive, and not read-only; cowardly refusing to demote it. Please set it as read-only beforehand", primary.Key, otherCoPrimary.Key, otherCoPrimary.Key)
 		}
 		// OK, good to go.
 	} else if _, found, _ := ReadInstance(&primary.SourceKey); found {
-		return instance, fmt.Errorf("%+v is not a real master; it replicates from: %+v", primary.Key, primary.SourceKey)
+		return instance, fmt.Errorf("%+v is not a real primary; it replicates from: %+v", primary.Key, primary.SourceKey)
 	}
 	if canReplicate, err := primary.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
 	}
-	log.Infof("Will make %+v co-master of %+v", instanceKey, primary.Key)
+	log.Infof("Will make %+v co-primary of %+v", instanceKey, primary.Key)
 
 	var gitHint OperationGTIDHint = GTIDHintNeutral
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-master of %+v", primary.Key)); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), fmt.Sprintf("make co-primary of %+v", primary.Key)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
 		defer EndMaintenance(maintenanceToken)
 	}
-	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v turns into co-master of this", *instanceKey)); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(&primary.Key, GetMaintenanceOwner(), fmt.Sprintf("%+v turns into co-primary of this", *instanceKey)); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", primary.Key, merr)
 		goto Cleanup
 	} else {
 		defer EndMaintenance(maintenanceToken)
 	}
 
-	// the coMaster used to be merely a replica. Just point primary into *some* position
-	// within coMaster...
+	// the coPrimary used to be merely a replica. Just point primary into *some* position
+	// within coPrimary...
 	if primary.IsReplica() {
 		// this is the case of a co-primary. For primaries, the StopReplication operation throws an error, and
 		// there's really no point in doing it.
@@ -975,7 +975,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("make-co-primary", instanceKey, fmt.Sprintf("%+v made co-master of %+v", *instanceKey, primary.Key))
+	AuditOperation("make-co-primary", instanceKey, fmt.Sprintf("%+v made co-primary of %+v", *instanceKey, primary.Key))
 
 	return instance, err
 }
@@ -1035,7 +1035,7 @@ func DetachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 	}
 	detachedPrimaryKey := instance.SourceKey.DetachedKey()
 
-	log.Infof("Will detach master host on %+v. Detached key is %+v", *instanceKey, *detachedPrimaryKey)
+	log.Infof("Will detach primary host on %+v. Detached key is %+v", *instanceKey, *detachedPrimaryKey)
 
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "detach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
@@ -1060,7 +1060,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v detached from master into %+v", *instanceKey, *detachedPrimaryKey))
+	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v detached from primary into %+v", *instanceKey, *detachedPrimaryKey))
 
 	return instance, err
 }
@@ -1080,7 +1080,7 @@ func ReattachReplicaPrimaryHost(instanceKey *InstanceKey) (*Instance, error) {
 
 	reattachedPrimaryKey := instance.SourceKey.ReattachedKey()
 
-	log.Infof("Will reattach master host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
+	log.Infof("Will reattach primary host on %+v. Reattached key is %+v", *instanceKey, *reattachedPrimaryKey)
 
 	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reattach-replica-primary-host"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
@@ -1107,7 +1107,7 @@ Cleanup:
 		return instance, log.Errore(err)
 	}
 	// and we're done (pending deferred functions)
-	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to master %+v", *instanceKey, *reattachedPrimaryKey))
+	AuditOperation("repoint", instanceKey, fmt.Sprintf("replica %+v reattached to primary %+v", *instanceKey, *reattachedPrimaryKey))
 
 	return instance, err
 }
@@ -1238,7 +1238,7 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 	replicationStopped := false
 	waitInterval := time.Second * 5
 
-	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reset-master-gtid"); merr != nil {
+	if maintenanceToken, merr := BeginMaintenance(instanceKey, GetMaintenanceOwner(), "reset-primary-gtid"); merr != nil {
 		err = fmt.Errorf("Cannot begin maintenance on %+v: %v", *instanceKey, merr)
 		goto Cleanup
 	} else {
@@ -1276,17 +1276,17 @@ func ErrantGTIDResetPrimary(instanceKey *InstanceKey) (instance *Instance, err e
 		time.Sleep(waitInterval)
 	}
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-primary: error while resetting master on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error while resetting primary on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
 		goto Cleanup
 	}
 
 	primaryStatusFound, executedGtidSet, err = ShowPrimaryStatus(instanceKey)
 	if err != nil {
-		err = fmt.Errorf("gtid-errant-reset-primary: error getting master status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
+		err = fmt.Errorf("gtid-errant-reset-primary: error getting primary status on %+v, after which intended to set gtid_purged to: %s. Error was: %+v", instance.Key, gtidSubtract, err)
 		goto Cleanup
 	}
 	if !primaryStatusFound {
-		err = fmt.Errorf("gtid-errant-reset-primary: cannot get master status on %+v, after which intended to set gtid_purged to: %s.", instance.Key, gtidSubtract)
+		err = fmt.Errorf("gtid-errant-reset-primary: cannot get primary status on %+v, after which intended to set gtid_purged to: %s.", instance.Key, gtidSubtract)
 		goto Cleanup
 	}
 	if executedGtidSet != "" {
@@ -1317,7 +1317,7 @@ Cleanup:
 	}
 
 	// and we're done (pending deferred functions)
-	AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v master reset", *instanceKey))
+	AuditOperation("gtid-errant-reset-primary", instanceKey, fmt.Sprintf("%+v primary reset", *instanceKey))
 
 	return instance, err
 }
@@ -1341,12 +1341,12 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
 	if len(primaries) == 0 {
-		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty found no writabel master for %+v cluster", instance.ClusterName)
+		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty found no writabel primary for %+v cluster", instance.ClusterName)
 	}
 	clusterPrimary = primaries[0]
 
 	if !clusterPrimary.SupportsOracleGTID {
-		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's master %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key)
+		return instance, clusterPrimary, countInjectedTransactions, log.Errorf("gtid-errant-inject-empty requested for %+v but the cluster's primary %+v does not support oracle-gtid", *instanceKey, clusterPrimary.Key)
 	}
 
 	gtidSet, err := NewOracleGtidSet(instance.GtidErrant)
@@ -1354,7 +1354,7 @@ func ErrantGTIDInjectEmpty(instanceKey *InstanceKey) (instance *Instance, cluste
 		return instance, clusterPrimary, countInjectedTransactions, err
 	}
 	explodedEntries := gtidSet.Explode()
-	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster master %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key)
+	log.Infof("gtid-errant-inject-empty: about to inject %+v empty transactions %+v on cluster primary %+v", len(explodedEntries), gtidSet.String(), clusterPrimary.Key)
 	for _, entry := range explodedEntries {
 		if err := injectEmptyGTIDTransaction(&clusterPrimary.Key, entry); err != nil {
 			return instance, clusterPrimary, countInjectedTransactions, err
@@ -1404,15 +1404,15 @@ func TakePrimaryHook(successor *Instance, demoted *Instance) {
 
 	processCount := len(config.Config.PostTakePrimaryProcesses)
 	for i, command := range config.Config.PostTakePrimaryProcesses {
-		fullDescription := fmt.Sprintf("PostTakeMasterProcesses hook %d of %d", i+1, processCount)
-		log.Debugf("Take-Master: PostTakeMasterProcesses: Calling %+s", fullDescription)
+		fullDescription := fmt.Sprintf("PostTakePrimaryProcesses hook %d of %d", i+1, processCount)
+		log.Debugf("Take-Primary: PostTakePrimaryProcesses: Calling %+s", fullDescription)
 		start := time.Now()
 		if err := os.CommandRun(command, env, successorStr, demotedStr); err == nil {
 			info := fmt.Sprintf("Completed %s in %v", fullDescription, time.Since(start))
-			log.Infof("Take-Master: %s", info)
+			log.Infof("Take-Primary: %s", info)
 		} else {
-			info := fmt.Sprintf("Execution of PostTakeMasterProcesses failed in %v with error: %v", time.Since(start), err)
-			log.Errorf("Take-Master: %s", info)
+			info := fmt.Sprintf("Execution of PostTakePrimaryProcesses failed in %v with error: %v", time.Since(start), err)
+			log.Errorf("Take-Primary: %s", info)
 		}
 	}
 
@@ -1431,16 +1431,16 @@ func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance
 	// Relocation of group secondaries makes no sense, group secondaries, by definition, always replicate from the group
 	// primary
 	if instance.IsReplicationGroupSecondary() {
-		return instance, fmt.Errorf("takeMaster: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
+		return instance, fmt.Errorf("takePrimary: %+v is a secondary replication group member, hence, it cannot be relocated", instance.Key)
 	}
 	primaryInstance, found, err := ReadInstance(&instance.SourceKey)
 	if err != nil || !found {
 		return instance, err
 	}
 	if primaryInstance.IsCoPrimary && !allowTakingCoPrimary {
-		return instance, fmt.Errorf("%+v is co-master. Cannot take it.", primaryInstance.Key)
+		return instance, fmt.Errorf("%+v is co-primary. Cannot take it.", primaryInstance.Key)
 	}
-	log.Debugf("TakePrimary: will attempt making %+v take its master %+v, now resolved as %+v", *instanceKey, instance.SourceKey, primaryInstance.Key)
+	log.Debugf("TakePrimary: will attempt making %+v take its primary %+v, now resolved as %+v", *instanceKey, instance.SourceKey, primaryInstance.Key)
 
 	if canReplicate, err := primaryInstance.CanReplicateFrom(instance); !canReplicate {
 		return instance, err
@@ -1463,7 +1463,7 @@ func TakePrimary(instanceKey *InstanceKey, allowTakingCoPrimary bool) (*Instance
 	// instance and primaryInstance are equal
 	// We skip name unresolve. It is OK if the primary's primary is dead, unreachable, does not resolve properly.
 	// We just copy+paste info from the primary.
-	// In particular, this is commonly calledin DeadMaster recovery
+	// In particular, this is commonly calledin DeadPrimary recovery
 	instance, err = ChangePrimaryTo(&instance.Key, &primaryInstance.SourceKey, &primaryInstance.ExecBinlogCoordinates, true, GTIDHintNeutral)
 	if err != nil {
 		goto Cleanup
@@ -1490,7 +1490,7 @@ Cleanup:
 	if err != nil {
 		return instance, err
 	}
-	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took master: %+v", primaryInstance.Key))
+	AuditOperation("take-primary", instanceKey, fmt.Sprintf("took primary: %+v", primaryInstance.Key))
 
 	// Created this to enable a custom hook to be called after a TakePrimary success.
 	// This only runs if there is a hook configured in orchestrator.conf.json
@@ -1974,13 +1974,13 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 			return instance, err
 		}
 		if !found {
-			return instance, log.Errorf("Cannot find master %+v", other.SourceKey)
+			return instance, log.Errorf("Cannot find primary %+v", other.SourceKey)
 		}
 		if !other.IsLastCheckValid {
 			return instance, log.Errorf("Binlog server %+v is not reachable. It would take two steps to relocate %+v below it, and I won't even do the first step.", other.Key, instance.Key)
 		}
 
-		log.Debugf("Relocating to a binlog server; will first attempt to relocate to the binlog server's master: %+v, and then repoint down", otherPrimary.Key)
+		log.Debugf("Relocating to a binlog server; will first attempt to relocate to the binlog server's primary: %+v, and then repoint down", otherPrimary.Key)
 		if _, err := relocateBelowInternal(instance, otherPrimary); err != nil {
 			return instance, err
 		}
@@ -1999,7 +1999,7 @@ func relocateBelowInternal(instance, other *Instance) (*Instance, error) {
 
 	// Check simple binlog file/pos operations:
 	if InstancesAreSiblings(instance, other) {
-		// If comastering, only move below if it's read-only
+		// If co-primarying, only move below if it's read-only
 		if !other.IsCoPrimary || other.ReadOnly {
 			return MoveBelow(&instance.Key, &other.Key)
 		}

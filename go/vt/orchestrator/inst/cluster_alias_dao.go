@@ -125,7 +125,7 @@ func UpdateClusterAliases() error {
 				    left join database_instance_downtime using (hostname, port)
 				  where
 				    suggested_cluster_alias!=''
-						/* exclude newly demoted, downtimed masters */
+						/* exclude newly demoted, downtimed primaries */
 						and ifnull(
 								database_instance_downtime.downtime_active = 1
 								and database_instance_downtime.end_timestamp > now()
