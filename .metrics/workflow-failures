@@ -1,9 +1,3 @@
-2021-04-18T12:53:49Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760760970
-2021-04-18T12:53:49Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760760941
-2021-04-18T12:53:49Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/760760934
-2021-04-18T12:55:07Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/760763213
-2021-04-18T12:55:07Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/760763212
-2021-04-18T12:55:07Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/760763237
 2021-04-18T17:41:33Z,Cluster (27),https://github.com/vitessio/vitess/actions/runs/761238386
 2021-04-18T17:41:33Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/761238405
 2021-04-18T17:41:33Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/761238393
@@ -9996,5 +9990,11 @@
 2021-08-26T06:24:26Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1169348197
 2021-08-26T06:24:26Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1169348240
 2021-08-26T06:54:23Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1169419048
+2021-08-26T06:54:23Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1169419025
+2021-08-26T06:54:23Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1169419035
+2021-08-26T06:54:23Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1169418993
+2021-08-26T06:54:23Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1169419010
+2021-08-26T06:54:23Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1169419005
 2021-08-26T06:54:23Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1169419018
 2021-08-26T06:54:23Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1169419017
+2021-08-26T06:54:23Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1169419065
