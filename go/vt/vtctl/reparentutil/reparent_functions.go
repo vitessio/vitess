@@ -53,7 +53,7 @@ type (
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, error)
 		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
-		PostReplicationChangeHook(*topodatapb.Tablet)
+		PostTabletChangeHook(*topodatapb.Tablet)
 		GetBetterCandidate(*topodatapb.Tablet, []*topodatapb.Tablet, map[string]*replicationdatapb.PrimaryStatus, map[string]*topo.TabletInfo) *topodatapb.Tablet
 		CheckIfNeedToOverridePrimary() error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
@@ -194,7 +194,7 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 }
 
 // 	PostReplicationChangeHook implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PostReplicationChangeHook(*topodatapb.Tablet) {
+func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Tablet) {
 	return
 }
 
