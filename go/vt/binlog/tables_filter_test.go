@@ -58,7 +58,7 @@ func TestTablesFilterPass(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	_ = f(eventToken, statements)
 	want := `statement: <6, "set1"> statement: <7, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <7, "dml2 /* _stream included2 (id ) (500 ); */"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want\n%s, got\n%s", want, got)
@@ -88,7 +88,7 @@ func TestTablesFilterSkip(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
@@ -118,7 +118,7 @@ func TestTablesFilterDDL(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
@@ -154,7 +154,7 @@ func TestTablesFilterMalformed(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	_ = f(eventToken, statements)
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
