@@ -408,3 +408,39 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 
 	return currentPrimary
 }
+
+// replaceWithBetterCandidate promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
+func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) error {
+
+	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
+	if err != nil {
+		return err
+	}
+
+	_, err = tmc.StopReplicationMinimum(ctx, newPrimary, pos, reparentFunctions.GetWaitReplicasTimeout())
+	if err != nil {
+		return err
+	}
+
+	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
+		return err
+	}
+
+	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, false)
+	if err != nil {
+		return err
+	}
+
+	// TODO := add as a postponed function
+	//if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
+	//	postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
+	//} else {
+	//	err = moveGTIDFunc()
+	//}
+
+	//log.Debugf("RegroupReplicasGTID: done")
+	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
+	return nil //unmovedReplicas, candidateReplica, err
+}

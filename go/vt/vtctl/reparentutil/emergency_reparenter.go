@@ -169,7 +169,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
-
+		err = replaceWithBetterCandidate(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, betterCandidate, "", "", tabletMap, statusMap, reparentFunctions)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := reparentFunctions.CheckIfNeedToOverridePrimary(); err != nil {
