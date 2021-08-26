@@ -1,6 +1,6 @@
 {
   "keyspaces": {
-    "ks": {
+    "main": {
       "sharded": true,
       "vindexes": {
         "hash": {
