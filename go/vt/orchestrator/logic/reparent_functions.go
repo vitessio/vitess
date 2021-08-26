@@ -378,7 +378,7 @@ func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary *
 }
 
 // PostReplicationChangeHook implements the ReparentFunctions interface
-func (vtOrcReparent *VtOrcReparentFunctions) PostReplicationChangeHook(tablet *topodatapb.Tablet) {
+func (vtOrcReparent *VtOrcReparentFunctions) PostTabletChangeHook(tablet *topodatapb.Tablet) {
 	inst.ReadTopologyInstance(&inst.InstanceKey{
 		Hostname: tablet.MysqlHostname,
 		Port:     int(tablet.MysqlPort),

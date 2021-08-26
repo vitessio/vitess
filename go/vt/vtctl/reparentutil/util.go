@@ -159,7 +159,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		}
 
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
-		reparentFunctions.PostReplicationChangeHook(ti.Tablet)
+		reparentFunctions.PostTabletChangeHook(ti.Tablet)
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		// We do this only when we do not want to wair for all the replicas
@@ -296,6 +296,8 @@ func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclien
 		return nil, err
 	}
 
+	reparentFunctions.PostTabletChangeHook(newPrimary)
+
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
 	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, !isIdeal)
 	if err != nil {
@@ -426,6 +428,8 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
 		return err
 	}
+
+	reparentFunctions.PostTabletChangeHook(newPrimary)
 
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
 	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, false)
