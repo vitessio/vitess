@@ -152,10 +152,14 @@ func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		}, nil)
 
 		exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
-		for _, expr := range exprs {
-			node.AddWhere(expr)
-		}
 		node.Having = nil
+		for _, expr := range exprs {
+			if sqlparser.ContainsAggregation(expr) {
+				node.AddHaving(expr)
+			} else {
+				node.AddWhere(expr)
+			}
+		}
 	case *sqlparser.ExistsExpr:
 		semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
 		if !found {
