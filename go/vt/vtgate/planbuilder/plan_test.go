@@ -249,7 +249,7 @@ func TestTPCC(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "onecase.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "tpcc_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
 func TestTPCH(t *testing.T) {
