@@ -2407,6 +2407,51 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2,-3",
+        "JoinVars": {
+          "user_col": 0
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col, `user`.id, `user`.col1 from `user` where 1 != 1",
+            "Query": "select `user`.col, `user`.id, `user`.col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Join with cross-shard derived table on rhs
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t"
