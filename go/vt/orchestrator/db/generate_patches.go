@@ -37,7 +37,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN oracle_gtid TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -75,7 +75,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER slave_io_running
+			ADD COLUMN has_replication_filters TINYINT UNSIGNED NOT NULL AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE
@@ -115,7 +115,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER slave_lag_seconds
+			ADD COLUMN sql_delay INT UNSIGNED NOT NULL AFTER replica_lag_seconds
 	`,
 	`
 		ALTER TABLE
@@ -528,7 +528,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER slave_io_running
+			ADD COLUMN replication_sql_thread_state tinyint signed not null default 0 AFTER replica_io_running
 	`,
 	`
 		ALTER TABLE

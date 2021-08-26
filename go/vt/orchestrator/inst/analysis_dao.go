@@ -141,17 +141,17 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running != 0
-				AND replica_instance.slave_sql_running != 0
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
 			),
 			0
 		) AS count_valid_replicating_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running = 0
+				AND replica_instance.replica_io_running = 0
 				AND replica_instance.last_io_error like '%%error %%connecting to master%%'
-				AND replica_instance.slave_sql_running = 1
+				AND replica_instance.replica_sql_running = 1
 			),
 			0
 		) AS count_replicas_failing_to_connect_to_master,
@@ -164,13 +164,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			)
 		) as slave_hosts,
 		MIN(
-			master_instance.slave_sql_running = 1
-			AND master_instance.slave_io_running = 0
+			master_instance.replica_sql_running = 1
+			AND master_instance.replica_io_running = 0
 			AND master_instance.last_io_error like '%%error %%connecting to master%%'
 		) AS is_failing_to_connect_to_master,
 		MIN(
-			master_instance.slave_sql_running = 0
-			AND master_instance.slave_io_running = 0
+			master_instance.replica_sql_running = 0
+			AND master_instance.replica_io_running = 0
 		) AS replication_stopped,
 		MIN(
 			master_downtime.downtime_active is not null
@@ -249,14 +249,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 			),
 			0
 		) AS count_logging_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'STATEMENT'
 			),
 			0
@@ -264,7 +264,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'MIXED'
 			),
 			0
@@ -272,7 +272,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'ROW'
 			),
 			0
@@ -282,7 +282,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_delayed_replicas,
 		IFNULL(
-			SUM(replica_instance.slave_lag_seconds > ?),
+			SUM(replica_instance.replica_lag_seconds > ?),
 			0
 		) AS count_lagging_replicas,
 		IFNULL(MIN(replica_instance.gtid_mode), '') AS min_replica_gtid_mode,
@@ -303,7 +303,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_downtimed_replicas,
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
-			AND replica_instance.log_slave_updates then replica_instance.major_version else NULL end
+			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
