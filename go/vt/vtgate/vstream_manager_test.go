@@ -48,7 +48,6 @@ import (
 var mu sync.Mutex
 
 func TestVStreamSkew(t *testing.T) {
-	t.Skip()
 	stream := func(conn *sandboxconn.SandboxConn, shard string, count, idx int64) {
 		vevents := getVEvents(shard, count, idx)
 		for _, ev := range vevents {
@@ -123,7 +122,6 @@ func TestVStreamSkew(t *testing.T) {
 }
 
 func TestVStreamEvents(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -276,7 +274,6 @@ func TestVStreamChunks(t *testing.T) {
 }
 
 func TestVStreamMulti(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -382,7 +379,6 @@ func TestVStreamRetry(t *testing.T) {
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -433,7 +429,6 @@ func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
 }
 
 func TestVStreamJournalOneToMany(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cell := "aa"
@@ -542,7 +537,6 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 }
 
 func TestVStreamJournalManyToOne(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -658,7 +652,6 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -787,7 +780,6 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 }
 
 func TestVStreamJournalPartialMatch(t *testing.T) {
-	t.Skip()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1018,7 +1010,6 @@ func TestResolveVStreamParams(t *testing.T) {
 }
 
 func TestVStreamIdleHeartbeat(t *testing.T) {
-	t.Skip()
 	cell := "aa"
 	ks := "TestVStream"
 	_ = createSandbox(ks)
