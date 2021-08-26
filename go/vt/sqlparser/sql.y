@@ -88,6 +88,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   when          *When
   order         *Order
   limit         *Limit
+
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
   convertType   *ConvertType
@@ -160,6 +161,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   boolean bool
   boolVal BoolVal
   ignore Ignore
+  partitionOption *PartitionOption
+  exprOrColumns *ExprOrColumns
+  subPartition  *SubPartition
 }
 
 %token LEX_ERROR
@@ -283,6 +287,13 @@ func bindVariable(yylex yyLexer, bvar string) {
 // TableOptions tokens
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
+
+// Partitions tokens
+%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS
+%token <str> linear_opt range_or_list partitions_opt subpartitions_opt
+%token <partitionOption> partitions_options_opt
+%token <exprOrColumns> expr_or_col
+%token <subPartition> subpartition_opt
 
 %type <statement> command
 %type <selStmt> simple_select select_statement base_select union_rhs
@@ -410,7 +421,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
-%type <partDef> partition_definition
+%type <partDef> partition_definition partition_definition_opt
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
@@ -769,10 +780,11 @@ set_session_or_global:
   }
 
 create_statement:
-  create_table_prefix table_spec
+  create_table_prefix table_spec partitions_options_opt
   {
     $1.TableSpec = $2
     $1.FullyParsed = true
+    $1.PartitionOption = $3
     $$ = $1
   }
 | create_table_prefix create_like
@@ -942,7 +954,7 @@ create_options:
   }
 
 default_optional:
-  /* empty */ %prec LOWER_THAN_CHARSET 
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = false
   }
@@ -2271,6 +2283,108 @@ alter_statement:
     }
   }
 
+partitions_options_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY linear_opt id_or_var '(' expression ')' partitions_opt
+    subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption{Linear: $3, HASH: $4, Expr: $6, Partitions: $8,
+                SubPartition: $9, Definitions: $10}
+    }
+| PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
+    partitions_opt subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption{Linear: $3, isKEY: true, KeyAlgorithm: $5,
+                KeyColList: $7, Partitions: $9, SubPartition: $10, Definitions: $11}
+    }
+| PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
+    partition_definition_opt
+    {
+      $$ = &PartitionOption{RANGE_or_LIST: $3, Expr_or_Col: $4, Partitions: $5,
+                SubPartition: $6, Definitions: $7}
+    }
+
+subpartition_opt:
+  {
+    $$ = nil
+  }
+| SUBPARTITION BY linear_opt id_or_var '(' expression ')' subpartitions_opt
+  {
+    $$ = &SubPartition{Linear: $3, HASH: $4, Expr: $6, SubPartitions: $8}
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
+  {
+    $$ = &SubPartition{Linear: $3, isKEY: true, KeyAlgorithm: $5,
+            KeyColList: $7, SubPartitions: $9}
+  }
+
+partition_definition_opt:
+  {
+    $$ = nil
+  }
+| partition_definitions
+  {
+    $$ = $1
+  }
+
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1)
+  }
+
+algorithm_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
+  }
+
+expr_or_col:
+  '(' expression ')'
+  {
+    $$ = &ExprOrColumns{Expr: $2}
+  }
+| COLUMNS '(' column_list ')'
+  {
+    $$ = &ExprOrColumns{ColumnList: $3}
+  }
+
+partitions_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
+subpartitions_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
 partition_operation:
   ADD PARTITION '(' partition_definition ')'
   {
@@ -2618,7 +2732,7 @@ show_statement:
 | SHOW VSCHEMA VINDEXES ON table_name
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), OnTable: $5, Scope: ImplicitScope}}
-  }
+  }$$ = &
 | SHOW WARNINGS
   {
     $$ = &Show{&ShowBasic{Command: Warnings}}
@@ -4943,6 +5057,7 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LINEAR
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
@@ -4970,6 +5085,7 @@ reserved_keyword:
 | PARTITION
 | PERCENT_RANK
 | PRIMARY
+| RANGE
 | RANK
 | READ
 | RECURSIVE
@@ -5134,6 +5250,7 @@ non_reserved_keyword:
 | LEVEL
 | LINES
 | LINESTRING
+| LIST
 | LOAD
 | LOCAL
 | LOCKED
@@ -5183,6 +5300,7 @@ non_reserved_keyword:
 | PACK_KEYS
 | PARSER
 | PARTITIONING
+| PARTITIONS
 | PASSWORD
 | PATH
 | PERSIST
@@ -5244,6 +5362,8 @@ non_reserved_keyword:
 | STATUS
 | STORAGE
 | STREAM
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TEMPORARY
