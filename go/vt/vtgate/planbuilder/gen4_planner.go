@@ -74,7 +74,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = subqueryRewrite(ctx, sel)
+	err = queryRewrite(ctx, sel)
 	if err != nil {
 		return nil, err
 	}

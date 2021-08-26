@@ -15,6 +15,21 @@
     "Table": "`user`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 from user having col2 = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+    "Query": "select `user`.col1 from `user` where col2 = 2",
+    "Table": "`user`"
+  }
+}
 
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
@@ -51,6 +66,40 @@
         },
         "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
         "Query": "select user_extra.col1 from user_extra having user_extra.col1 = 2",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+        "Query": "select `user`.col1 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
+        "Query": "select user_extra.col1 from user_extra where user_extra.col1 = 2",
         "Table": "user_extra"
       }
     ]
@@ -123,6 +172,42 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user having id in (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -1094,6 +1179,21 @@ Gen4 plan same as above
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
 "symbol u.col not found in subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.id in (select col2 from `user` where `user`.id = u.id order by u.col asc)",
+    "Table": "`user`"
+  }
+}
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"

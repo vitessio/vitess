@@ -230,9 +230,81 @@ func TestSubqueryRewrite(t *testing.T) {
 			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
 			ctx := newPlanningContext(reservedVars, semTable, nil)
-			err = subqueryRewrite(ctx, selectStatement)
+			err = queryRewrite(ctx, selectStatement)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, sqlparser.String(selectStatement))
 		})
 	}
+}
+
+func TestHavingRewrite(t *testing.T) {
+	tcases := []struct {
+		input  string
+		output string
+		sqs    map[string]string
+	}{{
+		input:  "select 1 from t1 group by a having a = 1",
+		output: "select 1 from t1 group by a having a = 1",
+	}, {
+		input:  "select 1 from t1 having a = 1",
+		output: "select 1 from t1 where a = 1",
+	}, {
+		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1",
+		output: "select 1 from t1 where x = 1 and y = 2 and a = 1",
+	}, {
+		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1",
+		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1",
+	}, {
+		input:  "select 1 from t1 where x = 1 having a = 1 and b = 2",
+		output: "select 1 from t1 where x = 1 and a = 1 and b = 2",
+	}, {
+		input:  "select 1 from t1 where x = 1 having a = 1 or b = 2",
+		output: "select 1 from t1 where x = 1 and (a = 1 or b = 2)",
+	}, {
+		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1 and b = 2",
+		output: "select 1 from t1 where x = 1 and y = 2 and a = 1 and b = 2",
+	}, {
+		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 and b = 2",
+		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 and b = 2",
+	}, {
+		input:  "select 1 from t1 where x = 1 and y = 2 having a = 1 or b = 2",
+		output: "select 1 from t1 where x = 1 and y = 2 and (a = 1 or b = 2)",
+	}, {
+		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 or b = 2",
+		output: "select 1 from t1 where (x = 1 or y = 2) and (a = 1 or b = 2)",
+	}, {
+		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
+		output: "select 1 from t1 where x in ::__sq1",
+		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			ctx, sel := prepTest(t, tcase.input)
+			err := queryRewrite(ctx, sel)
+			require.NoError(t, err)
+			assert.Equal(t, tcase.output, sqlparser.String(sel))
+			squeries, found := ctx.semTable.SubqueryMap[sel]
+			if len(tcase.sqs) > 0 {
+				assert.True(t, found, "no subquery found in the query")
+				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
+			}
+			for _, sq := range squeries {
+				assert.Equal(t, tcase.sqs[sq.ArgName], sqlparser.String(sq.SubQuery.Select))
+			}
+		})
+	}
+}
+
+func prepTest(t *testing.T, sql string) (planningContext, *sqlparser.Select) {
+	ast, vars, err := sqlparser.Parse2(sql)
+	require.NoError(t, err)
+
+	sel, isSelectStatement := ast.(*sqlparser.Select)
+	require.True(t, isSelectStatement, "analyzer expects a select statement")
+
+	reservedVars := sqlparser.NewReservedVars("vtg", vars)
+	semTable, err := semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
+	require.NoError(t, err)
+
+	return newPlanningContext(reservedVars, semTable, nil), sel
 }
