@@ -405,24 +405,28 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue
-		} else {
-			// allow time for tablet state to be updated after topo is updated
-			time.Sleep(2 * time.Second)
-			// make sure the health stream is updated
-			result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
-			require.NoError(t, err)
-			var streamHealthResponse querypb.StreamHealthResponse
+		} // make sure the health stream is updated
+		result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+		require.NoError(t, err)
+		var streamHealthResponse querypb.StreamHealthResponse
 
-			err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-			require.NoError(t, err)
-			//if !streamHealthResponse.GetServing() {
-			//	log.Exitf("stream health not updated")
-			//}
-			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", &streamHealthResponse)
-			tabletType := streamHealthResponse.GetTarget().GetTabletType()
-			require.Equal(t, topodatapb.TabletType_PRIMARY, tabletType)
-			break
+		err = json2.Unmarshal([]byte(result), &streamHealthResponse)
+		require.NoError(t, err)
+		//if !streamHealthResponse.GetServing() {
+		//	log.Exitf("stream health not updated")
+		//}
+		if !streamHealthResponse.GetServing() {
+			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
+			time.Sleep(time.Second)
+			continue
 		}
+		tabletType := streamHealthResponse.GetTarget().GetTabletType()
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			log.Warningf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias)
+			time.Sleep(time.Second)
+			continue
+		}
+		break
 	}
 }
 
