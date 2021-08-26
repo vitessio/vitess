@@ -269,6 +269,36 @@ func TestTPCH(t *testing.T) {
 	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
+func BenchmarkOLTP(b *testing.B) {
+	benchmarkWorkload(b, "oltp")
+}
+
+func BenchmarkTPCC(b *testing.B) {
+	benchmarkWorkload(b, "tpcc")
+}
+
+func BenchmarkTPCH(b *testing.B) {
+	benchmarkWorkload(b, "tpch")
+}
+
+func benchmarkWorkload(b *testing.B, name string) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(b, name+"_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	var testCases []testCase
+	for tc := range iterateExecFile(name + "_cases.txt") {
+		testCases = append(testCases, tc)
+	}
+	b.ResetTimer()
+	for _, version := range plannerVersions {
+		b.Run(version.String(), func(b *testing.B) {
+			benchmarkPlanner(b, version, testCases, vschemaWrapper)
+		})
+	}
+}
+
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
