@@ -108,6 +108,22 @@
               "name": "md5"
             }
           ]
+        },
+        "revenue0": {
+          "column_vindexes": [
+            {
+              "column": "supplier_no",
+              "name": "hash"
+            }
+          ],
+          "columns": [
+            {
+              "name": "supplier_no"
+            },
+            {
+              "name": "total_revenue"
+            }
+          ]
         }
       }
     }
