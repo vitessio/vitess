@@ -6,6 +6,7 @@
   "MySQLReplicaPassword": "",
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
+  "LockShardTimeoutSeconds": 45,
   "Durability": "specified",
   "DurabilityParams": {
     "zone2-0000000200": "prefer"
