@@ -142,6 +142,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2,1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2 and 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1",
+        "Query": "select user_extra.col3 from user_extra where user_extra.col3 = 1 and 1 = 1",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # HAVING uses subquery
 "select id from user having id in (select col from user)"
