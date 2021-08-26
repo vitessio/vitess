@@ -1,0 +1,279 @@
+# TPC-C select join customer1 and warehouse1
+"SELECT c_discount, c_last, c_credit, w_tax FROM customer1 AS c JOIN warehouse1 AS w ON c_w_id=w_id WHERE w_id = 1 AND c_d_id = 15 AND c_id = 10"
+{
+}
+{
+}
+
+# TPC-C select district1 for update
+"SELECT d_next_o_id, d_tax FROM district1 WHERE d_w_id = 15 AND d_id = 95 FOR UPDATE"
+{
+}
+{
+}
+
+# TPC-C update district1 unique
+"UPDATE district1 SET d_next_o_id = 56 WHERE d_id = 9842 AND d_w_id= 8546"
+{
+}
+{
+}
+
+# TPC-C insert into orders1
+"INSERT INTO orders1 (o_id, o_d_id, o_w_id, o_c_id,  o_entry_d, o_ol_cnt, o_all_local) VALUES (334983,59896,99,156,NOW(),781038,'hello')"
+{
+}
+{
+}
+
+# TPC-C insert into new_orders1
+"INSERT INTO new_orders1 (no_o_id, no_d_id, no_w_id) VALUES (8,9,48)"
+{
+}
+{
+}
+
+# TPC-C select unique item1
+"SELECT i_price, i_name, i_data FROM item1 WHERE i_id = 9654"
+{
+}
+{
+}
+
+# TPC-C select stock1 for update
+"SELECT s_quantity, s_data, s_dist_01 s_dist FROM stock1 WHERE s_i_id = 2198 AND s_w_id = 89 FOR UPDATE"
+{
+}
+{
+}
+
+# TPC-C update stock1
+"UPDATE stock1 SET s_quantity = 894 WHERE s_i_id = 156 AND s_w_id= 6"
+{
+}
+{
+}
+
+# TPC-C insert into order_line1
+"INSERT INTO order_line1 (ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) VALUES (648,36812,3201,4946378,3,7,89,1,'info')"
+{
+}
+{
+}
+
+# TPC-C update warehouse1 unique
+"UPDATE warehouse1 SET w_ytd = w_ytd + 946879 WHERE w_id = 3"
+{
+}
+{
+}
+
+# TPC-C select warehouse1 unique
+"SELECT w_street_1, w_street_2, w_city, w_state, w_zip, w_name FROM warehouse1 WHERE w_id = 998"
+{
+}
+{
+}
+
+# TPC-C update district1 unique
+"UPDATE district1 SET d_ytd = d_ytd + 2 WHERE d_w_id = 89 AND d_id= 9"
+{
+}
+{
+}
+
+# TPC-C select district1 unique
+"SELECT d_street_1, d_street_2, d_city, d_state, d_zip, d_name FROM district1 WHERE d_w_id = 896 AND d_id = 9"
+{
+}
+{
+}
+
+# TPC-C select aggr from customer1
+"SELECT count(c_id) namecnt FROM customer1 WHERE c_w_id = 5 AND c_d_id= 1 AND c_last='last'"
+{
+}
+{
+}
+
+# TPC-C select customer1 order by
+"SELECT c_id FROM customer1 WHERE c_w_id = 8 AND c_d_id = 5 AND c_last='item_last' ORDER BY c_first"
+{
+}
+{
+}
+
+# TPC-C select for update customer1 unique
+"SELECT c_first, c_middle, c_last, c_street_1, c_street_2, c_city, c_state, c_zip, c_phone, c_credit, c_credit_lim, c_discount, c_balance, c_ytd_payment, c_since FROM customer1 WHERE c_w_id = 8965 AND c_d_id = 1 AND c_id = 9 FOR UPDATE"
+{
+}
+{
+}
+
+# TPC-C select customer1 unique
+"SELECT c_data FROM customer1 WHERE c_w_id = 32 AND c_d_id=68 AND c_id = 5"
+{
+}
+{
+}
+
+# TPC-C update customer1 unique and float value
+"UPDATE customer1 SET c_balance=508.98, c_ytd_payment=48941.980301, c_data='i am data' WHERE c_w_id = 20  AND c_d_id=387 AND c_id=98"
+{
+}
+{
+}
+
+# TPC-C update customer1 unique and float value
+"UPDATE customer1 SET c_balance=508.98, c_ytd_payment=48941.980301 WHERE c_w_id = 20  AND c_d_id=387 AND c_id=98"
+{
+}
+{
+}
+
+# TPC-C insert into history1
+"INSERT INTO history1 (h_c_d_id, h_c_w_id, h_c_id, h_d_id,  h_w_id, h_date, h_amount, h_data) VALUES (6809887,38748,8746,210,8,NOW(),8907,'data')"
+{
+}
+{
+}
+
+# TPC-C select aggr customer1
+"SELECT count(c_id) namecnt FROM customer1 WHERE c_w_id = 870 AND c_d_id= 780 AND c_last='last'"
+{
+}
+{
+}
+
+# TPC-C select order by customer1
+"SELECT c_balance, c_first, c_middle, c_id FROM customer1 WHERE c_w_id = 840 AND c_d_id= 1 AND c_last='test' ORDER BY c_first"
+{
+}
+{
+}
+
+# TPC-C select unique customer1
+"SELECT c_balance, c_first, c_middle, c_last FROM customer1 WHERE c_w_id = 15 AND c_d_id=5169 AND c_id=1"
+{
+}
+{
+}
+
+# TPC-C select order by orders1
+"SELECT o_id, o_carrier_id, o_entry_d FROM orders1 WHERE o_w_id = 9894 AND o_d_id = 3 AND o_c_id = 159 ORDER BY o_id DESC"
+{
+}
+{
+}
+
+# TPC-C select order_line1
+"SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d FROM order_line1 WHERE ol_w_id = 92 AND ol_d_id = 5  AND ol_o_id = 1"
+{
+}
+{
+}
+
+# TPC-C select for update new_orders1
+"SELECT no_o_id FROM new_orders1 WHERE no_d_id = 689 AND no_w_id = 15 ORDER BY no_o_id ASC LIMIT 1 FOR UPDATE"
+{
+}
+{
+}
+
+# TPC-C delete new_orders1
+"DELETE FROM new_orders1 WHERE no_o_id = 2218 AND no_d_id = 358 AND no_w_id = 98465"
+{
+}
+{
+}
+
+# TPC-C select unique orders1
+"SELECT o_c_id FROM orders1 WHERE o_id = 6 AND o_d_id = 1983 AND o_w_id = 894605"
+{
+}
+{
+}
+
+# TPC-C update orders1 unique
+"UPDATE orders1 SET o_carrier_id = 9 WHERE o_id = 56 AND o_d_id = 98 AND o_w_id = 897"
+{
+}
+{
+}
+
+# TPC-C update order_line1
+"UPDATE order_line1 SET ol_delivery_d = NOW() WHERE ol_o_id = 235 AND ol_d_id = 315 AND ol_w_id = 8"
+{
+}
+{
+}
+
+# TPC-C select sum order_line1
+"SELECT SUM(ol_amount) sm FROM order_line1 WHERE ol_o_id = 680 AND ol_d_id = 201 AND ol_w_id = 87"
+{
+}
+{
+}
+
+# TPC-C update customer1
+"UPDATE customer1 SET c_balance = c_balance + 988.01, c_delivery_cnt = c_delivery_cnt + 1 WHERE c_id = 6 AND c_d_id = 5 AND c_w_id = 160"
+{
+}
+{
+}
+
+# TPC-C select unique district1
+"SELECT d_next_o_id FROM district1 WHERE d_id = 6 AND d_w_id= 21"
+{
+}
+{
+}
+
+# TPC-C select count distinct stock1 join order_line1
+"SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 894 AND s.s_quantity < 10"
+{
+}
+{
+}
+
+# TPC-C select distinct order_line1
+"SELECT DISTINCT ol_i_id FROM order_line1 WHERE ol_w_id = 1 AND ol_d_id = 156 AND ol_o_id < 500 AND ol_o_id >= 56"
+{
+}
+{
+}
+
+# TPC-C
+"SELECT count(*) FROM stock1 WHERE s_w_id = 1 AND s_i_id = 8 AND s_quantity < 1000"
+{
+}
+{
+}
+
+# TPC-C select with subquery,aggr,distinct,having,limit
+"select o_id,o.o_d_id from orders2 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_id) from orders2 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1"
+{
+}
+{
+}
+
+# TPC-C delete order_line1
+"DELETE FROM order_line1 where ol_w_id=178 AND ol_d_id=1 AND ol_o_id=84"
+{
+}
+{
+}
+
+# TPC-C delete orders1
+"DELETE FROM orders1 where o_w_id=1 AND o_d_id=3 and o_id=384"
+{
+}
+{
+}
+
+# TPC-C delete history1
+"DELETE FROM history1 where h_w_id=75 AND h_d_id=102 LIMIT 10"
+{
+}
+{
+}
