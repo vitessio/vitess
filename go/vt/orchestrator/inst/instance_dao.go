@@ -997,7 +997,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_master")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
-	replicasJSON := m.GetString("slave_hosts")
+	replicasJSON := m.GetString("replica_hosts")
 	instance.ClusterName = m.GetString("cluster_name")
 	instance.SuggestedClusterAlias = m.GetString("suggested_cluster_alias")
 	instance.DataCenter = m.GetString("data_center")
@@ -1007,7 +1007,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SemiSyncAvailable = m.GetBool("semi_sync_available")
 	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_master_enabled")
 	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_master_timeout")
-	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
+	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 	instance.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 	instance.SemiSyncPrimaryStatus = m.GetBool("semi_sync_master_status")
 	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
@@ -1300,7 +1300,7 @@ func SearchInstances(searchString string) ([](*Instance), error) {
 			or concat(port, '') = ?
 		`
 	args := sqlutils.Args(searchString, searchString, searchString, searchString, searchString, searchString, searchString, searchString)
-	return readInstancesByCondition(condition, args, `replication_depth asc, num_slave_hosts desc, cluster_name, hostname, port`)
+	return readInstancesByCondition(condition, args, `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
 }
 
 // FindInstances reads all instances whose name matches given pattern
@@ -1311,7 +1311,7 @@ func FindInstances(regexpPattern string) (result [](*Instance), err error) {
 		return result, err
 	}
 	condition := `1=1`
-	unfiltered, err := readInstancesByCondition(condition, sqlutils.Args(), `replication_depth asc, num_slave_hosts desc, cluster_name, hostname, port`)
+	unfiltered, err := readInstancesByCondition(condition, sqlutils.Args(), `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
 	if err != nil {
 		return unfiltered, err
 	}
@@ -1330,7 +1330,7 @@ func findFuzzyInstances(fuzzyInstanceKey *InstanceKey) ([](*Instance), error) {
 		hostname like concat('%%', ?, '%%')
 		and port = ?
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(fuzzyInstanceKey.Hostname, fuzzyInstanceKey.Port), `replication_depth asc, num_slave_hosts desc, cluster_name, hostname, port`)
+	return readInstancesByCondition(condition, sqlutils.Args(fuzzyInstanceKey.Hostname, fuzzyInstanceKey.Port), `replication_depth asc, num_replica_hosts desc, cluster_name, hostname, port`)
 }
 
 // ReadFuzzyInstanceKey accepts a fuzzy instance key and expects to return a single, fully qualified,
@@ -1464,7 +1464,7 @@ func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
 		// Pick up to two busiest IMs
 		condition := `
 			replication_depth = 1
-			and num_slave_hosts > 0
+			and num_replica_hosts > 0
 			and cluster_name = ?
 		`
 		intermediatePrimaries, err = readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
@@ -1524,7 +1524,7 @@ func GetClusterOSCReplicas(clusterName string) ([](*Instance), error) {
 		// Get 2 1st tier leaf replicas, if possible
 		condition := `
 			replication_depth = 1
-			and num_slave_hosts = 0
+			and num_replica_hosts = 0
 			and cluster_name = ?
 		`
 		replicas, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "")
@@ -1548,7 +1548,7 @@ func GetClusterGhostReplicas(clusterName string) (result [](*Instance), err erro
 			and binlog_format = 'ROW'
 			and cluster_name = ?
 		`
-	instances, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "num_slave_hosts asc")
+	instances, err := readInstancesByCondition(condition, sqlutils.Args(clusterName), "num_replica_hosts asc")
 	if err != nil {
 		return result, err
 	}
@@ -1730,21 +1730,21 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 
 	err := db.QueryOrchestratorRowsMap(`
 			SELECT DISTINCT
-			    slave_instance.master_host, slave_instance.master_port
+			    replica_instance.master_host, replica_instance.master_port
 			FROM
-			    database_instance slave_instance
+			    database_instance replica_instance
 			        LEFT JOIN
-			    hostname_resolve ON (slave_instance.master_host = hostname_resolve.hostname)
+			    hostname_resolve ON (replica_instance.master_host = hostname_resolve.hostname)
 			        LEFT JOIN
 			    database_instance master_instance ON (
-			    	COALESCE(hostname_resolve.resolved_hostname, slave_instance.master_host) = master_instance.hostname
-			    	and slave_instance.master_port = master_instance.port)
+			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.master_host) = master_instance.hostname
+			    	and replica_instance.master_port = master_instance.port)
 			WHERE
 			    master_instance.last_checked IS NULL
-			    and slave_instance.master_host != ''
-			    and slave_instance.master_host != '_'
-			    and slave_instance.master_port > 0
-			    and slave_instance.replica_io_running = 1
+			    and replica_instance.master_host != ''
+			    and replica_instance.master_host != '_'
+			    and replica_instance.master_port > 0
+			    and replica_instance.replica_io_running = 1
 			`, func(m sqlutils.RowMap) error {
 		instanceKey, _ := NewResolveInstanceKey(m.GetString("master_host"), m.GetInt("master_port"))
 		// we ignore the error. It can be expected that we are unable to resolve the hostname.
@@ -1862,19 +1862,19 @@ func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
 	res := make(map[string]string)
 	err := db.QueryOrchestratorRowsMap(`
 			SELECT DISTINCT
-			    slave_instance.master_host, hostname_resolve_history.resolved_hostname
+			    replica_instance.master_host, hostname_resolve_history.resolved_hostname
 			FROM
-			    database_instance slave_instance
-			LEFT JOIN hostname_resolve ON (slave_instance.master_host = hostname_resolve.hostname)
+			    database_instance replica_instance
+			LEFT JOIN hostname_resolve ON (replica_instance.master_host = hostname_resolve.hostname)
 			LEFT JOIN database_instance master_instance ON (
-			    COALESCE(hostname_resolve.resolved_hostname, slave_instance.master_host) = master_instance.hostname
-			    and slave_instance.master_port = master_instance.port
-			) LEFT JOIN hostname_resolve_history ON (slave_instance.master_host = hostname_resolve_history.hostname)
+			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.master_host) = master_instance.hostname
+			    and replica_instance.master_port = master_instance.port
+			) LEFT JOIN hostname_resolve_history ON (replica_instance.master_host = hostname_resolve_history.hostname)
 			WHERE
 			    master_instance.last_checked IS NULL
-			    and slave_instance.master_host != ''
-			    and slave_instance.master_host != '_'
-			    and slave_instance.master_port > 0
+			    and replica_instance.master_host != ''
+			    and replica_instance.master_host != '_'
+			    and replica_instance.master_port > 0
 			`, func(m sqlutils.RowMap) error {
 		res[m.GetString("master_host")] = m.GetString("resolved_hostname")
 		return nil
@@ -2305,8 +2305,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"seconds_behind_master",
 		"replica_lag_seconds",
 		"sql_delay",
-		"num_slave_hosts",
-		"slave_hosts",
+		"num_replica_hosts",
+		"replica_hosts",
 		"cluster_name",
 		"suggested_cluster_alias",
 		"data_center",
@@ -2321,7 +2321,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"semi_sync_available",
 		"semi_sync_master_enabled",
 		"semi_sync_master_timeout",
-		"semi_sync_master_wait_for_slave_count",
+		"semi_sync_primary_wait_for_replica_count",
 		"semi_sync_replica_enabled",
 		"semi_sync_master_status",
 		"semi_sync_master_clients",
