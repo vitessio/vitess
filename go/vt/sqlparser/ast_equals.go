@@ -1371,7 +1371,8 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
-		EqualsComments(a.Comments, b.Comments)
+		EqualsComments(a.Comments, b.Comments) &&
+		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -3826,6 +3827,27 @@ func EqualsSliceOfString(a, b []string) bool {
 	return true
 }
 
+// EqualsRefOfPartitionOption does deep equals between the two objects.
+func EqualsRefOfPartitionOption(a, b *PartitionOption) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Linear == b.Linear &&
+		a.isKEY == b.isKEY &&
+		a.KeyAlgorithm == b.KeyAlgorithm &&
+		a.RANGE_or_LIST == b.RANGE_or_LIST &&
+		a.Partitions == b.Partitions &&
+		EqualsColIdent(a.HASH, b.HASH) &&
+		EqualsColumns(a.KeyColList, b.KeyColList) &&
+		EqualsRefOfExprOrColumns(a.Expr_or_Col, b.Expr_or_Col) &&
+		EqualsExpr(a.Expr, b.Expr) &&
+		EqualsRefOfSubPartition(a.SubPartition, b.SubPartition) &&
+		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+}
+
 // EqualsSliceOfRefOfIndexColumn does deep equals between the two objects.
 func EqualsSliceOfRefOfIndexColumn(a, b []*IndexColumn) bool {
 	if len(a) != len(b) {
@@ -4059,6 +4081,35 @@ func EqualsCollateAndCharset(a, b CollateAndCharset) bool {
 	return a.IsDefault == b.IsDefault &&
 		a.Value == b.Value &&
 		a.Type == b.Type
+}
+
+// EqualsRefOfExprOrColumns does deep equals between the two objects.
+func EqualsRefOfExprOrColumns(a, b *ExprOrColumns) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsExpr(a.Expr, b.Expr) &&
+		EqualsColumns(a.ColumnList, b.ColumnList)
+}
+
+// EqualsRefOfSubPartition does deep equals between the two objects.
+func EqualsRefOfSubPartition(a, b *SubPartition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Linear == b.Linear &&
+		a.isKEY == b.isKEY &&
+		a.KeyAlgorithm == b.KeyAlgorithm &&
+		a.SubPartitions == b.SubPartitions &&
+		EqualsColIdent(a.HASH, b.HASH) &&
+		EqualsColumns(a.KeyColList, b.KeyColList) &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // EqualsRefOfIndexColumn does deep equals between the two objects.

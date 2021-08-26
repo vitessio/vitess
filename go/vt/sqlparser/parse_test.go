@@ -1241,7 +1241,7 @@ var (
 		// Tests unicode character §
 		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
 	}, {
-		input: "create table t (id int) partition by key (id) partitions 2",
+		input:  "create table t (id int) partition by key (id) partitions 2",
 		output: "create table t (\n\tid int\n)",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
