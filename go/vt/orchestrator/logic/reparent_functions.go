@@ -223,7 +223,7 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: %d postponed functions", vtorcReparent.topologyRecovery.PostponedFunctionsContainer.Len()))
 
 	vtorcReparent.promotedReplica = promotedReplica
-	vtorcReparent.lostReplicas = lostReplicas
+	vtorcReparent.topologyRecovery.LostReplicas.AddInstances(lostReplicas)
 	vtorcReparent.recoveryAttempted = true
 	return newPrimary, nil
 }
@@ -554,51 +554,49 @@ func getInstanceFromTablet(tablet *topodatapb.Tablet) *inst.Instance {
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePrimary() error {
-	if vtorcReparent.promotedReplica == nil {
-		err := TabletUndoDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemoteMaster: %v", err))
-		message := "Failure: no replica promoted."
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, message)
-		inst.AuditOperation("recover-dead-master", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, message)
-		return err
-	}
+func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error {
+	// TODO : use fixing code outside
+	//if vtorcReparent.promotedReplica == nil {
+	//	err := TabletUndoDemoteMaster(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
+	//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: TabletUndoDemoteMaster: %v", err))
+	//	message := "Failure: no replica promoted."
+	//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, message)
+	//	inst.AuditOperation("recover-dead-master", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, message)
+	//	return err
+	//}
 
+	// TODO: Move out to post-change code
 	message := fmt.Sprintf("promoted replica: %+v", vtorcReparent.promotedReplica.Key)
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, message)
 	inst.AuditOperation("recover-dead-master", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, message)
-	vtorcReparent.topologyRecovery.LostReplicas.AddInstances(vtorcReparent.lostReplicas)
 
-	var err error
-	overrideMasterPromotion := func() (*inst.Instance, error) {
-		if vtorcReparent.promotedReplica == nil {
-			// No promotion; nothing to override.
-			return vtorcReparent.promotedReplica, err
-		}
+	newPrimaryInstance := getInstanceFromTablet(newPrimary)
+	overrideMasterPromotion := func() error {
 		// Scenarios where we might cancel the promotion.
-		if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&vtorcReparent.analysisEntry, vtorcReparent.promotedReplica); !satisfied {
-			return nil, fmt.Errorf("RecoverDeadMaster: failed %+v promotion; %s", vtorcReparent.promotedReplica.Key, reason)
+		if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&vtorcReparent.analysisEntry, newPrimaryInstance); !satisfied {
+			return fmt.Errorf("RecoverDeadMaster: failed %+v promotion; %s", newPrimaryInstance.Key, reason)
 		}
 		if config.Config.FailMasterPromotionOnLagMinutes > 0 &&
-			time.Duration(vtorcReparent.promotedReplica.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailMasterPromotionOnLagMinutes)*time.Minute {
+			time.Duration(newPrimaryInstance.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailMasterPromotionOnLagMinutes)*time.Minute {
 			// candidate replica lags too much
-			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailMasterPromotionOnLagMinutes, vtorcReparent.promotedReplica.Key, vtorcReparent.promotedReplica.ReplicationLagSeconds.Int64)
+			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailMasterPromotionOnLagMinutes, newPrimaryInstance.Key, newPrimaryInstance.ReplicationLagSeconds.Int64)
 		}
-		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !vtorcReparent.promotedReplica.SQLThreadUpToDate() {
-			return nil, fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", vtorcReparent.promotedReplica.Key)
+		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
+			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", newPrimaryInstance.Key)
 		}
-		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate && !vtorcReparent.promotedReplica.SQLThreadUpToDate() {
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", vtorcReparent.promotedReplica.Key))
-			if _, err := inst.WaitForSQLThreadUpToDate(&vtorcReparent.promotedReplica.Key, 0, 0); err != nil {
-				return nil, fmt.Errorf("DelayMasterPromotionIfSQLThreadNotUpToDate error: %+v", err)
+		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", newPrimaryInstance.Key))
+			if _, err := inst.WaitForSQLThreadUpToDate(&newPrimaryInstance.Key, 0, 0); err != nil {
+				return fmt.Errorf("DelayMasterPromotionIfSQLThreadNotUpToDate error: %+v", err)
 			}
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: SQL thread caught up on %+v", vtorcReparent.promotedReplica.Key))
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: SQL thread caught up on %+v", newPrimaryInstance.Key))
 		}
 		// All seems well. No override done.
-		return vtorcReparent.promotedReplica, err
+		return nil
 	}
-	if vtorcReparent.promotedReplica, err = overrideMasterPromotion(); err != nil {
+	if err := overrideMasterPromotion(); err != nil {
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, err.Error())
+		return err
 	}
 	return nil
 }

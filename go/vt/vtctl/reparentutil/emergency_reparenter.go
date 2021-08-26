@@ -173,9 +173,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		if err != nil {
 			return err
 		}
+		newPrimary = betterCandidate
 	}
 
-	if err := reparentFunctions.CheckIfNeedToOverridePrimary(); err != nil {
+	if err := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary); err != nil {
+		erp.logger.Errorf("have to override promotion because of constraint failure - %v", err)
+		// TODO: override promotion here
 		return err
 	}
 

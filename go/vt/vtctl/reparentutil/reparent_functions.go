@@ -55,7 +55,7 @@ type (
 		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
 		PostTabletChangeHook(*topodatapb.Tablet)
 		GetBetterCandidate(*topodatapb.Tablet, []*topodatapb.Tablet, map[string]*replicationdatapb.PrimaryStatus, map[string]*topo.TabletInfo) *topodatapb.Tablet
-		CheckIfNeedToOverridePrimary() error
+		CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
 		GetNewPrimary() *topodatapb.Tablet
 
@@ -244,7 +244,7 @@ func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary *topo
 }
 
 // CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePrimary() error {
+func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error {
 	return nil
 }
 
