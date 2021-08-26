@@ -109,20 +109,26 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 	return starExpanded, colNames, nil
 }
 
-func subqueryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
-	if len(ctx.semTable.SubqueryMap) == 0 {
-		return nil
-	}
+func queryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
 	r := rewriter{
 		semTable:     ctx.semTable,
 		reservedVars: ctx.reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.subqueryRewrite, nil)
+	sqlparser.Rewrite(statement, r.rewrite, nil)
 	return nil
 }
 
-func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		if node.GroupBy != nil || node.Having == nil {
+			break
+		}
+		exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
+		for _, expr := range exprs {
+			node.AddWhere(expr)
+		}
+		node.Having = nil
 	case *sqlparser.ExistsExpr:
 		semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
 		if !found {
