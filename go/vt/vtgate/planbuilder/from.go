@@ -118,7 +118,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		subroute, ok := spb.plan.(*route)
 		if !ok {
 			var err error
-			pb.plan, pb.st, err = newSubquery(tableExpr.As, spb.plan)
+			pb.plan, pb.st, err = newSimpleProjection(tableExpr.As, spb.plan)
 			if err != nil {
 				return err
 			}

@@ -42,9 +42,9 @@ func TestSubqueryExecute(t *testing.T) {
 		},
 	}
 
-	sq := &Subquery{
-		Cols:     []int{0, 2},
-		Subquery: prim,
+	sq := &SimpleProjection{
+		Cols:  []int{0, 2},
+		Input: prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -69,7 +69,7 @@ func TestSubqueryExecute(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.Execute(nil, bv, true)
@@ -91,9 +91,9 @@ func TestSubqueryStreamExecute(t *testing.T) {
 		},
 	}
 
-	sq := &Subquery{
-		Cols:     []int{0, 2},
-		Subquery: prim,
+	sq := &SimpleProjection{
+		Cols:  []int{0, 2},
+		Input: prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -118,7 +118,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = wrapStreamExecute(sq, nil, bv, true)
@@ -140,9 +140,9 @@ func TestSubqueryGetFields(t *testing.T) {
 		},
 	}
 
-	sq := &Subquery{
-		Cols:     []int{0, 2},
-		Subquery: prim,
+	sq := &SimpleProjection{
+		Cols:  []int{0, 2},
+		Input: prim,
 	}
 
 	bv := map[string]*querypb.BindVariable{
@@ -165,7 +165,7 @@ func TestSubqueryGetFields(t *testing.T) {
 	))
 
 	// Error case.
-	sq.Subquery = &fakePrimitive{
+	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
 	_, err = sq.GetFields(nil, bv)

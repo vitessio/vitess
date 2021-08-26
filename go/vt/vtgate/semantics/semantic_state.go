@@ -138,6 +138,12 @@ type (
 	}
 )
 
+// CopyDependencies copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
+	st.ExprBaseTableDeps[to] = st.BaseTableDependencies(from)
+	st.ExprDeps[to] = st.Dependencies(from)
+}
+
 // GetExprFor implements the TableInfo interface
 func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range v.columnNames {

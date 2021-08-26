@@ -8,6 +8,7 @@ import (
 
 var _ Primitive = (*Projection)(nil)
 
+// Projection can evaluate expressions and project the results
 type Projection struct {
 	Cols  []string
 	Exprs []evalengine.Expr
@@ -15,18 +16,22 @@ type Projection struct {
 	noTxNeeded
 }
 
+// RouteType implements the Primitive interface
 func (p *Projection) RouteType() string {
 	return p.Input.RouteType()
 }
 
+// GetKeyspaceName implements the Primitive interface
 func (p *Projection) GetKeyspaceName() string {
 	return p.Input.GetKeyspaceName()
 }
 
+// GetTableName implements the Primitive interface
 func (p *Projection) GetTableName() string {
 	return p.Input.GetTableName()
 }
 
+// Execute implements the Primitive interface
 func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := p.Input.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
@@ -59,6 +64,7 @@ func (p *Projection) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return result, nil
 }
 
+// StreamExecute implements the Primitive interface
 func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	result, err := p.Input.Execute(vcursor, bindVars, wantields)
 	if err != nil {
@@ -91,6 +97,7 @@ func (p *Projection) StreamExecute(vcursor VCursor, bindVars map[string]*querypb
 	return callback(result)
 }
 
+// GetFields implements the Primitive interface
 func (p *Projection) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := p.Input.GetFields(vcursor, bindVars)
 	if err != nil {
@@ -118,10 +125,12 @@ func (p *Projection) addFields(qr *sqltypes.Result, bindVars map[string]*querypb
 	return nil
 }
 
+// Inputs implements the Primitive interface
 func (p *Projection) Inputs() []Primitive {
 	return []Primitive{p.Input}
 }
 
+// description implements the Primitive interface
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
