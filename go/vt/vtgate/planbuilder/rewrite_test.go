@@ -273,6 +273,12 @@ func TestHavingRewrite(t *testing.T) {
 		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 or b = 2",
 		output: "select 1 from t1 where (x = 1 or y = 2) and (a = 1 or b = 2)",
 	}, {
+		input:  "select 1 from t1 where x = 1 or y = 2 having a = 1 and count(*) = 1",
+		output: "select 1 from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
+	}, {
+		input:  "select count(*) k from t1 where x = 1 or y = 2 having a = 1 and k = 1",
+		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
+	}, {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
 		output: "select 1 from t1 where x in ::__sq1",
 		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
