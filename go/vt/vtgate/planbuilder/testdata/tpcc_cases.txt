@@ -774,10 +774,10 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # TPC-C select count distinct stock1 join order_line1
-"SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 894 AND s.s_quantity < 10"
+"SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id < 30 AND ol.ol_o_id >= 15 AND s.s_w_id= 12 AND s.s_quantity < 10"
 {
   "QueryType": "SELECT",
-  "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 894 AND s.s_quantity \u003c 10",
+  "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectEqualUnique",
@@ -786,7 +786,7 @@ Gen4 plan same as above
       "Sharded": true
     },
     "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where 1 != 1",
-    "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 894 and s.s_quantity \u003c 10",
+    "Query": "select COUNT(distinct s.s_i_id) from stock1 as s join order_line1 as ol on ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and s.s_w_id = 12 and s.s_quantity \u003c 10",
     "Table": "stock1, order_line1",
     "Values": [
       12
@@ -796,57 +796,21 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 894 AND s.s_quantity \u003c 10",
+  "Original": "SELECT COUNT(DISTINCT(s.s_i_id)) FROM stock1 AS s JOIN order_line1 AS ol ON ol.ol_w_id=s.s_w_id AND ol.ol_i_id=s.s_i_id WHERE ol.ol_w_id = 12 AND ol.ol_d_id = 1908 AND ol.ol_o_id \u003c 30 AND ol.ol_o_id \u003e= 15 AND s.s_w_id= 12 AND s.s_quantity \u003c 10",
   "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count_distinct(0|1) AS COUNT(distinct s.s_i_id)",
-    "ResultColumns": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-2,-3",
-        "JoinVars": {
-          "s_s_i_id": 1,
-          "s_s_w_id": 0
-        },
-        "TableName": "stock1_order_line1",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select s.s_w_id, s.s_i_id, weight_string(s.s_i_id) from stock1 as s where 1 != 1",
-            "OrderBy": "(1|2) ASC",
-            "Query": "select s.s_w_id, s.s_i_id, weight_string(s.s_i_id) from stock1 as s where s.s_w_id = 894 and s.s_quantity \u003c 10 order by s.s_i_id asc",
-            "Table": "stock1",
-            "Values": [
-              894
-            ],
-            "Vindex": "hash"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from order_line1 as ol where 1 != 1",
-            "Query": "select 1 from order_line1 as ol where ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = :s_s_w_id and ol.ol_i_id = :s_s_i_id",
-            "Table": "order_line1",
-            "Values": [
-              12
-            ],
-            "Vindex": "hash"
-          }
-        ]
-      }
-    ]
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where 1 != 1",
+    "Query": "select COUNT(distinct s.s_i_id) from stock1 as s, order_line1 as ol where s.s_w_id = 12 and s.s_quantity \u003c 10 and ol.ol_w_id = 12 and ol.ol_d_id = 1908 and ol.ol_o_id \u003c 30 and ol.ol_o_id \u003e= 15 and ol.ol_w_id = s.s_w_id and ol.ol_i_id = s.s_i_id",
+    "Table": "order_line1, stock1",
+    "Values": [
+      12
+    ],
+    "Vindex": "hash"
   }
 }
 
@@ -897,9 +861,56 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # TPC-C select with subquery,aggr,distinct,having,limit
-"select o_id,o.o_d_id from orders2 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_id) from orders2 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1"
-"table orders2 not found"
-Gen4 plan same as above
+"select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id > 2100 and o_id < 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) > 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) \u003e 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "o_o_c_id": 3,
+          "o_o_d_id": 1,
+          "o_o_w_id": 2
+        },
+        "TableName": "orders1_orders1",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select o.o_id, o.o_d_id, o.o_w_id, o.o_c_id from orders1 as o where 1 != 1",
+            "Query": "select o.o_id, o.o_d_id, o.o_w_id, o.o_c_id from orders1 as o",
+            "Table": "orders1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1 group by o_c_id, o_d_id, o_w_id) as t where 1 != 1",
+            "Query": "select 1 from (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id, o_d_id, o_w_id having count(distinct o_id) \u003e 1 limit 1) as t where t.o_w_id = :o_o_w_id and t.o_d_id = :o_o_d_id and t.o_c_id = :o_o_c_id",
+            "Table": "orders1",
+            "Values": [
+              1
+            ],
+            "Vindex": "hash"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # TPC-C delete order_line1
 "DELETE FROM order_line1 where ol_w_id=178 AND ol_d_id=1 AND ol_o_id=84"
