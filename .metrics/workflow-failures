@@ -1,11 +1,3 @@
-2021-04-20T08:34:10Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/766468425
-2021-04-20T09:19:34Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/766598952
-2021-04-20T09:19:34Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/766598987
-2021-04-20T09:19:34Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/766598983
-2021-04-20T09:19:34Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/766598942
-2021-04-20T09:39:32Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/766656626
-2021-04-20T09:39:32Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/766656609
-2021-04-20T09:39:32Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/766656591
 2021-04-20T09:39:32Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/766656580
 2021-04-20T09:39:32Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/766656598
 2021-04-20T09:39:32Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/766656586
@@ -9997,4 +9989,12 @@
 2021-08-26T11:50:55Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1170284747
 2021-08-26T11:50:55Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1170284785
 2021-08-26T11:50:55Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1170284798
+2021-08-26T12:15:48Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1170365558
+2021-08-26T12:15:48Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1170365540
+2021-08-26T12:15:48Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1170365533
+2021-08-26T12:15:48Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1170365518
+2021-08-26T12:15:48Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1170365509
+2021-08-26T12:15:48Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1170365520
+2021-08-26T12:15:48Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1170365588
 2021-08-26T12:15:48Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1170365563
+2021-08-26T12:15:48Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1170365591
