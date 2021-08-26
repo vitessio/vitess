@@ -18,6 +18,9 @@ package reparentutil
 
 import (
 	"context"
+	"time"
+
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -176,10 +179,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		newPrimary = betterCandidate
 	}
 
-	if err := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary); err != nil {
-		erp.logger.Errorf("have to override promotion because of constraint failure - %v", err)
-		// TODO: override promotion here
-		return err
+	var errInPromotion error
+	errInPromotion = reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
+	if errInPromotion != nil {
+		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
+		newPrimary, err = erp.undoPromotion(ctx, ts, ev, keyspace, shard, primaryStatusMap, "", "", tabletMap, statusMap, reparentFunctions)
+		if err != nil {
+			return err
+		}
+		if newPrimary == nil {
+			return vterrors.Errorf(vtrpc.Code_ABORTED, "more than 1 tablets thought they were primary, cannot undo promotion")
+		}
 	}
 
 	if err := reparentFunctions.StartReplication(ctx, ev, erp.logger, erp.tmc); err != nil {
@@ -188,5 +198,30 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	ev.NewPrimary = proto.Clone(reparentFunctions.GetNewPrimary()).(*topodatapb.Tablet)
 
-	return nil
+	return errInPromotion
+}
+
+func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Server, ev *events.Reparent, keyspace, shard string, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus,
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) (*topodatapb.Tablet, error) {
+	if len(primaryStatusMap) == 1 {
+		var prevPrimary *topodatapb.Tablet
+		for tablet := range primaryStatusMap {
+			prevPrimary = tabletMap[tablet].Tablet
+		}
+		if prevPrimary != nil {
+			_, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, true)
+			if err != nil {
+				return prevPrimary, err
+			}
+		}
+		return prevPrimary, nil
+	}
+
+	newTerm := time.Now()
+	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = nil
+		si.PrimaryTermStartTime = logutil.TimeToProto(newTerm)
+		return nil
+	})
+	return nil, err
 }
