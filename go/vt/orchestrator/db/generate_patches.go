@@ -27,7 +27,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_master_log_pos
+			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_primary_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -47,7 +47,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_master_log_pos
+			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_primary_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -55,12 +55,12 @@ var generateSQLPatches = []string{
 			ADD COLUMN relay_log_pos bigint unsigned NOT NULL AFTER relay_log_file
 	`,
 	`
-		DROP INDEX master_host_port_idx ON database_instance
+		DROP INDEX source_host_port_idx ON database_instance
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD INDEX master_host_port_idx_database_instance (master_host, master_port)
+			ADD INDEX source_host_port_idx_database_instance (source_host, source_port)
 	`,
 	`
 		ALTER TABLE
@@ -288,7 +288,7 @@ var generateSQLPatches = []string{
 			MODIFY last_suggested timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 	`,
 	`
-		ALTER TABLE master_position_equivalence /* sqlite3-skip */
+		ALTER TABLE primary_position_equivalence /* sqlite3-skip */
 			MODIFY last_suggested timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 	`,
 	`

@@ -825,8 +825,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 					cluster_name,
 					suggested_cluster_alias,
 					replication_depth,
-					master_host,
-					master_port,
+					source_host,
+					source_port,
 					ancestry_uuid,
 					executed_gtid_set
 				from database_instance
@@ -844,8 +844,8 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
 		primaryOrGroupPrimaryClusterName = m.GetString("cluster_name")
 		primaryOrGroupPrimaryReplicationDepth = m.GetUint("replication_depth")
-		primaryOrGroupPrimaryInstanceKey.Hostname = m.GetString("master_host")
-		primaryOrGroupPrimaryInstanceKey.Port = m.GetInt("master_port")
+		primaryOrGroupPrimaryInstanceKey.Hostname = m.GetString("source_host")
+		primaryOrGroupPrimaryInstanceKey.Port = m.GetInt("source_port")
 		ancestryUUID = m.GetString("ancestry_uuid")
 		primaryOrGroupPrimaryExecutedGtidSet = m.GetString("executed_gtid_set")
 		primaryOrGroupPrimaryDataFound = true
@@ -965,8 +965,8 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.BinlogRowImage = m.GetString("binlog_row_image")
 	instance.LogBinEnabled = m.GetBool("log_bin")
 	instance.LogReplicationUpdatesEnabled = m.GetBool("log_replica_updates")
-	instance.SourceKey.Hostname = m.GetString("master_host")
-	instance.SourceKey.Port = m.GetInt("master_port")
+	instance.SourceKey.Hostname = m.GetString("source_host")
+	instance.SourceKey.Port = m.GetInt("source_port")
 	instance.IsDetachedPrimary = instance.SourceKey.IsDetached()
 	instance.ReplicationSQLThreadRuning = m.GetBool("replica_sql_running")
 	instance.ReplicationIOThreadRuning = m.GetBool("replica_io_running")
@@ -984,17 +984,17 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
 	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
 	instance.SelfBinlogCoordinates.LogPos = m.GetInt64("binary_log_pos")
-	instance.ReadBinlogCoordinates.LogFile = m.GetString("master_log_file")
-	instance.ReadBinlogCoordinates.LogPos = m.GetInt64("read_master_log_pos")
-	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_master_log_file")
-	instance.ExecBinlogCoordinates.LogPos = m.GetInt64("exec_master_log_pos")
+	instance.ReadBinlogCoordinates.LogFile = m.GetString("primary_log_file")
+	instance.ReadBinlogCoordinates.LogPos = m.GetInt64("read_primary_log_pos")
+	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_primary_log_file")
+	instance.ExecBinlogCoordinates.LogPos = m.GetInt64("exec_primary_log_pos")
 	instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 	instance.RelaylogCoordinates.LogFile = m.GetString("relay_log_file")
 	instance.RelaylogCoordinates.LogPos = m.GetInt64("relay_log_pos")
 	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
-	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_master")
+	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_primary")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
 	replicasJSON := m.GetString("replica_hosts")
@@ -1207,8 +1207,8 @@ func ReadClusterAliasInstances(clusterAlias string) ([](*Instance), error) {
 // ReadReplicaInstances reads replicas of a given primary
 func ReadReplicaInstances(primaryKey *InstanceKey) ([](*Instance), error) {
 	condition := `
-			master_host = ?
-			and master_port = ?
+			source_host = ?
+			and source_port = ?
 		`
 	return readInstancesByCondition(condition, sqlutils.Args(primaryKey.Hostname, primaryKey.Port), "")
 }
@@ -1236,8 +1236,8 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKe
 // ReadBinlogServerReplicaInstances reads direct replicas of a given primary that are binlog servers
 func ReadBinlogServerReplicaInstances(primaryKey *InstanceKey) ([](*Instance), error) {
 	condition := `
-			master_host = ?
-			and master_port = ?
+			source_host = ?
+			and source_port = ?
 			and binlog_server = 1
 		`
 	return readInstancesByCondition(condition, sqlutils.Args(primaryKey.Hostname, primaryKey.Port), "")
@@ -1258,7 +1258,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
-				or (abs(cast(seconds_behind_master as signed) - cast(sql_delay as signed)) > ?)
+				or (abs(cast(seconds_behind_primary as signed) - cast(sql_delay as signed)) > ?)
 				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (gtid_errant != '')
 				or (replication_group_name != '' and replication_group_member_state != 'ONLINE')
@@ -1730,23 +1730,23 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 
 	err := db.QueryOrchestratorRowsMap(`
 			SELECT DISTINCT
-			    replica_instance.master_host, replica_instance.master_port
+			    replica_instance.source_host, replica_instance.source_port
 			FROM
 			    database_instance replica_instance
 			        LEFT JOIN
-			    hostname_resolve ON (replica_instance.master_host = hostname_resolve.hostname)
+			    hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
 			        LEFT JOIN
 			    database_instance master_instance ON (
-			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.master_host) = master_instance.hostname
-			    	and replica_instance.master_port = master_instance.port)
+			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = master_instance.hostname
+			    	and replica_instance.source_port = master_instance.port)
 			WHERE
 			    master_instance.last_checked IS NULL
-			    and replica_instance.master_host != ''
-			    and replica_instance.master_host != '_'
-			    and replica_instance.master_port > 0
+			    and replica_instance.source_host != ''
+			    and replica_instance.source_host != '_'
+			    and replica_instance.source_port > 0
 			    and replica_instance.replica_io_running = 1
 			`, func(m sqlutils.RowMap) error {
-		instanceKey, _ := NewResolveInstanceKey(m.GetString("master_host"), m.GetInt("master_port"))
+		instanceKey, _ := NewResolveInstanceKey(m.GetString("source_host"), m.GetInt("source_port"))
 		// we ignore the error. It can be expected that we are unable to resolve the hostname.
 		// Maybe that's how we got here in the first place!
 		res = append(res, *instanceKey)
@@ -1862,21 +1862,21 @@ func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
 	res := make(map[string]string)
 	err := db.QueryOrchestratorRowsMap(`
 			SELECT DISTINCT
-			    replica_instance.master_host, hostname_resolve_history.resolved_hostname
+			    replica_instance.source_host, hostname_resolve_history.resolved_hostname
 			FROM
 			    database_instance replica_instance
-			LEFT JOIN hostname_resolve ON (replica_instance.master_host = hostname_resolve.hostname)
+			LEFT JOIN hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
 			LEFT JOIN database_instance master_instance ON (
-			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.master_host) = master_instance.hostname
-			    and replica_instance.master_port = master_instance.port
-			) LEFT JOIN hostname_resolve_history ON (replica_instance.master_host = hostname_resolve_history.hostname)
+			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = master_instance.hostname
+			    and replica_instance.source_port = master_instance.port
+			) LEFT JOIN hostname_resolve_history ON (replica_instance.source_host = hostname_resolve_history.hostname)
 			WHERE
 			    master_instance.last_checked IS NULL
-			    and replica_instance.master_host != ''
-			    and replica_instance.master_host != '_'
-			    and replica_instance.master_port > 0
+			    and replica_instance.source_host != ''
+			    and replica_instance.source_host != '_'
+			    and replica_instance.source_port > 0
 			`, func(m sqlutils.RowMap) error {
-		res[m.GetString("master_host")] = m.GetString("resolved_hostname")
+		res[m.GetString("source_host")] = m.GetString("resolved_hostname")
 		return nil
 	})
 	if err != nil {
@@ -2138,7 +2138,7 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 	res := []MinimalInstance{}
 	query := `
 		select
-			hostname, port, master_host, master_port, cluster_name
+			hostname, port, source_host, source_port, cluster_name
 		from
 			database_instance
 			`
@@ -2149,8 +2149,8 @@ func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 			Port:     m.GetInt("port"),
 		}
 		minimalInstance.PrimaryKey = InstanceKey{
-			Hostname: m.GetString("master_host"),
-			Port:     m.GetInt("master_port"),
+			Hostname: m.GetString("source_host"),
+			Port:     m.GetInt("source_port"),
 		}
 		minimalInstance.ClusterName = m.GetString("cluster_name")
 
@@ -2277,8 +2277,8 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"log_replica_updates",
 		"binary_log_file",
 		"binary_log_pos",
-		"master_host",
-		"master_port",
+		"source_host",
+		"source_port",
 		"replica_sql_running",
 		"replica_io_running",
 		"replication_sql_thread_state",
@@ -2294,15 +2294,15 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"gtid_errant",
 		"mariadb_gtid",
 		"pseudo_gtid",
-		"master_log_file",
-		"read_master_log_pos",
-		"relay_master_log_file",
-		"exec_master_log_pos",
+		"primary_log_file",
+		"read_primary_log_pos",
+		"relay_primary_log_file",
+		"exec_primary_log_pos",
 		"relay_log_file",
 		"relay_log_pos",
 		"last_sql_error",
 		"last_io_error",
-		"seconds_behind_master",
+		"seconds_behind_primary",
 		"replica_lag_seconds",
 		"sql_delay",
 		"num_replica_hosts",
@@ -2697,10 +2697,10 @@ func SnapshotTopologies() error {
 		_, err := db.ExecOrchestrator(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
-        			hostname, port, master_host, master_port, cluster_name, version)
+        			hostname, port, source_host, source_port, cluster_name, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-        		hostname, port, master_host, master_port, cluster_name, version
+        		hostname, port, source_host, source_port, cluster_name, version
 			from
 				database_instance
 				`,
@@ -2734,8 +2734,8 @@ func ReadHistoryClusterInstances(clusterName string, historyTimestampPattern str
 
 		instance.Key.Hostname = m.GetString("hostname")
 		instance.Key.Port = m.GetInt("port")
-		instance.SourceKey.Hostname = m.GetString("master_host")
-		instance.SourceKey.Port = m.GetInt("master_port")
+		instance.SourceKey.Hostname = m.GetString("source_host")
+		instance.SourceKey.Port = m.GetInt("source_port")
 		instance.ClusterName = m.GetString("cluster_name")
 
 		instances = append(instances, instance)

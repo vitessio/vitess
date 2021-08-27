@@ -72,13 +72,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.hostname,
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
-		vitess_tablet.master_timestamp,
+		vitess_tablet.primary_timestamp,
 		master_instance.read_only AS read_only,
 		MIN(master_instance.data_center) AS data_center,
 		MIN(master_instance.region) AS region,
 		MIN(master_instance.physical_environment) AS physical_environment,
-		MIN(master_instance.master_host) AS master_host,
-		MIN(master_instance.master_port) AS master_port,
+		MIN(master_instance.source_host) AS source_host,
+		MIN(master_instance.source_port) AS source_port,
 		MIN(master_instance.cluster_name) AS cluster_name,
 		MIN(master_instance.binary_log_file) AS binary_log_file,
 		MIN(master_instance.binary_log_pos) AS binary_log_pos,
@@ -113,9 +113,9 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(master_instance.last_check_partial_success) as last_check_partial_success,
 		MIN(
 			(
-				master_instance.master_host IN ('', '_')
-				OR master_instance.master_port = 0
-				OR substr(master_instance.master_host, 1, 2) = '//'
+				master_instance.source_host IN ('', '_')
+				OR master_instance.source_port = 0
+				OR substr(master_instance.source_host, 1, 2) = '//'
 			)
 			AND (
 				master_instance.replication_group_name = ''
@@ -312,8 +312,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND vitess_tablet.port = master_instance.port
 		)
 		LEFT JOIN vitess_tablet master_tablet ON (
-			master_tablet.hostname = master_instance.master_host
-			AND master_tablet.port = master_instance.master_port
+			master_tablet.hostname = master_instance.source_host
+			AND master_tablet.port = master_instance.source_port
 		)
 		LEFT JOIN hostname_resolve ON (
 			master_instance.hostname = hostname_resolve.hostname
@@ -322,8 +322,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			COALESCE(
 				hostname_resolve.resolved_hostname,
 				master_instance.hostname
-			) = replica_instance.master_host
-			AND master_instance.port = replica_instance.master_port
+			) = replica_instance.source_host
+			AND master_instance.port = replica_instance.source_port
 		)
 		LEFT JOIN database_instance_maintenance ON (
 			master_instance.hostname = database_instance_maintenance.hostname
@@ -358,7 +358,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.port
 	ORDER BY
 		vitess_tablet.tablet_type ASC,
-		vitess_tablet.master_timestamp DESC
+		vitess_tablet.primary_timestamp DESC
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
@@ -384,13 +384,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
-		a.PrimaryTimeStamp = m.GetTime("master_timestamp")
+		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		a.IsPrimary = m.GetBool("is_master")
 		countCoPrimaryReplicas := m.GetUint("count_co_master_replicas")
 		a.IsCoPrimary = m.GetBool("is_co_master") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("master_host"), Port: m.GetInt("master_port")}
+		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("source_host"), Port: m.GetInt("source_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")
 		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
