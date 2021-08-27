@@ -32,21 +32,21 @@ var primaryKey = InstanceKey{Hostname: "host1", Port: 3306}
 
 func init() {
 	config.Config.HostnameResolveMethod = "none"
-	config.Config.KVClusterPrimaryPrefix = "test/master/"
+	config.Config.KVClusterPrimaryPrefix = "test/primary/"
 	config.MarkConfigurationLoaded()
 	log.SetLevel(log.ERROR)
 }
 
 func TestGetClusterPrimaryKVKey(t *testing.T) {
 	kvKey := GetClusterPrimaryKVKey("foo")
-	test.S(t).ExpectEquals(kvKey, "test/master/foo")
+	test.S(t).ExpectEquals(kvKey, "test/primary/foo")
 }
 
 func TestGetClusterPrimaryKVPair(t *testing.T) {
 	{
 		kvPair := getClusterPrimaryKVPair("myalias", &primaryKey)
 		test.S(t).ExpectNotNil(kvPair)
-		test.S(t).ExpectEquals(kvPair.Key, "test/master/myalias")
+		test.S(t).ExpectEquals(kvPair.Key, "test/primary/myalias")
 		test.S(t).ExpectEquals(kvPair.Value, primaryKey.StringCode())
 	}
 	{
@@ -65,17 +65,17 @@ func TestGetClusterPrimaryKVPairs(t *testing.T) {
 
 	{
 		kvPair := kvPairs[0]
-		test.S(t).ExpectEquals(kvPair.Key, "test/master/myalias")
+		test.S(t).ExpectEquals(kvPair.Key, "test/primary/myalias")
 		test.S(t).ExpectEquals(kvPair.Value, primaryKey.StringCode())
 	}
 	{
 		kvPair := kvPairs[1]
-		test.S(t).ExpectEquals(kvPair.Key, "test/master/myalias/hostname")
+		test.S(t).ExpectEquals(kvPair.Key, "test/primary/myalias/hostname")
 		test.S(t).ExpectEquals(kvPair.Value, primaryKey.Hostname)
 	}
 	{
 		kvPair := kvPairs[2]
-		test.S(t).ExpectEquals(kvPair.Key, "test/master/myalias/port")
+		test.S(t).ExpectEquals(kvPair.Key, "test/primary/myalias/port")
 		test.S(t).ExpectEquals(kvPair.Value, fmt.Sprintf("%d", primaryKey.Port))
 	}
 }

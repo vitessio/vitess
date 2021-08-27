@@ -44,12 +44,12 @@ const (
 	mysqlAggregateInterval      = 100 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
-	aggregatedMetricsCleanup      = 1 * time.Second
+	aggregatedMetricsCleanup      = 10 * time.Second
 	throttledAppsSnapshotInterval = 5 * time.Second
 	recentAppsExpiration          = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
-	nonDeprioritizedAppMapInterval   = 100 * time.Millisecond
+	nonDeprioritizedAppMapInterval   = 10 * time.Second
 
 	dormantPeriod             = time.Minute
 	defaultThrottleTTLMinutes = 60
@@ -165,34 +165,34 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
-
-		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
-
-		mysqlInventoryChan:     make(chan *mysql.Inventory, 1),
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlInventory:         mysql.NewInventory(),
-
-		metricsQuery:     replicationLagQuery,
-		MetricsThreshold: sync2.NewAtomicFloat64(throttleThreshold.Seconds()),
-
-		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
-		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
-		recentApps:             cache.New(recentAppsExpiration, time.Minute),
-		metricsHealth:          cache.New(cache.NoExpiration, 0),
-
-		tickers: [](*timer.SuspendableTicker){},
-
-		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
-
-		httpClient: base.SetupHTTPClient(0),
 	}
-	throttler.initThrottleTabletTypes()
-	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
-	throttler.check = NewThrottlerCheck(throttler)
-	throttler.initConfig("")
-	throttler.check.SelfChecks(context.Background())
 
+	if env.Config().EnableLagThrottler {
+		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+
+		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
+		throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+		throttler.mysqlInventory = mysql.NewInventory()
+
+		throttler.metricsQuery = replicationLagQuery
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
+
+		throttler.throttledApps = cache.New(cache.NoExpiration, 10*time.Second)
+		throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
+		throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup)
+		throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
+		throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+
+		throttler.tickers = [](*timer.SuspendableTicker){}
+		throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
+
+		throttler.httpClient = base.SetupHTTPClient(0)
+		throttler.initThrottleTabletTypes()
+		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+		throttler.check = NewThrottlerCheck(throttler)
+		throttler.initConfig("")
+		throttler.check.SelfChecks(context.Background())
+	}
 	return throttler
 }
 

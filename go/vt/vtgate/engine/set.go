@@ -382,7 +382,7 @@ func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEn
 		if err != nil {
 			return err
 		}
-		vcursor.Session().SetSQLSelectLimit(intValue)
+		vcursor.Session().SetSQLSelectLimit(intValue) // nolint:errcheck
 	case sysvars.TransactionMode.Name:
 		str, err := svss.evalAsString(env)
 		if err != nil {
