@@ -108,7 +108,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			master_instance.last_checked <= master_instance.last_seen
 			and master_instance.last_attempted_check <= master_instance.last_seen + interval ? second
 		) = 1 AS is_last_check_valid,
-		/* To be considered a master, traditional async replication must not be present/valid AND the host should either */
+		/* To be considered a primary, traditional async replication must not be present/valid AND the host should either */
 		/* not be a replication group member OR be the primary of the replication group */
 		MIN(master_instance.last_check_partial_success) as last_check_partial_success,
 		MIN(
@@ -454,7 +454,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToMaster: %+v",
+			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
 				a.ClusterDetails.ClusterName, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
@@ -476,44 +476,44 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
 			a.Analysis = DeadPrimaryWithoutReplicas
-			a.Description = "Master cannot be reached by orchestrator and has no replica"
+			a.Description = "Primary cannot be reached by orchestrator and has no replica"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimary
-			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Primary cannot be reached by orchestrator and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndReplicas
-			a.Description = "Master cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Primary cannot be reached by orchestrator and none of its replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadPrimaryAndSomeReplicas
-			a.Description = "Master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
+			a.Description = "Primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && !a.IsPrimary {
 			a.Analysis = PrimaryHasPrimary
-			a.Description = "Master is replicating from somewhere else"
+			a.Description = "Primary is replicating from somewhere else"
 			ca.hasClusterwideAction = true
 			//
 		} else if a.IsClusterPrimary && a.IsReadOnly {
 			a.Analysis = PrimaryIsReadOnly
-			a.Description = "Master is read-only"
+			a.Description = "Primary is read-only"
 			//
 		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
-			a.Description = "Master semi-sync must be set"
+			a.Description = "Primary semi-sync must be set"
 			//
 		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
-			a.Description = "Master semi-sync must not be set"
+			a.Description = "Primary semi-sync must not be set"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && ca.primaryKey == nil {
 			a.Analysis = ClusterHasNoPrimary
-			a.Description = "Cluster has no master"
+			a.Description = "Cluster has no primary"
 			ca.hasClusterwideAction = true
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsReadOnly {
 			a.Analysis = ReplicaIsWritable
@@ -521,11 +521,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			//
 		} else if topo.IsReplicaType(a.TabletType) && a.IsPrimary {
 			a.Analysis = NotConnectedToPrimary
-			a.Description = "Not connected to the master"
+			a.Description = "Not connected to the primary"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ca.primaryKey != nil && a.AnalyzedInstancePrimaryKey != *ca.primaryKey {
 			a.Analysis = ConnectedToWrongPrimary
-			a.Description = "Connected to wrong master"
+			a.Description = "Connected to wrong primary"
 			//
 		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && a.ReplicationStopped {
 			a.Analysis = ReplicationStopped
@@ -542,85 +542,85 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// TODO(sougou): Events below here are either ignored or not possible.
 		} else if a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachablePrimaryWithLaggingReplicas
-			a.Description = "Master cannot be reached by orchestrator and all of its replicas are lagging"
+			a.Description = "Primary cannot be reached by orchestrator and all of its replicas are lagging"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			// partial success is here to redice noise
 			a.Analysis = UnreachablePrimary
-			a.Description = "Master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && !a.LastCheckValid && a.LastCheckPartialSuccess && a.CountReplicasFailingToConnectToPrimary > 0 && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			// there's partial success, but also at least one replica is failing to connect to primary
 			a.Analysis = UnreachablePrimary
-			a.Description = "Master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsPrimary && a.SemiSyncPrimaryEnabled && a.SemiSyncPrimaryStatus && a.SemiSyncPrimaryWaitForReplicaCount > 0 && a.SemiSyncPrimaryClients < a.SemiSyncPrimaryWaitForReplicaCount {
 			if isStaleBinlogCoordinates {
 				a.Analysis = LockedSemiSyncPrimary
-				a.Description = "Semi sync master is locked since it doesn't get enough replica acknowledgements"
+				a.Description = "Semi sync primary is locked since it doesn't get enough replica acknowledgements"
 			} else {
 				a.Analysis = LockedSemiSyncPrimaryHypothesis
-				a.Description = "Semi sync master seems to be locked, more samplings needed to validate"
+				a.Description = "Semi sync primary seems to be locked, more samplings needed to validate"
 			}
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = PrimarySingleReplicaNotReplicating
-			a.Description = "Master is reachable but its single replica is not replicating"
+			a.Description = "Primary is reachable but its single replica is not replicating"
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == 0 {
 			a.Analysis = PrimarySingleReplicaDead
-			a.Description = "Master is reachable but its single replica is dead"
+			a.Description = "Primary is reachable but its single replica is dead"
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllPrimaryReplicasNotReplicating
-			a.Description = "Master is reachable but none of its replicas is replicating"
+			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
 		} else if a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllPrimaryReplicasNotReplicatingOrDead
-			a.Description = "Master is reachable but none of its replicas is replicating"
+			a.Description = "Primary is reachable but none of its replicas is replicating"
 			//
-		} else /* co-master */ if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		} else /* co-primary */ if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadCoPrimary
-			a.Description = "Co-master cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Co-primary cannot be reached by orchestrator and none of its replicas is replicating"
 			//
 		} else if a.IsCoPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadCoPrimaryAndSomeReplicas
-			a.Description = "Co-master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
+			a.Description = "Co-primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			//
 		} else if a.IsCoPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachableCoPrimary
-			a.Description = "Co-master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Co-primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if a.IsCoPrimary && a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllCoPrimaryReplicasNotReplicating
-			a.Description = "Co-master is reachable but none of its replicas is replicating"
+			a.Description = "Co-primary is reachable but none of its replicas is replicating"
 			//
-		} else /* intermediate-master */ if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountReplicasFailingToConnectToPrimary == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
+		} else /* intermediate-primary */ if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountReplicasFailingToConnectToPrimary == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimaryWithSingleReplicaFailingToConnect
-			a.Description = "Intermediate master cannot be reached by orchestrator and its (single) replica is failing to connect"
+			a.Description = "Intermediate primary cannot be reached by orchestrator and its (single) replica is failing to connect"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas == 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimaryWithSingleReplica
-			a.Description = "Intermediate master cannot be reached by orchestrator and its (single) replica is not replicating"
+			a.Description = "Intermediate primary cannot be reached by orchestrator and its (single) replica is not replicating"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicas == a.CountReplicas && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimary
-			a.Description = "Intermediate master cannot be reached by orchestrator and none of its replicas is replicating"
+			a.Description = "Intermediate primary cannot be reached by orchestrator and none of its replicas is replicating"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && a.CountValidReplicas < a.CountReplicas && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimaryAndSomeReplicas
-			a.Description = "Intermediate master cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
+			a.Description = "Intermediate primary cannot be reached by orchestrator; some of its replicas are unreachable and none of its reachable replicas is replicating"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicas == 0 {
 			a.Analysis = DeadIntermediatePrimaryAndReplicas
-			a.Description = "Intermediate master cannot be reached by orchestrator and all of its replicas are unreachable"
+			a.Description = "Intermediate primary cannot be reached by orchestrator and all of its replicas are unreachable"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && a.CountLaggingReplicas == a.CountReplicas && a.CountDelayedReplicas < a.CountReplicas && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachableIntermediatePrimaryWithLaggingReplicas
-			a.Description = "Intermediate master cannot be reached by orchestrator and all of its replicas are lagging"
+			a.Description = "Intermediate primary cannot be reached by orchestrator and all of its replicas are lagging"
 			//
 		} else if !a.IsPrimary && !a.LastCheckValid && !a.LastCheckPartialSuccess && a.CountValidReplicas > 0 && a.CountValidReplicatingReplicas > 0 {
 			a.Analysis = UnreachableIntermediatePrimary
-			a.Description = "Intermediate master cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
+			a.Description = "Intermediate primary cannot be reached by orchestrator but it has replicating replicas; possibly a network/host issue"
 			//
 		} else if !a.IsPrimary && a.LastCheckValid && a.CountReplicas > 1 && a.CountValidReplicatingReplicas == 0 &&
 			a.CountReplicasFailingToConnectToPrimary > 0 && a.CountReplicasFailingToConnectToPrimary == a.CountValidReplicas {
@@ -629,24 +629,24 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			// Must have at least two replicas to reach such conclusion -- do note that the intermediate primary is still
 			// reachable to orchestrator, so we base our conclusion on replicas only at this point.
 			a.Analysis = AllIntermediatePrimaryReplicasFailingToConnectOrDead
-			a.Description = "Intermediate master is reachable but all of its replicas are failing to connect"
+			a.Description = "Intermediate primary is reachable but all of its replicas are failing to connect"
 			//
 		} else if !a.IsPrimary && a.LastCheckValid && a.CountReplicas > 0 && a.CountValidReplicatingReplicas == 0 {
 			a.Analysis = AllIntermediatePrimaryReplicasNotReplicating
-			a.Description = "Intermediate master is reachable but none of its replicas is replicating"
+			a.Description = "Intermediate primary is reachable but none of its replicas is replicating"
 			//
 		} else if a.IsBinlogServer && a.IsFailingToConnectToPrimary {
 			a.Analysis = BinlogServerFailingToConnectToPrimary
-			a.Description = "Binlog server is unable to connect to its master"
+			a.Description = "Binlog server is unable to connect to its primary"
 			//
 		} else if a.ReplicationDepth == 1 && a.IsFailingToConnectToPrimary {
 			a.Analysis = FirstTierReplicaFailingToConnectToPrimary
-			a.Description = "1st tier replica (directly replicating from topology master) is unable to connect to the master"
+			a.Description = "1st tier replica (directly replicating from topology primary) is unable to connect to the primary"
 			//
 		}
 		//		 else if a.IsPrimary && a.CountReplicas == 0 {
-		//			a.Analysis = MasterWithoutReplicas
-		//			a.Description = "Master has no replicas"
+		//			a.Analysis = PrimaryWithoutReplicas
+		//			a.Description = "Primary has no replicas"
 		//		}
 
 		appendAnalysis := func(analysis *ReplicationAnalysis) {

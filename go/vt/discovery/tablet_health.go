@@ -89,6 +89,6 @@ func (th *TabletHealth) GetHostNameLevel(level int) string {
 // https://{{.GetHostNameLevel 0}}.bastion.corp -> https://host.bastion.corp
 func (th *TabletHealth) getTabletDebugURL() string {
 	var buffer bytes.Buffer
-	tabletURLTemplate.Execute(&buffer, th)
+	_ = tabletURLTemplate.Execute(&buffer, th)
 	return buffer.String()
 }

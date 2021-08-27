@@ -521,7 +521,7 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, bufferWrites bool,
 			defer waitGroup.Done()
 			if err := db.QueryRow(config.Config.ReplicationLagQuery).Scan(&instance.ReplicationLagSeconds); err == nil {
 				if instance.ReplicationLagSeconds.Valid && instance.ReplicationLagSeconds.Int64 < 0 {
-					log.Warningf("Host: %+v, instance.SlaveLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
+					log.Warningf("Host: %+v, instance.ReplicationLagSeconds < 0 [%+v], correcting to 0", instanceKey, instance.ReplicationLagSeconds.Int64)
 					instance.ReplicationLagSeconds.Int64 = 0
 				}
 			} else {
@@ -725,7 +725,7 @@ Cleanup:
 			instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ServerUUID)
 		}
 		// Add replication group ancestry UUID as well. Otherwise, Orchestrator thinks there are errant GTIDs in group
-		// members and its slaves, even though they are not.
+		// members and its replicas, even though they are not.
 		instance.AncestryUUID = fmt.Sprintf("%s,%s", instance.AncestryUUID, instance.ReplicationGroupName)
 		instance.AncestryUUID = strings.Trim(instance.AncestryUUID, ",")
 		if instance.ExecutedGtidSet != "" && instance.primaryExecutedGtidSet != "" {
@@ -874,7 +874,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		clusterNameByCoPrimaryKey := instance.SourceKey.StringCode()
 		if clusterName != clusterNameByInstanceKey && clusterName != clusterNameByCoPrimaryKey {
 			// Can be caused by a co-primary topology failover
-			log.Errorf("ReadInstanceClusterAttributes: in co-master topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
+			log.Errorf("ReadInstanceClusterAttributes: in co-primary topology %s is not in (%s, %s). Forcing it to become one of them", clusterName, clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 			clusterName = math.TernaryString(instance.Key.SmallerThan(&instance.SourceKey), clusterNameByInstanceKey, clusterNameByCoPrimaryKey)
 		}
 		if clusterName == clusterNameByInstanceKey {
@@ -1790,7 +1790,7 @@ func InjectUnseenPrimaries() error {
 		primaryKey := primaryKey
 
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnorePrimaryHostnameFilters) {
-			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnoreMasterHostnameFilters", primaryKey)
+			log.Debugf("InjectUnseenPrimaries: skipping discovery of %+v because it matches DiscoveryIgnorePrimaryHostnameFilters", primaryKey)
 			continue
 		}
 		if RegexpMatchPatterns(primaryKey.StringCode(), config.Config.DiscoveryIgnoreHostnameFilters) {
@@ -1806,7 +1806,7 @@ func InjectUnseenPrimaries() error {
 		}
 	}
 
-	AuditOperation("inject-unseen-masters", nil, fmt.Sprintf("Operations: %d", operations))
+	AuditOperation("inject-unseen-primaries", nil, fmt.Sprintf("Operations: %d", operations))
 	return err
 }
 
@@ -1855,7 +1855,7 @@ func ForgetUnseenInstancesDifferentlyResolved() error {
 	return err
 }
 
-// readUnknownPrimaryHostnameResolves will figure out the resolved hostnames of master-hosts which cannot be found.
+// readUnknownPrimaryHostnameResolves will figure out the resolved hostnames of primary-hosts which cannot be found.
 // It uses the hostname_resolve_history table to heuristically guess the correct hostname (based on "this was the
 // last time we saw this hostname and it resolves into THAT")
 func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
@@ -1899,7 +1899,7 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 		UpdateResolvedHostname(hostname, resolvedHostname)
 	}
 
-	AuditOperation("resolve-unknown-masters", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
+	AuditOperation("resolve-unknown-primaries", nil, fmt.Sprintf("Num resolved hostnames: %d", len(hostnameResolves)))
 	return err
 }
 
@@ -2070,7 +2070,7 @@ func GetPrimariesKVPairs(clusterName string) (kvPairs [](*kv.KVPair), err error)
 }
 
 // HeuristicallyApplyClusterDomainInstanceAttribute writes down the cluster-domain
-// to master-hostname as a general attribute, by reading current topology and **trusting** it to be correct
+// to primary-hostname as a general attribute, by reading current topology and **trusting** it to be correct
 func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (instanceKey *InstanceKey, err error) {
 	clusterInfo, err := ReadClusterInfo(clusterName)
 	if err != nil {
@@ -2086,7 +2086,7 @@ func HeuristicallyApplyClusterDomainInstanceAttribute(clusterName string) (insta
 		return nil, err
 	}
 	if len(primaries) != 1 {
-		return nil, fmt.Errorf("Found %+v potential master for cluster %+v", len(primaries), clusterName)
+		return nil, fmt.Errorf("found %+v potential primary for cluster %+v", len(primaries), clusterName)
 	}
 	instanceKey = &primaries[0].Key
 	return instanceKey, attributes.SetGeneralAttribute(clusterInfo.ClusterDomain, instanceKey.StringCode())
@@ -2133,7 +2133,7 @@ func ReadAllInstanceKeys() ([]InstanceKey, error) {
 	return res, log.Errore(err)
 }
 
-// ReadAllInstanceKeysMasterKeys
+// ReadAllInstanceKeysSourceKeys
 func ReadAllMinimalInstances() ([]MinimalInstance, error) {
 	res := []MinimalInstance{}
 	query := `
