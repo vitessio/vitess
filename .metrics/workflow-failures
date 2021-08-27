@@ -1,5 +1,3 @@
-2021-04-22T12:30:20Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/774177193
-2021-04-22T12:30:20Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/774177174
 2021-04-22T12:38:15Z,endtoend,https://github.com/vitessio/vitess/actions/runs/774199704
 2021-04-22T12:38:15Z,local_example,https://github.com/vitessio/vitess/actions/runs/774199693
 2021-04-22T13:01:13Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/774268086
@@ -9998,3 +9996,5 @@
 2021-08-27T15:40:05Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1174800475
 2021-08-27T15:40:05Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1174800526
 2021-08-27T15:40:05Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1174800505
+2021-08-27T16:03:55Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1174868113
+2021-08-27T16:03:55Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1174868127
