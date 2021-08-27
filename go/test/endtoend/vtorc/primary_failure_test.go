@@ -322,9 +322,23 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
 	crossCellReplica := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica}, 25*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, rdonly, replica}, 25*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -336,6 +350,8 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
+	// also check that the replication is working correctly after failover
+	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 }
 
 // covers the test case master-failover-candidate-lag from orchestrator
