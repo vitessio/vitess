@@ -31,15 +31,15 @@ var generateSQLBase = []string{
           log_replica_updates tinyint(3) unsigned NOT NULL,
           binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
           binary_log_pos bigint(20) unsigned NOT NULL,
-          master_host varchar(128) CHARACTER SET ascii NOT NULL,
-          master_port smallint(5) unsigned NOT NULL,
+          source_host varchar(128) CHARACTER SET ascii NOT NULL,
+          source_port smallint(5) unsigned NOT NULL,
           replica_sql_running tinyint(3) unsigned NOT NULL,
           replica_io_running tinyint(3) unsigned NOT NULL,
-          master_log_file varchar(128) CHARACTER SET ascii NOT NULL,
-          read_master_log_pos bigint(20) unsigned NOT NULL,
-          relay_master_log_file varchar(128) CHARACTER SET ascii NOT NULL,
-          exec_master_log_pos bigint(20) unsigned NOT NULL,
-          seconds_behind_master bigint(20) unsigned DEFAULT NULL,
+          primary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+          read_primary_log_pos bigint(20) unsigned NOT NULL,
+          relay_primary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+          exec_primary_log_pos bigint(20) unsigned NOT NULL,
+          seconds_behind_primary bigint(20) unsigned DEFAULT NULL,
           replica_lag_seconds bigint(20) unsigned DEFAULT NULL,
           num_replica_hosts int(10) unsigned NOT NULL,
           replica_hosts text CHARACTER SET ascii NOT NULL,
@@ -375,8 +375,8 @@ var generateSQLBase = []string{
 			snapshot_unix_timestamp INT UNSIGNED NOT NULL,
 			hostname varchar(128) CHARACTER SET ascii NOT NULL,
 			port smallint(5) unsigned NOT NULL,
-			master_host varchar(128) CHARACTER SET ascii NOT NULL,
-			master_port smallint(5) unsigned NOT NULL,
+			source_host varchar(128) CHARACTER SET ascii NOT NULL,
+			source_port smallint(5) unsigned NOT NULL,
 			cluster_name tinytext CHARACTER SET ascii NOT NULL,
 			PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
@@ -494,37 +494,37 @@ var generateSQLBase = []string{
 		CREATE INDEX domain_name_idx_cluster_domain_name ON cluster_domain_name (domain_name(32))
 	`,
 	`
-		CREATE TABLE IF NOT EXISTS master_position_equivalence (
+		CREATE TABLE IF NOT EXISTS primary_position_equivalence (
 			equivalence_id bigint unsigned not null auto_increment,
-			master1_hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			master1_port smallint(5) unsigned NOT NULL,
-			master1_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
-			master1_binary_log_pos bigint(20) unsigned NOT NULL,
-			master2_hostname varchar(128) CHARACTER SET ascii NOT NULL,
-			master2_port smallint(5) unsigned NOT NULL,
-			master2_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
-			master2_binary_log_pos bigint(20) unsigned NOT NULL,
+			primary1_hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			primary1_port smallint(5) unsigned NOT NULL,
+			primary1_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+			primary1_binary_log_pos bigint(20) unsigned NOT NULL,
+			primary2_hostname varchar(128) CHARACTER SET ascii NOT NULL,
+			primary2_port smallint(5) unsigned NOT NULL,
+			primary2_binary_log_file varchar(128) CHARACTER SET ascii NOT NULL,
+			primary2_binary_log_pos bigint(20) unsigned NOT NULL,
 			last_suggested TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY (equivalence_id)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
 	`,
 	`
-		DROP INDEX equivalence_uidx ON master_position_equivalence
+		DROP INDEX equivalence_uidx ON primary_position_equivalence
 	`,
 	`
-		CREATE UNIQUE INDEX equivalence_uidx_master_position_equivalence ON master_position_equivalence (master1_hostname, master1_port, master1_binary_log_file, master1_binary_log_pos, master2_hostname, master2_port)
+		CREATE UNIQUE INDEX equivalence_uidx_primary_position_equivalence ON primary_position_equivalence (primary1_hostname, primary1_port, primary1_binary_log_file, primary1_binary_log_pos, primary2_hostname, primary2_port)
 	`,
 	`
-		DROP INDEX master2_idx ON master_position_equivalence
+		DROP INDEX primary2_idx ON primary_position_equivalence
 	`,
 	`
-		CREATE INDEX master2_idx_master_position_equivalence ON master_position_equivalence (master2_hostname, master2_port, master2_binary_log_file, master2_binary_log_pos)
+		CREATE INDEX primary2_idx_primary_position_equivalence ON primary_position_equivalence (primary2_hostname, primary2_port, primary2_binary_log_file, primary2_binary_log_pos)
 	`,
 	`
-		DROP INDEX last_suggested_idx ON master_position_equivalence
+		DROP INDEX last_suggested_idx ON primary_position_equivalence
 	`,
 	`
-		CREATE INDEX last_suggested_idx_master_position_equivalence ON master_position_equivalence (last_suggested)
+		CREATE INDEX last_suggested_idx_primary_position_equivalence ON primary_position_equivalence (last_suggested)
 	`,
 	`
 		CREATE TABLE IF NOT EXISTS async_request (
@@ -859,7 +859,7 @@ var generateSQLBase = []string{
 			shard varchar(128) CHARACTER SET ascii NOT NULL,
 			cell varchar(128) CHARACTER SET ascii NOT NULL,
 			tablet_type smallint(5) NOT NULL,
-			master_timestamp timestamp NOT NULL,
+			primary_timestamp timestamp NOT NULL,
 			info varchar(512) CHARACTER SET ascii NOT NULL,
 			PRIMARY KEY (hostname, port)
 		) ENGINE=InnoDB DEFAULT CHARSET=ascii
