@@ -487,3 +487,8 @@ Gen4 plan same as above
 "select distinct a, b as a from user"
 "generating order by clause: ambiguous symbol reference: a"
 Gen4 plan same as above
+
+# Aggregates and joins
+"select count(*) from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above

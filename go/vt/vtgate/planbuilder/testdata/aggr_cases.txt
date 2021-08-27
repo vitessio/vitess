@@ -2226,11 +2226,6 @@ Gen4 plan same as above
   }
 }
 
-# Aggregates and joins
-"select count(*) from user join user_extra"
-"unsupported: cross-shard query with aggregates"
-Gen4 plan same as above
-
 # Grouping on join
 "select user.a from user join user_extra group by user.a"
 "unsupported: cross-shard query with aggregates"
