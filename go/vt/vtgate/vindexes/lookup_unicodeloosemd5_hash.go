@@ -381,6 +381,11 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lhu.lkp)
 }
 
+// IsBackfilling implements the LookupBackfill interface
+func (lhu *LookupUnicodeLooseMD5HashUnique) IsBackfilling() bool {
+	return lhu.writeOnly
+}
+
 func unicodeHashValue(value sqltypes.Value) (sqltypes.Value, error) {
 	hash, err := unicodeHash(vMD5Hash, value)
 	if err != nil {

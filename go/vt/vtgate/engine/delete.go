@@ -79,7 +79,13 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	case Unsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
 	case Equal:
-		return del.execDeleteEqual(vcursor, bindVars)
+		// checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
+		// and we will be able to do a delete equal. Otherwise, we do a delete scatter since we will not be able
+		// to know in which shard the row is.
+		if lu, isLu := del.Vindex.(vindexes.LookupBackfill); (isLu && !lu.IsBackfilling()) || !isLu {
+			return del.execDeleteEqual(vcursor, bindVars)
+		}
+		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case In:
 		return del.execDeleteIn(vcursor, bindVars)
 	case Scatter:

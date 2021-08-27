@@ -128,6 +128,11 @@ type Lookup interface {
 	Update(vc VCursor, oldValues []sqltypes.Value, ksid []byte, newValues []sqltypes.Value) error
 }
 
+// LookupBackfill interfaces all lookup vindexes that can backfill rows, such as LookupUnique.
+type LookupBackfill interface {
+	IsBackfilling() bool
+}
+
 // WantOwnerInfo defines the interface that a vindex must
 // satisfy to request info about the owner table. This information can
 // be used to query the owner's table for the owning row's presence.

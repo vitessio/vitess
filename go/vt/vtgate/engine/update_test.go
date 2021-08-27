@@ -628,6 +628,16 @@ func buildTestVSchema() *vindexes.VSchema {
 						},
 						Owner: "t1",
 					},
+					"backfill": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table":      "lkp3",
+							"from":       "from",
+							"to":         "toc",
+							"write_only": "true",
+						},
+						Owner: "t1",
+					},
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
@@ -640,6 +650,9 @@ func buildTestVSchema() *vindexes.VSchema {
 						}, {
 							Name:    "onecol",
 							Columns: []string{"c3"},
+						}, {
+							Name:    "backfill",
+							Columns: []string{"c4"},
 						}},
 					},
 					"t2": {
