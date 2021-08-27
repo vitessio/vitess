@@ -2352,9 +2352,9 @@ partition_definition_opt:
   {
     $$ = nil
   }
-| partition_definitions
+| '(' partition_definitions ')'
   {
-    $$ = $1
+    $$ = $2
   }
 
 linear_opt:
