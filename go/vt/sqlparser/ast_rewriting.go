@@ -308,7 +308,7 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
-	case JoinCondition:
+	case *JoinCondition:
 		er.rewriteJoinCondition(cursor, node)
 	case *AliasedTableExpr:
 		if !SystemSchema(er.keyspace) {
@@ -338,7 +338,7 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 	return true
 }
 
-func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node JoinCondition) {
+func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCondition) {
 	if node.Using != nil && !er.hasStarInSelect {
 		joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
 		if !ok {
@@ -361,7 +361,7 @@ func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node JoinCond
 			er.err = err
 			return
 		}
-		newCondition := JoinCondition{}
+		newCondition := &JoinCondition{}
 		for _, colIdent := range node.Using {
 			lftCol := NewColNameWithQualifier(colIdent.String(), lft)
 			rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)

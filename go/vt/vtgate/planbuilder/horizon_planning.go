@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
@@ -190,7 +192,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		// push projection to the outer query
 		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
 	case *simpleProjection:
-		offset, _, err := pushProjection(expr, node.input, semTable, inner, reuseCol)
+		offset, _, err := pushProjection(expr, node.input, semTable, inner, true)
 		if err != nil {
 			return 0, false, err
 		}
@@ -306,6 +308,9 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
 		offset, _, err := pushProjection(pushExpr, plan, ctx.semTable, true, false)
 		if err != nil {
+			if strings.HasPrefix(err.Error(), "unknown dependencies for") {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			}
 			return nil, err
 		}
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{

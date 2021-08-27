@@ -1286,6 +1286,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
