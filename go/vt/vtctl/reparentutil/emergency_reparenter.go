@@ -192,11 +192,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
+	_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
+	if err != nil {
+		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
+	}
+
 	if err := reparentFunctions.StartReplication(ctx, ev, erp.logger, erp.tmc); err != nil {
 		return err
 	}
 
-	ev.NewPrimary = proto.Clone(reparentFunctions.GetNewPrimary()).(*topodatapb.Tablet)
+	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
 
 	return errInPromotion
 }

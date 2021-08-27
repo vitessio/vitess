@@ -613,34 +613,34 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", vtorcReparent.promotedReplica.Key))
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", vtorcReparent.promotedReplica.SelfBinlogCoordinates))
 
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
-		{
-			_, err := inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
-			if err != nil {
-				// Ugly, but this is important. Let's give it another try
-				_, err = inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
-			}
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying RESET SLAVE ALL on promoted master: success=%t", (err == nil)))
-			if err != nil {
-				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: NOTE that %+v is promoted even though SHOW SLAVE STATUS may still show it has a master", vtorcReparent.promotedReplica.Key))
-			}
-		}
-		{
-			count := inst.MasterSemiSync(vtorcReparent.promotedReplica.Key)
-			err := inst.SetSemiSyncMaster(&vtorcReparent.promotedReplica.Key, count > 0)
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
-
-			// Dont' allow writes if semi-sync settings fail.
-			if err == nil {
-				_, err := inst.SetReadOnly(&vtorcReparent.promotedReplica.Key, false)
-				AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
-			}
-		}
-		// Let's attempt, though we won't necessarily succeed, to set old master as read-only
-		go func() {
-			_, err := inst.SetReadOnly(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, true)
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=1 on demoted master: success=%t", (err == nil)))
-		}()
+		//AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadMaster: will apply MySQL changes to promoted master")
+		//{
+		//	_, err := inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
+		//	if err != nil {
+		//		// Ugly, but this is important. Let's give it another try
+		//		_, err = inst.ResetReplicationOperation(&vtorcReparent.promotedReplica.Key)
+		//	}
+		//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying RESET SLAVE ALL on promoted master: success=%t", (err == nil)))
+		//	if err != nil {
+		//		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: NOTE that %+v is promoted even though SHOW SLAVE STATUS may still show it has a master", vtorcReparent.promotedReplica.Key))
+		//	}
+		//}
+		//{
+		//	count := inst.MasterSemiSync(vtorcReparent.promotedReplica.Key)
+		//	err := inst.SetSemiSyncMaster(&vtorcReparent.promotedReplica.Key, count > 0)
+		//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying semi-sync %v: success=%t", count > 0, (err == nil)))
+		//
+		//	// Dont' allow writes if semi-sync settings fail.
+		//	if err == nil {
+		//		_, err := inst.SetReadOnly(&vtorcReparent.promotedReplica.Key, false)
+		//		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=0 on promoted master: success=%t", (err == nil)))
+		//	}
+		//}
+		//// Let's attempt, though we won't necessarily succeed, to set old master as read-only
+		//go func() {
+		//	_, err := inst.SetReadOnly(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, true)
+		//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=1 on demoted master: success=%t", (err == nil)))
+		//}()
 
 		kvPairs := inst.GetClusterMasterKVPairs(vtorcReparent.analysisEntry.ClusterDetails.ClusterAlias, &vtorcReparent.promotedReplica.Key)
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))

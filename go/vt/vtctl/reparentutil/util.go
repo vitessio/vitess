@@ -420,7 +420,7 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 		return err
 	}
 
-	_, err = tmc.StopReplicationMinimum(ctx, newPrimary, pos, reparentFunctions.GetWaitReplicasTimeout())
+	err = tmc.WaitForPosition(ctx, newPrimary, pos)
 	if err != nil {
 		return err
 	}
