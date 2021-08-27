@@ -231,12 +231,29 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 // covers the test case master-failover-fail-promotion-lag-minutes-success from orchestrator
 func TestPromotionLagSuccess(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config_promotion_success.json")
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_promotion_success.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -246,13 +263,10 @@ func TestPromotionLagSuccess(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	for _, tablet := range shard0.Vttablets {
-		// we know we have only two tablets, so the "other" one must be the new primary
-		if tablet.Alias != curPrimary.Alias {
-			checkPrimaryTablet(t, clusterInstance, tablet)
-			break
-		}
-	}
+	// check that the replica gets promoted
+	checkPrimaryTablet(t, clusterInstance, replica)
+	// also check that the replication is working correctly after failover
+	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
