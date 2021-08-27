@@ -136,6 +136,17 @@ func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Durat
 	return time.Duration(config.Config.LockShardTimeoutSeconds) * time.Second
 }
 
+// TODO : Discuss correct way
+func (vtorcReparent *VtOrcReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
+	return 1 * time.Second
+}
+
+// TODO : Discuss correct way
+func (vtorcReparent *VtOrcReparentFunctions) HandleRelayLogFailure(err error) error {
+	log.Infof("failed to apply all relay logs - %v", err)
+	return nil
+}
+
 func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
 	return nil
 }

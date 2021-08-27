@@ -48,6 +48,8 @@ type (
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		GetWaitReplicasTimeout() time.Duration
+		GetWaitForRelayLogsTimeout() time.Duration
+		HandleRelayLogFailure(err error) error
 		GetIgnoreReplicas() sets.String
 		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
@@ -131,6 +133,14 @@ func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Co
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) GetWaitReplicasTimeout() time.Duration {
 	return vtctlReparentFunctions.WaitReplicasTimeout
+}
+
+func (vtctlReparentFunctions *VtctlReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
+	return vtctlReparentFunctions.WaitReplicasTimeout
+}
+
+func (vtctlReparentFunctions *VtctlReparentFunctions) HandleRelayLogFailure(err error) error {
+	return err
 }
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) GetIgnoreReplicas() sets.String {
