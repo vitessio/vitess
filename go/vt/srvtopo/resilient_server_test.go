@@ -66,7 +66,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// wait until we get the right value
 	var got *topodatapb.SrvKeyspace
@@ -126,7 +127,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
 
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	updateTime := time.Now()
 	for {
@@ -250,7 +252,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnName: "id3",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -382,7 +385,8 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// Wait until we get the right value.
 	expiry := time.Now().Add(5 * time.Second)
@@ -506,8 +510,11 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
+
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks2, %s) failed", want)
 
 	ctx := context.Background()
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
