@@ -463,20 +463,25 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
-	// make the replica lag by setting the source_delay to 20 seconds
-	runSQL(t, "STOP SLAVE", replica, "")
-	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", replica, "")
-	runSQL(t, "START SLAVE", replica, "")
+	// revoke super privileges from vtorc on replica so that it is unable to repair the replication
+	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, replica, "orc_client_user")
 
-	defer func() {
-		// fix the replica back so that no other tests see this as a side effect
-		runSQL(t, "STOP SLAVE", replica, "")
-		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", replica, "")
-		runSQL(t, "START SLAVE", replica, "")
-	}()
+	// stop replication on the replica.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
+	require.NoError(t, err)
 
 	// check that rdonly and crossCellReplica are able to replicate. We also want to add some queries to crossCenterReplica which will not be there in replica
 	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly, crossCellReplica}, 15*time.Second)
+
+	// reset the primary logs so that crossCellReplica can never catch up
+	resetPrimaryLogs(t, curPrimary)
+
+	// start replication back on the replica.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", replica.Alias)
+	require.NoError(t, err)
+
+	// grant super privileges back to vtorc on replica so that it can repair
+	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, replica, "orc_client_user")
 
 	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
@@ -493,6 +498,11 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 
 	// the replica should be promoted since we have prevented cross cell promotions
 	checkPrimaryTablet(t, clusterInstance, replica)
+
+	// assert that the replica has indeed caught up
+	out, err = runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(out.Rows))
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
