@@ -345,6 +345,13 @@ func TestMain(m *testing.M) {
 	}()
 
 	cluster.PanicHandler(nil)
+
+	// stop vtorc first otherwise its logs get polluted
+	// with instances being unreachable triggering unnecessary operations
+	if clusterInstance.VtorcProcess != nil {
+		_ = clusterInstance.VtorcProcess.TearDown()
+	}
+
 	for _, cellInfo := range cellInfos {
 		killTablets(cellInfo.replicaTablets)
 		killTablets(cellInfo.rdonlyTablets)
