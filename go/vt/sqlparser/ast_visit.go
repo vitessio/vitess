@@ -126,6 +126,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
+	case *ExprOrColumns:
+		return VisitRefOfExprOrColumns(in, f)
 	case Exprs:
 		return VisitExprs(in, f)
 	case *Flush:
@@ -204,6 +206,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfParenTableExpr(in, f)
 	case *PartitionDefinition:
 		return VisitRefOfPartitionDefinition(in, f)
+	case *PartitionOption:
+		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
 		return VisitRefOfPartitionSpec(in, f)
 	case Partitions:
@@ -260,6 +264,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
+	case *SubPartition:
+		return VisitRefOfSubPartition(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -824,6 +830,9 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfCreateView(in *CreateView, f Visit) error {
@@ -1008,6 +1017,21 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExprOrColumns(in *ExprOrColumns, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ColumnList, f); err != nil {
 		return err
 	}
 	return nil
@@ -1496,6 +1520,35 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.HASH, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.KeyColList, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfExprOrColumns(in.ExprOrCol, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubPartition(in.SubPartition, f); err != nil {
+		return err
+	}
+	for _, el := range in.Definitions {
+		if err := VisitRefOfPartitionDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -1900,6 +1953,24 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 		return err
 	}
 	if err := VisitTableName(in.Table, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColIdent(in.HASH, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.KeyColList, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
 	}
 	return nil

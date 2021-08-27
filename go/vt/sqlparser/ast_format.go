@@ -404,6 +404,91 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PartitionOption) Format(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if !node.HASH.IsEmpty() {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.astPrintf(node, " %v", node.HASH)
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " %v", node.KeyColList)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.astPrintf(node, " %s", node.RangeOrList)
+		buf.astPrintf(node, " %v", node.ExprOrCol)
+	}
+	if node.Partitions != "" {
+		buf.astPrintf(node, " partitions %s", node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.astPrintf(node, " %v", node.SubPartition)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.astPrintf(node, "%v", pd)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// Format formats the node.
+func (node *SubPartition) Format(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if !node.HASH.IsEmpty() {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.astPrintf(node, " %v", node.HASH)
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " (%v)", node.KeyColList)
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.astPrintf(node, "subpartitions %s", node.SubPartitions)
+	}
+}
+
+// Format formats the node.
+func (node *ExprOrColumns) Format(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.astPrintf(node, "(%v)", node.Expr)
+	}
+	if node.ColumnList != nil {
+		buf.astPrintf(node, "columns %v", node.ColumnList)
+	}
+}
+
+// Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ts, "(\n")
 	for i, col := range ts.Columns {
@@ -1434,6 +1519,9 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	}
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
+	}
+	if node.PartitionOption != nil {
+		buf.astPrintf(node, " %v", node.PartitionOption)
 	}
 }
 

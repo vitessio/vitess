@@ -127,6 +127,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
+	case *ExprOrColumns:
+		return CloneRefOfExprOrColumns(in)
 	case Exprs:
 		return CloneExprs(in)
 	case *Flush:
@@ -205,6 +207,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfParenTableExpr(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
+	case *PartitionOption:
+		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
 	case Partitions:
@@ -261,6 +265,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfStarExpr(in)
 	case *Stream:
 		return CloneRefOfStream(in)
+	case *SubPartition:
+		return CloneRefOfSubPartition(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -835,6 +841,17 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
+// CloneRefOfExprOrColumns creates a deep clone of the input.
+func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.ColumnList = CloneColumns(n.ColumnList)
+	return &out
+}
+
 // CloneExprs creates a deep clone of the input.
 func CloneExprs(n Exprs) Exprs {
 	res := make(Exprs, 0, len(n))
@@ -1210,6 +1227,21 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	return &out
 }
 
+// CloneRefOfPartitionOption creates a deep clone of the input.
+func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.HASH = CloneColIdent(n.HASH)
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
+	out.Expr = CloneExpr(n.Expr)
+	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
+	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	return &out
+}
+
 // CloneRefOfPartitionSpec creates a deep clone of the input.
 func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	if n == nil {
@@ -1499,6 +1531,18 @@ func CloneRefOfStream(n *Stream) *Stream {
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExpr = CloneSelectExpr(n.SelectExpr)
 	out.Table = CloneTableName(n.Table)
+	return &out
+}
+
+// CloneRefOfSubPartition creates a deep clone of the input.
+func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.HASH = CloneColIdent(n.HASH)
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.Expr = CloneExpr(n.Expr)
 	return &out
 }
 
@@ -2313,21 +2357,6 @@ func CloneSliceOfString(n []string) []string {
 	return res
 }
 
-// CloneRefOfPartitionOption creates a deep clone of the input.
-func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.HASH = CloneColIdent(n.HASH)
-	out.KeyColList = CloneColumns(n.KeyColList)
-	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
-	out.Expr = CloneExpr(n.Expr)
-	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
-	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
-	return &out
-}
-
 // CloneSliceOfRefOfIndexColumn creates a deep clone of the input.
 func CloneSliceOfRefOfIndexColumn(n []*IndexColumn) []*IndexColumn {
 	res := make([]*IndexColumn, 0, len(n))
@@ -2501,29 +2530,6 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 // CloneCollateAndCharset creates a deep clone of the input.
 func CloneCollateAndCharset(n CollateAndCharset) CollateAndCharset {
 	return *CloneRefOfCollateAndCharset(&n)
-}
-
-// CloneRefOfExprOrColumns creates a deep clone of the input.
-func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Expr = CloneExpr(n.Expr)
-	out.ColumnList = CloneColumns(n.ColumnList)
-	return &out
-}
-
-// CloneRefOfSubPartition creates a deep clone of the input.
-func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.HASH = CloneColIdent(n.HASH)
-	out.KeyColList = CloneColumns(n.KeyColList)
-	out.Expr = CloneExpr(n.Expr)
-	return &out
 }
 
 // CloneRefOfIndexColumn creates a deep clone of the input.
