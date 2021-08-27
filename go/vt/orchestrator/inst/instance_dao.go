@@ -1736,11 +1736,11 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 			        LEFT JOIN
 			    hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
 			        LEFT JOIN
-			    database_instance master_instance ON (
-			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = master_instance.hostname
-			    	and replica_instance.source_port = master_instance.port)
+			    database_instance primary_instance ON (
+			    	COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = primary_instance.hostname
+			    	and replica_instance.source_port = primary_instance.port)
 			WHERE
-			    master_instance.last_checked IS NULL
+			    primary_instance.last_checked IS NULL
 			    and replica_instance.source_host != ''
 			    and replica_instance.source_host != '_'
 			    and replica_instance.source_port > 0
@@ -1866,12 +1866,12 @@ func readUnknownPrimaryHostnameResolves() (map[string]string, error) {
 			FROM
 			    database_instance replica_instance
 			LEFT JOIN hostname_resolve ON (replica_instance.source_host = hostname_resolve.hostname)
-			LEFT JOIN database_instance master_instance ON (
-			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = master_instance.hostname
-			    and replica_instance.source_port = master_instance.port
+			LEFT JOIN database_instance primary_instance ON (
+			    COALESCE(hostname_resolve.resolved_hostname, replica_instance.source_host) = primary_instance.hostname
+			    and replica_instance.source_port = primary_instance.port
 			) LEFT JOIN hostname_resolve_history ON (replica_instance.source_host = hostname_resolve_history.hostname)
 			WHERE
-			    master_instance.last_checked IS NULL
+			    primary_instance.last_checked IS NULL
 			    and replica_instance.source_host != ''
 			    and replica_instance.source_host != '_'
 			    and replica_instance.source_port > 0
