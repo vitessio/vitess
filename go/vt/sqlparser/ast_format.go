@@ -474,7 +474,7 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 		}
 	}
 	if node.SubPartitions != "" {
-		buf.astPrintf(node, "subpartitions %s", node.SubPartitions)
+		buf.astPrintf(node, " subpartitions %s", node.SubPartitions)
 	}
 }
 

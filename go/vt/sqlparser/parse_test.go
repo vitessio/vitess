@@ -1241,8 +1241,29 @@ var (
 		// Tests unicode character §
 		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
 	}, {
+		input:  "create table t (id int) partition by hash (id) partitions 3",
+		output: "create table t (\n\tid int\n) partition by hash (id) partitions 3",
+	}, {
+		input:  "create table t (hired date) partition by linear hash (year(hired)) partitions 4",
+		output: "create table t (\n\thired date\n) partition by linear hash (year(hired)) partitions 4",
+	}, {
 		input:  "create table t (id int) partition by key (id) partitions 2",
-		output: "create table t (\n\tid int\n)",
+		output: "create table t (\n\tid int\n) partition by key (id) partitions 2",
+	}, {
+		input:  "create table t (id int) partition by key algorithm = 1 (id)",
+		output: "create table t (\n\tid int\n) partition by key algorithm = 1 (id)",
+	}, {
+		input:  "create table t (id int not null) partition by linear key (id) partitions 5",
+		output: "create table t (\n\tid int not null\n) partition by linear key (id) partitions 5",
+	}, {
+		input:  "create table t (id int) partition by list (id)",
+		output: "create table t (\n\tid int\n) partition by list (id)", // TODO PARTITION BY LIST(id) (PARTITION p0 VALUES IN (1, 4, 7))
+	}, {
+		input:  "create table t (renewal date) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+		output: "create table t (\n\trenewal date\n) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+	}, {
+		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {

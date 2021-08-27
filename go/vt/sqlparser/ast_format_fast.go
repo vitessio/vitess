@@ -661,7 +661,7 @@ func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 		}
 	}
 	if node.SubPartitions != "" {
-		buf.WriteString("subpartitions ")
+		buf.WriteString(" subpartitions ")
 		buf.WriteString(node.SubPartitions)
 	}
 }
