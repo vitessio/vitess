@@ -21,12 +21,18 @@ import (
 	"time"
 )
 
+type shardBufferI interface {
+	oldestEntry() *entry
+	evictOldestEntry(*entry)
+	stopBufferingDueToMaxDuration()
+}
+
 // timeoutThread captures the state of the timeout thread.
 // The thread actively removes the head of the queue when that entry exceeds
 // its buffering window.
 // For each active failover there will be one thread (Go routine).
 type timeoutThread struct {
-	sb *shardBuffer
+	sb shardBufferI
 	// maxDuration enforces that a failover stops after
 	// -buffer_max_failover_duration at most.
 	maxDuration *time.Timer
@@ -43,7 +49,7 @@ type timeoutThread struct {
 	queueNotEmpty chan struct{}
 }
 
-func newTimeoutThread(sb *shardBuffer) *timeoutThread {
+func newTimeoutThread(sb shardBufferI) *timeoutThread {
 	return &timeoutThread{
 		sb:            sb,
 		maxDuration:   time.NewTimer(*maxFailoverDuration),

@@ -105,9 +105,10 @@ var (
 // stopReason is used in "stopsByReason" as "Reason" label.
 type stopReason string
 
-var stopReasons = []stopReason{stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown}
+var stopReasons = []stopReason{stopShardMissing, stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown}
 
 const (
+	stopShardMissing                stopReason = "ReshardingComplete"
 	stopFailoverEndDetected         stopReason = "NewPrimarySeen"
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"

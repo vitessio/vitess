@@ -70,7 +70,7 @@ type TabletGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
-	buffer *buffer.Buffer
+	buffer buffer.BufferI
 }
 
 func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
@@ -96,7 +96,6 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 			}
 		}
 		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
-
 	}
 	vtgateHealthCheck = hc
 	gw := &TabletGateway{
@@ -105,31 +104,66 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		localCell:         localCell,
 		retryCount:        *RetryCount,
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
 	}
-	// subscribe to healthcheck updates so that buffer can be notified if needed
-	// we run this in a separate goroutine so that normal processing doesn't need to block
-	hcChan := hc.Subscribe()
-	bufferCtx, bufferCancel := context.WithCancel(ctx)
-	go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case result := <-hcChan:
-				if result == nil {
-					// If result is nil it must mean the channel has been closed. Stop goroutine in that case
-					bufferCancel()
-					return
-				}
-				if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
-					buffer.ProcessPrimaryHealth(result)
-				}
-			}
-		}
-	}(bufferCtx, hcChan, gw.buffer)
+	gw.setupBuffering(ctx)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
+}
+
+func (gw *TabletGateway) setupBuffering(ctx context.Context) {
+	switch *bufferImplementation {
+	case "healthcheck":
+		// subscribe to healthcheck updates so that buffer can be notified if needed
+		// we run this in a separate goroutine so that normal processing doesn't need to block
+		buf := buffer.New()
+		hcChan := gw.hc.Subscribe()
+		bufferCtx, bufferCancel := context.WithCancel(ctx)
+
+		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
+			defer bufferCancel()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case result := <-hcChan:
+					if result == nil {
+						return
+					}
+					if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
+						buffer.ProcessPrimaryHealth(result)
+					}
+				}
+			}
+		}(bufferCtx, hcChan, buf)
+
+		gw.buffer = buf
+	case "keyspace_events":
+		buf := buffer.New2()
+		kew := discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
+		ksChan := kew.Subscribe()
+		bufferCtx, bufferCancel := context.WithCancel(ctx)
+
+		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer2) {
+			defer bufferCancel()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case result := <-ksChan:
+					if result == nil {
+						return
+					}
+					buffer.HandleKeyspaceEvent(result)
+				}
+			}
+		}(bufferCtx, ksChan, buf)
+
+		gw.buffer = buf
+	default:
+		log.Exitf("unknown buffering implementation for TabletGateway: %q", *bufferImplementation)
+	}
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -216,13 +250,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
-			if bufferErr != nil {
-				// Buffering failed e.g. buffer is already full. Do not retry.
-				err = vterrors.Errorf(vterrors.Code(bufferErr),
-					"failed to automatically buffer and retry failed request during failover: %v original err (type=%T): %v",
-					bufferErr, err, err)
-				break
-			}
 
 			// Request may have been buffered.
 			if retryDone != nil {
@@ -230,6 +257,13 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 				// Notify the buffer after we retried.
 				defer retryDone()
 				bufferedOnce = true
+			}
+
+			if bufferErr != nil {
+				err = vterrors.Wrapf(bufferErr,
+					"failed to automatically buffer and retry failed request during failover. original err (type=%T): %v",
+					err, err)
+				break
 			}
 		}
 
