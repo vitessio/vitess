@@ -53,7 +53,7 @@ type (
 		GetIgnoreReplicas() sets.String
 		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
-		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, error)
+		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error)
 		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
 		PostTabletChangeHook(*topodatapb.Tablet)
 		GetBetterCandidate(*topodatapb.Tablet, []*topodatapb.Tablet, map[string]*replicationdatapb.PrimaryStatus, map[string]*topo.TabletInfo) *topodatapb.Tablet
@@ -173,7 +173,7 @@ func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandid
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
+func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
 	// Elect the candidate with the most up-to-date position.
 	for alias, position := range validCandidates {
 		if vtctlReparent.winningPosition.IsZero() || position.AtLeast(vtctlReparent.winningPosition) {
@@ -192,15 +192,15 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 		pos, ok := vtctlReparent.validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
 		case !pos.AtLeast(vtctlReparent.winningPosition):
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
 		}
 	}
 
 	// TODO:= handle not found error
 	newPrimaryAlias := tabletMap[vtctlReparent.winningPrimaryTabletAliasStr]
-	return newPrimaryAlias.Tablet, nil
+	return newPrimaryAlias.Tablet, tabletMap, nil
 }
 
 // 	PostReplicationChangeHook implements the ReparentFunctions interface

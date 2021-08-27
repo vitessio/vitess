@@ -170,7 +170,7 @@ func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandid
 }
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, error) {
+func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
 	vtorcReparent.postponedAll = false
 	//promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
 	//	if promoted == nil {
@@ -197,11 +197,11 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	vtorcReparent.topologyRecovery.AddError(err)
 	vtorcReparent.hasBestPromotionRule = hasBestPromotionRule
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	newPrimary, err := inst.ReadTablet(promotedReplica.Key)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for _, replica := range lostReplicas {
@@ -236,7 +236,24 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	vtorcReparent.promotedReplica = promotedReplica
 	vtorcReparent.topologyRecovery.LostReplicas.AddInstances(lostReplicas)
 	vtorcReparent.recoveryAttempted = true
-	return newPrimary, nil
+
+	tabletMapWithoutLostReplicas := map[string]*topo.TabletInfo{}
+
+	for alias, info := range tabletMap {
+		instance := getInstanceFromTablet(info.Tablet)
+		isLost := false
+		for _, replica := range lostReplicas {
+			if instance.Key.Equals(&replica.Key) {
+				isLost = true
+				break
+			}
+		}
+		if !isLost {
+			tabletMapWithoutLostReplicas[alias] = info
+		}
+	}
+
+	return newPrimary, tabletMapWithoutLostReplicas, nil
 }
 
 // ChooseCandidate will choose a candidate replica of a given instance, and take its siblings using GTID
