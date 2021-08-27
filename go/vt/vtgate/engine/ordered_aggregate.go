@@ -85,10 +85,9 @@ type AggregateParams struct {
 	KeyCol    int
 	WCol      int
 	WAssigned bool
-	// Alias is set only for distinct opcodes.
-	Alias string `json:",omitempty"`
 
-	Expr sqlparser.Expr
+	Alias string `json:",omitempty"`
+	Expr  sqlparser.Expr
 }
 
 func (ap *AggregateParams) isDistinct() bool {

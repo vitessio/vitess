@@ -150,17 +150,29 @@ type Executor struct {
 	shard    string
 	dbName   string
 
-	initMutex             sync.Mutex
-	migrationMutex        sync.Mutex
-	vreplMigrationRunning int64
-	ghostMigrationRunning int64
-	ptoscMigrationRunning int64
-	lastMigrationUUID     string
-	tickReentranceFlag    int64
+	initMutex      sync.Mutex
+	migrationMutex sync.Mutex
+	// ownedRunningMigrations lists UUIDs owned by this executor (consider this a map[string]bool)
+	// A UUID listed in this map stands for a migration that is executing, and that this executor can control.
+	// Migrations found to be running which are not listed in this map will either:
+	// - be adopted by this executor (possible for vreplication migrations), or
+	// - be terminated (example: pt-osc migration gone rogue, process still running even as the migration failed)
+	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
+	ownedRunningMigrations sync.Map
+	tickReentranceFlag     int64
 
 	ticks             *timer.Timer
 	isOpen            bool
 	schemaInitialized bool
+}
+
+type cancellableMigration struct {
+	uuid    string
+	message string
+}
+
+func newCancellableMigration(uuid string, message string) *cancellableMigration {
+	return &cancellableMigration{uuid: uuid, message: message}
 }
 
 // GhostBinaryFileName returns the full path+name of the gh-ost binary
@@ -296,16 +308,13 @@ func (e *Executor) triggerNextCheckInterval() {
 
 // isAnyMigrationRunning sees if there's any migration running right now
 func (e *Executor) isAnyMigrationRunning() bool {
-	if atomic.LoadInt64(&e.vreplMigrationRunning) > 0 {
-		return true
-	}
-	if atomic.LoadInt64(&e.ghostMigrationRunning) > 0 {
-		return true
-	}
-	if atomic.LoadInt64(&e.ptoscMigrationRunning) > 0 {
-		return true
-	}
-	return false
+	migrationFound := false
+
+	e.ownedRunningMigrations.Range(func(_, _ interface{}) bool {
+		migrationFound = true
+		return false // stop iteration
+	})
+	return migrationFound
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -593,7 +602,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 	toggleWrites := func(allowWrites bool) error {
 		if _, err := e.ts.UpdateShardFields(ctx, e.keyspace, shardInfo.ShardName(), func(si *topo.ShardInfo) error {
-			err := si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
+			err := si.UpdateSourceDeniedTables(ctx, topodatapb.TabletType_PRIMARY, nil, allowWrites, []string{onlineDDL.Table})
 			return err
 		}); err != nil {
 			return err
@@ -611,7 +620,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
-		// Those queries are unaffected by UpdateSourceBlacklistedTables() because they don't go through Vitess.
+		// Those queries are unaffected by UpdateSourceDeniedTables() because they don't go through Vitess.
 		// We therefore hard-rename the table here, such that the queries will hard-fail.
 		beforeTableName := fmt.Sprintf("%s_before", onlineDDL.Table)
 		parsed := sqlparser.BuildParsedQuery(sqlRenameTable,
@@ -675,6 +684,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 			}
 		}
 	}
+	e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 
 	go func() {
 		// Tables are swapped! Let's take the opportunity to ReloadSchema now
@@ -781,8 +791,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	defer conn.Close()
 
-	atomic.StoreInt64(&e.vreplMigrationRunning, 1)
-	e.lastMigrationUUID = onlineDDL.UUID
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
 	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown); err != nil {
 		return err
 	}
@@ -1020,11 +1029,10 @@ exit $exit_code
 		return err
 	}
 
-	atomic.StoreInt64(&e.ghostMigrationRunning, 1)
-	e.lastMigrationUUID = onlineDDL.UUID
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
 
 	go func() error {
-		defer atomic.StoreInt64(&e.ghostMigrationRunning, 0)
+		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
@@ -1241,11 +1249,10 @@ export MYSQL_PWD
 		return err
 	}
 
-	atomic.StoreInt64(&e.ptoscMigrationRunning, 1)
-	e.lastMigrationUUID = onlineDDL.UUID
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
 
 	go func() error {
-		defer atomic.StoreInt64(&e.ptoscMigrationRunning, 0)
+		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
@@ -1329,7 +1336,12 @@ func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []stri
 }
 
 // terminateMigration attempts to interrupt and hard-stop a running migration
-func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, lastMigrationUUID string) (foundRunning bool, err error) {
+func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.OnlineDDL) (foundRunning bool, err error) {
+	// It's possible the killing the migration fails for whatever reason, in which case
+	// the logic will retry killing it later on.
+	// Whatever happens in this function, this executor stops owning the given migration.
+	defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+
 	switch onlineDDL.Strategy {
 	case schema.DDLStrategyOnline:
 		// migration could have started by a different tablet. We need to actively verify if it is running
@@ -1358,24 +1370,22 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 			}
 		}
 	case schema.DDLStrategyGhost:
-		if atomic.LoadInt64(&e.ghostMigrationRunning) > 0 {
-			// double check: is the running migration the very same one we wish to cancel?
-			if onlineDDL.UUID == lastMigrationUUID {
-				// assuming all goes well in next steps, we can already report that there has indeed been a migration
-				foundRunning = true
-			}
+		// double check: is the running migration the very same one we wish to cancel?
+		if _, ok := e.ownedRunningMigrations.Load(onlineDDL.UUID); ok {
+			// assuming all goes well in next steps, we can already report that there has indeed been a migration
+			foundRunning = true
 		}
 		// gh-ost migrations are easy to kill: just touch their specific panic flag files. We trust
 		// gh-ost to terminate. No need to KILL it. And there's no trigger cleanup.
 		if err := e.createGhostPanicFlagFile(onlineDDL.UUID); err != nil {
-			return foundRunning, fmt.Errorf("Error cancelling migration, flag file error: %+v", err)
+			return foundRunning, fmt.Errorf("Error cancelling gh-ost migration, flag file error: %+v", err)
 		}
 	}
 	return foundRunning, nil
 }
 
 // CancelMigration attempts to abort a scheduled or a running migration
-func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRunningMigration bool, message string) (result *sqltypes.Result, err error) {
+func (e *Executor) CancelMigration(ctx context.Context, uuid string, message string) (result *sqltypes.Result, err error) {
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
@@ -1400,30 +1410,27 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, terminateRu
 		rowsAffected = 1
 	}
 
-	if terminateRunningMigration {
-		migrationFound, err := e.terminateMigration(ctx, onlineDDL, e.lastMigrationUUID)
-		defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+	migrationFound, err := e.terminateMigration(ctx, onlineDDL)
+	defer e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
 
-		if migrationFound {
-			rowsAffected = 1
-		}
-		if err != nil {
-			return result, err
-		}
+	if migrationFound {
+		rowsAffected = 1
+	}
+	if err != nil {
+		return result, err
 	}
 
 	result = &sqltypes.Result{
 		RowsAffected: rowsAffected,
 	}
-
 	return result, nil
 }
 
 // cancelMigrations attempts to abort a list of migrations
-func (e *Executor) cancelMigrations(ctx context.Context, uuids []string, message string) (err error) {
-	for _, uuid := range uuids {
-		log.Infof("cancelMigrations: cancelling %s", uuid)
-		if _, err := e.CancelMigration(ctx, uuid, true, message); err != nil {
+func (e *Executor) cancelMigrations(ctx context.Context, cancellable []*cancellableMigration) (err error) {
+	for _, migration := range cancellable {
+		log.Infof("cancelMigrations: cancelling %s", migration.uuid)
+		if _, err := e.CancelMigration(ctx, migration.uuid, migration.message); err != nil {
 			return err
 		}
 	}
@@ -1445,7 +1452,7 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 	result = &sqltypes.Result{}
 	for _, uuid := range uuids {
 		log.Infof("CancelPendingMigrations: cancelling %s", uuid)
-		res, err := e.CancelMigration(ctx, uuid, true, message)
+		res, err := e.CancelMigration(ctx, uuid, message)
 		if err != nil {
 			return result, err
 		}
@@ -2223,7 +2230,7 @@ func (e *Executor) isVReplMigrationRunning(ctx context.Context, uuid string) (is
 
 // reviewRunningMigrations iterates migrations in 'running' state. Normally there's only one running, which was
 // spawned by this tablet; but vreplication migrations could also resume from failure.
-func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []string, err error) {
+func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning int, cancellable []*cancellableMigration, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
@@ -2231,13 +2238,14 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
-	// we identify running vreplication migrations in this function
-	atomic.StoreInt64(&e.vreplMigrationRunning, 0)
+	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
 		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
+
+		uuidsFoundRunning[uuid] = true
 
 		switch strategy {
 		case schema.DDLStrategyOnline:
@@ -2253,11 +2261,12 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				}
 				if running {
 					// This VRepl migration may have started from outside this tablet, so
-					// vreplMigrationRunning could be zero. Whatever the case is, we're under
-					// migrationMutex lock and it's now safe to ensure vreplMigrationRunning is 1
-					atomic.StoreInt64(&e.vreplMigrationRunning, 1)
+					// this executor may not own the migration _yet_. We make sure to own it.
+					// VReplication migrations are unique in this respect: we are able to complete
+					// a vreplicaiton migration started by another tablet.
+					e.ownedRunningMigrations.Store(uuid, true)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
-
+					_ = e.updateMigrationTablet(ctx, uuid)
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationProgressByRowsCopied(ctx, uuid, s.rowsCopied)
 					_ = e.updateMigrationETASecondsByProgress(ctx, uuid)
@@ -2291,30 +2300,48 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if running {
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 				}
-				if uuid != e.lastMigrationUUID {
-					// This executor can only spawn one migration at a time. And that
-					// migration is identified by e.lastMigrationUUID.
-					// If we find a _running_ migration that does not have this UUID, it _must_
-					// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
-					cancellable = append(cancellable, uuid)
+				if _, ok := e.ownedRunningMigrations.Load(uuid); !ok {
+					// Ummm, the migration is running but we don't own it. This means the migration
+					// is rogue. Maybe executed by another tablet. Anyway, if we don't own it, we can't
+					// complete the migration. Even if it runs, the logic around announcing it as complete
+					// is missing. So we may as well cancel it.
+					message := fmt.Sprintf("cancelling a pt-osc running migration %s which is not owned (not started, or is assumed to be terminated) by this executor", uuid)
+					cancellable = append(cancellable, newCancellableMigration(uuid, message))
+				}
+			}
+		case schema.DDLStrategyGhost:
+			{
+				if _, ok := e.ownedRunningMigrations.Load(uuid); !ok {
+					// Ummm, the migration is running but we don't own it. This means the migration
+					// is rogue. Maybe executed by another tablet. Anyway, if we don't own it, we can't
+					// complete the migration. Even if it runs, the logic around announcing it as complete
+					// is missing. So we may as well cancel it.
+					message := fmt.Sprintf("cancelling a gh-ost running migration %s which is not owned (not started, or is assumed to be terminated) by this executor", uuid)
+					cancellable = append(cancellable, newCancellableMigration(uuid, message))
 				}
 			}
 		}
 		countRunnning++
-
-		if uuid != e.lastMigrationUUID {
-			// This executor can only run one migration at a time. And that
-			// migration is identified by e.lastMigrationUUID.
-			// If we find a _running_ migration that does not have this UUID, it _must_
-			// mean the migration was started by a former vttablet (ie vttablet crashed and restarted)
-			cancellable = append(cancellable, uuid)
-		}
 	}
+	{
+		// now, let's look at UUIDs we own and _think_ should be running, and see which of tham _isn't_ actually running...
+		e.ownedRunningMigrations.Range(func(k, _ interface{}) bool {
+			uuid, ok := k.(string)
+			if !ok {
+				return true
+			}
+			if !uuidsFoundRunning[uuid] {
+				e.ownedRunningMigrations.Delete(uuid)
+			}
+			return true
+		})
+	}
+
 	return countRunnning, cancellable, err
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
-// shown no liveness in past X minutes
+// shown no liveness in past X minutes. It also attempts to terminate them
 func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
@@ -2336,27 +2363,31 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		// If this is pt-osc migration, then it may have crashed without having its triggers cleaned up.
-		// make sure to drop them.
-		if onlineDDL.Strategy == schema.DDLStrategyPTOSC {
-			if err := e.dropPTOSCMigrationTriggers(ctx, onlineDDL); err != nil {
-				return err
-			}
-		}
+		message := fmt.Sprintf("stale migration %s: found running but indicates no liveness", onlineDDL.UUID)
 		if onlineDDL.TabletAlias != e.TabletAliasString() {
 			// This means another tablet started the migration, and the migration has failed due to the tablet failure (e.g. primary failover)
 			if err := e.updateTabletFailure(ctx, onlineDDL.UUID); err != nil {
 				return err
 			}
+			message = fmt.Sprintf("%s; executed by different tablet %s", message, onlineDDL.TabletAlias)
+		}
+		if _, err := e.terminateMigration(ctx, onlineDDL); err != nil {
+			message = fmt.Sprintf("error terminating migration (%v): %v", message, err)
+			e.updateMigrationMessage(ctx, onlineDDL.UUID, message)
+			continue // we still want to handle rest of migrations
+		}
+		if err := e.updateMigrationMessage(ctx, onlineDDL.UUID, message); err != nil {
+			return err
 		}
 		if err := e.updateMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusFailed); err != nil {
 			return err
 		}
 		_ = e.updateMigrationStartedTimestamp(ctx, uuid)
-		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid); err != nil {
+		// Because the migration is stale, it may not update completed_timestamp. It is essential to set completed_timestamp
+		// as this is then used when cleaning artifacts
+		if err := e.updateMigrationTimestamp(ctx, "completed_timestamp", onlineDDL.UUID); err != nil {
 			return err
 		}
-		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "stale migration")
 	}
 
 	return nil
@@ -2488,7 +2519,7 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 	if _, cancellable, err := e.reviewRunningMigrations(ctx); err != nil {
 		log.Error(err)
-	} else if err := e.cancelMigrations(ctx, cancellable, "auto cancel"); err != nil {
+	} else if err := e.cancelMigrations(ctx, cancellable); err != nil {
 		log.Error(err)
 	}
 	if err := e.reviewStaleMigrations(ctx); err != nil {
@@ -2559,6 +2590,19 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+// updateMigrationTablet sets 'tablet' column to be this executor's tablet alias for given migration
+func (e *Executor) updateMigrationTablet(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateTablet,
+		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -3010,7 +3054,7 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			if !schema.IsOnlineDDLUUID(uuid) {
 				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
 			}
-			return response(e.CancelMigration(ctx, uuid, true, "cancel by user"))
+			return response(e.CancelMigration(ctx, uuid, "cancel by user"))
 		case cancelAllMigrationHint:
 			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
 			if uuid != "" {

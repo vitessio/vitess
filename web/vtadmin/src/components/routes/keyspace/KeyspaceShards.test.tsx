@@ -42,13 +42,13 @@ describe('KeyspaceShards', () => {
                             '-80': {
                                 name: '-80',
                                 shard: {
-                                    is_master_serving: false,
+                                    is_primary_serving: false,
                                 },
                             },
                             '80-': {
                                 name: '80-',
                                 shard: {
-                                    is_master_serving: true,
+                                    is_primary_serving: true,
                                 },
                             },
                         },

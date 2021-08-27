@@ -43,7 +43,7 @@ const (
 )
 
 const (
-	Error1201CouldnotInitializeMasterInfoStructure = "Error 1201:"
+	Error1201CouldnotInitializePrimaryInfoStructure = "Error 1201:"
 )
 
 // ExecInstance executes a given query on the given MySQL topology instance
@@ -207,8 +207,8 @@ func purgeBinaryLogsTo(instanceKey *InstanceKey, logFile string) (*Instance, err
 }
 
 // TODO(sougou): implement count
-func SetSemiSyncMaster(instanceKey *InstanceKey, enableMaster bool) error {
-	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enableMaster, false); err != nil {
+func SetSemiSyncPrimary(instanceKey *InstanceKey, enablePrimary bool) error {
+	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, enablePrimary, false); err != nil {
 		return log.Errore(err)
 	}
 	return nil
@@ -484,8 +484,8 @@ func WaitForExecBinlogCoordinatesToReach(instanceKey *InstanceKey, coordinates *
 	}
 }
 
-// StartReplicationUntilMasterCoordinates issuesa START SLAVE UNTIL... statement on given instance
-func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoordinates *BinlogCoordinates) (*Instance, error) {
+// StartReplicationUntilPrimaryCoordinates issuesa START SLAVE UNTIL... statement on given instance
+func StartReplicationUntilPrimaryCoordinates(instanceKey *InstanceKey, primaryCoordinates *BinlogCoordinates) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -498,18 +498,18 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 		return instance, fmt.Errorf("replication threads are not stopped: %+v", instanceKey)
 	}
 
-	log.Infof("Will start replication on %+v until coordinates: %+v", instanceKey, masterCoordinates)
+	log.Infof("Will start replication on %+v until coordinates: %+v", instanceKey, primaryCoordinates)
 
 	// MariaDB has a bug: a CHANGE MASTER TO statement does not work properly with prepared statement... :P
 	// See https://mariadb.atlassian.net/browse/MDEV-7640
 	// This is the reason for ExecInstance
 	_, err = ExecInstance(instanceKey, "start slave until master_log_file=?, master_log_pos=?",
-		masterCoordinates.LogFile, masterCoordinates.LogPos)
+		primaryCoordinates.LogFile, primaryCoordinates.LogPos)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 
-	instance, exactMatch, err := WaitForExecBinlogCoordinatesToReach(instanceKey, masterCoordinates, 0)
+	instance, exactMatch, err := WaitForExecBinlogCoordinatesToReach(instanceKey, primaryCoordinates, 0)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
@@ -525,17 +525,17 @@ func StartReplicationUntilMasterCoordinates(instanceKey *InstanceKey, masterCoor
 	return instance, err
 }
 
-// EnableMasterSSL issues CHANGE MASTER TO MASTER_SSL=1
-func EnableMasterSSL(instanceKey *InstanceKey) (*Instance, error) {
+// EnablePrimarySSL issues CHANGE MASTER TO MASTER_SSL=1
+func EnablePrimarySSL(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("EnableMasterSSL: Cannot enable SSL replication on %+v because replication threads are not stopped", *instanceKey)
+		return instance, fmt.Errorf("EnablePrimarySSL: Cannot enable SSL replication on %+v because replication threads are not stopped", *instanceKey)
 	}
-	log.Debugf("EnableMasterSSL: Will attempt enabling SSL replication on %+v", *instanceKey)
+	log.Debugf("EnablePrimarySSL: Will attempt enabling SSL replication on %+v", *instanceKey)
 
 	if *config.RuntimeCLIFlags.Noop {
 		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO MASTER_SSL=1 operation on %+v; signaling error but nothing went wrong.", *instanceKey)
@@ -546,7 +546,7 @@ func EnableMasterSSL(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 
-	log.Infof("EnableMasterSSL: Enabled SSL replication on %+v", *instanceKey)
+	log.Infof("EnablePrimarySSL: Enabled SSL replication on %+v", *instanceKey)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
@@ -568,9 +568,9 @@ func workaroundBug83713(instanceKey *InstanceKey) {
 	}
 }
 
-// ChangeMasterTo changes the given instance's primary according to given input.
+// ChangePrimaryTo changes the given instance's primary according to given input.
 // TODO(sougou): deprecate ReplicationCredentialsQuery, and all other credential discovery.
-func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
+func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryBinlogCoordinates *BinlogCoordinates, skipUnresolve bool, gtidHint OperationGTIDHint) (*Instance, error) {
 	user, password := config.Config.MySQLReplicaUser, config.Config.MySQLReplicaPassword
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
@@ -578,41 +578,41 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("ChangeMasterTo: Cannot change master on: %+v because replication threads are not stopped", *instanceKey)
+		return instance, fmt.Errorf("ChangePrimaryTo: Cannot change primary on: %+v because replication threads are not stopped", *instanceKey)
 	}
-	log.Debugf("ChangeMasterTo: will attempt changing master on %+v to %+v, %+v", *instanceKey, *masterKey, *masterBinlogCoordinates)
-	changeToMasterKey := masterKey
+	log.Debugf("ChangePrimaryTo: will attempt changing primary on %+v to %+v, %+v", *instanceKey, *primaryKey, *primaryBinlogCoordinates)
+	changeToPrimaryKey := primaryKey
 	if !skipUnresolve {
-		unresolvedMasterKey, nameUnresolved, err := UnresolveHostname(masterKey)
+		unresolvedPrimaryKey, nameUnresolved, err := UnresolveHostname(primaryKey)
 		if err != nil {
-			log.Debugf("ChangeMasterTo: aborting operation on %+v due to resolving error on %+v: %+v", *instanceKey, *masterKey, err)
+			log.Debugf("ChangePrimaryTo: aborting operation on %+v due to resolving error on %+v: %+v", *instanceKey, *primaryKey, err)
 			return instance, err
 		}
 		if nameUnresolved {
-			log.Debugf("ChangeMasterTo: Unresolved %+v into %+v", *masterKey, unresolvedMasterKey)
+			log.Debugf("ChangePrimaryTo: Unresolved %+v into %+v", *primaryKey, unresolvedPrimaryKey)
 		}
-		changeToMasterKey = &unresolvedMasterKey
+		changeToPrimaryKey = &unresolvedPrimaryKey
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
 		return instance, fmt.Errorf("noop: aborting CHANGE MASTER TO operation on %+v; signalling error but nothing went wrong.", *instanceKey)
 	}
 
-	var changeMasterFunc func() error
+	var changePrimaryFunc func() error
 	changedViaGTID := false
 	if instance.UsingMariaDBGTID && gtidHint != GTIDHintDeny {
 		// Keep on using GTID
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err := ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingMariaDBGTID && gtidHint == GTIDHintDeny {
 		// Make sure to not use GTID
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_use_gtid=no",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.IsMariaDB() && gtidHint == GTIDHintForce {
@@ -626,61 +626,61 @@ func ChangeMasterTo(instanceKey *InstanceKey, masterKey *InstanceKey, masterBinl
 			// - https://dba.stackexchange.com/a/234323
 			mariadbGTIDHint = "current_pos"
 		}
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, fmt.Sprintf("change master to master_user=?, master_password=?, master_host=?, master_port=?, master_use_gtid=%s", mariadbGTIDHint),
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint != GTIDHintDeny {
 		// Is Oracle; already uses GTID; keep using it.
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else if instance.UsingOracleGTID && gtidHint == GTIDHintDeny {
 		// Is Oracle; already uses GTID
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?, master_auto_position=0",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
 	} else if instance.SupportsOracleGTID && gtidHint == GTIDHintForce {
 		// Is Oracle; not using GTID right now; turn into GTID
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_auto_position=1",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port)
 			return err
 		}
 		changedViaGTID = true
 	} else {
 		// Normal binlog file:pos
-		changeMasterFunc = func() error {
+		changePrimaryFunc = func() error {
 			_, err = ExecInstance(instanceKey, "change master to master_user=?, master_password=?, master_host=?, master_port=?, master_log_file=?, master_log_pos=?",
-				user, password, changeToMasterKey.Hostname, changeToMasterKey.Port, masterBinlogCoordinates.LogFile, masterBinlogCoordinates.LogPos)
+				user, password, changeToPrimaryKey.Hostname, changeToPrimaryKey.Port, primaryBinlogCoordinates.LogFile, primaryBinlogCoordinates.LogPos)
 			return err
 		}
 	}
-	err = changeMasterFunc()
-	if err != nil && instance.UsingOracleGTID && strings.Contains(err.Error(), Error1201CouldnotInitializeMasterInfoStructure) {
-		log.Debugf("ChangeMasterTo: got %+v", err)
+	err = changePrimaryFunc()
+	if err != nil && instance.UsingOracleGTID && strings.Contains(err.Error(), Error1201CouldnotInitializePrimaryInfoStructure) {
+		log.Debugf("ChangePrimaryTo: got %+v", err)
 		workaroundBug83713(instanceKey)
-		err = changeMasterFunc()
+		err = changePrimaryFunc()
 	}
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 
-	semiSync := ReplicaSemiSync(*masterKey, *instanceKey)
+	semiSync := ReplicaSemiSync(*primaryKey, *instanceKey)
 	if _, err := ExecInstance(instanceKey, `set global rpl_semi_sync_master_enabled = ?, global rpl_semi_sync_slave_enabled = ?`, false, semiSync); err != nil {
 		return instance, log.Errore(err)
 	}
 
 	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
-	log.Infof("ChangeMasterTo: Changed master on %+v to: %+v, %+v. GTID: %+v", *instanceKey, masterKey, masterBinlogCoordinates, changedViaGTID)
+	log.Infof("ChangePrimaryTo: Changed primary on %+v to: %+v, %+v. GTID: %+v", *instanceKey, primaryKey, primaryBinlogCoordinates, changedViaGTID)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
@@ -702,7 +702,7 @@ func SkipToNextBinaryLog(instanceKey *InstanceKey) (*Instance, error) {
 	nextFileCoordinates.LogPos = 4
 	log.Debugf("Will skip replication on %+v to next binary log: %+v", instance.Key, nextFileCoordinates.LogFile)
 
-	instance, err = ChangeMasterTo(&instance.Key, &instance.MasterKey, &nextFileCoordinates, false, GTIDHintNeutral)
+	instance, err = ChangePrimaryTo(&instance.Key, &instance.SourceKey, &nextFileCoordinates, false, GTIDHintNeutral)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
@@ -734,7 +734,7 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 		return instance, log.Errore(err)
 	}
 	_, err = ExecInstance(instanceKey, `reset slave /*!50603 all */`)
-	if err != nil && strings.Contains(err.Error(), Error1201CouldnotInitializeMasterInfoStructure) {
+	if err != nil && strings.Contains(err.Error(), Error1201CouldnotInitializePrimaryInfoStructure) {
 		log.Debugf("ResetReplication: got %+v", err)
 		workaroundBug83713(instanceKey)
 		_, err = ExecInstance(instanceKey, `reset slave /*!50603 all */`)
@@ -748,19 +748,19 @@ func ResetReplication(instanceKey *InstanceKey) (*Instance, error) {
 	return instance, err
 }
 
-// ResetMaster issues a RESET MASTER statement on given instance. Use with extreme care!
-func ResetMaster(instanceKey *InstanceKey) (*Instance, error) {
+// ResetPrimary issues a RESET MASTER statement on given instance. Use with extreme care!
+func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("Cannot reset master on: %+v because replication threads are not stopped", instanceKey)
+		return instance, fmt.Errorf("Cannot reset primary on: %+v because replication threads are not stopped", instanceKey)
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-master operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-primary operation on %+v; signalling error but nothing went wrong.", *instanceKey)
 	}
 
 	_, err = ExecInstance(instanceKey, `reset master`)
@@ -876,8 +876,8 @@ func SkipQuery(instanceKey *InstanceKey) (*Instance, error) {
 	return StartReplication(instanceKey)
 }
 
-// MasterPosWait issues a MASTER_POS_WAIT() an given instance according to given coordinates.
-func MasterPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinates) (*Instance, error) {
+// PrimaryPosWait issues a MASTER_POS_WAIT() an given instance according to given coordinates.
+func PrimaryPosWait(instanceKey *InstanceKey, binlogCoordinates *BinlogCoordinates) (*Instance, error) {
 	instance, err := ReadTopologyInstance(instanceKey)
 	if err != nil {
 		return instance, log.Errore(err)
@@ -959,17 +959,17 @@ func GTIDSubtract(instanceKey *InstanceKey, gtidSet string, gtidSubset string) (
 	return gtidSubtract, err
 }
 
-func ShowMasterStatus(instanceKey *InstanceKey) (masterStatusFound bool, executedGtidSet string, err error) {
+func ShowPrimaryStatus(instanceKey *InstanceKey) (primaryStatusFound bool, executedGtidSet string, err error) {
 	db, err := db.OpenTopology(instanceKey.Hostname, instanceKey.Port)
 	if err != nil {
-		return masterStatusFound, executedGtidSet, err
+		return primaryStatusFound, executedGtidSet, err
 	}
 	err = sqlutils.QueryRowsMap(db, "show master status", func(m sqlutils.RowMap) error {
-		masterStatusFound = true
+		primaryStatusFound = true
 		executedGtidSet = m.GetStringD("Executed_Gtid_Set", "")
 		return nil
 	})
-	return masterStatusFound, executedGtidSet, err
+	return primaryStatusFound, executedGtidSet, err
 }
 
 func ShowBinaryLogs(instanceKey *InstanceKey) (binlogs []string, err error) {

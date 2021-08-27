@@ -29,74 +29,75 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(tree queryTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
+func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
-		return transformRoutePlan(n, semTable)
+		return transformRoutePlan(n, semTable, ctx.sqToReplace)
 
 	case *joinTree:
-		return transformJoinPlan(n, semTable, processing)
+		return transformJoinPlan(ctx, n, semTable)
 
 	case *derivedTree:
-		// transforming the inner part of the derived table into a logical plan
-		// so that we can do horizon planning on the inner. If the logical plan
-		// we've produced is a Route, we set its Select.From field to be an aliased
-		// expression containing our derived table's inner select and the derived
-		// table's alias.
+		return transformDerivedPlan(ctx, n, semTable)
+	case *subqueryTree:
+		return transformSubqueryTree(ctx, n, semTable)
+	}
 
-		plan, err := transformToLogicalPlan(n.inner, semTable, processing)
-		if err != nil {
-			return nil, err
-		}
-		processing.inDerived = true
-		plan, err = processing.planHorizon(plan, n.query)
-		if err != nil {
-			return nil, err
-		}
-		processing.inDerived = false
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
+}
 
-		rb, isRoute := plan.(*route)
-		if !isRoute {
-			return plan, nil
-		}
-		innerSelect := rb.Select
-		derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
-		tblExpr := &sqlparser.AliasedTableExpr{
-			Expr: derivedTable,
-			As:   sqlparser.NewTableIdent(n.alias),
-		}
-		rb.Select = &sqlparser.Select{
-			From: []sqlparser.TableExpr{tblExpr},
-		}
+func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *semantics.SemTable) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+	if err != nil {
+		return nil, err
+	}
+	innerPlan, err = planHorizon(ctx, innerPlan, n.subquery)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
+	outerPlan, err := transformToLogicalPlan(ctx, n.outer, semTable)
+	if err != nil {
+		return nil, err
+	}
+	plan.underlying = outerPlan
+	return plan, err
+}
+
+func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semantics.SemTable) (logicalPlan, error) {
+	// transforming the inner part of the derived table into a logical plan
+	// so that we can do horizon planning on the inner. If the logical plan
+	// we've produced is a Route, we set its Select.From field to be an aliased
+	// expression containing our derived table's inner select and the derived
+	// table's alias.
+
+	plan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+	if err != nil {
+		return nil, err
+	}
+	plan, err = planHorizon(ctx, plan, n.query)
+	if err != nil {
+		return nil, err
+	}
+
+	rb, isRoute := plan.(*route)
+	if !isRoute {
 		return plan, nil
 	}
-
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T", tree)
+	innerSelect := rb.Select
+	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
+	tblExpr := &sqlparser.AliasedTableExpr{
+		Expr: derivedTable,
+		As:   sqlparser.NewTableIdent(n.alias),
+	}
+	rb.Select = &sqlparser.Select{
+		From: []sqlparser.TableExpr{tblExpr},
+	}
+	return plan, nil
 }
 
-func transformJoinPlan(n *joinTree, semTable *semantics.SemTable, processing *postProcessor) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(n.lhs, semTable, processing)
-	if err != nil {
-		return nil, err
-	}
-	rhs, err := transformToLogicalPlan(n.rhs, semTable, processing)
-	if err != nil {
-		return nil, err
-	}
-	opCode := engine.InnerJoin
-	if n.outer {
-		opCode = engine.LeftJoin
-	}
-	return &joinGen4{
-		Left:   lhs,
-		Right:  rhs,
-		Cols:   n.columns,
-		Vars:   n.vars,
-		Opcode: opCode,
-	}, nil
-}
-
-func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, error) {
+func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace map[string]*sqlparser.Select) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -175,6 +176,15 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 	}
 	sort.Strings(tableNames)
 
+	sel := &sqlparser.Select{
+		SelectExprs: expressions,
+		From:        tablesForSelect,
+		Where:       where,
+		Comments:    semTable.Comments,
+	}
+
+	replaceSubQuery(sqToReplace, sel)
+
 	return &route{
 		eroute: &engine.Route{
 			Opcode:              n.routeOpCode,
@@ -185,13 +195,30 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable) (*route, err
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},
-		Select: &sqlparser.Select{
-			SelectExprs: expressions,
-			From:        tablesForSelect,
-			Where:       where,
-			Comments:    semTable.Comments,
-		},
+		Select: sel,
 		tables: n.solved,
+	}, nil
+}
+
+func transformJoinPlan(ctx planningContext, n *joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, n.lhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, n.rhs, semTable)
+	if err != nil {
+		return nil, err
+	}
+	opCode := engine.InnerJoin
+	if n.outer {
+		opCode = engine.LeftJoin
+	}
+	return &joinGen4{
+		Left:   lhs,
+		Right:  rhs,
+		Cols:   n.columns,
+		Vars:   n.vars,
+		Opcode: opCode,
 	}, nil
 }
 
@@ -261,5 +288,48 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown relation type: %T", t)
+	}
+}
+
+type subQReplacer struct {
+	sqToReplace map[string]*sqlparser.Select
+	err         error
+	replaced    bool
+}
+
+func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
+	argName := argumentName(cursor.Node())
+	if argName == "" {
+		return true
+	}
+
+	var node sqlparser.SQLNode
+	subqSelect, exists := sqr.sqToReplace[argName]
+	if !exists {
+		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
+		return false
+	}
+	sq := &sqlparser.Subquery{Select: subqSelect}
+	node = sq
+
+	// if the subquery is in an EXISTS, e.g. "__sq_has_values1"
+	// then we encapsulate the subquery in an exists expression.
+	if strings.HasPrefix(argName, string(sqlparser.HasValueSubQueryBaseName)) {
+		node = &sqlparser.ExistsExpr{Subquery: sq}
+	}
+	cursor.Replace(node)
+	sqr.replaced = true
+	return false
+}
+
+func replaceSubQuery(sqToReplace map[string]*sqlparser.Select, sel *sqlparser.Select) {
+	if len(sqToReplace) > 0 {
+		sqr := &subQReplacer{sqToReplace: sqToReplace}
+		sqlparser.Rewrite(sel, sqr.replacer, nil)
+		for sqr.replaced {
+			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+			sqr.replaced = false
+			sqlparser.Rewrite(sel, sqr.replacer, nil)
+		}
 	}
 }

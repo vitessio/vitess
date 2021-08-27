@@ -32,6 +32,10 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // CreateKeyspace creates a new keyspace in the given cluster.
+    rpc CreateKeyspace(CreateKeyspaceRequest) returns (CreateKeyspaceResponse) {};
+    // DeleteKeyspace deletes a keyspace in the given cluster.
+    rpc DeleteKeyspace(DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -188,6 +192,20 @@ message Workflow {
 }
 
 /* Request/Response types */
+
+message CreateKeyspaceRequest {
+    string cluster_id = 1;
+    vtctldata.CreateKeyspaceRequest options = 2;
+}
+
+message CreateKeyspaceResponse {
+    Keyspace keyspace = 1;
+}
+
+message DeleteKeyspaceRequest {
+    string cluster_id = 1;
+    vtctldata.DeleteKeyspaceRequest options = 2;
+}
 
 message FindSchemaRequest {
     string table = 1;

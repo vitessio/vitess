@@ -11,5 +11,5 @@
   "DurabilityParams": {
     "zone2-0000000200": "prefer"
   },
-  "PreventCrossDataCenterMasterFailover": true
+  "PreventCrossDataCenterPrimaryFailover": true
 }

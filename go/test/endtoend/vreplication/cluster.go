@@ -400,6 +400,8 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
 				log.Errorf("Error in vtgate teardown - %s", err.Error())
+			} else {
+				log.Infof("vtgate teardown successful")
 			}
 		}
 	}
@@ -436,11 +438,15 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Infof("Error stopping Vtctld:  %s", err.Error())
+	} else {
+		log.Info("Successfully stopped vtctld")
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
 			log.Infof("Error in etcd teardown - %s", err.Error())
+		} else {
+			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
 		}
 	}
 }
@@ -461,6 +467,8 @@ func (vc *VitessCluster) TearDown(t testing.TB) {
 	case <-time.After(1 * time.Minute):
 		log.Infof("TearDown() timed out")
 	}
+	// some processes seem to hang around for a bit
+	time.Sleep(5 * time.Second)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {

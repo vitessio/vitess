@@ -40,7 +40,7 @@ mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
 ./204_vertical_migrate_replicas.sh
 ./205_vertical_migrate_master.sh
 # Expected to fail!
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
+mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "DenyList working as expected"
 ./206_clean_commerce.sh
 # Expected to fail!
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"

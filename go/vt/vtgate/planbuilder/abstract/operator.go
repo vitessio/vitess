@@ -29,12 +29,17 @@ type (
 	//     while still preserving the results
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
+	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
 
 		// PushPredicate pushes a predicate to the closest possible operator
 		PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error
+
+		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
+		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
+		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 )
 
@@ -129,6 +134,23 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 
 // CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
 func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
+	var resultantOp *SubQuery
+	if len(semTable.SubqueryMap[sel]) > 0 {
+		resultantOp = &SubQuery{}
+		for _, sq := range semTable.SubqueryMap[sel] {
+			subquerySelectStatement := sq.SubQuery.Select.(*sqlparser.Select)
+			opInner, err := CreateOperatorFromSelect(subquerySelectStatement, semTable)
+			if err != nil {
+				return nil, err
+			}
+			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
+				SelectStatement: subquerySelectStatement,
+				Inner:           opInner,
+				Type:            sq.OpCode,
+				ArgName:         sq.ArgName,
+			})
+		}
+	}
 	op, err := crossJoin(sel.From, semTable)
 	if err != nil {
 		return nil, err
@@ -140,9 +162,30 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 			if err != nil {
 				return nil, err
 			}
+			addColumnEquality(semTable, expr)
 		}
 	}
-	return op, nil
+	if resultantOp == nil {
+		return op, nil
+	}
+	resultantOp.Outer = op
+	return resultantOp, nil
+}
+
+func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator != sqlparser.EqualOp {
+			return
+		}
+
+		if left, isCol := expr.Left.(*sqlparser.ColName); isCol {
+			semTable.AddColumnEquality(left, expr.Right)
+		}
+		if right, isCol := expr.Right.(*sqlparser.ColName); isCol {
+			semTable.AddColumnEquality(right, expr.Left)
+		}
+	}
 }
 
 func createJoin(LHS, RHS Operator) Operator {

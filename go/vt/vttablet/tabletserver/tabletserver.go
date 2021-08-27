@@ -1409,9 +1409,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		return errCode
 	}
 
-	errstr := err.Error()
-	errnum := sqlErr.Number()
-	switch errnum {
+	switch sqlErr.Number() {
 	case mysql.ERNotSupportedYet:
 		errCode = vtrpcpb.Code_UNIMPLEMENTED
 	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
@@ -1433,11 +1431,7 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		mysql.ErNoReferencedRow2, mysql.ERWarnDataOutOfRange:
 		errCode = vtrpcpb.Code_FAILED_PRECONDITION
 	case mysql.EROptionPreventsStatement:
-		// Special-case this error code. It's probably because
-		// there was a failover and there are old clients still connected.
-		if strings.Contains(errstr, "read-only") {
-			errCode = vtrpcpb.Code_FAILED_PRECONDITION
-		}
+		errCode = vtrpcpb.Code_CLUSTER_EVENT
 	case mysql.ERTableExists, mysql.ERDupEntry, mysql.ERFileExists, mysql.ERUDFExists:
 		errCode = vtrpcpb.Code_ALREADY_EXISTS
 	case mysql.ERGotSignal, mysql.ERForcingClose, mysql.ERAbortingConnection, mysql.ERLockDeadlock:
@@ -1462,11 +1456,10 @@ func convertErrorCode(err error) vtrpcpb.Code {
 		mysql.ERTruncatedWrongValueForField:
 		errCode = vtrpcpb.Code_INVALID_ARGUMENT
 	case mysql.ERSpecifiedAccessDenied:
+		errCode = vtrpcpb.Code_PERMISSION_DENIED
 		// This code is also utilized for Google internal failover error code.
-		if strings.Contains(errstr, "failover in progress") {
+		if strings.Contains(err.Error(), "failover in progress") {
 			errCode = vtrpcpb.Code_FAILED_PRECONDITION
-		} else {
-			errCode = vtrpcpb.Code_PERMISSION_DENIED
 		}
 	case mysql.CRServerLost:
 		// Query was killed.

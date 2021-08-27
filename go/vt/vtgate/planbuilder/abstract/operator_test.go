@@ -183,6 +183,61 @@ JoinPredicates:
 	}
 	Predicate: t.id = s.foo
 }`,
+	}, {
+		input: "select (select 1) from t where exists (select 1) and id in (select 1)",
+		output: `SubQuery: {
+	SubQueries: [	
+	{
+		Type: PulloutValue
+		ArgName: 
+		Query: 	QueryGraph: {
+		Tables:
+			2:dual
+		}
+	} 	
+	{
+		Type: PulloutExists
+		ArgName: 
+		Query: 	QueryGraph: {
+		Tables:
+			4:dual
+		}
+	} 	
+	{
+		Type: PulloutIn
+		ArgName: 
+		Query: 	QueryGraph: {
+		Tables:
+			8:dual
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:t where id in (select 1 from dual)
+	ForAll: exists (select 1 from dual)
+	}
+}`,
+	}, {
+		input: "select u.id from user u where u.id = (select id from user_extra where id = u.id)",
+		output: `SubQuery: {
+	SubQueries: [	
+	{
+		Type: PulloutValue
+		ArgName: 
+		Query: 	QueryGraph: {
+		Tables:
+			2:user_extra
+		JoinPredicates:
+			1:2 - id = u.id
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:` + "`user`" + ` AS u
+	JoinPredicates:
+		1:2 - u.id = (select id from user_extra where id = u.id)
+	}
+}`,
 	}}
 
 	for i, tc := range tcases {
@@ -190,7 +245,7 @@ JoinPredicates:
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{})
+			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
 			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
@@ -218,6 +273,14 @@ func testString(op Operator) string {
 		inner := indent(testString(op.Inner))
 		query := sqlparser.String(op.Sel)
 		return fmt.Sprintf("Derived %s: {\n\tQuery: %s\n\tInner:%s\n}", op.Alias, query, inner)
+	case *SubQuery:
+		var inners []string
+		for _, sqOp := range op.Inner {
+			subquery := fmt.Sprintf("\n{\n\tType: %s\n\tArgName: %s\n\tQuery: %s\n}", sqOp.Type.String(), sqOp.ArgName, indent(testString(sqOp.Inner)))
+			inners = append(inners, indent(subquery))
+		}
+		outer := indent(testString(op.Outer))
+		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)
 	}
 	return "implement me"
 }

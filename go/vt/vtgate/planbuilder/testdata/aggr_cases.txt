@@ -133,7 +133,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "count(0) AS count(*)",
     "GroupBy": "(1|4), (2|5), (3|6)",
     "ResultColumns": 4,
     "Inputs": [
@@ -179,7 +179,30 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*), intcol from user group by intcol",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "GroupBy": "1",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*), intcol from `user` where 1 != 1 group by intcol",
+        "OrderBy": "1 ASC",
+        "Query": "select count(*), intcol from `user` group by intcol order by intcol asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter group by a text column, reuse existing weight_string
 "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
@@ -229,7 +252,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "count(0) AS k",
         "GroupBy": "(1|4), (2|5), (3|6)",
         "Inputs": [
           {
@@ -274,7 +297,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # sum aggregate
 "select sum(col) from user"
@@ -300,7 +344,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select sum(col) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "sum(0) AS sum(col)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select sum(col) from `user` where 1 != 1",
+        "Query": "select sum(col) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # min aggregate
 "select min(col) from user"
@@ -326,7 +391,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select min(col) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "min(0) AS min(col)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select min(col) from `user` where 1 != 1",
+        "Query": "select min(col) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # max aggregate
 "select max(col) from user"
@@ -352,7 +438,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select max(col) from user",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "max(0) AS max(col)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select max(col) from `user` where 1 != 1",
+        "Query": "select max(col) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # distinct and group by together for scatter route
 "select distinct col1, col2 from user group by col1"
@@ -490,7 +597,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -519,7 +626,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(*)",
     "GroupBy": "(0|2), (3|4)",
     "ResultColumns": 2,
     "Inputs": [
@@ -572,7 +679,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -695,7 +802,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "QueryType": "SELECT",
   "Original": "select a from (select count(*) as a from user) t",
   "Instructions": {
-    "OperatorType": "Subquery",
+    "OperatorType": "SimpleProjection",
     "Columns": [
       0
     ],
@@ -704,6 +811,36 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a from (select count(*) as a from user) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -902,7 +1039,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(distinct id)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1165,7 +1302,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "min(1)",
+    "Aggregates": "min(1) AS min(distinct col2)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1290,7 +1427,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "count(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1343,7 +1480,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "count(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1396,7 +1533,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(2)",
+    "Aggregates": "count(2) AS count(*)",
     "GroupBy": "(1|3), (0|4)",
     "ResultColumns": 3,
     "Inputs": [
@@ -1496,7 +1633,28 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user order by null",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
@@ -1593,7 +1751,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "count(4) AS count(*)",
     "GroupBy": "(0|5), (1|6), (2|7), (3|8)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1646,7 +1804,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(4)",
+    "Aggregates": "count(4) AS count(*)",
     "GroupBy": "(2|5), (1|6), (0|7), (3|8)",
     "ResultColumns": 5,
     "Inputs": [
@@ -1699,7 +1857,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(3)",
+    "Aggregates": "count(3) AS count(*)",
     "GroupBy": "(2|4), (1|5), (0|6)",
     "ResultColumns": 4,
     "Inputs": [
@@ -1767,7 +1925,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "count(1) AS count(*)",
         "GroupBy": "(0|2)",
         "ResultColumns": 2,
         "Inputs": [
@@ -1928,7 +2086,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "count(1) AS count(*)",
         "GroupBy": "(0|2)",
         "Inputs": [
           {
@@ -2050,7 +2208,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2076,7 +2234,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "count(0) AS count(*)",
     "Inputs": [
       {
         "OperatorType": "Join",
@@ -2168,7 +2326,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(*)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2216,7 +2374,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS count(user_extra.a)",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2327,7 +2485,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(1)",
+        "Aggregates": "count(1) AS k",
         "GroupBy": "(0|2)",
         "Inputs": [
           {
@@ -2381,7 +2539,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(1)",
+    "Aggregates": "count(1) AS k",
     "GroupBy": "(0|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -2400,4 +2558,3 @@ Gen4 plan same as above
     ]
   }
 }
-

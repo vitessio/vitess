@@ -299,23 +299,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from authoritative order by user_id",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative where 1 != 1",
-    "OrderBy": "(0|3) ASC",
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.user_id) from authoritative order by user_id asc",
-    "ResultColumns": 3,
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by col1"
@@ -336,23 +320,7 @@ Gen4 plan same as above
     "Table": "authoritative"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from authoritative order by col1",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative where 1 != 1",
-    "OrderBy": "(1|3) ASC",
-    "Query": "select authoritative.user_id as user_id, authoritative.col1 as col1, authoritative.col2 as col2, weight_string(authoritative.col1) from authoritative order by col1 asc",
-    "ResultColumns": 3,
-    "Table": "authoritative"
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY on scatter with text column
 "select a, textcol1, b from user order by a, textcol1, b"
@@ -530,6 +498,40 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by col",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select col, weight_string(col) from `user` where col in ::__sq1 order by col asc",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -569,6 +571,51 @@ Gen4 plan same as above
         },
         "FieldQuery": "select music.col3 from music where 1 != 1",
         "Query": "select music.col3 from music where music.id = :user_id order by null",
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by null",
+        "Table": "`user`",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Query": "select music.col3 from music where music.id = :user_id",
         "Table": "music",
         "Values": [
           ":user_id"
@@ -796,6 +843,38 @@ Gen4 plan same as above
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by null",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where col in ::__sq1 order by null",
         "Table": "`user`"
       }
     ]
@@ -1123,7 +1202,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-#Order by subquery column
+#Order by derived table column
 "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id"
 {
   "QueryType": "SELECT",
@@ -1343,6 +1422,44 @@ Gen4 plan same as above
             },
             "FieldQuery": "select col from `user` where 1 != 1",
             "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col1 from user) limit 1",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 1,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col1 from `user` where 1 != 1",
+            "Query": "select col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` where col in ::__sq1 limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -1585,7 +1702,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "Aggregates": "count(0)",
+    "Aggregates": "count(0) AS count(id)",
     "GroupBy": "(1|2)",
     "ResultColumns": 2,
     "Inputs": [
@@ -1651,7 +1768,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "count(0)",
+        "Aggregates": "count(0) AS count(id)",
         "GroupBy": "(1|2)",
         "Inputs": [
           {
@@ -1898,5 +2015,24 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
         "Table": "`user`"
       }
     ]
+  }
+}
+
+# Order by has subqueries
+"select id from unsharded order by (select id from unsharded)"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from unsharded order by (select id from unsharded)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from unsharded where 1 != 1",
+    "Query": "select id from unsharded order by (select id from unsharded) asc",
+    "Table": "unsharded"
   }
 }

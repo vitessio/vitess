@@ -727,7 +727,7 @@ func (cached *Set) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *Subquery) CachedSize(alloc bool) int64 {
+func (cached *SimpleProjection) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -739,8 +739,8 @@ func (cached *Subquery) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.Cols)) * int64(8)
 	}
-	// field Subquery vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	if cc, ok := cached.Subquery.(cachedObject); ok {
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

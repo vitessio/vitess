@@ -111,7 +111,7 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	require.NotEqual(t, newPrimary.Alias, tab1.Alias)
 
 	// Check new primary has latest transaction.
-	err = checkInsertedValues(ctx, t, newPrimary, 2)
+	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
 	require.NoError(t, err)
 
 	// bring back the old primary as a replica, check that it catches up
@@ -152,7 +152,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 
 	newPrimary := getNewPrimary(t)
 	// Check new primary has latest transaction.
-	err = checkInsertedValues(ctx, t, newPrimary, 2)
+	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
 	require.Nil(t, err)
 
 	// bring back the old primary as a replica, check that it catches up
@@ -370,9 +370,13 @@ func TestReparentWithDownReplica(t *testing.T) {
 
 	ctx := context.Background()
 
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
 	// Stop replica mysql Process
 	err := tab3.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab4})
 
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
@@ -392,7 +396,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait until it gets the data
-	err = checkInsertedValues(ctx, t, tab3, 2)
+	err = checkInsertedValues(ctx, t, tab3, insertVal)
 	require.NoError(t, err)
 }
 

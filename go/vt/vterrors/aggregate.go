@@ -40,6 +40,7 @@ const (
 	PriorityDeadlineExceeded
 	PriorityAborted
 	PriorityFailedPrecondition
+	PriorityClusterEvent
 	// Permanent errors.
 	PriorityResourceExhausted
 	PriorityUnknown
@@ -71,6 +72,7 @@ var errorPriorities = map[vtrpcpb.Code]int{
 	vtrpcpb.Code_INTERNAL:            PriorityInternal,
 	vtrpcpb.Code_UNAVAILABLE:         PriorityUnavailable,
 	vtrpcpb.Code_DATA_LOSS:           PriorityDataLoss,
+	vtrpcpb.Code_CLUSTER_EVENT:       PriorityClusterEvent,
 }
 
 // Aggregate aggregates several errors into a single one.

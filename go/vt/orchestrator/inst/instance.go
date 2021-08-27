@@ -45,17 +45,14 @@ type Instance struct {
 	Binlog_format                string
 	BinlogRowImage               string
 	LogBinEnabled                bool
-	LogSlaveUpdatesEnabled       bool // for API backwards compatibility. Equals `LogReplicationUpdatesEnabled`
 	LogReplicationUpdatesEnabled bool
 	SelfBinlogCoordinates        BinlogCoordinates
-	MasterKey                    InstanceKey
-	MasterUUID                   string
+	SourceKey                    InstanceKey
+	SourceUUID                   string
 	AncestryUUID                 string
-	IsDetachedMaster             bool
+	IsDetachedPrimary            bool
 
-	Slave_SQL_Running          bool // for API backwards compatibility. Equals `ReplicationSQLThreadRuning`
 	ReplicationSQLThreadRuning bool
-	Slave_IO_Running           bool // for API backwards compatibility. Equals `ReplicationIOThreadRuning`
 	ReplicationIOThreadRuning  bool
 	ReplicationSQLThreadState  ReplicationThreadState
 	ReplicationIOThreadState   ReplicationThreadState
@@ -72,36 +69,34 @@ type Instance struct {
 	RelaylogCoordinates   BinlogCoordinates
 	LastSQLError          string
 	LastIOError           string
-	SecondsBehindMaster   sql.NullInt64
+	SecondsBehindPrimary  sql.NullInt64
 	SQLDelay              uint
 	ExecutedGtidSet       string
 	GtidPurged            string
 	GtidErrant            string
 
-	masterExecutedGtidSet string // Not exported
+	primaryExecutedGtidSet string // Not exported
 
-	SlaveLagSeconds                   sql.NullInt64 // for API backwards compatibility. Equals `ReplicationLagSeconds`
-	ReplicationLagSeconds             sql.NullInt64
-	SlaveHosts                        InstanceKeyMap // for API backwards compatibility. Equals `Replicas`
-	Replicas                          InstanceKeyMap
-	ClusterName                       string
-	SuggestedClusterAlias             string
-	DataCenter                        string
-	Region                            string
-	PhysicalEnvironment               string
-	ReplicationDepth                  uint
-	IsCoMaster                        bool
-	HasReplicationCredentials         bool
-	ReplicationCredentialsAvailable   bool
-	SemiSyncAvailable                 bool // when both semi sync plugins (primary & replica) are loaded
-	SemiSyncEnforced                  bool
-	SemiSyncMasterEnabled             bool
-	SemiSyncReplicaEnabled            bool
-	SemiSyncMasterTimeout             uint64
-	SemiSyncMasterWaitForReplicaCount uint
-	SemiSyncMasterStatus              bool
-	SemiSyncMasterClients             uint
-	SemiSyncReplicaStatus             bool
+	ReplicationLagSeconds              sql.NullInt64
+	Replicas                           InstanceKeyMap
+	ClusterName                        string
+	SuggestedClusterAlias              string
+	DataCenter                         string
+	Region                             string
+	PhysicalEnvironment                string
+	ReplicationDepth                   uint
+	IsCoPrimary                        bool
+	HasReplicationCredentials          bool
+	ReplicationCredentialsAvailable    bool
+	SemiSyncAvailable                  bool // when both semi sync plugins (primary & replica) are loaded
+	SemiSyncEnforced                   bool
+	SemiSyncPrimaryEnabled             bool
+	SemiSyncReplicaEnabled             bool
+	SemiSyncPrimaryTimeout             uint64
+	SemiSyncPrimaryWaitForReplicaCount uint
+	SemiSyncPrimaryStatus              bool
+	SemiSyncPrimaryClients             uint
+	SemiSyncReplicaStatus              bool
 
 	LastSeenTimestamp    string
 	IsLastCheckValid     bool
@@ -163,13 +158,6 @@ func (this *Instance) MarshalJSON() ([]byte, error) {
 		Instance
 	}{}
 	i.Instance = *this
-	// change terminology. Users of the orchestrator API can switch to new terminology and avoid using old terminology
-	// flip
-	i.SlaveHosts = i.Replicas
-	i.SlaveLagSeconds = this.ReplicationLagSeconds
-	i.LogSlaveUpdatesEnabled = this.LogReplicationUpdatesEnabled
-	i.Slave_SQL_Running = this.ReplicationSQLThreadRuning
-	i.Slave_IO_Running = this.ReplicationIOThreadRuning
 
 	return json.Marshal(i)
 }
@@ -311,12 +299,12 @@ func (this *Instance) FlavorNameAndMajorVersion() string {
 
 // IsReplica makes simple heuristics to decide whether this instance is a replica of another instance
 func (this *Instance) IsReplica() bool {
-	return this.MasterKey.Hostname != "" && this.MasterKey.Hostname != "_" && this.MasterKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
+	return this.SourceKey.Hostname != "" && this.SourceKey.Hostname != "_" && this.SourceKey.Port != 0 && (this.ReadBinlogCoordinates.LogFile != "" || this.UsingGTID())
 }
 
-// IsMaster makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
+// IsPrimary makes simple heuristics to decide whether this instance is a primary (not replicating from any other server),
 // either via traditional async/semisync replication or group replication
-func (this *Instance) IsMaster() bool {
+func (this *Instance) IsPrimary() bool {
 	// If traditional replication is configured, it is for sure not a primary
 	if this.IsReplica() {
 		return false
@@ -374,9 +362,9 @@ func (this *Instance) NextGTID() (string, error) {
 		return tokens[len(tokens)-1]
 	}
 	// executed GTID set: 4f6d62ed-df65-11e3-b395-60672090eb04:1,b9b4712a-df64-11e3-b391-60672090eb04:1-6
-	executedGTIDsFromMaster := lastToken(this.ExecutedGtidSet, ",")
-	// executedGTIDsFromMaster: b9b4712a-df64-11e3-b391-60672090eb04:1-6
-	executedRange := lastToken(executedGTIDsFromMaster, ":")
+	executedGTIDsFromPrimary := lastToken(this.ExecutedGtidSet, ",")
+	// executedGTIDsFromPrimary: b9b4712a-df64-11e3-b391-60672090eb04:1-6
+	executedRange := lastToken(executedGTIDsFromPrimary, ":")
 	// executedRange: 1-6
 	lastExecutedNumberToken := lastToken(executedRange, "-")
 	// lastExecutedNumber: 6
@@ -385,7 +373,7 @@ func (this *Instance) NextGTID() (string, error) {
 		return "", err
 	}
 	nextNumber := lastExecutedNumber + 1
-	nextGTID := fmt.Sprintf("%s:%d", firstToken(executedGTIDsFromMaster, ":"), nextNumber)
+	nextGTID := fmt.Sprintf("%s:%d", firstToken(executedGTIDsFromPrimary, ":"), nextNumber)
 	return nextGTID, nil
 }
 
@@ -408,12 +396,12 @@ func (this *Instance) GetNextBinaryLog(binlogCoordinates BinlogCoordinates) (Bin
 }
 
 // IsReplicaOf returns true if this instance claims to replicate from given primary
-func (this *Instance) IsReplicaOf(master *Instance) bool {
-	return this.MasterKey.Equals(&master.Key)
+func (this *Instance) IsReplicaOf(primary *Instance) bool {
+	return this.SourceKey.Equals(&primary.Key)
 }
 
 // IsReplicaOf returns true if this i supposed primary of given replica
-func (this *Instance) IsMasterOf(replica *Instance) bool {
+func (this *Instance) IsPrimaryOf(replica *Instance) bool {
 	return replica.IsReplicaOf(this)
 }
 
@@ -472,9 +460,9 @@ func (this *Instance) CanReplicateFrom(other *Instance) (bool, error) {
 func (this *Instance) HasReasonableMaintenanceReplicationLag() bool {
 	// replicas with SQLDelay are a special case
 	if this.SQLDelay > 0 {
-		return math.AbsInt64(this.SecondsBehindMaster.Int64-int64(this.SQLDelay)) <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
+		return math.AbsInt64(this.SecondsBehindPrimary.Int64-int64(this.SQLDelay)) <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
 	}
-	return this.SecondsBehindMaster.Int64 <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
+	return this.SecondsBehindPrimary.Int64 <= int64(config.Config.ReasonableMaintenanceReplicationLagSeconds)
 }
 
 // CanMove returns true if this instance's state allows it to be repositioned. For example,
@@ -492,7 +480,7 @@ func (this *Instance) CanMove() (bool, error) {
 	if !this.ReplicationIOThreadState.IsRunning() {
 		return false, fmt.Errorf("%+v: instance is not replicating", this.Key)
 	}
-	if !this.SecondsBehindMaster.Valid {
+	if !this.SecondsBehindPrimary.Valid {
 		return false, fmt.Errorf("%+v: cannot determine replication lag", this.Key)
 	}
 	if !this.HasReasonableMaintenanceReplicationLag() {
@@ -501,8 +489,8 @@ func (this *Instance) CanMove() (bool, error) {
 	return true, nil
 }
 
-// CanMoveAsCoMaster returns true if this instance's state allows it to be repositioned.
-func (this *Instance) CanMoveAsCoMaster() (bool, error) {
+// CanMoveAsCoPrimary returns true if this instance's state allows it to be repositioned.
+func (this *Instance) CanMoveAsCoPrimary() (bool, error) {
 	if !this.IsLastCheckValid {
 		return false, fmt.Errorf("%+v: last check invalid", this.Key)
 	}
@@ -543,7 +531,7 @@ func (this *Instance) LagStatusString() string {
 	if this.IsReplica() && !this.ReplicaRunning() {
 		return "null"
 	}
-	if this.IsReplica() && !this.SecondsBehindMaster.Valid {
+	if this.IsReplica() && !this.SecondsBehindPrimary.Valid {
 		return "null"
 	}
 	if this.IsReplica() && this.ReplicationLagSeconds.Int64 > int64(config.Config.ReasonableMaintenanceReplicationLagSeconds) {
@@ -578,7 +566,7 @@ func (this *Instance) descriptionTokens() (tokens []string) {
 			}
 			extraTokens = append(extraTokens, token)
 		}
-		if this.SemiSyncMasterStatus {
+		if this.SemiSyncPrimaryStatus {
 			extraTokens = append(extraTokens, "semi:master")
 		}
 		if this.SemiSyncReplicaStatus {

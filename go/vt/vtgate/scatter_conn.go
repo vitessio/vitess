@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -601,7 +600,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	}
 
 	if session.MustRollback() {
-		stc.txConn.Rollback(ctx, session)
+		_ = stc.txConn.Rollback(ctx, session)
 	}
 	return allErrors
 }
@@ -699,8 +698,8 @@ func wasConnectionClosed(err error) bool {
 func requireNewQS(err error, target *querypb.Target) bool {
 	code := vterrors.Code(err)
 	msg := err.Error()
-	return (code == vtrpcpb.Code_FAILED_PRECONDITION && (vterrors.RxOp.MatchString(msg) || vterrors.RxWrongTablet.MatchString(msg))) ||
-		(target != nil && target.TabletType == topodatapb.TabletType_PRIMARY && buffer.CausedByFailover(err))
+	return (code == vtrpcpb.Code_FAILED_PRECONDITION && vterrors.RxWrongTablet.MatchString(msg)) ||
+		(code == vtrpcpb.Code_CLUSTER_EVENT && ((target != nil && target.TabletType == topodatapb.TabletType_PRIMARY) || vterrors.RxOp.MatchString(msg)))
 }
 
 // actionInfo looks at the current session, and returns information about what needs to be done for this tablet

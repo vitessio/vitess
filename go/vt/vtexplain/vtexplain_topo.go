@@ -17,10 +17,9 @@ limitations under the License.
 package vtexplain
 
 import (
+	"context"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -115,6 +114,6 @@ func (et *ExplainTopo) GetSrvKeyspace(ctx context.Context, cell, keyspace string
 }
 
 // WatchSrvVSchema is part of the srvtopo.Server interface.
-func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error)) {
+func (et *ExplainTopo) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
 	callback(et.getSrvVSchema(), nil)
 }

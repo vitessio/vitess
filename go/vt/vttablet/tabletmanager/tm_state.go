@@ -66,7 +66,7 @@ type tmState struct {
 	isInSrvKeyspace          bool
 	isShardServing           map[topodatapb.TabletType]bool
 	tabletControls           map[topodatapb.TabletType]bool
-	blacklistedTables        map[topodatapb.TabletType][]string
+	deniedTables             map[topodatapb.TabletType][]string
 	tablet                   *topodatapb.Tablet
 	isPublishing             bool
 	hasCreatedMetadataTables bool
@@ -136,10 +136,10 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 	if shardInfo != nil {
 		ts.isResharding = len(shardInfo.SourceShards) > 0
 
-		ts.blacklistedTables = make(map[topodatapb.TabletType][]string)
+		ts.deniedTables = make(map[topodatapb.TabletType][]string)
 		for _, tc := range shardInfo.TabletControls {
 			if topo.InCellList(ts.tm.tabletAlias.Cell, tc.Cells) {
-				ts.blacklistedTables[tc.TabletType] = tc.BlacklistedTables
+				ts.deniedTables[tc.TabletType] = tc.DeniedTables
 			}
 		}
 	}
@@ -245,8 +245,8 @@ func (ts *tmState) updateLocked(ctx context.Context) {
 		}
 	}
 
-	if err := ts.applyBlacklist(ctx); err != nil {
-		log.Errorf("Cannot update blacklisted tables rule: %v", err)
+	if err := ts.applyDenyList(ctx); err != nil {
+		log.Errorf("Cannot update denied tables rule: %v", err)
 	}
 
 	ts.tm.replManager.SetTabletType(ts.tablet.Type)
@@ -323,30 +323,30 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	return ""
 }
 
-func (ts *tmState) applyBlacklist(ctx context.Context) (err error) {
-	blacklistRules := rules.New()
-	blacklistedTables := ts.blacklistedTables[ts.tablet.Type]
-	if len(blacklistedTables) > 0 {
-		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), blacklistedTables)
+func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
+	denyListRules := rules.New()
+	deniedTables := ts.deniedTables[ts.tablet.Type]
+	if len(deniedTables) > 0 {
+		tables, err := mysqlctl.ResolveTables(ctx, ts.tm.MysqlDaemon, topoproto.TabletDbName(ts.tablet), deniedTables)
 		if err != nil {
 			return err
 		}
 
 		// Verify that at least one table matches the wildcards, so
-		// that we don't add a rule to blacklist all tables
+		// that we don't add a rule to deny all tables
 		if len(tables) > 0 {
-			log.Infof("Blacklisting tables %v", strings.Join(tables, ", "))
-			qr := rules.NewQueryRule("enforce blacklisted tables", "blacklisted_table", rules.QRFailRetry)
+			log.Infof("Denying tables %v", strings.Join(tables, ", "))
+			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
 			}
-			blacklistRules.Add(qr)
+			denyListRules.Add(qr)
 		}
 	}
 
-	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(blacklistQueryRules, blacklistRules)
+	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
-		log.Warningf("Fail to load query rule set %s: %s", blacklistQueryRules, loadRuleErr)
+		log.Warningf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr)
 	}
 	return nil
 }
@@ -424,9 +424,9 @@ func (ts *tmState) retryPublish() {
 // of tmState may not be accessible due to longer mutex holds.
 // tmState uses publishForDisplay to keep these values uptodate.
 type displayState struct {
-	mu                sync.Mutex
-	tablet            *topodatapb.Tablet
-	blackListedTables []string
+	mu           sync.Mutex
+	tablet       *topodatapb.Tablet
+	deniedTables []string
 }
 
 // Note that the methods for displayState are all in tmState.
@@ -435,7 +435,7 @@ func (ts *tmState) publishForDisplay() {
 	defer ts.displayState.mu.Unlock()
 
 	ts.displayState.tablet = proto.Clone(ts.tablet).(*topodatapb.Tablet)
-	ts.displayState.blackListedTables = ts.blacklistedTables[ts.tablet.Type]
+	ts.displayState.deniedTables = ts.deniedTables[ts.tablet.Type]
 }
 
 func (ts *tmState) Tablet() *topodatapb.Tablet {
@@ -444,10 +444,10 @@ func (ts *tmState) Tablet() *topodatapb.Tablet {
 	return proto.Clone(ts.displayState.tablet).(*topodatapb.Tablet)
 }
 
-func (ts *tmState) BlacklistedTables() []string {
+func (ts *tmState) DeniedTables() []string {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
-	return ts.displayState.blackListedTables
+	return ts.displayState.deniedTables
 }
 
 func (ts *tmState) Keyspace() string {

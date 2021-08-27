@@ -56,6 +56,8 @@ var (
 		"vreplication_cellalias",
 		"vstream_failover",
 		"vreplication_v2",
+		"vstream_stoponreshard_true",
+		"vstream_stoponreshard_false",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",

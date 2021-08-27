@@ -373,6 +373,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		if !curTables[tableName] {
 			dropped = append(dropped, tableName)
 			delete(se.tables, tableName)
+			// We can't actually delete the label from the stats, but we can set it to 0.
+			// Many monitoring tools will drop zero-valued metrics.
+			se.tableFileSizeGauge.Reset(tableName)
+			se.tableAllocatedSizeGauge.Reset(tableName)
 		}
 	}
 

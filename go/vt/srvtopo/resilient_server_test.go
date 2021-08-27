@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -64,7 +66,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// wait until we get the right value
 	var got *topodatapb.SrvKeyspace
@@ -124,7 +127,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
 
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	updateTime := time.Now()
 	for {
@@ -248,7 +252,8 @@ func TestGetSrvKeyspace(t *testing.T) {
 		ShardingColumnName: "id3",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 	expiry = time.Now().Add(5 * time.Second)
 	for {
 		got, err = rs.GetSrvKeyspace(context.Background(), "test_cell", "test_ks")
@@ -380,7 +385,8 @@ func TestGetSrvKeyspaceCreated(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
 
 	// Wait until we get the right value.
 	expiry := time.Now().Add(5 * time.Second)
@@ -414,11 +420,12 @@ func TestWatchSrvVSchema(t *testing.T) {
 	mu := sync.Mutex{}
 	var watchValue *vschemapb.SrvVSchema
 	var watchErr error
-	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) {
+	rs.WatchSrvVSchema(ctx, "test_cell", func(v *vschemapb.SrvVSchema, e error) bool {
 		mu.Lock()
 		defer mu.Unlock()
 		watchValue = v
 		watchErr = e
+		return true
 	})
 	get := func() (*vschemapb.SrvVSchema, error) {
 		mu.Lock()
@@ -503,8 +510,11 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		ShardingColumnName: "id",
 		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
 	}
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
-	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks, %s) failed", want)
+
+	err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
+	require.NoError(t, err, "UpdateSrvKeyspace(test_cell, test_ks2, %s) failed", want)
 
 	ctx := context.Background()
 	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
@@ -684,10 +694,11 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 		return nil
 	}
 
-	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(keyspace *topodatapb.SrvKeyspace, err error) {
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(keyspace *topodatapb.SrvKeyspace, err error) bool {
 		wmu.Lock()
 		defer wmu.Unlock()
 		wseen = append(wseen, watched{keyspace: keyspace, err: err})
+		return true
 	})
 
 	seen1 := allSeen()
@@ -753,4 +764,55 @@ func TestSrvKeyspaceWatcher(t *testing.T) {
 	assert.Nil(t, seen6[9].err)
 	assert.NotNil(t, seen6[9].keyspace)
 	assert.Equal(t, seen6[9].keyspace.ShardingColumnName, "updated4")
+}
+
+func TestSrvKeyspaceListener(t *testing.T) {
+	ts, _ := memorytopo.NewServerAndFactory("test_cell")
+	*srvTopoCacheTTL = time.Duration(100 * time.Millisecond)
+	*srvTopoCacheRefresh = time.Duration(40 * time.Millisecond)
+	defer func() {
+		*srvTopoCacheTTL = 1 * time.Second
+		*srvTopoCacheRefresh = 1 * time.Second
+	}()
+
+	rs := NewResilientServer(ts, "TestGetSrvKeyspaceWatcher")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var callbackCount sync2.AtomicInt32
+
+	// adding listener will perform callback.
+	rs.WatchSrvKeyspace(context.Background(), "test_cell", "test_ks", func(srvKs *topodatapb.SrvKeyspace, err error) bool {
+		callbackCount.Add(1)
+		select {
+		case <-ctx.Done():
+			return false
+		default:
+			return true
+		}
+	})
+
+	// First update (callback - 2)
+	want := &topodatapb.SrvKeyspace{
+		ShardingColumnName: "id",
+		ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+	}
+	err := ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+	require.NoError(t, err)
+
+	// Next callback to remove from listener
+	cancel()
+
+	// multi updates thereafter
+	for i := 0; i < 5; i++ {
+		want = &topodatapb.SrvKeyspace{
+			ShardingColumnName: fmt.Sprintf("updated%d", i),
+			ShardingColumnType: topodatapb.KeyspaceIdType_UINT64,
+		}
+		err = ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks", want)
+		require.NoError(t, err)
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// only 3 times the callback called for the listener
+	assert.EqualValues(t, 3, callbackCount.Get())
 }

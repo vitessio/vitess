@@ -141,6 +141,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateTablet = `UPDATE _vt.schema_migrations
+			SET tablet=%a
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateTabletFailure = `UPDATE _vt.schema_migrations
 			SET tablet_failure=1
 		WHERE

@@ -57,3 +57,17 @@ func TestFireOnTermSyncHooksTimeout(t *testing.T) {
 		t.Errorf("finished = %v, want %v", finished, want)
 	}
 }
+
+func TestFireOnCloseHooksTimeout(t *testing.T) {
+	onCloseHooks = event.Hooks{}
+
+	OnClose(func() {
+		time.Sleep(1 * time.Second)
+	})
+
+	// we deliberatly test the flag to make sure it's not accidently set to a
+	// high value.
+	if finished, want := fireOnCloseHooks(*onCloseTimeout), false; finished != want {
+		t.Errorf("finished = %v, want %v", finished, want)
+	}
+}

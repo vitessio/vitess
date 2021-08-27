@@ -78,7 +78,7 @@ type TableFilter struct {
 }
 
 // NewTableFilter creates a TableFilter for whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFilter, error) {
 	f := &TableFilter{
@@ -173,7 +173,7 @@ func (f *TableFilter) Includes(tableName string, tableType string) bool {
 }
 
 // FilterTables returns a copy which includes only whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	copy := proto.Clone(sd).(*tabletmanagerdatapb.SchemaDefinition)

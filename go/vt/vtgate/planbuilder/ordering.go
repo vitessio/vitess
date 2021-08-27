@@ -24,7 +24,7 @@ import (
 
 func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.OrderBy) (logicalPlan, error) {
 	switch node := input.(type) {
-	case *subquery, *vindexFunc:
+	case *simpleProjection, *vindexFunc:
 		if len(orderBy) == 0 {
 			return node, nil
 		}

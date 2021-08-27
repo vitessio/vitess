@@ -6,5 +6,5 @@
   "MySQLReplicaPassword": "",
   "RecoveryPeriodBlockSeconds": 1,
   "InstancePollSeconds": 1,
-  "PreventCrossDataCenterMasterFailover": true
+  "PreventCrossDataCenterPrimaryFailover": true
 }

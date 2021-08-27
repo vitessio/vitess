@@ -68,8 +68,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// Query rules from blacklist
-const blacklistQueryRules string = "BlacklistQueryRules"
+// Query rules from denylist
+const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
@@ -275,7 +275,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")
 	}
-	tm.QueryServiceControl.RegisterQueryRuleSource(blacklistQueryRules)
+	tm.QueryServiceControl.RegisterQueryRuleSource(denyListQueryList)
 
 	if tm.UpdateStream != nil {
 		tm.UpdateStream.InitDBConfig(tm.DBConfigs)
@@ -713,9 +713,9 @@ func (tm *TabletManager) Tablet() *topodatapb.Tablet {
 	return tm.tmState.Tablet()
 }
 
-// BlacklistedTables returns the list of currently blacklisted tables.
-func (tm *TabletManager) BlacklistedTables() []string {
-	return tm.tmState.BlacklistedTables()
+// DeniedTables returns the list of currently denied tables.
+func (tm *TabletManager) DeniedTables() []string {
+	return tm.tmState.DeniedTables()
 }
 
 // hookExtraEnv returns the map to pass to local hooks

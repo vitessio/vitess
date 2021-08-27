@@ -93,10 +93,10 @@ func TestQP(t *testing.T) {
 			require.NoError(t, err)
 
 			sel := stmt.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel)
+			qp, err := CreateQPFromSelect(sel, semantics.NewSemTable())
 			if tcase.expErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tcase.expErr)
@@ -200,10 +200,10 @@ func TestQPSimplifiedExpr(t *testing.T) {
 			ast, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 			sel := ast.(*sqlparser.Select)
-			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{})
+			_, err = semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
 
-			qp, err := CreateQPFromSelect(sel)
+			qp, err := CreateQPFromSelect(sel, semantics.NewSemTable())
 			require.NoError(t, err)
 			require.Equal(t, tc.expected[1:], qp.toString())
 		})
