@@ -40,39 +40,39 @@ var TopoServ *topo.Server
 // ErrTabletAliasNil is a fixed error message.
 var ErrTabletAliasNil = errors.New("tablet alias is nil")
 
-// SwitchMaster makes the new tablet the primary and proactively performs
+// SwitchPrimary makes the new tablet the primary and proactively performs
 // the necessary propagation to the old primary. The propagation is best
 // effort. If it fails, the tablet's shard sync will eventually converge.
 // The proactive propagation allows a competing Orchestrator from discovering
 // the successful action of a previous one, which reduces churn.
-func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
-	newMasterTablet, err := ChangeTabletType(newMasterKey, topodatapb.TabletType_PRIMARY)
+func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
+	newPrimaryTablet, err := ChangeTabletType(newPrimaryKey, topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return err
 	}
 	// The following operations are best effort.
-	if newMasterTablet.Type != topodatapb.TabletType_PRIMARY {
-		log.Errorf("Unexpected: tablet type did not change to master: %v", newMasterTablet.Type)
+	if newPrimaryTablet.Type != topodatapb.TabletType_PRIMARY {
+		log.Errorf("Unexpected: tablet type did not change to primary: %v", newPrimaryTablet.Type)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer cancel()
-	_, err = TopoServ.UpdateShardFields(ctx, newMasterTablet.Keyspace, newMasterTablet.Shard, func(si *topo.ShardInfo) error {
-		if proto.Equal(si.PrimaryAlias, newMasterTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newMasterTablet.PrimaryTermStartTime) {
+	_, err = TopoServ.UpdateShardFields(ctx, newPrimaryTablet.Keyspace, newPrimaryTablet.Shard, func(si *topo.ShardInfo) error {
+		if proto.Equal(si.PrimaryAlias, newPrimaryTablet.Alias) && proto.Equal(si.PrimaryTermStartTime, newPrimaryTablet.PrimaryTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
 
 		// We just successfully reparented. We should check timestamps, but always overwrite.
 		lastTerm := si.GetPrimaryTermStartTime()
-		newTerm := logutil.ProtoToTime(newMasterTablet.PrimaryTermStartTime)
+		newTerm := logutil.ProtoToTime(newPrimaryTablet.PrimaryTermStartTime)
 		if !newTerm.After(lastTerm) {
-			log.Errorf("Possible clock skew. New master start time is before previous one: %v vs %v", newTerm, lastTerm)
+			log.Errorf("Possible clock skew. New primary start time is before previous one: %v vs %v", newTerm, lastTerm)
 		}
 
-		aliasStr := topoproto.TabletAliasString(newMasterTablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
-		si.PrimaryAlias = newMasterTablet.Alias
-		si.PrimaryTermStartTime = newMasterTablet.PrimaryTermStartTime
+		aliasStr := topoproto.TabletAliasString(newPrimaryTablet.Alias)
+		log.Infof("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
+		si.PrimaryAlias = newPrimaryTablet.Alias
+		si.PrimaryTermStartTime = newPrimaryTablet.PrimaryTermStartTime
 		return nil
 	})
 	// Don't proceed if shard record could not be updated.
@@ -80,7 +80,7 @@ func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
 		log.Errore(err)
 		return nil
 	}
-	if _, err := ChangeTabletType(oldMasterKey, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := ChangeTabletType(oldPrimaryKey, topodatapb.TabletType_REPLICA); err != nil {
 		// This is best effort.
 		log.Errore(err)
 	}
@@ -90,7 +90,7 @@ func SwitchMaster(newMasterKey, oldMasterKey InstanceKey) error {
 // ChangeTabletType designates the tablet that owns an instance as the primary.
 func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
 	if instanceKey.Hostname == "" {
-		return nil, errors.New("can't set tablet to master: instance is unspecified")
+		return nil, errors.New("can't set tablet to primary: instance is unspecified")
 	}
 	tablet, err := ReadTablet(instanceKey)
 	if err != nil {

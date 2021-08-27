@@ -72,7 +72,7 @@ func canRetry(ctx context.Context, err error) bool {
 	}
 
 	switch vterrors.Code(err) {
-	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_FAILED_PRECONDITION:
+	case vtrpcpb.Code_UNAVAILABLE, vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_CLUSTER_EVENT:
 		return true
 	}
 	return false

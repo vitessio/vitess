@@ -194,7 +194,7 @@ export const formatRows = (
     const filteredTabletsByShard = groupBy(filteredTablets, 'shard');
 
     const shardsForKeyspace = Object.values(keyspace.shards || {}).map((shard) => {
-        const isShardServing = !!shard.shard?.is_master_serving;
+        const isShardServing = !!shard.shard?.is_primary_serving;
         return {
             isShardServing,
             shard: shard.name,

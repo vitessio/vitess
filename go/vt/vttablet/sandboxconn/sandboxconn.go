@@ -156,7 +156,7 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
 	if sbc.NotServing {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NotServing)
+		return nil, vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
 	}
 	if sbc.tablet.Type != target.TabletType {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)

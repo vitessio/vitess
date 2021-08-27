@@ -28,15 +28,15 @@ describe('getShardsByState', () => {
                 shards: {
                     '-80': {
                         name: '-80',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                     '-': {
                         name: '-',
-                        shard: { is_master_serving: false },
+                        shard: { is_primary_serving: false },
                     },
                     '80-': {
                         name: '80-',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                 },
             }),
@@ -44,17 +44,17 @@ describe('getShardsByState', () => {
                 [ShardState.serving]: [
                     {
                         name: '-80',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                     {
                         name: '80-',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                 ],
                 [ShardState.nonserving]: [
                     {
                         name: '-',
-                        shard: { is_master_serving: false },
+                        shard: { is_primary_serving: false },
                     },
                 ],
             },
@@ -65,7 +65,7 @@ describe('getShardsByState', () => {
                 shards: {
                     '-': {
                         name: '-',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                 },
             }),
@@ -73,7 +73,7 @@ describe('getShardsByState', () => {
                 [ShardState.serving]: [
                     {
                         name: '-',
-                        shard: { is_master_serving: true },
+                        shard: { is_primary_serving: true },
                     },
                 ],
                 [ShardState.nonserving]: [],

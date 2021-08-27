@@ -40,8 +40,8 @@ func (r *switcher) deleteRoutingRules(ctx context.Context) error {
 	return r.ts.deleteRoutingRules(ctx)
 }
 
-func (r *switcher) dropSourceBlacklistedTables(ctx context.Context) error {
-	return r.ts.dropSourceBlacklistedTables(ctx)
+func (r *switcher) dropSourceDeniedTables(ctx context.Context) error {
+	return r.ts.dropSourceDeniedTables(ctx)
 }
 
 func (r *switcher) validateWorkflowHasCompleted(ctx context.Context) error {

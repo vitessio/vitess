@@ -597,7 +597,7 @@ Gen4 plan same as above
     "OperatorType": "SHOW WARNINGS"
   }
 }
-
+Gen4 plan same as above
 
 # show global status
 "show global status"

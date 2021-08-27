@@ -459,6 +459,16 @@ func NewArgument(in string) Argument {
 	return Argument(in)
 }
 
+// NewListArg builds a new ListArg.
+func NewListArg(in string) ListArg {
+	return ListArg(in)
+}
+
+// String returns ListArg as a string.
+func (node ListArg) String() string {
+	return string(node)
+}
+
 // Bytes return the []byte
 func (node *Literal) Bytes() []byte {
 	return []byte(node.Val)

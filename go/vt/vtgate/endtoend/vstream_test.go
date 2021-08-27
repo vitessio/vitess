@@ -316,7 +316,7 @@ func TestVStreamSharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	flags := &vtgatepb.VStreamFlags{}
-	reader, err := gconn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
+	reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 	_, _ = conn, mconn
 	if err != nil {
 		t.Fatal(err)

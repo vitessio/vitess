@@ -191,6 +191,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 	if vtgate.proc == nil || vtgate.exit == nil {
 		return nil
 	}
+	// graceful shutdown is not currently working with vtgate, attempting a force-kill to make tests less flaky
 	// Attempt graceful shutdown with SIGTERM first
 	vtgate.proc.Process.Signal(syscall.SIGTERM)
 

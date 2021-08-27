@@ -1048,6 +1048,70 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user where id in (select u.id, e.id from user u join user_extra e where e.id = u.col limit 10)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 10,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-2,1",
+            "JoinVars": {
+              "u_col": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+                "Query": "select u.col, u.id from `user` as u",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # Wire-up in underlying primitive after pullout
 "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10"
@@ -1091,6 +1155,66 @@
                 },
                 "FieldQuery": "select u.id, :__sq1, u.col from `user` as u where 1 != 1",
                 "Query": "select u.id, :__sq1, u.col from `user` as u",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, e.id, (select col from user) from user u join user_extra e where e.id = u.col limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 10,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-2,1,-3",
+            "JoinVars": {
+              "u_col": 0
+            },
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.col, u.id, :__sq1 from `user` as u where 1 != 1",
+                "Query": "select u.col, u.id, :__sq1 from `user` as u",
                 "Table": "`user`"
               },
               {

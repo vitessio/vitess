@@ -248,7 +248,7 @@ message Shard {
     // OBSOLETE: disable_query_service 3
     reserved 3;
 
-    repeated string blacklisted_tables = 4;
+    repeated string denied_tables = 4;
 
     // frozen is set if we've started failing over traffic for
     // the primary. If set, this record should not be removed.

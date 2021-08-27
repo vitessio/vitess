@@ -28,6 +28,13 @@ import (
 	"vitess.io/vitess/go/vt/sysvars"
 )
 
+var (
+	subQueryBaseArgName = []byte("__sq")
+
+	// HasValueSubQueryBaseName is the prefix of each parameter representing an EXISTS subquery
+	HasValueSubQueryBaseName = []byte("__sq_has_values")
+)
+
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
@@ -42,6 +49,7 @@ type ReservedVars struct {
 	next         []byte
 	counter      int
 	fast, static bool
+	sqNext       int64
 }
 
 // ReserveAll tries to reserve all the given variable names. If they're all available,
@@ -73,10 +81,35 @@ func (r *ReservedVars) ReserveColName(col *ColName) string {
 
 	for {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
 			return string(joinVar)
 		}
 		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
 		i++
+	}
+}
+
+// ReserveSubQuery returns the next argument name to replace subquery with pullout value.
+func (r *ReservedVars) ReserveSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
+	}
+}
+
+// ReserveHasValuesSubQuery returns the next argument name to replace subquery with has value.
+func (r *ReservedVars) ReserveHasValuesSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
 	}
 }
 

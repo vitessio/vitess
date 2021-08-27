@@ -95,8 +95,8 @@ func TestInformationSchemaQueryGetsRoutedToTheRightTableAndKeyspace(t *testing.T
 	require.NoError(t, err)
 	defer conn.Close()
 
-	_ = checkedExec(t, conn, "SELECT id FROM t1000") // test that the routed table is available to us
-	result := checkedExec(t, conn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='t1000'")
+	_ = checkedExec(t, conn, "SELECT id FROM ks.t1000") // test that the routed table is available to us
+	result := checkedExec(t, conn, "SELECT * FROM information_schema.tables WHERE table_schema = database() and table_name='ks.t1000'")
 	assert.NotEmpty(t, result.Rows)
 }
 
@@ -107,9 +107,9 @@ func TestFKConstraintUsingInformationSchema(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	checkedExec(t, conn, "create table t7_xxhash(uid varchar(50),phone bigint,msg varchar(100),primary key(uid)) Engine=InnoDB")
-	checkedExec(t, conn, "create table t7_fk(id bigint,t7_uid varchar(50),primary key(id),CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)	on delete set null on update cascade) Engine=InnoDB;")
-	defer checkedExec(t, conn, "drop table t7_fk, t7_xxhash")
+	checkedExec(t, conn, "create table ks.t7_xxhash(uid varchar(50),phone bigint,msg varchar(100),primary key(uid)) Engine=InnoDB")
+	checkedExec(t, conn, "create table ks.t7_fk(id bigint,t7_uid varchar(50),primary key(id),CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)	on delete set null on update cascade) Engine=InnoDB;")
+	defer checkedExec(t, conn, "drop table ks.t7_fk, ks.t7_xxhash")
 
 	query := "select fk.referenced_table_name as to_table, fk.referenced_column_name as primary_key, fk.column_name as `column`, fk.constraint_name as name, rc.update_rule as on_update, rc.delete_rule as on_delete from information_schema.referential_constraints as rc join information_schema.key_column_usage as fk using (constraint_schema, constraint_name) where fk.referenced_column_name is not null and fk.table_schema = database() and fk.table_name = 't7_fk' and rc.constraint_schema = database() and rc.table_name = 't7_fk'"
 	assertMatches(t, conn, query, `[[VARCHAR("t7_xxhash") VARCHAR("uid") VARCHAR("t7_uid") VARCHAR("t7_fk_ibfk_1") VARCHAR("CASCADE") VARCHAR("SET NULL")]]`)
@@ -152,7 +152,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
-		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
+		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
 	qr1 := checkedExec(t, conn, queryWithQualifier)
 
 	checkedExec(t, conn, "use information_schema")
@@ -161,7 +161,7 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
-		"order by t.table_schema,t.table_name,c.column_name", KeyspaceName, KeyspaceName)
+		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
 	qr2 := checkedExec(t, conn, queryWithoutQualifier)
 	require.Equal(t, qr1, qr2)
 
@@ -186,7 +186,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, KeyspaceName, KeyspaceName)
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, shardedKs, shardedKs)
 	qr1 := checkedExec(t, conn, query)
 	require.EqualValues(t, 4, len(qr1.Fields))
 
@@ -195,7 +195,7 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 		"from information_schema.tables t "+
 		"join information_schema.columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
-		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", KeyspaceName, KeyspaceName, "a")
+		"where t.table_schema = '%s' and c.table_schema = '%s' and c.table_schema = '%s'", shardedKs, shardedKs, "a")
 	_, err = conn.ExecuteFetch(query, 1000, true)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")

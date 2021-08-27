@@ -2,14 +2,14 @@ package inst
 
 type MinimalInstance struct {
 	Key         InstanceKey
-	MasterKey   InstanceKey
+	PrimaryKey  InstanceKey
 	ClusterName string
 }
 
 func (this *MinimalInstance) ToInstance() *Instance {
 	return &Instance{
 		Key:         this.Key,
-		MasterKey:   this.MasterKey,
+		SourceKey:   this.PrimaryKey,
 		ClusterName: this.ClusterName,
 	}
 }

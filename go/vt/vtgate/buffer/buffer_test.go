@@ -43,8 +43,8 @@ const (
 )
 
 var (
-	failoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
-		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN")
+	failoverErr = vterrors.New(vtrpcpb.Code_CLUSTER_EVENT,
+		"vttablet: rpc error: code = 17 desc = gRPCServerError: retry: operation not allowed in state SHUTTING_DOWN")
 	nonFailoverErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
 		"vttablet: rpc error: code = 9 desc = gRPCServerError: retry: TODO(mberlin): Insert here any realistic error not caused by a failover")
 

@@ -2,8 +2,11 @@
 
 name: Cluster (vstream_failover)
 on: [push, pull_request]
-jobs:
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vstream_failover)')
+  cancel-in-progress: true
 
+jobs:
   build:
     name: Run endtoend tests on Cluster (vstream_failover)
     runs-on: ubuntu-18.04
@@ -12,7 +15,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.16
+        go-version: 1.17
 
     - name: Tune the OS
       run: |

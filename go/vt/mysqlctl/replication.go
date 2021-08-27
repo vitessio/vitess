@@ -318,7 +318,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Posi
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, masterHost string, masterPort int, replicationStopBefore bool, replicationStartAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int, replicationStopBefore bool, replicationStartAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -333,7 +333,11 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, masterHost strin
 	if replicationStopBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
-	smc := conn.SetReplicationSourceCommand(params, masterHost, masterPort, int(masterConnectRetry.Seconds()))
+	// If flag value is same as default, check deprecated flag value
+	if *replicationConnectRetry == 10*time.Second && *masterConnectRetry != *replicationConnectRetry {
+		*replicationConnectRetry = *masterConnectRetry
+	}
+	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
 	if replicationStartAfter {
 		cmds = append(cmds, conn.StartReplicationCommand())

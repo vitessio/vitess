@@ -31,7 +31,7 @@ const (
 	MetricsQueryTypeUnknown
 )
 
-var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Millisecond)
+var mysqlMetricCache = cache.New(cache.NoExpiration, 10*time.Second)
 
 func getMySQLMetricCacheKey(probe *Probe) string {
 	return fmt.Sprintf("%s:%s", probe.Key, probe.MetricQuery)

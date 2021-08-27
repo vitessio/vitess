@@ -1025,7 +1025,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorBlacklistQRFail(t *testing.T) {
+func TestQueryExecutorDenyListQRFail(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
@@ -1050,7 +1050,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
-	rulesName := "blacklistedRulesQRFail"
+	rulesName := "denyListRulesQRFail"
 	rules := rules.New()
 	rules.Add(alterRule)
 
@@ -1072,14 +1072,14 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	defer tsv.StopService()
 
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
-	// execute should fail because query has been blacklisted
+	// execute should fail because query has a table which is part of the denylist
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
-func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
+func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
@@ -1104,7 +1104,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
-	rulesName := "blacklistedRulesQRRetry"
+	rulesName := "denyListRulesQRRetry"
 	rules := rules.New()
 	rules.Add(alterRule)
 

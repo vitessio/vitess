@@ -7,6 +7,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	vtctldata "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -18,6 +19,10 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type VTAdminClient interface {
+	// CreateKeyspace creates a new keyspace in the given cluster.
+	CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error)
+	// DeleteKeyspace deletes a keyspace in the given cluster.
+	DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -69,6 +74,24 @@ type vTAdminClient struct {
 
 func NewVTAdminClient(cc grpc.ClientConnInterface) VTAdminClient {
 	return &vTAdminClient{cc}
+}
+
+func (c *vTAdminClient) CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error) {
+	out := new(CreateKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CreateKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error) {
+	out := new(vtctldata.DeleteKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *vTAdminClient) FindSchema(ctx context.Context, in *FindSchemaRequest, opts ...grpc.CallOption) (*Schema, error) {
@@ -228,6 +251,10 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 // All implementations must embed UnimplementedVTAdminServer
 // for forward compatibility
 type VTAdminServer interface {
+	// CreateKeyspace creates a new keyspace in the given cluster.
+	CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error)
+	// DeleteKeyspace deletes a keyspace in the given cluster.
+	DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -278,6 +305,12 @@ type VTAdminServer interface {
 type UnimplementedVTAdminServer struct {
 }
 
+func (UnimplementedVTAdminServer) CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteKeyspace not implemented")
+}
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
 }
@@ -340,6 +373,42 @@ type UnsafeVTAdminServer interface {
 
 func RegisterVTAdminServer(s grpc.ServiceRegistrar, srv VTAdminServer) {
 	s.RegisterService(&VTAdmin_ServiceDesc, srv)
+}
+
+func _VTAdmin_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).CreateKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/CreateKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).CreateKeyspace(ctx, req.(*CreateKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).DeleteKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/DeleteKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).DeleteKeyspace(ctx, req.(*DeleteKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _VTAdmin_FindSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -655,6 +724,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "vtadmin.VTAdmin",
 	HandlerType: (*VTAdminServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "CreateKeyspace",
+			Handler:    _VTAdmin_CreateKeyspace_Handler,
+		},
+		{
+			MethodName: "DeleteKeyspace",
+			Handler:    _VTAdmin_DeleteKeyspace_Handler,
+		},
 		{
 			MethodName: "FindSchema",
 			Handler:    _VTAdmin_FindSchema_Handler,
