@@ -3838,11 +3838,11 @@ func EqualsRefOfPartitionOption(a, b *PartitionOption) bool {
 	return a.Linear == b.Linear &&
 		a.isKEY == b.isKEY &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
-		a.RANGE_or_LIST == b.RANGE_or_LIST &&
+		a.RangeOrList == b.RangeOrList &&
 		a.Partitions == b.Partitions &&
 		EqualsColIdent(a.HASH, b.HASH) &&
 		EqualsColumns(a.KeyColList, b.KeyColList) &&
-		EqualsRefOfExprOrColumns(a.Expr_or_Col, b.Expr_or_Col) &&
+		EqualsRefOfExprOrColumns(a.ExprOrCol, b.ExprOrCol) &&
 		EqualsExpr(a.Expr, b.Expr) &&
 		EqualsRefOfSubPartition(a.SubPartition, b.SubPartition) &&
 		EqualsSliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)

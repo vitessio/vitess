@@ -1472,26 +1472,28 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
-// PartitionOptions describes partitioning control (for create table statements)
+// PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
-	Linear        string
-	HASH          ColIdent
-	isKEY         bool
-	KeyAlgorithm  string
-	KeyColList    Columns
-	RANGE_or_LIST string
-	Expr_or_Col   *ExprOrColumns
-	Expr          Expr
-	Partitions    string
-	SubPartition  *SubPartition
-	Definitions   []*PartitionDefinition
+	Linear       string
+	HASH         ColIdent
+	isKEY        bool
+	KeyAlgorithm string
+	KeyColList   Columns
+	RangeOrList  string
+	ExprOrCol    *ExprOrColumns
+	Expr         Expr
+	Partitions   string
+	SubPartition *SubPartition
+	Definitions  []*PartitionDefinition
 }
 
+// ExprOrColumns describes expression and columnlist in the partition
 type ExprOrColumns struct {
 	Expr       Expr
 	ColumnList Columns
 }
 
+// SubPartition describes subpartitions control
 type SubPartition struct {
 	Linear        string
 	HASH          ColIdent
