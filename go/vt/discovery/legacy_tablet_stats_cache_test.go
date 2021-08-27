@@ -41,7 +41,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		log.Errorf("creating cellsAlias \"region1\" failed: %v", err)
 	}
 
-	defer ts.DeleteCellsAlias(context.Background(), "region1")
+	defer deleteCellsAlias(t, ts, "region1")
 
 	cellsAlias = &topodatapb.CellsAlias{
 		Cells: []string{"cell2"},
@@ -51,7 +51,7 @@ func TestLegacyTabletStatsCache(t *testing.T) {
 		log.Errorf("creating cellsAlias \"region2\" failed: %v", err)
 	}
 
-	defer ts.DeleteCellsAlias(context.Background(), "region2")
+	defer deleteCellsAlias(t, ts, "region2")
 
 	// We want to unit test LegacyTabletStatsCache without a full-blown
 	// LegacyHealthCheck object, so we can't call NewLegacyTabletStatsCache.

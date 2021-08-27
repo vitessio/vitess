@@ -644,7 +644,9 @@ func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Ta
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	callback(MessageStreamResult)
+	if err := callback(MessageStreamResult); err != nil {
+		f.t.Logf("MessageStream callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -700,7 +702,9 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	callback(shr)
+	if err := callback(shr); err != nil {
+		f.t.Logf("StreamHealth callback failed: %v", err)
+	}
 	return nil
 }
 

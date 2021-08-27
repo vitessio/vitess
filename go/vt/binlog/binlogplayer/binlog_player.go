@@ -741,7 +741,9 @@ func MysqlUncompress(input string) []byte {
 		return nil
 	}
 	var outputBytes bytes.Buffer
-	io.Copy(&outputBytes, reader)
+	if _, err := io.Copy(&outputBytes, reader); err != nil {
+		return nil
+	}
 	if outputBytes.Len() == 0 {
 		return nil
 	}
