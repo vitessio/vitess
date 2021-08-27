@@ -115,7 +115,7 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 		return true
 	}
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", vtorcReparent.analysisEntry.ClusterDetails.ClusterName))
-	recoverDeadMasterCounter.Inc(1)
+	recoverDeadPrimaryCounter.Inc(1)
 	return false
 }
 
@@ -153,9 +153,9 @@ func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
 
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType() error {
-	vtorcReparent.topologyRecovery.RecoveryType = GetMasterRecoveryType(&vtorcReparent.topologyRecovery.AnalysisEntry)
+	vtorcReparent.topologyRecovery.RecoveryType = GetPrimaryRecoveryType(&vtorcReparent.topologyRecovery.AnalysisEntry)
 	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", vtorcReparent.topologyRecovery.RecoveryType))
-	if vtorcReparent.topologyRecovery.RecoveryType != MasterRecoveryGTID {
+	if vtorcReparent.topologyRecovery.RecoveryType != PrimaryRecoveryGTID {
 		return vtorcReparent.topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
 	}
 	return nil
@@ -208,12 +208,12 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
 	}
 
-	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterMasterFailover {
+	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterPrimaryFailover {
 		postponedFunction := func() error {
 			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
 				replica := replica
-				inst.DetachReplicaMasterHost(&replica.Key)
+				inst.DetachReplicaPrimaryHost(&replica.Key)
 			}
 			return nil
 		}
@@ -474,7 +474,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	AuditTopologyRecovery(topologyRecovery, "+ searching for an ideal candidate")
 	if oldPrimary != nil {
 		for _, candidateReplica := range preferredCandidates {
-			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
+			if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
 				candidateReplica.Alias.Cell == oldPrimary.Alias.Cell {
 				// This would make a great candidate
 				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("orchestrator picks %+v as candidate replacement, based on being in same cell as failed instance", candidateReplica.Alias))
@@ -488,7 +488,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	for _, candidateReplica := range preferredCandidates {
 		if topoproto.TabletAliasEqual(newPrimary.Alias, candidateReplica.Alias) {
 			// Seems like we promoted a candidate replica (though not in same DC and ENV as dead primary)
-			if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
+			if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
 				// Good enough. No further action required.
 				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("promoted replica %+v is a good candidate", newPrimary.Alias))
 				return newPrimary
@@ -502,7 +502,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	// Try a candidate replica that is in same DC & env as the promoted replica (our promoted replica is not an "is_candidate")
 	AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
 	for _, candidateReplica := range preferredCandidates {
-		if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
+		if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) &&
 			newPrimary.Alias.Cell == candidateReplica.Alias.Cell {
 			// OK, better than nothing
 			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", newPrimary.Alias, candidateReplica.Alias))
@@ -514,8 +514,8 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	// Try a candidate replica (our promoted replica is not an "is_candidate")
 	AuditTopologyRecovery(topologyRecovery, "+ searching for a candidate")
 	for _, candidateReplica := range preferredCandidates {
-		if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) {
-			if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
+		if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(candidateReplica), getInstanceFromTablet(newPrimary)) {
+			if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(candidateReplica)); satisfied {
 				// OK, better than nothing
 				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement", newPrimary.Alias, candidateReplica.Alias))
 				return candidateReplica
@@ -526,7 +526,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	}
 
 	keepSearchingHint := ""
-	if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(newPrimary)); !satisfied {
+	if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(newPrimary)); !satisfied {
 		keepSearchingHint = fmt.Sprintf("Will keep searching; %s", reason)
 	} else if inst.PromotionRule(newPrimary) == inst.PreferNotPromoteRule {
 		keepSearchingHint = fmt.Sprintf("Will keep searching because we have promoted a server with prefer_not rule: %+v", newPrimary.Alias)
@@ -538,7 +538,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 		if oldPrimary != nil {
 			AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as dead master")
 			for _, neutralReplica := range neutralReplicas {
-				if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
+				if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
 					oldPrimary.Alias.Cell == neutralReplica.Alias.Cell {
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as dead master", newPrimary.Alias, neutralReplica.Alias))
 					return neutralReplica
@@ -549,7 +549,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 		// find neutral instance in same dv&env as promoted replica
 		AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace promoted server, in same DC and env as promoted replica")
 		for _, neutralReplica := range neutralReplicas {
-			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
+			if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) &&
 				newPrimary.Alias.Cell == neutralReplica.Alias.Cell {
 				AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on being in same DC & env as promoted instance", newPrimary.Alias, neutralReplica.Alias))
 				return neutralReplica
@@ -558,8 +558,8 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 
 		AuditTopologyRecovery(topologyRecovery, "+ searching for a neutral server to replace a prefer_not")
 		for _, neutralReplica := range neutralReplicas {
-			if canTakeOverPromotedServerAsMaster(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) {
-				if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(neutralReplica)); satisfied {
+			if canTakeOverPromotedServerAsPrimary(getInstanceFromTablet(neutralReplica), getInstanceFromTablet(newPrimary)) {
+				if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(neutralReplica)); satisfied {
 					// OK, better than nothing
 					AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("no candidate was offered for %+v but orchestrator picks %+v as candidate replacement, based on promoted instance having prefer_not promotion rule", newPrimary.Alias, neutralReplica.Alias))
 					return neutralReplica
@@ -601,18 +601,18 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfNeedToOverridePromotion(newP
 	newPrimaryInstance := getInstanceFromTablet(newPrimary)
 	overrideMasterPromotion := func() error {
 		// Scenarios where we might cancel the promotion.
-		if satisfied, reason := MasterFailoverGeographicConstraintSatisfied(&vtorcReparent.analysisEntry, newPrimaryInstance); !satisfied {
+		if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&vtorcReparent.analysisEntry, newPrimaryInstance); !satisfied {
 			return fmt.Errorf("RecoverDeadMaster: failed %+v promotion; %s", newPrimaryInstance.Key, reason)
 		}
-		if config.Config.FailMasterPromotionOnLagMinutes > 0 &&
-			time.Duration(newPrimaryInstance.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailMasterPromotionOnLagMinutes)*time.Minute {
+		if config.Config.FailPrimaryPromotionOnLagMinutes > 0 &&
+			time.Duration(newPrimaryInstance.ReplicationLagSeconds.Int64)*time.Second >= time.Duration(config.Config.FailPrimaryPromotionOnLagMinutes)*time.Minute {
 			// candidate replica lags too much
-			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailMasterPromotionOnLagMinutes, newPrimaryInstance.Key, newPrimaryInstance.ReplicationLagSeconds.Int64)
+			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailPrimaryPromotionOnLagMinutes is set to %d (minutes) and promoted replica %+v 's lag is %d (seconds)", config.Config.FailPrimaryPromotionOnLagMinutes, newPrimaryInstance.Key, newPrimaryInstance.ReplicationLagSeconds.Int64)
 		}
-		if config.Config.FailMasterPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
-			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailMasterPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", newPrimaryInstance.Key)
+		if config.Config.FailPrimaryPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
+			return fmt.Errorf("RecoverDeadMaster: failed promotion. FailPrimaryPromotionIfSQLThreadNotUpToDate is set and promoted replica %+v 's sql thread is not up to date (relay logs still unapplied). Aborting promotion", newPrimaryInstance.Key)
 		}
-		if config.Config.DelayMasterPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
+		if config.Config.DelayPrimaryPromotionIfSQLThreadNotUpToDate && !newPrimaryInstance.SQLThreadUpToDate() {
 			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("DelayMasterPromotionIfSQLThreadNotUpToDate: waiting for SQL thread on %+v", newPrimaryInstance.Key))
 			if _, err := inst.WaitForSQLThreadUpToDate(&newPrimaryInstance.Key, 0, 0); err != nil {
 				return fmt.Errorf("DelayMasterPromotionIfSQLThreadNotUpToDate error: %+v", err)
@@ -637,7 +637,7 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 	// Now, see whether we are successful or not. From this point there's no going back.
 	if vtorcReparent.promotedReplica != nil {
 		// Success!
-		recoverDeadMasterSuccessCounter.Inc(1)
+		recoverDeadPrimarySuccessCounter.Inc(1)
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: successfully promoted %+v", vtorcReparent.promotedReplica.Key))
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: promoted server coordinates: %+v", vtorcReparent.promotedReplica.SelfBinlogCoordinates))
 
@@ -670,7 +670,7 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 		//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("- RecoverDeadMaster: applying read-only=1 on demoted master: success=%t", (err == nil)))
 		//}()
 
-		kvPairs := inst.GetClusterMasterKVPairs(vtorcReparent.analysisEntry.ClusterDetails.ClusterAlias, &vtorcReparent.promotedReplica.Key)
+		kvPairs := inst.GetClusterPrimaryKVPairs(vtorcReparent.analysisEntry.ClusterDetails.ClusterAlias, &vtorcReparent.promotedReplica.Key)
 		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
 		for _, kvPair := range kvPairs {
 			err := kv.PutKVPair(kvPair)
@@ -681,10 +681,10 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 			err := kv.DistributePairs(kvPairs)
 			log.Errore(err)
 		}
-		if config.Config.MasterFailoverDetachReplicaMasterHost {
+		if config.Config.PrimaryFailoverDetachReplicaPrimaryHost {
 			postponedFunction := func() error {
-				AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadMaster: detaching master host on promoted master")
-				inst.DetachReplicaMasterHost(&vtorcReparent.promotedReplica.Key)
+				AuditTopologyRecovery(vtorcReparent.topologyRecovery, "- RecoverDeadPrimary: detaching master host on promoted master")
+				inst.DetachReplicaPrimaryHost(&vtorcReparent.promotedReplica.Key)
 				return nil
 			}
 			vtorcReparent.topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detaching promoted master host %+v", vtorcReparent.promotedReplica.Key))
@@ -706,10 +706,10 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 
 		if !vtorcReparent.skipProcesses {
 			// Execute post master-failover processes
-			executeProcesses(config.Config.PostMasterFailoverProcesses, "PostMasterFailoverProcesses", vtorcReparent.topologyRecovery, false)
+			executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostPrimaryFailoverProcesses", vtorcReparent.topologyRecovery, false)
 		}
 	} else {
-		recoverDeadMasterFailureCounter.Inc(1)
+		recoverDeadPrimaryFailureCounter.Inc(1)
 	}
 	return nil
 }
