@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,7 +28,6 @@ package buffer
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -36,29 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	ShardMissingError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "destination shard is missing after a resharding operation")
-	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "primary buffer is full")
-	entryEvictedError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "buffer full: request evicted for newer request")
-	contextCanceledError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "context was canceled before failover finished")
-)
-
-// bufferMode specifies how the buffer is configured for a given shard.
-type bufferMode int
-
-const (
-	// bufferDisabled will let all requests pass through and do nothing.
-	bufferDisabled bufferMode = iota
-	// bufferEnabled means all requests should be buffered.
-	bufferEnabled
-	// bufferDryRun will track the failover, but not actually buffer requests.
-	bufferDryRun
 )
 
 // Buffer is used to track ongoing PRIMARY tablet failovers and buffer
@@ -68,7 +44,7 @@ const (
 //
 // There should be exactly one instance of this buffer. For each failover, an
 // instance of "ShardBuffer" will be created.
-type Buffer struct {
+type Buffer2 struct {
 	// Immutable configuration fields.
 	// Except for "now", they are parsed from command line flags.
 	// keyspaces has the same purpose as "shards" but applies to a whole keyspace.
@@ -93,17 +69,17 @@ type Buffer struct {
 	// buffers holds a shardBuffer object per shard, even if no failover is in
 	// progress.
 	// Key Format: "<keyspace>/<shard>"
-	buffers map[string]*shardBuffer
+	buffers map[string]*shardBuffer2
 	// stopped is true after Shutdown() was run.
 	stopped bool
 }
 
 // New creates a new Buffer object.
-func New() *Buffer {
-	return newWithNow(time.Now)
+func New2() *Buffer2 {
+	return newWithNow2(time.Now)
 }
 
-func newWithNow(now func() time.Time) *Buffer {
+func newWithNow2(now func() time.Time) *Buffer2 {
 	if err := verifyFlags(); err != nil {
 		log.Fatalf("Invalid buffer configuration: %v", err)
 	}
@@ -143,18 +119,18 @@ func newWithNow(now func() time.Time) *Buffer {
 		log.Infof("vtgate buffer not enabled.")
 	}
 
-	return &Buffer{
+	return &Buffer2{
 		keyspaces:      keyspaces,
 		shards:         shards,
 		now:            now,
 		bufferSizeSema: sync2.NewSemaphore(*size, 0),
-		buffers:        make(map[string]*shardBuffer),
+		buffers:        make(map[string]*shardBuffer2),
 	}
 }
 
 // mode determines for the given keyspace and shard if buffering, dry-run
 // buffering or no buffering at all should be enabled.
-func (b *Buffer) mode(keyspace, shard string) bufferMode {
+func (b *Buffer2) mode(keyspace, shard string) bufferMode {
 	// Actual buffering is enabled if
 	// a) no keyspaces and shards were listed in particular,
 	if *enabled && len(b.keyspaces) == 0 && len(b.shards) == 0 {
@@ -178,17 +154,6 @@ func (b *Buffer) mode(keyspace, shard string) bufferMode {
 	return bufferDisabled
 }
 
-// RetryDoneFunc will be returned for each buffered request and must be called
-// after the buffered request was retried.
-// Without this signal, the buffer would not know how many buffered requests are
-// currently retried.
-type RetryDoneFunc context.CancelFunc
-
-type BufferI interface {
-	WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error)
-	Shutdown()
-}
-
 // WaitForFailoverEnd blocks until a pending buffering due to a failover for
 // keyspace/shard is over.
 // If there is no ongoing failover, "err" is checked. If it's caused by a
@@ -196,7 +161,7 @@ type BufferI interface {
 // It returns an error if buffering failed (e.g. buffer full).
 // If it does not return an error, it may return a RetryDoneFunc which must be
 // called after the request was retried.
-func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
+func (b *Buffer2) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
 	// If an err is given, it must be related to a failover.
 	// We never buffer requests with other errors.
 	if err != nil && !CausedByFailover(err) {
@@ -217,61 +182,18 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// ProcessPrimaryHealth notifies the buffer to record a new primary
-// and end any failover buffering that may be in progress
-func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
-	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non-PRIMARY TabletHealth object must not be forwarded: %#v", th))
+func (b *Buffer2) HandleKeyspaceEvent(ksevent *discovery.KeyspaceEvent) {
+	for _, shard := range ksevent.Shards {
+		sb := b.getOrCreateBuffer(shard.Target.Keyspace, shard.Target.Shard)
+		if sb != nil {
+			sb.recordKeyspaceEvent(shard.Serving, shard.LastReparenting)
+		}
 	}
-	timestamp := th.PrimaryTermStartTime
-	if timestamp == 0 {
-		// Primarys where TabletExternallyReparented was never called will return 0.
-		// Ignore them.
-		return
-	}
-
-	sb := b.getOrCreateBuffer(th.Target.Keyspace, th.Target.Shard)
-	if sb == nil {
-		// Buffer is shut down. Ignore all calls.
-		return
-	}
-	sb.recordExternallyReparentedTimestamp(timestamp, th.Tablet.Alias)
-}
-
-// StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
-// each primary. This way we can detect the end of a failover.
-// It is part of the discovery.LegacyHealthCheckStatsListener interface.
-func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {
-		panic(fmt.Sprintf("BUG: non-PRIMARY LegacyTabletStats object must not be forwarded: %#v", ts))
-	}
-
-	timestamp := ts.TabletExternallyReparentedTimestamp
-	if timestamp == 0 {
-		// Primarys where TabletExternallyReparented was never called will return 0.
-		// Ignore them.
-		return
-	}
-
-	sb := b.getOrCreateBuffer(ts.Target.Keyspace, ts.Target.Shard)
-	if sb == nil {
-		// Buffer is shut down. Ignore all calls.
-		return
-	}
-	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
-}
-
-// CausedByFailover returns true if "err" was supposedly caused by a failover.
-// To simplify things, we've merged the detection for different MySQL flavors
-// in one function. Supported flavors: MariaDB, MySQL, Google internal.
-func CausedByFailover(err error) bool {
-	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
-	return vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT
 }
 
 // getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.
 // It returns nil if Buffer is shut down and all calls should be ignored.
-func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
+func (b *Buffer2) getOrCreateBuffer(keyspace, shard string) *shardBuffer2 {
 	key := topoproto.KeyspaceShardString(keyspace, shard)
 	b.mu.RLock()
 	sb, ok := b.buffers[key]
@@ -290,7 +212,7 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 	// Look it up again because it could have been created in the meantime.
 	sb, ok = b.buffers[key]
 	if !ok {
-		sb = newShardBuffer(b.mode(keyspace, shard), keyspace, shard, b.now, b.bufferSizeSema)
+		sb = newShardBuffer2(b, b.mode(keyspace, shard), keyspace, shard)
 		b.buffers[key] = sb
 	}
 	return sb
@@ -299,12 +221,12 @@ func (b *Buffer) getOrCreateBuffer(keyspace, shard string) *shardBuffer {
 // Shutdown blocks until all pending ShardBuffer objects are shut down.
 // In particular, it guarantees that all launched Go routines are stopped after
 // it returns.
-func (b *Buffer) Shutdown() {
+func (b *Buffer2) Shutdown() {
 	b.shutdown()
 	b.waitForShutdown()
 }
 
-func (b *Buffer) shutdown() {
+func (b *Buffer2) shutdown() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -314,7 +236,7 @@ func (b *Buffer) shutdown() {
 	b.stopped = true
 }
 
-func (b *Buffer) waitForShutdown() {
+func (b *Buffer2) waitForShutdown() {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
