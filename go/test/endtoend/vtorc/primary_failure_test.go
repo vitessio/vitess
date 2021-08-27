@@ -152,48 +152,54 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
+	setupVttabletsAndVtorc(t, 2, 2, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	// get the replicas
-	var replica, rdonly *cluster.Vttablet
+	// get the tablets
+	var replica, rdonly, aheadRdonly *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// find tablets which are not the primary
 		if tablet.Alias != curPrimary.Alias {
 			if tablet.Type == "replica" {
 				replica = tablet
 			} else {
-				rdonly = tablet
+				if rdonly == nil {
+					rdonly = tablet
+				} else {
+					aheadRdonly = tablet
+				}
 			}
 		}
 	}
 	assert.NotNil(t, replica, "could not find replica tablet")
-	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+	assert.NotNil(t, rdonly, "could not find any rdonly tablet")
+	assert.NotNil(t, aheadRdonly, "could not find both rdonly tablet")
 
 	// check that replication is setup correctly
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 15*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, aheadRdonly, replica}, 15*time.Second)
 
-	// make the replica lag by setting the source_delay to 20 seconds
-	runSQL(t, "STOP SLAVE", replica, "")
-	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", replica, "")
-	runSQL(t, "START SLAVE", replica, "")
+	// revoke super privileges from vtorc on replica and rdonly so that it is unable to repair the replication
+	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, replica, "orc_client_user")
+	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, rdonly, "orc_client_user")
 
-	defer func() {
-		// fix the crossCell replica back so that no other tests see this as a side effect
-		runSQL(t, "STOP SLAVE", replica, "")
-		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", replica, "")
-		runSQL(t, "START SLAVE", replica, "")
-	}()
+	// stop replication on the replica and rdonly.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replica.Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", rdonly.Alias)
+	require.NoError(t, err)
 
-	// check that rdonly is able to replicate. We also want to add some queries to rdonly which will not be there in replica
-	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly}, 15*time.Second)
+	// check that aheadRdonly is able to replicate. We also want to add some queries to aheadRdonly which will not be there in replica and rdonly
+	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{aheadRdonly}, 15*time.Second)
 
-	// assert that the replica is indeed lagging and does not have the new insertion by checking the count of rows in the table
+	// assert that the replica and rdonly are indeed lagging and do not have the new insertion by checking the count of rows in the tables
 	out, err := runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(out.Rows))
+	out, err = runSQL(t, "SELECT * FROM vt_insert_test", rdonly, "vt_ks")
 	require.NoError(t, err)
 	require.Equal(t, 1, len(out.Rows))
 
@@ -205,11 +211,18 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
+	// grant super privileges back to vtorc on replica and rdonly so that it can repair
+	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, replica, "orc_client_user")
+	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, rdonly, "orc_client_user")
+
 	// vtorc must promote the lagging replica and not the rdonly, since it has a MustNotPromoteRule promotion rule
 	checkPrimaryTablet(t, clusterInstance, replica)
 
+	// also check that the replication is setup correctly
+	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 15*time.Second)
+
 	// check that the rdonly is lost. The lost replica has is detached and its host is prepended with `//`
-	out, err = runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
+	out, err = runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", aheadRdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
 }

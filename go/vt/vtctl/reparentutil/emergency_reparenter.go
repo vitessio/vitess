@@ -151,7 +151,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
-	newPrimary, err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
+	var newPrimary *topodatapb.Tablet
+	newPrimary, tabletMap, err = reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
 	if err != nil {
 		return err
 	}
