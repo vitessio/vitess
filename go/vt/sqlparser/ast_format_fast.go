@@ -1208,7 +1208,10 @@ func (node *ParenTableExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JoinCondition) formatFast(buf *TrackedBuffer) {
+func (node *JoinCondition) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.On != nil {
 		buf.WriteString(" on ")
 		node.On.formatFast(buf)
