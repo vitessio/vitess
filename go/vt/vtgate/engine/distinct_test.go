@@ -66,7 +66,7 @@ func TestDistinct(t *testing.T) {
 		t.Run(tc.testName+"-Execute", func(t *testing.T) {
 			distinct := &Distinct{Source: &fakePrimitive{results: []*sqltypes.Result{tc.inputs}}}
 
-			qr, err := distinct.Execute(&noopVCursor{ctx: context.Background()}, nil, true)
+			qr, err := distinct.TryExecute(&noopVCursor{ctx: context.Background()}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 				got := fmt.Sprintf("%v", qr.Rows)
