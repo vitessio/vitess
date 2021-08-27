@@ -2290,27 +2290,38 @@ partitions_options_opt:
 | PARTITION BY linear_opt id_or_var '(' expression ')' partitions_opt
     subpartition_opt partition_definition_opt
     {
-      $$ = &PartitionOption{Linear: $3, HASH: $4, Expr: $6, Partitions: $8,
-                SubPartition: $9, Definitions: $10}
+      $$ = &PartitionOption {
+        Linear: $3,
+        HASH: $4,
+        Expr: $6,
+        Partitions: $8,
+        SubPartition: $9,
+        Definitions: $10,
+      }
     }
 | PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
     partitions_opt subpartition_opt partition_definition_opt
     {
-      $$ = &PartitionOption{
-	      Linear: $3,
-	      isKEY: true,
-	      KeyAlgorithm: $5,
-	      KeyColList: $7,
-	      Partitions: $9,
-	      SubPartition: $10,
-	      Definitions: $11,
+      $$ = &PartitionOption {
+        Linear: $3,
+        isKEY: true,
+        KeyAlgorithm: $5,
+        KeyColList: $7,
+        Partitions: $9,
+        SubPartition: $10,
+        Definitions: $11,
       }
     }
 | PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
     partition_definition_opt
     {
-      $$ = &PartitionOption{RANGE_or_LIST: $3, Expr_or_Col: $4, Partitions: $5,
-                SubPartition: $6, Definitions: $7}
+      $$ = &PartitionOption {
+        RangeOrList: $3,
+        ExprOrCol: $4,
+        Partitions: $5,
+        SubPartition: $6,
+        Definitions: $7,
+      }
     }
 
 subpartition_opt:
@@ -2319,12 +2330,22 @@ subpartition_opt:
   }
 | SUBPARTITION BY linear_opt id_or_var '(' expression ')' subpartitions_opt
   {
-    $$ = &SubPartition{Linear: $3, HASH: $4, Expr: $6, SubPartitions: $8}
+    $$ = &SubPartition {
+      Linear: $3,
+      HASH: $4,
+      Expr: $6,
+      SubPartitions: $8,
+    }
   }
 | SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
   {
-    $$ = &SubPartition{Linear: $3, isKEY: true, KeyAlgorithm: $5,
-            KeyColList: $7, SubPartitions: $9}
+    $$ = &SubPartition {
+      Linear: $3,
+      isKEY: true,
+      KeyAlgorithm: $5,
+      KeyColList: $7,
+      SubPartitions: $9,
+    }
   }
 
 partition_definition_opt:

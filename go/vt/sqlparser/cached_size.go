@@ -1523,10 +1523,10 @@ func (cached *PartitionOption) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(false)
 		}
 	}
-	// field RANGE_or_LIST string
-	size += int64(len(cached.RANGE_or_LIST))
-	// field Expr_or_Col *vitess.io/vitess/go/vt/sqlparser.ExprOrColumns
-	size += cached.Expr_or_Col.CachedSize(true)
+	// field RangeOrList string
+	size += int64(len(cached.RangeOrList))
+	// field ExprOrCol *vitess.io/vitess/go/vt/sqlparser.ExprOrColumns
+	size += cached.ExprOrCol.CachedSize(true)
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
