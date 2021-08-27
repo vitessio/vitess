@@ -386,20 +386,25 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replica, rdonly}, 25*time.Second)
 
-	// make the crossCellReplica lag by setting the source_delay to 20 seconds
-	runSQL(t, "STOP SLAVE", crossCellReplica, "")
-	runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 20", crossCellReplica, "")
-	runSQL(t, "START SLAVE", crossCellReplica, "")
+	// revoke super privileges from vtorc on crossCellReplica so that it is unable to repair the replication
+	changePrivileges(t, `REVOKE SUPER ON *.* FROM 'orc_client_user'@'%'`, crossCellReplica, "orc_client_user")
 
-	defer func() {
-		// fix the crossCell replica back so that no other tests see this as a side effect
-		runSQL(t, "STOP SLAVE", crossCellReplica, "")
-		runSQL(t, "CHANGE MASTER TO MASTER_DELAY = 0", crossCellReplica, "")
-		runSQL(t, "START SLAVE", crossCellReplica, "")
-	}()
+	// stop replication on the crossCellReplica.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", crossCellReplica.Alias)
+	require.NoError(t, err)
 
 	// check that rdonly and replica are able to replicate. We also want to add some queries to replica which will not be there in crossCellReplica
 	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
+
+	// reset the primary logs so that crossCellReplica can never catch up
+	resetPrimaryLogs(t, curPrimary)
+
+	// start replication back on the crossCellReplica.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", crossCellReplica.Alias)
+	require.NoError(t, err)
+
+	// grant super privileges back to vtorc on crossCellReplica so that it can repair
+	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, crossCellReplica, "orc_client_user")
 
 	// assert that the crossCellReplica is indeed lagging and does not have the new insertion by checking the count of rows in the table
 	out, err := runSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
@@ -416,6 +421,11 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 
 	// the crossCellReplica is set to be preferred according to the durability requirements. So it must be promoted
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
+
+	// assert that the crossCellReplica has indeed caught up
+	out, err = runSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(out.Rows))
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
