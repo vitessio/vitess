@@ -272,15 +272,30 @@ func TestPromotionLagSuccess(t *testing.T) {
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
 // covers the test case master-failover-fail-promotion-lag-minutes-failure from orchestrator
 func TestPromotionLagFailure(t *testing.T) {
-	// skip the test since it fails now
-	t.Skip()
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config_promotion_failure.json")
+	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_promotion_failure.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// find the replica and rdonly tablets
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -290,11 +305,9 @@ func TestPromotionLagFailure(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// wait for 20 seconds
-	time.Sleep(20 * time.Second)
-
-	// the previous primary should still be the primary since recovery of dead primary should fail
-	checkPrimaryTablet(t, clusterInstance, curPrimary)
+	// vtorc would run a deadPrimary failure but should not be able to elect any new primary
+	// it will try to undo the changes and should set the shard to have no primary in that case
+	checkShardNoPrimaryTablet(t, clusterInstance, keyspace, shard0)
 }
 
 // covers the test case master-failover-candidate from orchestrator
