@@ -710,3 +710,18 @@ func changePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user s
 		require.NoError(t, err)
 	}
 }
+
+func resetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
+	_, err := runSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
+	require.NoError(t, err)
+
+	binLogsOutput, err := runSQL(t, "SHOW BINARY LOGS", curPrimary, "")
+	require.NoError(t, err)
+	require.True(t, len(binLogsOutput.Rows) >= 2, "there should be atlease 2 binlog files")
+
+	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
+
+	// purge binary logs of the primary so that crossCellReplica cannot catch up
+	_, err = runSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
+	require.NoError(t, err)
+}
