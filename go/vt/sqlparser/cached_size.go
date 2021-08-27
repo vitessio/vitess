@@ -1207,7 +1207,7 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(48)
 	}
 	// field LeftExpr vitess.io/vitess/go/vt/sqlparser.TableExpr
 	if cc, ok := cached.LeftExpr.(cachedObject); ok {
@@ -1217,8 +1217,8 @@ func (cached *JoinTableExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.RightExpr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Condition vitess.io/vitess/go/vt/sqlparser.JoinCondition
-	size += cached.Condition.CachedSize(false)
+	// field Condition *vitess.io/vitess/go/vt/sqlparser.JoinCondition
+	size += cached.Condition.CachedSize(true)
 	return size
 }
 func (cached *KeyState) CachedSize(alloc bool) int64 {
