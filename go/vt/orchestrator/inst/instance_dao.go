@@ -975,7 +975,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.HasReplicationFilters = m.GetBool("has_replication_filters")
 	instance.SupportsOracleGTID = m.GetBool("supports_oracle_gtid")
 	instance.UsingOracleGTID = m.GetBool("oracle_gtid")
-	instance.SourceUUID = m.GetString("master_uuid")
+	instance.SourceUUID = m.GetString("primary_uuid")
 	instance.AncestryUUID = m.GetString("ancestry_uuid")
 	instance.ExecutedGtidSet = m.GetString("executed_gtid_set")
 	instance.GTIDMode = m.GetString("gtid_mode")
@@ -1005,15 +1005,15 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
 	instance.SemiSyncEnforced = m.GetBool("semi_sync_enforced")
 	instance.SemiSyncAvailable = m.GetBool("semi_sync_available")
-	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_master_enabled")
-	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_master_timeout")
+	instance.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
+	instance.SemiSyncPrimaryTimeout = m.GetUint64("semi_sync_primary_timeout")
 	instance.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
 	instance.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
-	instance.SemiSyncPrimaryStatus = m.GetBool("semi_sync_master_status")
-	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
+	instance.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
+	instance.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 	instance.SemiSyncReplicaStatus = m.GetBool("semi_sync_replica_status")
 	instance.ReplicationDepth = m.GetUint("replication_depth")
-	instance.IsCoPrimary = m.GetBool("is_co_master")
+	instance.IsCoPrimary = m.GetBool("is_co_primary")
 	instance.ReplicationCredentialsAvailable = m.GetBool("replication_credentials_available")
 	instance.HasReplicationCredentials = m.GetBool("has_replication_credentials")
 	instance.IsUpToDate = (m.GetUint("seconds_since_last_checked") <= config.Config.InstancePollSeconds)
@@ -1161,7 +1161,7 @@ func ReadClusterWriteablePrimary(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
 		and read_only = 0
-		and (replication_depth = 0 or is_co_master)
+		and (replication_depth = 0 or is_co_primary)
 	`
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "replication_depth asc")
 }
@@ -1172,7 +1172,7 @@ func ReadClusterWriteablePrimary(clusterName string) ([](*Instance), error) {
 func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
 	condition := `
 		cluster_name = ?
-		and (replication_depth = 0 or is_co_master)
+		and (replication_depth = 0 or is_co_primary)
 	`
 	return readInstancesByCondition(condition, sqlutils.Args(clusterName), "read_only asc, replication_depth asc")
 }
@@ -1182,7 +1182,7 @@ func ReadClusterPrimary(clusterName string) ([](*Instance), error) {
 func ReadWriteableClustersPrimaries() (instances [](*Instance), err error) {
 	condition := `
 		read_only = 0
-		and (replication_depth = 0 or is_co_master)
+		and (replication_depth = 0 or is_co_primary)
 	`
 	allPrimaries, err := readInstancesByCondition(condition, sqlutils.Args(), "cluster_name asc, replication_depth asc")
 	if err != nil {
@@ -2286,7 +2286,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"has_replication_filters",
 		"supports_oracle_gtid",
 		"oracle_gtid",
-		"master_uuid",
+		"primary_uuid",
 		"ancestry_uuid",
 		"executed_gtid_set",
 		"gtid_mode",
@@ -2313,18 +2313,18 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"region",
 		"physical_environment",
 		"replication_depth",
-		"is_co_master",
+		"is_co_primary",
 		"replication_credentials_available",
 		"has_replication_credentials",
 		"allow_tls",
 		"semi_sync_enforced",
 		"semi_sync_available",
-		"semi_sync_master_enabled",
-		"semi_sync_master_timeout",
+		"semi_sync_primary_enabled",
+		"semi_sync_primary_timeout",
 		"semi_sync_primary_wait_for_replica_count",
 		"semi_sync_replica_enabled",
-		"semi_sync_master_status",
-		"semi_sync_master_clients",
+		"semi_sync_primary_status",
+		"semi_sync_primary_clients",
 		"semi_sync_replica_status",
 		"instance_alias",
 		"last_discovery_latency",

@@ -105,7 +105,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN is_co_master TINYINT UNSIGNED NOT NULL AFTER replication_depth
+			ADD COLUMN is_co_primary TINYINT UNSIGNED NOT NULL AFTER replication_depth
 	`,
 	`
 		ALTER TABLE
@@ -493,7 +493,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_enabled TINYINT UNSIGNED NOT NULL
+			ADD COLUMN semi_sync_primary_enabled TINYINT UNSIGNED NOT NULL
 	`,
 	`
 		ALTER TABLE
@@ -513,7 +513,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN master_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN primary_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
@@ -523,7 +523,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER master_uuid
+			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER primary_uuid
 	`,
 	`
 		ALTER TABLE
@@ -549,27 +549,27 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_timeout INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_enabled
+			ADD COLUMN semi_sync_primary_timeout INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_enabled
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_primary_wait_for_replica_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_timeout
+			ADD COLUMN semi_sync_primary_wait_for_replica_count INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_timeout
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_wait_for_replica_count
+			ADD COLUMN semi_sync_primary_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_wait_for_replica_count
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_replica_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_status
+			ADD COLUMN semi_sync_replica_status TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_status
 	`,
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN semi_sync_master_clients INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_master_status
+			ADD COLUMN semi_sync_primary_clients INT UNSIGNED NOT NULL DEFAULT 0 AFTER semi_sync_primary_status
 	`,
 	`
 		ALTER TABLE
@@ -579,7 +579,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE /* sqlite3-skip */
 			database_instance
-			MODIFY semi_sync_master_timeout BIGINT UNSIGNED NOT NULL DEFAULT 0
+			MODIFY semi_sync_primary_timeout BIGINT UNSIGNED NOT NULL DEFAULT 0
   `,
 	// Fields related to Replication Group the instance belongs to
 	`

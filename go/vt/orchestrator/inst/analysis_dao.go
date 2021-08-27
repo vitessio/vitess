@@ -122,7 +122,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				OR master_instance.replication_group_member_role = 'PRIMARY'
 			)
 		) AS is_master,
-		MIN(master_instance.is_co_master) AS is_co_master,
+		MIN(master_instance.is_co_primary) AS is_co_primary,
 		MIN(
 			CONCAT(
 				master_instance.hostname,
@@ -192,21 +192,21 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			master_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
 		MIN(
-			master_instance.semi_sync_master_enabled
-		) AS semi_sync_master_enabled,
+			master_instance.semi_sync_primary_enabled
+		) AS semi_sync_primary_enabled,
 		MIN(
 			master_instance.semi_sync_primary_wait_for_replica_count
 		) AS semi_sync_primary_wait_for_replica_count,
 		MIN(
-			master_instance.semi_sync_master_clients
-		) AS semi_sync_master_clients,
+			master_instance.semi_sync_primary_clients
+		) AS semi_sync_primary_clients,
 		MIN(
-			master_instance.semi_sync_master_status
-		) AS semi_sync_master_status,
+			master_instance.semi_sync_primary_status
+		) AS semi_sync_primary_status,
 		MIN(
 			master_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_master) AS count_co_master_replicas,
+		SUM(replica_instance.is_co_primary) AS count_co_master_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -388,7 +388,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 
 		a.IsPrimary = m.GetBool("is_master")
 		countCoPrimaryReplicas := m.GetUint("count_co_master_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_master") || (countCoPrimaryReplicas > 0)
+		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
 		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("source_host"), Port: m.GetInt("source_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
@@ -430,13 +430,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_master_enabled")
-		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_master_status")
+		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
+		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
 		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
-		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
+		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 
 		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")
 		a.MaxReplicaGTIDMode = m.GetString("max_replica_gtid_mode")
