@@ -536,7 +536,12 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		}
 		modified = append(modified, line)
 	}
-	modified = append(modified, fmt.Sprintf("  `%s` varbinary(128),", vindexToCol))
+
+	if vindex.Params["data_type"] == "" || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
+		modified = append(modified, fmt.Sprintf("  `%s` varbinary(128),", vindexToCol))
+	} else {
+		modified = append(modified, fmt.Sprintf("  `%s` `%s`,", vindexToCol, vindex.Params["data_type"]))
+	}
 	buf := sqlparser.NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "  PRIMARY KEY (")
 	prefix := ""
@@ -555,7 +560,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	for i := range vindexFromCols {
 		buf.Myprintf("%v as %v, ", sqlparser.NewColIdent(sourceVindexColumns[i]), sqlparser.NewColIdent(vindexFromCols[i]))
 	}
-	buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+	if strings.EqualFold(vindexToCol, "keyspace_id") || strings.EqualFold(vindex.Type, "consistent_lookup_unique") || strings.EqualFold(vindex.Type, "consistent_lookup") {
+		buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+	} else {
+		buf.Myprintf("%v as %v ", sqlparser.NewColIdent(vindexToCol), sqlparser.NewColIdent(vindexToCol))
+	}
 	buf.Myprintf("from %v", sqlparser.NewTableIdent(sourceTableName))
 	if vindex.Owner != "" {
 		// Only backfill

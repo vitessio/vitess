@@ -109,7 +109,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {
 			case *route:
 				plan.eroute.ScatterErrorsAsWarnings = true
