@@ -57,7 +57,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -95,7 +95,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -137,7 +137,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -181,7 +181,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -250,12 +250,12 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	want := "input fail"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.TryExecute(&noopVCursor{}, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 
@@ -320,7 +320,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -397,7 +397,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -484,7 +484,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -529,7 +529,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 		Input:       fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	assert.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -565,12 +565,12 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.TryExecute(&noopVCursor{}, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }
@@ -616,13 +616,13 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		},
 	}
 
-	res, err := oa.Execute(nil, nil, false)
+	res, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	utils.MustMatch(t, result, res, "Found mismatched values")
 
 	fp.rewind()
-	err = oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil })
+	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(_ *sqltypes.Result) error { return nil })
 	require.NoError(t, err)
 }
 
@@ -725,7 +725,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 				Input:       fp,
 			}
 
-			result, err := oa.Execute(nil, nil, false)
+			result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(
@@ -778,7 +778,7 @@ func TestOrderedAggregateExecuteGtid(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -829,13 +829,13 @@ func TestCountDistinctOnVarchar(t *testing.T) {
 		`20|1`,
 	)
 
-	qr, err := oa.Execute(nil, nil, false)
+	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -896,13 +896,13 @@ func TestCountDistinctOnVarcharWithNulls(t *testing.T) {
 		`30|0`,
 	)
 
-	qr, err := oa.Execute(nil, nil, false)
+	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -963,13 +963,13 @@ func TestSumDistinctOnVarcharWithNulls(t *testing.T) {
 		`30|null`,
 	)
 
-	qr, err := oa.Execute(nil, nil, false)
+	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}
@@ -1034,13 +1034,13 @@ func TestMultiDistinct(t *testing.T) {
 		`40|3|1`,
 	)
 
-	qr, err := oa.Execute(nil, nil, false)
+	qr, err := oa.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 	assert.Equal(t, want, qr)
 
 	fp.rewind()
 	results := &sqltypes.Result{}
-	err = oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err = oa.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		if qr.Fields != nil {
 			results.Fields = qr.Fields
 		}

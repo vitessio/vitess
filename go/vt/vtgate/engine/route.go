@@ -241,19 +241,19 @@ func (route *Route) SetTruncateColumnCount(count int) {
 }
 
 // Execute performs a non-streaming exec.
-func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
-	qr, err := route.execute(vcursor, bindVars, wantfields)
+	qr, err := route.executeInternal(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -323,7 +323,7 @@ func filterOutNilErrors(errs []error) []error {
 }
 
 // StreamExecute performs a streaming exec.
-func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -400,7 +400,7 @@ func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.Bind
 		OrderBy:                 route.OrderBy,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
 	}
-	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	return vcursor.StreamExecutePrimitive(&ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }

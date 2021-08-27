@@ -59,12 +59,12 @@ func (s *SessionPrimitive) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (s *SessionPrimitive) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (s *SessionPrimitive) TryExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())
 }
 
 // StreamExecute implements the Primitive interface
-func (s *SessionPrimitive) StreamExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
+func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	qr, err := s.action(vcursor.Session())
 	if err != nil {
 		return err
