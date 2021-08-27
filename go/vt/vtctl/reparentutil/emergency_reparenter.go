@@ -144,8 +144,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, reparentFunctions.GetWaitReplicasTimeout()); err != nil {
-		return err
+	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, reparentFunctions.GetWaitForRelayLogsTimeout()); err != nil {
+		err = reparentFunctions.HandleRelayLogFailure(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	newPrimary, err := reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
