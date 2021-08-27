@@ -360,7 +360,9 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 
 // StopReplicasNicely will attemt to stop all given replicas nicely, up to timeout
 func StopReplicasNicely(replicas [](*Instance), timeout time.Duration) [](*Instance) {
-	return StopReplicas(replicas, StopReplicationNice, timeout)
+	stoppedReplicas := StopReplicas(replicas, StopReplicationNice, timeout)
+	stoppedReplicas = RemoveNilInstances(stoppedReplicas)
+	return stoppedReplicas
 }
 
 // StopReplication stops replication on a given instance

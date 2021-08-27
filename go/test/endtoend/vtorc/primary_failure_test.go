@@ -20,9 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/json2"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -68,7 +65,7 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replica gets promoted
 	checkPrimaryTablet(t, clusterInstance, replica)
 	// also check that the replication is working correctly after failover
-	runAdditionalCommands(t, replica, []*cluster.Vttablet{replica}, 10*time.Second)
+	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -82,18 +79,23 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
-	var replicaInSameCell *cluster.Vttablet
+	// find the replica and rdonly tablets
+	var replicaInSameCell, rdonly *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two replcia tablets, so the one not the primary must be the other replica
 		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
 			replicaInSameCell = tablet
-			break
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
 		}
 	}
+	assert.NotNil(t, replicaInSameCell, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	crossCellReplica := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell}, 25*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, replicaInSameCell, rdonly}, 25*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -105,6 +107,8 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
+	// also check that the replication is working correctly after failover
+	runAdditionalCommands(t, replicaInSameCell, []*cluster.Vttablet{crossCellReplica, rdonly}, 10*time.Second)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -118,9 +122,18 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	curPrimary := shardPrimaryTablet(t, clusterInstance, keyspace, shard0)
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
+	// find the rdonly tablet
+	var rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
 	crossCellReplica := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica}, 25*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, rdonly}, 25*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -130,16 +143,9 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// Give vtorc time to repair
-	time.Sleep(15 * time.Second)
-
-	// we should not have promoted the crossCellReplica
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", crossCellReplica.Alias)
-	require.NoError(t, err)
-	var tabletInfo topodatapb.Tablet
-	err = json2.Unmarshal([]byte(result), &tabletInfo)
-	require.NoError(t, err)
-	require.NotEqual(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
+	// vtorc would run a deadPrimary failure but should not be able to elect any new primary
+	// it will try to undo the changes and should set the shard to have no primary in that case
+	checkShardNoPrimaryTablet(t, clusterInstance, keyspace, shard0)
 }
 
 // Failover will sometimes lead to a rdonly which can no longer replicate.
