@@ -375,7 +375,7 @@ var keywords = []keyword{
 	{"processlist", PROCESSLIST},
 	{"procedure", PROCEDURE},
 	{"query", QUERY},
-	{"range", UNUSED},
+	{"range", RANGE},
 	{"rank", UNUSED},
 	{"read", READ},
 	{"reads", UNUSED},
