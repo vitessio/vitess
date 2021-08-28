@@ -170,11 +170,24 @@ func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, si
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
 	}
+	var tsF TableSet
+	var qtF *querypb.Type
+	found := false
 	for i, colName := range v.columnNames {
 		if col.Name.String() == colName {
 			ts, qt := org.depsForExpr(v.cols[i])
-			return &ts, qt, nil
+			if !found {
+				tsF = ts
+				qtF = qt
+			} else if tsF != ts {
+				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
+				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
+			}
+			found = true
 		}
+	}
+	if found {
+		return &tsF, qtF, nil
 	}
 	return nil, nil, nil
 }
