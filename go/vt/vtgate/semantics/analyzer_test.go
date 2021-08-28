@@ -273,7 +273,7 @@ func TestHavingBinding(t *testing.T) {
 		T1,
 	}, {
 		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		T0,
+		T1 | T2,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
