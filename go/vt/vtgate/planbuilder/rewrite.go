@@ -24,13 +24,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type (
-	rewriter struct {
-		err          error
-		semTable     *semantics.SemTable
-		reservedVars *sqlparser.ReservedVars
-	}
-)
+type rewriter struct {
+	err          error
+	semTable     *semantics.SemTable
+	reservedVars *sqlparser.ReservedVars
+}
 
 func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
 	r := rewriter{
@@ -109,48 +107,96 @@ func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarEx
 	return starExpanded, colNames, nil
 }
 
-func subqueryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
-	if len(ctx.semTable.SubqueryMap) == 0 {
-		return nil
-	}
+func queryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
 	r := rewriter{
 		semTable:     ctx.semTable,
 		reservedVars: ctx.reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.subqueryRewrite, nil)
+	sqlparser.Rewrite(statement, r.rewrite, nil)
 	return nil
 }
 
-func (r *rewriter) subqueryRewrite(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		rewriteHavingClause(node)
 	case *sqlparser.ExistsExpr:
-		semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
-		if !found {
-			// should never happen
-			return false
-		}
-
-		argName := r.reservedVars.ReserveHasValuesSubQuery()
-		semTableSQ.ArgName = argName
-
-		cursor.Replace(sqlparser.NewArgument(argName))
-		return false
+		return r.rewriteExistsSubquery(cursor, node)
 	case *sqlparser.Subquery:
-		semTableSQ, found := r.semTable.SubqueryRef[node]
-		if !found {
-			// should never happen
-			return false
-		}
-
-		argName := r.reservedVars.ReserveSubQuery()
-		semTableSQ.ArgName = argName
-
-		switch semTableSQ.OpCode {
-		case engine.PulloutIn, engine.PulloutNotIn:
-			cursor.Replace(sqlparser.NewListArg(argName))
-		default:
-			cursor.Replace(sqlparser.NewArgument(argName))
-		}
+		rewriteSubquery(cursor, r, node)
 	}
 	return true
+}
+
+func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
+	semTableSQ, found := r.semTable.SubqueryRef[node]
+	if !found {
+		// should never happen
+		return
+	}
+
+	argName := r.reservedVars.ReserveSubQuery()
+	semTableSQ.ArgName = argName
+
+	switch semTableSQ.OpCode {
+	case engine.PulloutIn, engine.PulloutNotIn:
+		cursor.Replace(sqlparser.NewListArg(argName))
+	default:
+		cursor.Replace(sqlparser.NewArgument(argName))
+	}
+}
+
+func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) bool {
+	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
+	if !found {
+		// should never happen
+		return false
+	}
+
+	argName := r.reservedVars.ReserveHasValuesSubQuery()
+	semTableSQ.ArgName = argName
+
+	cursor.Replace(sqlparser.NewArgument(argName))
+	return false
+}
+
+func rewriteHavingClause(node *sqlparser.Select) {
+	if node.Having == nil {
+		return
+	}
+
+	selectExprMap := map[string]sqlparser.Expr{}
+	for _, selectExpr := range node.SelectExprs {
+		aliasedExpr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
+		if !isAliased || aliasedExpr.As.IsEmpty() {
+			continue
+		}
+		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
+	}
+
+	sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
+		switch x := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			if !x.Qualifier.IsEmpty() {
+				return false
+			}
+			originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
+			if isInMap {
+				cursor.Replace(originalExpr)
+				return false
+			}
+			return false
+		}
+		return true
+	}, nil)
+
+	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
+	node.Having = nil
+	for _, expr := range exprs {
+		if sqlparser.ContainsAggregation(expr) {
+			node.AddHaving(expr)
+		} else {
+			node.AddWhere(expr)
+		}
+	}
 }

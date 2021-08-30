@@ -112,6 +112,9 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		scope := b.scoper.currentScope()
 		ts := TableSet(0)
 		for _, table := range scope.tables {
+			if !table.IsActualTable() {
+				continue
+			}
 			ts |= b.tc.tableSetFor(table.GetExpr())
 		}
 		b.exprRecursiveDeps[node] = ts
