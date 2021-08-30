@@ -44,6 +44,7 @@ var (
 	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
 	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
 	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
+	crl  = flag.String("tablet_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
 	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
 )
 
@@ -73,7 +74,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	} else {
 		addr = tablet.Hostname
 	}
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
 	if err != nil {
 		return nil, err
 	}

@@ -374,7 +374,7 @@ func tabletConnExtraArgs(name string) []string {
 }
 
 func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
-	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, grpcName)
+	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, "", grpcName)
 	if err != nil {
 		return nil, err
 	}

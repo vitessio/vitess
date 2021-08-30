@@ -54,12 +54,14 @@ func TestValidCert(t *testing.T) {
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", clientCertUsername)
+	tlstest.CreateCRL(root, tlstest.CA)
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
+		path.Join(root, "ca-crl.pem"),
 		"",
 		tls.VersionTLS12)
 	if err != nil {
@@ -136,12 +138,14 @@ func TestNoCert(t *testing.T) {
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+	tlstest.CreateCRL(root, tlstest.CA)
 
 	// Create the server with TLS config.
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
+		path.Join(root, "ca-crl.pem"),
 		"",
 		tls.VersionTLS12)
 	if err != nil {
