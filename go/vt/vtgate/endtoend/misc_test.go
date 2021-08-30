@@ -48,3 +48,15 @@ func TestSysNumericPrecisionScale(t *testing.T) {
 	assert.True(t, qr.Fields[0].Type == qr.Rows[0][0].Type())
 	assert.True(t, qr.Fields[1].Type == qr.Rows[0][1].Type())
 }
+
+func TestRenameFieldsOnOLAP(t *testing.T) {
+	// note that this is testing vttest and not vtgate
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_ = exec(t, conn, "set workload = olap")
+	qr := exec(t, conn, "show tables")
+	assert.Equal(t, `[[VARCHAR("aggr_test")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t1_last_insert_id")] [VARCHAR("t1_row_count")] [VARCHAR("t1_sharded")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("vstream_test")]]`, fmt.Sprintf("%v", qr.Rows))
+}
