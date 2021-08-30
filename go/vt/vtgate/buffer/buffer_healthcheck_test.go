@@ -17,14 +17,13 @@ limitations under the License.
 package buffer
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -211,14 +210,14 @@ func TestBuffer(t *testing.T) {
 
 // issueRequest simulates executing a request which goes through the buffer.
 // If the buffering returned an error, it will be sent on the returned channel.
-func issueRequest(ctx context.Context, t *testing.T, b *Buffer, err error) chan error {
+func issueRequest(ctx context.Context, t *testing.T, b *HealthCheckBuffer, err error) chan error {
 	return issueRequestAndBlockRetry(ctx, t, b, err, nil /* markRetryDone */)
 }
 
 // issueRequestAndBlockRetry is the same as issueRequest() but allows to signal
 // when the buffer should be informed that the retry is done. (For that,
 // the channel "markRetryDone" must be closed.)
-func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err error, markRetryDone chan struct{}) chan error {
+func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *HealthCheckBuffer, err error, markRetryDone chan struct{}) chan error {
 	bufferingStopped := make(chan error)
 
 	go func() {
@@ -241,7 +240,7 @@ func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err
 
 // waitForRequestsInFlight blocks until the buffer queue has reached "count".
 // This check is potentially racy and therefore retried up to a timeout of 10s.
-func waitForRequestsInFlight(b *Buffer, count int) error {
+func waitForRequestsInFlight(b *HealthCheckBuffer, count int) error {
 	start := time.Now()
 	sb := b.getOrCreateBuffer(keyspace, shard)
 	for {
@@ -259,7 +258,7 @@ func waitForRequestsInFlight(b *Buffer, count int) error {
 
 // waitForState polls the buffer data for up to 10 seconds and returns an error
 // if shardBuffer doesn't have the wanted state by then.
-func waitForState(b *Buffer, want bufferState) error {
+func waitForState(b *HealthCheckBuffer, want bufferState) error {
 	sb := b.getOrCreateBuffer(keyspace, shard)
 	start := time.Now()
 	for {
@@ -279,7 +278,7 @@ func waitForState(b *Buffer, want bufferState) error {
 // returned. The wait is necessary because in some cases the buffer code
 // does not block itself on the wait. But in any case, the slot should be
 // returned when the request has finished. See also shardBuffer.unblockAndWait().
-func waitForPoolSlots(b *Buffer, want int) error {
+func waitForPoolSlots(b *HealthCheckBuffer, want int) error {
 	start := time.Now()
 	for {
 		got := b.bufferSizeSema.Size()
@@ -300,7 +299,7 @@ func TestDryRun(t *testing.T) {
 
 	flag.Set("enable_buffer_dry_run", "true")
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	// Request does not get buffered.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
@@ -343,7 +342,7 @@ func TestPassthrough(t *testing.T) {
 	flag.Set("enable_buffer", "true")
 	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
@@ -470,7 +469,7 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	flag.Set("enable_buffer", "true")
 	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	// Buffer one request.
 	markRetryDone := make(chan struct{})
@@ -516,7 +515,7 @@ func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
 	flag.Set("enable_buffer", "true")
 	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	ignoredKeyspace := "ignored_ks"
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, failoverErr); err != nil || retryDone != nil {
@@ -562,7 +561,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool) {
 	// Enable buffering for the complete keyspace and not just a specific shard.
 	flag.Set("buffer_keyspace_shards", keyspace)
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 	if !explicitEnd {
 		// Set value after constructor to work-around hardcoded minimum values.
 		flag.Set("buffer_window", "100ms")
@@ -636,7 +635,7 @@ func TestEviction(t *testing.T) {
 	flag.Set("buffer_keyspace_shards", topoproto.KeyspaceShardString(keyspace, shard))
 	flag.Set("buffer_size", "2")
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
 	// This wait is important because each request gets inserted asynchronously
@@ -720,7 +719,7 @@ func TestEvictionNotPossible(t *testing.T) {
 		topoproto.KeyspaceShardString(keyspace, shard2)))
 	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	// Make the buffer full (applies to all failovers).
 	// Also triggers buffering for the first shard.
@@ -774,7 +773,7 @@ func TestWindow(t *testing.T) {
 		topoproto.KeyspaceShardString(keyspace, shard2)))
 	flag.Set("buffer_size", "1")
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 	// Set value after constructor to work-around hardcoded minimum values.
 	flag.Set("buffer_window", "1ms")
 
@@ -881,7 +880,7 @@ func TestShutdown(t *testing.T) {
 
 	flag.Set("enable_buffer", "true")
 	defer resetFlagsForTesting()
-	b := New()
+	b := NewHealthCheckBuffer()
 
 	// Buffer one request.
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)

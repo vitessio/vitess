@@ -38,9 +38,9 @@ import (
 // - discovery.HealthCheck listener execution thread
 // - timeout thread (timeout_thread.go) to evict too old buffered requests
 // - drain() thread
-type shardBuffer2 struct {
+type shardBufferKS struct {
 	// Immutable fields set at construction.
-	buf      *Buffer2
+	buf      *KeyspaceEventBuffer
 	mode     bufferMode
 	keyspace string
 	shard    string
@@ -65,11 +65,11 @@ type shardBuffer2 struct {
 	wg sync.WaitGroup
 }
 
-func newShardBuffer2(buf *Buffer2, mode bufferMode, keyspace, shard string) *shardBuffer2 {
+func newShardBufferKeyspace(buf *KeyspaceEventBuffer, mode bufferMode, keyspace, shard string) *shardBufferKS {
 	statsKey := []string{keyspace, shard}
 	initVariablesForShard(statsKey)
 
-	return &shardBuffer2{
+	return &shardBufferKS{
 		buf:            buf,
 		mode:           mode,
 		keyspace:       keyspace,
@@ -82,11 +82,11 @@ func newShardBuffer2(buf *Buffer2, mode bufferMode, keyspace, shard string) *sha
 }
 
 // disabled returns true if neither buffering nor the dry-run mode is enabled.
-func (sb *shardBuffer2) disabled() bool {
+func (sb *shardBufferKS) disabled() bool {
 	return sb.mode == bufferDisabled
 }
 
-func (sb *shardBuffer2) waitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
+func (sb *shardBufferKS) waitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
 	// We assume if err != nil then it's always caused by a failover.
 	// Other errors must be filtered at higher layers.
 	failoverDetected := err != nil
@@ -181,7 +181,7 @@ func (sb *shardBuffer2) waitForFailoverEnd(ctx context.Context, keyspace, shard 
 
 // shouldBufferLocked returns true if the current request should be buffered
 // (based on the current state and whether the request detected a failover).
-func (sb *shardBuffer2) shouldBufferLocked(failoverDetected bool) bool {
+func (sb *shardBufferKS) shouldBufferLocked(failoverDetected bool) bool {
 	switch s := sb.state; {
 	case s == stateIdle && !failoverDetected:
 		// No failover in progress.
@@ -203,7 +203,7 @@ func (sb *shardBuffer2) shouldBufferLocked(failoverDetected bool) bool {
 	panic("BUG: All possible states must be covered by the switch expression above.")
 }
 
-func (sb *shardBuffer2) startBufferingLocked(err error) {
+func (sb *shardBufferKS) startBufferingLocked(err error) {
 	// Reset monitoring data from previous failover.
 	lastRequestsInFlightMax.Set(sb.statsKey, 0)
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
@@ -230,7 +230,7 @@ func (sb *shardBuffer2) startBufferingLocked(err error) {
 // state is less severe than (potentially) crash-looping all vtgates.
 // Note: The prefix "Locked" is not related to the state. Instead, it stresses
 // that "sb.mu" must be locked before calling the method.
-func (sb *shardBuffer2) logErrorIfStateNotLocked(state bufferState) {
+func (sb *shardBufferKS) logErrorIfStateNotLocked(state bufferState) {
 	if sb.state != state {
 		log.Errorf("BUG: Buffer state should be '%v' and not '%v'. Full state of buffer object: %#v Stacktrace:\n%s", state, sb.state, sb, debug.Stack())
 	}
@@ -242,7 +242,7 @@ func (sb *shardBuffer2) logErrorIfStateNotLocked(state bufferState) {
 // is useful for canceled RPCs (e.g. due to deadline exceeded) which want to
 // give up their spot in the buffer. It also holds the "bufferCancel" function.
 // If buffering fails e.g. due to a full buffer, an error is returned.
-func (sb *shardBuffer2) bufferRequestLocked(ctx context.Context) (*entry, error) {
+func (sb *shardBufferKS) bufferRequestLocked(ctx context.Context) (*entry, error) {
 	if !sb.buf.bufferSizeSema.TryAcquire() {
 		// Buffer is full. Evict the oldest entry and buffer this request instead.
 		if len(sb.queue) == 0 {
@@ -293,7 +293,7 @@ func (sb *shardBuffer2) bufferRequestLocked(ctx context.Context) (*entry, error)
 // while the non-blocking mode is used when a) evicting a request (e.g. because
 // the buffer is full or it exceeded the buffering window) or b) when the
 // request was canceled from outside and we removed it.
-func (sb *shardBuffer2) unblockAndWait(e *entry, err error, releaseSlot, blockingWait bool) {
+func (sb *shardBufferKS) unblockAndWait(e *entry, err error, releaseSlot, blockingWait bool) {
 	// Set error such that the request will see it.
 	e.err = err
 	// Tell blocked request to stop waiting.
@@ -307,7 +307,7 @@ func (sb *shardBuffer2) unblockAndWait(e *entry, err error, releaseSlot, blockin
 	}
 }
 
-func (sb *shardBuffer2) waitForRequestFinish(e *entry, releaseSlot, async bool) {
+func (sb *shardBufferKS) waitForRequestFinish(e *entry, releaseSlot, async bool) {
 	if async {
 		defer sb.wg.Done()
 	}
@@ -326,7 +326,7 @@ func (sb *shardBuffer2) waitForRequestFinish(e *entry, releaseSlot, async bool) 
 
 // wait blocks while the request is buffered during the failover.
 // See Buffer.WaitForFailoverEnd() for the API contract of the return values.
-func (sb *shardBuffer2) wait(ctx context.Context, e *entry) (RetryDoneFunc, error) {
+func (sb *shardBufferKS) wait(ctx context.Context, e *entry) (RetryDoneFunc, error) {
 	select {
 	case <-ctx.Done():
 		sb.remove(e)
@@ -337,7 +337,7 @@ func (sb *shardBuffer2) wait(ctx context.Context, e *entry) (RetryDoneFunc, erro
 }
 
 // oldestEntry returns the head of the queue or nil if the queue is empty.
-func (sb *shardBuffer2) oldestEntry() *entry {
+func (sb *shardBufferKS) oldestEntry() *entry {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
@@ -349,7 +349,7 @@ func (sb *shardBuffer2) oldestEntry() *entry {
 
 // evictOldestEntry is used by timeoutThread to evict the head entry of the
 // queue if it exceeded its buffering window.
-func (sb *shardBuffer2) evictOldestEntry(e *entry) {
+func (sb *shardBufferKS) evictOldestEntry(e *entry) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
@@ -373,7 +373,7 @@ func (sb *shardBuffer2) evictOldestEntry(e *entry) {
 
 // remove must be called when the request was canceled from outside and not
 // internally.
-func (sb *shardBuffer2) remove(toRemove *entry) {
+func (sb *shardBufferKS) remove(toRemove *entry) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
@@ -412,7 +412,7 @@ func (sb *shardBuffer2) remove(toRemove *entry) {
 	// Entry was already removed. Keep the queue as it is.
 }
 
-func (sb *shardBuffer2) recordKeyspaceEvent(shardStillServing bool, lastReparentForShard time.Time) {
+func (sb *shardBufferKS) recordKeyspaceEvent(shardStillServing bool, lastReparentForShard time.Time) {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
@@ -426,7 +426,7 @@ func (sb *shardBuffer2) recordKeyspaceEvent(shardStillServing bool, lastReparent
 	}
 }
 
-func (sb *shardBuffer2) stopBufferingDueToMaxDuration() {
+func (sb *shardBufferKS) stopBufferingDueToMaxDuration() {
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
@@ -434,7 +434,7 @@ func (sb *shardBuffer2) stopBufferingDueToMaxDuration() {
 		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
 }
 
-func (sb *shardBuffer2) stopBufferingLocked(reason stopReason, details string) {
+func (sb *shardBufferKS) stopBufferingLocked(reason stopReason, details string) {
 	if sb.state != stateBuffering {
 		return
 	}
@@ -481,7 +481,7 @@ func (sb *shardBuffer2) stopBufferingLocked(reason stopReason, details string) {
 	go sb.drain(q, clientEntryError)
 }
 
-func (sb *shardBuffer2) drain(q []*entry, err error) {
+func (sb *shardBufferKS) drain(q []*entry, err error) {
 	defer sb.wg.Done()
 
 	// stop must be called outside of the lock because the thread may access
@@ -505,27 +505,27 @@ func (sb *shardBuffer2) drain(q []*entry, err error) {
 	sb.timeoutThread = nil
 }
 
-func (sb *shardBuffer2) shutdown() {
+func (sb *shardBufferKS) shutdown() {
 	sb.mu.Lock()
 	sb.stopBufferingLocked(stopShutdown, "shutdown")
 	sb.mu.Unlock()
 }
 
-func (sb *shardBuffer2) waitForShutdown() {
+func (sb *shardBufferKS) waitForShutdown() {
 	sb.wg.Wait()
 }
 
 // sizeForTesting is used by the unit test only to find out the current number
 // of buffered requests.
 // TODO(mberlin): Remove this if we add a more general statistics reporting.
-func (sb *shardBuffer2) sizeForTesting() int {
+func (sb *shardBufferKS) sizeForTesting() int {
 	sb.mu.RLock()
 	defer sb.mu.RUnlock()
 	return len(sb.queue)
 }
 
 // stateForTesting is used by unit tests only to probe the current state.
-func (sb *shardBuffer2) stateForTesting() bufferState {
+func (sb *shardBufferKS) stateForTesting() bufferState {
 	sb.mu.RLock()
 	defer sb.mu.RUnlock()
 	return sb.state

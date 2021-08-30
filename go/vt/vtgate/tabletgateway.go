@@ -70,7 +70,7 @@ type TabletGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
-	buffer buffer.BufferI
+	buffer buffer.Buffer
 }
 
 func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
@@ -115,11 +115,11 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	case "healthcheck":
 		// subscribe to healthcheck updates so that buffer can be notified if needed
 		// we run this in a separate goroutine so that normal processing doesn't need to block
-		buf := buffer.New()
+		buf := buffer.NewHealthCheckBuffer()
 		hcChan := gw.hc.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)
 
-		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
+		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.HealthCheckBuffer) {
 			defer bufferCancel()
 
 			for {
@@ -144,7 +144,7 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 		ksChan := kew.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)
 
-		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer2) {
+		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.KeyspaceEventBuffer) {
 			defer bufferCancel()
 
 			for {
