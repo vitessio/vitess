@@ -89,8 +89,8 @@ func newProbeTable() *probeTable {
 }
 
 // Execute implements the Primitive interface
-func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	input, err := d.Source.Execute(vcursor, bindVars, wantfields)
+func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	input, err := vcursor.ExecutePrimitive(d.Source, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -116,10 +116,10 @@ func (d *Distinct) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute implements the Primitive interface
-func (d *Distinct) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	pt := newProbeTable()
 
-	err := d.Source.StreamExecute(vcursor, bindVars, wantfields, func(input *sqltypes.Result) error {
+	err := vcursor.StreamExecutePrimitive(d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
 			Fields:   input.Fields,
 			InsertID: input.InsertID,
