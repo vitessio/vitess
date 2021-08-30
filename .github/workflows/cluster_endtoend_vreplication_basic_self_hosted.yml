@@ -12,13 +12,13 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Docker Image
-        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_basic/Dockerfile -t cluster_test_(vreplication_basic)  .
+        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_basic/Dockerfile -t cluster_test_vreplication_basic  .
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm cluster_test_(vreplication_basic) /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_basic'
+        run: docker run --rm cluster_test_vreplication_basic /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_basic'
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm cluster_test_(vreplication_basic)
+          docker images rm cluster_test_vreplication_basic
           docker volume prune -f
