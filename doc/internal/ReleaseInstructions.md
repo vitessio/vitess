@@ -229,13 +229,23 @@ git push upstream v12.0.0
 
 1. Create a new branch (if needed) with the following existing naming convention e.g. release-11.0. We usually do this while creating RC1 and re-use it for GA release.
 
+![alt text](.images/release-01.png)
+
 2. Click on Code -> Releases
+
+![alt text](.images/release-02.png)
 
 3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
 
+![alt text](.images/release-03.png)
+
 4. Tag a new release against the branch.
 
+![alt text](.images/release-04.png)
+
 5. Copy/paste previously built Release Notes into the description.
+
+![alt text](.images/release-05.png)
 
 Note: If this is a pre-release (RC)  select the pre-release checkbox. 
 
