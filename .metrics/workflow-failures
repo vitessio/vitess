@@ -1,12 +1,3 @@
-2021-04-26T10:26:29Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/785208273
-2021-04-26T10:26:29Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/785208291
-2021-04-26T10:26:29Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/785208247
-2021-04-26T10:26:29Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/785208272
-2021-04-26T10:26:29Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/785208262
-2021-04-26T10:26:29Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/785208278
-2021-04-26T10:26:29Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/785208256
-2021-04-26T10:26:29Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/785208280
-2021-04-26T10:26:29Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/785208298
 2021-04-26T10:26:29Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/785208251
 2021-04-26T10:26:29Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/785208257
 2021-04-26T10:26:29Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/785208292
@@ -9998,3 +9989,12 @@
 2021-08-30T14:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1182556941
 2021-08-30T14:33:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182556902
 2021-08-30T14:33:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1182556948
+2021-08-30T15:34:17Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1182758614
+2021-08-30T15:34:17Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1182758667
+2021-08-30T15:34:17Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1182758654
+2021-08-30T15:34:17Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1182758612
+2021-08-30T15:34:17Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1182758647
+2021-08-30T15:34:17Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1182758644
+2021-08-30T15:34:24Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1182759195
+2021-08-30T15:34:24Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1182759191
+2021-08-30T15:34:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182759144
