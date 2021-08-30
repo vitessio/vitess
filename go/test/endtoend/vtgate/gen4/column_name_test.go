@@ -35,10 +35,11 @@ func TestColumnNames(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	err = conn.WriteComQuery("create table uks.t2(id bigint,phone bigint,msg varchar(100),primary key(id)) Engine=InnoDB")
+	_, err = exec(t, conn, "create table uks.t2(id bigint,phone bigint,msg varchar(100),primary key(id)) Engine=InnoDB")
 	require.NoError(t, err)
+	defer exec(t, conn, "drop table uks.t2")
 
-	qr, err := conn.ExecuteFetch("SELECT t1.id as t1id, t2.id as t2id, t2.phone as t2phn FROM ks.t1 cross join uks.t2 where t1.id = t2.id ORDER BY t2.phone", 1000, true)
+	qr, err := exec(t, conn, "SELECT t1.id as t1id, t2.id as t2id, t2.phone as t2phn FROM ks.t1 cross join uks.t2 where t1.id = t2.id ORDER BY t2.phone")
 	require.NoError(t, err)
 
 	assert.Equal(t, 3, len(qr.Fields))
