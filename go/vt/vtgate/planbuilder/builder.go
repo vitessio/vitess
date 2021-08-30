@@ -82,6 +82,10 @@ const (
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
 )
 
+var (
+	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback}
+)
+
 type truncater interface {
 	SetTruncateColumnCount(int)
 }

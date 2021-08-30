@@ -121,9 +121,9 @@ func TestClone(t *testing.T) {
 	assert.Equal(t, clonedRP.routeOpCode, engine.SelectDBA)
 	assert.Equal(t, original.routeOpCode, engine.SelectEqualUnique)
 
-	clonedRP.vindexPreds[0].foundVindex = &vindexes.Null{}
-	assert.NotNil(t, clonedRP.vindexPreds[0].foundVindex)
-	assert.Nil(t, original.vindexPreds[0].foundVindex)
+	clonedRP.vindexPreds[0].colVindex = &vindexes.ColumnVindex{}
+	assert.NotNil(t, clonedRP.vindexPreds[0].colVindex)
+	assert.Nil(t, original.vindexPreds[0].colVindex)
 }
 
 func TestCreateRoutePlanForOuter(t *testing.T) {

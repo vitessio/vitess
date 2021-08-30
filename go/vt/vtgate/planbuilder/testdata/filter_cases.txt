@@ -1064,6 +1064,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # Route with multiple route constraints, SelectEqualUnique is the best constraint, order reversed.
 "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5"
@@ -1865,6 +1866,7 @@ Gen4 error: symbol uu.user_id not found
 # changed to project all the columns from the derived tables.
 "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
 "unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
 
 # Select with equals null
 "select id from music where id = null"
