@@ -1,0 +1,24 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Cluster Self Hosted (vreplication_multicell)
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build Docker Image
+        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_multicell/Dockerfile -t cluster_test_(vreplication_multicell)  .
+
+      - name: Run test
+        timeout-minutes: 30
+        run: docker run --rm cluster_test_(vreplication_multicell) /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_multicell'
+
+      - name: Cleanup Docker Image
+        run: |
+          docker images rm cluster_test_(vreplication_multicell)
+          docker volume prune -f
