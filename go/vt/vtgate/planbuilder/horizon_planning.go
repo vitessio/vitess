@@ -60,7 +60,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		return nil, err
 	}
 
-	if hp.qp.NeedsAggregation() {
+	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
