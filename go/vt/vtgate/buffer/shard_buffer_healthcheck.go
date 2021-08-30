@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -26,12 +25,11 @@ import (
 // - drain() thread
 type shardBufferHC struct {
 	// Immutable fields set at construction.
+	buf      *HealthCheckBuffer
 	mode     bufferMode
 	keyspace string
 	shard    string
-	now      func() time.Time
-	// bufferSizeSema is the shared pool of slots. See "Buffer.bufferSizeSema".
-	bufferSizeSema *sync2.Semaphore
+
 	// statsKey is used to update the stats variables.
 	statsKey []string
 	// statsKeyJoined is all elements of "statsKey" in one string, joined by ".".
@@ -68,21 +66,24 @@ type shardBufferHC struct {
 	wg sync.WaitGroup
 }
 
-func newShardBufferHealthCheck(mode bufferMode, keyspace, shard string, now func() time.Time, bufferSizeSema *sync2.Semaphore) *shardBufferHC {
+func newShardBufferHealthCheck(buf *HealthCheckBuffer, mode bufferMode, keyspace, shard string) *shardBufferHC {
 	statsKey := []string{keyspace, shard}
 	initVariablesForShard(statsKey)
 
 	return &shardBufferHC{
+		buf:            buf,
 		mode:           mode,
 		keyspace:       keyspace,
 		shard:          shard,
-		now:            now,
-		bufferSizeSema: bufferSizeSema,
 		statsKey:       statsKey,
 		statsKeyJoined: fmt.Sprintf("%s.%s", keyspace, shard),
 		logTooRecent:   logutil.NewThrottledLogger(fmt.Sprintf("FailoverTooRecent-%v", topoproto.KeyspaceShardString(keyspace, shard)), 5*time.Second),
 		state:          stateIdle,
 	}
+}
+
+func (sb *shardBufferHC) timeNow() time.Time {
+	return sb.buf.config.now()
 }
 
 // disabled returns true if neither buffering nor the dry-run mode is enabled.
@@ -119,13 +120,14 @@ func (sb *shardBufferHC) waitForFailoverEnd(ctx context.Context, keyspace, shard
 		// a) buffering was stopped recently
 		// OR
 		// b) we did not buffer, but observed a reparent very recently
-		now := sb.now()
+		now := sb.timeNow()
+		minTimeBetweenFailovers := sb.buf.config.MinTimeBetweenFailovers
 
 		// a) Buffering was stopped recently.
 		// This can happen when we stop buffering while MySQL is not ready yet
 		// (read-only mode is not cleared yet on the new primary).
 		lastBufferingStopped := now.Sub(sb.lastEnd)
-		if !sb.lastEnd.IsZero() && lastBufferingStopped < *minTimeBetweenFailovers {
+		if !sb.lastEnd.IsZero() && lastBufferingStopped < minTimeBetweenFailovers {
 			sb.mu.Unlock()
 			msg := "NOT starting buffering"
 			if sb.mode == bufferDryRun {
@@ -134,7 +136,7 @@ func (sb *shardBufferHC) waitForFailoverEnd(ctx context.Context, keyspace, shard
 
 			sb.logTooRecent.Infof("%v for shard: %s because the last failover which triggered buffering is too recent (%v < %v)."+
 				" (A failover was detected by this seen error: %v.)",
-				msg, topoproto.KeyspaceShardString(keyspace, shard), lastBufferingStopped, *minTimeBetweenFailovers, err)
+				msg, topoproto.KeyspaceShardString(keyspace, shard), lastBufferingStopped, minTimeBetweenFailovers, err)
 
 			statsKeyWithReason := append(sb.statsKey, string(skippedLastFailoverTooRecent))
 			requestsSkipped.Add(statsKeyWithReason, 1)
@@ -147,7 +149,7 @@ func (sb *shardBufferHC) waitForFailoverEnd(ctx context.Context, keyspace, shard
 		// very low. If we do not skip buffering here, we would start buffering but
 		// not stop because we already observed the promotion of the new primary.
 		lastReparentAgo := now.Sub(sb.lastReparent)
-		if !sb.lastReparent.IsZero() && lastReparentAgo < *minTimeBetweenFailovers {
+		if !sb.lastReparent.IsZero() && lastReparentAgo < minTimeBetweenFailovers {
 			sb.mu.Unlock()
 			msg := "NOT starting buffering"
 			if sb.mode == bufferDryRun {
@@ -156,7 +158,7 @@ func (sb *shardBufferHC) waitForFailoverEnd(ctx context.Context, keyspace, shard
 
 			sb.logTooRecent.Infof("%v for shard: %s because the last reparent is too recent (%v < %v)."+
 				" (A failover was detected by this seen error: %v.)",
-				msg, topoproto.KeyspaceShardString(keyspace, shard), lastReparentAgo, *minTimeBetweenFailovers, err)
+				msg, topoproto.KeyspaceShardString(keyspace, shard), lastReparentAgo, minTimeBetweenFailovers, err)
 
 			statsKeyWithReason := append(sb.statsKey, string(skippedLastReparentTooRecent))
 			requestsSkipped.Add(statsKeyWithReason, 1)
@@ -213,12 +215,12 @@ func (sb *shardBufferHC) startBufferingLocked(err error) {
 	lastRequestsDryRunMax.Set(sb.statsKey, 0)
 	failoverDurationSumMs.Reset(sb.statsKey)
 
-	sb.lastStart = sb.now()
+	sb.lastStart = sb.timeNow()
 	sb.logErrorIfStateNotLocked(stateIdle)
 	sb.state = stateBuffering
 	sb.queue = make([]*entry, 0)
 
-	sb.timeoutThread = newTimeoutThread(sb)
+	sb.timeoutThread = newTimeoutThread(sb, sb.buf.config.MaxFailoverDuration)
 	sb.timeoutThread.start()
 	msg := "Starting buffering"
 	if sb.mode == bufferDryRun {
@@ -226,7 +228,13 @@ func (sb *shardBufferHC) startBufferingLocked(err error) {
 	}
 	starts.Add(sb.statsKey, 1)
 	log.Infof("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)",
-		msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), *window, *size, *maxFailoverDuration, err)
+		msg,
+		topoproto.KeyspaceShardString(sb.keyspace, sb.shard),
+		sb.buf.config.Window,
+		sb.buf.config.Size,
+		sb.buf.config.MaxFailoverDuration,
+		err,
+	)
 }
 
 // logErrorIfStateNotLocked logs an error if the current state is not "state".
@@ -247,7 +255,7 @@ func (sb *shardBufferHC) logErrorIfStateNotLocked(state bufferState) {
 // give up their spot in the buffer. It also holds the "bufferCancel" function.
 // If buffering fails e.g. due to a full buffer, an error is returned.
 func (sb *shardBufferHC) bufferRequestLocked(ctx context.Context) (*entry, error) {
-	if !sb.bufferSizeSema.TryAcquire() {
+	if !sb.buf.bufferSizeSema.TryAcquire() {
 		// Buffer is full. Evict the oldest entry and buffer this request instead.
 		if len(sb.queue) == 0 {
 			// Overall buffer is full, but this shard's queue is empty. That means
@@ -273,7 +281,7 @@ func (sb *shardBufferHC) bufferRequestLocked(ctx context.Context) (*entry, error
 
 	e := &entry{
 		done:     make(chan struct{}),
-		deadline: sb.now().Add(*window),
+		deadline: sb.timeNow().Add(sb.buf.config.Window),
 	}
 	e.bufferCtx, e.bufferCancel = context.WithCancel(ctx)
 	sb.queue = append(sb.queue, e)
@@ -324,7 +332,7 @@ func (sb *shardBufferHC) waitForRequestFinish(e *entry, releaseSlot, async bool)
 	// the buffer full eviction or the timeout thread does not block on us.
 	// This way, the request's slot can only be reused after the request finished.
 	if releaseSlot {
-		sb.bufferSizeSema.Release()
+		sb.buf.bufferSizeSema.Release()
 	}
 }
 
@@ -440,7 +448,7 @@ func (sb *shardBufferHC) recordExternallyReparentedTimestamp(timestamp int64, al
 	sb.externallyReparented = timestamp
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {
-			sb.lastReparent = sb.now()
+			sb.lastReparent = sb.timeNow()
 		}
 		sb.currentPrimary = alias
 	}
@@ -452,7 +460,7 @@ func (sb *shardBufferHC) stopBufferingDueToMaxDuration() {
 	defer sb.mu.Unlock()
 
 	sb.stopBufferingLocked(stopMaxFailoverDurationExceeded,
-		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", *maxFailoverDuration))
+		fmt.Sprintf("stopping buffering because failover did not finish in time (%v)", sb.buf.config.MaxFailoverDuration))
 }
 
 func (sb *shardBufferHC) stopBufferingLocked(reason stopReason, details string) {
@@ -461,7 +469,7 @@ func (sb *shardBufferHC) stopBufferingLocked(reason stopReason, details string) 
 	}
 
 	// Stop buffering.
-	sb.lastEnd = sb.now()
+	sb.lastEnd = sb.timeNow()
 	d := sb.lastEnd.Sub(sb.lastStart)
 
 	statsKeyWithReason := append(sb.statsKey, string(reason))
@@ -471,11 +479,11 @@ func (sb *shardBufferHC) stopBufferingLocked(reason stopReason, details string) 
 	failoverDurationSumMs.Add(sb.statsKey, int64(d/time.Millisecond))
 	if sb.mode == bufferDryRun {
 		utilDryRunMax := int64(
-			float64(lastRequestsDryRunMax.Counts()[sb.statsKeyJoined]) / float64(*size) * 100.0)
+			float64(lastRequestsDryRunMax.Counts()[sb.statsKeyJoined]) / float64(sb.buf.config.Size) * 100.0)
 		utilizationDryRunSum.Add(sb.statsKey, utilDryRunMax)
 	} else {
 		utilMax := int64(
-			float64(lastRequestsInFlightMax.Counts()[sb.statsKeyJoined]) / float64(*size) * 100.0)
+			float64(lastRequestsInFlightMax.Counts()[sb.statsKeyJoined]) / float64(sb.buf.config.Size) * 100.0)
 		utilizationSum.Add(sb.statsKey, utilMax)
 	}
 
@@ -504,12 +512,12 @@ func (sb *shardBufferHC) drain(q []*entry) {
 	// shardBuffer as well e.g. to get the current oldest entry.
 	sb.timeoutThread.stop()
 
-	start := sb.now()
+	start := sb.timeNow()
 	// TODO(mberlin): Parallelize the drain by pumping the data through a channel.
 	for _, e := range q {
 		sb.unblockAndWait(e, nil /* err */, true /* releaseSlot */, true /* blockingWait */)
 	}
-	d := sb.now().Sub(start)
+	d := sb.timeNow().Sub(start)
 	log.Infof("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))
 
@@ -534,14 +542,14 @@ func (sb *shardBufferHC) waitForShutdown() {
 // sizeForTesting is used by the unit test only to find out the current number
 // of buffered requests.
 // TODO(mberlin): Remove this if we add a more general statistics reporting.
-func (sb *shardBufferHC) sizeForTesting() int {
+func (sb *shardBufferHC) testGetSize() int {
 	sb.mu.RLock()
 	defer sb.mu.RUnlock()
 	return len(sb.queue)
 }
 
 // stateForTesting is used by unit tests only to probe the current state.
-func (sb *shardBufferHC) stateForTesting() bufferState {
+func (sb *shardBufferHC) testGetState() bufferState {
 	sb.mu.RLock()
 	defer sb.mu.RUnlock()
 	return sb.state

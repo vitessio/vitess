@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -22,14 +20,7 @@ import (
 // instance of "ShardBuffer" will be created.
 type HealthCheckBuffer struct {
 	// Immutable configuration fields.
-	// Except for "now", they are parsed from command line flags.
-	// keyspaces has the same purpose as "shards" but applies to a whole keyspace.
-	keyspaces map[string]bool
-	// shards is a set of keyspace/shard entries to which buffering is limited.
-	// If empty (and *enabled==true), buffering is enabled for all shards.
-	shards map[string]bool
-	// now returns the current time. Overridden in tests.
-	now func() time.Time
+	config *Config
 
 	// bufferSizeSema limits how many requests can be buffered
 	// ("-buffer_size") and is shared by all shardBuffer instances.
@@ -51,83 +42,12 @@ type HealthCheckBuffer struct {
 }
 
 // New creates a new Buffer object.
-func NewHealthCheckBuffer() *HealthCheckBuffer {
-	return newWithNow(time.Now)
-}
-
-func newWithNow(now func() time.Time) *HealthCheckBuffer {
-	if err := verifyFlags(); err != nil {
-		log.Fatalf("Invalid buffer configuration: %v", err)
-	}
-	bufferSize.Set(int64(*size))
-	keyspaces, shards := keyspaceShardsToSets(*shards)
-
-	if *enabledDryRun {
-		log.Infof("vtgate buffer in dry-run mode enabled for all requests. Dry-run bufferings will log failovers but not buffer requests.")
-	}
-
-	if *enabled {
-		log.Infof("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
-
-		// Log a second line if it's only enabled for some keyspaces or shards.
-		header := "Buffering limited to configured "
-		limited := ""
-		if len(keyspaces) > 0 {
-			limited += "keyspaces: " + setToString(keyspaces)
-		}
-		if len(shards) > 0 {
-			if limited == "" {
-				limited += " and "
-			}
-			limited += "shards: " + setToString(shards)
-		}
-		if limited != "" {
-			limited = header + limited
-			dryRunOverride := ""
-			if *enabledDryRun {
-				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
-			}
-			log.Infof("%v.%v", limited, dryRunOverride)
-		}
-	}
-
-	if !*enabledDryRun && !*enabled {
-		log.Infof("vtgate buffer not enabled.")
-	}
-
+func NewHealthCheckBuffer(cfg *Config) *HealthCheckBuffer {
 	return &HealthCheckBuffer{
-		keyspaces:      keyspaces,
-		shards:         shards,
-		now:            now,
-		bufferSizeSema: sync2.NewSemaphore(*size, 0),
+		config:         cfg,
+		bufferSizeSema: sync2.NewSemaphore(cfg.Size, 0),
 		buffers:        make(map[string]*shardBufferHC),
 	}
-}
-
-// mode determines for the given keyspace and shard if buffering, dry-run
-// buffering or no buffering at all should be enabled.
-func (b *HealthCheckBuffer) mode(keyspace, shard string) bufferMode {
-	// Actual buffering is enabled if
-	// a) no keyspaces and shards were listed in particular,
-	if *enabled && len(b.keyspaces) == 0 && len(b.shards) == 0 {
-		// No explicit whitelist given i.e. all shards should be buffered.
-		return bufferEnabled
-	}
-	// b) or this keyspace is listed,
-	if b.keyspaces[keyspace] {
-		return bufferEnabled
-	}
-	// c) or this shard is listed.
-	keyspaceShard := topoproto.KeyspaceShardString(keyspace, shard)
-	if b.shards[keyspaceShard] {
-		return bufferEnabled
-	}
-
-	if *enabledDryRun {
-		return bufferDryRun
-	}
-
-	return bufferDisabled
 }
 
 // WaitForFailoverEnd blocks until a pending buffering due to a failover for
@@ -223,7 +143,7 @@ func (b *HealthCheckBuffer) getOrCreateBuffer(keyspace, shard string) *shardBuff
 	// Look it up again because it could have been created in the meantime.
 	sb, ok = b.buffers[key]
 	if !ok {
-		sb = newShardBufferHealthCheck(b.mode(keyspace, shard), keyspace, shard, b.now, b.bufferSizeSema)
+		sb = newShardBufferHealthCheck(b, b.config.bufferingMode(keyspace, shard), keyspace, shard)
 		b.buffers[key] = sb
 	}
 	return sb
