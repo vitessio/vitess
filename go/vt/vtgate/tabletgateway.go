@@ -115,7 +115,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	case "healthcheck":
 		// subscribe to healthcheck updates so that buffer can be notified if needed
 		// we run this in a separate goroutine so that normal processing doesn't need to block
-		buf := buffer.NewHealthCheckBuffer()
+		cfg := buffer.NewConfigFromFlags()
+		buf := buffer.NewHealthCheckBuffer(cfg)
 		hcChan := gw.hc.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)
 
@@ -139,7 +140,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 
 		gw.buffer = buf
 	case "keyspace_events":
-		buf := buffer.New2()
+		cfg := buffer.NewConfigFromFlags()
+		buf := buffer.NewKeyspaceEventBuffer(cfg)
 		kew := discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
 		ksChan := kew.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)

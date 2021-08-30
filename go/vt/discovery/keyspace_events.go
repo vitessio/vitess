@@ -50,6 +50,7 @@ type KeyspaceEvent struct {
 }
 
 type ShardEvent struct {
+	Tablet          *topodatapb.TabletAlias
 	Target          *query.Target
 	LastReparenting time.Time
 	Serving         bool
@@ -194,6 +195,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 
 	for shard, sstate := range kss.shards {
 		ksevent.Shards = append(ksevent.Shards, ShardEvent{
+			Tablet:          sstate.currentPrimary,
 			Target:          sstate.target,
 			LastReparenting: sstate.lastReparent,
 			Serving:         sstate.serving,
