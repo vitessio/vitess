@@ -2575,3 +2575,22 @@ Gen4 plan same as above
     ]
   }
 }
+
+# aggregation filtering by having on a route
+"select id from user group by id having count(id) = 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user group by id having count(id) = 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1 group by id",
+    "Query": "select id from `user` group by id having count(id) = 10",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
