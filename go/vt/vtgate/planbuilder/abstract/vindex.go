@@ -25,8 +25,10 @@ import (
 type (
 	// Vindex stores the information about the vindex query
 	Vindex struct {
-		Table  VindexTable
-		Vindex vindexes.Vindex
+		Table         VindexTable
+		Vindex        vindexes.Vindex
+		JoinPredicate []sqlparser.Expr
+		NoDeps        []sqlparser.Expr
 	}
 
 	VindexTable struct {
@@ -40,11 +42,26 @@ type (
 var _ Operator = (*Vindex)(nil)
 
 func (v Vindex) TableID() semantics.TableSet {
-	panic("implement me")
+	return v.Table.TableID
 }
 
 func (v Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("implement me")
+	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
+		deps := semTable.BaseTableDependencies(e)
+		switch deps.NumberOfTables() {
+		case 0:
+			v.NoDeps = append(v.NoDeps, e)
+		case 1:
+			if v.TableID().IsSolvedBy(deps) {
+				v.Table.Predicates = append(v.Table.Predicates, e)
+			} else {
+				v.JoinPredicate = append(v.JoinPredicate, e)
+			}
+		default:
+			v.JoinPredicate = append(v.JoinPredicate, e)
+		}
+	}
+	return nil
 }
 
 func (v Vindex) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
