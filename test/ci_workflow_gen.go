@@ -185,7 +185,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 		directoryName := fmt.Sprintf("unit_test_%s", platform)
 		test := &selfHostedTest{
 			Name:              fmt.Sprintf("Unit Test Self Hosted (%s)", platform),
-			ImageName:         fmt.Sprintf("unit_test_(%s)", platform),
+			ImageName:         fmt.Sprintf("unit_test_%s", platform),
 			Platform:          platform,
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
@@ -211,7 +211,7 @@ func generateSelfHostedClusterWorkflows() error {
 		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
 		test := &selfHostedTest{
 			Name:              fmt.Sprintf("Cluster Self Hosted (%s)", cluster),
-			ImageName:         fmt.Sprintf("cluster_test_(%s)", cluster),
+			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
 			Platform:          "mysql57",
 			directoryName:     directoryName,
 			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
