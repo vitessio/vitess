@@ -115,42 +115,29 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	})
 }
 
-func TestDeleteEqualWithBackfilling(t *testing.T) {
-	ks := buildTestVSchema().Keyspaces["sharded"]
+func TestDeleteEqualNoScatter(t *testing.T) {
+	vindex, _ := vindexes.NewLookupUnique("", map[string]string{
+		"table":      "lkp",
+		"from":       "from",
+		"to":         "toc",
+		"write_only": "true",
+	})
 	del := &Delete{
 		DML: DML{
-			Opcode:           Equal,
-			Keyspace:         ks.Keyspace,
-			Query:            "dummy_delete",
-			Vindex:           ks.Vindexes["backfill"].(vindexes.SingleColumn),
-			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(8)}},
-			Table:            ks.Tables["t1"],
-			OwnedVindexQuery: "dummy_subquery",
-			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
 	}
 
-	results := []*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|c1|c2|c3|c4",
-			"int64|int64|int64|int64|int64",
-		),
-		"1|4|5|6|8",
-	)}
-
-	vc := newDMLTestVCursor("-20", "20-")
-	vc.results = results
-
+	vc := newDMLTestVCursor("0")
 	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	require.NoError(t, err)
-	vc.ExpectLog(t, []string{
-		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`Execute delete from lkp3 where from = :from and toc = :toc from: type:INT64 value:"8" toc: type:VARBINARY value:"\x16k@\xb4J\xbaK\xd6" true`,
-		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
-	})
+	require.EqualError(t, err, "cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
 func TestDeleteOwnedVindex(t *testing.T) {

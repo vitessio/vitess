@@ -2446,3 +2446,50 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Delete on backfilling unique lookup vindex should be a scatter
+"delete from zlookup_unique.t1 where c2 = 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2 from t1 where c2 = 20 for update",
+    "Query": "delete from t1 where c2 = 20",
+    "Table": "t1"
+  }
+}
+Gen4 plan same as above
+
+# Update on backfilling unique lookup vindex should be a scatter
+"update zlookup_unique.t1 set c2 = 1 where c2 = 20"
+{
+  "QueryType": "UPDATE",
+  "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 20",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "lookup_t1:2"
+    ],
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c2 = 1 from t1 where c2 = 20 for update",
+    "Query": "update t1 set c2 = 1 where c2 = 20",
+    "Table": "t1"
+  }
+}
+Gen4 plan same as above
