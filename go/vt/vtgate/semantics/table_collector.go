@@ -64,22 +64,22 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
-		var isInfSchema, isVindexTable bool
+		var vindex vindexes.Vindex
+		var isInfSchema bool
 		if sqlparser.SystemSchema(t.Qualifier.String()) {
 			isInfSchema = true
 		} else {
-			table, vdx, _, _, _, err := tc.si.FindTableOrVindex(t)
+			var err error
+			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
 			if err != nil {
 				return err
 			}
-			tbl = table
-			if tbl == nil && vdx != nil {
-				isVindexTable = true
+			if tbl == nil && vindex != nil {
 				tbl = newVindexTable(t.Name)
 			}
 		}
 		scope := tc.scoper.currentScope()
-		tableInfo := tc.createTable(t, node, tbl, isInfSchema, isVindexTable)
+		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
 
 		tc.Tables = append(tc.Tables, tableInfo)
 		return scope.addTable(tableInfo)
@@ -115,26 +115,34 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
-func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema, isVindexTable bool) TableInfo {
+func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool, vindex vindexes.Vindex) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
 		dbName = tc.currentDb
 	}
+	var table TableInfo
 	if alias.As.IsEmpty() {
-		return &RealTable{
-			dbName:        dbName,
-			tableName:     t.Name.String(),
-			ASTNode:       alias,
-			Table:         tbl,
-			isInfSchema:   isInfSchema,
-			isVindexTable: isVindexTable,
+		table = &RealTable{
+			dbName:      dbName,
+			tableName:   t.Name.String(),
+			ASTNode:     alias,
+			Table:       tbl,
+			isInfSchema: isInfSchema,
+		}
+	} else {
+		table = &AliasedTable{
+			tableName:   alias.As.String(),
+			ASTNode:     alias,
+			Table:       tbl,
+			isInfSchema: isInfSchema,
 		}
 	}
-	return &AliasedTable{
-		tableName:     alias.As.String(),
-		ASTNode:       alias,
-		Table:         tbl,
-		isInfSchema:   isInfSchema,
-		isVindexTable: isVindexTable,
+
+	if vindex != nil {
+		return VindexTable{
+			Table:  table,
+			Vindex: vindex,
+		}
 	}
+	return table
 }

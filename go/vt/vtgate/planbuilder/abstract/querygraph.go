@@ -44,12 +44,11 @@ type (
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
 	QueryTable struct {
-		TableID       semantics.TableSet
-		Alias         *sqlparser.AliasedTableExpr
-		Table         sqlparser.TableName
-		Predicates    []sqlparser.Expr
-		IsInfSchema   bool
-		IsVindexTable bool
+		TableID     semantics.TableSet
+		Alias       *sqlparser.AliasedTableExpr
+		Table       sqlparser.TableName
+		Predicates  []sqlparser.Expr
+		IsInfSchema bool
 	}
 )
 

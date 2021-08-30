@@ -62,16 +62,14 @@ type (
 		ASTNode           *sqlparser.AliasedTableExpr
 		Table             *vindexes.Table
 		isInfSchema       bool
-		isVindexTable     bool
 	}
 
 	// AliasedTable contains the alias table expr and vindex table
 	AliasedTable struct {
-		tableName     string
-		ASTNode       *sqlparser.AliasedTableExpr
-		Table         *vindexes.Table
-		isInfSchema   bool
-		isVindexTable bool
+		tableName   string
+		ASTNode     *sqlparser.AliasedTableExpr
+		Table       *vindexes.Table
+		isInfSchema bool
 	}
 
 	// vTableInfo is used to represent projected results, not real tables. It is used for
@@ -81,6 +79,11 @@ type (
 		ASTNode     *sqlparser.AliasedTableExpr
 		columnNames []string
 		cols        []sqlparser.Expr
+	}
+
+	VindexTable struct {
+		Table  TableInfo
+		Vindex vindexes.Vindex
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -140,6 +143,10 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
+
+func (v VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	panic("implement me")
+}
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
@@ -426,12 +433,52 @@ func (v *vTableInfo) IsVindexTable() bool {
 
 // IsVindexTable implements the TableInfo interface
 func (a *AliasedTable) IsVindexTable() bool {
-	return a.isVindexTable
+	return false
 }
 
 // IsVindexTable implements the TableInfo interface
 func (r *RealTable) IsVindexTable() bool {
-	return r.isVindexTable
+	return false
+}
+
+func (v VindexTable) IsVindexTable() bool {
+	return true
+}
+
+func (v VindexTable) Matches(name sqlparser.TableName) bool {
+	return v.Table.Matches(name)
+}
+
+func (v VindexTable) Authoritative() bool {
+	return true
+}
+
+func (v VindexTable) Name() (sqlparser.TableName, error) {
+	return v.Table.Name()
+}
+
+func (v VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
+	return v.Table.GetExpr()
+}
+
+func (v VindexTable) GetColumns() []ColumnInfo {
+	return v.Table.GetColumns()
+}
+
+func (v VindexTable) IsActualTable() bool {
+	return true
+}
+
+func (v VindexTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return v.Table.RecursiveDepsFor(col, org, single)
+}
+
+func (v VindexTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	return v.Table.DepsFor(col, org, single)
+}
+
+func (v VindexTable) IsInfSchema() bool {
+	return v.Table.IsInfSchema()
 }
 
 // NewSemTable creates a new empty SemTable

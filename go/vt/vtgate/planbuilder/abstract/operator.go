@@ -49,15 +49,17 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
 		case sqlparser.TableName:
-			qg := newQueryGraph()
 			tableID := semTable.TableSetFor(tableExpr)
 			tableInfo, err := semTable.TableInfoFor(tableID)
 			if err != nil {
 				return nil, err
 			}
+			if tableInfo.IsVindexTable() {
+				return &Vindex{}, nil
+			}
+			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
-			isVindexTable := tableInfo.IsVindexTable()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema, IsVindexTable: isVindexTable}
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
