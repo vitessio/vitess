@@ -127,6 +127,15 @@ func (client *gRPCVtctldClient) DeleteShards(ctx context.Context, in *vtctldatap
 	return client.c.DeleteShards(ctx, in, opts...)
 }
 
+// DeleteSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) DeleteSrvVSchema(ctx context.Context, in *vtctldatapb.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteSrvVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.DeleteSrvVSchema(ctx, in, opts...)
+}
+
 // DeleteTablets is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) DeleteTablets(ctx context.Context, in *vtctldatapb.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteTabletsResponse, error) {
 	if client.c == nil {
@@ -233,6 +242,15 @@ func (client *gRPCVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.Ge
 	}
 
 	return client.c.GetShard(ctx, in, opts...)
+}
+
+// GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldatapb.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.GetSrvKeyspaceNames(ctx, in, opts...)
 }
 
 // GetSrvKeyspaces is part of the vtctlservicepb.VtctldClient interface.
