@@ -27,69 +27,83 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type routeTree struct {
-	routeOpCode engine.RouteOpcode
-	solved      semantics.TableSet
-	keyspace    *vindexes.Keyspace
+type (
+	routeTree struct {
+		routeOpCode engine.RouteOpcode
+		solved      semantics.TableSet
+		keyspace    *vindexes.Keyspace
 
-	// tables contains inner tables that are solved by this plan.
-	// the tables also contain any predicates that only depend on that particular table
-	tables parenTables
+		// tables contains inner tables that are solved by this plan.
+		// the tables also contain any predicates that only depend on that particular table
+		tables parenTables
 
-	// predicates are the predicates evaluated by this plan
-	predicates []sqlparser.Expr
+		// predicates are the predicates evaluated by this plan
+		predicates []sqlparser.Expr
 
-	// leftJoins are the join conditions evaluated by this plan
-	leftJoins []*outerTable
+		// leftJoins are the join conditions evaluated by this plan
+		leftJoins []*outerTable
 
-	// these fields are set if a vindex will be used for this route
-	currentCost cost // currentCost tracks the cost of the chosen access method
-	vindex      vindexes.Vindex
+		// here we store the possible vindexes we can use so that when we add predicates to the plan,
+		// we can quickly check if the new predicates enables any new vindex options
+		vindexPreds []*vindexPlusPredicates
 
-	// vindexValues contains the values that the vindex needs to be queried for
-	vindexValues []sqltypes.PlanValue
+		// the best option available is stored here
+		selected *vindexOption
 
-	// vindexPredicates contains the comparisons that were the source of vindexValues
-	vindexPredicates []sqlparser.Expr
-	valueExprs       []sqlparser.Expr
+		// columns needed to feed other plans
+		columns []*sqlparser.ColName
 
-	// here we store the possible vindexes we can use so that when we add predicates to the plan,
-	// we can quickly check if the new predicates enables any new vindex options
-	vindexPreds []*vindexPlusPredicates
+		// The following two fields are used when routing information_schema queries
+		SysTableTableSchema []evalengine.Expr
+		SysTableTableName   map[string]evalengine.Expr
+	}
 
-	// columns needed to feed other plans`
-	columns []*sqlparser.ColName
+	// cost is used to make it easy to compare the cost of two plans with each other
+	cost struct {
+		vindexCost int
+		isUnique   bool
+		opCode     engine.RouteOpcode
+	}
 
-	// The following two fields are used when routing information_schema queries
-	SysTableTableSchema []evalengine.Expr
-	SysTableTableName   map[string]evalengine.Expr
-}
+	// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
+	vindexPlusPredicates struct {
+		tableID   semantics.TableSet
+		colVindex *vindexes.ColumnVindex
+
+		// during planning, we store the alternatives found for this route in this slice
+		options []*vindexOption
+	}
+
+	// vindexOption stores the information needed to know if we have all the information needed to use a vindex
+	vindexOption struct {
+		ready       bool
+		values      []sqltypes.PlanValue
+		valueExprs  []sqlparser.Expr
+		predicates  []sqlparser.Expr
+		opcode      engine.RouteOpcode
+		foundVindex vindexes.Vindex
+		cost        cost
+	}
+)
 
 var _ queryTree = (*routeTree)(nil)
-
-// cost is used to make it easy to compare the cost of two plans with each other
-type cost struct {
-	vindexCost int
-	isUnique   bool
-	opCode     engine.RouteOpcode
-}
-
-// vindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
-type vindexPlusPredicates struct {
-	tableID    semantics.TableSet
-	colVindex  *vindexes.ColumnVindex
-	values     []sqltypes.PlanValue
-	valueExprs []sqlparser.Expr
-
-	// when we have the predicates found, we also know how to interact with this vindex
-	foundVindex vindexes.Vindex
-	opcode      engine.RouteOpcode
-	predicates  []sqlparser.Expr
-}
 
 // tables implements the queryTree interface
 func (rp *routeTree) tableID() semantics.TableSet {
 	return rp.solved
+}
+
+func (rp *routeTree) selectedVindex() vindexes.Vindex {
+	if rp.selected == nil {
+		return nil
+	}
+	return rp.selected.foundVindex
+}
+func (rp *routeTree) vindexExpressions() []sqlparser.Expr {
+	if rp.selected == nil {
+		return nil
+	}
+	return rp.selected.valueExprs
 }
 
 // clone returns a copy of the struct with copies of slices,
@@ -428,6 +442,15 @@ func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
+func allNotNil(s []sqlparser.Expr) bool {
+	for _, expr := range s {
+		if expr == nil {
+			return false
+		}
+	}
+	return true
+}
+
 func (rp *routeTree) haveMatchingVindex(
 	ctx planningContext,
 	node sqlparser.Expr,
@@ -439,22 +462,54 @@ func (rp *routeTree) haveMatchingVindex(
 ) bool {
 	newVindexFound := false
 	for _, v := range rp.vindexPreds {
-		if v.foundVindex != nil || !ctx.semTable.Dependencies(column).IsSolvedBy(v.tableID) {
+		// check that the
+		if !ctx.semTable.Dependencies(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		for _, col := range v.colVindex.Columns {
-			// If the column for the predicate matches any column in the vindex add it to the list
+		cols := len(v.colVindex.Columns)
+		for idx, col := range v.colVindex.Columns {
 			if column.Name.Equal(col) {
-				v.values = append(v.values, value)
-				v.valueExprs = append(v.valueExprs, valueExpr)
-				v.predicates = append(v.predicates, node)
-				// Vindex is covered if all the columns in the vindex have a associated predicate
-				covered := len(v.values) == len(v.colVindex.Columns)
-				if covered {
-					v.opcode = opcode(v.colVindex)
-					v.foundVindex = vfunc(v.colVindex)
+				if cols == 1 {
+					// single column vindex - just add the option
+					routeOpcode := opcode(v.colVindex)
+					vindex := vfunc(v.colVindex)
+					v.options = append(v.options, &vindexOption{
+						values:      []sqltypes.PlanValue{value},
+						valueExprs:  []sqlparser.Expr{valueExpr},
+						predicates:  []sqlparser.Expr{node},
+						opcode:      routeOpcode,
+						foundVindex: vindex,
+						cost:        costFor(vindex, routeOpcode),
+						ready:       true,
+					})
+					newVindexFound = true
+				} else {
+					// let's first see if we can improve any of the existing options
+					for _, option := range v.options {
+						if option.predicates[idx] == nil {
+							option.values[idx] = value
+							option.predicates[idx] = node
+							option.valueExprs[idx] = valueExpr
+						}
+						if allNotNil(option.predicates) {
+							option.opcode = opcode(v.colVindex)
+							option.foundVindex = vfunc(v.colVindex)
+							option.cost = costFor(option.foundVindex, option.opcode)
+							option.ready = true
+							newVindexFound = true
+						}
+					}
+
+					newOption := &vindexOption{
+						values:     make([]sqltypes.PlanValue, cols),
+						valueExprs: make([]sqlparser.Expr, cols),
+						predicates: make([]sqlparser.Expr, cols),
+					}
+					newOption.values[idx] = value
+					newOption.predicates[idx] = node
+					newOption.valueExprs[idx] = valueExpr
+					v.options = append(v.options, newOption)
 				}
-				newVindexFound = newVindexFound || covered
 			}
 		}
 	}
@@ -464,20 +519,31 @@ func (rp *routeTree) haveMatchingVindex(
 // pickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
 func (rp *routeTree) pickBestAvailableVindex() {
 	for _, v := range rp.vindexPreds {
-		if v.foundVindex == nil {
-			continue
-		}
-		// Choose the minimum cost vindex from the ones which are covered
-		thisCost := costFor(v.foundVindex, v.opcode)
-		if rp.vindex == nil || less(thisCost, rp.currentCost) {
-			rp.currentCost = thisCost
-			rp.routeOpCode = v.opcode
-			rp.vindex = v.foundVindex
-			rp.vindexValues = v.values
-			rp.vindexPredicates = v.predicates
-			rp.valueExprs = v.valueExprs
+		option := v.bestOption()
+		if option != nil && (rp.selected == nil || less(option.cost, rp.selected.cost)) {
+			rp.selected = option
+			rp.routeOpCode = option.opcode
 		}
 	}
+}
+
+func (vpp *vindexPlusPredicates) bestOption() *vindexOption {
+	var best *vindexOption
+	var keepOptions []*vindexOption
+	for _, option := range vpp.options {
+		if option.ready {
+			if best == nil || less(option.cost, best.cost) {
+				best = option
+			}
+		} else {
+			keepOptions = append(keepOptions, option)
+		}
+	}
+	if best != nil {
+		keepOptions = append(keepOptions, best)
+	}
+	vpp.options = keepOptions
+	return best
 }
 
 // Predicates takes all known predicates for this route and ANDs them together
@@ -521,11 +587,7 @@ func (rp *routeTree) resetRoutingSelections(ctx planningContext) error {
 		rp.routeOpCode = engine.SelectScatter
 	}
 
-	rp.vindex = nil
-	rp.vindexValues = nil
-	rp.valueExprs = nil
-	rp.vindexPredicates = nil
-
+	rp.selected = nil
 	for i, vp := range rp.vindexPreds {
 		rp.vindexPreds[i] = &vindexPlusPredicates{colVindex: vp.colVindex, tableID: vp.tableID}
 	}
