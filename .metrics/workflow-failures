@@ -1,9 +1,3 @@
-2021-04-26T10:26:29Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/785208269
-2021-04-26T10:26:29Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/785208270
-2021-04-26T10:26:29Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/785208287
-2021-04-26T10:26:29Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/785208252
-2021-04-26T10:26:29Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/785208253
-2021-04-26T10:26:29Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/785208302
 2021-04-26T10:26:29Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/785208273
 2021-04-26T10:26:29Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/785208291
 2021-04-26T10:26:29Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/785208247
@@ -9996,5 +9990,11 @@
 2021-08-30T13:26:33Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1182330230
 2021-08-30T13:26:33Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182330267
 2021-08-30T14:09:00Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1182468574
+2021-08-30T14:09:00Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1182468623
 2021-08-30T14:09:00Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1182468596
 2021-08-30T14:09:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1182468593
+2021-08-30T14:33:24Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1182556970
+2021-08-30T14:33:24Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1182556920
+2021-08-30T14:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1182556941
+2021-08-30T14:33:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182556902
+2021-08-30T14:33:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1182556948
