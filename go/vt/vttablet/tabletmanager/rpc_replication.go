@@ -521,7 +521,7 @@ func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
-	log.Infof("SetMaster: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication)
+	log.Infof("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
