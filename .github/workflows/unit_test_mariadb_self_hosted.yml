@@ -20,4 +20,4 @@ jobs:
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm unit_test_mariadb
+          docker image rm unit_test_mariadb

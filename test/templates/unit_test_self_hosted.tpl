@@ -18,4 +18,4 @@ jobs:
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm {{.ImageName}}
+          docker image rm {{.ImageName}}
