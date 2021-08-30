@@ -55,7 +55,12 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			if tableInfo.IsVindexTable() {
-				return &Vindex{}, nil
+				vt, _ := tableInfo.(*semantics.VindexTable)
+				return &Vindex{Table: VindexTable{
+					TableID: tableID,
+					Alias:   tableExpr,
+					Table:   tbl,
+				}, Vindex: vt.Vindex}, nil
 			}
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
