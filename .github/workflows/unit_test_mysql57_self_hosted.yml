@@ -1,0 +1,23 @@
+# DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
+
+name: Unit Test Self Hosted (mysql57)
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: self-hosted
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build Docker Image
+        run: docker build -f ./.github/dockerFiles/unit_test_mysql57/Dockerfile -t unit_test_(mysql57)  .
+
+      - name: Run test
+        timeout-minutes: 30
+        run: docker run --rm unit_test_(mysql57) /bin/bash -c 'make unit_test'
+
+      - name: Cleanup Docker Image
+        run: |
+          docker images rm unit_test_(mysql57)
