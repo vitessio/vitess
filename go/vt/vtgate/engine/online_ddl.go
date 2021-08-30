@@ -72,7 +72,7 @@ func (v *OnlineDDL) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -98,7 +98,7 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 				IsDML:             false,
 				SingleShardOnly:   false,
 			}
-			if _, err := s.Execute(vcursor, bindVars, wantfields); err != nil {
+			if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
 				return result, err
 			}
 		} else {
@@ -115,8 +115,8 @@ func (v *OnlineDDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVari
 }
 
 //StreamExecute implements the Primitive interface
-func (v *OnlineDDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.Execute(vcursor, bindVars, wantfields)
+func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

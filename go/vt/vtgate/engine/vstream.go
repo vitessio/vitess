@@ -61,12 +61,12 @@ func (v *VStream) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (v *VStream) Execute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *VStream) TryExecute(_ VCursor, _ map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
 }
 
 // StreamExecute implements the Primitive interface
-func (v *VStream) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (v *VStream) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	rss, _, err := vcursor.ResolveDestinations(v.Keyspace.Name, nil, []key.Destination{v.TargetDestination})
 	if err != nil {
 		return err

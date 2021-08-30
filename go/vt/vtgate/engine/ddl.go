@@ -86,11 +86,11 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 }
 
 // Execute implements the Primitive interface
-func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if ddl.CreateTempTable {
 		vcursor.Session().HasCreatedTempTable()
 		vcursor.Session().NeedsReservedConn()
-		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.NormalDDL, bindVars, wantfields)
 	}
 
 	ddlStrategySetting, err := schema.ParseDDLStrategy(vcursor.Session().GetDDLStrategy())
@@ -104,18 +104,18 @@ func (ddl *DDL) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable
 		if !ddl.OnlineDDLEnabled {
 			return nil, schema.ErrOnlineDDLDisabled
 		}
-		return ddl.OnlineDDL.Execute(vcursor, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.OnlineDDL, bindVars, wantfields)
 	default: // non online-ddl
 		if !ddl.DirectDDLEnabled {
 			return nil, schema.ErrDirectDDLDisabled
 		}
-		return ddl.NormalDDL.Execute(vcursor, bindVars, wantfields)
+		return vcursor.ExecutePrimitive(ddl.NormalDDL, bindVars, wantfields)
 	}
 }
 
 // StreamExecute implements the Primitive interface
-func (ddl *DDL) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := ddl.Execute(vcursor, bindVars, wantfields)
+func (ddl *DDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := ddl.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}
