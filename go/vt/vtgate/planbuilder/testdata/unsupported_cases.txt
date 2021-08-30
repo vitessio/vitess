@@ -493,3 +493,12 @@ Gen4 plan same as above
 "select count(*) from user join user_extra"
 "unsupported: cross-shard query with aggregates"
 Gen4 plan same as above
+
+# TODO this should be planned without using OA and MS
+"select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: filtering on results of aggregates
+
+"select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
+"symbol ue.col not found in subquery"
+Gen4 error: unsupported: filtering on results of aggregates
