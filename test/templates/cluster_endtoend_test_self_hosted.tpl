@@ -18,5 +18,4 @@ jobs:
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm {{.ImageName}}
-          docker volume prune -f
+          docker image rm {{.ImageName}}

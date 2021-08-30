@@ -20,5 +20,4 @@ jobs:
 
       - name: Cleanup Docker Image
         run: |
-          docker images rm cluster_test_vreplication_cellalias
-          docker volume prune -f
+          docker image rm cluster_test_vreplication_cellalias
