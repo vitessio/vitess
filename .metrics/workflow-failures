@@ -1,10 +1,3 @@
-2021-04-26T10:26:29Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/785208257
-2021-04-26T10:26:29Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/785208292
-2021-04-26T10:26:29Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/785208286
-2021-04-26T10:26:29Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/785208264
-2021-04-26T10:26:29Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/785208290
-2021-04-26T10:26:29Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/785208261
-2021-04-26T10:26:29Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/785208248
 2021-04-26T10:26:29Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/785208268
 2021-04-26T10:26:29Z,endtoend,https://github.com/vitessio/vitess/actions/runs/785208244
 2021-04-26T10:26:29Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/785208295
@@ -9988,6 +9981,7 @@
 2021-08-30T14:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1182556941
 2021-08-30T14:33:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182556902
 2021-08-30T14:33:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1182556948
+2021-08-30T15:34:17Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/1182758682
 2021-08-30T15:34:17Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1182758614
 2021-08-30T15:34:17Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1182758667
 2021-08-30T15:34:17Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1182758654
@@ -9996,5 +9990,11 @@
 2021-08-30T15:34:17Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1182758644
 2021-08-30T15:34:24Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1182759195
 2021-08-30T15:34:24Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1182759170
+2021-08-30T15:34:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1182759199
+2021-08-30T15:34:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1182759196
+2021-08-30T15:34:24Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1182759153
+2021-08-30T15:34:24Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1182759169
+2021-08-30T15:34:24Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1182759162
 2021-08-30T15:34:24Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1182759191
+2021-08-30T15:34:24Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1182759132
 2021-08-30T15:34:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182759144
