@@ -21,6 +21,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 )
 
@@ -37,4 +40,16 @@ func TestDatabaseFunc(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARBINARY("ks")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
+}
+
+func TestRenameFieldsOnOLAP(t *testing.T) {
+	// note that this is testing vttest and not vtgate
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_ = exec(t, conn, "set workload = olap")
+	qr := exec(t, conn, "show tables")
+	assert.Equal(t, `[[VARCHAR("aggr_test")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t1_last_insert_id")] [VARCHAR("t1_row_count")] [VARCHAR("t1_sharded")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("vstream_test")]]`, fmt.Sprintf("%v", qr.Rows))
 }
