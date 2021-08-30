@@ -30,6 +30,7 @@ type (
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
+	//  *  Vindex - Represents a query that selects from vindex tables.
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -55,7 +56,8 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			isInfSchema := tableInfo.IsInfSchema()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			isVindexTable := tableInfo.IsVindexTable()
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema, IsVindexTable: isVindexTable}
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
