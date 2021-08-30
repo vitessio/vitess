@@ -87,6 +87,7 @@ Gen4 plan same as above
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
 "unsupported: filtering on results of aggregates"
+Gen4 plan same as above
 
 # group by must reference select list
 "select a from user group by b"
