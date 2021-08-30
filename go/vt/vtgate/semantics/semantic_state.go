@@ -46,6 +46,7 @@ type (
 		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
 		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
+		IsVindexTable() bool
 		GetExprFor(s string) (sqlparser.Expr, error)
 	}
 
@@ -61,14 +62,16 @@ type (
 		ASTNode           *sqlparser.AliasedTableExpr
 		Table             *vindexes.Table
 		isInfSchema       bool
+		isVindexTable     bool
 	}
 
 	// AliasedTable contains the alias table expr and vindex table
 	AliasedTable struct {
-		tableName   string
-		ASTNode     *sqlparser.AliasedTableExpr
-		Table       *vindexes.Table
-		isInfSchema bool
+		tableName     string
+		ASTNode       *sqlparser.AliasedTableExpr
+		Table         *vindexes.Table
+		isInfSchema   bool
+		isVindexTable bool
 	}
 
 	// vTableInfo is used to represent projected results, not real tables. It is used for
@@ -414,6 +417,21 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 		}
 	}
 	return r.tableName == name.Name.String()
+}
+
+// IsVindexTable implements the TableInfo interface
+func (v *vTableInfo) IsVindexTable() bool {
+	return false
+}
+
+// IsVindexTable implements the TableInfo interface
+func (a *AliasedTable) IsVindexTable() bool {
+	return a.isVindexTable
+}
+
+// IsVindexTable implements the TableInfo interface
+func (r *RealTable) IsVindexTable() bool {
+	return r.isVindexTable
 }
 
 // NewSemTable creates a new empty SemTable

@@ -64,7 +64,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
-		var isInfSchema bool
+		var isInfSchema, isVindexTable bool
 		if sqlparser.SystemSchema(t.Qualifier.String()) {
 			isInfSchema = true
 		} else {
@@ -74,16 +74,34 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			}
 			tbl = table
 			if tbl == nil && vdx != nil {
-				return Gen4NotSupportedF("vindex in FROM")
+				isVindexTable = true
+				tbl = newVindexTable(t.Name)
 			}
 		}
 		scope := tc.scoper.currentScope()
-		tableInfo := tc.createTable(t, node, tbl, isInfSchema)
+		tableInfo := tc.createTable(t, node, tbl, isInfSchema, isVindexTable)
 
 		tc.Tables = append(tc.Tables, tableInfo)
 		return scope.addTable(tableInfo)
 	}
 	return nil
+}
+
+func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
+	vindexCols := []vindexes.Column{
+		{Name: sqlparser.NewColIdent("id")},
+		{Name: sqlparser.NewColIdent("keyspace_id")},
+		{Name: sqlparser.NewColIdent("range_start")},
+		{Name: sqlparser.NewColIdent("range_end")},
+		{Name: sqlparser.NewColIdent("hex_keyspace_id")},
+		{Name: sqlparser.NewColIdent("shard")},
+	}
+
+	return &vindexes.Table{
+		Name:                    t,
+		Columns:                 vindexCols,
+		ColumnListAuthoritative: true,
+	}
 }
 
 // tabletSetFor implements the originable interface, and that is why it lives on the analyser struct.
@@ -97,24 +115,26 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
-func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
+func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema, isVindexTable bool) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
 		dbName = tc.currentDb
 	}
 	if alias.As.IsEmpty() {
 		return &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
+			dbName:        dbName,
+			tableName:     t.Name.String(),
+			ASTNode:       alias,
+			Table:         tbl,
+			isInfSchema:   isInfSchema,
+			isVindexTable: isVindexTable,
 		}
 	}
 	return &AliasedTable{
-		tableName:   alias.As.String(),
-		ASTNode:     alias,
-		Table:       tbl,
-		isInfSchema: isInfSchema,
+		tableName:     alias.As.String(),
+		ASTNode:       alias,
+		Table:         tbl,
+		isInfSchema:   isInfSchema,
+		isVindexTable: isVindexTable,
 	}
 }
