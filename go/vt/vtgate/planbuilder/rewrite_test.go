@@ -243,9 +243,6 @@ func TestHavingRewrite(t *testing.T) {
 		output string
 		sqs    map[string]string
 	}{{
-		input:  "select 1 from t1 group by a having a = 1",
-		output: "select 1 from t1 group by a having a = 1",
-	}, {
 		input:  "select 1 from t1 having a = 1",
 		output: "select 1 from t1 where a = 1",
 	}, {
@@ -282,6 +279,9 @@ func TestHavingRewrite(t *testing.T) {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
 		output: "select 1 from t1 where x in ::__sq1",
 		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
+	}, {
+		input:  "select 1 from t1 group by a having a = 1 and count(*) > 1",
+		output: "select 1 from t1 where a = 1 group by a having count(*) > 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {

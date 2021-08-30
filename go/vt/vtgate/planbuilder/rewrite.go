@@ -161,7 +161,7 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {
-	if node.GroupBy != nil || node.Having == nil {
+	if node.Having == nil {
 		return
 	}
 
@@ -175,8 +175,7 @@ func rewriteHavingClause(node *sqlparser.Select) {
 	}
 
 	sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
-		rewriteNode := cursor.Node()
-		switch x := rewriteNode.(type) {
+		switch x := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			if !x.Qualifier.IsEmpty() {
 				return false

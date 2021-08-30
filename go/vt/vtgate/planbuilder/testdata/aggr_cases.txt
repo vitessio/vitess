@@ -796,6 +796,44 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) c from user group by id having id=1 and c=10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
+    "Query": "select id, count(*) as c from `user` where id = 1 group by id having count(*) = 10",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
+"select id, count(*) c from user group by id having max(col) > 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) c from user group by id having max(col) \u003e 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
+    "Query": "select id, count(*) as c from `user` group by id having max(col) \u003e 10",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
 
 # scatter aggregate in a subquery
 "select a from (select count(*) as a from user) t"
