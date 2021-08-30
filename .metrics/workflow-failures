@@ -1,4 +1,3 @@
-2021-04-26T10:26:29Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/785208277
 2021-04-26T10:26:29Z,Cluster (26),https://github.com/vitessio/vitess/actions/runs/785208269
 2021-04-26T10:26:29Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/785208270
 2021-04-26T10:26:29Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/785208287
@@ -9996,5 +9995,6 @@
 2021-08-30T13:26:33Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1182330271
 2021-08-30T13:26:33Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1182330230
 2021-08-30T13:26:33Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1182330267
+2021-08-30T14:09:00Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1182468574
 2021-08-30T14:09:00Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1182468596
 2021-08-30T14:09:00Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1182468593
