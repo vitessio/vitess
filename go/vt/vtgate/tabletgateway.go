@@ -70,7 +70,7 @@ type TabletGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
-	buffer buffer.Buffer
+	buffer *buffer.Buffer
 }
 
 func createTabletGateway(ctx context.Context, _ discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, _ int) Gateway {
@@ -111,16 +111,17 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 }
 
 func (gw *TabletGateway) setupBuffering(ctx context.Context) {
+	cfg := buffer.NewConfigFromFlags()
+	gw.buffer = buffer.New(cfg)
+
 	switch *bufferImplementation {
 	case "healthcheck":
 		// subscribe to healthcheck updates so that buffer can be notified if needed
 		// we run this in a separate goroutine so that normal processing doesn't need to block
-		cfg := buffer.NewConfigFromFlags()
-		buf := buffer.NewHealthCheckBuffer(cfg)
 		hcChan := gw.hc.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)
 
-		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.HealthCheckBuffer) {
+		go func(ctx context.Context, c chan *discovery.TabletHealth, buffer *buffer.Buffer) {
 			defer bufferCancel()
 
 			for {
@@ -136,17 +137,14 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 					}
 				}
 			}
-		}(bufferCtx, hcChan, buf)
+		}(bufferCtx, hcChan, gw.buffer)
 
-		gw.buffer = buf
 	case "keyspace_events":
-		cfg := buffer.NewConfigFromFlags()
-		buf := buffer.NewKeyspaceEventBuffer(cfg)
 		kew := discovery.NewKeyspaceEventWatcher(ctx, gw.srvTopoServer, gw.hc, gw.localCell)
 		ksChan := kew.Subscribe()
 		bufferCtx, bufferCancel := context.WithCancel(ctx)
 
-		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.KeyspaceEventBuffer) {
+		go func(ctx context.Context, c chan *discovery.KeyspaceEvent, buffer *buffer.Buffer) {
 			defer bufferCancel()
 
 			for {
@@ -160,9 +158,8 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 					buffer.HandleKeyspaceEvent(result)
 				}
 			}
-		}(bufferCtx, ksChan, buf)
+		}(bufferCtx, ksChan, gw.buffer)
 
-		gw.buffer = buf
 	default:
 		log.Exitf("unknown buffering implementation for TabletGateway: %q", *bufferImplementation)
 	}

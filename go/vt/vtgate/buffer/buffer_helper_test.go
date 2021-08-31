@@ -8,56 +8,67 @@ import (
 	"testing"
 	"time"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type constructor func(cfg *Config) testBuffer
+type failover func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time)
 
-type testShardBuffer interface {
-	shardBuffer
-	testGetSize() int
-	testGetState() bufferState
-}
-
-type testBuffer interface {
-	Buffer
-	testFailover(tablet *topodatapb.Tablet, target *querypb.Target, now time.Time)
-	testGetShardBuffer(keyspace, shard string) testShardBuffer
-	testGetPoolSlots() int
-	waitForShutdown()
-}
-
-func testAllImplementations(t *testing.T, runTest func(t *testing.T, new constructor)) {
+func testAllImplementations(t *testing.T, runTest func(t *testing.T, fail failover)) {
 	t.Helper()
 
 	t.Run("HealthCheck", func(t *testing.T) {
 		t.Helper()
-		runTest(t, func(cfg *Config) testBuffer {
-			return NewHealthCheckBuffer(cfg)
+		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
+			buf.ProcessPrimaryHealth(&discovery.TabletHealth{
+				Tablet:               tablet,
+				Target:               &query.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
+				PrimaryTermStartTime: now.Unix(),
+			})
+		})
+	})
+
+	t.Run("LegacyHealthCheck", func(t *testing.T) {
+		t.Helper()
+		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
+			buf.StatsUpdate(&discovery.LegacyTabletStats{
+				Tablet:                              tablet,
+				Target:                              &query.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
+				TabletExternallyReparentedTimestamp: now.Unix(),
+			})
 		})
 	})
 
 	t.Run("KeyspaceEvent", func(t *testing.T) {
 		t.Helper()
-		runTest(t, func(cfg *Config) testBuffer {
-			return NewKeyspaceEventBuffer(cfg)
+		runTest(t, func(buf *Buffer, tablet *topodatapb.Tablet, keyspace, shard string, now time.Time) {
+			buf.HandleKeyspaceEvent(&discovery.KeyspaceEvent{
+				Keyspace: keyspace,
+				Shards: []discovery.ShardEvent{
+					{
+						Tablet:  tablet.Alias,
+						Target:  &query.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY},
+						Serving: true,
+					},
+				},
+			})
 		})
 	})
 }
 
 // issueRequest simulates executing a request which goes through the buffer.
 // If the buffering returned an error, it will be sent on the returned channel.
-func issueRequest(ctx context.Context, t *testing.T, b testBuffer, err error) chan error {
+func issueRequest(ctx context.Context, t *testing.T, b *Buffer, err error) chan error {
 	return issueRequestAndBlockRetry(ctx, t, b, err, nil /* markRetryDone */)
 }
 
 // issueRequestAndBlockRetry is the same as issueRequest() but allows to signal
 // when the buffer should be informed that the retry is done. (For that,
 // the channel "markRetryDone" must be closed.)
-func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b testBuffer, err error, markRetryDone chan struct{}) chan error {
+func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b *Buffer, err error, markRetryDone chan struct{}) chan error {
 	bufferingStopped := make(chan error)
 
 	go func() {
@@ -80,9 +91,9 @@ func issueRequestAndBlockRetry(ctx context.Context, t *testing.T, b testBuffer, 
 
 // waitForRequestsInFlight blocks until the buffer queue has reached "count".
 // This check is potentially racy and therefore retried up to a timeout of 10s.
-func waitForRequestsInFlight(b testBuffer, count int) error {
+func waitForRequestsInFlight(b *Buffer, count int) error {
 	start := time.Now()
-	sb := b.testGetShardBuffer(keyspace, shard)
+	sb := b.getOrCreateBuffer(keyspace, shard)
 	for {
 		got, want := sb.testGetSize(), count
 		if got == want {
@@ -98,8 +109,8 @@ func waitForRequestsInFlight(b testBuffer, count int) error {
 
 // waitForState polls the buffer data for up to 10 seconds and returns an error
 // if shardBuffer doesn't have the wanted state by then.
-func waitForState(b testBuffer, want bufferState) error {
-	sb := b.testGetShardBuffer(keyspace, shard)
+func waitForState(b *Buffer, want bufferState) error {
+	sb := b.getOrCreateBuffer(keyspace, shard)
 	start := time.Now()
 	for {
 		got := sb.testGetState()
@@ -118,10 +129,10 @@ func waitForState(b testBuffer, want bufferState) error {
 // returned. The wait is necessary because in some cases the buffer code
 // does not block itself on the wait. But in any case, the slot should be
 // returned when the request has finished. See also shardBuffer.unblockAndWait().
-func waitForPoolSlots(b testBuffer, want int) error {
+func waitForPoolSlots(b *Buffer, want int) error {
 	start := time.Now()
 	for {
-		got := b.testGetPoolSlots()
+		got := b.bufferSizeSema.Size()
 		if got == want {
 			return nil
 		}
