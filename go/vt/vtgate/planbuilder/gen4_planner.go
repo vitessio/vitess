@@ -93,9 +93,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	sel := selStmt.(*sqlparser.Select)
-
-	opTree, err := abstract.CreateOperatorFromSelect(sel, semTable)
+	opTree, err := abstract.CreateOperatorFromSelectStmt(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -109,6 +107,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+
+	sel := selStmt.(*sqlparser.Select)
 
 	plan, err = planHorizon(ctx, plan, sel)
 	if err != nil {
