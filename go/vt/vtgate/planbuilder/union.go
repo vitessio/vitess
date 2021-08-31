@@ -29,17 +29,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
-	union := stmt.(*sqlparser.Union)
-	// For unions, create a pb with anonymous scope.
-	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
-	if err := pb.processUnion(union, reservedVars, nil); err != nil {
-		return nil, err
+func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+		union := stmt.(*sqlparser.Union)
+		// For unions, create a pb with anonymous scope.
+		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
+		if err := pb.processUnion(union, reservedVars, nil); err != nil {
+			return nil, err
+		}
+		if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
+			return nil, err
+		}
+		return pb.plan.Primitive(), nil
 	}
-	if err := pb.plan.Wireup(pb.plan, pb.jt); err != nil {
-		return nil, err
-	}
-	return pb.plan.Primitive(), nil
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *sqlparser.ReservedVars, outer *symtab) error {
