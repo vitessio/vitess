@@ -45,25 +45,27 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
 	"vitess.io/vitess/go/flagutil"
-
-	"vitess.io/vitess/go/vt/topo"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
 
 var (
-	hcErrorCounters          = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
-	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Master promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
-	healthcheckOnce          sync.Once
+	hcErrorCounters = stats.NewCountersWithMultiLabels("HealthcheckErrors", "Healthcheck Errors", []string{"Keyspace", "ShardName", "TabletType"})
+
+	// DEPRECATED HealthcheckMasterPromoted in favor of HealthcheckPrimaryPromoted
+	//TODO(rohit) : remove this metric and related parameter in V13
+	hcMasterPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckMasterPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
+
+	hcPrimaryPromotedCounters = stats.NewCountersWithMultiLabels("HealthcheckPrimaryPromoted", "Primary promoted in keyspace/shard name because of health check errors", []string{"Keyspace", "ShardName"})
+	healthcheckOnce           sync.Once
 
 	// TabletURLTemplateString is a flag to generate URLs for the tablets that vtgate discovers.
 	TabletURLTemplateString = flag.String("tablet_url_template", "http://{{.GetTabletHostPort}}", "format string describing debug tablet url formatting. See the Go code for getTabletDebugURL() how to customize this.")
@@ -71,7 +73,7 @@ var (
 
 	//TODO(deepthi): change these vars back to unexported when discoveryGateway is removed
 
-	// AllowedTabletTypes is the list of allowed tablet types. e.g. {MASTER, REPLICA}
+	// AllowedTabletTypes is the list of allowed tablet types. e.g. {PRIMARY, REPLICA}
 	AllowedTabletTypes []topodata.TabletType
 	// TabletFilters are the keyspace|shard or keyrange filters to apply to the full set of tablets
 	TabletFilters flagutil.StringListValue
@@ -148,6 +150,11 @@ func init() {
 	flag.Var(&KeyspacesToWatch, "keyspaces_to_watch", "Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema")
 }
 
+// FilteringKeyspaces returns true if any keyspaces have been configured to be filtered.
+func FilteringKeyspaces() bool {
+	return len(KeyspacesToWatch) > 0
+}
+
 // TabletRecorder is a sub interface of HealthCheck.
 // It is separated out to enable unit testing.
 type TabletRecorder interface {
@@ -177,20 +184,20 @@ type HealthCheck interface {
 	WaitForAllServingTablets(ctx context.Context, targets []*query.Target) error
 
 	// TabletConnection returns the TabletConn of the given tablet.
-	TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error)
+	TabletConnection(alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error)
 
 	// RegisterStats registers the connection counts stats
 	RegisterStats()
 
 	// GetHealthyTabletStats returns only the healthy tablets.
 	// The returned array is owned by the caller.
-	// For TabletType_MASTER, this will only return at most one entry,
-	// the most recent tablet of type master.
+	// For TabletType_PRIMARY, this will only return at most one entry,
+	// the most recent tablet of type primary.
 	// This returns a copy of the data so that callers can access without
 	// synchronization
 	GetHealthyTabletStats(target *query.Target) []*TabletHealth
 
-	// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
+	// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
 	Subscribe() chan *TabletHealth
 
 	// Unsubscribe removes a listener.
@@ -254,7 +261,7 @@ type HealthCheckImpl struct {
 // localCell.
 //   The localCell for this healthcheck
 // callback.
-//   A function to call when there is a master change. Used to notify vtgate's buffer to stop buffering.
+//   A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
@@ -404,7 +411,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	}
 }
 
-func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, isPrimaryUp bool) {
+func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
 	// hc.healthByAlias is authoritative, it should be updated
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
@@ -427,48 +434,55 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	// add it to the map by target
 	hc.healthData[targetKey][tabletAlias] = th
 
-	isPrimary := th.Target.TabletType == topodata.TabletType_MASTER
+	isPrimary := th.Target.TabletType == topodata.TabletType_PRIMARY
 	switch {
-	case isPrimary && isPrimaryUp:
+	case isPrimary && up:
 		if len(hc.healthy[targetKey]) == 0 {
 			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
 		} else {
 			// We already have one up server, see if we
 			// need to replace it.
-			if th.MasterTermStartTime < hc.healthy[targetKey][0].MasterTermStartTime {
-				log.Warningf("not marking healthy master %s as Up for %s because its MasterTermStartTime is smaller than the highest known timestamp from previous MASTERs %s: %d < %d ",
+			if th.PrimaryTermStartTime < hc.healthy[targetKey][0].PrimaryTermStartTime {
+				log.Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
 					topoproto.TabletAliasString(th.Tablet.Alias),
 					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
 					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
-					th.MasterTermStartTime,
-					hc.healthy[targetKey][0].MasterTermStartTime)
+					th.PrimaryTermStartTime,
+					hc.healthy[targetKey][0].PrimaryTermStartTime)
 			} else {
 				// Just replace it.
 				hc.healthy[targetKey][0] = th
 			}
 		}
-	case isPrimary && !isPrimaryUp:
-		// No healthy master tablet
-		hc.healthy[targetKey] = []*TabletHealth{}
+	case isPrimary && !up:
+		if healthy, ok := hc.healthy[targetKey]; ok && len(healthy) > 0 {
+			// isPrimary is true here therefore we should only have 1 tablet in healthy
+			alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
+			// Clear healthy list for primary if the existing tablet is down
+			if alias == tabletAlias {
+				hc.healthy[targetKey] = []*TabletHealth{}
+			}
+		}
 	}
 
 	if !trivialUpdate {
 		// We re-sort the healthy tablet list whenever we get a health update for tablets we can route to.
-		// Tablets from other cells for non-master targets should not trigger a re-sort;
+		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
-		if th.Target.TabletType != topodata.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
+		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
 			hc.recomputeHealthy(targetKey)
 		}
-		if targetChanged && prevTarget.TabletType != topodata.TabletType_MASTER && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
+		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
 			oldTargetKey := hc.keyFromTarget(prevTarget)
 			hc.recomputeHealthy(oldTargetKey)
 		}
 	}
 
-	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_MASTER
+	isNewPrimary := isPrimary && prevTarget.TabletType != topodata.TabletType_PRIMARY
 	if isNewPrimary {
-		log.Errorf("Adding 1 to MasterPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
+		log.Errorf("Adding 1 to PrimaryPromoted counter for target: %v, tablet: %v, tabletType: %v", prevTarget, topoproto.TabletAliasString(th.Tablet.Alias), th.Target.TabletType)
 		hcMasterPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
+		hcPrimaryPromotedCounters.Add([]string{th.Target.Keyspace, th.Target.Shard}, 1)
 	}
 
 	// broadcast to subscribers
@@ -487,7 +501,7 @@ func (hc *HealthCheckImpl) recomputeHealthy(key keyspaceShardTabletType) {
 	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
 }
 
-// Subscribe adds a listener. Used by vtgate buffer to learn about master changes.
+// Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
 func (hc *HealthCheckImpl) Subscribe() chan *TabletHealth {
 	hc.subMu.Lock()
 	defer hc.subMu.Unlock()
@@ -575,8 +589,8 @@ func (hc *HealthCheckImpl) Close() error {
 
 // GetHealthyTabletStats returns only the healthy tablets.
 // The returned array is owned by the caller.
-// For TabletType_MASTER, this will only return at most one entry,
-// the most recent tablet of type master.
+// For TabletType_PRIMARY, this will only return at most one entry,
+// the most recent tablet of type primary.
 // This returns a copy of the data so that callers can access without
 // synchronization
 func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*TabletHealth {
@@ -591,8 +605,8 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 
 // getTabletStats returns all tablets for the given target.
 // The returned array is owned by the caller.
-// For TabletType_MASTER, this will only return at most one entry,
-// the most recent tablet of type master.
+// For TabletType_PRIMARY, this will only return at most one entry,
+// the most recent tablet of type primary.
 func (hc *HealthCheckImpl) getTabletStats(target *query.Target) []*TabletHealth {
 	var result []*TabletHealth
 	hc.mu.Lock()
@@ -693,7 +707,7 @@ func (hc *HealthCheckImpl) waitForTablets(ctx context.Context, targets []*query.
 }
 
 // TabletConnection returns the Connection to a given tablet.
-func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias) (queryservice.QueryService, error) {
+func (hc *HealthCheckImpl) TabletConnection(alias *topodata.TabletAlias, target *query.Target) (queryservice.QueryService, error) {
 	hc.mu.Lock()
 	thc := hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
 	hc.mu.Unlock()
@@ -729,7 +743,7 @@ func (hc *HealthCheckImpl) getAliasByCell(cell string) string {
 }
 
 func (hc *HealthCheckImpl) isIncluded(tabletType topodata.TabletType, tabletAlias *topodata.TabletAlias) bool {
-	if tabletType == topodata.TabletType_MASTER {
+	if tabletType == topodata.TabletType_PRIMARY {
 		return true
 	}
 	if tabletAlias.Cell == hc.cell {
@@ -842,7 +856,7 @@ func (hc *HealthCheckImpl) stateChecksum() int64 {
 		)
 		sort.Sort(st.TabletsStats)
 		for _, ts := range st.TabletsStats {
-			fmt.Fprintf(&buf, "%v%v\n", ts.Serving, ts.MasterTermStartTime)
+			fmt.Fprintf(&buf, "%v%v\n", ts.Serving, ts.PrimaryTermStartTime)
 		}
 	}
 

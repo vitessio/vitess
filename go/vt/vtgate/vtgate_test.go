@@ -17,9 +17,10 @@ limitations under the License.
 package vtgate
 
 import (
-	"reflect"
 	"strings"
 	"testing"
+
+	"google.golang.org/protobuf/proto"
 
 	"github.com/stretchr/testify/assert"
 
@@ -28,8 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"context"
-
-	"github.com/golang/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -50,8 +49,8 @@ var executeOptions = &querypb.ExecuteOptions{
 	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
-var masterSession = &vtgatepb.Session{
-	TargetString: "@master",
+var primarySession = &vtgatepb.Session{
+	TargetString: "@primary",
 }
 
 func init() {
@@ -93,12 +92,12 @@ func init() {
 func TestVTGateExecute(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	_, qr, err := rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
 			Autocommit:   true,
-			TargetString: "@master",
+			TargetString: "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -109,9 +108,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
-	if !reflect.DeepEqual(&want, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &want, qr)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
@@ -120,7 +117,7 @@ func TestVTGateExecute(t *testing.T) {
 func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	// Valid keyspace.
 	_, qr, err := rpcVTGate.Execute(
@@ -136,9 +133,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	}
 	wantQr := *sandboxconn.SingleRowResult
 	wantQr.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
-	if !reflect.DeepEqual(&wantQr, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace.
 	_, _, err = rpcVTGate.Execute(
@@ -149,14 +144,14 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "keyspace invalid_keyspace not found in vschema"
+	want := "Unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
 	_, qr, err = rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":0@master",
+			TargetString: KsTestUnsharded + ":0@primary",
 		},
 		"select id from none",
 		nil,
@@ -164,21 +159,19 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(&wantQr, qr) {
-		t.Errorf("want \n%+v, got \n%+v", sandboxconn.SingleRowResult, qr)
-	}
+	utils.MustMatch(t, &wantQr, qr)
 
 	// Invalid keyspace/shard.
 	_, _, err = rpcVTGate.Execute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: KsTestUnsharded + ":noshard@master",
+			TargetString: KsTestUnsharded + ":noshard@primary",
 		},
 		"select id from none",
 		nil,
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:MASTER`)
+	require.Contains(t, err.Error(), `no healthy tablet available for 'keyspace:"TestUnsharded" shard:"noshard" tablet_type:PRIMARY`)
 }
 
 func TestVTGateStreamExecute(t *testing.T) {
@@ -186,12 +179,12 @@ func TestVTGateStreamExecute(t *testing.T) {
 	shard := "0"
 	createSandbox(ks)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
 	var qrs []*sqltypes.Result
 	err := rpcVTGate.StreamExecute(
 		context.Background(),
 		&vtgatepb.Session{
-			TargetString: "@master",
+			TargetString: "@primary",
 			Options:      executeOptions,
 		},
 		"select id from t1",
@@ -265,7 +258,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	_, _, err := rpcVTGate.Execute(
 		context.Background(),
-		masterSession,
+		primarySession,
 		"select id from t1",
 		nil,
 	)
@@ -287,7 +280,7 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 	}
 	err = rpcVTGate.StreamExecute(
 		context.Background(),
-		masterSession,
+		primarySession,
 		"select id from t1",
 		nil,
 		func(r *sqltypes.Result) error {
@@ -308,13 +301,13 @@ func testErrorPropagation(t *testing.T, sbcs []*sandboxconn.SandboxConn, before 
 }
 
 // TestErrorPropagation tests an error returned by sandboxconn is
-// properly propagated through vtgate layers.  We need both a master
+// properly propagated through vtgate layers.  We need both a primary
 // tablet and a rdonly tablet because we don't control the routing of
 // Commit.
 func TestErrorPropagation(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbcm := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbcrdonly := hcVTGateTest.AddTestTablet("aa", "1.1.1.2", 1001, KsTestUnsharded, "0", topodatapb.TabletType_RDONLY, true, 1, nil)
 	sbcs := []*sandboxconn.SandboxConn{
 		sbcm,
@@ -399,7 +392,7 @@ func TestErrorPropagation(t *testing.T) {
 func TestErrorIssuesRollback(t *testing.T) {
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
-	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	// Start a transaction, send one statement.
 	// Simulate an error that should trigger a rollback:

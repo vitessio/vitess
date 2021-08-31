@@ -81,7 +81,7 @@ func (upd *Update) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -105,7 +105,7 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute performs a streaming exec.
-func (upd *Update) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", upd.Query)
 }
 
@@ -122,7 +122,7 @@ func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*que
 	if len(rss) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Keyspace does not have exactly one shard: %v", rss)
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rs)
+	err = allowOnlyPrimary(rs)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.Bi
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	if err != nil {
 		return nil, err
 	}
-	err = allowOnlyMaster(rss...)
+	err = allowOnlyPrimary(rss...)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func (upd *Update) description() PrimitiveDescription {
 		OperatorType:     "Update",
 		Keyspace:         upd.Keyspace,
 		Variant:          upd.Opcode.String(),
-		TargetTabletType: topodatapb.TabletType_MASTER,
+		TargetTabletType: topodatapb.TabletType_PRIMARY,
 		Other:            other,
 	}
 }

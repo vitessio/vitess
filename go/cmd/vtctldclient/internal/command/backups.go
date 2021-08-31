@@ -23,28 +23,48 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // GetBackups makes a GetBackups gRPC call to a vtctld.
 var GetBackups = &cobra.Command{
-	Use:  "GetBackups keyspace shard",
-	Args: cobra.ExactArgs(2),
+	Use:  "GetBackups <keyspace/shard>",
+	Args: cobra.ExactArgs(1),
 	RunE: commandGetBackups,
 }
 
-func commandGetBackups(cmd *cobra.Command, args []string) error {
-	cli.FinishedParsing(cmd)
+var getBackupsOptions = struct {
+	Limit      uint32
+	OutputJSON bool
+}{}
 
-	keyspace := cmd.Flags().Arg(0)
-	shard := cmd.Flags().Arg(1)
+func commandGetBackups(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
 
 	resp, err := client.GetBackups(commandCtx, &vtctldatapb.GetBackupsRequest{
 		Keyspace: keyspace,
 		Shard:    shard,
+		Limit:    getBackupsOptions.Limit,
 	})
 	if err != nil {
 		return err
+	}
+
+	if getBackupsOptions.OutputJSON {
+		data, err := cli.MarshalJSON(resp)
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("%s\n", data)
+		return nil
 	}
 
 	names := make([]string, len(resp.Backups))
@@ -58,5 +78,7 @@ func commandGetBackups(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	GetBackups.Flags().Uint32VarP(&getBackupsOptions.Limit, "limit", "l", 0, "Retrieve only the most recent N backups")
+	GetBackups.Flags().BoolVarP(&getBackupsOptions.OutputJSON, "json", "j", false, "Output backup info in JSON format rather than a list of backups")
 	Root.AddCommand(GetBackups)
 }

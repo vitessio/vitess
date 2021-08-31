@@ -131,7 +131,7 @@ type TabletManagerClient struct {
 	DemoteMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
 	DemoteMasterResults map[string]struct {
-		Status *replicationdatapb.MasterStatus
+		Status *replicationdatapb.PrimaryStatus
 		Error  error
 	}
 	// keyed by tablet alias.
@@ -162,6 +162,8 @@ type TabletManagerClient struct {
 		Result string
 		Error  error
 	}
+	// keyed by tablet alias.
+	RefreshStateResults      map[string]error
 	ReplicationStatusDelays  map[string]time.Duration
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
@@ -170,6 +172,7 @@ type TabletManagerClient struct {
 	// keyed by tablet alias.
 	SetMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
+	// TODO(deepthi): fix after v12.0
 	SetMasterResults map[string]error
 	// keyed by tablet alias.
 	SetReadWriteDelays map[string]time.Duration
@@ -215,7 +218,7 @@ func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodat
 }
 
 // DemoteMaster is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.MasterStatus, error) {
+func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	if fake.DemoteMasterResults == nil {
 		return nil, assert.AnError
 	}
@@ -364,6 +367,20 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+// RefreshState is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.RefreshStateResults == nil {
+		return fmt.Errorf("%w: no RefreshState results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if err, ok := fake.RefreshStateResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no RefreshState result set for tablet %s", assert.AnError, key)
 }
 
 // ReplicationStatus is part of the tmclient.TabletManagerClient interface.

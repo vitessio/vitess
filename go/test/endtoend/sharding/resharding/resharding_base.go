@@ -202,29 +202,29 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Defining all the tablets
-	shard0Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Primary := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard0Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard0RdonlyZ2 := clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
 
-	shard1Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Primary := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard1Replica1 := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard1Replica2 := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard1Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 	shard1RdonlyZ2 := clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
 
-	shard2Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard2Primary := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard2Replica1 := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard2Replica2 := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard2Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard3Master := clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard3Primary := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard3Replica := clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard3Rdonly := clusterInstance.NewVttabletInstance("rdonly", 0, "")
 
-	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdonlyZ2}
-	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2}
-	shard2.Vttablets = []*cluster.Vttablet{shard2Master, shard2Replica1, shard2Replica2, shard2Rdonly}
-	shard3.Vttablets = []*cluster.Vttablet{shard3Master, shard3Replica, shard3Rdonly}
+	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica, shard0RdonlyZ2}
+	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2}
+	shard2.Vttablets = []*cluster.Vttablet{shard2Primary, shard2Replica1, shard2Replica2, shard2Rdonly}
+	shard3.Vttablets = []*cluster.Vttablet{shard3Primary, shard3Replica, shard3Rdonly}
 
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
@@ -288,30 +288,30 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		}
 	}
 
-	// Init Shard Master
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Master.Alias)
+	// InitShardPrimary
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard0.Name), shard0Primary.Alias)
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1Master.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1Primary.Alias)
 	require.Nil(t, err)
 
-	// Init Shard Master on Split Shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Master.Alias)
+	// InitShardPrimary on Split Shards
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard2.Name), shard2Primary.Alias)
 	require.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Master.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
+		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard3.Name), shard3Primary.Alias)
 	require.Nil(t, err)
 
 	// Wait for tablets to come in Service state
-	err = shard0Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard0Primary.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard1Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1Primary.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard2Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard2Primary.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard3Master.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard3Primary.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
 
 	// keyspace/shard name fields
@@ -366,7 +366,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -375,7 +375,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Replica2.Alias, "spare")
 	require.Nil(t, err)
 
-	err = shard1Replica2.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard1Replica2.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	// we need to create the schema, and the worker will do data copying
@@ -407,9 +407,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Check values in the split shard
-	checkValues(t, *shard2.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard2.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, true, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
-	checkValues(t, *shard3.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard3.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, false, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	// Reset vtworker such that we can run the next command.
@@ -418,7 +418,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Test the correct handling of keyspace_id changes which happen after the first clone.
 	sql := fmt.Sprintf("update resharding1 set custom_ksid_col=%d WHERE id=2", key3)
-	_, err = shard1Master.VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, err = shard1Primary.VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	require.Nil(t, err)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
@@ -431,9 +431,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard1Ks)
 	require.Nil(t, err)
 
-	checkValues(t, *shard2.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key3)},
+	checkValues(t, *shard2.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key3)},
 		2, false, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
-	checkValues(t, *shard3.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key3)},
+	checkValues(t, *shard3.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key3)},
 		2, true, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("Reset")
@@ -441,7 +441,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Move row 2 back to shard 2 from shard 3 by changing the keyspace_id again
 	sql = fmt.Sprintf("update resharding1 set custom_ksid_col=%d WHERE id=2", key2)
-	_, err = shard1Master.VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, err = shard1Primary.VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	require.Nil(t, err)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
@@ -454,9 +454,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		shard1Ks)
 	require.Nil(t, err)
 
-	checkValues(t, *shard2.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard2.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, true, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
-	checkValues(t, *shard3.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard3.PrimaryTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, false, tableName, fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	// Reset vtworker such that we can run the next command.
@@ -466,15 +466,15 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// Modify the destination shard. SplitClone will revert the changes.
 
 	// Delete row 2 (provokes an insert).
-	_, err = shard2Master.VttabletProcess.QueryTablet("delete from resharding1 where id=2", keyspaceName, true)
+	_, err = shard2Primary.VttabletProcess.QueryTablet("delete from resharding1 where id=2", keyspaceName, true)
 	require.Nil(t, err)
 	// Update row 3 (provokes an update).
-	_, err = shard3Master.VttabletProcess.QueryTablet("update resharding1 set msg='msg-not-3' where id=3", keyspaceName, true)
+	_, err = shard3Primary.VttabletProcess.QueryTablet("update resharding1 set msg='msg-not-3' where id=3", keyspaceName, true)
 	require.Nil(t, err)
 
 	// Insert row 4 and 5 (provokes a delete).
-	insertValue(t, shard3.MasterTablet(), keyspaceName, tableName, 4, "msg4", key3)
-	insertValue(t, shard3.MasterTablet(), keyspaceName, tableName, 5, "msg5", key3)
+	insertValue(t, shard3.PrimaryTablet(), keyspaceName, tableName, 4, "msg4", key3)
+	insertValue(t, shard3.PrimaryTablet(), keyspaceName, tableName, 5, "msg5", key3)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--exclude_tables", "unrelated",
@@ -501,30 +501,30 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	// Verify vreplication table entries
-	qr, err := shard2Master.VttabletProcess.QueryTabletWithDB("select * from vreplication", "_vt")
+	qr, err := shard2Primary.VttabletProcess.QueryTabletWithDB("select * from vreplication", "_vt")
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "SplitClone")
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:<start:\"\\200\" end:\"\\300\" > "`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:{start:\"\\x80\" end:\"\\xc0\"}"`)
 
-	qr, err = shard3.MasterTablet().VttabletProcess.QueryTabletWithDB("select * from vreplication", "_vt")
+	qr, err = shard3.PrimaryTablet().VttabletProcess.QueryTabletWithDB("select * from vreplication", "_vt")
 	require.Nil(t, err)
 	assert.Equal(t, 1, len(qr.Rows))
 	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), "SplitClone")
-	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:<start:\"\\300\" > "`)
+	assert.Contains(t, fmt.Sprintf("%v", qr.Rows), `"keyspace:\"ks\" shard:\"80-\" key_range:{start:\"\\xc0\"}"`)
 
 	// check the binlog players are running and exporting vars
-	sharding.CheckDestinationMaster(t, *shard2Master, []string{shard1Ks}, *clusterInstance)
-	sharding.CheckDestinationMaster(t, *shard3Master, []string{shard1Ks}, *clusterInstance)
+	sharding.CheckDestinationPrimary(t, *shard2Primary, []string{shard1Ks}, *clusterInstance)
+	sharding.CheckDestinationPrimary(t, *shard3Primary, []string{shard1Ks}, *clusterInstance)
 
 	// When the binlog players/filtered replication is turned on, the query
-	// service must be turned off on the destination masters.
+	// service must be turned off on the destination primaries.
 	// The tested behavior is a safeguard to prevent that somebody can
-	// accidentally modify data on the destination masters while they are not
+	// accidentally modify data on the destination primaries while they are not
 	// migrated yet and the source shards are still the source of truth.
-	err = shard2Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard2Primary.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
-	err = shard3Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard3Primary.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	// check that binlog server exported the stats vars
@@ -532,15 +532,15 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Check that the throttler was enabled.
 	// The stream id is hard-coded as 1, which is the first id generated through auto-inc.
-	sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard2Master.GrpcPort),
+	sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard2Primary.GrpcPort),
 		[]string{"BinlogPlayer/1"}, 9999, *clusterInstance)
-	sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard3Master.GrpcPort),
+	sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard3Primary.GrpcPort),
 		[]string{"BinlogPlayer/1"}, 9999, *clusterInstance)
 
 	// testing filtered replication: insert a bunch of data on shard 1, check we get most of it after a few seconds,
 	// wait for binlog server timeout, check we get all of it.
 	log.Info("Inserting lots of data on source shard")
-	insertLots(100, 0, *shard1Master, tableName, fixedParentID, keyspaceName)
+	insertLots(100, 0, *shard1Primary, tableName, fixedParentID, keyspaceName)
 	log.Info("Executing MultiValue Insert Queries")
 	execMultiShardDmls(t, keyspaceName)
 
@@ -551,8 +551,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// Checking MultiValue Insert Queries
 	checkMultiShardValues(t, keyspaceName, shardingKeyType)
-	sharding.CheckBinlogPlayerVars(t, *shard2Master, []string{shard1Ks}, 30)
-	sharding.CheckBinlogPlayerVars(t, *shard3Master, []string{shard1Ks}, 30)
+	sharding.CheckBinlogPlayerVars(t, *shard2Primary, []string{shard1Ks}, 30)
+	sharding.CheckBinlogPlayerVars(t, *shard3Primary, []string{shard1Ks}, 30)
 
 	sharding.CheckBinlogServerVars(t, *shard1Replica1, 100, 100, false)
 
@@ -596,9 +596,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard1Replica1.Alias, "spare")
 	require.Nil(t, err)
 
-	err = shard1Replica2.VttabletProcess.WaitForTabletType("SERVING")
+	err = shard1Replica2.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.Nil(t, err)
-	err = shard1Replica1.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = shard1Replica1.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
 	require.Nil(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard1Replica2.Alias)
@@ -606,26 +606,26 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// test data goes through again
 	log.Info("Inserting lots of data on source shard")
-	insertLots(100, 100, *shard1Master, tableName, fixedParentID, keyspaceName)
+	insertLots(100, 100, *shard1Primary, tableName, fixedParentID, keyspaceName)
 	log.Info("Checking 100 percent of data was sent quickly")
 	assert.True(t, checkLotsTimeout(t, 100, 100, tableName, keyspaceName, shardingKeyType))
 
 	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80, false)
 
-	// check we can't migrate the master just yet
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
+	// check we can't migrate the primary just yet
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "primary")
 	require.Error(t, err, "MigrateServedTypes should fail")
 
-	// check query service is off on master 2 and master 3, as filtered replication is enabled.
-	// Even health check that is enabled on master 3 should not interfere (we run it to be sure).
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard3Master.Alias)
+	// check query service is off on primary 2 and primary 3, as filtered replication is enabled.
+	// Even health check that is enabled on primary 3 should not interfere (we run it to be sure).
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard3Primary.Alias)
 	require.Nil(t, err)
 
-	for _, master := range []cluster.Vttablet{*shard2Master, *shard3Master} {
-		sharding.CheckTabletQueryService(t, master, "NOT_SERVING", false, *clusterInstance)
+	for _, primary := range []cluster.Vttablet{*shard2Primary, *shard3Primary} {
+		sharding.CheckTabletQueryService(t, primary, "NOT_SERVING", false, *clusterInstance)
 		streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 			"VtTabletStreamHealth",
-			"-count", "1", master.Alias)
+			"-count", "1", primary.Alias)
 		require.Nil(t, err)
 		log.Info("Got health: ", streamHealth)
 
@@ -645,14 +645,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check srv keyspace
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// Cell 2 is not affected
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -682,7 +682,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -708,7 +708,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.Nil(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -731,7 +731,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, false)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard1.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
@@ -750,23 +750,23 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		topodata.TabletType_REPLICA, true)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
 	// reparent shard2 to shard2Replica1, then insert more data and see it flow through still
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", shard2Ks,
-		"-new_master", shard2Replica1.Alias)
+		"-new_primary", shard2Replica1.Alias)
 	require.Nil(t, err)
 
-	// update our test variables to point at the new master
-	tmp := shard2Master
-	shard2Master = shard2Replica1
+	// update our test variables to point at the new primary
+	tmp := shard2Primary
+	shard2Primary = shard2Replica1
 	shard2Replica1 = tmp
 
 	// Insert another set of the data and see it flow through
-	insertLots(100, 200, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
+	insertLots(100, 200, *shard1.PrimaryTablet(), tableName, fixedParentID, keyspaceName)
 	// Checking 100 percent of data is sent fairly quickly
 	assert.True(t, checkLotsTimeout(t, 100, 200, tableName, keyspaceName, shardingKeyType))
 
@@ -796,7 +796,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", shard3Rdonly.Alias, "rdonly")
 	require.Nil(t, err)
 
-	// going to migrate the master now
+	// going to migrate the primary now
 
 	// mock with the SourceShard records to test 'vtctl SourceShardDelete'  and 'vtctl SourceShardAdd'
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardDelete", shard3Ks, "1")
@@ -811,115 +811,117 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// do a Migrate that will fail waiting for replication
 	// which should cause the Migrate to be canceled and the source
-	// master to be serving again.
+	// primary to be serving again.
+	// This is the legacy resharding migration command which should work with either primary or master
+	// We will leave this one to test that, all other usages have been replaced with "primary"
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
 		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
 	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
-	sharding.CheckTabletQueryService(t, *shard1Master, "SERVING", false, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard1Primary, "SERVING", false, *clusterInstance)
 
-	// sabotage master migration and make it fail in an unfinished state.
+	// sabotage primary migration and make it fail in an unfinished state.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl",
-		"-blacklisted_tables=t",
-		shard3Ks, "master")
+		"-denied_tables=t",
+		shard3Ks, "primary")
 	require.Nil(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Error(t, err)
 
 	// Query service is disabled in source shard as failure occurred after point of no return
-	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard1Primary, "NOT_SERVING", true, *clusterInstance)
 
 	// Global topology records should not change as migration did not succeed
 	shardInfo := sharding.GetShardInfo(t, shard1Ks, *clusterInstance)
-	assert.True(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.True(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard3Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
 	shardInfo = sharding.GetShardInfo(t, shard2Ks, *clusterInstance)
 	assert.Equal(t, 1, len(shardInfo.GetSourceShards()), "source shards should be set in destination shard")
-	assert.False(t, shardInfo.GetIsMasterServing(), "source shards should be set in destination shard")
+	assert.False(t, shardInfo.GetIsPrimaryServing(), "source shards should be set in destination shard")
 
-	// remove sabotage, but make it fail early. This should not result in the source master serving,
+	// remove sabotage, but make it fail early. This should not result in the source primary serving,
 	// because this failure is past the point of no return.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-blacklisted_tables=t",
-		"-remove", shard3Ks, "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-denied_tables=t",
+		"-remove", shard3Ks, "primary")
 	require.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
+		"-filtered_replication_wait_time", "0s", shard1Ks, "primary")
 	require.Error(t, err)
 
-	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard1Primary, "NOT_SERVING", true, *clusterInstance)
 
 	// do the migration that's expected to succeed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Nil(t, err)
 	expectedPartitions = map[topodata.TabletType][]string{}
-	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard2.Name, shard3.Name}
+	expectedPartitions[topodata.TabletType_PRIMARY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *clusterInstance)
 
-	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard1Primary, "NOT_SERVING", true, *clusterInstance)
 
 	// check destination shards are serving
-	sharding.CheckTabletQueryService(t, *shard2Master, "SERVING", false, *clusterInstance)
-	sharding.CheckTabletQueryService(t, *shard3Master, "SERVING", false, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard2Primary, "SERVING", false, *clusterInstance)
+	sharding.CheckTabletQueryService(t, *shard3Primary, "SERVING", false, *clusterInstance)
 
 	// check the binlog players are gone now
-	err = shard2Master.VttabletProcess.WaitForBinLogPlayerCount(0)
+	err = shard2Primary.VttabletProcess.WaitForBinLogPlayerCount(0)
 	require.Nil(t, err)
-	err = shard3Master.VttabletProcess.WaitForBinLogPlayerCount(0)
+	err = shard3Primary.VttabletProcess.WaitForBinLogPlayerCount(0)
 	require.Nil(t, err)
 
 	// test reverse_replication
 	// start with inserting a row in each destination shard
-	insertValue(t, shard2Master, keyspaceName, "resharding2", 2, "msg2", key2)
-	insertValue(t, shard3Master, keyspaceName, "resharding2", 3, "msg3", key3)
+	insertValue(t, shard2Primary, keyspaceName, "resharding2", 2, "msg2", key2)
+	insertValue(t, shard3Primary, keyspaceName, "resharding2", 3, "msg3", key3)
 
 	// ensure the rows are not present yet
-	checkValues(t, *shard1Master, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard1Primary, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, false, "resharding2", fixedParentID, keyspaceName, shardingKeyType, nil)
-	checkValues(t, *shard1Master, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, fmt.Sprintf("UINT64(%d)", key3)},
+	checkValues(t, *shard1Primary, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, fmt.Sprintf("UINT64(%d)", key3)},
 		3, false, "resharding2", fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	// repeat the migration with reverse_replication
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "-reverse_replication=true",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Nil(t, err)
-	// look for the rows in the original master after a short wait
+	// look for the rows in the original primary after a short wait
 	time.Sleep(1 * time.Second)
-	checkValues(t, *shard1Master, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
+	checkValues(t, *shard1Primary, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, true, "resharding2", fixedParentID, keyspaceName, shardingKeyType, nil)
-	checkValues(t, *shard1Master, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, fmt.Sprintf("UINT64(%d)", key3)},
+	checkValues(t, *shard1Primary, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, fmt.Sprintf("UINT64(%d)", key3)},
 		3, true, "resharding2", fixedParentID, keyspaceName, shardingKeyType, nil)
 
 	// retry the migration to ensure it now fails
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"MigrateServedTypes",
 		"-reverse_replication=true",
-		shard1Ks, "master")
+		shard1Ks, "primary")
 	require.Error(t, err)
 
 	// CancelResharding should now succeed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", shard1Ks)
 	require.Nil(t, err)
-	err = shard1Master.VttabletProcess.WaitForBinLogPlayerCount(0)
+	err = shard1Primary.VttabletProcess.WaitForBinLogPlayerCount(0)
 	require.Nil(t, err)
 
 	// delete the original tablets in the original shard
 	var wg sync.WaitGroup
-	for _, tablet := range []*cluster.Vttablet{shard1Master, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2} {
+	for _, tablet := range []*cluster.Vttablet{shard1Primary, shard1Replica1, shard1Replica2, shard1Rdonly, shard1RdonlyZ2} {
 		wg.Add(1)
 		go func(tablet *cluster.Vttablet) {
 			defer wg.Done()
@@ -933,7 +935,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.Nil(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1Master.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", shard1Primary.Alias)
 	require.Nil(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
@@ -963,25 +965,25 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 func insertStartupValues(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 1, "msg1", key1, key1, 1)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 2, "msg2", key2, key2, 2)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 3, "msg3", key3, key3, 3)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 1, "a", key1, key1, 1)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard0.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 2, "b", key2, key2, 2)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 3, "c", key3, key3, 3)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.PrimaryTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "no_pk", fixedParentID, 1, "msg1", key5, key5, 1)
-	sharding.ExecuteOnTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard1.PrimaryTablet(), keyspaceName, false)
 }
 
 func insertValue(t *testing.T, tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
@@ -993,73 +995,73 @@ func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids := []int{10000001, 10000002, 10000003}
 	msgs := []string{"msg-id10000001", "msg-id10000002", "msg-id10000003"}
 	ksIds := []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"msg-id10000004", "msg-id10000005"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"msg-id10000011", "msg-id10000012", "msg-id10000013"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql := `update resharding1 set msg="update1" where parent_id=86 and id in (10000011,10000012)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 	// This update targets one shard.
 	sql = `update resharding1 set msg="update1" where parent_id=86 and id in (10000013)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"msg-id10000014", "msg-id10000015", "msg-id10000016"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding1 where parent_id =86 and id in (10000014, 10000015)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	// This delete targets one shard.
 	sql = `delete from resharding1 where parent_id =86 and id in (10000016)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 	// repeat DMLs for table with msg as bit(8)
 	ids = []int{10000001, 10000002, 10000003}
 	msgs = []string{"a", "b", "c"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"d", "e"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"k", "l", "m"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql = `update resharding3 set msg="g" where parent_id=86 and id in (10000011, 10000012)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 	// This update targets one shard.
 	sql = `update resharding3 set msg="h" where parent_id=86 and id in (10000013)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"n", "o", "p"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.PrimaryTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding3 where parent_id =86 and id in (10000014, 10000015)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 	// This delete targets one shard.
 	sql = `delete from resharding3 where parent_id =86 and id in (10000016)`
-	_, _ = shard1.MasterTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
+	_, _ = shard1.PrimaryTablet().VttabletProcess.QueryTablet(sql, keyspaceName, true)
 
 }
 
@@ -1217,7 +1219,7 @@ func checkValues(t *testing.T, vttablet cluster.Vttablet, values []string, id ui
 }
 
 func checkMultiShardValues(t *testing.T, keyspaceName string, keyType querypb.Type) {
-	//Shard2 master, replica1 and replica 2
+	//Shard2 primary, replica1 and replica 2
 	shard2Tablets := []cluster.Vttablet{*shard2.Vttablets[0], *shard2.Vttablets[1], *shard2.Vttablets[2]}
 	checkMultiDbs(t, shard2Tablets, "resharding1", keyspaceName, keyType, 10000001, "msg-id10000001", key2, true)
 	checkMultiDbs(t, shard2Tablets, "resharding1", keyspaceName, keyType, 10000002, "msg-id10000002", key3, false)
@@ -1225,7 +1227,7 @@ func checkMultiShardValues(t *testing.T, keyspaceName string, keyType querypb.Ty
 	checkMultiDbs(t, shard2Tablets, "resharding1", keyspaceName, keyType, 10000004, "msg-id10000004", key3, false)
 	checkMultiDbs(t, shard2Tablets, "resharding1", keyspaceName, keyType, 10000005, "msg-id10000005", key4, false)
 
-	//Shard 3 master and replica
+	//Shard 3 primary and replica
 	shard3Tablets := []cluster.Vttablet{*shard3.Vttablets[0], *shard3.Vttablets[1]}
 	checkMultiDbs(t, shard3Tablets, "resharding1", keyspaceName, keyType, 10000001, "msg-id10000001", key2, false)
 	checkMultiDbs(t, shard3Tablets, "resharding1", keyspaceName, keyType, 10000002, "msg-id10000002", key3, true)

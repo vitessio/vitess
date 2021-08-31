@@ -91,7 +91,7 @@ func NoTestMycnfHook(t *testing.T) {
 	// expect these in the output my.cnf
 	os.Setenv("KEYSPACE", "test-messagedb")
 	os.Setenv("SHARD", "0")
-	os.Setenv("TABLET_TYPE", "MASTER")
+	os.Setenv("TABLET_TYPE", "PRIMARY")
 	os.Setenv("TABLET_ID", "11111")
 	os.Setenv("TABLET_DIR", TabletDir(uid))
 	os.Setenv("MYSQL_PORT", "15306")
@@ -134,7 +134,7 @@ func NoTestMycnfHook(t *testing.T) {
 	if got, want := mycnf.lookup("SHARD"), "0"; got != want {
 		t.Errorf("Error passing env %v, got %v, want %v", "SHARD", got, want)
 	}
-	if got, want := mycnf.lookup("TABLET_TYPE"), "MASTER"; got != want {
+	if got, want := mycnf.lookup("TABLET_TYPE"), "PRIMARY"; got != want {
 		t.Errorf("Error passing env %v, got %v, want %v", "TABLET_TYPE", got, want)
 	}
 	if got, want := mycnf.lookup("TABLET_ID"), "11111"; got != want {

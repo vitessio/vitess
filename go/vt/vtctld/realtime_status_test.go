@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
@@ -59,7 +59,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	t2 := testlib.NewFakeTablet(t, wr, "cell2", 1, topodatapb.TabletType_REPLICA, nil,
 		testlib.TabletKeyspaceShard(t, keyspace, shard))
 
-	target := querypb.Target{
+	target := &querypb.Target{
 		Keyspace:   keyspace,
 		Shard:      shard,
 		TabletType: topodatapb.TabletType_REPLICA,
@@ -83,7 +83,7 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 
 	// Insert tablet1.
 	want := &querypb.RealtimeStats{
-		SecondsBehindMaster: 1,
+		ReplicationLagSeconds: 1,
 	}
 	if err := checkStats(realtimeStats, t1, want); err != nil {
 		t.Errorf("%v", err)
@@ -92,8 +92,8 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Update tablet1.
 	fqs1.AddHealthResponseWithQPS(2.0)
 	want2 := &querypb.RealtimeStats{
-		SecondsBehindMaster: 1,
-		Qps:                 2.0,
+		ReplicationLagSeconds: 1,
+		Qps:                   2.0,
 	}
 	if err := checkStats(realtimeStats, t1, want2); err != nil {
 		t.Errorf("%v", err)
@@ -102,8 +102,8 @@ func TestRealtimeStatsWithQueryService(t *testing.T) {
 	// Insert tablet2.
 	fqs2.AddHealthResponseWithQPS(3.0)
 	want3 := &querypb.RealtimeStats{
-		SecondsBehindMaster: 1,
-		Qps:                 3.0,
+		ReplicationLagSeconds: 1,
+		Qps:                   3.0,
 	}
 	if err := checkStats(realtimeStats, t2, want3); err != nil {
 		t.Errorf("%v", err)

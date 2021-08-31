@@ -51,7 +51,7 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
-			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr); err != nil {
+			if colNumber, err = ResultFromNumber(ms.ResultColumns(), expr, "order clause"); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:
@@ -82,10 +82,12 @@ func newMemorySort(plan logicalPlan, orderBy sqlparser.OrderBy) (*memorySort, er
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
-		ob := engine.OrderbyParams{
-			Col:             colNumber,
-			WeightStringCol: -1,
-			Desc:            order.Direction == sqlparser.DescOrder,
+
+		ob := engine.OrderByParams{
+			Col:               colNumber,
+			WeightStringCol:   -1,
+			Desc:              order.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: colNumber,
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, ob)
 	}
@@ -134,6 +136,6 @@ func (ms *memorySort) Wireup(plan logicalPlan, jt *jointab) error {
 	return ms.input.Wireup(plan, jt)
 }
 
-func (ms *memorySort) WireupV4(semTable *semantics.SemTable) error {
-	return ms.input.WireupV4(semTable)
+func (ms *memorySort) WireupGen4(semTable *semantics.SemTable) error {
+	return ms.input.WireupGen4(semTable)
 }

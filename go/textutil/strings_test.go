@@ -44,3 +44,25 @@ func TestSplitDelimitedList(t *testing.T) {
 		assert.Equal(t, tc.list, list)
 	}
 }
+
+func TestEscapeJoin(t *testing.T) {
+	elems := []string{"normal", "with space", "with,comma", "with?question"}
+	s := EscapeJoin(elems, ",")
+	assert.Equal(t, "normal,with+space,with%2Ccomma,with%3Fquestion", s)
+}
+
+func TestSplitUnescape(t *testing.T) {
+	{
+		s := ""
+		elems, err := SplitUnescape(s, ",")
+		assert.NoError(t, err)
+		assert.Nil(t, elems)
+	}
+	{
+		s := "normal,with+space,with%2Ccomma,with%3Fquestion"
+		expected := []string{"normal", "with space", "with,comma", "with?question"}
+		elems, err := SplitUnescape(s, ",")
+		assert.NoError(t, err)
+		assert.Equal(t, expected, elems)
+	}
+}

@@ -34,7 +34,7 @@ import (
 )
 
 // DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
-// MASTER tablet type
+// PRIMARY tablet type
 type DBAction int
 
 // Allowed values for DBAction

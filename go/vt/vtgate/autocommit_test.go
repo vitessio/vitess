@@ -97,14 +97,14 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 			"name":        sqltypes.Int32BindVariable(1),
-			"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 		},
 	}, {
 		Sql: "insert into name_lastname_keyspace_id_map(`name`, lastname, keyspace_id) values (:name_0, :lastname_0, :keyspace_id_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
 			"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
-			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 		},
 	}})
 	testCommitCount(t, "sbclookup", sbclookup, 1)
@@ -375,7 +375,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
-		TargetString:    "@master",
+		TargetString:    "@primary",
 		Autocommit:      true,
 		InTransaction:   true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
@@ -397,7 +397,7 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
-		TargetString:    "TestUnsharded/0@master",
+		TargetString:    "TestUnsharded/0@primary",
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
@@ -418,7 +418,7 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	session := &vtgatepb.Session{
-		TargetString:    "TestExecutor[-]@master",
+		TargetString:    "TestExecutor[-]@primary",
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}
@@ -436,7 +436,7 @@ func TestAutocommitDirectRangeTarget(t *testing.T) {
 
 func autocommitExec(executor *Executor, sql string) (*sqltypes.Result, error) {
 	session := &vtgatepb.Session{
-		TargetString:    "@master",
+		TargetString:    "@primary",
 		Autocommit:      true,
 		TransactionMode: vtgatepb.TransactionMode_MULTI,
 	}

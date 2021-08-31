@@ -69,7 +69,7 @@ type TabletGateway struct {
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 
-	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
 }
 
@@ -83,6 +83,7 @@ func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, t
 }
 
 // NewTabletGateway creates and returns a new TabletGateway
+// NewTabletGateway is the default Gateway implementation
 func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, localCell string) *TabletGateway {
 	// hack to accomodate various users of gateway + tests
 	if hc == nil {
@@ -121,8 +122,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 					bufferCancel()
 					return
 				}
-				if result.Target.TabletType == topodatapb.TabletType_MASTER {
-					buffer.ProcessMasterHealth(result)
+				if result.Target.TabletType == topodatapb.TabletType_PRIMARY {
+					buffer.ProcessPrimaryHealth(result)
 				}
 			}
 		}
@@ -132,8 +133,8 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	return gw.hc.TabletConnection(alias)
+func (gw *TabletGateway) QueryServiceByAlias(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
+	return gw.hc.TabletConnection(alias, target)
 }
 
 // RegisterStats registers the stats to export the lag since the last refresh
@@ -185,7 +186,7 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
 	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
-	if inTransaction && target.TabletType != topodatapb.TabletType_MASTER {
+	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "gateway's query service can only be used for non-transactional queries on replicas")
 	}
 	var tabletLastUsed *topodatapb.Tablet
@@ -207,12 +208,12 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 	bufferedOnce := false
 	for i := 0; i < gw.retryCount+1; i++ {
-		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// Check if we should buffer PRIMARY queries which failed due to an ongoing
 		// failover.
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := gw.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {

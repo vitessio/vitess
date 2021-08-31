@@ -123,7 +123,8 @@ type QueryEngine struct {
 	streamConns *connpool.Pool
 
 	// Services
-	consolidator *sync2.Consolidator
+	consolidator       *sync2.Consolidator
+	streamConsolidator *StreamConsolidator
 	// txSerializer protects vttablet from applications which try to concurrently
 	// UPDATE (or DELETE) a "hot" row (or range of rows).
 	// Such queries would be serialized by MySQL anyway. This serializer prevents
@@ -179,6 +180,9 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Set(config.Consolidator)
 	qe.enableQueryPlanFieldCaching = config.CacheResultFields
 	qe.consolidator = sync2.NewConsolidator()
+	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
+		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
+	}
 	qe.txSerializer = txserializer.New(env)
 
 	qe.strictTableACL = config.StrictTableACL

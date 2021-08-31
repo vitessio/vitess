@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -533,7 +533,7 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 		}
 	}
 	if idx == -1 {
-		return sessions, nil
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to remove missing shard")
 	}
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }

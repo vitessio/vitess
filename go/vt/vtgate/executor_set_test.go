@@ -89,10 +89,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{},
 	}, {
 		in:  "set AUTOCOMMIT = 'aa'",
-		err: "Variable 'autocommit' can't be set to the value: 'aa' is not a boolean",
+		err: "variable 'autocommit' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set autocommit = 2",
-		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
+		err: "variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set client_found_rows = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{ClientFoundRows: true}},
@@ -110,10 +110,10 @@ func TestExecutorSet(t *testing.T) {
 		err: "cannot use scope and @@",
 	}, {
 		in:  "set client_found_rows = 'aa'",
-		err: "Variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
+		err: "variable 'client_found_rows' can't be set to the value: 'aa' is not a boolean",
 	}, {
 		in:  "set client_found_rows = 2",
-		err: "Variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
+		err: "variable 'client_found_rows' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_mode = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_UNSPECIFIED},
@@ -134,7 +134,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid transaction_mode: aa",
 	}, {
 		in:  "set transaction_mode = 1",
-		err: "Incorrect argument type to variable 'transaction_mode': INT64",
+		err: "incorrect argument type to variable 'transaction_mode': INT64",
 	}, {
 		in:  "set workload = 'unspecified'",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_UNSPECIFIED}},
@@ -152,7 +152,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "invalid workload: aa",
 	}, {
 		in:  "set workload = 1",
-		err: "Incorrect argument type to variable 'workload': INT64",
+		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -164,10 +164,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SqlSelectLimit: 0}},
 	}, {
 		in:  "set sql_select_limit = 'asdfasfd'",
-		err: "Incorrect argument type to variable 'sql_select_limit': VARBINARY",
+		err: "incorrect argument type to variable 'sql_select_limit': VARBINARY",
 	}, {
 		in:  "set autocommit = 1+1",
-		err: "Variable 'autocommit' can't be set to the value: 2 is not a boolean",
+		err: "variable 'autocommit' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set autocommit = 1+0",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -182,7 +182,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set names ascii",
-		err: "unexpected value for charset/names: ascii",
+		err: "charset/name ascii is not supported",
 	}, {
 		in:  "set charset utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -191,7 +191,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set character set ascii",
-		err: "unexpected value for charset/names: ascii",
+		err: "charset/name ascii is not supported",
 	}, {
 		in:  "set skip_query_plan_cache = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
@@ -200,10 +200,10 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{}},
 	}, {
 		in:  "set tx_read_only = 2",
-		err: "Variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
+		err: "variable 'tx_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set transaction_read_only = 2",
-		err: "Variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
+		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
 		in:  "set session transaction isolation level repeatable read",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -248,7 +248,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
-		err: "Variable 'socket' is a read only variable",
+		err: "variable 'socket' is a read only variable",
 	}}
 	for i, tcase := range testcases {
 		t.Run(fmt.Sprintf("%d-%s", i, tcase.in), func(t *testing.T) {
@@ -349,7 +349,7 @@ func TestExecutorSetOp(t *testing.T) {
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
-			session := NewAutocommitSession(masterSession)
+			session := NewAutocommitSession(primarySession)
 			session.TargetString = KsTestUnsharded
 			session.EnableSystemSettings = !tcase.disallowResConn
 			sbclookup.SetResults([]*sqltypes.Result{tcase.result})
@@ -368,7 +368,7 @@ func TestExecutorSetOp(t *testing.T) {
 
 func TestExecutorSetMetadata(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -380,7 +380,7 @@ func TestExecutorSetMetadata(t *testing.T) {
 	}()
 
 	executor, _, _, _ = createLegacyExecutorEnv()
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
 
 	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
@@ -464,15 +464,15 @@ func TestSetUDVFromTabletInput(t *testing.T) {
 		),
 	})
 
-	masterSession.TargetString = "TestExecutor"
+	primarySession.TargetString = "TestExecutor"
 	defer func() {
-		masterSession.TargetString = ""
+		primarySession.TargetString = ""
 	}()
 	_, err := executorExec(executor, "set @foo = concat('a','b','c')", nil)
 	require.NoError(t, err)
 
 	want := map[string]*querypb.BindVariable{"foo": sqltypes.StringBindVariable("abc")}
-	utils.MustMatch(t, want, masterSession.UserDefinedVariables, "")
+	utils.MustMatch(t, want, primarySession.UserDefinedVariables, "")
 }
 
 func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {

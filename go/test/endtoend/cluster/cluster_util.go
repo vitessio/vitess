@@ -59,23 +59,35 @@ func (tablet *Vttablet) Restart() error {
 	return tablet.MysqlctldProcess.Start()
 }
 
+// RestartOnlyTablet restarts vttablet, but not the underlying mysql instance
+func (tablet *Vttablet) RestartOnlyTablet() error {
+	err := tablet.VttabletProcess.TearDown()
+	if err != nil {
+		return err
+	}
+
+	tablet.VttabletProcess.ServingStatus = "SERVING"
+
+	return tablet.VttabletProcess.Setup()
+}
+
 // ValidateTabletRestart restarts the tablet and validate error if there is any.
 func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
 	require.Nilf(t, tablet.Restart(), "tablet restart failed")
 }
 
-// GetMasterPosition gets the master position of required vttablet
-func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
+// GetPrimaryPosition gets the executed replication position of given vttablet
+func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.MasterPosition(ctx, vtablet)
+	pos, err := tmClient.PrimaryPosition(ctx, vtablet)
 	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
 
-// VerifyRowsInTabletForTable Verify total number of rows in a table
-// this is used to check replication caught up the changes from master
+// VerifyRowsInTabletForTable verifies the total number of rows in a table.
+// This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -186,9 +198,9 @@ func filterResultWhenRunsForCoverage(input string) string {
 
 // WaitForReplicationPos will wait for replication position to catch-up
 func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
-	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
+	replicationPosA, _ := GetPrimaryPosition(t, *tabletA, hostname)
 	for {
-		replicationPosB, _ := GetMasterPosition(t, *tabletB, hostname)
+		replicationPosB, _ := GetPrimaryPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			break
 		}

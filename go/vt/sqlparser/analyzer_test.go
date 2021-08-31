@@ -167,6 +167,76 @@ func TestSplitAndExpression(t *testing.T) {
 	}
 }
 
+func TestAndExpressions(t *testing.T) {
+	greaterThanExpr := &ComparisonExpr{
+		Operator: GreaterThanOp,
+		Left: &ColName{
+			Name: NewColIdent("val"),
+			Qualifier: TableName{
+				Name: NewTableIdent("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewColIdent("val"),
+			Qualifier: TableName{
+				Name: NewTableIdent("b"),
+			},
+		},
+	}
+	equalExpr := &ComparisonExpr{
+		Operator: EqualOp,
+		Left: &ColName{
+			Name: NewColIdent("id"),
+			Qualifier: TableName{
+				Name: NewTableIdent("a"),
+			},
+		},
+		Right: &ColName{
+			Name: NewColIdent("id"),
+			Qualifier: TableName{
+				Name: NewTableIdent("b"),
+			},
+		},
+	}
+	testcases := []struct {
+		name           string
+		expressions    Exprs
+		expectedOutput Expr
+	}{
+		{
+			name:           "empty input",
+			expressions:    nil,
+			expectedOutput: nil,
+		}, {
+			name: "two equal inputs",
+			expressions: Exprs{
+				greaterThanExpr,
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: &AndExpr{
+				Left:  greaterThanExpr,
+				Right: equalExpr,
+			},
+		},
+		{
+			name: "two equal inputs",
+			expressions: Exprs{
+				equalExpr,
+				equalExpr,
+			},
+			expectedOutput: equalExpr,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			output := AndExpressions(testcase.expressions...)
+			assert.Equal(t, String(testcase.expectedOutput), String(output))
+		})
+	}
+}
+
 func TestTableFromStatement(t *testing.T) {
 	testcases := []struct {
 		in, out string
@@ -269,7 +339,7 @@ func TestIsValue(t *testing.T) {
 		in:  NewIntLiteral("1"),
 		out: true,
 	}, {
-		in:  NewArgument(":a"),
+		in:  NewArgument("a"),
 		out: true,
 	}, {
 		in:  &NullVal{},
@@ -320,7 +390,7 @@ func TestIsSimpleTuple(t *testing.T) {
 	}, {
 		in: ValTuple{&ColName{}},
 	}, {
-		in:  ListArg("::a"),
+		in:  ListArg("a"),
 		out: true,
 	}, {
 		in: &ColName{},
@@ -345,7 +415,7 @@ func TestNewPlanValue(t *testing.T) {
 		out sqltypes.PlanValue
 		err string
 	}{{
-		in:  Argument(":valarg"),
+		in:  Argument("valarg"),
 		out: sqltypes.PlanValue{Key: "valarg"},
 	}, {
 		in: &Literal{
@@ -384,11 +454,11 @@ func TestNewPlanValue(t *testing.T) {
 		},
 		err: "odd length hex string",
 	}, {
-		in:  ListArg("::list"),
+		in:  ListArg("list"),
 		out: sqltypes.PlanValue{ListKey: "list"},
 	}, {
 		in: ValTuple{
-			Argument(":valarg"),
+			Argument("valarg"),
 			&Literal{
 				Type: StrVal,
 				Val:  "strval",
@@ -403,7 +473,7 @@ func TestNewPlanValue(t *testing.T) {
 		},
 	}, {
 		in: ValTuple{
-			ListArg("::list"),
+			ListArg("list"),
 		},
 		err: "unsupported: nested lists",
 	}, {
@@ -476,9 +546,4 @@ func TestNewPlanValue(t *testing.T) {
 	}
 }
 
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqltypes.Value{},
-	},
-	[]string{".Conn"}, // ignored fields
-)
+var mustMatch = utils.MustMatchFn(".Conn")

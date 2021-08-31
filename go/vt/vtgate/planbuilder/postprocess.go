@@ -95,9 +95,9 @@ var _ planVisitor = setUpperLimit
 // that it does not need to return more than the specified number of rows.
 // A primitive that cannot perform this can ignore the request.
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
-	arg := sqlparser.NewArgument(":__upper_limit")
+	arg := sqlparser.NewArgument("__upper_limit")
 	switch node := plan.(type) {
-	case *join:
+	case *join, *joinGen4:
 		return false, node, nil
 	case *memorySort:
 		pv, err := sqlparser.NewPlanValue(arg)

@@ -44,7 +44,7 @@ for i in 110 111; do
 	CELL=zone2 KEYSPACE=commerce TABLET_UID=$i ./scripts/ovttablet-up.sh
 done
 
-# set one of the replicas to master
+# set one of the replicas to primary
 #vtctlclient InitShardMaster -force commerce/0 zone1-100
 
 # create the schema

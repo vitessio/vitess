@@ -18,11 +18,15 @@ package endtoend
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 
@@ -39,6 +43,98 @@ func TestStreamUnion(t *testing.T) {
 		return
 	}
 	assert.Equal(t, 1, len(qr.Rows))
+}
+
+func populateStressQuery(client *framework.QueryClient, rowCount int, rowContent string) error {
+	err := client.Begin(false)
+	if err != nil {
+		return err
+	}
+	defer client.Rollback()
+
+	for i := 0; i < rowCount; i++ {
+		query := fmt.Sprintf("insert into vitess_stress values (%d, '%s')", i, strings.Repeat(rowContent, 2048/len(rowContent)))
+		_, err := client.Execute(query, nil)
+		if err != nil {
+			return err
+		}
+	}
+	return client.Commit()
+}
+
+func BenchmarkStreamQuery(b *testing.B) {
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	client := framework.NewClient()
+	err := populateStressQuery(client, RowCount, RowContent)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_stress", nil)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+			return nil
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func TestStreamConsolidation(t *testing.T) {
+	const Workers = 50
+	const RowCount = 1100
+	const RowContent = "abcdefghijklmnopqrstuvwxyz"
+
+	client := framework.NewClient()
+	err := populateStressQuery(client, RowCount, RowContent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Execute("delete from vitess_stress", nil)
+
+	defaultPoolSize := framework.Server.StreamPoolSize()
+
+	framework.Server.SetStreamPoolSize(4)
+	framework.Server.SetStreamConsolidationBlocking(true)
+
+	defer func() {
+		framework.Server.SetStreamPoolSize(defaultPoolSize)
+		framework.Server.SetStreamConsolidationBlocking(false)
+	}()
+
+	var start = make(chan struct{})
+	var finish sync.WaitGroup
+
+	// Spawn N workers at the same time to stress test the stream consolidator
+	for i := 0; i < Workers; i++ {
+		finish.Add(1)
+		go func() {
+			defer finish.Done()
+
+			// block all the workers so they all perform their queries at the same time
+			<-start
+
+			var rowCount int
+			err := client.Stream("select * from vitess_stress", nil, func(result *sqltypes.Result) error {
+				for _, r := range result.Rows {
+					rowCount += len(r)
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, 2200, rowCount)
+		}()
+	}
+
+	// wait until all the goroutines have spawned and are blocked before we unblock them at once
+	time.Sleep(500 * time.Millisecond)
+	close(start)
+	finish.Wait()
 }
 
 func TestStreamBigData(t *testing.T) {

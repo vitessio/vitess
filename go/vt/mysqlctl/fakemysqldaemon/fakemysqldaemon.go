@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"context"
@@ -39,6 +40,7 @@ import (
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
+	mu sync.Mutex
 	// db is the fake SQL DB we may use for some queries.
 	db *fakesqldb.DB
 
@@ -66,15 +68,15 @@ type FakeMysqlDaemon struct {
 	Replicating bool
 
 	// IOThreadRunning is always true except in one testcase
-	// where we want to test error handling during SetMaster
+	// where we want to test error handling during SetReplicationSource
 	IOThreadRunning bool
 
-	// CurrentMasterPosition is returned by MasterPosition
+	// CurrentPrimaryPosition is returned by PrimaryPosition
 	// and ReplicationStatus
-	CurrentMasterPosition mysql.Position
+	CurrentPrimaryPosition mysql.Position
 
-	// CurrentMasterFilePosition is used to determine the executed file based positioning of the master.
-	CurrentMasterFilePosition mysql.Position
+	// CurrentSourceFilePosition is used to determine the executed file based positioning of the replication source.
+	CurrentSourceFilePosition mysql.Position
 
 	// ReplicationStatusError is used by ReplicationStatus
 	ReplicationStatusError error
@@ -82,17 +84,17 @@ type FakeMysqlDaemon struct {
 	// StartReplicationError is used by StartReplication
 	StartReplicationError error
 
-	// MasterStatusError is used by MasterStatus
-	MasterStatusError error
+	// PrimaryStatusError is used by PrimaryStatus
+	PrimaryStatusError error
 
-	// CurrentMasterHost is returned by ReplicationStatus
-	CurrentMasterHost string
+	// CurrentSourceHost is returned by ReplicationStatus
+	CurrentSourceHost string
 
-	// CurrentMasterport is returned by ReplicationStatus
-	CurrentMasterPort int
+	// CurrentSourcePort is returned by ReplicationStatus
+	CurrentSourcePort int
 
-	// SecondsBehindMaster is returned by ReplicationStatus
-	SecondsBehindMaster uint
+	// ReplicationLagSeconds is returned by ReplicationStatus
+	ReplicationLagSeconds uint
 
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
@@ -107,16 +109,16 @@ type FakeMysqlDaemon struct {
 	// StartReplicationUntilAfterPos is matched against the input
 	StartReplicationUntilAfterPos mysql.Position
 
-	// SetMasterInput is matched against the input of SetMaster
-	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
-	SetMasterInput string
+	// SetReplicationSourceInput is matched against the input of SetReplicationSource
+	// (as "%v:%v"). If it doesn't match, SetReplicationSource will return an error.
+	SetReplicationSourceInput string
 
-	// SetMasterError is used by SetMaster
-	SetMasterError error
+	// SetReplicationSourceError is used by SetReplicationSource
+	SetReplicationSourceError error
 
-	// WaitMasterPosition is checked by WaitMasterPos, if the
+	// WaitPrimaryPosition is checked by WaitSourcePos, if the
 	// same it returns nil, if different it returns an error
-	WaitMasterPosition mysql.Position
+	WaitPrimaryPosition mysql.Position
 
 	// PromoteResult is returned by Promote
 	PromoteResult mysql.Position
@@ -248,33 +250,42 @@ func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
 	return fmd.MysqlPort.Get(), nil
 }
 
+// CurrentPrimaryPositionLocked is thread-safe
+func (fmd *FakeMysqlDaemon) CurrentPrimaryPositionLocked(pos mysql.Position) {
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
+	fmd.CurrentPrimaryPosition = pos
+}
+
 // ReplicationStatus is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ReplicationStatus() (mysql.ReplicationStatus, error) {
 	if fmd.ReplicationStatusError != nil {
 		return mysql.ReplicationStatus{}, fmd.ReplicationStatusError
 	}
+	fmd.mu.Lock()
+	defer fmd.mu.Unlock()
 	return mysql.ReplicationStatus{
-		Position:             fmd.CurrentMasterPosition,
-		FilePosition:         fmd.CurrentMasterFilePosition,
-		FileRelayLogPosition: fmd.CurrentMasterFilePosition,
-		SecondsBehindMaster:  fmd.SecondsBehindMaster,
+		Position:              fmd.CurrentPrimaryPosition,
+		FilePosition:          fmd.CurrentSourceFilePosition,
+		FileRelayLogPosition:  fmd.CurrentSourceFilePosition,
+		ReplicationLagSeconds: fmd.ReplicationLagSeconds,
 		// implemented as AND to avoid changing all tests that were
 		// previously using Replicating = false
 		IOThreadRunning:  fmd.Replicating && fmd.IOThreadRunning,
 		SQLThreadRunning: fmd.Replicating,
-		MasterHost:       fmd.CurrentMasterHost,
-		MasterPort:       fmd.CurrentMasterPort,
+		SourceHost:       fmd.CurrentSourceHost,
+		SourcePort:       fmd.CurrentSourcePort,
 	}, nil
 }
 
-// MasterStatus is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) MasterStatus(ctx context.Context) (mysql.MasterStatus, error) {
-	if fmd.MasterStatusError != nil {
-		return mysql.MasterStatus{}, fmd.MasterStatusError
+// PrimaryStatus is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PrimaryStatus(ctx context.Context) (mysql.PrimaryStatus, error) {
+	if fmd.PrimaryStatusError != nil {
+		return mysql.PrimaryStatus{}, fmd.PrimaryStatusError
 	}
-	return mysql.MasterStatus{
-		Position:     fmd.CurrentMasterPosition,
-		FilePosition: fmd.CurrentMasterFilePosition,
+	return mysql.PrimaryStatus{
+		Position:     fmd.CurrentPrimaryPosition,
+		FilePosition: fmd.CurrentSourceFilePosition,
 	}, nil
 }
 
@@ -285,9 +296,9 @@ func (fmd *FakeMysqlDaemon) ResetReplication(ctx context.Context) error {
 	})
 }
 
-// MasterPosition is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) MasterPosition() (mysql.Position, error) {
-	return fmd.CurrentMasterPosition, nil
+// PrimaryPosition is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) PrimaryPosition() (mysql.Position, error) {
+	return fmd.CurrentPrimaryPosition, nil
 }
 
 // IsReadOnly is part of the MysqlDaemon interface
@@ -362,14 +373,14 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysq
 	})
 }
 
-// SetMaster is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, masterPort int, stopReplicationBefore bool, startReplicationAfter bool) error {
-	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
-	if fmd.SetMasterInput != input {
-		return fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterInput, input)
+// SetReplicationSource is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error {
+	input := fmt.Sprintf("%v:%v", host, port)
+	if fmd.SetReplicationSourceInput != input {
+		return fmt.Errorf("wrong input for SetReplicationSourceCommands: expected %v got %v", fmd.SetReplicationSourceInput, input)
 	}
-	if fmd.SetMasterError != nil {
-		return fmd.SetMasterError
+	if fmd.SetReplicationSourceError != nil {
+		return fmd.SetReplicationSourceError
 	}
 	cmds := []string{}
 	if stopReplicationBefore {
@@ -387,20 +398,20 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is deprecated: use mysqld.MasterPosition() instead
+// DemoteMaster is deprecated: use mysqld.DemotePrimary() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
-	return fmd.CurrentMasterPosition, nil
+	return fmd.CurrentPrimaryPosition, nil
 }
 
-// WaitMasterPos is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) WaitMasterPos(_ context.Context, pos mysql.Position) error {
+// WaitSourcePos is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position) error {
 	if fmd.TimeoutHook != nil {
 		return fmd.TimeoutHook()
 	}
-	if reflect.DeepEqual(fmd.WaitMasterPosition, pos) {
+	if reflect.DeepEqual(fmd.WaitPrimaryPosition, pos) {
 		return nil
 	}
-	return fmt.Errorf("wrong input for WaitMasterPos: expected %v got %v", fmd.WaitMasterPosition, pos)
+	return fmt.Errorf("wrong input for WaitSourcePos: expected %v got %v", fmd.WaitPrimaryPosition, pos)
 }
 
 // Promote is part of the MysqlDaemon interface

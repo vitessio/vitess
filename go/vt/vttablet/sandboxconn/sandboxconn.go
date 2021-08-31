@@ -114,6 +114,8 @@ type SandboxConn struct {
 
 	// this error will only happen once
 	EphemeralShardErr error
+
+	NotServing bool
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -153,6 +155,12 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	sbc.execMu.Lock()
 	defer sbc.execMu.Unlock()
 	sbc.ExecCount.Add(1)
+	if sbc.NotServing {
+		return nil, vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, vterrors.NotServing)
+	}
+	if sbc.tablet.Type != target.TabletType {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s: %v, want: %v", vterrors.WrongTablet, target.TabletType, sbc.tablet.Type)
+	}
 	bv := make(map[string]*querypb.BindVariable)
 	for k, v := range bindVars {
 		bv[k] = v
@@ -207,10 +215,25 @@ func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Targe
 		return err
 	}
 	parse, _ := sqlparser.Parse(query)
-	nextRs := sbc.getNextResult(parse)
-	sbc.sExecMu.Unlock()
 
-	return callback(nextRs)
+	if sbc.results == nil {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		return callback(nextRs)
+	}
+
+	for len(sbc.results) > 0 {
+		nextRs := sbc.getNextResult(parse)
+		sbc.sExecMu.Unlock()
+		err := callback(nextRs)
+		if err != nil {
+			return err
+		}
+		sbc.sExecMu.Lock()
+	}
+
+	sbc.sExecMu.Unlock()
+	return nil
 }
 
 // Begin is part of the QueryService interface.
@@ -481,7 +504,7 @@ func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Targ
 }
 
 // QueryServiceByAlias is part of the Gateway interface.
-func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return sbc, nil
 }
 
@@ -540,6 +563,11 @@ func (sbc *SandboxConn) Close(ctx context.Context) error {
 // Tablet is part of the QueryService interface.
 func (sbc *SandboxConn) Tablet() *topodatapb.Tablet {
 	return sbc.tablet
+}
+
+// ChangeTabletType changes the tablet type.
+func (sbc *SandboxConn) ChangeTabletType(typ topodatapb.TabletType) {
+	sbc.tablet.Type = typ
 }
 
 func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {

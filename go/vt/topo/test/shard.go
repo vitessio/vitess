@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -66,7 +66,7 @@ func checkShard(t *testing.T, ts *topo.Server) {
 	// Test UpdateShardFields works.
 	other := &topodatapb.TabletAlias{Cell: "ny", Uid: 82873}
 	_, err := ts.UpdateShardFields(ctx, "test_keyspace", "b0-c0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = other
+		si.PrimaryAlias = other
 		return nil
 	})
 	if err != nil {
@@ -77,8 +77,8 @@ func checkShard(t *testing.T, ts *topo.Server) {
 	if err != nil {
 		t.Fatalf("GetShard: %v", err)
 	}
-	if !proto.Equal(si.Shard.MasterAlias, other) {
-		t.Fatalf("shard.MasterAlias = %v, want %v", si.Shard.MasterAlias, other)
+	if !proto.Equal(si.Shard.PrimaryAlias, other) {
+		t.Fatalf("shard.PrimaryAlias = %v, want %v", si.Shard.PrimaryAlias, other)
 	}
 
 	// test GetShardNames

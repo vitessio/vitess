@@ -17,9 +17,12 @@ limitations under the License.
 package schema
 
 import (
+	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -48,7 +51,24 @@ var (
 		// ALTER TABLE tbl something
 		regexp.MustCompile(alterTableBasicPattern + `([\S]+)\s+(.*$)`),
 	}
+	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
+	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
+
+	enumValuesRegexp = regexp.MustCompile("(?i)^enum[(](.*)[)]$")
 )
+
+// ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
+// This intentionally string-replacement based, and not sqlparser.String() based, because the return statement has to be formatted _precisely_,
+// up to MySQL version nuances, like the original statement. That's in favor of tengo table comparison.
+// We expect a well formatted, no-qualifier statement in the form:
+// CREATE TABLE `some_table` ...
+func ReplaceTableNameInCreateTableStatement(createStatement string, replacementName string) (modifiedStatement string, err error) {
+	submatch := createTableRegexp.FindStringSubmatch(createStatement)
+	if len(submatch) == 0 {
+		return createStatement, fmt.Errorf("could not parse statement: %s", createStatement)
+	}
+	return fmt.Sprintf("%s`%s`%s", submatch[1], replacementName, submatch[3]), nil
+}
 
 // ParseAlterTableOptions parses a ALTER ... TABLE... statement into:
 // - explicit schema and table, if available
@@ -73,24 +93,47 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 	return explicitSchema, explicitTable, alterOptions
 }
 
-// NormalizeOnlineDDL normalizes a given query for OnlineDDL, possibly exploding it into multiple distinct queries
-func NormalizeOnlineDDL(sql string) (normalized []*NormalizedDDLQuery, err error) {
-	ddlStmt, action, err := ParseOnlineDDLStatement(sql)
-	if err != nil {
-		return normalized, err
+// legacyParseRevertUUID expects a query like "revert 4e5dcf80_354b_11eb_82cd_f875a4d24e90" and returns the UUID value.
+func legacyParseRevertUUID(sql string) (uuid string, err error) {
+	submatch := revertStatementRegexp.FindStringSubmatch(sql)
+	if len(submatch) == 0 {
+		return "", fmt.Errorf("Not a Revert DDL: '%s'", sql)
 	}
-	switch action {
-	case sqlparser.DropDDLAction:
-		tables := ddlStmt.GetFromTables()
-		for _, table := range tables {
-			ddlStmt.SetFromTables([]sqlparser.TableName{table})
-			normalized = append(normalized, &NormalizedDDLQuery{SQL: sqlparser.String(ddlStmt), TableName: table})
+	uuid = submatch[1]
+	if !IsOnlineDDLUUID(uuid) {
+		return "", fmt.Errorf("Not an online DDL UUID: '%s'", uuid)
+	}
+	return uuid, nil
+}
+
+// ParseEnumValues parses the comma delimited part of an enum column definition
+func ParseEnumValues(enumColumnType string) string {
+	if submatch := enumValuesRegexp.FindStringSubmatch(enumColumnType); len(submatch) > 0 {
+		return submatch[1]
+	}
+	return enumColumnType
+}
+
+// ParseEnumTokens parses the comma delimited part of an enum column definition and
+// returns the (unquoted) text values
+func ParseEnumTokens(enumValues string) []string {
+	enumValues = ParseEnumValues(enumValues)
+	tokens := textutil.SplitDelimitedList(enumValues)
+	for i := range tokens {
+		if strings.HasPrefix(tokens[i], `'`) && strings.HasSuffix(tokens[i], `'`) {
+			tokens[i] = strings.Trim(tokens[i], `'`)
 		}
-		return normalized, nil
 	}
-	if ddlStmt.IsFullyParsed() {
-		sql = sqlparser.String(ddlStmt)
+	return tokens
+}
+
+// ParseEnumTokensMap parses the comma delimited part of an enum column definition
+// and returns a map where ["1"] is the first token, and ["<n>"] is th elast token
+func ParseEnumTokensMap(enumValues string) map[string]string {
+	tokens := ParseEnumTokens(enumValues)
+	tokensMap := map[string]string{}
+	for i, token := range tokens {
+		tokensMap[strconv.Itoa(i+1)] = token
 	}
-	n := &NormalizedDDLQuery{SQL: sql, TableName: ddlStmt.GetTable()}
-	return []*NormalizedDDLQuery{n}, nil
+	return tokensMap
 }

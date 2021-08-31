@@ -17,7 +17,6 @@ limitations under the License.
 package endtoend
 
 import (
-	"reflect"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -124,16 +123,14 @@ func TestResetSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
+	utils.MustMatch(t, &want, qr)
 
-	// Reset mastership
+	// Reset primaryship
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +141,5 @@ func TestResetSequence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(*qr, want) {
-		t.Errorf("Execute: \n%#v, want \n%#v", *qr, want)
-	}
+	utils.MustMatch(t, &want, qr)
 }

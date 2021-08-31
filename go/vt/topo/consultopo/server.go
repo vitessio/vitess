@@ -24,7 +24,9 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/hashicorp/consul/api"
 
@@ -36,6 +38,10 @@ import (
 
 var (
 	consulAuthClientStaticFile = flag.String("consul_auth_static_file", "", "JSON File to read the topos/tokens from.")
+	// serfHealth is the default check from consul
+	consulLockSessionChecks = flag.String("topo_consul_lock_session_checks", "serfHealth", "List of checks for consul session.")
+	consulLockSessionTTL    = flag.String("topo_consul_lock_session_ttl", "", "TTL for consul session.")
+	consulLockDelay         = flag.Duration("topo_consul_lock_delay", 15*time.Second, "LockDelay for consul session.")
 )
 
 // ClientAuthCred credential to use for consul clusters
@@ -93,6 +99,10 @@ type Server struct {
 	// locks is a map of *lockInstance structures.
 	// The key is the filepath of the Lock file.
 	locks map[string]*lockInstance
+
+	lockChecks []string
+	lockTTL    string
+	lockDelay  time.Duration
 }
 
 // lockInstance keeps track of one lock held by this client.
@@ -126,11 +136,22 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 	}
 
 	return &Server{
-		client: client,
-		kv:     client.KV(),
-		root:   root,
-		locks:  make(map[string]*lockInstance),
+		client:     client,
+		kv:         client.KV(),
+		root:       root,
+		locks:      make(map[string]*lockInstance),
+		lockChecks: parseConsulLockSessionChecks(*consulLockSessionChecks),
+		lockTTL:    *consulLockSessionTTL,
+		lockDelay:  *consulLockDelay,
 	}, nil
+}
+
+func parseConsulLockSessionChecks(s string) []string {
+	var res []string
+	if len(s) == 0 {
+		return res
+	}
+	return strings.Split(*consulLockSessionChecks, ",")
 }
 
 // Close implements topo.Server.Close.

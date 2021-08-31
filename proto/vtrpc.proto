@@ -30,7 +30,7 @@ package vtrpc;
 // just be used for logging purposes, and to easily find a client.
 // VtGate propagates it to VtTablet, and VtTablet may use this
 // information for monitoring purposes, to display on dashboards, or
-// for blacklisting purposes.
+// for denying access to tables during a migration.
 message CallerID {
   // principal is the effective user identifier. It is usually filled in
   // with whoever made the request to the appserver, if the request
@@ -96,9 +96,6 @@ enum Code {
   // instead for those errors).
   PERMISSION_DENIED = 7;
 
-  // UNAUTHENTICATED indicates the request does not have valid
-  // authentication credentials for the operation.
-  UNAUTHENTICATED = 16;
 
   // RESOURCE_EXHAUSTED indicates some resource has been exhausted, perhaps
   // a per-user quota, or perhaps the entire file system is out of space.
@@ -169,86 +166,13 @@ enum Code {
 
   // DATA_LOSS indicates unrecoverable data loss or corruption.
   DATA_LOSS = 15;
-}
 
-// LegacyErrorCode is the enum values for Errors. This type is deprecated.
-// Use Code instead. Background: In the initial design, we thought
-// that we may end up with a different list of canonical error codes
-// than the ones defined by grpc. In hindsight, we realize that
-// the grpc error codes are fairly generic and mostly sufficient.
-// In order to avoid confusion, this type will be deprecated in
-// favor of the new Code that matches exactly what grpc defines.
-// Some names below have a _LEGACY suffix. This is to prevent
-// name collisions with Code.
-enum LegacyErrorCode {
-  // SUCCESS_LEGACY is returned from a successful call.
-  SUCCESS_LEGACY = 0;
+  // UNAUTHENTICATED indicates the request does not have valid
+  // authentication credentials for the operation.
+  UNAUTHENTICATED = 16;
 
-  // CANCELLED_LEGACY means that the context was cancelled (and noticed in the app layer,
-  // as opposed to the RPC layer).
-  CANCELLED_LEGACY = 1;
-
-  // UNKNOWN_ERROR_LEGACY includes:
-  // 1. MySQL error codes that we don't explicitly handle.
-  // 2. MySQL response that wasn't as expected. For example, we might expect a MySQL
-  //  timestamp to be returned in a particular way, but it wasn't.
-  // 3. Anything else that doesn't fall into a different bucket.
-  UNKNOWN_ERROR_LEGACY = 2;
-
-  // BAD_INPUT_LEGACY is returned when an end-user either sends SQL that couldn't be parsed correctly,
-  // or tries a query that isn't supported by Vitess.
-  BAD_INPUT_LEGACY = 3;
-
-  // DEADLINE_EXCEEDED_LEGACY is returned when an action is taking longer than a given timeout.
-  DEADLINE_EXCEEDED_LEGACY = 4;
-
-  // INTEGRITY_ERROR_LEGACY is returned on integrity error from MySQL, usually due to
-  // duplicate primary keys.
-  INTEGRITY_ERROR_LEGACY = 5;
-
-  // PERMISSION_DENIED_LEGACY errors are returned when a user requests access to something
-  // that they don't have permissions for.
-  PERMISSION_DENIED_LEGACY = 6;
-
-  // RESOURCE_EXHAUSTED_LEGACY is returned when a query exceeds its quota in some dimension
-  // and can't be completed due to that. Queries that return RESOURCE_EXHAUSTED
-  // should not be retried, as it could be detrimental to the server's health.
-  // Examples of errors that will cause the RESOURCE_EXHAUSTED code:
-  // 1. TxPoolFull: this is retried server-side, and is only returned as an error
-  //  if the server-side retries failed.
-  // 2. Query is killed due to it taking too long.
-  RESOURCE_EXHAUSTED_LEGACY = 7;
-
-  // QUERY_NOT_SERVED_LEGACY means that a query could not be served right now.
-  // Client can interpret it as: "the tablet that you sent this query to cannot
-  // serve the query right now, try a different tablet or try again later."
-  // This could be due to various reasons: QueryService is not serving, should
-  // not be serving, wrong shard, wrong tablet type, blacklisted table, etc.
-  // Clients that receive this error should usually retry the query, but after taking
-  // the appropriate steps to make sure that the query will get sent to the correct
-  // tablet.
-  QUERY_NOT_SERVED_LEGACY = 8;
-
-  // NOT_IN_TX_LEGACY means that we're not currently in a transaction, but we should be.
-  NOT_IN_TX_LEGACY = 9;
-
-  // INTERNAL_ERROR_LEGACY means some invariants expected by underlying
-  // system has been broken.  If you see one of these errors,
-  // something is very broken.
-  INTERNAL_ERROR_LEGACY = 10;
-
-  // TRANSIENT_ERROR_LEGACY is used for when there is some error that we expect we can
-  // recover from automatically - often due to a resource limit temporarily being
-  // reached. Retrying this error, with an exponential backoff, should succeed.
-  // Clients should be able to successfully retry the query on the same backends.
-  // Examples of things that can trigger this error:
-  // 1. Query has been throttled
-  // 2. VtGate could have request backlog
-  TRANSIENT_ERROR_LEGACY = 11;
-
-  // UNAUTHENTICATED_LEGACY errors are returned when a user requests access to something,
-  // and we're unable to verify the user's authentication.
-  UNAUTHENTICATED_LEGACY = 12;
+  // CLUSTER_EVENT indicates that a cluster operation might be in effect
+  CLUSTER_EVENT = 17;
 }
 
 // RPCError is an application-level error structure returned by
@@ -256,7 +180,7 @@ enum LegacyErrorCode {
 // We use this so the clients don't have to parse the error messages,
 // but instead can depend on the value of the code.
 message RPCError {
-  LegacyErrorCode legacy_code = 1;
+  reserved 1; reserved "legacy_code";
   string message = 2;
   Code code = 3;
 }

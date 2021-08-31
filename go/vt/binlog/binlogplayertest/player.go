@@ -24,7 +24,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -112,7 +112,9 @@ func (fake *FakeBinlogStreamer) StreamKeyRange(ctx context.Context, position str
 		!proto.Equal(charset, testKeyRangeRequest.Charset) {
 		fake.t.Errorf("wrong StreamKeyRange parameter, got %+v want %+v", req, testKeyRangeRequest)
 	}
-	callback(testBinlogTransaction)
+	if err := callback(testBinlogTransaction); err != nil {
+		fake.t.Logf("StreamKeyRange callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -126,7 +128,7 @@ func testStreamKeyRange(t *testing.T, bpc binlogplayer.Client) {
 		t.Fatalf("got error: %v", err)
 	} else {
 		if !proto.Equal(se, testBinlogTransaction) {
-			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+			t.Errorf("got wrong result, got %v expected %v", se, testBinlogTransaction)
 		}
 	}
 	if se, err := stream.Recv(); err == nil {
@@ -178,7 +180,9 @@ func (fake *FakeBinlogStreamer) StreamTables(ctx context.Context, position strin
 		!proto.Equal(charset, testTablesRequest.Charset) {
 		fake.t.Errorf("wrong StreamTables parameter, got %+v want %+v", req, testTablesRequest)
 	}
-	callback(testBinlogTransaction)
+	if err := callback(testBinlogTransaction); err != nil {
+		fake.t.Logf("StreamTables callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -192,7 +196,7 @@ func testStreamTables(t *testing.T, bpc binlogplayer.Client) {
 		t.Fatalf("got error: %v", err)
 	} else {
 		if !proto.Equal(se, testBinlogTransaction) {
-			t.Errorf("got wrong result, got %v expected %v", *se, *testBinlogTransaction)
+			t.Errorf("got wrong result, got %v expected %v", se, testBinlogTransaction)
 		}
 	}
 	if se, err := stream.Recv(); err == nil {

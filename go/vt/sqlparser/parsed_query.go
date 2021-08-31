@@ -21,13 +21,18 @@ import (
 	"fmt"
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	"vitess.io/vitess/go/bytes2"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // ParsedQuery represents a parsed query where
-// bind locations are precompued for fast substitutions.
+// bind locations are precomputed for fast substitutions.
 type ParsedQuery struct {
 	Query         string
 	bindLocations []bindLocation
@@ -80,6 +85,66 @@ func (pq *ParsedQuery) Append(buf *strings.Builder, bindVariables map[string]*qu
 	return nil
 }
 
+// AppendFromRow behaves like Append but takes a querypb.Row directly, assuming that
+// the fields in the row are in the same order as the placeholders in this query. The fields might include generated
+// columns which are dropped, by checking against skipFields, before binding the variables
+// note: there can be more fields than bind locations since extra columns might be requested from the source if not all
+// primary keys columns are present in the target table, for example. Also some values in the row may not correspond for
+// values from the database on the source: sum/count for aggregation queries, for example
+func (pq *ParsedQuery) AppendFromRow(buf *bytes2.Buffer, fields []*querypb.Field, row *querypb.Row, skipFields map[string]bool) error {
+	if len(fields) < len(pq.bindLocations) {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "wrong number of fields: got %d fields for %d bind locations ",
+			len(fields), len(pq.bindLocations))
+	}
+
+	type colInfo struct {
+		typ    querypb.Type
+		length int64
+		offset int64
+	}
+	rowInfo := make([]*colInfo, 0)
+
+	offset := int64(0)
+	for i, field := range fields { // collect info required for fields to be bound
+		length := row.Lengths[i]
+		if !skipFields[strings.ToLower(field.Name)] {
+			rowInfo = append(rowInfo, &colInfo{
+				typ:    field.Type,
+				length: length,
+				offset: offset,
+			})
+		}
+		if length > 0 {
+			offset += row.Lengths[i]
+		}
+	}
+
+	// bind field values to locations
+	var offsetQuery int
+	for i, loc := range pq.bindLocations {
+		col := rowInfo[i]
+		buf.WriteString(pq.Query[offsetQuery:loc.offset])
+
+		typ := col.typ
+		if typ == querypb.Type_TUPLE {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected Type_TUPLE for value %d", i)
+		}
+
+		length := col.length
+		if length < 0 {
+			// -1 means a null variable; serialize it directly
+			buf.WriteString("null")
+		} else {
+			vv := sqltypes.MakeTrusted(typ, row.Values[col.offset:col.offset+col.length])
+			vv.EncodeSQLBytes2(buf)
+		}
+
+		offsetQuery = loc.offset + loc.length
+	}
+	buf.WriteString(pq.Query[offsetQuery:])
+	return nil
+}
+
 // MarshalJSON is a custom JSON marshaler for ParsedQuery.
 // Note that any queries longer that 512 bytes will be truncated.
 func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
@@ -91,7 +156,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 	if value.Type != querypb.Type_TUPLE {
 		// Since we already check for TUPLE, we don't expect an error.
 		v, _ := sqltypes.BindVariableToValue(value)
-		v.EncodeSQL(buf)
+		v.EncodeSQLStringBuilder(buf)
 		return
 	}
 
@@ -101,7 +166,7 @@ func EncodeValue(buf *strings.Builder, value *querypb.BindVariable) {
 		if i != 0 {
 			buf.WriteString(", ")
 		}
-		sqltypes.ProtoToValue(bv).EncodeSQL(buf)
+		sqltypes.ProtoToValue(bv).EncodeSQLStringBuilder(buf)
 	}
 	buf.WriteByte(')')
 }

@@ -24,9 +24,10 @@ import (
 	"io"
 	"strconv"
 
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/olekukonko/tablewriter"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -132,7 +133,7 @@ func parseExecuteOptions(value string) (*querypb.ExecuteOptions, error) {
 		return nil, nil
 	}
 	result := &querypb.ExecuteOptions{}
-	if err := proto.UnmarshalText(value, result); err != nil {
+	if err := prototext.Unmarshal([]byte(value), result); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal options: %v", err)
 	}
 	return result, nil

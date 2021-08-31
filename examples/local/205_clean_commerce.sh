@@ -19,5 +19,5 @@
 
 source ./env.sh
 
-vtctlclient DropSources customer.commerce2customer
+vtctlclient MoveTables Complete customer.commerce2customer
 

@@ -210,7 +210,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		MysqlDaemon:         ft.FakeMysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		QueryServiceControl: tabletservermock.NewController(),
-		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
+		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
 	}
 	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
 		t.Fatal(err)
@@ -257,8 +257,8 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 }
 
 // Target returns the keyspace/shard/type info of this tablet as Target.
-func (ft *FakeTablet) Target() querypb.Target {
-	return querypb.Target{
+func (ft *FakeTablet) Target() *querypb.Target {
+	return &querypb.Target{
 		Keyspace:   ft.Tablet.Keyspace,
 		Shard:      ft.Tablet.Shard,
 		TabletType: ft.Tablet.Type,

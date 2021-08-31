@@ -45,6 +45,11 @@ func New(ddls []string) *WithDDL {
 	}
 }
 
+// DDLs returns a copy of the ddls
+func (wd *WithDDL) DDLs() []string {
+	return wd.ddls[:]
+}
+
 // Exec executes the query using the supplied function.
 // If there are any schema errors, it applies the DDLs and retries.
 // Funcs can be any of these types:

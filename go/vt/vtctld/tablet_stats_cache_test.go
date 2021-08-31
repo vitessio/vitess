@@ -18,6 +18,7 @@ package vtctld
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -85,25 +86,25 @@ func TestStatsUpdate(t *testing.T) {
 
 func TestHeatmapData(t *testing.T) {
 	// Creating and Sending updates to 12 tablets.
-	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_MASTER, 100)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_PRIMARY, 100)
 	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 200)
 	ts3 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 300)
 	ts4 := tabletStats("ks1", "cell1", "80-", topodatapb.TabletType_REPLICA, 400)
 
 	ts5 := tabletStats("ks1", "cell2", "-80", topodatapb.TabletType_REPLICA, 500)
 	ts6 := tabletStats("ks1", "cell2", "-80", topodatapb.TabletType_RDONLY, 600)
-	ts7 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_MASTER, 700)
+	ts7 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_PRIMARY, 700)
 	ts8 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 800)
 	ts9 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 900)
 
-	ts10 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_MASTER, 1000)
+	ts10 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_PRIMARY, 1000)
 	ts11 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_RDONLY, 1100)
 	ts12 := tabletStats("ks2", "cell1", "-80", topodatapb.TabletType_RDONLY, 1200)
 	ts13 := tabletStats("ks2", "cell1", "80-", topodatapb.TabletType_RDONLY, 1300)
 
 	ts14 := tabletStats("ks2", "cell2", "-80", topodatapb.TabletType_REPLICA, 1400)
 	ts15 := tabletStats("ks2", "cell2", "-80", topodatapb.TabletType_RDONLY, 1500)
-	ts16 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_MASTER, 1600)
+	ts16 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_PRIMARY, 1600)
 	ts17 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_REPLICA, 1700)
 	ts18 := tabletStats("ks2", "cell2", "80-", topodatapb.TabletType_REPLICA, 1800)
 
@@ -137,13 +138,13 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 7},
 			Data: [][]float64{
-				{float64(-1), float64(ts9.Stats.SecondsBehindMaster)},
-				{float64(ts6.Stats.SecondsBehindMaster), float64(ts8.Stats.SecondsBehindMaster)},
-				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
-				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
-				{float64(ts1.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(-1), float64(ts9.Stats.ReplicationLagSeconds)},
+				{float64(ts6.Stats.ReplicationLagSeconds), float64(ts8.Stats.ReplicationLagSeconds)},
+				{float64(ts5.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(-1), float64(ts7.Stats.ReplicationLagSeconds)},
+				{float64(ts3.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts2.Stats.ReplicationLagSeconds), float64(ts4.Stats.ReplicationLagSeconds)},
+				{float64(ts1.Stats.ReplicationLagSeconds), float64(-1)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts9.Tablet.Alias},
@@ -158,14 +159,14 @@ func TestHeatmapData(t *testing.T) {
 				{
 					CellLabel: label{Name: "cell1", Rowspan: 3},
 					TypeLabels: []label{
-						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_PRIMARY.String(), Rowspan: 1},
 						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 2},
 					},
 				},
 				{
 					CellLabel: label{Name: "cell2", Rowspan: 4},
 					TypeLabels: []label{
-						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_PRIMARY.String(), Rowspan: 1},
 						{Name: topodatapb.TabletType_REPLICA.String(), Rowspan: 1},
 						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
 					},
@@ -188,9 +189,9 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 3},
 			Data: [][]float64{
-				{float64(ts5.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts3.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts2.Stats.SecondsBehindMaster), float64(ts4.Stats.SecondsBehindMaster)},
+				{float64(ts5.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts3.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts2.Stats.ReplicationLagSeconds), float64(ts4.Stats.ReplicationLagSeconds)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{ts5.Tablet.Alias, nil},
@@ -228,9 +229,9 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks2", Rowspan: 3},
 			Data: [][]float64{
-				{float64(ts12.Stats.SecondsBehindMaster), float64(-1)},
-				{float64(ts11.Stats.SecondsBehindMaster), float64(ts13.Stats.SecondsBehindMaster)},
-				{float64(ts10.Stats.SecondsBehindMaster), float64(-1)},
+				{float64(ts12.Stats.ReplicationLagSeconds), float64(-1)},
+				{float64(ts11.Stats.ReplicationLagSeconds), float64(ts13.Stats.ReplicationLagSeconds)},
+				{float64(ts10.Stats.ReplicationLagSeconds), float64(-1)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{ts12.Tablet.Alias, nil},
@@ -241,7 +242,7 @@ func TestHeatmapData(t *testing.T) {
 				{
 					CellLabel: label{Name: "cell1", Rowspan: 3},
 					TypeLabels: []label{
-						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_PRIMARY.String(), Rowspan: 1},
 						{Name: topodatapb.TabletType_RDONLY.String(), Rowspan: 2},
 					},
 				},
@@ -301,8 +302,8 @@ func TestHeatmapData(t *testing.T) {
 		t.Errorf("got: %v, want: %v", got4, want4)
 	}
 
-	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell2", type="MASTER").
-	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "MASTER", "lag")
+	// Checking that the heatmap data is returned correctly for the following view: (keyspace="ks1", cell="cell2", type="PRIMARY").
+	got5, err := tabletStatsCache.heatmapData("ks1", "cell2", "PRIMARY", "lag")
 	if err != nil {
 		t.Errorf("could not get heatmap data: %v", err)
 	}
@@ -310,7 +311,7 @@ func TestHeatmapData(t *testing.T) {
 		{
 			KeyspaceLabel: label{Name: "ks1", Rowspan: 1},
 			Data: [][]float64{
-				{float64(-1), float64(ts7.Stats.SecondsBehindMaster)},
+				{float64(-1), float64(ts7.Stats.ReplicationLagSeconds)},
 			},
 			Aliases: [][]*topodatapb.TabletAlias{
 				{nil, ts7.Tablet.Alias},
@@ -319,7 +320,7 @@ func TestHeatmapData(t *testing.T) {
 				{
 					CellLabel: label{Name: "cell2", Rowspan: 1},
 					TypeLabels: []label{
-						{Name: topodatapb.TabletType_MASTER.String(), Rowspan: 1},
+						{Name: topodatapb.TabletType_PRIMARY.String(), Rowspan: 1},
 					},
 				},
 			},
@@ -334,7 +335,7 @@ func TestHeatmapData(t *testing.T) {
 
 func TestTabletStats(t *testing.T) {
 	// Creating tabletStats.
-	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_MASTER, 200)
+	ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_PRIMARY, 200)
 	ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
 	ts3 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 300)
 
@@ -357,20 +358,19 @@ func TestTabletStats(t *testing.T) {
 
 	// Test 2: tablet3 isn't found in the map since no update was received for it.
 	_, gotErr := tabletStatsCache.tabletStats(ts3.Tablet.Alias)
-	wantErr := "could not find tablet: cell:\"cell1\" uid:300 "
-	if gotErr.Error() != wantErr {
-		t.Errorf("got: %v, want: %v", gotErr.Error(), wantErr)
+	if !strings.Contains(gotErr.Error(), "could not find tablet") {
+		t.Errorf("bad error message: %v", gotErr.Error())
 	}
 }
 
 func TestTopologyInfo(t *testing.T) {
-	ts1 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_MASTER, 100)
+	ts1 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_PRIMARY, 100)
 	ts2 := tabletStats("ks1", "cell1", "0", topodatapb.TabletType_REPLICA, 200)
 	ts3 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_REPLICA, 300)
 	ts4 := tabletStats("ks1", "cell2", "0", topodatapb.TabletType_RDONLY, 400)
 	ts5 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 500)
 	ts6 := tabletStats("ks1", "cell3", "0", topodatapb.TabletType_RDONLY, 600)
-	ts7 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_MASTER, 700)
+	ts7 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_PRIMARY, 700)
 
 	tabletStatsCache := newTabletStatsCache()
 	tabletStatsCache.StatsUpdate(ts1)
@@ -389,19 +389,19 @@ func TestTopologyInfo(t *testing.T) {
 		{"all", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
-			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+			TabletTypes: []string{topodatapb.TabletType_PRIMARY.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
 		},
 		},
 		{"ks1", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1", "cell2", "cell3"},
-			TabletTypes: []string{topodatapb.TabletType_MASTER.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
+			TabletTypes: []string{topodatapb.TabletType_PRIMARY.String(), topodatapb.TabletType_REPLICA.String(), topodatapb.TabletType_RDONLY.String()},
 		},
 		},
 		{"ks2", "all", &topologyInfo{
 			Keyspaces:   []string{"ks1", "ks2"},
 			Cells:       []string{"cell1"},
-			TabletTypes: []string{topodatapb.TabletType_MASTER.String()},
+			TabletTypes: []string{topodatapb.TabletType_PRIMARY.String()},
 		},
 		},
 		{"ks1", "cell2", &topologyInfo{
@@ -442,8 +442,8 @@ func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType,
 	}
 	realtimeStats := &querypb.RealtimeStats{
 		HealthError: "",
-		// uid is used for SecondsBehindMaster to give it a unique value.
-		SecondsBehindMaster: uid,
+		// uid is used for ReplicationLagSeconds to give it a unique value.
+		ReplicationLagSeconds: uid,
 	}
 	stats := &discovery.LegacyTabletStats{
 		Tablet:    tablet,

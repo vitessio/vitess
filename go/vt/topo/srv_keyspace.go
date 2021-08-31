@@ -23,7 +23,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"context"
 
@@ -412,8 +412,8 @@ func (ts *Server) UpdateDisableQueryService(ctx context.Context, keyspace string
 
 	for _, shard := range shards {
 		for _, tc := range shard.TabletControls {
-			if len(tc.BlacklistedTables) > 0 {
-				return fmt.Errorf("cannot safely alter DisableQueryService as BlacklistedTables is set for shard %v", shard)
+			if len(tc.DeniedTables) > 0 {
+				return fmt.Errorf("cannot safely alter DisableQueryService as DeniedTables is set for shard %v", shard)
 			}
 		}
 	}
@@ -510,7 +510,7 @@ func (ts *Server) MigrateServedType(ctx context.Context, keyspace string, shards
 				for _, partition := range srvKeyspace.GetPartitions() {
 
 					// We are finishing the migration, cleaning up tablet controls from the srvKeyspace
-					if tabletType == topodatapb.TabletType_MASTER {
+					if tabletType == topodatapb.TabletType_PRIMARY {
 						partition.ShardTabletControls = nil
 					}
 

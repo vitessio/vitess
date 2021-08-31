@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -43,12 +44,12 @@ const (
 	mysqlAggregateInterval      = 100 * time.Millisecond
 
 	aggregatedMetricsExpiration   = 5 * time.Second
-	aggregatedMetricsCleanup      = 1 * time.Second
+	aggregatedMetricsCleanup      = 10 * time.Second
 	throttledAppsSnapshotInterval = 5 * time.Second
 	recentAppsExpiration          = time.Hour * 24
 
 	nonDeprioritizedAppMapExpiration = time.Second
-	nonDeprioritizedAppMapInterval   = 100 * time.Millisecond
+	nonDeprioritizedAppMapInterval   = 10 * time.Second
 
 	dormantPeriod             = time.Minute
 	defaultThrottleTTLMinutes = 60
@@ -119,7 +120,7 @@ type Throttler struct {
 	mysqlInventory *mysql.Inventory
 
 	metricsQuery     string
-	metricsThreshold float64
+	MetricsThreshold sync2.AtomicFloat64
 	metricsQueryType mysql.MetricsQueryType
 
 	mysqlClusterThresholds *cache.Cache
@@ -164,34 +165,34 @@ func NewThrottler(env tabletenv.Env, ts *topo.Server, tabletTypeFunc func() topo
 			Size:               2,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),
-
-		mysqlThrottleMetricChan: make(chan *mysql.MySQLThrottleMetric),
-
-		mysqlInventoryChan:     make(chan *mysql.Inventory, 1),
-		mysqlClusterProbesChan: make(chan *mysql.ClusterProbes),
-		mysqlInventory:         mysql.NewInventory(),
-
-		metricsQuery:     replicationLagQuery,
-		metricsThreshold: throttleThreshold.Seconds(),
-
-		throttledApps:          cache.New(cache.NoExpiration, 10*time.Second),
-		mysqlClusterThresholds: cache.New(cache.NoExpiration, 0),
-		aggregatedMetrics:      cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup),
-		recentApps:             cache.New(recentAppsExpiration, time.Minute),
-		metricsHealth:          cache.New(cache.NoExpiration, 0),
-
-		tickers: [](*timer.SuspendableTicker){},
-
-		nonLowPriorityAppRequestsThrottled: cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval),
-
-		httpClient: base.SetupHTTPClient(0),
 	}
-	throttler.initThrottleTabletTypes()
-	throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
-	throttler.check = NewThrottlerCheck(throttler)
-	throttler.initConfig("")
-	throttler.check.SelfChecks(context.Background())
 
+	if env.Config().EnableLagThrottler {
+		throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
+
+		throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
+		throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
+		throttler.mysqlInventory = mysql.NewInventory()
+
+		throttler.metricsQuery = replicationLagQuery
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds())
+
+		throttler.throttledApps = cache.New(cache.NoExpiration, 10*time.Second)
+		throttler.mysqlClusterThresholds = cache.New(cache.NoExpiration, 0)
+		throttler.aggregatedMetrics = cache.New(aggregatedMetricsExpiration, aggregatedMetricsCleanup)
+		throttler.recentApps = cache.New(recentAppsExpiration, time.Minute)
+		throttler.metricsHealth = cache.New(cache.NoExpiration, 0)
+
+		throttler.tickers = [](*timer.SuspendableTicker){}
+		throttler.nonLowPriorityAppRequestsThrottled = cache.New(nonDeprioritizedAppMapExpiration, nonDeprioritizedAppMapInterval)
+
+		throttler.httpClient = base.SetupHTTPClient(0)
+		throttler.initThrottleTabletTypes()
+		throttler.ThrottleApp("abusing-app", time.Now().Add(time.Hour*24*365*10), defaultThrottleRatio)
+		throttler.check = NewThrottlerCheck(throttler)
+		throttler.initConfig("")
+		throttler.check.SelfChecks(context.Background())
+	}
 	return throttler
 }
 
@@ -235,7 +236,7 @@ func (throttler *Throttler) initConfig(password string) {
 		throttler.metricsQuery = *throttleMetricQuery
 	}
 	if *throttleMetricThreshold != math.MaxFloat64 {
-		throttler.metricsThreshold = *throttleMetricThreshold
+		throttler.MetricsThreshold = sync2.NewAtomicFloat64(*throttleMetricThreshold)
 	}
 	throttler.metricsQueryType = mysql.GetMetricsQueryType(throttler.metricsQuery)
 
@@ -243,7 +244,7 @@ func (throttler *Throttler) initConfig(password string) {
 		User:              "", // running on local tablet server, will use vttablet DBA user
 		Password:          "", // running on local tablet server, will use vttablet DBA user
 		MetricQuery:       throttler.metricsQuery,
-		ThrottleThreshold: throttler.metricsThreshold,
+		ThrottleThreshold: throttler.MetricsThreshold.Get(),
 		IgnoreHostsCount:  0,
 	}
 	if password != "" {
@@ -251,7 +252,7 @@ func (throttler *Throttler) initConfig(password string) {
 			User:              throttlerUser,
 			Password:          password,
 			MetricQuery:       throttler.metricsQuery,
-			ThrottleThreshold: throttler.metricsThreshold,
+			ThrottleThreshold: throttler.MetricsThreshold.Get(),
 			IgnoreHostsCount:  0,
 		}
 	}
@@ -330,8 +331,6 @@ func (throttler *Throttler) createThrottlerUser(ctx context.Context) (password s
 		// any query that writes to the binary log, CREATE USER does not hang.
 		// The simplest such query is FLUSH STATUS. Other options are FLUSH PRIVILEGES or similar.
 		// The bug was found in MySQL 8.0.21, and not found in 5.7.30
-		// at this time, Vitess only supports 5.7 an ddoes not support 8.0,
-		// but please keep this code in anticipation of supporting 8.0
 		// - shlomi
 		simpleBinlogQuery := `FLUSH STATUS`
 		if _, err := conn.ExecuteFetch(simpleBinlogQuery, 0, false); err != nil {
@@ -440,7 +439,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 					// sparse
 					shouldBeLeader := int64(0)
 					if atomic.LoadInt64(&throttler.isOpen) > 0 {
-						if throttler.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+						if throttler.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
 							shouldBeLeader = 1
 						}
 					}

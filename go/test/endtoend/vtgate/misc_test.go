@@ -21,17 +21,14 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
-
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
 )
 
 func TestSelectNull(t *testing.T) {
@@ -592,7 +589,132 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
 	exec(t, conn, `insert into t2(id3, id4) values (1, 3), (2, 4)`)
 
-	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2)", `[[INT64(3)] [INT64(4)]]`)
+	assertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
+}
+
+func TestShowVGtid(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show global vgtid_executed from ks"
+	qr := exec(t, conn, query)
+	require.Equal(t, 1, len(qr.Rows))
+	require.Equal(t, 2, len(qr.Rows[0]))
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	qr2 := exec(t, conn, query)
+	require.Equal(t, 1, len(qr2.Rows))
+	require.Equal(t, 2, len(qr2.Rows[0]))
+
+	require.Equal(t, qr.Rows[0][0], qr2.Rows[0][0], "keyspace should be same")
+	require.NotEqual(t, qr.Rows[0][1].ToString(), qr2.Rows[0][1].ToString(), "vgtid should have changed")
+}
+
+func TestShowGtid(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	query := "show global gtid_executed from ks"
+	qr := exec(t, conn, query)
+	require.Equal(t, 2, len(qr.Rows))
+
+	res := make(map[string]string, 2)
+	for _, row := range qr.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		res[row[2].ToString()] = row[1].ToString()
+	}
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, `insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`)
+	qr2 := exec(t, conn, query)
+	require.Equal(t, 2, len(qr2.Rows))
+
+	for _, row := range qr2.Rows {
+		require.Equal(t, KeyspaceName, row[0].ToString())
+		gtid, exists := res[row[2].ToString()]
+		require.True(t, exists, "gtid not cached for row: %v", row)
+		require.NotEqual(t, gtid, row[1].ToString())
+	}
+}
+
+func TestQueryAndSubQWithLimit(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1),(2,2),(3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8),(9,9)")
+	result := exec(t, conn, `select id1, id2 from t1 where id1 >= ( select id1 from t1 order by id1 asc limit 1) limit 100`)
+	assert.Equal(t, 10, len(result.Rows))
+}
+
+func TestDeleteAlias(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, "delete t1 from t1 where id1 = 1")
+	exec(t, conn, "delete t.* from t1 t where t.id1 = 1")
+}
+
+func TestFunctionInDefault(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// set the sql mode ALLOW_INVALID_DATES
+	exec(t, conn, `SET sql_mode = 'ALLOW_INVALID_DATES'`)
+
+	_, err = conn.ExecuteFetch(`create table function_default (x varchar(25) DEFAULT (TRIM(" check ")))`, 1000, true)
+	// this query fails because mysql57 does not support functions in default clause
+	require.Error(t, err)
+
+	// verify that currenet_timestamp and it's aliases work as default values
+	exec(t, conn, `create table function_default (
+ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+dt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts2 TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+dt2 DATETIME DEFAULT CURRENT_TIMESTAMP,
+ts3 TIMESTAMP DEFAULT 0,
+dt3 DATETIME DEFAULT 0,
+ts4 TIMESTAMP DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+dt4 DATETIME DEFAULT 0 ON UPDATE CURRENT_TIMESTAMP,
+ts5 TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+ts6 TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+dt5 DATETIME ON UPDATE CURRENT_TIMESTAMP,
+dt6 DATETIME NOT NULL ON UPDATE CURRENT_TIMESTAMP,
+ts7 TIMESTAMP(6) DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+ts8 TIMESTAMP DEFAULT NOW(),
+ts9 TIMESTAMP DEFAULT LOCALTIMESTAMP,
+ts10 TIMESTAMP DEFAULT LOCALTIME,
+ts11 TIMESTAMP DEFAULT LOCALTIMESTAMP(),
+ts12 TIMESTAMP DEFAULT LOCALTIME()
+)`)
+	exec(t, conn, "drop table function_default")
+
+	_, err = conn.ExecuteFetch(`create table function_default (ts TIMESTAMP DEFAULT UTC_TIMESTAMP)`, 1000, true)
+	// this query fails because utc_timestamp is not supported in default clause
+	require.Error(t, err)
+
+	exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
+	exec(t, conn, "drop table function_default")
+}
+
+func TestSubqueryInINClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
+	assertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
@@ -604,6 +726,7 @@ func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
 	}
 }
+
 func assertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

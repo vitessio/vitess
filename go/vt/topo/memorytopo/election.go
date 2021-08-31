@@ -93,7 +93,7 @@ func (mp *cMasterParticipation) WaitForMastership() (context.Context, error) {
 		close(mp.done)
 	}()
 
-	// Try to get the mastership, by getting a lock.
+	// Try to get the primaryship, by getting a lock.
 	var err error
 	ld, err = mp.c.Lock(lockCtx, electionPath, mp.id)
 	if err != nil {

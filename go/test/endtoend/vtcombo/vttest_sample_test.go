@@ -154,7 +154,7 @@ func assertInsertedRowsExist(ctx context.Context, t *testing.T, conn *vtgateconn
 }
 
 func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn) {
-	cur := conn.Session(ks1+":80-@master", nil)
+	cur := conn.Session(ks1+":80-@primary", nil)
 	_, err := cur.Execute(ctx, "begin", nil)
 	require.Nil(t, err)
 
@@ -173,7 +173,7 @@ func assertCanInsertRow(ctx context.Context, t *testing.T, conn *vtgateconn.VTGa
 }
 
 func insertManyRows(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, idStart, rowCount int) {
-	cur := conn.Session(ks1+":-80@master", nil)
+	cur := conn.Session(ks1+":-80@primary", nil)
 
 	query := "insert into test_table (id, msg, keyspace_id) values (:id, :msg, :keyspace_id)"
 	_, err := cur.Execute(ctx, "begin", nil)
@@ -201,7 +201,7 @@ func assertTablesPresent(t *testing.T) {
 	output, err := tmpCmd.CombinedOutput()
 	require.Nil(t, err)
 
-	numMaster, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
+	numPrimary, numReplica, numRdonly, numDash80, num80Dash := 0, 0, 0, 0, 0
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		if !strings.HasPrefix(line, "test-") {
@@ -211,8 +211,8 @@ func assertTablesPresent(t *testing.T) {
 		assert.Equal(t, "test_keyspace", parts[1])
 
 		switch parts[3] {
-		case "master":
-			numMaster++
+		case "primary":
+			numPrimary++
 		case "replica":
 			numReplica++
 		case "rdonly":
@@ -232,7 +232,7 @@ func assertTablesPresent(t *testing.T) {
 
 	}
 
-	assert.Equal(t, 2, numMaster)
+	assert.Equal(t, 2, numPrimary)
 	assert.Equal(t, 2, numReplica)
 	assert.Equal(t, 2, numRdonly)
 	assert.Equal(t, 3, numDash80)

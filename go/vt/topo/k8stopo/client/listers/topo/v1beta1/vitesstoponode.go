@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/cache"
+
 	v1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 )
 

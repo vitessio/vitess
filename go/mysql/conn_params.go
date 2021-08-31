@@ -16,6 +16,8 @@ limitations under the License.
 
 package mysql
 
+import "vitess.io/vitess/go/vt/vttls"
+
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
 	Host       string `json:"host"`
@@ -28,14 +30,19 @@ type ConnParams struct {
 	Flags      uint64 `json:"flags"`
 	Flavor     string `json:"flavor,omitempty"`
 
-	// The following SSL flags are only used when flags |= 2048
-	// is set (CapabilityClientSSL).
-	SslCa            string `json:"ssl_ca"`
-	SslCaPath        string `json:"ssl_ca_path"`
-	SslCert          string `json:"ssl_cert"`
-	SslKey           string `json:"ssl_key"`
-	ServerName       string `json:"server_name"`
-	ConnectTimeoutMs uint64 `json:"connect_timeout_ms"`
+	// The following SSL flags control the SSL behavior.
+	//
+	// Not setting this value implies preferred mode unless
+	// the CapabilityClientSSL bit is set in db_flags. In the
+	// flag is set, it ends up equivalent to verify_identity mode.
+	SslMode          vttls.SslMode `json:"ssl_mode"`
+	SslCa            string        `json:"ssl_ca"`
+	SslCaPath        string        `json:"ssl_ca_path"`
+	SslCert          string        `json:"ssl_cert"`
+	SslKey           string        `json:"ssl_key"`
+	TLSMinVersion    string        `json:"tls_min_version"`
+	ServerName       string        `json:"server_name"`
+	ConnectTimeoutMs uint64        `json:"connect_timeout_ms"`
 
 	// The following is only set when the deprecated "dbname" flags are
 	// supplied and will be removed.
@@ -48,15 +55,46 @@ type ConnParams struct {
 
 // EnableSSL will set the right flag on the parameters.
 func (cp *ConnParams) EnableSSL() {
-	cp.Flags |= CapabilityClientSSL
+	cp.SslMode = vttls.VerifyIdentity
 }
 
-// SslEnabled returns if SSL is enabled.
+// SslEnabled returns if SSL is enabled. If the effective
+// ssl mode is preferred, it checks the unix socket and
+// hostname to see if we're not connecting to local MySQL.
 func (cp *ConnParams) SslEnabled() bool {
-	return (cp.Flags & CapabilityClientSSL) > 0
+	mode := cp.EffectiveSslMode()
+	// Follow MySQL behavior to not enable SSL if it's
+	// preferred but we're using a Unix socket.
+	if mode == vttls.Preferred && cp.UnixSocket != "" {
+		return false
+	}
+	return mode != vttls.Disabled
 }
 
 // EnableClientFoundRows sets the flag for CLIENT_FOUND_ROWS.
 func (cp *ConnParams) EnableClientFoundRows() {
 	cp.Flags |= CapabilityClientFoundRows
+}
+
+// SslRequired returns whether the connection parameters
+// define that SSL is a requirement. If SslMode is set, it uses
+// that to determine this, if it's not set it falls back to
+// the legacy db_flags behavior.
+func (cp *ConnParams) SslRequired() bool {
+	mode := cp.EffectiveSslMode()
+	return mode != vttls.Disabled && mode != vttls.Preferred
+}
+
+// EffectiveSslMode computes the effective SslMode. If SslMode
+// is explicitly set, it uses that to determine this, if it's
+// not set it falls back to the legacy db_flags behavior.
+func (cp *ConnParams) EffectiveSslMode() vttls.SslMode {
+	if cp.SslMode == "" {
+		if (cp.Flags & CapabilityClientSSL) > 0 {
+			return vttls.VerifyIdentity
+		}
+		// Old behavior is Disabled so keep that for now.
+		return vttls.Disabled
+	}
+	return cp.SslMode
 }

@@ -46,6 +46,9 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		MakeDistinct()
+		GetColumnCount() int
+		SetComments(comments Comments)
+		GetComments() Comments
 	}
 
 	// DDLStatement represents any DDL Statement
@@ -64,6 +67,9 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
+		SetComments(comments Comments)
+		GetComments() Comments
+		SetFullyParsed(fullyParsed bool)
 		Statement
 	}
 
@@ -72,6 +78,7 @@ type (
 		iDBDDLStatement()
 		IsFullyParsed() bool
 		GetDatabaseName() string
+		SetFullyParsed(bool)
 		Statement
 	}
 
@@ -100,7 +107,7 @@ type (
 	// AddColumns represents a ADD COLUMN alter option
 	AddColumns struct {
 		Columns []*ColumnDefinition
-		First   *ColName
+		First   bool
 		After   *ColName
 	}
 
@@ -118,14 +125,14 @@ type (
 	ChangeColumn struct {
 		OldColumn        *ColName
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
 	// ModifyColumn is used to change the column definition in alter table command
 	ModifyColumn struct {
 		NewColDefinition *ColumnDefinition
-		First            *ColName
+		First            bool
 		After            *ColName
 	}
 
@@ -197,16 +204,17 @@ type (
 		Distinct         bool
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
-		Comments         Comments
-		SelectExprs      SelectExprs
-		From             TableExprs
-		Where            *Where
-		GroupBy          GroupBy
-		Having           *Where
-		OrderBy          OrderBy
-		Limit            *Limit
-		Lock             Lock
-		Into             *SelectInto
+		// The From field must be the first AST element of this struct so the rewriter sees it first
+		From        []TableExpr
+		Comments    Comments
+		SelectExprs SelectExprs
+		Where       *Where
+		GroupBy     GroupBy
+		Having      *Where
+		OrderBy     OrderBy
+		Limit       *Limit
+		Lock        Lock
+		Into        *SelectInto
 	}
 
 	// SelectInto is a struct that represent the INTO part of a select query
@@ -409,9 +417,16 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
+	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
+	ShowMigrationLogs struct {
+		UUID     string
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
-		UUID string
+		UUID     string
+		Comments Comments
 	}
 
 	// AlterMigrationType represents the type of operation in an ALTER VITESS_MIGRATION statement
@@ -428,6 +443,7 @@ type (
 		Table         TableName
 		AlterOptions  []AlterOption
 		PartitionSpec *PartitionSpec
+		Comments      Comments
 		FullyParsed   bool
 	}
 
@@ -437,6 +453,7 @@ type (
 		FromTables TableNames
 		// The following fields are set if a DDL was fully analyzed.
 		IfExists bool
+		Comments Comments
 	}
 
 	// DropView represents a DROP VIEW statement.
@@ -452,6 +469,7 @@ type (
 		IfNotExists bool
 		TableSpec   *TableSpec
 		OptLike     *OptLike
+		Comments    Comments
 		FullyParsed bool
 	}
 
@@ -613,6 +631,7 @@ func (*AlterTable) iStatement()        {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
+func (*ShowMigrationLogs) iStatement() {}
 func (*DropTable) iStatement()         {}
 func (*DropView) iStatement()          {}
 func (*TruncateTable) iStatement()     {}
@@ -658,14 +677,25 @@ func (*TruncateTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (*TruncateTable) SetFullyParsed(bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (*RenameTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateTable) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // IsFullyParsed implements the DDLStatement interface
@@ -673,25 +703,42 @@ func (node *AlterTable) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterTable) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *CreateView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *CreateView) SetFullyParsed(fullyParsed bool) {}
 
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropView) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropView) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *DropTable) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DDLStatement interface
+func (node *DropTable) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DDLStatement interface
 func (node *AlterView) IsFullyParsed() bool {
 	return true
 }
+
+// SetFullyParsed implements the DDLStatement interface
+func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 
 // IsTemporary implements the DDLStatement interface
 func (*TruncateTable) IsTemporary() bool {
@@ -1062,6 +1109,96 @@ func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
+// SetComments implements DDLStatement.
+func (node *RenameTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *TruncateTable) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *CreateView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *DropTable) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// SetComments implements DDLStatement.
+func (node *DropView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments implements DDLStatement.
+func (node *AlterView) SetComments(comments Comments) {
+	// irrelevant
+}
+
+// SetComments for RevertMigration, does not implement DDLStatement
+func (node *RevertMigration) SetComments(comments Comments) {
+	node.Comments = comments
+}
+
+// GetComments implements DDLStatement.
+func (node *RenameTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *TruncateTable) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *CreateView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *DropTable) GetComments() Comments {
+	return node.Comments
+}
+
+// GetComments implements DDLStatement.
+func (node *DropView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
+// GetComments implements DDLStatement.
+func (node *AlterView) GetComments() Comments {
+	// irrelevant
+	return nil
+}
+
 // GetToTables implements the DDLStatement interface
 func (node *RenameTable) GetToTables() TableNames {
 	var toTables TableNames
@@ -1212,14 +1349,27 @@ func (node *DropDatabase) IsFullyParsed() bool {
 	return true
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *DropDatabase) SetFullyParsed(fullyParsed bool) {}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *CreateDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
 }
 
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *CreateDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
+}
+
 // IsFullyParsed implements the DBDDLStatement interface
 func (node *AlterDatabase) IsFullyParsed() bool {
 	return node.FullyParsed
+}
+
+// SetFullyParsed implements the DBDDLStatement interface
+func (node *AlterDatabase) SetFullyParsed(fullyParsed bool) {
+	node.FullyParsed = fullyParsed
 }
 
 // GetDatabaseName implements the DBDDLStatement interface
@@ -1362,13 +1512,27 @@ type ColumnType struct {
 	EnumValues []string
 }
 
+// ColumnStorage is an enum that defines the type of storage.
+type ColumnStorage int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
-	NotNull       bool
+	/* We need Null to be *bool to distinguish 3 cases -
+	1. When Not Null is specified (Null = false)
+	2. When Null is specified (Null = true)
+	3. When nothing is specified (Null = nil)
+	The complexity arises from the fact that we do not know whether the column will be nullable or not if nothing is specified.
+	Therefore we do not know whether the column is nullable or not in case 3.
+	*/
+	Null          *bool
 	Autoincrement bool
 	Default       Expr
 	OnUpdate      Expr
+	As            Expr
 	Comment       *Literal
+	Storage       ColumnStorage
+	// Reference stores a foreign key constraint for the given column
+	Reference *ReferenceDefinition
 
 	// Key specification
 	KeyOpt ColumnKeyOption
@@ -1426,7 +1590,13 @@ type (
 
 	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
 	ForeignKeyDefinition struct {
-		Source            Columns
+		Source              Columns
+		IndexName           ColIdent
+		ReferenceDefinition *ReferenceDefinition
+	}
+
+	// ReferenceDefinition describes the referenced tables and columns that the foreign key references
+	ReferenceDefinition struct {
 		ReferencedTable   TableName
 		ReferencedColumns Columns
 		OnDelete          ReferenceAction
@@ -1511,7 +1681,7 @@ type (
 		LeftExpr  TableExpr
 		Join      JoinType
 		RightExpr TableExpr
-		Condition JoinCondition
+		Condition *JoinCondition
 	}
 
 	// JoinType represents the type of Join for JoinTableExpr
@@ -1635,8 +1805,8 @@ type (
 
 	// IsExpr represents an IS ... or an IS NOT ... expression.
 	IsExpr struct {
-		Operator IsExprOperator
-		Expr     Expr
+		Left  Expr
+		Right IsExprOperator
 	}
 
 	// IsExprOperator is an enum for IsExpr.Operator
@@ -1681,7 +1851,7 @@ type (
 	}
 
 	// ListArg represents a named list argument.
-	ListArg []byte
+	ListArg string
 
 	// ValTuple represents a tuple of actual values.
 	ValTuple Exprs

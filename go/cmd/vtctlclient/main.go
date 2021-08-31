@@ -67,6 +67,10 @@ func main() {
 			logutil.LogEvent(logger, e)
 		})
 	if err != nil {
+		if strings.Contains(err.Error(), "flag: help requested") {
+			return
+		}
+
 		errStr := strings.Replace(err.Error(), "remote error: ", "", -1)
 		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
 		log.Error(err)

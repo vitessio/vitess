@@ -18,6 +18,7 @@ package errors
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -39,7 +40,7 @@ type BadRequest struct {
 func (e *BadRequest) Error() string        { return e.Err.Error() }
 func (e *BadRequest) Code() string         { return "bad request" }
 func (e *BadRequest) Details() interface{} { return e.ErrDetails }
-func (e *BadRequest) HTTPStatus() int      { return 400 }
+func (e *BadRequest) HTTPStatus() int      { return http.StatusBadRequest }
 
 // Unknown is the generic error, used when a more specific error is either
 // unspecified or inappropriate.
@@ -51,7 +52,7 @@ type Unknown struct {
 func (e *Unknown) Error() string        { return e.Err.Error() }
 func (e *Unknown) Code() string         { return "unknown" }
 func (e *Unknown) Details() interface{} { return e.ErrDetails }
-func (e *Unknown) HTTPStatus() int      { return 500 }
+func (e *Unknown) HTTPStatus() int      { return http.StatusInternalServerError }
 
 // ErrInvalidCluster is returned when a cluster parameter, either in a route or
 // as a query param, is invalid.
@@ -62,7 +63,7 @@ type ErrInvalidCluster struct {
 func (e *ErrInvalidCluster) Error() string        { return e.Err.Error() }
 func (e *ErrInvalidCluster) Code() string         { return "invalid cluster" }
 func (e *ErrInvalidCluster) Details() interface{} { return nil }
-func (e *ErrInvalidCluster) HTTPStatus() int      { return 400 }
+func (e *ErrInvalidCluster) HTTPStatus() int      { return http.StatusBadRequest }
 
 // MissingParams is returned when an HTTP handler requires parameters that were
 // not provided.
@@ -76,4 +77,30 @@ func (e *MissingParams) Error() string {
 
 func (e *MissingParams) Code() string         { return "missing params" }
 func (e *MissingParams) Details() interface{} { return nil }
-func (e *MissingParams) HTTPStatus() int      { return 400 }
+func (e *MissingParams) HTTPStatus() int      { return http.StatusBadRequest }
+
+// NoSuchSchema is returned when a schema definition cannot be found for a given
+// set of filter criteria. Both GetSchema and FindSchema can return this error.
+type NoSuchSchema struct {
+	Clusters []string
+	Table    string
+}
+
+func (e *NoSuchSchema) Error() string {
+	return fmt.Sprintf("%s: no schemas found with table named %s", e.Code(), e.Table)
+}
+
+func (e *NoSuchSchema) Details() interface{} {
+	details := map[string]interface{}{
+		"table": e.Table,
+	}
+
+	if e.Clusters != nil {
+		details["clusters"] = e.Clusters
+	}
+
+	return details
+}
+
+func (e *NoSuchSchema) Code() string    { return "no such schema" }
+func (e *NoSuchSchema) HTTPStatus() int { return http.StatusNotFound }

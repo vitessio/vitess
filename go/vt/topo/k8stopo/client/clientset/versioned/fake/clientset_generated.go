@@ -24,6 +24,7 @@ import (
 	"k8s.io/client-go/discovery"
 	fakediscovery "k8s.io/client-go/discovery/fake"
 	"k8s.io/client-go/testing"
+
 	clientset "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned"
 	topov1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned/typed/topo/v1beta1"
 	faketopov1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned/typed/topo/v1beta1/fake"

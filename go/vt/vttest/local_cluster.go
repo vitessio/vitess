@@ -117,6 +117,15 @@ type Config struct {
 
 	// Authorize vschema ddl operations to a list of users
 	VSchemaDDLAuthorizedUsers string
+
+	// How to handle foreign key constraint in CREATE/ALTER TABLE.  Valid values are "allow", "disallow"
+	ForeignKeyMode string
+
+	// Allow users to submit, view, and control Online DDL
+	EnableOnlineDDL bool
+
+	// Allow users to submit direct DDL statements
+	EnableDirectDDL bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -512,7 +521,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
-	args := []string{"ReloadSchemaKeyspace", "-include_master=true", keyspace}
+	args := []string{"ReloadSchemaKeyspace", "-include_primary=true", keyspace}
 	fmt.Printf("Reloading keyspace schema %v", args)
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {

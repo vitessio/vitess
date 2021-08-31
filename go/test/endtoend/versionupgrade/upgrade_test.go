@@ -27,7 +27,7 @@ in which case it will not attempt to create keyspaces/schemas/tables, nor will i
 The game is to setup the cluster with a stable version (say `v8.0.0`), take it down (and preserve data), then setup a new cluster with a new version (namely the branch/PR head) and attempt to read the data.
 
 Both executions must force some settings so that both reuse same directories, ports, etc. An invocation will look like:
-go test ./go/test/endtoend/versionupgrade80/upgrade80_test.go --keep-data -force-vtdataroot /tmp/vtdataroot/vtroot_10901 --force-port-start 11900 --force-base-tablet-uid 1190
+go test ./go/test/endtoend/versionupgrade80/upgrade_test.go --keep-data -force-vtdataroot /tmp/vtdataroot/vtroot_10901 --force-port-start 11900 --force-base-tablet-uid 1190
 
 */
 
@@ -150,8 +150,8 @@ func TestDeploySchema(t *testing.T) {
 
 		{
 			sqlQuery := fmt.Sprintf(createTable, tableName)
-			_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, "")
-			require.Nil(t, err)
+			result, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, sqlQuery, cluster.VtctlClientParams{DDLStrategy: ""})
+			require.Nil(t, err, result)
 		}
 		for i := range clusterInstance.Keyspaces[0].Shards {
 			sqlQuery := fmt.Sprintf(insertIntoTable, tableName)

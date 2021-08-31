@@ -21,20 +21,18 @@ import (
 	"sort"
 	"sync"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/sync2"
-
-	"github.com/golang/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -146,7 +144,7 @@ func (fhc *FakeHealthCheck) ReplaceTablet(old, new *topodatapb.Tablet) {
 }
 
 // TabletConnection returns the TabletConn of the given tablet.
-func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
 	aliasStr := topoproto.TabletAliasString(alias)
 	fhc.mu.RLock()
 	defer fhc.mu.RUnlock()
@@ -155,7 +153,7 @@ func (fhc *FakeHealthCheck) TabletConnection(alias *topodatapb.TabletAlias) (que
 			return item.ts.Conn, nil
 		}
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %v not found", aliasStr)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "tablet %v not found", aliasStr)
 }
 
 // CacheStatus returns the status for each tablet
@@ -224,7 +222,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 		TabletType: tabletType,
 	}
 	item.ts.Serving = serving
-	item.ts.MasterTermStartTime = reparentTS
+	item.ts.PrimaryTermStartTime = reparentTS
 	item.ts.Stats = &querypb.RealtimeStats{}
 	item.ts.LastError = err
 	conn := connFactory(t)

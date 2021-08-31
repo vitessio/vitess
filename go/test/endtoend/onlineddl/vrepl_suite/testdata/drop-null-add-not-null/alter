@@ -1,0 +1,1 @@
+drop column c1, add column c1 int not null default 47

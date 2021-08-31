@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -13,7 +16,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 package fuzzing
 
@@ -32,9 +34,8 @@ func FuzzNormalizer(data []byte) int {
 	if err != nil {
 		return -1
 	}
-	prefix := "bv"
 	bv := make(map[string]*querypb.BindVariable)
-	sqlparser.Normalize(stmt, reservedVars, bv, prefix)
+	sqlparser.Normalize(stmt, sqlparser.NewReservedVars("bv", reservedVars), bv)
 	return 1
 }
 

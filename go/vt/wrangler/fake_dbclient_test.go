@@ -75,7 +75,9 @@ func newFakeDBClient() *fakeDBClient {
 		queriesRE: make(map[string]*dbResults),
 		invariants: map[string]*sqltypes.Result{
 			"use _vt": {},
-			"select * from _vt.vreplication where db_name='db'": {},
+			"select * from _vt.vreplication where db_name='db'":         {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
 		},
 	}
 }
@@ -98,6 +100,11 @@ func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err er
 	dc.queriesRE[query] = &dbResults{results: []*dbResult{dbr}, err: err}
 }
 
+func (dc *fakeDBClient) getInvariant(query string) *sqltypes.Result {
+	return dc.invariants[query]
+}
+
+// note: addInvariant will replace a previous result for a query with the provided one: this is used in the tests
 func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
 	dc.invariants[query] = result
 }
@@ -136,6 +143,7 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	if testMode == "debug" {
 		fmt.Printf("ExecuteFetch: %s\n", query)
 	}
+
 	if dbrs := dc.queries[query]; dbrs != nil {
 		return dbrs.next(query)
 	}

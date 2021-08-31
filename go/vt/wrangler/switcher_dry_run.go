@@ -17,17 +17,17 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"context"
 )
 
 var _ iswitcher = (*switcherDryRun)(nil)
@@ -47,18 +47,18 @@ func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
 	for _, source := range dr.ts.sources {
-		sourceShards = append(sourceShards, source.si.ShardName())
+		sourceShards = append(sourceShards, source.GetShard().ShardName())
 	}
 	for _, target := range dr.ts.targets {
-		targetShards = append(targetShards, target.si.ShardName())
+		targetShards = append(targetShards, target.GetShard().ShardName())
 	}
 	sort.Strings(sourceShards)
 	sort.Strings(targetShards)
-	if direction == DirectionForward {
+	if direction == workflow.DirectionForward {
 		dr.drLog.Log(fmt.Sprintf("Switch reads from keyspace %s to keyspace %s for shards %s to shards %s",
 			dr.ts.sourceKeyspace, dr.ts.targetKeyspace, strings.Join(sourceShards, ","), strings.Join(targetShards, ",")))
 	} else {
@@ -68,9 +68,9 @@ func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, 
 	return nil
 }
 
-func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction TrafficSwitchDirection) error {
+func (dr *switcherDryRun) switchTableReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	ks := dr.ts.targetKeyspace
-	if direction == DirectionBackward {
+	if direction == workflow.DirectionBackward {
 		ks = dr.ts.sourceKeyspace
 	}
 	var tabletTypes []string
@@ -109,15 +109,15 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 	deleteLogs = nil
 	addLogs = nil
 	for _, source := range dr.ts.sources {
-		deleteLogs = append(deleteLogs, fmt.Sprintf("\tShard %s, Tablet %d", source.si.ShardName(), source.si.MasterAlias.Uid))
+		deleteLogs = append(deleteLogs, fmt.Sprintf("\tShard %s, Tablet %d", source.GetShard().ShardName(), source.GetShard().PrimaryAlias.Uid))
 	}
 	for _, target := range dr.ts.targets {
-		addLogs = append(addLogs, fmt.Sprintf("\tShard %s, Tablet %d", target.si.ShardName(), target.si.MasterAlias.Uid))
+		addLogs = append(addLogs, fmt.Sprintf("\tShard %s, Tablet %d", target.GetShard().ShardName(), target.GetShard().PrimaryAlias.Uid))
 	}
 	if len(deleteLogs) > 0 {
-		dr.drLog.Log("IsMasterServing will be set to false for:")
+		dr.drLog.Log("IsPrimaryServing will be set to false for:")
 		dr.drLog.LogSlice(deleteLogs)
-		dr.drLog.Log("IsMasterServing will be set to true for:")
+		dr.drLog.Log("IsPrimaryServing will be set to true for:")
 		dr.drLog.LogSlice(addLogs)
 	}
 	return nil
@@ -127,7 +127,7 @@ func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *traffi
 	dr.drLog.Log("SwitchWrites completed, freeze and delete vreplication streams on:")
 	logs := make([]string, 0)
 	for _, t := range ts.targets {
-		logs = append(logs, fmt.Sprintf("\ttablet %d", t.master.Alias.Uid))
+		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil
@@ -137,7 +137,7 @@ func (dr *switcherDryRun) startReverseVReplication(ctx context.Context) error {
 	dr.drLog.Log("Start reverse replication streams on:")
 	logs := make([]string, 0)
 	for _, t := range dr.ts.sources {
-		logs = append(logs, fmt.Sprintf("\ttablet %d", t.master.Alias.Uid))
+		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil
@@ -148,16 +148,18 @@ func (dr *switcherDryRun) createReverseVReplication(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater) error {
-	if len(sm.templates) == 0 {
+func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.StreamMigrator) error {
+	templates := sm.Templates()
+
+	if len(templates) == 0 {
 		return nil
 	}
 	logs := make([]string, 0)
 
 	dr.drLog.Log(fmt.Sprintf("Migrate streams to %s:", dr.ts.targetKeyspace))
-	for key, streams := range sm.streams {
+	for key, streams := range sm.Streams() {
 		for _, stream := range streams {
-			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.id, stream.workflow, mysql.EncodePosition(stream.pos), stream.bls))
+			logs = append(logs, fmt.Sprintf("\tShard %s Id %d, Workflow %s, Pos %s, BinLogSource %v", key, stream.ID, stream.Workflow, mysql.EncodePosition(stream.Position), stream.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -166,10 +168,10 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *streamMigrater
 		logs = nil
 	}
 	for _, target := range dr.ts.targets {
-		tabletStreams := copyTabletStreams(sm.templates)
+		tabletStreams := templates
 		for _, vrs := range tabletStreams {
 			logs = append(logs, fmt.Sprintf("\t Keyspace %s, Shard %s, Tablet %d, Workflow %s, Id %d, Pos %v, BinLogSource %s",
-				vrs.bls.Keyspace, vrs.bls.Shard, target.master.Alias.Uid, vrs.workflow, vrs.id, mysql.EncodePosition(vrs.pos), vrs.bls))
+				vrs.BinlogSource.Keyspace, vrs.BinlogSource.Shard, target.GetPrimary().Alias.Uid, vrs.Workflow, vrs.ID, mysql.EncodePosition(vrs.Position), vrs.BinlogSource))
 		}
 	}
 	if len(logs) > 0 {
@@ -187,8 +189,8 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
-		position, _ := dr.ts.wr.tmc.MasterPosition(ctx, source.master.Tablet)
-		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.sourceKeyspace, source.si.ShardName(), position))
+		position, _ := dr.ts.wr.tmc.MasterPosition(ctx, source.GetPrimary().Tablet)
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.sourceKeyspace, source.GetShard().ShardName(), position))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log(fmt.Sprintf("Stop writes on keyspace %s, tables [%s]:", dr.ts.sourceKeyspace, strings.Join(dr.ts.tables, ",")))
@@ -197,12 +199,12 @@ func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *streamMigrater) ([]string, error) {
+func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *workflow.StreamMigrator) ([]string, error) {
 	logs := make([]string, 0)
-	for _, streams := range sm.streams {
+	for _, streams := range sm.Streams() {
 		for _, stream := range streams {
 			logs = append(logs, fmt.Sprintf("\tId %d Keyspace %s Shard %s Rules %s at Position %v",
-				stream.id, stream.bls.Keyspace, stream.bls.Shard, stream.bls.Filter, stream.pos))
+				stream.ID, stream.BinlogSource.Keyspace, stream.BinlogSource.Shard, stream.BinlogSource.Filter, stream.Position))
 		}
 	}
 	if len(logs) > 0 {
@@ -212,7 +214,7 @@ func (dr *switcherDryRun) stopStreams(ctx context.Context, sm *streamMigrater) (
 	return nil, nil
 }
 
-func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *streamMigrater) {
+func (dr *switcherDryRun) cancelMigration(ctx context.Context, sm *workflow.StreamMigrator) {
 	dr.drLog.Log("Cancel stream migrations as requested")
 }
 
@@ -223,16 +225,16 @@ func (dr *switcherDryRun) lockKeyspace(ctx context.Context, keyspace, _ string) 
 	}, nil
 }
 
-func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType TableRemovalType) error {
+func (dr *switcherDryRun) removeSourceTables(ctx context.Context, removalType workflow.TableRemovalType) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.sources {
 		for _, tableName := range dr.ts.tables {
 			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
-				source.master.Keyspace, source.master.Shard, source.master.DbName(), source.master.Alias.Uid, tableName))
+				source.GetPrimary().Keyspace, source.GetPrimary().Shard, source.GetPrimary().DbName(), source.GetPrimary().Alias.Uid, tableName))
 		}
 	}
 	action := "Dropping"
-	if removalType == RenameTable {
+	if removalType == workflow.RenameTable {
 		action = "Renaming"
 	}
 	if len(logs) > 0 {
@@ -257,7 +259,7 @@ func (dr *switcherDryRun) dropSourceShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")
@@ -276,7 +278,7 @@ func (dr *switcherDryRun) dropTargetVReplicationStreams(ctx context.Context) err
 	logs := make([]string, 0)
 	for _, t := range dr.ts.targets {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
-			t.si.Keyspace(), t.si.ShardName(), dr.ts.workflow, t.master.DbName(), t.master.Alias.Uid))
+			t.GetShard().Keyspace(), t.GetShard().ShardName(), dr.ts.workflow, t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil
@@ -287,7 +289,7 @@ func (dr *switcherDryRun) dropSourceReverseVReplicationStreams(ctx context.Conte
 	logs := make([]string, 0)
 	for _, t := range dr.ts.sources {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Workflow %s DbName %s Tablet %d",
-			t.si.Keyspace(), t.si.ShardName(), reverseName(dr.ts.workflow), t.master.DbName(), t.master.Alias.Uid))
+			t.GetShard().Keyspace(), t.GetShard().ShardName(), workflow.ReverseWorkflowName(dr.ts.workflow), t.GetPrimary().DbName(), t.GetPrimary().Alias.Uid))
 	}
 	dr.drLog.LogSlice(logs)
 	return nil
@@ -297,7 +299,7 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, target := range dr.ts.targets {
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s, Tablet %d, Workflow %s, DbName %s",
-			target.master.Keyspace, target.master.Shard, target.master.Alias.Uid, dr.ts.workflow, target.master.DbName()))
+			target.GetPrimary().Keyspace, target.GetPrimary().Shard, target.GetPrimary().Alias.Uid, dr.ts.workflow, target.GetPrimary().DbName()))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Mark vreplication streams frozen on:")
@@ -306,13 +308,13 @@ func (dr *switcherDryRun) freezeTargetVReplication(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) dropSourceBlacklistedTables(ctx context.Context) error {
+func (dr *switcherDryRun) dropSourceDeniedTables(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, si := range dr.ts.sourceShards() {
-		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.MasterAlias.Uid))
+		logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s Tablet %d", si.Keyspace(), si.ShardName(), si.PrimaryAlias.Uid))
 	}
 	if len(logs) > 0 {
-		dr.drLog.Log(fmt.Sprintf("Blacklisted tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
+		dr.drLog.Log(fmt.Sprintf("Denied tables [%s] will be removed from:", strings.Join(dr.ts.tables, ",")))
 		dr.drLog.LogSlice(logs)
 	}
 	return nil
@@ -327,7 +329,7 @@ func (dr *switcherDryRun) removeTargetTables(ctx context.Context) error {
 	for _, target := range dr.ts.targets {
 		for _, tableName := range dr.ts.tables {
 			logs = append(logs, fmt.Sprintf("\tKeyspace %s Shard %s DbName %s Tablet %d Table %s",
-				target.master.Keyspace, target.master.Shard, target.master.DbName(), target.master.Alias.Uid, tableName))
+				target.GetPrimary().Keyspace, target.GetPrimary().Shard, target.GetPrimary().DbName(), target.GetPrimary().Alias.Uid, tableName))
 		}
 	}
 	if len(logs) > 0 {
@@ -352,7 +354,7 @@ func (dr *switcherDryRun) dropTargetShards(ctx context.Context) error {
 		}
 		sort.Strings(tabletsList[si.ShardName()])
 		logs = append(logs, fmt.Sprintf("\tCell %s Keyspace %s Shard\n%s",
-			si.Shard.MasterAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
+			si.Shard.PrimaryAlias.Cell, si.Keyspace(), si.ShardName()), strings.Join(tabletsList[si.ShardName()], "\n"))
 	}
 	if len(logs) > 0 {
 		dr.drLog.Log("Deleting following shards (and all related tablets):")

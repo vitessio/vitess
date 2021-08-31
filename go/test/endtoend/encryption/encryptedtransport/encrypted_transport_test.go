@@ -107,7 +107,7 @@ func TestSecureTransport(t *testing.T) {
 	_, err := clusterSetUp(t)
 	require.Nil(t, err, "setup failed")
 
-	masterTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
+	primaryTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 
 	// creating table_acl_config.json file
@@ -130,7 +130,7 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 
 	// start the tablets
-	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
+	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-table-acl-config", tableACLConfigJSON, "-queryserver-config-strict-table-acl")
 		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, serverExtraArguments("vttablet-server-instance", "vttablet-client")...)
 		err = tablet.VttabletProcess.Setup()
@@ -143,7 +143,7 @@ func TestSecureTransport(t *testing.T) {
 	vtctlClientTmArgs := append(vtctlClientArgs, tmclientExtraArgs("vttablet-client-1")...)
 
 	// Reparenting
-	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardMaster", "-force", "test_keyspace/0", masterTablet.Alias)
+	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardPrimary", "-force", "test_keyspace/0", primaryTablet.Alias)
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlClientArgs...)
 	require.NoError(t, err)
 
@@ -152,7 +152,7 @@ func TestSecureTransport(t *testing.T) {
 	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	require.NoError(t, err)
 
-	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
+	for _, tablet := range []cluster.Vttablet{primaryTablet, replicaTablet} {
 		var vtctlTabletArgs []string
 		vtctlTabletArgs = append(vtctlTabletArgs, tmclientExtraArgs("vttablet-client-1")...)
 		vtctlTabletArgs = append(vtctlTabletArgs, "RunHealthCheck", tablet.Alias)
@@ -426,7 +426,7 @@ func setSSLInfoEmpty() {
 
 func getSession() *vtgatepb.Session {
 	return &vtgatepb.Session{
-		TargetString: "test_keyspace:0@master",
+		TargetString: "test_keyspace:0@primary",
 	}
 }
 

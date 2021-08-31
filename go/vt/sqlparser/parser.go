@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -81,6 +82,12 @@ func Parse2(sql string) (Statement, BindVars, error) {
 				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
 			}
 			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
+			switch x := tokenizer.partialDDL.(type) {
+			case DBDDLStatement:
+				x.SetFullyParsed(false)
+			case DDLStatement:
+				x.SetFullyParsed(false)
+			}
 			tokenizer.ParseTree = tokenizer.partialDDL
 			return tokenizer.ParseTree, tokenizer.BindVars, nil
 		}
@@ -157,7 +164,7 @@ func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "Query was empty")
+var ErrEmpty = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.EmptyQuery, "query was empty")
 
 // SplitStatement returns the first sql statement up to either a ; or EOF
 // and the remainder from the given buffer
@@ -182,6 +189,17 @@ func SplitStatement(blob string) (string, string, error) {
 // SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
 // returns the sql pieces blob contains; or error if sql cannot be parsed
 func SplitStatementToPieces(blob string) (pieces []string, err error) {
+	// fast path: the vast majority of SQL statements do not have semicolons in them
+	if blob == "" {
+		return nil, nil
+	}
+	switch strings.IndexByte(blob, ';') {
+	case -1: // if there is no semicolon, return blob as a whole
+		return []string{blob}, nil
+	case len(blob) - 1: // if there's a single semicolon and it's the last character, return blob without it
+		return []string{blob[:len(blob)-1]}, nil
+	}
+
 	pieces = make([]string, 0, 16)
 	tokenizer := NewStringTokenizer(blob)
 

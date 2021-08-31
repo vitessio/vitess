@@ -94,7 +94,7 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 	} else {
 		args = append(args, "Reshard")
 	}
-	args = append(args, "-v2")
+
 	switch action {
 	case workflowActionCreate:
 		if currentWorkflowType == wrangler.MoveTablesWorkflow {
@@ -135,19 +135,19 @@ func tstWorkflowReverseReads(t *testing.T, tabletTypes, cells string) {
 }
 
 func tstWorkflowSwitchWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "master", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "primary", ""))
 }
 
 func tstWorkflowReverseWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "master", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "primary", ""))
 }
 
 func tstWorkflowSwitchReadsAndWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "replica,rdonly,master", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionSwitchTraffic, "replica,rdonly,primary", ""))
 }
 
 func tstWorkflowReverseReadsAndWrites(t *testing.T) {
-	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "replica,rdonly,master", ""))
+	require.NoError(t, tstWorkflowAction(t, workflowActionReverseTraffic, "replica,rdonly,primary", ""))
 }
 
 func tstWorkflowComplete(t *testing.T) error {
@@ -233,7 +233,7 @@ func getCurrentState(t *testing.T) string {
 func TestBasicV2Workflows(t *testing.T) {
 	vc = setupCluster(t)
 	defer vtgateConn.Close()
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
@@ -400,7 +400,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 
 	vtgate = zone1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -418,10 +418,10 @@ func setupCustomerKeyspace(t *testing.T) {
 		customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1); err != nil {
+	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
 		t.Fatal(err)
 	}
 	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "customer", "-80"), 2); err != nil {
@@ -438,7 +438,7 @@ func setupCustomerKeyspace(t *testing.T) {
 
 func TestSwitchReadsWritesInAnyOrder(t *testing.T) {
 	vc = setupCluster(t)
-	defer vc.TearDown()
+	defer vc.TearDown(t)
 	moveCustomerTableSwitchFlows(t, []*Cell{vc.Cells["zone1"]}, "zone1")
 }
 
@@ -550,11 +550,11 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 	arrTargetShardNames := strings.Split(shards, ",")
 
 	for _, shardName := range arrTargetShardNames {
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ksName, shardName), 1); err != nil {
-			t.Fatal(err)
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1); err != nil {
+			require.NoError(t, err)
 		}
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", ksName, shardName), 2); err != nil {
-			t.Fatal(err)
+			require.NoError(t, err)
 		}
 	}
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[ksName]

@@ -373,7 +373,7 @@ func addLookupDataToVschema(
 		lookupTableOwner := ""
 
 		// Find owner of lookup table
-		for primaryTableName, _ := range primaryTableColumns {
+		for primaryTableName := range primaryTableColumns {
 			if strings.HasPrefix(tableName, primaryTableName) && len(primaryTableName) > len(lookupTableOwner) {
 				lookupTableOwner = primaryTableName
 			}
@@ -517,7 +517,7 @@ func applyShardPatches(
 }
 
 func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo, opts vtOptions) string {
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}
@@ -533,7 +533,7 @@ func generateDefaultShard(tabAlias int, shard string, keyspaceData keyspaceInfo,
   path: /services/init_shard_master%[2]d
   value:
     image: vitess/lite:${VITESS_TAG:-latest}
-    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardMaster -force %[4]s/%[3]s %[6]s-%[2]d "]
+    command: ["sh", "-c", "/vt/bin/vtctlclient %[5]s InitShardPrimary -force %[4]s/%[3]s %[6]s-%[2]d "]
     %[1]s
 `, dependsOn, aliases[0], shard, keyspaceData.keyspace, opts.topologyFlags, opts.cell)
 }
@@ -546,7 +546,7 @@ func generateExternalmaster(
 	opts vtOptions,
 ) string {
 
-	aliases := []int{tabAlias + 1} // master alias, e.g. 201
+	aliases := []int{tabAlias + 1} // primary alias, e.g. 201
 	for i := 0; i < keyspaceData.replicaTablets; i++ {
 		aliases = append(aliases, tabAlias+2+i) // replica aliases, e.g. 202, 203, ...
 	}

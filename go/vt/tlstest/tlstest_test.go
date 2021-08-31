@@ -66,15 +66,18 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ClientCA,
-		serverCA)
+		serverCA,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	clientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ClientCert,
 		clientServerKeyPairs.ClientKey,
 		clientServerKeyPairs.ServerCA,
-		clientServerKeyPairs.ServerName)
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -101,7 +104,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		defer wg.Done()
 		clientConn, clientErr := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
 		if clientErr == nil {
-			clientConn.Write([]byte{42})
+			_, _ = clientConn.Write([]byte{42})
 			clientConn.Close()
 		}
 	}()
@@ -131,10 +134,12 @@ func testClientServer(t *testing.T, combineCerts bool) {
 	//
 
 	badClientConfig, err := vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ServerCA,
-		clientServerKeyPairs.ServerName)
+		clientServerKeyPairs.ServerName,
+		tls.VersionTLS12)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -184,7 +189,8 @@ func getServerConfigWithoutCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Co
 		keypairs.ServerCert,
 		keypairs.ServerKey,
 		keypairs.ClientCA,
-		"")
+		"",
+		tls.VersionTLS12)
 }
 
 func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Config, error) {
@@ -192,15 +198,18 @@ func getServerConfigWithCombinedCerts(keypairs ClientServerKeyPairs) (*tls.Confi
 		keypairs.ServerCert,
 		keypairs.ServerKey,
 		keypairs.ClientCA,
-		keypairs.ServerCA)
+		keypairs.ServerCA,
+		tls.VersionTLS12)
 }
 
 func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ClientConfig(
+		vttls.VerifyIdentity,
 		keypairs.ClientCert,
 		keypairs.ClientKey,
 		keypairs.ServerCA,
-		keypairs.ServerName)
+		keypairs.ServerName,
+		tls.VersionTLS12)
 }
 
 func testServerTLSConfigCaching(t *testing.T, getServerConfig func(ClientServerKeyPairs) (*tls.Config, error)) {
@@ -288,7 +297,8 @@ func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int,
 		clientServerKeyPairs.ServerCert,
 		clientServerKeyPairs.ServerKey,
 		clientServerKeyPairs.ClientCA,
-		serverCA)
+		serverCA,
+		tls.VersionTLS12)
 
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)

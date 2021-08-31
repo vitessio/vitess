@@ -24,11 +24,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildPlanForBypass(stmt sqlparser.Statement, _ sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	switch vschema.Destination().(type) {
 	case key.DestinationExactKeyRange:
 		if _, ok := stmt.(*sqlparser.Insert); ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries are not allowed for insert statement: %s", vschema.TargetString())
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", vschema.TargetString())
 		}
 	}
 
@@ -37,10 +37,11 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ sqlparser.BindVars, vschema 
 		return nil, err
 	}
 	return &engine.Send{
-		Keyspace:          keyspace,
-		TargetDestination: vschema.Destination(),
-		Query:             sqlparser.String(stmt),
-		IsDML:             sqlparser.IsDMLStatement(stmt),
-		SingleShardOnly:   false,
+		Keyspace:             keyspace,
+		TargetDestination:    vschema.Destination(),
+		Query:                sqlparser.String(stmt),
+		IsDML:                sqlparser.IsDMLStatement(stmt),
+		SingleShardOnly:      false,
+		MultishardAutocommit: sqlparser.MultiShardAutocommitDirective(stmt),
 	}, nil
 }

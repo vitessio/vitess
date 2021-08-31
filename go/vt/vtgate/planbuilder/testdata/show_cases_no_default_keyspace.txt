@@ -10,11 +10,11 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from user_extra",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show columns from routed table
 "show full fields from `route1`"
@@ -28,11 +28,11 @@
       "Sharded": true
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from `user`",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show variables
 "show variables"
@@ -49,13 +49,13 @@
           "Sharded": false
         },
         "TargetDestination": "AnyShard()",
-        "IsDML": false,
         "Query": "show variables",
         "SingleShardOnly": true
       }
     ]
   }
 }
+Gen4 plan same as above
 
 # show full columns from system schema
 "show full columns from sys.sys_config"
@@ -69,11 +69,11 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from sys.sys_config",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
 
 # show full columns from system schema replacing qualifier
 "show full columns from x.sys_config from sys"
@@ -87,8 +87,26 @@
       "Sharded": false
     },
     "TargetDestination": "AnyShard()",
-    "IsDML": false,
     "Query": "show full columns from sys.sys_config",
     "SingleShardOnly": true
   }
 }
+Gen4 plan same as above
+
+# show global status
+"show global status"
+{
+  "QueryType": "SHOW",
+  "Original": "show global status",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AnyShard()",
+    "Query": "show global status",
+    "SingleShardOnly": true
+  }
+}
+Gen4 plan same as above

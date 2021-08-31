@@ -56,7 +56,7 @@ func TestMergeSortNormal(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -114,7 +114,7 @@ func TestMergeSortWeightString(t *testing.T) {
 			"8|h",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: 0,
 		Col:             1,
 	}}
@@ -174,7 +174,7 @@ func TestMergeSortDescending(t *testing.T) {
 			"4|d",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 		Desc:            true,
@@ -225,7 +225,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 	}, {
 		results: sqltypes.MakeTestStreamingResults(idColFields),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -253,7 +253,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 // TestMergeSortResultFailures tests failures at various
 // stages of result return.
 func TestMergeSortResultFailures(t *testing.T) {
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -299,7 +299,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 			"2.1|b",
 		),
 	}}
-	orderBy := []OrderbyParams{{
+	orderBy := []OrderByParams{{
 		WeightStringCol: -1,
 		Col:             0,
 	}}
@@ -325,7 +325,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 	require.EqualError(t, err, want)
 }
 
-func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callback func(qr *sqltypes.Result) error) error {
+func testMergeSort(shardResults []*shardResult, orderBy []OrderByParams, callback func(qr *sqltypes.Result) error) error {
 	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {
 		prims = append(prims, sr)
@@ -334,7 +334,7 @@ func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callbac
 		Primitives: prims,
 		OrderBy:    orderBy,
 	}
-	return ms.StreamExecute(&noopVCursor{}, nil, true, callback)
+	return ms.TryStreamExecute(&noopVCursor{}, nil, true, callback)
 }
 
 type shardResult struct {
