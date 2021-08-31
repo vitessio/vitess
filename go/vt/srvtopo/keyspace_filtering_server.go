@@ -95,6 +95,23 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspace(
 	return ksf.server.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
+func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
+	ctx context.Context,
+	cell, keyspace string,
+	callback func(*topodatapb.SrvKeyspace, error) bool,
+) {
+	filteringCallback := func(ks *topodatapb.SrvKeyspace, err error) bool {
+		if ks != nil {
+			if !ksf.selectKeyspaces[keyspace] {
+				return callback(nil, topo.NewError(topo.NoNode, keyspace))
+			}
+		}
+		return callback(ks, err)
+	}
+
+	ksf.server.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
+}
+
 func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 	ctx context.Context,
 	cell string,
