@@ -87,6 +87,26 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
+	case *abstract.Concatenate:
+		var sources []queryTree
+		for _, source := range op.Sources {
+			qt, err := optimizeQuery(ctx, source)
+			if err != nil {
+				return nil, err
+			}
+			sources = append(sources, qt)
+		}
+		return &concatenateTree{
+			sources: sources,
+		}, nil
+	case *abstract.Distinct:
+		qt, err := optimizeQuery(ctx, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		return &distinctTree{
+			source: qt,
+		}, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
