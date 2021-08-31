@@ -60,6 +60,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 					TableID: tableID,
 					Alias:   tableExpr,
 					Table:   tbl,
+					VTable:  vt.Table.GetVindex(),
 				}, Vindex: vt.Vindex}, nil
 			}
 			qg := newQueryGraph()

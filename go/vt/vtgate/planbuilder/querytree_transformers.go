@@ -41,6 +41,8 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *seman
 		return transformDerivedPlan(ctx, n, semTable)
 	case *subqueryTree:
 		return transformSubqueryTree(ctx, n, semTable)
+	case *vindexTree:
+		panic("vindexTree not supported for logicalPlan transformation")
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)

@@ -18,25 +18,43 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type vindexTree struct {
-	table routeTable
+	table   vindexTable
+	solved  semantics.TableSet
+	columns []*sqlparser.ColName
 }
 
-func (v vindexTree) tableID() semantics.TableSet {
-	panic("implement me")
+var _ queryTree = (*vindexTree)(nil)
+
+func (v *vindexTree) tableID() semantics.TableSet {
+	return v.solved
 }
 
-func (v vindexTree) clone() queryTree {
-	panic("implement me")
+func (v *vindexTree) clone() queryTree {
+	clone := *v
+	return &clone
 }
 
-func (v vindexTree) cost() int {
-	panic("implement me")
+func (v *vindexTree) cost() int {
+	return int(engine.SelectEqualUnique)
 }
 
-func (v vindexTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
-	panic("implement me")
+func (v *vindexTree) pushOutputColumns(col []*sqlparser.ColName, _ *semantics.SemTable) ([]int, error) {
+	idxs := make([]int, len(col))
+outer:
+	for i, newCol := range col {
+		for j, existingCol := range v.columns {
+			if sqlparser.EqualsExpr(newCol, existingCol) {
+				idxs[i] = j
+				continue outer
+			}
+		}
+		idxs[i] = len(v.columns)
+		v.columns = append(v.columns, newCol)
+	}
+	return idxs, nil
 }

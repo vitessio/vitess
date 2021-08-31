@@ -31,20 +31,24 @@ type (
 		NoDeps        []sqlparser.Expr
 	}
 
+	// VindexTable contains information about the vindex table we want to query
 	VindexTable struct {
 		TableID    semantics.TableSet
 		Alias      *sqlparser.AliasedTableExpr
 		Table      sqlparser.TableName
 		Predicates []sqlparser.Expr
+		VTable     *vindexes.Table
 	}
 )
 
 var _ Operator = (*Vindex)(nil)
 
+// TableID implements the Operator interface
 func (v Vindex) TableID() semantics.TableSet {
 	return v.Table.TableID
 }
 
+// PushPredicate implements the Operator interface
 func (v Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.BaseTableDependencies(e)
@@ -64,6 +68,7 @@ func (v Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable)
 	return nil
 }
 
+// UnsolvedPredicates implements the Operator interface
 func (v Vindex) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
