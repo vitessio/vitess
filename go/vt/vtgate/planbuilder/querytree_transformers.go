@@ -25,29 +25,30 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
-		return transformRoutePlan(n, semTable, ctx.sqToReplace)
+		return transformRoutePlan(ctx, n)
 	case *joinTree:
-		return transformJoinPlan(ctx, n, semTable)
+		return transformJoinPlan(ctx, n)
 	case *derivedTree:
-		return transformDerivedPlan(ctx, n, semTable)
+		return transformDerivedPlan(ctx, n)
 	case *subqueryTree:
-		return transformSubqueryTree(ctx, n, semTable)
+		return transformSubqueryTree(ctx, n)
+	case *concatenateTree:
+		return transformConcatenatePlan(ctx, n)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
-func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *semantics.SemTable) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +58,7 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *seman
 	}
 
 	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
-	outerPlan, err := transformToLogicalPlan(ctx, n.outer, semTable)
+	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +66,14 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *seman
 	return plan, err
 }
 
-func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased
 	// expression containing our derived table's inner select and the derived
 	// table's alias.
 
-	plan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+	plan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +101,31 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semanti
 	return plan, nil
 }
 
-func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace map[string]*sqlparser.Select) (*route, error) {
+func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (*concatenateGen4, error) {
+	var sources []logicalPlan
+	for i, source := range n.sources {
+		plan, err := transformToLogicalPlan(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+		selStmt := n.selectStmts[i]
+		if selStmt != nil {
+			plan, err = planHorizon(ctx, plan, selStmt)
+			if err != nil {
+				return nil, err
+			}
+			if err := setMiscFunc(plan, selStmt); err != nil {
+				return nil, err
+			}
+		}
+		sources = append(sources, plan)
+	}
+	return &concatenateGen4{
+		sources: sources,
+	}, nil
+}
+
+func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -187,10 +212,10 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 		SelectExprs: expressions,
 		From:        tablesForSelect,
 		Where:       where,
-		Comments:    semTable.Comments,
+		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(sqToReplace, sel)
+	replaceSubQuery(ctx.sqToReplace, sel)
 
 	return &route{
 		eroute: &engine.Route{
@@ -207,12 +232,12 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 	}, nil
 }
 
-func transformJoinPlan(ctx planningContext, n *joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(ctx, n.lhs, semTable)
+func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, n.lhs)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(ctx, n.rhs, semTable)
+	rhs, err := transformToLogicalPlan(ctx, n.rhs)
 	if err != nil {
 		return nil, err
 	}

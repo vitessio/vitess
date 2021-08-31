@@ -103,27 +103,30 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, tree, semTable)
+	plan, err := transformToLogicalPlan(ctx, tree)
 	if err != nil {
 		return nil, err
 	}
 
-	sel := selStmt.(*sqlparser.Select)
+	sel, isSel := selStmt.(*sqlparser.Select)
+	// We do not need to call planHorizon for union queries.
+	// We would have already executed this for the select statements while transforming to logical plans.
+	if isSel {
+		plan, err = planHorizon(ctx, plan, sel)
+		if err != nil {
+			return nil, err
+		}
 
-	plan, err = planHorizon(ctx, plan, sel)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := setMiscFunc(plan, sel); err != nil {
-		return nil, err
+		if err := setMiscFunc(plan, sel); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := plan.WireupGen4(semTable); err != nil {
 		return nil, err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(selStmt).Comments)
 	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
 		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
 			switch plan := logicalPlan.(type) {

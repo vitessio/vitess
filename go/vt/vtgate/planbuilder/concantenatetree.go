@@ -23,7 +23,8 @@ import (
 
 type (
 	concatenateTree struct {
-		sources []queryTree
+		selectStmts []*sqlparser.Select
+		sources     []queryTree
 	}
 )
 
@@ -42,7 +43,7 @@ func (c *concatenateTree) clone() queryTree {
 	for _, source := range c.sources {
 		sourcesCopy = append(sourcesCopy, source.clone())
 	}
-	return &concatenateTree{sources: sourcesCopy}
+	return &concatenateTree{sources: sourcesCopy, selectStmts: c.selectStmts}
 }
 
 func (c *concatenateTree) cost() int {

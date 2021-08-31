@@ -97,7 +97,8 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 			sources = append(sources, qt)
 		}
 		return &concatenateTree{
-			sources: sources,
+			selectStmts: op.SelectStmts,
+			sources:     sources,
 		}, nil
 	case *abstract.Distinct:
 		qt, err := optimizeQuery(ctx, op.Source)
