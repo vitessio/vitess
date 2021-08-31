@@ -29,32 +29,32 @@ var _ selectPlanner = gen4Planner
 
 func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
-		sel, ok := stmt.(*sqlparser.Select)
+		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
 
-		// handle dual table for processing at vtgate.
-		p, err := handleDualSelects(sel, vschema)
-		if err != nil {
-			return nil, err
-		}
-		if p != nil {
-			return p, nil
-		}
-
-		getPlan := func(sel *sqlparser.Select) (logicalPlan, error) {
-			return newBuildSelectPlan(sel, reservedVars, vschema)
+		sel, isSel := selStatement.(*sqlparser.Select)
+		if isSel {
+			// handle dual table for processing at vtgate.
+			p, err := handleDualSelects(sel, vschema)
+			if err != nil || p != nil {
+				return p, err
+			}
 		}
 
-		plan, err := getPlan(sel)
+		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
+			return newBuildSelectPlan(selStatement, reservedVars, vschema)
+		}
+
+		plan, err := getPlan(selStatement)
 		if err != nil {
 			return nil, err
 		}
 
 		if shouldRetryWithCNFRewriting(plan) {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
-			primitive := rewriteToCNFAndReplan(stmt, getPlan)
+			primitive := gen4CNFRewrite(stmt, getPlan)
 			if primitive != nil {
 				return primitive, nil
 			}
@@ -63,21 +63,37 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 	}
 }
 
-func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
+func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, error)) engine.Primitive {
+	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
+	if !isSel {
+		// Fail-safe code, should never happen
+		return nil
+	}
+	plan2, err := getPlan(rewritten)
+	if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+		// we only use this new plan if it's better than the old one we got
+		return plan2.Primitive()
+	}
+	return nil
+}
+
+func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(sel, ksName, vschema, starRewrite)
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema, starRewrite)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = queryRewrite(ctx, sel)
+	err = queryRewrite(ctx, selStmt)
 	if err != nil {
 		return nil, err
 	}
+
+	sel := selStmt.(*sqlparser.Select)
 
 	opTree, err := abstract.CreateOperatorFromSelect(sel, semTable)
 	if err != nil {
