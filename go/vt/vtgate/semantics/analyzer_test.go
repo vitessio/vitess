@@ -191,7 +191,7 @@ func TestOrderByBindingMultiTable(t *testing.T) {
 	})
 }
 
-func TestGroupByBindingSingleTable(t *testing.T) {
+func TestGroupByBinding(t *testing.T) {
 	tcases := []struct {
 		sql  string
 		deps TableSet
@@ -232,6 +232,55 @@ func TestGroupByBindingSingleTable(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			grp := sel.GroupBy[0]
 			d := semTable.BaseTableDependencies(grp)
+			require.Equal(t, tc.deps, d, tc.sql)
+		})
+	}
+}
+
+func TestHavingBinding(t *testing.T) {
+	tcases := []struct {
+		sql  string
+		deps TableSet
+	}{{
+		"select col from tabl having col = 1",
+		T1,
+	}, {
+		"select col from tabl having tabl.col = 1",
+		T1,
+	}, {
+		"select col from tabl having d.tabl.col = 1",
+		T1,
+	}, {
+		"select tabl.col as x from tabl having x = 1",
+		T1,
+	}, {
+		"select tabl.col as x from tabl having col",
+		T1,
+	}, {
+		"select col from tabl having 1 = 1",
+		T0,
+	}, {
+		"select col as c from tabl having c = 1",
+		T1,
+	}, {
+		"select 1 as c from tabl having c = 1",
+		T0,
+	}, {
+		"select t1.id from t1, t2 having id = 1",
+		T1,
+	}, {
+		"select t.id from t, t1 having id = 1",
+		T1,
+	}, {
+		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
+		T1 | T2,
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+			hvng := sel.Having.Expr
+			d := semTable.BaseTableDependencies(hvng)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
 	}

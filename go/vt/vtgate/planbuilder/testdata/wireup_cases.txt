@@ -37,6 +37,48 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1,-1",
+    "JoinVars": {
+      "e_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.id, e.col from user_extra as e where 1 != 1",
+        "Query": "select e.id, e.col from user_extra as e",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+        "Query": "select u.id as uid from `user` as u where u.id = :e_id",
+        "Table": "`user`",
+        "Values": [
+          ":e_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
 
 # bind var already in use
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid"
@@ -73,6 +115,47 @@
         "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
         "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid1 and e.col = :uid",
         "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1,-1",
+    "JoinVars": {
+      "e_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.id, e.col from user_extra as e where 1 != 1",
+        "Query": "select e.id, e.col from user_extra as e where e.col = :uid",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+        "Query": "select u.id as uid from `user` as u where u.id = :e_id",
+        "Table": "`user`",
+        "Values": [
+          ":e_id"
+        ],
+        "Vindex": "user_index"
       }
     ]
   }

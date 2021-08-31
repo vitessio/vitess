@@ -54,6 +54,14 @@ type noopVCursor struct {
 	ctx context.Context
 }
 
+func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(t, bindVars, wantfields)
+}
+
+func (t *noopVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(t, bindVars, wantfields, callback)
+}
+
 func (t *noopVCursor) GetWarnings() []*querypb.QueryWarning {
 	panic("implement me")
 }
@@ -289,6 +297,14 @@ type loggingVCursor struct {
 
 type tableRoutes struct {
 	tbl *vindexes.Table
+}
+
+func (f *loggingVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(f, bindVars, wantfields)
+}
+
+func (f *loggingVCursor) StreamExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(f, bindVars, wantfields, callback)
 }
 
 func (f *loggingVCursor) KeyspaceAvailable(ks string) bool {

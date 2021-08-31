@@ -173,6 +173,8 @@ type VtctldClient interface {
 	// shard must be empty (have no tablets) or DeleteShards returns an error for
 	// that shard.
 	DeleteShards(ctx context.Context, in *vtctldata.DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteSrvVSchema deletes the SrvVSchema object in the specified cell.
+	DeleteSrvVSchema(ctx context.Context, in *vtctldata.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(ctx context.Context, in *vtctldata.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteTabletsResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
@@ -202,6 +204,9 @@ type VtctldClient interface {
 	GetSchema(ctx context.Context, in *vtctldata.GetSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSchemaResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error)
+	// GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
+	// in that cell.
+	GetSrvKeyspaceNames(ctx context.Context, in *vtctldata.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspaceNamesResponse, error)
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error)
@@ -382,6 +387,15 @@ func (c *vtctldClient) DeleteShards(ctx context.Context, in *vtctldata.DeleteSha
 	return out, nil
 }
 
+func (c *vtctldClient) DeleteSrvVSchema(ctx context.Context, in *vtctldata.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.DeleteSrvVSchemaResponse, error) {
+	out := new(vtctldata.DeleteSrvVSchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/DeleteSrvVSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) DeleteTablets(ctx context.Context, in *vtctldata.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteTabletsResponse, error) {
 	out := new(vtctldata.DeleteTabletsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/DeleteTablets", in, out, opts...)
@@ -484,6 +498,15 @@ func (c *vtctldClient) GetSchema(ctx context.Context, in *vtctldata.GetSchemaReq
 func (c *vtctldClient) GetShard(ctx context.Context, in *vtctldata.GetShardRequest, opts ...grpc.CallOption) (*vtctldata.GetShardResponse, error) {
 	out := new(vtctldata.GetShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldata.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspaceNamesResponse, error) {
+	out := new(vtctldata.GetSrvKeyspaceNamesResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSrvKeyspaceNames", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -706,6 +729,8 @@ type VtctldServer interface {
 	// shard must be empty (have no tablets) or DeleteShards returns an error for
 	// that shard.
 	DeleteShards(context.Context, *vtctldata.DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error)
+	// DeleteSrvVSchema deletes the SrvVSchema object in the specified cell.
+	DeleteSrvVSchema(context.Context, *vtctldata.DeleteSrvVSchemaRequest) (*vtctldata.DeleteSrvVSchemaResponse, error)
 	// DeleteTablets deletes one or more tablets from the topology.
 	DeleteTablets(context.Context, *vtctldata.DeleteTabletsRequest) (*vtctldata.DeleteTabletsResponse, error)
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
@@ -735,6 +760,9 @@ type VtctldServer interface {
 	GetSchema(context.Context, *vtctldata.GetSchemaRequest) (*vtctldata.GetSchemaResponse, error)
 	// GetShard returns information about a shard in the topology.
 	GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error)
+	// GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
+	// in that cell.
+	GetSrvKeyspaceNames(context.Context, *vtctldata.GetSrvKeyspaceNamesRequest) (*vtctldata.GetSrvKeyspaceNamesResponse, error)
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error)
@@ -846,6 +874,9 @@ func (UnimplementedVtctldServer) DeleteKeyspace(context.Context, *vtctldata.Dele
 func (UnimplementedVtctldServer) DeleteShards(context.Context, *vtctldata.DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteShards not implemented")
 }
+func (UnimplementedVtctldServer) DeleteSrvVSchema(context.Context, *vtctldata.DeleteSrvVSchemaRequest) (*vtctldata.DeleteSrvVSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteSrvVSchema not implemented")
+}
 func (UnimplementedVtctldServer) DeleteTablets(context.Context, *vtctldata.DeleteTabletsRequest) (*vtctldata.DeleteTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteTablets not implemented")
 }
@@ -881,6 +912,9 @@ func (UnimplementedVtctldServer) GetSchema(context.Context, *vtctldata.GetSchema
 }
 func (UnimplementedVtctldServer) GetShard(context.Context, *vtctldata.GetShardRequest) (*vtctldata.GetShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShard not implemented")
+}
+func (UnimplementedVtctldServer) GetSrvKeyspaceNames(context.Context, *vtctldata.GetSrvKeyspaceNamesRequest) (*vtctldata.GetSrvKeyspaceNamesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaceNames not implemented")
 }
 func (UnimplementedVtctldServer) GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaces not implemented")
@@ -1150,6 +1184,24 @@ func _Vtctld_DeleteShards_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_DeleteSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.DeleteSrvVSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).DeleteSrvVSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/DeleteSrvVSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).DeleteSrvVSchema(ctx, req.(*vtctldata.DeleteSrvVSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_DeleteTablets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.DeleteTabletsRequest)
 	if err := dec(in); err != nil {
@@ -1362,6 +1414,24 @@ func _Vtctld_GetShard_Handler(srv interface{}, ctx context.Context, dec func(int
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetShard(ctx, req.(*vtctldata.GetShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_GetSrvKeyspaceNames_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.GetSrvKeyspaceNamesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).GetSrvKeyspaceNames(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/GetSrvKeyspaceNames",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).GetSrvKeyspaceNames(ctx, req.(*vtctldata.GetSrvKeyspaceNamesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1760,6 +1830,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_DeleteShards_Handler,
 		},
 		{
+			MethodName: "DeleteSrvVSchema",
+			Handler:    _Vtctld_DeleteSrvVSchema_Handler,
+		},
+		{
 			MethodName: "DeleteTablets",
 			Handler:    _Vtctld_DeleteTablets_Handler,
 		},
@@ -1806,6 +1880,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetShard",
 			Handler:    _Vtctld_GetShard_Handler,
+		},
+		{
+			MethodName: "GetSrvKeyspaceNames",
+			Handler:    _Vtctld_GetSrvKeyspaceNames_Handler,
 		},
 		{
 			MethodName: "GetSrvKeyspaces",

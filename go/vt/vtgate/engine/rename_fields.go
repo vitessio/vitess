@@ -61,8 +61,8 @@ func (r *RenameFields) GetTableName() string {
 }
 
 // Execute implements the primitive interface
-func (r *RenameFields) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := r.Input.Execute(vcursor, bindVars, wantfields)
+func (r *RenameFields) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (r *RenameFields) renameFields(qr *sqltypes.Result) {
 }
 
 // StreamExecute implements the primitive interface
-func (r *RenameFields) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (r *RenameFields) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if wantfields {
 		innerCallback := callback
 		callback = func(result *sqltypes.Result) error {
@@ -88,7 +88,7 @@ func (r *RenameFields) StreamExecute(vcursor VCursor, bindVars map[string]*query
 			return innerCallback(result)
 		}
 	}
-	return r.Input.StreamExecute(vcursor, bindVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(r.Input, bindVars, wantfields, callback)
 }
 
 // GetFields implements the primitive interface
