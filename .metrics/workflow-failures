@@ -1,4 +1,3 @@
-2021-04-27T15:03:07Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/789526724
 2021-04-27T15:03:07Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/789526747
 2021-04-27T15:03:07Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/789526727
 2021-04-27T15:03:07Z,unit_race,https://github.com/vitessio/vitess/actions/runs/789526713
@@ -9997,4 +9996,5 @@
 2021-08-31T18:15:44Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1187261261
 2021-08-31T18:15:44Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1187261260
 2021-08-31T18:19:43Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1187273677
+2021-08-31T18:19:43Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/1187273619
 2021-08-31T18:19:43Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1187273652
