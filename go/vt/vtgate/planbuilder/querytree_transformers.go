@@ -101,28 +101,78 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, err
 	return plan, nil
 }
 
-func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (*concatenateGen4, error) {
+func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalPlan, error) {
 	var sources []logicalPlan
+
 	for i, source := range n.sources {
-		plan, err := transformToLogicalPlan(ctx, source)
+		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
 		if err != nil {
 			return nil, err
 		}
-		selStmt := n.selectStmts[i]
-		if selStmt != nil {
-			plan, err = planHorizon(ctx, plan, selStmt)
-			if err != nil {
-				return nil, err
-			}
-			if err := setMiscFunc(plan, selStmt); err != nil {
-				return nil, err
-			}
+		if i == 0 {
+			sources = append(sources, plan)
+			continue
+		}
+		last := sources[len(sources)-1]
+		newPlan := mergeLogicalPlans(last, plan)
+		if newPlan != nil {
+			sources[len(sources)-1] = newPlan
+			continue
 		}
 		sources = append(sources, plan)
 	}
+
+	if len(sources) == 1 {
+		return sources[0], nil
+	}
+
 	return &concatenateGen4{
 		sources: sources,
 	}, nil
+}
+
+func mergeLogicalPlans(left logicalPlan, right logicalPlan) logicalPlan {
+	lroute, ok := left.(*route)
+	if !ok {
+		return nil
+	}
+	rroute, ok := right.(*route)
+	if !ok {
+		return nil
+	}
+
+	if lroute.unionCanMerge(rroute, false) {
+		elem := &sqlparser.UnionSelect{
+			Distinct:  false,
+			Statement: rroute.Select,
+		}
+		switch n := lroute.Select.(type) {
+		case *sqlparser.Union:
+			n.UnionSelects = append(n.UnionSelects, elem)
+		default:
+			lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
+		}
+
+		return lroute
+	}
+	return nil
+}
+
+func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if selStmt != nil {
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
+		if err := setMiscFunc(plan, selStmt); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
 func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {

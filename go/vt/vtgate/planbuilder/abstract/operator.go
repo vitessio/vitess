@@ -165,8 +165,10 @@ func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *s
 			}
 		}
 		return createConcatenateIfRequired(sources, selectStmts), nil
+	case *sqlparser.ParenSelect:
+		return CreateOperatorFromSelectStmt(node.Select, semTable)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", selStmt)
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 }
 
 // CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
