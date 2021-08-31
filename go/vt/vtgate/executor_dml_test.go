@@ -493,6 +493,44 @@ func TestDeleteScatter(t *testing.T) {
 	}
 }
 
+func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
+	executor, sbc1, _, _ := createLegacyExecutorEnv()
+
+	sbc1.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int64},
+			{Name: "wo_lu_col", Type: sqltypes.Int64},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(1),
+		}},
+	}})
+
+	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1", nil)
+	require.NoError(t, err)
+	// Queries get annotatted.
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+			BindVariables: map[string]*querypb.BindVariable{
+				"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+				"wo_lu_col":   {Type: querypb.Type_INT64, Value: []byte("1")},
+			},
+		}, {
+			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+}
+
 func TestDeleteByDestination(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	// This query is not supported in v3, so we know for sure is taking the DeleteByDestination route
