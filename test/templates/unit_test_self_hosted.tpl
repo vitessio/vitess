@@ -14,7 +14,21 @@ jobs:
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'make unit_test'
+        run: docker run --name "{{.ImageName}}_$GITHUB_SHA" {{.ImageName}}:$GITHUB_SHA /bin/bash -c 'make unit_test'
+
+      - name: Print Volume Used
+        if: ${{"{{ always() }}"}}
+        run: |
+          docker inspect -f '{{"{{ (index .Mounts 0).Name }}"}}' {{.ImageName}}_$GITHUB_SHA
+
+      - name: Cleanup Docker Volume
+        run: |
+          docker rm -v {{.ImageName}}_$GITHUB_SHA
+
+      - name: Cleanup Docker Container
+        if: ${{"{{ always() }}"}}
+        run: |
+          docker rm -f {{.ImageName}}_$GITHUB_SHA
 
       - name: Cleanup Docker Image
         run: |
