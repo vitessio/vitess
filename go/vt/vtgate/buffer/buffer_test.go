@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -73,7 +72,7 @@ func TestBuffering(t *testing.T) {
 	testAllImplementations(t, testBuffering1)
 }
 
-func testBuffering1(t *testing.T, new constructor) {
+func testBuffering1(t *testing.T, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -88,14 +87,14 @@ func testBuffering1(t *testing.T, new constructor) {
 	}
 	cfg.now = func() time.Time { return now }
 
-	b := new(cfg)
+	b := New(cfg)
 
 	// Simulate that the current primary reports its ExternallyReparentedTimestamp.
 	// vtgate sees this at startup. Additional periodic updates will be sent out
 	// after this. If the TabletExternallyReparented RPC is called regularly by
 	// an external failover tool, the timestamp will be increased (even though
 	// the primary did not change.)
-	b.testFailover(oldPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, oldPrimary, keyspace, shard, now)
 
 	// First request with failover error starts buffering.
 	stopped := issueRequest(context.Background(), t, b, failoverErr)
@@ -121,7 +120,7 @@ func testBuffering1(t *testing.T, new constructor) {
 
 	// Mimic the failover end.
 	now = now.Add(1 * time.Second)
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, newPrimary, keyspace, shard, now)
 
 	// Check that the drain is successful.
 	if err := <-stopped; err != nil {
@@ -178,7 +177,7 @@ func testBuffering1(t *testing.T, new constructor) {
 		t.Fatalf("buffering start was not tracked: got = %v, want = %v", got, want)
 	}
 	// Stop buffering.
-	b.testFailover(oldPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, oldPrimary, keyspace, shard, now)
 
 	if err := <-stopped4; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
@@ -205,13 +204,13 @@ func TestDryRun(t *testing.T) {
 	testAllImplementations(t, testDryRun1)
 }
 
-func testDryRun1(t *testing.T, new constructor) {
+func testDryRun1(t *testing.T, fail failover) {
 	resetVariables()
 
 	cfg := NewDefaultConfig()
 	cfg.DryRun = true
 
-	b := new(cfg)
+	b := New(cfg)
 
 	// Request does not get buffered.
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
@@ -232,7 +231,7 @@ func testDryRun1(t *testing.T, new constructor) {
 	}
 
 	// End of failover is tracked as well.
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -251,14 +250,14 @@ func TestPassthrough(t *testing.T) {
 	testAllImplementations(t, testPassthrough1)
 }
 
-func testPassthrough1(t *testing.T, new constructor) {
+func testPassthrough1(t *testing.T, fail failover) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
 	cfg.Shards = map[string]bool{
 		topoproto.KeyspaceShardString(keyspace, shard): true,
 	}
 
-	b := new(cfg)
+	b := New(cfg)
 
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, nil); err != nil || retryDone != nil {
 		t.Fatalf("requests with no error must never be buffered. err: %v retryDone: %v", err, retryDone)
@@ -280,24 +279,24 @@ func TestLastReparentTooRecent_BufferingSkipped(t *testing.T) {
 	testAllImplementations(t, testLastReparentTooRecent_BufferingSkipped1)
 }
 
-func testLastReparentTooRecent_BufferingSkipped1(t *testing.T, new constructor) {
+func testLastReparentTooRecent_BufferingSkipped1(t *testing.T, fail failover) {
 	resetVariables()
 
 	now := time.Now()
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
 	cfg.now = func() time.Time { return now }
-	b := new(cfg)
+	b := New(cfg)
 
 	// Simulate that the old primary notified us about its reparented timestamp
 	// very recently (time.Now()).
 	// vtgate should see this immediately after the start.
-	b.testFailover(oldPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, oldPrimary, keyspace, shard, now)
 
 	// Failover to new primary. Its end is detected faster than the beginning.
 	// Do not start buffering.
 	now = now.Add(1 * time.Second)
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, newPrimary, keyspace, shard, now)
 
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), keyspace, shard, failoverErr); err != nil || retryDone != nil {
 		t.Fatalf("requests where the failover end was recently detected before the start must not be buffered. err: %v retryDone: %v", err, retryDone)
@@ -320,24 +319,24 @@ func TestLastReparentTooRecent_Buffering(t *testing.T) {
 	testAllImplementations(t, testLastReparentTooRecent_Buffering1)
 }
 
-func testLastReparentTooRecent_Buffering1(t *testing.T, new constructor) {
+func testLastReparentTooRecent_Buffering1(t *testing.T, fail failover) {
 	resetVariables()
 
 	now := time.Now()
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
 	cfg.now = func() time.Time { return now }
-	b := new(cfg)
+	b := New(cfg)
 
 	// Simulate that the old primary notified us about its reparented timestamp
 	// very recently (time.Now()).
 	// vtgate should see this immediately after the start.
-	b.testFailover(oldPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, oldPrimary, keyspace, shard, now)
 
 	// Failover to new primary. Do not issue any requests before or after i.e.
 	// there was 0 QPS traffic and no buffering was started.
 	now = now.Add(1 * time.Second)
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, newPrimary, keyspace, shard, now)
 
 	// After we're past the --buffer_min_time_between_failovers threshold, go
 	// through a failover with non-zero QPS.
@@ -348,7 +347,7 @@ func testLastReparentTooRecent_Buffering1(t *testing.T, new constructor) {
 		t.Fatal(err)
 	}
 	// And then the failover end.
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, now)
+	fail(b, newPrimary, keyspace, shard, now)
 
 	// Check that the drain is successful.
 	if err := <-stopped; err != nil {
@@ -373,13 +372,13 @@ func TestPassthroughDuringDrain(t *testing.T) {
 	testAllImplementations(t, testPassthroughDuringDrain1)
 }
 
-func testPassthroughDuringDrain1(t *testing.T, new constructor) {
+func testPassthroughDuringDrain1(t *testing.T, fail failover) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
 	cfg.Shards = map[string]bool{
 		topoproto.KeyspaceShardString(keyspace, shard): true,
 	}
-	b := new(cfg)
+	b := New(cfg)
 
 	// Buffer one request.
 	markRetryDone := make(chan struct{})
@@ -389,9 +388,9 @@ func testPassthroughDuringDrain1(t *testing.T, new constructor) {
 	}
 
 	// Stop buffering and trigger drain.
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
-	if got, want := b.testGetShardBuffer(keyspace, shard).testGetState(), stateDraining; got != want {
+	if got, want := b.getOrCreateBuffer(keyspace, shard).testGetState(), stateDraining; got != want {
 		t.Fatalf("wrong expected state. got = %v, want = %v", got, want)
 	}
 
@@ -422,13 +421,13 @@ func TestPassthroughIgnoredKeyspaceOrShard(t *testing.T) {
 	testAllImplementations(t, testPassthroughIgnoredKeyspaceOrShard1)
 }
 
-func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, new constructor) {
+func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, fail failover) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
 	cfg.Shards = map[string]bool{
 		topoproto.KeyspaceShardString(keyspace, shard): true,
 	}
-	b := new(cfg)
+	b := New(cfg)
 
 	ignoredKeyspace := "ignored_ks"
 	if retryDone, err := b.WaitForFailoverEnd(context.Background(), ignoredKeyspace, shard, failoverErr); err != nil || retryDone != nil {
@@ -455,24 +454,24 @@ func testPassthroughIgnoredKeyspaceOrShard1(t *testing.T, new constructor) {
 // TestRequestCanceled_ExplicitEnd stops the buffering because the we see the
 // new primary.
 func TestRequestCanceled_ExplicitEnd(t *testing.T) {
-	testAllImplementations(t, func(t *testing.T, new constructor) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
 		t.Helper()
-		testRequestCanceled(t, true, new)
+		testRequestCanceled(t, true, fail)
 	})
 }
 
 // TestRequestCanceled_MaxDurationEnd stops the buffering because the max
 // failover duration is reached.
 func TestRequestCanceled_MaxDurationEnd(t *testing.T) {
-	testAllImplementations(t, func(t *testing.T, new constructor) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
 		t.Helper()
-		testRequestCanceled(t, false, new)
+		testRequestCanceled(t, false, fail)
 	})
 }
 
 // testRequestCanceled tests the case when a buffered request is canceled
 // (more precisively its context) before the failover/buffering ends.
-func testRequestCanceled(t *testing.T, explicitEnd bool, new constructor) {
+func testRequestCanceled(t *testing.T, explicitEnd bool, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -485,7 +484,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, new constructor) {
 		cfg.MaxFailoverDuration = 100 * time.Millisecond
 	}
 
-	b := new(cfg)
+	b := New(cfg)
 
 	// Buffer 2 requests. The second will be canceled and the first will be drained.
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
@@ -513,7 +512,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, new constructor) {
 	}
 
 	if explicitEnd {
-		b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 	}
 
 	// Failover will end eventually.
@@ -528,7 +527,7 @@ func testRequestCanceled(t *testing.T, explicitEnd bool, new constructor) {
 	// If buffering stopped implicitly, the explicit signal will still happen
 	// shortly after. In that case, the buffer should ignore it.
 	if !explicitEnd {
-		b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+		fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 	}
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -542,7 +541,7 @@ func TestEviction(t *testing.T) {
 	testAllImplementations(t, testEviction1)
 }
 
-func testEviction1(t *testing.T, new constructor) {
+func testEviction1(t *testing.T, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -552,7 +551,7 @@ func testEviction1(t *testing.T, new constructor) {
 		topoproto.KeyspaceShardString(keyspace, shard): true,
 	}
 	cfg.Size = 2
-	b := new(cfg)
+	b := New(cfg)
 
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)
 	// This wait is important because each request gets inserted asynchronously
@@ -576,7 +575,7 @@ func testEviction1(t *testing.T, new constructor) {
 	}
 
 	// End of failover. Stop buffering.
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
 	if err := <-stopped2; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
@@ -599,7 +598,7 @@ func TestEvictionNotPossible(t *testing.T) {
 	testAllImplementations(t, testEvictionNotPossible1)
 }
 
-func testEvictionNotPossible1(t *testing.T, new constructor) {
+func testEvictionNotPossible1(t *testing.T, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -611,7 +610,7 @@ func testEvictionNotPossible1(t *testing.T, new constructor) {
 	}
 	cfg.Size = 1
 
-	b := new(cfg)
+	b := New(cfg)
 
 	// Make the buffer full (applies to all failovers).
 	// Also triggers buffering for the first shard.
@@ -634,7 +633,7 @@ func testEvictionNotPossible1(t *testing.T, new constructor) {
 	}
 
 	// End of failover. Stop buffering.
-	b.testFailover(newPrimary, &querypb.Target{Keyspace: keyspace, Shard: shard, TabletType: topodatapb.TabletType_PRIMARY}, time.Unix(1, 0))
+	fail(b, newPrimary, keyspace, shard, time.Unix(1, 0))
 
 	if err := <-stoppedFirstFailover; err != nil {
 		t.Fatalf("request should have been buffered and not returned an error: %v", err)
@@ -656,7 +655,7 @@ func TestWindow(t *testing.T) {
 	testAllImplementations(t, testWindow1)
 }
 
-func testWindow1(t *testing.T, new constructor) {
+func testWindow1(t *testing.T, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
@@ -669,7 +668,7 @@ func testWindow1(t *testing.T, new constructor) {
 	cfg.Size = 1
 	cfg.Window = 1 * time.Millisecond
 
-	b := new(cfg)
+	b := New(cfg)
 
 	// Buffer one request.
 	t.Logf("first request exceeds its window")
@@ -741,7 +740,7 @@ func testWindow1(t *testing.T, new constructor) {
 
 	// At this point the buffer is empty but buffering is still active.
 	// Simulate that the buffering stops because the max duration (10m) was reached.
-	b.testGetShardBuffer(keyspace, shard).stopBufferingDueToMaxDuration()
+	b.getOrCreateBuffer(keyspace, shard).stopBufferingDueToMaxDuration()
 	// Wait for the failover end to avoid races.
 	if err := waitForState(b, stateIdle); err != nil {
 		t.Fatal(err)
@@ -757,13 +756,13 @@ func TestShutdown(t *testing.T) {
 	testAllImplementations(t, testShutdown1)
 }
 
-func testShutdown1(t *testing.T, new constructor) {
+func testShutdown1(t *testing.T, fail failover) {
 	resetVariables()
 	defer checkVariables(t)
 
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true
-	b := new(cfg)
+	b := New(cfg)
 
 	// Buffer one request.
 	stopped1 := issueRequest(context.Background(), t, b, failoverErr)

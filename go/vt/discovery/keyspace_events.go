@@ -50,10 +50,9 @@ type KeyspaceEvent struct {
 }
 
 type ShardEvent struct {
-	Tablet          *topodatapb.TabletAlias
-	Target          *query.Target
-	LastReparenting time.Time
-	Serving         bool
+	Tablet  *topodatapb.TabletAlias
+	Target  *query.Target
+	Serving bool
 }
 
 func NewKeyspaceEventWatcher(ctx context.Context, topoServer srvtopo.Server, hc HealthCheck, localCell string) *KeyspaceEventWatcher {
@@ -86,7 +85,6 @@ type shardState struct {
 	target               *query.Target
 	serving              bool
 	externallyReparented int64
-	lastReparent         time.Time
 	currentPrimary       *topodatapb.TabletAlias
 }
 
@@ -195,10 +193,9 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 
 	for shard, sstate := range kss.shards {
 		ksevent.Shards = append(ksevent.Shards, ShardEvent{
-			Tablet:          sstate.currentPrimary,
-			Target:          sstate.target,
-			LastReparenting: sstate.lastReparent,
-			Serving:         sstate.serving,
+			Tablet:  sstate.currentPrimary,
+			Target:  sstate.target,
+			Serving: sstate.serving,
 		})
 
 		log.Infof("keyspace event resolved: %s/%s is now consistent (serving: %v)",
@@ -239,20 +236,7 @@ func (kss *keyspaceState) onHealthCheck(th *TabletHealth) {
 
 	if th.PrimaryTermStartTime != 0 && th.PrimaryTermStartTime > sstate.externallyReparented {
 		sstate.externallyReparented = th.PrimaryTermStartTime
-
-		log.Infof("keyspace event: primary promoted for %s/%s (old: %q, new: %q)",
-			th.Target.Keyspace, th.Target.Shard,
-			topoproto.TabletAliasString(sstate.currentPrimary),
-			topoproto.TabletAliasString(th.Tablet.Alias),
-		)
-
-		if !topoproto.TabletAliasEqual(th.Tablet.Alias, sstate.currentPrimary) {
-			if sstate.currentPrimary != nil {
-				sstate.lastReparent = time.Now()
-			}
-			sstate.currentPrimary = th.Tablet.Alias
-		}
-
+		sstate.currentPrimary = th.Tablet.Alias
 		kss.consistent = false
 	}
 

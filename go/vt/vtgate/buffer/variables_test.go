@@ -43,7 +43,7 @@ func TestVariables(t *testing.T) {
 func TestVariablesAreInitialized(t *testing.T) {
 	// Create a new buffer and make a call which will create the shardBuffer object.
 	// After that, the variables should be initialized for that shard.
-	b := NewHealthCheckBuffer(NewDefaultConfig())
+	b := New(NewDefaultConfig())
 	_, err := b.WaitForFailoverEnd(context.Background(), "init_test", "0", nil /* err */)
 	if err != nil {
 		t.Fatalf("buffer should just passthrough and not return an error: %v", err)

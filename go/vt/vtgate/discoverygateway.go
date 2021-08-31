@@ -74,7 +74,7 @@ type DiscoveryGateway struct {
 	statusAggregators map[string]*TabletStatusAggregator
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
-	buffer *buffer.HealthCheckBuffer
+	buffer *buffer.Buffer
 }
 
 //TabletsCacheStatus is not implemented for this struct
@@ -112,7 +112,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		retryCount:        retryCount,
 		tabletsWatchers:   make([]*discovery.LegacyTopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.NewHealthCheckBuffer(bufferCfg),
+		buffer:            buffer.New(bufferCfg),
 	}
 
 	// Set listener which will update LegacyTabletStatsCache and PrimaryBuffer.
