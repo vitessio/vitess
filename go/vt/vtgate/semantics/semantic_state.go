@@ -35,6 +35,7 @@ type (
 		Authoritative() bool
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
+		GetVindex() *vindexes.Table
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
@@ -143,6 +144,22 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
+
+func (v VindexTable) GetVindex() *vindexes.Table {
+	return v.Table.GetVindex()
+}
+
+func (v *vTableInfo) GetVindex() *vindexes.Table {
+	return nil
+}
+
+func (a *AliasedTable) GetVindex() *vindexes.Table {
+	return a.Table
+}
+
+func (r *RealTable) GetVindex() *vindexes.Table {
+	return r.Table
+}
 
 func (v VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	panic("implement me")
@@ -312,6 +329,7 @@ func (r *RealTable) IsActualTable() bool {
 var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
+var _ TableInfo = (*VindexTable)(nil)
 
 func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
 	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
