@@ -227,27 +227,44 @@ git push upstream v12.0.0
 
 ### Creating Release (or Candidate)
 
-1. Create a new branch (if needed) with the following existing naming convention e.g. release-11.0. We usually do this while creating RC1 and re-use it for GA release.
+#### 1. Create a new branch
+
+If needed, create a new branch with the following existing naming convention. We usually do this while creating RC1 and re-use it for GA release, as well as any patch release of the same major release.
+
+> **For instance:**
+> 
+> - If we are currently on release 8, and we want to release `v9.0.0-rc1`, we will create a `release-9.0` branch.
+> - Once `v9.0.0-rc1` is out, any new commit on the `release-9.0` branch will be used to publish the next releases of the same major increment (`v9.0.0`, `v9.0.1`, `v9.0.2`, etc).
 
 ![alt text](.images/release-01.png)
 
-2. Click on Code -> Releases
+#### 2. Open the releases page
+
+On Vitess' GitHub repository main page, click on Code -> [Releases](https://github.com/vitessio/vitess/releases).
 
 ![alt text](.images/release-02.png)
 
-3. Draft a new release. The naming convention for release candidates is to append “-rc1” to the expected release version.
+#### 3. Draft a new release
+
+On the Releases page, click on `Draft a new release`.
 
 ![alt text](.images/release-03.png)
 
-4. Tag a new release against the branch.
+#### 4. Tag a new release
+
+When drafting a new release, we are asked to choose the release's tag and branch. The tag is formated this way: `v9.0.0`. The naming convention for release candidates is to append `-rc1` to the tag name. The branch is the same one as the one we've created in the first step. 
 
 ![alt text](.images/release-04.png)
 
-5. Copy/paste previously built Release Notes into the description.
+#### 5. Add release notes and release
+
+Copy/paste the previously built Release Notes into the description of the release.
+
+If this is a pre-release (RC) select the `pre-release` checkbox.
+
+And finally, click on `Publish release`.
 
 ![alt text](.images/release-05.png)
-
-Note: If this is a pre-release (RC)  select the pre-release checkbox. 
 
 ### Post Release Steps
 * Announce new release in Vitess Slack #general channel. 
