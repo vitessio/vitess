@@ -95,7 +95,12 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 }
 
 func optimizeVindex(ctx planningContext, op *abstract.Vindex) (queryTree, error) {
-	return nil, nil
+	solves := ctx.semTable.TableSetFor(op.Table.Alias)
+	plan := &vindexTree{
+		solved: solves,
+		table:  vindexTable{table: op.Table},
+	}
+	return plan, nil
 }
 
 func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, error) {

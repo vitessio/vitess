@@ -50,7 +50,7 @@ type (
 	}
 
 	vindexTable struct {
-		table *abstract.VindexTable
+		table abstract.VindexTable
 	}
 
 	joinTables struct {
