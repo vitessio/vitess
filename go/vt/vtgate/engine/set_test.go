@@ -56,7 +56,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 			"foobar",
 		)},
 	}
-	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
@@ -324,7 +324,7 @@ func TestSetTable(t *testing.T) {
 				results:        tc.qr,
 				multiShardErrs: []error{tc.execErr},
 			}
-			_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
 			} else {
@@ -363,7 +363,7 @@ func TestSysVarSetErr(t *testing.T) {
 		shards:         []string{"-20", "20-"},
 		multiShardErrs: []error{fmt.Errorf("error")},
 	}
-	_, err := set.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := set.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, "error")
 	vc.ExpectLog(t, expectedQueryLog)
 }

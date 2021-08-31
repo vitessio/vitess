@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -1978,6 +1979,108 @@ func TestDeleteShards(t *testing.T) {
 	}
 }
 
+func TestDeleteSrvKeyspace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		vschemas  map[string]*vschemapb.SrvVSchema
+		req       *vtctldatapb.DeleteSrvVSchemaRequest
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			vschemas: map[string]*vschemapb.SrvVSchema{
+				"zone1": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {},
+						"ks2": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+				"zone2": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks3": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+			},
+			req: &vtctldatapb.DeleteSrvVSchemaRequest{
+				Cell: "zone2",
+			},
+		},
+		{
+			name: "cell not found",
+			vschemas: map[string]*vschemapb.SrvVSchema{
+				"zone1": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {},
+						"ks2": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+				"zone2": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks3": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+			},
+			req: &vtctldatapb.DeleteSrvVSchemaRequest{
+				Cell: "zone404",
+			},
+			shouldErr: true,
+		},
+		{
+			name:      "empty cell argument",
+			req:       &vtctldatapb.DeleteSrvVSchemaRequest{},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.vschemas))
+			finalVSchemas := make(map[string]*vschemapb.SrvVSchema, len(tt.vschemas)) // the set of vschemas that should be left after the Delete
+			for cell, vschema := range tt.vschemas {
+				cells = append(cells, cell)
+
+				if cell == tt.req.Cell {
+					vschema = nil
+				}
+
+				finalVSchemas[cell] = vschema
+			}
+
+			ts := memorytopo.NewServer(cells...)
+			for cell, vschema := range tt.vschemas {
+				err := ts.UpdateSrvVSchema(ctx, cell, vschema)
+				require.NoError(t, err, "failed to update SrvVSchema in cell = %v, vschema = %+v", cell, vschema)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.DeleteSrvVSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			resp, err := vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{})
+			require.NoError(t, err, "GetSrvVSchemas error")
+			utils.MustMatch(t, resp.SrvVSchemas, finalVSchemas)
+		})
+	}
+}
+
 func TestDeleteTablets(t *testing.T) {
 	t.Parallel()
 
@@ -3352,6 +3455,142 @@ func TestGetShard(t *testing.T) {
 				return
 			}
 
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetSrvKeyspaceNames(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name               string
+		srvKeyspacesByCell map[string]map[string]*topodatapb.SrvKeyspace
+		topoError          error
+		req                *vtctldatapb.GetSrvKeyspaceNamesRequest
+		expected           *vtctldatapb.GetSrvKeyspaceNamesResponse
+		shouldErr          bool
+	}{
+		{
+			name: "success",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{},
+			expected: &vtctldatapb.GetSrvKeyspaceNamesResponse{
+				Names: map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{
+					"zone1": {
+						Names: []string{"ks1", "ks2"},
+					},
+					"zone2": {
+						Names: []string{"ks1"},
+					},
+				},
+			},
+		},
+		{
+			name: "cell filtering",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{
+				Cells: []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetSrvKeyspaceNamesResponse{
+				Names: map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{
+					"zone2": {
+						Names: []string{"ks1"},
+					},
+				},
+			},
+		},
+		{
+			name: "all cells topo down",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req:       &vtctldatapb.GetSrvKeyspaceNamesRequest{},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+		{
+			name: "cell filtering topo down",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{
+				Cells: []string{"zone2"},
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.srvKeyspacesByCell))
+			for cell := range tt.srvKeyspacesByCell {
+				cells = append(cells, cell)
+			}
+
+			ts, factory := memorytopo.NewServerAndFactory(cells...)
+
+			for cell, srvKeyspaces := range tt.srvKeyspacesByCell {
+				for ks, srvks := range srvKeyspaces {
+					err := ts.UpdateSrvKeyspace(ctx, cell, ks, srvks)
+					require.NoError(t, err, "UpdateSrvKeyspace(%s, %s, %+v) failed", cell, ks, srvks)
+				}
+			}
+
+			if tt.topoError != nil {
+				factory.SetError(tt.topoError)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.GetSrvKeyspaceNames(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			for _, names := range resp.Names {
+				sort.Strings(names.Names)
+			}
+			for _, names := range tt.expected.Names {
+				sort.Strings(names.Names)
+			}
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
