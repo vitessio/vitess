@@ -3891,3 +3891,66 @@ Gen4 plan same as above
     ]
   }
 }
+
+# alias on column from derived table. TODO: to support alias in SimpleProjection engine primitive.
+"select a as k from (select count(*) as a from user) t"
+{
+  "QueryType": "SELECT",
+  "Original": "select a as k from (select count(*) as a from user) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a as k from (select count(*) as a from user) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
