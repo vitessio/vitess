@@ -55,7 +55,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 				// Checking if the Vindex is currently backfilling or not, if it isn't we can read from the vindex table
 				// and we will be able to do a delete equal. Otherwise, we do a delete scatter since we will not be able
 				// to know in which shard the row is.
-				opcode = engine.Scatter
+				continue
 			}
 			return opcode, ksidVindex, ksidCol, single, []sqltypes.PlanValue{pv}, nil
 		}
