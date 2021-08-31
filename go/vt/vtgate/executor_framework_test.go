@@ -111,7 +111,17 @@ var executorVSchema = `
         		"from": "unq_col",
         		"to": "keyspace_id"
       		},
-      	"owner": "t1"
+      		"owner": "t1"
+    	},
+		"t2_wo_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "wo_lu_idx",
+        		"from": "wo_lu_col",
+        		"to": "keyspace_id",
+				"write_only": "true"
+      		},
+      		"owner": "t2_wo_lookup"
     	}
 	},
 	"tables": {
@@ -265,6 +275,26 @@ var executorVSchema = `
 			"column_vindexes": [
 				{
 					"column": "unq_col",
+				  	"name": "hash_index"
+				}
+			]
+		},
+		"t2_wo_lookup": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+				  	"column": "wo_lu_col",
+				  	"name": "t2_wo_lu_vdx"
+				}
+            ]
+    	},
+		"wo_lu_idx": {
+			"column_vindexes": [
+				{
+					"column": "wo_lu_col",
 				  	"name": "hash_index"
 				}
 			]
