@@ -12,12 +12,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Docker Image
-        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_multicell/Dockerfile -t cluster_test_vreplication_multicell  .
+        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_multicell/Dockerfile -t cluster_test_vreplication_multicell:$GITHUB_SHA  .
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm cluster_test_vreplication_multicell /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_multicell'
+        run: docker run --rm cluster_test_vreplication_multicell:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_multicell'
 
       - name: Cleanup Docker Image
         run: |
-          docker image rm cluster_test_vreplication_multicell
+          docker image rm cluster_test_vreplication_multicell:$GITHUB_SHA

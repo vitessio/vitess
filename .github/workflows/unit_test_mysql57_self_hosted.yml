@@ -12,12 +12,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Docker Image
-        run: docker build -f ./.github/dockerFiles/unit_test_mysql57/Dockerfile -t unit_test_mysql57  .
+        run: docker build -f ./.github/dockerFiles/unit_test_mysql57/Dockerfile -t unit_test_mysql57:$GITHUB_SHA  .
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm unit_test_mysql57 /bin/bash -c 'make unit_test'
+        run: docker run --rm unit_test_mysql57:$GITHUB_SHA /bin/bash -c 'make unit_test'
 
       - name: Cleanup Docker Image
         run: |
-          docker image rm unit_test_mysql57
+          docker image rm unit_test_mysql57:$GITHUB_SHA
