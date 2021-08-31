@@ -23,17 +23,18 @@ import (
 
 // Concatenate represents a UNION ALL.
 type Concatenate struct {
-	Sources []Operator
+	SelectStmts []*sqlparser.Select
+	Sources     []Operator
 }
 
 var _ Operator = (*Concatenate)(nil)
 
 // createConcatenateIfRequired creates a Concatenate operator on top of the sources if it is required
-func createConcatenateIfRequired(sources []Operator) Operator {
+func createConcatenateIfRequired(sources []Operator, selStmts []*sqlparser.Select) Operator {
 	if len(sources) == 1 {
 		return sources[0]
 	}
-	return &Concatenate{Sources: sources}
+	return &Concatenate{Sources: sources, SelectStmts: selStmts}
 }
 
 // TableID implements the Operator interface

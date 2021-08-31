@@ -147,17 +147,24 @@ func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *s
 			return nil, err
 		}
 		sources := []Operator{op}
+		sel, _ := node.FirstStatement.(*sqlparser.Select)
+		selectStmts := []*sqlparser.Select{sel}
 		for _, unionSelect := range node.UnionSelects {
 			op, err = CreateOperatorFromSelectStmt(unionSelect.Statement, semTable)
 			if err != nil {
 				return nil, err
 			}
+
 			sources = append(sources, op)
+			sel, _ = unionSelect.Statement.(*sqlparser.Select)
+			selectStmts = append(selectStmts, sel)
+
 			if unionSelect.Distinct {
-				sources = []Operator{&Distinct{Source: &Concatenate{Sources: sources}}}
+				sources = []Operator{&Distinct{Source: &Concatenate{Sources: sources, SelectStmts: selectStmts}}}
+				selectStmts = []*sqlparser.Select{nil}
 			}
 		}
-		return createConcatenateIfRequired(sources), nil
+		return createConcatenateIfRequired(sources, selectStmts), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", selStmt)
 }
