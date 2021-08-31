@@ -5,12 +5,12 @@ FROM "${image}"
 
 USER root
 
-  # Re-copy sources from working tree
+# Re-copy sources from working tree
 RUN rm -rf /vt/src/vitess.io/vitess/*
 COPY . /vt/src/vitess.io/vitess
 
 {{if .InstallXtraBackup}}
-  # install XtraBackup
+# install XtraBackup
 RUN wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
 RUN apt-get update
 RUN apt-get install -y gnupg2
@@ -19,23 +19,24 @@ RUN apt-get update
 RUN apt-get install -y percona-xtrabackup-24
 {{end}}
 
-  # Set the working directory
+# Set the working directory
 WORKDIR /vt/src/vitess.io/vitess
 
-  # Fix permissions
+# Fix permissions
 RUN chown -R vitess:vitess /vt
 
 USER vitess
 
-  # Set environment variables
+# Set environment variables
 ENV VTROOT /vt/src/vitess.io/vitess
-ENV VTDATAROOT $VTROOT/vtdataroot
+# Set the vtdataroot such that it uses the volume mount
+ENV VTDATAROOT /vt/vtdataroot
 
-  # create the vtdataroot directory
+# create the vtdataroot directory
 RUN mkdir -p $VTDATAROOT
 
 {{if .MakeTools}}
-  # make tools
+# make tools
 RUN make tools
 {{end}}
 
