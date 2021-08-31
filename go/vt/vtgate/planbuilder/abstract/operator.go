@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -130,6 +132,32 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 		}
 	}
 	return output, nil
+}
+
+// CreateOperatorFromSelectStmt creates an operator tree that represents the input SELECT or UNION query
+func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (Operator, error) {
+	switch node := selStmt.(type) {
+	case *sqlparser.Select:
+		return CreateOperatorFromSelect(node, semTable)
+	case *sqlparser.Union:
+		op, err := CreateOperatorFromSelectStmt(node.FirstStatement, semTable)
+		if err != nil {
+			return nil, err
+		}
+		sources := []Operator{op}
+		for _, unionSelect := range node.UnionSelects {
+			op, err = CreateOperatorFromSelectStmt(unionSelect.Statement, semTable)
+			if err != nil {
+				return nil, err
+			}
+			sources = append(sources, op)
+			if unionSelect.Distinct {
+				sources = []Operator{&Distinct{Source: &Concatenate{Sources: sources}}}
+			}
+		}
+		return createConcatenateIfRequired(sources), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", selStmt)
 }
 
 // CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
