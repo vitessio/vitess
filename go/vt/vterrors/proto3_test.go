@@ -19,7 +19,7 @@ package vterrors
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -33,15 +33,14 @@ func TestFromVtRPCError(t *testing.T) {
 		want: nil,
 	}, {
 		in: &vtrpcpb.RPCError{
-			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
-			Message:    "bad input",
+			Code:    vtrpcpb.Code_INVALID_ARGUMENT,
+			Message: "bad input",
 		},
 		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}, {
 		in: &vtrpcpb.RPCError{
-			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
-			Message:    "bad input",
-			Code:       vtrpcpb.Code_INVALID_ARGUMENT,
+			Message: "bad input",
+			Code:    vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 		want: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 	}, {
@@ -69,9 +68,8 @@ func TestVtRPCErrorFromVtError(t *testing.T) {
 	}, {
 		in: New(vtrpcpb.Code_INVALID_ARGUMENT, "bad input"),
 		want: &vtrpcpb.RPCError{
-			LegacyCode: vtrpcpb.LegacyErrorCode_BAD_INPUT_LEGACY,
-			Message:    "bad input",
-			Code:       vtrpcpb.Code_INVALID_ARGUMENT,
+			Message: "bad input",
+			Code:    vtrpcpb.Code_INVALID_ARGUMENT,
 		},
 	}}
 	for _, tcase := range testcases {

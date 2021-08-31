@@ -37,17 +37,17 @@ func TestTabletCommands(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
-	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
+	conn, err := mysql.Connect(ctx, &primaryTabletParams)
 	require.Nil(t, err)
-	defer masterConn.Close()
+	defer conn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
 	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
-	exec(t, masterConn, "delete from t1")
-	exec(t, masterConn, "insert into t1(id, value) values(1,'a'), (2,'b')")
+	exec(t, conn, "delete from t1")
+	exec(t, conn, "insert into t1(id, value) values(1,'a'), (2,'b')")
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// test exclude_field_names to vttablet works as expected
@@ -56,7 +56,7 @@ func TestTabletCommands(t *testing.T) {
 		"VtTabletExecute",
 		"-options", "included_fields:TYPE_ONLY",
 		"-json",
-		masterTablet.Alias,
+		primaryTablet.Alias,
 		sql,
 	}
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
@@ -65,15 +65,15 @@ func TestTabletCommands(t *testing.T) {
 
 	// make sure direct dba queries work
 	sql = "select * from t1"
-	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", masterTablet.Alias, sql)
+	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", primaryTablet.Alias, sql)
 	require.Nil(t, err)
 	assertExecuteFetch(t, result)
 
 	// check Ping / RefreshState / RefreshStateByShard
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Ping", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshStateByShard", keyspaceShard)
@@ -83,16 +83,16 @@ func TestTabletCommands(t *testing.T) {
 	require.Nil(t, err, "error should be Nil")
 
 	// Check basic actions.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadOnly", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadOnly", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
-	qr := exec(t, masterConn, "show variables like 'read_only'")
+	qr := exec(t, conn, "show variables like 'read_only'")
 	got := fmt.Sprintf("%v", qr.Rows)
 	want := "[[VARCHAR(\"read_only\") VARCHAR(\"ON\")]]"
 	assert.Equal(t, want, got)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", masterTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", primaryTablet.Alias)
 	require.Nil(t, err, "error should be Nil")
-	qr = exec(t, masterConn, "show variables like 'read_only'")
+	qr = exec(t, conn, "show variables like 'read_only'")
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)
@@ -147,12 +147,12 @@ func assertExecuteFetch(t *testing.T, qr string) {
 func TestActionAndTimeout(t *testing.T) {
 
 	defer cluster.PanicHandler(t)
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("Sleep", masterTablet.Alias, "5s")
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("Sleep", primaryTablet.Alias, "5s")
 	require.Nil(t, err)
 	time.Sleep(1 * time.Second)
 
 	// try a frontend RefreshState that should timeout as the tablet is busy running the other one
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", masterTablet.Alias, "-wait-time", "2s")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias, "-wait-time", "2s")
 	assert.Error(t, err, "timeout as tablet is in Sleep")
 }
 
@@ -160,24 +160,24 @@ func TestHook(t *testing.T) {
 	// test a regular program works
 	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
-		"ExecuteHook", masterTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
 
 	// test stderr output
 	runHookAndAssert(t, []string{
-		"ExecuteHook", masterTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--to-stderr"}, "0", false, "ERR: --to-stderr\n")
 
 	// test commands that fail
 	runHookAndAssert(t, []string{
-		"ExecuteHook", masterTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
+		"ExecuteHook", primaryTablet.Alias, "test.sh", "--exit-error"}, "1", false, "ERROR: exit status 1\n")
 
 	// test hook that is not present
 	runHookAndAssert(t, []string{
-		"ExecuteHook", masterTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
+		"ExecuteHook", primaryTablet.Alias, "not_here.sh", "--exit-error"}, "-1", false, "missing hook")
 
 	// test hook with invalid name
 
 	runHookAndAssert(t, []string{
-		"ExecuteHook", masterTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
+		"ExecuteHook", primaryTablet.Alias, "/bin/ls"}, "-1", true, "hook name cannot have")
 }
 
 func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expectedError bool, expectedStderr string) {
@@ -203,7 +203,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 }
 
 func TestShardReplicationFix(t *testing.T) {
-	// make sure the replica is in the replication graph, 2 nodes: 1 master, 1 replica
+	// make sure the replica is in the replication graph, 2 nodes: 1 primary, 1 replica
 	defer cluster.PanicHandler(t)
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")

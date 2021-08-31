@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/test/utils"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +37,7 @@ func TestGetSchema(t *testing.T) {
 		Hostname: "abcd",
 		Keyspace: "testkeyspace",
 		Shard:    "-",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 	}
 	require.NoError(t, topo.CreateTablet(ctx, tablet))
 
@@ -171,7 +173,7 @@ func TestGetSchema(t *testing.T) {
 	err = json2.Unmarshal([]byte(val), actual)
 	require.NoError(t, err)
 
-	assert.Equal(t, sd, actual)
+	utils.MustMatch(t, sd, actual)
 
 	// reset for the next invocation, where we verify that passing
 	// -table_sizes_only does not include the create table statement or columns.
@@ -212,5 +214,5 @@ func TestGetSchema(t *testing.T) {
 	err = json2.Unmarshal([]byte(val), actual)
 	require.NoError(t, err)
 
-	assert.Equal(t, sd, actual)
+	utils.MustMatch(t, sd, actual)
 }

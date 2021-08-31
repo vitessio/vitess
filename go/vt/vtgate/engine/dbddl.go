@@ -95,7 +95,7 @@ func (c *DBDDL) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (c *DBDDL) Execute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (c *DBDDL) TryExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()
 	plugin, ok := databaseCreatorPlugins[name]
 	if !ok {
@@ -181,8 +181,8 @@ func (c *DBDDL) dropDatabase(vcursor VCursor, plugin DBDDLPlugin) (*sqltypes.Res
 }
 
 // StreamExecute implements the Primitive interface
-func (c *DBDDL) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	res, err := c.Execute(vcursor, bindVars, wantfields)
+func (c *DBDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	res, err := c.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

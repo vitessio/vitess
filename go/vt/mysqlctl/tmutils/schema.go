@@ -23,7 +23,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/concurrency"
 
@@ -78,7 +78,7 @@ type TableFilter struct {
 }
 
 // NewTableFilter creates a TableFilter for whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFilter, error) {
 	f := &TableFilter{
@@ -173,10 +173,10 @@ func (f *TableFilter) Includes(tableName string, tableType string) bool {
 }
 
 // FilterTables returns a copy which includes only whitelisted tables
-// (tables), no blacklisted tables (excludeTables) and optionally
+// (tables), no denied tables (excludeTables) and optionally
 // views (includeViews).
 func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	copy := *sd
+	copy := proto.Clone(sd).(*tabletmanagerdatapb.SchemaDefinition)
 	copy.TableDefinitions = make([]*tabletmanagerdatapb.TableDefinition, 0, len(sd.TableDefinitions))
 
 	f, err := NewTableFilter(tables, excludeTables, includeViews)
@@ -192,10 +192,10 @@ func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTable
 
 	// Regenerate hash over tables because it may have changed.
 	if copy.Version != "" {
-		GenerateSchemaVersion(&copy)
+		GenerateSchemaVersion(copy)
 	}
 
-	return &copy, nil
+	return copy, nil
 }
 
 // GenerateSchemaVersion return a unique schema version string based on

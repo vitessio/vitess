@@ -27,6 +27,16 @@
 					"to": "user_id"
 				}
 			},
+			"email_customer_map": {
+				"type": "lookup_hash_unique",
+				"owner": "customer",
+				"params": {
+					"table": "email_customer_map",
+					"from": "email",
+					"to": "user_id",
+					"batch_lookup": "true"
+				}
+			},
 			"hash": {
 				"type": "hash"
 			},
@@ -93,6 +103,26 @@
 						}
 				],
 					"column_list_authoritative": true
+			},
+			"customer": {
+				"column_vindexes": [
+					{
+						"column": "id",
+						"name": "hash"
+					},
+					{
+						"column": "email",
+						"name": "email_customer_map"
+					}
+				]
+			},
+			"email_customer_map": {
+				"column_vindexes": [
+					{
+						"column": "email",
+						"name": "md5"
+					}
+				]
 			}
 		}
 	}

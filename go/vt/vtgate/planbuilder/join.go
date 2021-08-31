@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -74,14 +72,14 @@ type join struct {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars sqlparser.BindVars) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reservedVars *sqlparser.ReservedVars) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	opcode := engine.NormalJoin
+	opcode := engine.InnerJoin
 	if ajoin != nil {
 		switch {
 		case ajoin.Join == sqlparser.LeftJoinType:
@@ -100,7 +98,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return errors.New("unsupported: join with USING(column_list) clause for complex queries")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{
@@ -154,12 +152,12 @@ func (jb *join) Wireup(plan logicalPlan, jt *jointab) error {
 }
 
 // Wireup2 implements the logicalPlan interface
-func (jb *join) WireupV4(semTable *semantics.SemTable) error {
-	err := jb.Right.WireupV4(semTable)
+func (jb *join) WireupGen4(semTable *semantics.SemTable) error {
+	err := jb.Right.WireupGen4(semTable)
 	if err != nil {
 		return err
 	}
-	return jb.Left.WireupV4(semTable)
+	return jb.Left.WireupGen4(semTable)
 }
 
 // SupplyVar implements the logicalPlan interface

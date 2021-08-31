@@ -17,28 +17,26 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
-
-	"context"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // This file uses the sandbox_test framework.
@@ -48,15 +46,15 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 	createSandbox("TestExecuteFailOnAutocommit")
 	hc := discovery.NewFakeLegacyHealthCheck()
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestExecuteFailOnAutocommit", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestExecuteFailOnAutocommit", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "0",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc0,
 		},
@@ -64,7 +62,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 			Target: &querypb.Target{
 				Keyspace:   "TestExecuteFailOnAutocommit",
 				Shard:      "1",
-				TabletType: topodatapb.TabletType_MASTER,
+				TabletType: topodatapb.TabletType_PRIMARY,
 			},
 			Gateway: sbc1,
 		},
@@ -91,7 +89,7 @@ func TestLegacyExecuteFailOnAutocommit(t *testing.T) {
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{
 			{
-				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_MASTER, Cell: "aa"},
+				Target:        &querypb.Target{Keyspace: "TestExecuteFailOnAutocommit", Shard: "0", TabletType: topodatapb.TabletType_PRIMARY, Cell: "aa"},
 				TransactionId: 123,
 				TabletAlias:   nil,
 			},
@@ -153,11 +151,11 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		err = sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
-		return qr, err
+		return qr, vterrors.Aggregate(errors)
 	})
 }
 
@@ -387,15 +385,17 @@ func TestMultiExecs(t *testing.T) {
 	rss := []*srvtopo.ResolvedShard{
 		{
 			Target: &querypb.Target{
-				Keyspace: "TestMultiExecs",
-				Shard:    "0",
+				Keyspace:   "TestMultiExecs",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			Gateway: sbc0,
 		},
 		{
 			Target: &querypb.Target{
-				Keyspace: "TestMultiExecs",
-				Shard:    "1",
+				Keyspace:   "TestMultiExecs",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_REPLICA,
 			},
 			Gateway: sbc1,
 		},
@@ -415,7 +415,8 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	_, err := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
@@ -495,13 +496,13 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	hc.Reset()
 	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_MASTER, true, 1, nil)
+	hc.AddTestTablet("aa", "0", 1, "TestScatterConnSingleDB", "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	hc.AddTestTablet("aa", "1", 1, "TestScatterConnSingleDB", "1", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("0"))
+	rss0, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("0"))
 	require.NoError(t, err)
-	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_MASTER, key.DestinationShard("1"))
+	rss1, err := res.ResolveDestination(ctx, "TestScatterConnSingleDB", topodatapb.TabletType_PRIMARY, key.DestinationShard("1"))
 	require.NoError(t, err)
 
 	want := "multi-db transaction attempted"

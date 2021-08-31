@@ -39,7 +39,7 @@ var (
 	cell                  = "zone1"
 	cell2                 = "zone2"
 	hostname              = "localhost"
-	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_MASTER: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
+	servedTypes           = map[topodata.TabletType]bool{topodata.TabletType_PRIMARY: true, topodata.TabletType_REPLICA: true, topodata.TabletType_RDONLY: true}
 	sqlSchema             = `create table vt_insert_test (
 								id bigint auto_increment,
 								msg varchar(64),
@@ -202,7 +202,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "primary")
 
 	// Can't delete keyspace if there are shards present.
 	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
@@ -220,7 +220,7 @@ func TestDeleteKeyspace(t *testing.T) {
 	// Start over and this time use recursive DeleteKeyspace to do everything.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "primary")
 
 	// Create the serving/replication entries and check that they exist,
 	//  so we can later check they're deleted.
@@ -250,8 +250,8 @@ func TestDeleteKeyspace(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace_removekscell")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/0")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace_removekscell/1")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=0", "zone1-0000000100", "master")
-	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=1", "zone1-0000000101", "master")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=0", "zone1-0000000100", "primary")
+	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=1", "zone1-0000000101", "primary")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=0", "zone2-0000000100", "replica")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-port=1234", "-keyspace=test_delete_keyspace_removekscell", "-shard=1", "zone2-0000000101", "replica")
 
@@ -325,7 +325,7 @@ func TestShardCountForAllKeyspaces(t *testing.T) {
 func testShardCountForKeyspace(t *testing.T, keyspace string, count int) {
 	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			assert.Equal(t, len(partition.ShardReferences), count)
@@ -342,7 +342,7 @@ func TestShardNameForAllKeyspaces(t *testing.T) {
 func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string) {
 	srvKeyspace := getSrvKeyspace(t, cell, keyspace)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
 		if servedTypes[partition.ServedType] {
 			for _, shardRef := range partition.ShardReferences {
@@ -357,9 +357,9 @@ func TestKeyspaceToShardName(t *testing.T) {
 	var id []byte
 	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 
-	// for each served type MASTER REPLICA RDONLY, the shard ref count should match
+	// for each served type PRIMARY REPLICA RDONLY, the shard ref count should match
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_MASTER {
+		if partition.ServedType == topodata.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				shardKIDs := shardKIdMap[shardRef.Name]
 				for _, kid := range shardKIDs {
@@ -374,7 +374,7 @@ func TestKeyspaceToShardName(t *testing.T) {
 	srvKeyspace = getSrvKeyspace(t, cell, keyspaceUnshardedName)
 
 	for _, partition := range srvKeyspace.Partitions {
-		if partition.ServedType == topodata.TabletType_MASTER {
+		if partition.ServedType == topodata.TabletType_PRIMARY {
 			for _, shardRef := range partition.ShardReferences {
 				assert.Equal(t, shardRef.Name, keyspaceUnshardedName)
 			}

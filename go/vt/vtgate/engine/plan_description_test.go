@@ -60,7 +60,7 @@ func createRoute() *Route {
 		FieldQuery:        "more query",
 		Vindex:            hash.(*vindexes.Hash),
 		Values:            []sqltypes.PlanValue{},
-		OrderBy:           []OrderbyParams{},
+		OrderBy:           []OrderByParams{},
 	}
 }
 
@@ -86,15 +86,8 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 		Inputs: []PrimitiveDescription{routeDescr},
 	}
 
-	mustMatch(t, expected, planDescription, "descriptions did not match")
+	utils.MustMatch(t, expected, planDescription, "descriptions did not match")
 }
-
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqltypes.Value{},
-	},
-	[]string{}, // ignored fields
-)
 
 func getDescriptionFor(route *Route) PrimitiveDescription {
 	return PrimitiveDescription{

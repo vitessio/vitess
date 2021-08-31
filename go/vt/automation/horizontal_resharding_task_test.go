@@ -19,7 +19,7 @@ package automation
 import (
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
@@ -46,6 +46,6 @@ func TestHorizontalReshardingTaskEmittedTasks(t *testing.T) {
 
 	// TODO(mberlin): Check emitted tasks against expected output.
 	for _, tc := range newTaskContainers {
-		t.Logf("new tasks: %v", proto.MarshalTextString(tc))
+		t.Logf("new tasks: %v", prototext.Format(tc))
 	}
 }

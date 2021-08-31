@@ -41,7 +41,14 @@ var (
 		keyspace_id bigint(20) unsigned NOT NULL,
 		data longblob,
 		primary key (id)
-		) Engine=InnoDB`
+		) Engine=InnoDB;
+`
+	createProcSQL = `use vt_test_keyspace;
+CREATE PROCEDURE testing()
+BEGIN
+	delete from vt_insert_test;
+END;
+`
 )
 
 func TestMain(m *testing.M) {
@@ -98,6 +105,7 @@ func TestMain(m *testing.M) {
 			"-mysql_auth_server_impl", "static",
 			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
 			"-mysql_server_version", "8.0.16-7",
+			"-warn_sharded_only=true",
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
@@ -124,6 +132,11 @@ func TestMain(m *testing.M) {
 			Port:  clusterInstance.VtgateMySQLPort,
 			Uname: "testuser1",
 			Pass:  "testpassword1",
+		}
+
+		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+		if _, err := primaryTabletProcess.QueryTablet(createProcSQL, keyspaceName, false); err != nil {
+			return 1, err
 		}
 
 		return m.Run(), nil

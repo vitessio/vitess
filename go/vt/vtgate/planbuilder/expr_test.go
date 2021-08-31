@@ -40,16 +40,16 @@ func TestValEqual(t *testing.T) {
 		in2: &sqlparser.ColName{Metadata: c2, Name: sqlparser.NewColIdent("c1")},
 		out: false,
 	}, {
-		in1: sqlparser.NewArgument(":aa"),
+		in1: sqlparser.NewArgument("aa"),
 		in2: &sqlparser.ColName{Metadata: c1, Name: sqlparser.NewColIdent("c1")},
 		out: false,
 	}, {
-		in1: sqlparser.NewArgument(":aa"),
-		in2: sqlparser.NewArgument(":aa"),
+		in1: sqlparser.NewArgument("aa"),
+		in2: sqlparser.NewArgument("aa"),
 		out: true,
 	}, {
-		in1: sqlparser.NewArgument(":aa"),
-		in2: sqlparser.NewArgument(":bb"),
+		in1: sqlparser.NewArgument("aa"),
+		in2: sqlparser.NewArgument("bb"),
 	}, {
 		in1: sqlparser.NewStrLiteral("aa"),
 		in2: sqlparser.NewStrLiteral("aa"),

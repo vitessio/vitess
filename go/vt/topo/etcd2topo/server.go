@@ -34,12 +34,16 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"strings"
 	"time"
 
-	"github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/pkg/transport"
+	"google.golang.org/grpc"
+
+	"go.etcd.io/etcd/client/pkg/v3/tlsutil"
+	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -80,29 +84,55 @@ func (s *Server) Close() {
 	s.cli = nil
 }
 
-func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
-	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
-
-	config := clientv3.Config{
-		Endpoints:   strings.Split(serverAddr, ","),
-		DialTimeout: 5 * time.Second,
-	}
-
+func newTLSConfig(certPath, keyPath, caPath string) (*tls.Config, error) {
+	var tlscfg *tls.Config
 	// If TLS is enabled, attach TLS config info.
 	if certPath != "" && keyPath != "" {
-		// Safe now to build up TLS info.
-		tlsInfo := transport.TLSInfo{
-			CertFile:      certPath,
-			KeyFile:       keyPath,
-			TrustedCAFile: caPath,
-		}
+		var (
+			cert *tls.Certificate
+			cp   *x509.CertPool
+			err  error
+		)
 
-		tlsConfig, err := tlsInfo.ClientConfig()
+		cert, err = tlsutil.NewCert(certPath, keyPath, nil)
 		if err != nil {
 			return nil, err
 		}
-		config.TLS = tlsConfig
+
+		if caPath != "" {
+			cp, err = tlsutil.NewCertPool([]string{caPath})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		tlscfg = &tls.Config{
+			MinVersion:         tls.VersionTLS12,
+			RootCAs:            cp,
+			InsecureSkipVerify: false,
+		}
+		if cert != nil {
+			tlscfg.Certificates = []tls.Certificate{*cert}
+		}
 	}
+	return tlscfg, nil
+}
+
+// NewServerWithOpts creates a new server with the provided TLS options
+func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
+	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
+	config := clientv3.Config{
+		Endpoints:   strings.Split(serverAddr, ","),
+		DialTimeout: 5 * time.Second,
+		DialOptions: []grpc.DialOption{grpc.WithBlock()},
+	}
+
+	tlscfg, err := newTLSConfig(certPath, keyPath, caPath)
+	if err != nil {
+		return nil, err
+	}
+
+	config.TLS = tlscfg
 
 	cli, err := clientv3.New(config)
 	if err != nil {

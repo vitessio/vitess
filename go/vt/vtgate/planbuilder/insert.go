@@ -30,7 +30,7 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	ins := stmt.(*sqlparser.Insert)
 	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
@@ -146,7 +146,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 	case sqlparser.Values:
 		rows = insertValues
 		if hasSubquery(rows) {
-			return nil, errors.New("unsupported: subquery in insert values")
+			return nil, errors.New("unsupported: simpleProjection in insert values")
 		}
 	default:
 		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
@@ -183,7 +183,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (engin
 		for _, col := range colVindex.Columns {
 			colNum := findOrAddColumn(ins, col)
 			for rowNum, row := range rows {
-				name := ":" + engine.InsertVarName(col, rowNum)
+				name := engine.InsertVarName(col, rowNum)
 				row[colNum] = sqlparser.NewArgument(name)
 			}
 		}
@@ -236,7 +236,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
 		}
 		autoIncValues.Values = append(autoIncValues.Values, pv)
-		row[colNum] = sqlparser.NewArgument(":" + engine.SeqVarName + strconv.Itoa(rowNum))
+		row[colNum] = sqlparser.NewArgument(engine.SeqVarName + strconv.Itoa(rowNum))
 	}
 
 	eins.Generate = &engine.Generate{

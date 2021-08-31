@@ -19,9 +19,9 @@ package topo
 import (
 	"path"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -61,8 +61,8 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodat
 
 // CheckServedFromMigration makes sure a requested migration is safe
 func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
-	// master is a special case with a few extra checks
-	if tabletType == topodatapb.TabletType_MASTER {
+	// primary is a special case with a few extra checks
+	if tabletType == topodatapb.TabletType_PRIMARY {
 		if !remove {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}
@@ -234,7 +234,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 			if IsErrType(err, NoNode) {
 				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
 			} else {
-				vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+				return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 			}
 		}
 		result[shard] = si
@@ -242,7 +242,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
-// GetServingShards returns all shards where the master is serving.
+// GetServingShards returns all shards where the primary is serving.
 func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
 	shards, err := ts.GetShardNames(ctx, keyspace)
 	if err != nil {
@@ -255,7 +255,7 @@ func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*Sha
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 		}
-		if !si.IsMasterServing {
+		if !si.IsPrimaryServing {
 			continue
 		}
 		result = append(result, si)

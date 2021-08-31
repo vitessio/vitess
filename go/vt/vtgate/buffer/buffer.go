@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package buffer provides a buffer for MASTER traffic during failovers.
+// Package buffer provides a buffer for PRIMARY traffic during failovers.
 //
-// Instead of returning an error to the application (when the vttablet master
+// Instead of returning an error to the application (when the vttablet primary
 // becomes unavailable), the buffer will automatically retry buffered requests
 // after the end of the failover was detected.
 //
@@ -28,7 +28,6 @@ package buffer
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -45,7 +44,7 @@ import (
 )
 
 var (
-	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "master buffer is full")
+	bufferFullError      = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "primary buffer is full")
 	entryEvictedError    = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "buffer full: request evicted for newer request")
 	contextCanceledError = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "context was canceled before failover finished")
 )
@@ -62,9 +61,9 @@ const (
 	bufferDryRun
 )
 
-// Buffer is used to track ongoing MASTER tablet failovers and buffer
-// requests while the MASTER tablet is unavailable.
-// Once the new MASTER starts accepting requests, buffering stops and requests
+// Buffer is used to track ongoing PRIMARY tablet failovers and buffer
+// requests while the PRIMARY tablet is unavailable.
+// Once the new PRIMARY starts accepting requests, buffering stops and requests
 // queued so far will be automatically retried.
 //
 // There should be exactly one instance of this buffer. For each failover, an
@@ -116,7 +115,7 @@ func newWithNow(now func() time.Time) *Buffer {
 	}
 
 	if *enabled {
-		log.Infof("vtgate buffer enabled. MASTER requests will be buffered during detected failovers.")
+		log.Infof("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
 		header := "Buffering limited to configured "
@@ -195,7 +194,7 @@ type RetryDoneFunc context.CancelFunc
 func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
 	// If an err is given, it must be related to a failover.
 	// We never buffer requests with other errors.
-	if err != nil && !causedByFailover(err) {
+	if err != nil && !CausedByFailover(err) {
 		return nil, nil
 	}
 
@@ -213,15 +212,15 @@ func (b *Buffer) WaitForFailoverEnd(ctx context.Context, keyspace, shard string,
 	return sb.waitForFailoverEnd(ctx, keyspace, shard, err)
 }
 
-// ProcessMasterHealth notifies the buffer to record a new master
+// ProcessPrimaryHealth notifies the buffer to record a new primary
 // and end any failover buffering that may be in progress
-func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
-	if th.Target.TabletType != topodatapb.TabletType_MASTER {
-		panic(fmt.Sprintf("BUG: non MASTER TabletHealth object must not be forwarded: %#v", th))
+func (b *Buffer) ProcessPrimaryHealth(th *discovery.TabletHealth) {
+	if th.Target.TabletType != topodatapb.TabletType_PRIMARY {
+		panic(fmt.Sprintf("BUG: non-PRIMARY TabletHealth object must not be forwarded: %#v", th))
 	}
-	timestamp := th.MasterTermStartTime
+	timestamp := th.PrimaryTermStartTime
 	if timestamp == 0 {
-		// Masters where TabletExternallyReparented was never called will return 0.
+		// Primarys where TabletExternallyReparented was never called will return 0.
 		// Ignore them.
 		return
 	}
@@ -235,16 +234,16 @@ func (b *Buffer) ProcessMasterHealth(th *discovery.TabletHealth) {
 }
 
 // StatsUpdate keeps track of the "tablet_externally_reparented_timestamp" of
-// each master. This way we can detect the end of a failover.
+// each primary. This way we can detect the end of a failover.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
-	if ts.Target.TabletType != topodatapb.TabletType_MASTER {
-		panic(fmt.Sprintf("BUG: non MASTER LegacyTabletStats object must not be forwarded: %#v", ts))
+	if ts.Target.TabletType != topodatapb.TabletType_PRIMARY {
+		panic(fmt.Sprintf("BUG: non-PRIMARY LegacyTabletStats object must not be forwarded: %#v", ts))
 	}
 
 	timestamp := ts.TabletExternallyReparentedTimestamp
 	if timestamp == 0 {
-		// Masters where TabletExternallyReparented was never called will return 0.
+		// Primarys where TabletExternallyReparented was never called will return 0.
 		// Ignore them.
 		return
 	}
@@ -257,35 +256,12 @@ func (b *Buffer) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	sb.recordExternallyReparentedTimestamp(timestamp, ts.Tablet.Alias)
 }
 
-// causedByFailover returns true if "err" was supposedly caused by a failover.
+// CausedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
 // in one function. Supported flavors: MariaDB, MySQL, Google internal.
-func causedByFailover(err error) bool {
+func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
-
-	// TODO(sougou): Remove the INTERNAL check after rollout.
-	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION && code != vtrpcpb.Code_INTERNAL {
-		return false
-	}
-	switch {
-	// All flavors.
-	case strings.Contains(err.Error(), "operation not allowed in state NOT_SERVING") ||
-		strings.Contains(err.Error(), "operation not allowed in state SHUTTING_DOWN") ||
-		// Match 1290 if -queryserver-config-terse-errors explicitly hid the error message
-		// (which it does to avoid logging the original query including any PII).
-		strings.Contains(err.Error(), "(errno 1290) (sqlstate HY000) during query:"):
-		return true
-	// MariaDB flavor.
-	case strings.Contains(err.Error(), "The MariaDB server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
-		return true
-	// MySQL flavor.
-	case strings.Contains(err.Error(), "The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) (sqlstate HY000)"):
-		return true
-	// Google internal flavor.
-	case strings.Contains(err.Error(), "failover in progress (errno 1227) (sqlstate 42000)"):
-		return true
-	}
-	return false
+	return vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT
 }
 
 // getOrCreateBuffer returns the ShardBuffer for the given keyspace and shard.

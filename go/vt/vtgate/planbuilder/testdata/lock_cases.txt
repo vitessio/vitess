@@ -13,6 +13,7 @@
     "Query": "select get_lock('xyz', 10) from dual"
   }
 }
+Gen4 plan same as above
 
 # is_free_lock from dual
 "select is_free_lock('xyz') from dual"
@@ -29,6 +30,7 @@
     "Query": "select is_free_lock('xyz') from dual"
   }
 }
+Gen4 plan same as above
 
 # lock tables read
 "lock tables t as x read local"

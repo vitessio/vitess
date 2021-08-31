@@ -108,7 +108,7 @@ type stopReason string
 var stopReasons = []stopReason{stopFailoverEndDetected, stopMaxFailoverDurationExceeded, stopShutdown}
 
 const (
-	stopFailoverEndDetected         stopReason = "NewMasterSeen"
+	stopFailoverEndDetected         stopReason = "NewPrimarySeen"
 	stopMaxFailoverDurationExceeded stopReason = "MaxDurationExceeded"
 	stopShutdown                    stopReason = "Shutdown"
 )

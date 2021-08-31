@@ -22,10 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -250,7 +248,7 @@ func TestBuildBindVariable(t *testing.T) {
 			if tcase.err != "" {
 				require.EqualError(t, err, tcase.err)
 			} else {
-				utils.MustMatch(t, tcase.out, bv, "binvar output did not match")
+				require.Truef(t, proto.Equal(tcase.out, bv), "binvar output did not match")
 			}
 		})
 	}
@@ -587,8 +585,7 @@ func TestBindVariablesFormat(t *testing.T) {
 	if !strings.Contains(formattedStr, "key_3") || !strings.Contains(formattedStr, "val_3") {
 		t.Fatalf("bind variable 'key_3': 'val_3' is not formatted")
 	}
-	if !strings.Contains(formattedStr, "key_4") ||
-		!strings.Contains(formattedStr, "values:<type:INT64 value:\"1\" > values:<type:INT64 value:\"2\" >") {
+	if !strings.Contains(formattedStr, "key_4:type:TUPLE") {
 		t.Fatalf("bind variable 'key_4': (1, 2) is not formatted")
 	}
 

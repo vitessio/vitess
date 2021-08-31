@@ -62,21 +62,21 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // Execute satisfies the Primitive interface.
-func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return ps.Underlying.Execute(vcursor, combinedVars, wantfields)
+	return vcursor.ExecutePrimitive(ps.Underlying, combinedVars, wantfields)
 }
 
 // StreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-	return ps.Underlying.StreamExecute(vcursor, combinedVars, wantfields, callback)
+	return vcursor.StreamExecutePrimitive(ps.Underlying, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
@@ -111,7 +111,11 @@ var (
 )
 
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
-	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
+	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
+	for k, v := range bindVars {
+		subqueryBindVars[k] = v
+	}
+	result, err := vcursor.ExecutePrimitive(ps.Subquery, subqueryBindVars, false)
 	if err != nil {
 		return nil, err
 	}

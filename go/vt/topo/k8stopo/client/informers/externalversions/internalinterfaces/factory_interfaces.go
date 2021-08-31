@@ -24,6 +24,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	cache "k8s.io/client-go/tools/cache"
+
 	versioned "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned"
 )
 

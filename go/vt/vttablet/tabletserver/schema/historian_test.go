@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -85,7 +85,7 @@ func TestHistorian(t *testing.T) {
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
 	tab, err := se.GetTableForPos(sqlparser.NewTableIdent("dual"), gtid1)
 	require.NoError(t, err)
-	require.Equal(t, `name:"dual" `, fmt.Sprintf("%v", tab))
+	require.Equal(t, `name:"dual"`, fmt.Sprintf("%v", tab))
 	se.EnableHistorian(true)
 	_, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
@@ -119,7 +119,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp1 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:INT32 table:"t1" > p_k_columns:0 `
+	exp1 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:INT32 table:"t1"} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid1)
 	require.NoError(t, err)
 	require.Equal(t, exp1, fmt.Sprintf("%v", tab))
@@ -139,7 +139,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp2 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:VARBINARY table:"t1" > p_k_columns:0 `
+	exp2 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid2)
 	require.NoError(t, err)
 	require.Equal(t, exp2, fmt.Sprintf("%v", tab))
@@ -159,7 +159,7 @@ func TestHistorian(t *testing.T) {
 		},
 	})
 	require.Nil(t, se.RegisterVersionEvent())
-	exp3 := `name:"t1" fields:<name:"id1" type:INT32 table:"t1" > fields:<name:"id2" type:VARBINARY table:"t1" > fields:<name:"id3" type:INT32 table:"t1" > p_k_columns:0 `
+	exp3 := `name:"t1" fields:{name:"id1" type:INT32 table:"t1"} fields:{name:"id2" type:VARBINARY table:"t1"} fields:{name:"id3" type:INT32 table:"t1"} p_k_columns:0`
 	tab, err = se.GetTableForPos(sqlparser.NewTableIdent("t1"), gtid3)
 	require.NoError(t, err)
 	require.Equal(t, exp3, fmt.Sprintf("%v", tab))

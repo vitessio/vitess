@@ -125,7 +125,7 @@ func UpdateClusterAliases() error {
 				    left join database_instance_downtime using (hostname, port)
 				  where
 				    suggested_cluster_alias!=''
-						/* exclude newly demoted, downtimed masters */
+						/* exclude newly demoted, downtimed primaries */
 						and ifnull(
 								database_instance_downtime.downtime_active = 1
 								and database_instance_downtime.end_timestamp > now()
@@ -195,7 +195,7 @@ func ReplaceAliasClusterName(oldClusterName string, newClusterName string) (err 
 	return err
 }
 
-// ReadUnambiguousSuggestedClusterAliases reads potential master hostname:port who have suggested cluster aliases,
+// ReadUnambiguousSuggestedClusterAliases reads potential primary hostname:port who have suggested cluster aliases,
 // where no one else shares said suggested cluster alias. Such hostname:port are likely true owners
 // of the alias.
 func ReadUnambiguousSuggestedClusterAliases() (result map[string]InstanceKey, err error) {

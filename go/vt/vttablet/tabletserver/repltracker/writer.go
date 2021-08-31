@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/withddl"
 
 	"context"
@@ -52,14 +54,14 @@ var withDDL = withddl.New([]string{
 	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
 })
 
-// heartbeatWriter runs on master tablets and writes heartbeats to the _vt.heartbeat
+// heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type heartbeatWriter struct {
 	env tabletenv.Env
 
 	enabled       bool
 	interval      time.Duration
-	tabletAlias   topodatapb.TabletAlias
+	tabletAlias   *topodatapb.TabletAlias
 	keyspaceShard string
 	now           func() time.Time
 	errorLog      *logutil.ThrottledLogger
@@ -71,7 +73,7 @@ type heartbeatWriter struct {
 }
 
 // newHeartbeatWriter creates a new heartbeatWriter.
-func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartbeatWriter {
+func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heartbeatWriter {
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
@@ -82,7 +84,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartb
 	return &heartbeatWriter{
 		env:         env,
 		enabled:     true,
-		tabletAlias: alias,
+		tabletAlias: proto.Clone(alias).(*topodatapb.TabletAlias),
 		now:         time.Now,
 		interval:    heartbeatInterval,
 		ticks:       timer.NewTimer(heartbeatInterval),
@@ -95,7 +97,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias topodatapb.TabletAlias) *heartb
 }
 
 // InitDBConfig initializes the target name for the heartbeatWriter.
-func (w *heartbeatWriter) InitDBConfig(target querypb.Target) {
+func (w *heartbeatWriter) InitDBConfig(target *querypb.Target) {
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 

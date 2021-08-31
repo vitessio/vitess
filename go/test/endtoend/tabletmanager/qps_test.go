@@ -71,7 +71,7 @@ func TestQPS(t *testing.T) {
 	var qpsIncreased bool
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
-		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", masterTablet.Alias)
+		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", primaryTablet.Alias)
 		require.Nil(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 

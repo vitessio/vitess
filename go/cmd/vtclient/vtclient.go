@@ -54,7 +54,7 @@ Examples:
 
   $ vtclient -server vtgate:15991 "SELECT * FROM messages"
 
-  $ vtclient -server vtgate:15991 -target '@master' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
+  $ vtclient -server vtgate:15991 -target '@primary' -bind_variables '[ 12345, 1, "msg 12345" ]' "INSERT INTO messages (page,time_created_ns,message) VALUES (:v1, :v2, :v3)"
 
 `
 	server        = flag.String("server", "", "vtgate server to connect to")

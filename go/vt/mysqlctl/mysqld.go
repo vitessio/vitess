@@ -75,8 +75,9 @@ var (
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
-	// masterConnectRetry is used in 'SET MASTER' commands
-	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+	// Deprecated
+	masterConnectRetry      = flag.Duration("master_connect_retry", 10*time.Second, "Deprecated, use -replication_connect_retry")
+	replicationConnectRetry = flag.Duration("replication_connect_retry", 10*time.Second, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
@@ -813,13 +814,13 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	}
 	myTemplateSource.Write(b)
 
-	// mysql version specific file.
-	// master_{flavor}{major}{minor}.cnf
+	// database flavor + version specific file.
+	// {flavor}{major}{minor}.cnf
 	f := FlavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
 		f = FlavorMySQL
 	}
-	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
+	fn := fmt.Sprintf("mycnf/%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
 	b, err = riceBox.Bytes(fn)
 	if err != nil {
 		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)

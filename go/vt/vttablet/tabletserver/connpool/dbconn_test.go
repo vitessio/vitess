@@ -341,7 +341,10 @@ func TestDBConnStream(t *testing.T) {
 				result.Rows = append(result.Rows, r.Rows...)
 			}
 			return nil
-		}, 10, querypb.ExecuteOptions_ALL)
+		}, func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
 	if err != nil {
 		t.Fatalf("should not get an error, err: %v", err)
 	}
@@ -354,7 +357,10 @@ func TestDBConnStream(t *testing.T) {
 	err = dbConn.Stream(
 		ctx, sql, func(r *sqltypes.Result) error {
 			return nil
-		}, 10, querypb.ExecuteOptions_ALL)
+		}, func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
 	db.DisableConnFail()
 	want := "no such file or directory (errno 2002)"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -384,10 +390,15 @@ func TestDBConnStreamKill(t *testing.T) {
 		dbConn.Kill("test kill", 0)
 	}()
 
-	err = dbConn.Stream(context.Background(), sql, func(r *sqltypes.Result) error {
-		time.Sleep(100 * time.Millisecond)
-		return nil
-	}, 10, querypb.ExecuteOptions_ALL)
+	err = dbConn.Stream(context.Background(), sql,
+		func(r *sqltypes.Result) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		},
+		func() *sqltypes.Result {
+			return &sqltypes.Result{}
+		},
+		10, querypb.ExecuteOptions_ALL)
 
 	assert.Contains(t, err.Error(), "(errno 2013) due to")
 }

@@ -50,19 +50,19 @@ func TestShardReplicationStatuses(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("GetOrCreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	// mark the master inside the shard
+	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = master.Tablet.Alias
+		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
-	// master action loop (to initialize host and port)
-	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	// primary action loop (to initialize host and port)
+	primary.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -71,11 +71,11 @@ func TestShardReplicationStatuses(t *testing.T) {
 			},
 		},
 	}
-	master.StartActionLoop(t, wr)
-	defer master.StopActionLoop(t)
+	primary.StartActionLoop(t, wr)
+	defer primary.StopActionLoop(t)
 
 	// replica loop
-	replica.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+	replica.FakeMysqlDaemon.CurrentPrimaryPosition = mysql.Position{
 		GTIDSet: mysql.MariadbGTIDSet{
 			5: mysql.MariadbGTID{
 				Domain:   5,
@@ -84,8 +84,8 @@ func TestShardReplicationStatuses(t *testing.T) {
 			},
 		},
 	}
-	replica.FakeMysqlDaemon.CurrentMasterHost = master.Tablet.MysqlHostname
-	replica.FakeMysqlDaemon.CurrentMasterPort = int(master.Tablet.MysqlPort)
+	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
+	replica.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)
 
@@ -95,7 +95,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 		t.Fatalf("ShardReplicationStatuses failed: %v", err)
 	}
 
-	// check result (make master first in the array)
+	// check result (make primary first in the array)
 	if len(ti) != 2 || len(rs) != 2 {
 		t.Fatalf("ShardReplicationStatuses returned wrong results: %v %v", ti, rs)
 	}
@@ -103,10 +103,10 @@ func TestShardReplicationStatuses(t *testing.T) {
 		ti[0], ti[1] = ti[1], ti[0]
 		rs[0], rs[1] = rs[1], rs[0]
 	}
-	if !topoproto.TabletAliasEqual(ti[0].Alias, master.Tablet.Alias) ||
+	if !topoproto.TabletAliasEqual(ti[0].Alias, primary.Tablet.Alias) ||
 		!topoproto.TabletAliasEqual(ti[1].Alias, replica.Tablet.Alias) ||
-		rs[0].MasterHost != "" ||
-		rs[1].MasterHost != master.Tablet.Hostname {
+		rs[0].SourceHost != "" ||
+		rs[1].SourceHost != primary.Tablet.Hostname {
 		t.Fatalf("ShardReplicationStatuses returend wrong results: %v %v", ti, rs)
 	}
 }
@@ -126,20 +126,20 @@ func TestReparentTablet(t *testing.T) {
 	if _, err := ts.GetOrCreateShard(ctx, "test_keyspace", "0"); err != nil {
 		t.Fatalf("CreateShard failed: %v", err)
 	}
-	master := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, nil)
+	primary := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_PRIMARY, nil)
 	replica := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	// mark the master inside the shard
+	// mark the primary inside the shard
 	if _, err := ts.UpdateShardFields(ctx, "test_keyspace", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = master.Tablet.Alias
+		si.PrimaryAlias = primary.Tablet.Alias
 		return nil
 	}); err != nil {
 		t.Fatalf("UpdateShardFields failed: %v", err)
 	}
 
-	// master action loop (to initialize host and port)
-	master.StartActionLoop(t, wr)
-	defer master.StopActionLoop(t)
+	// primary action loop (to initialize host and port)
+	primary.StartActionLoop(t, wr)
+	defer primary.StopActionLoop(t)
 
 	// replica loop
 	// We have to set the settings as replicating. Otherwise,
@@ -147,7 +147,7 @@ func TestReparentTablet(t *testing.T) {
 	// which ends up making this test unpredictable.
 	replica.FakeMysqlDaemon.Replicating = true
 	replica.FakeMysqlDaemon.IOThreadRunning = true
-	replica.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(master.Tablet)
+	replica.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 		"FAKE SET MASTER",

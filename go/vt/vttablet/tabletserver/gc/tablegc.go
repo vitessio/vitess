@@ -41,8 +41,7 @@ import (
 )
 
 const (
-	leaderCheckInterval     = 5 * time.Second
-	purgeReentranceInterval = 1 * time.Minute
+	leaderCheckInterval = 5 * time.Second
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
 	evacHours        = 72
 	throttlerAppName = "tablegc"
@@ -50,6 +49,9 @@ const (
 
 // checkInterval marks the interval between looking for tables in mysql server/schema
 var checkInterval = flag.Duration("gc_check_interval", 1*time.Hour, "Interval between garbage collection checks")
+
+// purgeReentranceInterval marks the interval between searching tables to purge
+var purgeReentranceInterval = flag.Duration("gc_purge_check_interval", 1*time.Minute, "Interval between purge discovery checks")
 
 // gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
 var gcLifecycle = flag.String("table_gc_lifecycle", "hold,purge,evac,drop", "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
@@ -209,7 +211,7 @@ func (collector *TableGC) Operate(ctx context.Context) {
 	}
 	tableCheckTicker := addTicker(*checkInterval)
 	leaderCheckTicker := addTicker(leaderCheckInterval)
-	purgeReentranceTicker := addTicker(purgeReentranceInterval)
+	purgeReentranceTicker := addTicker(*purgeReentranceInterval)
 
 	log.Info("TableGC: operating")
 	for {
@@ -222,7 +224,7 @@ func (collector *TableGC) Operate(ctx context.Context) {
 					// sparse
 					shouldBePrimary := false
 					if atomic.LoadInt64(&collector.isOpen) > 0 {
-						if collector.tabletTypeFunc() == topodatapb.TabletType_MASTER {
+						if collector.tabletTypeFunc() == topodatapb.TabletType_PRIMARY {
 							shouldBePrimary = true
 						}
 					}

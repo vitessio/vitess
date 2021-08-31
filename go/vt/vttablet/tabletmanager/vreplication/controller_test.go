@@ -62,7 +62,7 @@ func TestControllerKeyRange(t *testing.T) {
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -189,7 +189,7 @@ func TestControllerOverrides(t *testing.T) {
 	params := map[string]string{
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
-		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
 	}
@@ -225,7 +225,7 @@ func TestControllerCanceledContext(t *testing.T) {
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -254,7 +254,7 @@ func TestControllerRetry(t *testing.T) {
 	params := map[string]string{
 		"id":           "1",
 		"state":        binlogplayer.BlpRunning,
-		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 		"cell":         env.Cells[0],
 		"tablet_types": "replica",
 	}
@@ -291,7 +291,7 @@ func TestControllerStopPosition(t *testing.T) {
 	params := map[string]string{
 		"id":     "1",
 		"state":  binlogplayer.BlpRunning,
-		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:<end:"\200" > `, env.KeyspaceName),
+		"source": fmt.Sprintf(`keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
 	}
 
 	dbClient := binlogplayer.NewMockDBClient(t)

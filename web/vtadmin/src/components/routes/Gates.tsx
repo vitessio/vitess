@@ -15,31 +15,64 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
+
 import { useGates } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
-import { vtadmin as pb } from '../../proto/vtadmin';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
+import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 export const Gates = () => {
     useDocumentTitle('Gates');
+
     const { data } = useGates();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
     const rows = React.useMemo(() => {
-        return orderBy(data, ['cluster.name', 'hostname']);
-    }, [data]);
+        const mapped = (data || []).map((g) => ({
+            cell: g.cell,
+            cluster: g.cluster?.name,
+            hostname: g.hostname,
+            keyspaces: g.keyspaces,
+            pool: g.pool,
+        }));
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['cluster', 'pool', 'hostname', 'cell']);
+    }, [data, filter]);
 
-    const renderRows = (gates: pb.VTGate[]) =>
+    const renderRows = (gates: typeof rows) =>
         gates.map((gate, idx) => (
             <tr key={idx}>
-                <td>{gate.cluster?.name}</td>
-                <td>{gate.hostname}</td>
+                <DataCell className="white-space-nowrap">
+                    <div>{gate.pool}</div>
+                    <div className="font-size-small text-color-secondary">{gate.cluster}</div>
+                </DataCell>
+                <DataCell className="white-space-nowrap">{gate.hostname}</DataCell>
+                <DataCell className="white-space-nowrap">{gate.cell}</DataCell>
+                <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
             </tr>
         ));
 
     return (
         <div>
-            <h1>Gates</h1>
-            <DataTable columns={['Cluster', 'Hostname']} data={rows} renderRows={renderRows} />
+            <WorkspaceHeader>
+                <WorkspaceTitle>Gates</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter gates"
+                    value={filter || ''}
+                />
+                <DataTable columns={['Pool', 'Hostname', 'Cell', 'Keyspaces']} data={rows} renderRows={renderRows} />
+            </ContentContainer>
         </div>
     );
 };

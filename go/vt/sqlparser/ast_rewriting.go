@@ -17,6 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
+	"strconv"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -26,16 +28,158 @@ import (
 	"vitess.io/vitess/go/vt/sysvars"
 )
 
+var (
+	subQueryBaseArgName = []byte("__sq")
+
+	// HasValueSubQueryBaseName is the prefix of each parameter representing an EXISTS subquery
+	HasValueSubQueryBaseName = []byte("__sq_has_values")
+)
+
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
 	AST Statement // The rewritten AST
 }
 
+// ReservedVars keeps track of the bind variable names that have already been used
+// in a parsed query.
+type ReservedVars struct {
+	prefix       string
+	reserved     BindVars
+	next         []byte
+	counter      int
+	fast, static bool
+	sqNext       int64
+}
+
+// ReserveAll tries to reserve all the given variable names. If they're all available,
+// they are reserved and the function returns true. Otherwise the function returns false.
+func (r *ReservedVars) ReserveAll(names ...string) bool {
+	for _, name := range names {
+		if _, ok := r.reserved[name]; ok {
+			return false
+		}
+	}
+	for _, name := range names {
+		r.reserved[name] = struct{}{}
+	}
+	return true
+}
+
+// ReserveColName reserves a variable name for the given column; if a variable
+// with the same name already exists, it'll be suffixed with a numberic identifier
+// to make it unique.
+func (r *ReservedVars) ReserveColName(col *ColName) string {
+	compliantName := col.CompliantName()
+	if r.fast && strings.HasPrefix(compliantName, r.prefix) {
+		compliantName = "_" + compliantName
+	}
+
+	joinVar := []byte(compliantName)
+	baseLen := len(joinVar)
+	i := int64(1)
+
+	for {
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
+		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
+		i++
+	}
+}
+
+// ReserveSubQuery returns the next argument name to replace subquery with pullout value.
+func (r *ReservedVars) ReserveSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
+	}
+}
+
+// ReserveHasValuesSubQuery returns the next argument name to replace subquery with has value.
+func (r *ReservedVars) ReserveHasValuesSubQuery() string {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
+		if _, ok := r.reserved[string(joinVar)]; !ok {
+			r.reserved[string(joinVar)] = struct{}{}
+			return string(joinVar)
+		}
+	}
+}
+
+const staticBvar10 = "vtg0vtg1vtg2vtg3vtg4vtg5vtg6vtg7vtg8vtg9"
+const staticBvar100 = "vtg10vtg11vtg12vtg13vtg14vtg15vtg16vtg17vtg18vtg19vtg20vtg21vtg22vtg23vtg24vtg25vtg26vtg27vtg28vtg29vtg30vtg31vtg32vtg33vtg34vtg35vtg36vtg37vtg38vtg39vtg40vtg41vtg42vtg43vtg44vtg45vtg46vtg47vtg48vtg49vtg50vtg51vtg52vtg53vtg54vtg55vtg56vtg57vtg58vtg59vtg60vtg61vtg62vtg63vtg64vtg65vtg66vtg67vtg68vtg69vtg70vtg71vtg72vtg73vtg74vtg75vtg76vtg77vtg78vtg79vtg80vtg81vtg82vtg83vtg84vtg85vtg86vtg87vtg88vtg89vtg90vtg91vtg92vtg93vtg94vtg95vtg96vtg97vtg98vtg99"
+
+func (r *ReservedVars) nextUnusedVar() string {
+	if r.fast {
+		r.counter++
+
+		if r.static {
+			switch {
+			case r.counter < 10:
+				ofs := r.counter * 4
+				return staticBvar10[ofs : ofs+4]
+			case r.counter < 100:
+				ofs := (r.counter - 10) * 5
+				return staticBvar100[ofs : ofs+5]
+			}
+		}
+
+		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
+		return string(r.next)
+	}
+
+	for {
+		r.counter++
+		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
+
+		if _, ok := r.reserved[string(r.next)]; !ok {
+			bvar := string(r.next)
+			r.reserved[bvar] = struct{}{}
+			return bvar
+		}
+	}
+}
+
+// NewReservedVars allocates a ReservedVar instance that will generate unique
+// variable names starting with the given `prefix` and making sure that they
+// don't conflict with the given set of `known` variables.
+func NewReservedVars(prefix string, known BindVars) *ReservedVars {
+	rv := &ReservedVars{
+		prefix:   prefix,
+		counter:  0,
+		reserved: known,
+		fast:     true,
+		next:     []byte(prefix),
+	}
+
+	if prefix != "" && prefix[0] == '_' {
+		panic("cannot reserve variables with a '_' prefix")
+	}
+
+	for bvar := range known {
+		if strings.HasPrefix(bvar, prefix) {
+			rv.fast = false
+			break
+		}
+	}
+
+	if prefix == "vtg" {
+		rv.static = true
+	}
+	return rv
+}
+
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, reservedVars BindVars, bindVars map[string]*querypb.BindVariable, prefix string, parameterize bool, keyspace string) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string) (*RewriteASTResult, error) {
 	if parameterize {
-		err := Normalize(in, reservedVars, bindVars, prefix)
+		err := Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +308,7 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		}
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
-	case JoinCondition:
+	case *JoinCondition:
 		er.rewriteJoinCondition(cursor, node)
 	case *AliasedTableExpr:
 		if !SystemSchema(er.keyspace) {
@@ -194,7 +338,7 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 	return true
 }
 
-func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node JoinCondition) {
+func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCondition) {
 	if node.Using != nil && !er.hasStarInSelect {
 		joinTableExpr, ok := cursor.Parent().(*JoinTableExpr)
 		if !ok {
@@ -217,7 +361,7 @@ func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node JoinCond
 			er.err = err
 			return
 		}
-		newCondition := JoinCondition{}
+		newCondition := &JoinCondition{}
 		for _, colIdent := range node.Using {
 			lftCol := NewColNameWithQualifier(colIdent.String(), lft)
 			rgtCol := NewColNameWithQualifier(colIdent.String(), rgt)
@@ -294,15 +438,16 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 		return
 	}
 
-	if !(len(sel.SelectExprs) != 1 ||
+	if len(sel.SelectExprs) != 1 ||
 		len(sel.OrderBy) != 0 ||
 		len(sel.GroupBy) != 0 ||
 		len(sel.From) != 1 ||
-		sel.Where == nil ||
-		sel.Having == nil ||
-		sel.Limit == nil) && sel.Lock == NoLock {
+		sel.Where != nil ||
+		sel.Having != nil ||
+		sel.Limit != nil || sel.Lock != NoLock {
 		return
 	}
+
 	aliasedTable, ok := sel.From[0].(*AliasedTableExpr)
 	if !ok {
 		return
@@ -318,12 +463,29 @@ func (er *expressionRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquer
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewrittenExpr := Rewrite(expr.Expr, er.rewrite, nil)
-	cursor.Replace(rewrittenExpr)
+	rewritten := Rewrite(expr.Expr, er.rewrite, nil)
+
+	// Here we need to handle the subquery rewrite in case in occurs in an IN clause
+	// For example, SELECT id FROM user WHERE id IN (SELECT 1 FROM DUAL)
+	// Here we cannot rewrite the query to SELECT id FROM user WHERE id IN 1, since that is syntactically wrong
+	// We must rewrite it to SELECT id FROM user WHERE id IN (1)
+	// Find more cases in the test file
+	rewrittenExpr, isExpr := rewritten.(Expr)
+	_, isColTuple := rewritten.(ColTuple)
+	comparisonExpr, isCompExpr := cursor.Parent().(*ComparisonExpr)
+	// Check that the parent is a comparison operator with IN or NOT IN operation.
+	// Also, if rewritten is already a ColTuple (like a subquery), then we do not need this
+	// We also need to check that rewritten is an Expr, if it is then we can rewrite it as a ValTuple
+	if isCompExpr && (comparisonExpr.Operator == InOp || comparisonExpr.Operator == NotInOp) && !isColTuple && isExpr {
+		cursor.Replace(ValTuple{rewrittenExpr})
+		return
+	}
+
+	cursor.Replace(rewritten)
 }
 
 func bindVarExpression(name string) Expr {
-	return NewArgument(":" + name)
+	return NewArgument(name)
 }
 
 // SystemSchema returns true if the schema passed is system schema

@@ -96,7 +96,7 @@ func TestVerticalSplit(t *testing.T) {
 
 	// source keyspace, with 4 tables
 	sourceShard := clusterInstance.Keyspaces[0].Shards[0]
-	sourceMasterTablet := *sourceShard.Vttablets[0]
+	sourcePrimaryTablet := *sourceShard.Vttablets[0]
 	sourceReplicaTablet := *sourceShard.Vttablets[1]
 	sourceRdOnlyTablet1 := *sourceShard.Vttablets[2]
 	sourceRdOnlyTablet2 := *sourceShard.Vttablets[3]
@@ -104,13 +104,13 @@ func TestVerticalSplit(t *testing.T) {
 
 	// destination keyspace, with just two tables
 	destinationShard := clusterInstance.Keyspaces[1].Shards[0]
-	destinationMasterTablet := *destinationShard.Vttablets[0]
+	destinationPrimaryTablet := *destinationShard.Vttablets[0]
 	destinationReplicaTablet := *destinationShard.Vttablets[1]
 	destinationRdOnlyTablet1 := *destinationShard.Vttablets[2]
 	destinationRdOnlyTablet2 := *destinationShard.Vttablets[3]
 
-	// source and destination master and replica tablets will be started
-	for _, tablet := range []cluster.Vttablet{sourceMasterTablet, sourceReplicaTablet, destinationMasterTablet, destinationReplicaTablet} {
+	// source and destination primary and replica tablets will be started
+	for _, tablet := range []cluster.Vttablet{sourcePrimaryTablet, sourceReplicaTablet, destinationPrimaryTablet, destinationReplicaTablet} {
 		_ = tablet.VttabletProcess.Setup()
 	}
 
@@ -128,45 +128,45 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 
 	// check SrvKeyspace
-	ksServedFrom := "ServedFrom(master): source_keyspace\nServedFrom(rdonly): source_keyspace\nServedFrom(replica): source_keyspace\n"
+	ksServedFrom := "ServedFrom(primary): source_keyspace\nServedFrom(rdonly): source_keyspace\nServedFrom(replica): source_keyspace\n"
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 
 	// reparent to make the tablets work (we use health check, fix their types)
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(sourceKeyspace, shardName, cellj, sourceMasterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(sourceKeyspace, shardName, cellj, sourcePrimaryTablet.TabletUID)
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(destinationKeyspace, shardName, cellj, destinationMasterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(destinationKeyspace, shardName, cellj, destinationPrimaryTablet.TabletUID)
 	require.NoError(t, err)
 
-	sourceMasterTablet.Type = "master"
-	destinationMasterTablet.Type = "master"
+	sourcePrimaryTablet.Type = "primary"
+	destinationPrimaryTablet.Type = "primary"
 
 	for _, tablet := range []cluster.Vttablet{sourceReplicaTablet, destinationReplicaTablet} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 	for _, tablet := range []cluster.Vttablet{sourceRdOnlyTablet1, sourceRdOnlyTablet2, destinationRdOnlyTablet1, destinationRdOnlyTablet2} {
-		_ = tablet.VttabletProcess.WaitForTabletType("SERVING")
+		_ = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 		require.NoError(t, err)
 	}
 
-	for _, tablet := range []cluster.Vttablet{sourceMasterTablet, destinationMasterTablet, sourceReplicaTablet, destinationReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2, destinationRdOnlyTablet1, destinationRdOnlyTablet2} {
+	for _, tablet := range []cluster.Vttablet{sourcePrimaryTablet, destinationPrimaryTablet, sourceReplicaTablet, destinationReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2, destinationRdOnlyTablet1, destinationRdOnlyTablet2} {
 		assert.Equal(t, tablet.VttabletProcess.GetTabletStatus(), "SERVING")
 	}
 
 	// Apply schema on source.
 	for _, tableName := range tableArr {
-		_, err := sourceMasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createTabletTemplate, tableName), sourceKeyspace, true)
+		_, err := sourcePrimaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createTabletTemplate, tableName), sourceKeyspace, true)
 		require.NoError(t, err)
 	}
-	_, err = sourceMasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createViewTemplate, "view1", "moving1"), sourceKeyspace, true)
+	_, err = sourcePrimaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createViewTemplate, "view1", "moving1"), sourceKeyspace, true)
 	require.NoError(t, err)
-	_, err = sourceMasterTablet.VttabletProcess.QueryTablet(createMoving3NoPkTable, sourceKeyspace, true)
+	_, err = sourcePrimaryTablet.VttabletProcess.QueryTablet(createMoving3NoPkTable, sourceKeyspace, true)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchemaShard", "source_keyspace/0")
 	require.NoError(t, err)
 
 	// Alloy schema on destination.
-	_, err = destinationMasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createTabletTemplate, "extra1"), destinationKeyspace, true)
+	_, err = destinationPrimaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf(createTabletTemplate, "extra1"), destinationKeyspace, true)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchemaShard", "destination_keyspace/0")
 	require.NoError(t, err)
@@ -184,13 +184,13 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", sourceKeyspace, shardName), 1)
+	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", sourceKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", sourceKeyspace, shardName), 2)
 	require.NoError(t, err)
-	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", destinationKeyspace, shardName), 1)
+	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", destinationKeyspace, shardName), 1)
 	require.NoError(t, err)
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", destinationKeyspace, shardName), 1)
 	require.NoError(t, err)
@@ -198,7 +198,7 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 
 	// create the schema on the source keyspace, add some values
-	insertInitialValues(t, conn, sourceMasterTablet, destinationMasterTablet)
+	insertInitialValues(t, conn, sourcePrimaryTablet, destinationPrimaryTablet)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "--tables", "/moving/,view1", sourceRdOnlyTablet1.Alias, "destination_keyspace/0")
 	require.NoError(t, err, "CopySchemaShard failed")
@@ -227,10 +227,10 @@ func TestVerticalSplit(t *testing.T) {
 	// test Cancel first
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", "destination_keyspace/0")
 	require.NoError(t, err)
-	err = destinationMasterTablet.VttabletProcess.WaitForBinLogPlayerCount(0)
+	err = destinationPrimaryTablet.VttabletProcess.WaitForBinLogPlayerCount(0)
 	require.NoError(t, err)
-	// master should be in serving state after cancel
-	sharding.CheckTabletQueryServices(t, []cluster.Vttablet{destinationMasterTablet}, "SERVING", false, *clusterInstance)
+	// primary should be in serving state after cancel
+	sharding.CheckTabletQueryServices(t, []cluster.Vttablet{destinationPrimaryTablet}, "SERVING", false, *clusterInstance)
 
 	// redo VerticalSplitClone
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(), clusterInstance.GetAndReservePort(),
@@ -245,15 +245,15 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 
 	// check values are present
-	checkValues(t, &destinationMasterTablet, destinationKeyspace, "vt_destination_keyspace", "moving1", moving1First, 100)
-	checkValues(t, &destinationMasterTablet, destinationKeyspace, "vt_destination_keyspace", "moving2", moving2First, 100)
-	checkValues(t, &destinationMasterTablet, destinationKeyspace, "vt_destination_keyspace", "view1", moving1First, 100)
-	checkValues(t, &destinationMasterTablet, destinationKeyspace, "vt_destination_keyspace", "moving3_no_pk", moving3NoPkFirst, 100)
+	checkValues(t, &destinationPrimaryTablet, destinationKeyspace, "vt_destination_keyspace", "moving1", moving1First, 100)
+	checkValues(t, &destinationPrimaryTablet, destinationKeyspace, "vt_destination_keyspace", "moving2", moving2First, 100)
+	checkValues(t, &destinationPrimaryTablet, destinationKeyspace, "vt_destination_keyspace", "view1", moving1First, 100)
+	checkValues(t, &destinationPrimaryTablet, destinationKeyspace, "vt_destination_keyspace", "moving3_no_pk", moving3NoPkFirst, 100)
 
 	// Verify vreplication table entries
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
-		UnixSocket: path.Join(destinationMasterTablet.VttabletProcess.Directory, "mysql.sock"),
+		UnixSocket: path.Join(destinationPrimaryTablet.VttabletProcess.Directory, "mysql.sock"),
 	}
 	dbParams.DbName = "_vt"
 	dbConn, err := mysql.Connect(ctx, &dbParams)
@@ -266,7 +266,7 @@ func TestVerticalSplit(t *testing.T) {
 	dbConn.Close()
 
 	// check the binlog player is running and exporting vars
-	sharding.CheckDestinationMaster(t, destinationMasterTablet, []string{sourceKs}, *clusterInstance)
+	sharding.CheckDestinationPrimary(t, destinationPrimaryTablet, []string{sourceKs}, *clusterInstance)
 
 	// check that binlog server exported the stats vars
 	sharding.CheckBinlogServerVars(t, sourceReplicaTablet, 0, 0, true)
@@ -275,9 +275,9 @@ func TestVerticalSplit(t *testing.T) {
 	moving1FirstAdd1 := insertValues(t, conn, sourceKeyspace, "moving1", 100)
 	_ = insertValues(t, conn, sourceKeyspace, "staying1", 100)
 	moving2FirstAdd1 := insertValues(t, conn, sourceKeyspace, "moving2", 100)
-	checkValuesTimeout(t, destinationMasterTablet, "moving1", moving1FirstAdd1, 100, 30)
-	checkValuesTimeout(t, destinationMasterTablet, "moving2", moving2FirstAdd1, 100, 30)
-	sharding.CheckBinlogPlayerVars(t, destinationMasterTablet, []string{sourceKs}, 30)
+	checkValuesTimeout(t, destinationPrimaryTablet, "moving1", moving1FirstAdd1, 100, 30)
+	checkValuesTimeout(t, destinationPrimaryTablet, "moving2", moving2FirstAdd1, 100, 30)
+	sharding.CheckBinlogPlayerVars(t, destinationPrimaryTablet, []string{sourceKs}, 30)
 	sharding.CheckBinlogServerVars(t, sourceReplicaTablet, 100, 100, true)
 
 	// use vtworker to compare the data
@@ -291,14 +291,14 @@ func TestVerticalSplit(t *testing.T) {
 		"destination_keyspace/0")
 	require.NoError(t, err)
 
-	// check query service is off on destination master, as filtered
+	// check query service is off on destination primary, as filtered
 	// replication is enabled. Even health check should not interfere.
-	destinationMasterTabletVars := destinationMasterTablet.VttabletProcess.GetVars()
-	assert.NotNil(t, destinationMasterTabletVars)
-	assert.Contains(t, reflect.ValueOf(destinationMasterTabletVars["TabletStateName"]).String(), "NOT_SERVING")
+	destinationPrimaryTabletVars := destinationPrimaryTablet.VttabletProcess.GetVars()
+	assert.NotNil(t, destinationPrimaryTabletVars)
+	assert.Contains(t, reflect.ValueOf(destinationPrimaryTabletVars["TabletStateName"]).String(), "NOT_SERVING")
 
-	// check we can't migrate the master just yet
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
+	// check we can't migrate the primary just yet
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "primary")
 	require.Error(t, err)
 
 	// migrate rdonly only in test_ny cell, make sure nothing is migrated
@@ -308,10 +308,10 @@ func TestVerticalSplit(t *testing.T) {
 
 	// check SrvKeyspace
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, nil)
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, nil)
 
 	// migrate test_nj only, using command line manual fix command,
 	// and restore it back.
@@ -340,67 +340,67 @@ func TestVerticalSplit(t *testing.T) {
 	// now serve rdonly from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
 
 	grpcAddress := fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
 	gconn, err := vtgateconn.Dial(ctx, grpcAddress)
 	require.NoError(t, err)
 	defer gconn.Close()
 
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA}, []string{"moving1", "moving2"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA}, []string{"moving1", "moving2"})
 
 	// then serve replica from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\n", *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER}, []string{"moving1", "moving2"})
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\n", *clusterInstance)
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY}, []string{"moving1", "moving2"})
 
 	// move replica back and forth
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "-reverse", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "replica")
 	require.NoError(t, err)
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\n", *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
-	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_MASTER}, []string{"moving1", "moving2"})
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(primary): source_keyspace\n", *clusterInstance)
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, nil)
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
+	checkClientConnRedirectionExecuteKeyrange(ctx, t, gconn, destinationKeyspace, []topodata.TabletType{topodata.TabletType_PRIMARY}, []string{"moving1", "moving2"})
 
 	// Cancel should fail now
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", "destination_keyspace/0")
 	require.Error(t, err)
 
-	// then serve master from the destination shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
+	// then serve primary from the destination shards
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "primary")
 	require.NoError(t, err)
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "", *clusterInstance)
-	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
-	checkBlacklistedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourcePrimaryTablet, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet1, sourceKeyspace, []string{"/moving/", "view1"})
+	checkDeniedTables(t, sourceRdOnlyTablet2, sourceKeyspace, []string{"/moving/", "view1"})
 
 	// check the binlog player is gone now
-	_ = destinationMasterTablet.VttabletProcess.WaitForBinLogPlayerCount(0)
+	_ = destinationPrimaryTablet.VttabletProcess.WaitForBinLogPlayerCount(0)
 
 	// check the stats are correct
 	checkStats(t)
 
-	// now remove the tables on the source shard. The blacklisted tables
+	// now remove the tables on the source shard. The denied tables
 	// in the source shard won't match any table, make sure that works.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ApplySchema", "-sql=drop view view1", "source_keyspace")
 	require.NoError(t, err)
@@ -409,11 +409,11 @@ func TestVerticalSplit(t *testing.T) {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("ApplySchema", "--sql=drop table "+table, "source_keyspace")
 		require.NoError(t, err)
 	}
-	for _, tablet := range []cluster.Vttablet{sourceMasterTablet, sourceReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2} {
+	for _, tablet := range []cluster.Vttablet{sourcePrimaryTablet, sourceReplicaTablet, sourceRdOnlyTablet1, sourceRdOnlyTablet2} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", tablet.Alias)
 		require.NoError(t, err)
 	}
-	qr, _ = sourceMasterTablet.VttabletProcess.QueryTablet("select count(1) from staying1", sourceKeyspace, true)
+	qr, _ = sourcePrimaryTablet.VttabletProcess.QueryTablet("select count(1) from staying1", sourceKeyspace, true)
 	assert.Equal(t, 1, len(qr.Rows), fmt.Sprintf("cannot read staying1: got %d", len(qr.Rows)))
 
 	// test SetShardTabletControl
@@ -425,19 +425,19 @@ func verifyVtctlSetShardTabletControl(t *testing.T) {
 	// clear the rdonly entry:
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA})
+	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA})
 
 	// re-add rdonly:
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--blacklisted_tables=/moving/,view1", "source_keyspace/0", "rdonly")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--denied_tables=/moving/,view1", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
-	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_MASTER, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
+	assertTabletControls(t, clusterInstance, []topodata.TabletType{topodata.TabletType_PRIMARY, topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
 
 	//and then clear all entries:
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "rdonly")
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "replica")
 	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "master")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "--remove", "source_keyspace/0", "primary")
 	require.NoError(t, err)
 
 	shardJSON, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", "source_keyspace/0")
@@ -458,7 +458,7 @@ func assertTabletControls(t *testing.T, clusterInstance *cluster.LocalProcessClu
 	assert.Equal(t, len(shardJSONData.TabletControls), len(aliases))
 	for _, tc := range shardJSONData.TabletControls {
 		assert.Contains(t, aliases, tc.TabletType)
-		assert.Equal(t, []string{"/moving/", "view1"}, tc.BlacklistedTables)
+		assert.Equal(t, []string{"/moving/", "view1"}, tc.DeniedTables)
 	}
 }
 
@@ -475,38 +475,38 @@ func checkStats(t *testing.T) {
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
-	// Verify master reads done by self._check_client_conn_redirection().
+	// Verify primary reads done by self._check_client_conn_redirection().
 	resultVtgateAPI := resultMap["VtgateApi"]
 	resultVtgateAPIMap := resultVtgateAPI.(map[string]interface{})
 	resultAPIHistograms := resultVtgateAPIMap["Histograms"]
 	resultAPIHistogramsMap := resultAPIHistograms.(map[string]interface{})
-	resultTabletDestination := resultAPIHistogramsMap["Execute.destination_keyspace.master"]
+	resultTabletDestination := resultAPIHistogramsMap["Execute.destination_keyspace.primary"]
 	resultTabletDestinationMap := resultTabletDestination.(map[string]interface{})
 	resultCountStrDestination := fmt.Sprintf("%v", reflect.ValueOf(resultTabletDestinationMap["Count"]))
-	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.master) inside %s)", resultCountStrDestination))
+	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(Execute.destination_keyspace.primary) inside %s)", resultCountStrDestination))
 
 	assert.Empty(t, resultMap["VtgateApiErrorCounts"])
 
 }
 
-func insertInitialValues(t *testing.T, conn *mysql.Conn, sourceMasterTablet cluster.Vttablet, destinationMasterTablet cluster.Vttablet) {
+func insertInitialValues(t *testing.T, conn *mysql.Conn, sourcePrimaryTablet cluster.Vttablet, destinationPrimaryTablet cluster.Vttablet) {
 	moving1First = insertValues(t, conn, sourceKeyspace, "moving1", 100)
 	moving2First = insertValues(t, conn, sourceKeyspace, "moving2", 100)
 	staying1First = insertValues(t, conn, sourceKeyspace, "staying1", 100)
 	staying2First = insertValues(t, conn, sourceKeyspace, "staying2", 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "moving1", moving1First, 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "moving2", moving2First, 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "staying1", staying1First, 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "staying2", staying2First, 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "view1", moving1First, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "moving1", moving1First, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "moving2", moving2First, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "staying1", staying1First, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "staying2", staying2First, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "view1", moving1First, 100)
 
 	moving3NoPkFirst = insertValues(t, conn, sourceKeyspace, "moving3_no_pk", 100)
-	checkValues(t, &sourceMasterTablet, sourceKeyspace, "vt_source_keyspace", "moving3_no_pk", moving3NoPkFirst, 100)
+	checkValues(t, &sourcePrimaryTablet, sourceKeyspace, "vt_source_keyspace", "moving3_no_pk", moving3NoPkFirst, 100)
 
 	// Insert data directly because vtgate would redirect us.
-	_, err := destinationMasterTablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into %s (id, msg) values(%d, 'value %d')", "extra1", 1, 1), destinationKeyspace, true)
+	_, err := destinationPrimaryTablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into %s (id, msg) values(%d, 'value %d')", "extra1", 1, 1), destinationKeyspace, true)
 	require.NoError(t, err)
-	checkValues(t, &destinationMasterTablet, destinationKeyspace, "vt_destination_keyspace", "extra1", 1, 1)
+	checkValues(t, &destinationPrimaryTablet, destinationKeyspace, "vt_destination_keyspace", "extra1", 1, 1)
 }
 
 func checkClientConnRedirectionExecuteKeyrange(ctx context.Context, t *testing.T, conn *vtgateconn.VTGateConn, keyspace string, servedFromDbTypes []topodata.TabletType, movedTables []string) {
@@ -539,7 +539,7 @@ func checkValuesTimeout(t *testing.T, tablet cluster.Vttablet, table string, fir
 	for i := 0; i < timeoutInSec; i-- {
 		qr, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select id, msg from %s where id>=%d order by id limit %d", table, first, count), destinationKeyspace, true)
 		if err != nil {
-			require.NoError(t, err, "select failed on master tablet")
+			require.NoError(t, err, "select failed on primary tablet")
 		}
 		if len(qr.Rows) == count {
 			return true
@@ -549,23 +549,23 @@ func checkValuesTimeout(t *testing.T, tablet cluster.Vttablet, table string, fir
 	return true
 }
 
-func checkBlacklistedTables(t *testing.T, tablet cluster.Vttablet, keyspace string, expected []string) {
+func checkDeniedTables(t *testing.T, tablet cluster.Vttablet, keyspace string, expected []string) {
 	t.Helper()
 	tabletStatus := tablet.VttabletProcess.GetStatus()
 	if expected != nil {
-		assert.Contains(t, tabletStatus, fmt.Sprintf("BlacklistedTables: %s", strings.Join(expected, " ")))
+		assert.Contains(t, tabletStatus, fmt.Sprintf("DeniedTables: %s", strings.Join(expected, " ")))
 	} else {
-		assert.NotContains(t, tabletStatus, "BlacklistedTables")
+		assert.NotContains(t, tabletStatus, "DeniedTables")
 	}
 
 	// check we can or cannot access the tables
 	for _, table := range []string{"moving1", "moving2"} {
 		if expected != nil && strings.Contains(strings.Join(expected, " "), "moving") {
-			// table is blacklisted, should get error
+			// table is denied, should get error
 			err := clusterInstance.VtctlclientProcess.ExecuteCommand("VtTabletExecute", "-json", tablet.Alias, fmt.Sprintf("select count(1) from %s", table))
-			require.Error(t, err, "disallowed due to rule: enforce blacklisted tables")
+			require.Error(t, err, "disallowed due to rule: enforce denied tables")
 		} else {
-			// table is not blacklisted, should just work
+			// table is not part of the denylist, should just work
 			_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select count(1) from %s", table), keyspace, true)
 			require.NoError(t, err)
 		}
@@ -608,8 +608,8 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 			tabletTypeKeyspaceMap[tabletTy] = servedFrom.GetKeyspace()
 		}
 	}
-	if tabletTypeKeyspaceMap["master"] != "" {
-		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "master", tabletTypeKeyspaceMap["master"])
+	if tabletTypeKeyspaceMap["primary"] != "" {
+		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "primary", tabletTypeKeyspaceMap["primary"])
 	}
 	if tabletTypeKeyspaceMap["rdonly"] != "" {
 		result = result + fmt.Sprintf("ServedFrom(%s): %s\n", "rdonly", tabletTypeKeyspaceMap["rdonly"])
@@ -639,7 +639,7 @@ func initializeCluster() (int, error) {
 				return 1, err
 			}
 		} else {
-			if err := clusterInstance.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "--served_from", "master:source_keyspace,replica:source_keyspace,rdonly:source_keyspace", "destination_keyspace"); err != nil {
+			if err := clusterInstance.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "--served_from", "primary:source_keyspace,replica:source_keyspace,rdonly:source_keyspace", "destination_keyspace"); err != nil {
 				return 1, err
 			}
 		}
@@ -708,7 +708,7 @@ func validateKeyspaceJSON(t *testing.T, keyspaceJSON string, cellsArr []string) 
 						assert.Contains(t, strings.Join(servedFrom.GetCells(), " "), eachCell)
 					}
 				} else {
-					assert.Equal(t, []string{}, servedFrom.GetCells())
+					assert.Empty(t, servedFrom.GetCells())
 				}
 			}
 		}

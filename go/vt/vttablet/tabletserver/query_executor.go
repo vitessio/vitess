@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -59,11 +61,39 @@ type QueryExecutor struct {
 	tabletType     topodatapb.TabletType
 }
 
+const streamRowsSize = 256
+
+var streamResultPool = sync.Pool{New: func() interface{} {
+	return &sqltypes.Result{
+		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+	}
+}}
+
+func returnStreamResult(result *sqltypes.Result) error {
+	// only return large results slices to the pool
+	if cap(result.Rows) >= streamRowsSize {
+		rows := result.Rows[:0]
+		*result = sqltypes.Result{}
+		result.Rows = rows
+		streamResultPool.Put(result)
+	}
+	return nil
+}
+
+func allocStreamResult() *sqltypes.Result {
+	return streamResultPool.Get().(*sqltypes.Result)
+}
+
 var sequenceFields = []*querypb.Field{
 	{
 		Name: "nextval",
 		Type: sqltypes.Int64,
 	},
+}
+
+func (qre *QueryExecutor) shouldConsolidate() bool {
+	cm := qre.tsv.qe.consolidatorMode.Get()
+	return cm == tabletenv.Enable || ((cm == tabletenv.NotOnMaster || cm == tabletenv.NotOnPrimary) && qre.tabletType != topodatapb.TabletType_PRIMARY)
 }
 
 // Execute performs a non-streaming query execution.
@@ -147,8 +177,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execCallProc()
 	case p.PlanAlterMigration:
 		return qre.execAlterMigration()
+	case p.PlanRevertMigration:
+		return qre.execRevertMigration()
+	case p.PlanShowMigrationLogs:
+		return qre.execShowMigrationLogs()
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
@@ -229,11 +263,11 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	case p.PlanCallProc:
 		return qre.execProc(conn)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
 // Stream performs a streaming query execution.
-func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
 	defer func(start time.Time) {
@@ -243,6 +277,39 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 
 	if err := qre.checkPermissions(); err != nil {
 		return err
+	}
+
+	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
+	if err != nil {
+		return err
+	}
+
+	var replaceKeyspace string
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL {
+		replaceKeyspace = qre.tsv.sm.target.Keyspace
+	}
+
+	if consolidator := qre.tsv.qe.streamConsolidator; consolidator != nil {
+		if qre.connID == 0 && qre.plan.PlanID == p.PlanSelectStream && qre.shouldConsolidate() {
+			return consolidator.Consolidate(qre.logStats, sqlWithoutComments, callback,
+				func(callback StreamCallback) error {
+					dbConn, err := qre.getStreamConn()
+					if err != nil {
+						return err
+					}
+					defer dbConn.Recycle()
+					return qre.execStreamSQL(dbConn, sql, func(result *sqltypes.Result) error {
+						// this stream result is potentially used by more than one client, so
+						// the consolidator will return it to the pool once it knows it's no longer
+						// being shared
+
+						if replaceKeyspace != "" {
+							result.ReplaceKeyspace(replaceKeyspace)
+						}
+						return callback(result)
+					})
+				})
+		}
 	}
 
 	// if we have a transaction id, let's use the txPool for this query
@@ -263,15 +330,20 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 		conn = dbConn
 	}
 
-	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-	if err != nil {
-		return err
-	}
-	return qre.execStreamSQL(conn, sql, callback)
+	return qre.execStreamSQL(conn, sql, func(result *sqltypes.Result) error {
+		// this stream result is only used by the calling client, so it can be
+		// returned to the pool once the callback has fully returned
+		defer returnStreamResult(result)
+
+		if replaceKeyspace != "" {
+			result.ReplaceKeyspace(replaceKeyspace)
+		}
+		return callback(result)
+	})
 }
 
 // MessageStream streams messages from a message table.
-func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) error {
+func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	qre.logStats.OriginalSQL = qre.query
 	qre.logStats.PlanType = qre.plan.PlanID.String()
 
@@ -300,14 +372,14 @@ func (qre *QueryExecutor) MessageStream(callback func(*sqltypes.Result) error) e
 }
 
 // checkPermissions returns an error if the query does not pass all checks
-// (query blacklisting, table ACL).
+// (denied query, table ACL).
 func (qre *QueryExecutor) checkPermissions() error {
 	// Skip permissions check if the context is local.
 	if tabletenv.IsLocalContext(qre.ctx) {
 		return nil
 	}
 
-	// Check if the query is blacklisted.
+	// Check if the query relates to a table that is in the denylist.
 	remoteAddr := ""
 	username := ""
 	ci, ok := callinfo.FromContext(qre.ctx)
@@ -315,7 +387,7 @@ func (qre *QueryExecutor) checkPermissions() error {
 		remoteAddr = ci.RemoteAddr()
 		username = ci.Username()
 	}
-	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars)
+	action, desc := qre.plan.Rules.GetAction(remoteAddr, username, qre.bindVars, qre.marginComments)
 	switch action {
 	case rules.QRFail:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed due to rule: %s", desc)
@@ -384,6 +456,16 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 }
 
 func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	// Let's see if this is a normal DDL statement or an Online DDL statement.
+	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
+	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
+		// Parsing is successful.
+		if !onlineDDL.Strategy.IsDirect() {
+			// This is an online DDL.
+			return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+		}
+	}
+
 	defer func() {
 		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
@@ -444,7 +526,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	}
 	tableName := qre.plan.TableName()
 	if inc < 1 {
-		return nil, fmt.Errorf("invalid increment for sequence %s: %d", tableName, inc)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid increment for sequence %s: %d", tableName, inc)
 	}
 
 	t := qre.plan.Table
@@ -458,7 +540,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, err
 			}
 			if len(qr.Rows) != 1 {
-				return nil, fmt.Errorf("unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected rows from reading sequence %s (possible mis-route): %d", tableName, len(qr.Rows))
 			}
 			nextID, err := evalengine.ToInt64(qr.Rows[0][0])
 			if err != nil {
@@ -480,7 +562,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
 			if cache < 1 {
-				return nil, fmt.Errorf("invalid cache value for sequence %s: %d", tableName, cache)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid cache value for sequence %s: %d", tableName, cache)
 			}
 			newLast := nextID + cache
 			for newLast < t.SequenceInfo.NextVal+inc {
@@ -611,7 +693,7 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 		return nil, err
 	}
 	// Check tablet type.
-	if cm := qre.tsv.qe.consolidatorMode.Get(); cm == tabletenv.Enable || (cm == tabletenv.NotOnMaster && qre.tabletType != topodatapb.TabletType_MASTER) {
+	if qre.shouldConsolidate() {
 		q, original := qre.tsv.qe.consolidator.Create(sqlWithoutComments)
 		if original {
 			defer q.Broadcast()
@@ -664,18 +746,20 @@ func (qre *QueryExecutor) txFetch(conn *StatefulConnection, record bool) (*sqlty
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (string, string, error) {
-	var buf strings.Builder
-	buf.WriteString(qre.marginComments.Leading)
-
 	query, err := parsedQuery.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
-	withoutComments := query
+
+	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
+		return query, query, nil
+	}
+
+	var buf strings.Builder
+	buf.WriteString(qre.marginComments.Leading)
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)
-	fullSQL := buf.String()
-	return fullSQL, withoutComments, nil
+	return buf.String(), query, nil
 }
 
 func rewriteOUTParamError(err error) error {
@@ -754,11 +838,25 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CompleteMigrationType:
 		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION COMPLETE is not implemented yet")
 	case sqlparser.CancelMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, true, "CANCEL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION not implemented")
+}
+
+func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.RevertMigration); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting REVERT VITESS_MIGRATION plan")
+	}
+	return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
+}
+
+func (qre *QueryExecutor) execShowMigrationLogs() (*sqltypes.Result, error) {
+	if showMigrationLogsStmt, ok := qre.plan.FullStmt.(*sqlparser.ShowMigrationLogs); ok {
+		return qre.tsv.onlineDDLExecutor.ShowMigrationLogs(qre.ctx, showMigrationLogsStmt)
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATION plan")
 }
 
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
@@ -821,7 +919,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callb
 	defer qre.tsv.olapql.Remove(qd)
 
 	start := time.Now()
-	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue

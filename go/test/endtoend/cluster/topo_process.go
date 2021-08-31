@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -89,7 +90,7 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Errorf("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
+	log.Infof("Starting etcd with command: %v", strings.Join(topo.proc.Args, " "))
 
 	err = topo.proc.Start()
 	if err != nil {
@@ -147,25 +148,65 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 	return
 }
 
+// ConsulConfigs are the configurations that are added the config files which are used by consul
+type ConsulConfigs struct {
+	Ports   PortsInfo `json:"ports"`
+	DataDir string    `json:"data_dir"`
+	LogFile string    `json:"log_file"`
+}
+
+// PortsInfo is the different ports used by consul
+type PortsInfo struct {
+	DNS     int `json:"dns"`
+	HTTP    int `json:"http"`
+	SerfLan int `json:"serf_lan"`
+	SerfWan int `json:"serf_wan"`
+	Server  int `json:"server"`
+}
+
 // SetupConsul spawns a new consul service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	topo.VerifyURL = fmt.Sprintf("http://%s:%d/v1/kv/?keys", topo.Host, topo.Port)
 
+	_ = os.MkdirAll(topo.LogDirectory, os.ModePerm)
+	_ = os.MkdirAll(topo.DataDirectory, os.ModePerm)
+
 	configFile := path.Join(os.Getenv("VTDATAROOT"), "consul.json")
 
-	config := fmt.Sprintf(`{"ports":{"dns":%d,"http":%d,"serf_lan":%d,"serf_wan":%d}}`,
-		cluster.GetAndReservePort(), topo.Port, cluster.GetAndReservePort(), cluster.GetAndReservePort())
+	logFile := path.Join(topo.LogDirectory, "/consul.log")
+	_, _ = os.Create(logFile)
 
-	err = ioutil.WriteFile(configFile, []byte(config), 0666)
+	var config []byte
+	configs := ConsulConfigs{
+		Ports: PortsInfo{
+			DNS:     cluster.GetAndReservePort(),
+			HTTP:    topo.Port,
+			SerfLan: cluster.GetAndReservePort(),
+			SerfWan: cluster.GetAndReservePort(),
+			Server:  cluster.GetAndReservePort(),
+		},
+		DataDir: topo.DataDirectory,
+		LogFile: logFile,
+	}
+	config, err = json.Marshal(configs)
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+
+	err = ioutil.WriteFile(configFile, config, 0666)
 	if err != nil {
 		return
 	}
 
 	topo.proc = exec.Command(
 		topo.Binary, "agent",
-		"-dev",
+		"-server",
+		"-ui",
+		"-bootstrap-expect", "1",
+		"-bind", "127.0.0.1",
 		"-config-file", configFile,
 	)
 
@@ -174,7 +215,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
-	log.Infof("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
+	log.Errorf("Starting consul with args %v", strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -225,7 +266,9 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 			return nil
 		}
 
-		topo.removeTopoDirectories(Cell)
+		if !(*keepData || keepdata) {
+			topo.removeTopoDirectories(Cell)
+		}
 
 		// Attempt graceful shutdown with SIGTERM first
 		_ = topo.proc.Process.Signal(syscall.SIGTERM)
@@ -233,8 +276,8 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		if !(*keepData || keepdata) {
 			_ = os.RemoveAll(topo.DataDirectory)
 			_ = os.RemoveAll(currentRoot)
+			_ = os.Setenv("VTDATAROOT", originalVtRoot)
 		}
-		_ = os.Setenv("VTDATAROOT", originalVtRoot)
 
 		select {
 		case <-topo.exit:

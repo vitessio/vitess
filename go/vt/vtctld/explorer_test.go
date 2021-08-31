@@ -110,7 +110,7 @@ func TestHandlePathKeyspace(t *testing.T) {
 
 	// Test the Keyspace object itself.
 	input := path.Join("/global", "keyspaces", "test_keyspace", "Keyspace")
-	want := "sharding_column_name: \"keyspace_id\"\n"
+	want := "sharding_column_name:\"keyspace_id\""
 	result := ex.HandlePath(input, nil)
 	if got := result.Data; got != want {
 		t.Errorf("HandlePath(%q) = %q, want %q", input, got, want)
@@ -141,7 +141,7 @@ func TestHandlePathShard(t *testing.T) {
 	input := path.Join("/global", "keyspaces", "test_keyspace", "shards", "-80", "Shard")
 	cells := []string{"cell1", "cell2", "cell3"}
 	keyspace := &topodatapb.Keyspace{}
-	want := "is_master_serving: true\n"
+	want := "is_primary_serving:true"
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer(cells...)
@@ -180,7 +180,7 @@ func TestHandlePathTablet(t *testing.T) {
 		Hostname: "example.com",
 		PortMap:  map[string]int32{"vt": 4321},
 	}
-	want := "alias: <\n  cell: \"cell1\"\n  uid: 123\n>\nhostname: \"example.com\"\nport_map: <\n  key: \"vt\"\n  value: 4321\n>\n"
+	want := "alias:{cell:\"cell1\" uid:123} hostname:\"example.com\" port_map:{key:\"vt\" value:4321}"
 
 	ctx := context.Background()
 	ts := memorytopo.NewServer(cells...)

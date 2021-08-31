@@ -10,14 +10,18 @@ relay-log-index =  {{.RelayLogIndexPath}}
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
 
+{{if .SecureFilePriv}}
+secure-file-priv = {{.SecureFilePriv}}
+{{end}}
+
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
 server-id = {{.ServerID}}
 
-# all db instances should skip the slave startup - that way we can do any
+# all db instances should skip starting replication threads - that way we can do any
 # additional configuration (like enabling semi-sync) before we connect to
-# the master.
+# the source.
 skip_slave_start
 socket = {{.SocketFile}}
 tmpdir = {{.TmpDir}}

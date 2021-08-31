@@ -45,14 +45,14 @@ func TestMemorySortExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -66,12 +66,12 @@ func TestMemorySortExecute(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -100,7 +100,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: 0,
 			Col:             1,
 		}},
@@ -110,7 +110,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("order by weight string", func(t *testing.T) {
 
-		err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -129,13 +129,13 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("Limit test", func(t *testing.T) {
 		fp.rewind()
-		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+		upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 		require.NoError(t, err)
 		ms.UpperLimit = upperlimit
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err = ms.StreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+		err = ms.TryStreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -168,14 +168,14 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: 1,
 			Col:             0,
 		}},
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -189,12 +189,12 @@ func TestMemorySortExecuteWeightString(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -223,7 +223,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -231,7 +231,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -248,13 +248,13 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
-	err = ms.StreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+	err = ms.TryStreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -302,7 +302,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -310,7 +310,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 2,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -341,7 +341,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             1,
 		}},
@@ -350,7 +350,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -384,7 +384,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			Col:             1,
 			WeightStringCol: -1,
 		}, {
@@ -395,7 +395,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.TryExecute(&noopVCursor{}, nil, false)
 	require.NoError(t, err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -409,12 +409,12 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 
 	fp.rewind()
-	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument(":__upper_limit"))
+	upperlimit, err := sqlparser.NewPlanValue(sqlparser.NewArgument("__upper_limit"))
 	require.NoError(t, err)
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, bv, false)
+	result, err = ms.TryExecute(&noopVCursor{}, bv, false)
 	require.NoError(t, err)
 
 	wantResult = sqltypes.MakeTestResult(
@@ -459,7 +459,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		ms := &MemorySort{
-			OrderBy: []OrderbyParams{{
+			OrderBy: []OrderByParams{{
 				WeightStringCol: -1,
 				Col:             1,
 			}},
@@ -467,7 +467,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		}
 
 		testIgnoreMaxMemoryRows = test.ignoreMaxMemoryRows
-		err := ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		if testIgnoreMaxMemoryRows {
@@ -495,21 +495,21 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	ms := &MemorySort{
-		OrderBy: []OrderbyParams{{
+		OrderBy: []OrderByParams{{
 			WeightStringCol: -1,
 			Col:             0,
 		}},
 		Input: fp,
 	}
 
-	_, err := ms.Execute(nil, nil, false)
+	_, err := ms.TryExecute(&noopVCursor{}, nil, false)
 	want := "types are not comparable: VARCHAR vs VARCHAR"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)
 	}
 
 	fp.rewind()
-	err = ms.StreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	if err == nil || err.Error() != want {

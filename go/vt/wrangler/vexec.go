@@ -24,12 +24,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	vtctldvexec "vitess.io/vitess/go/vt/vtctl/workflow/vexec" // renamed to avoid a collision with the vexec struct in this package
@@ -66,7 +68,7 @@ type vexec struct {
 
 	wr *Wrangler
 
-	masters []*topo.TabletInfo
+	primaries []*topo.TabletInfo
 }
 
 func newVExec(ctx context.Context, workflow, keyspace, query string, wr *Wrangler) *vexec {
@@ -145,7 +147,7 @@ func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query s
 	return qr, nil
 }
 
-// VExec executes queries on a table on all masters in the target keyspace of the workflow
+// VExec executes queries on a table on all primaries in the target keyspace of the workflow
 func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
@@ -159,7 +161,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
-	if err := vx.getMasters(); err != nil {
+	if err := vx.getPrimaries(); err != nil {
 		return nil, err
 	}
 	plan, err := vx.parseAndPlan(ctx)
@@ -192,7 +194,7 @@ func (vx *vexec) outputDryRunInfo(ctx context.Context) error {
 	return vx.planner.dryRun(ctx)
 }
 
-// exec runs our planned query on backend shard masters. It collects query results from all
+// exec runs our planned query on backend shard primaries. It collects query results from all
 // shards and returns an aggregate (UNION ALL -like) result.
 func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
@@ -201,21 +203,19 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var mu sync.Mutex
 	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
 	defer cancel()
-	for _, master := range vx.masters {
+	for _, primary := range vx.primaries {
 		wg.Add(1)
-		go func(ctx context.Context, master *topo.TabletInfo) {
+		go func(ctx context.Context, primary *topo.TabletInfo) {
 			defer wg.Done()
-			log.Infof("Running %s on %s\n", vx.plannedQuery, master.AliasString())
-			qr, err := vx.planner.exec(ctx, master.Alias, vx.plannedQuery)
-			log.Infof("Result is %s: %v", master.AliasString(), qr)
+			qr, err := vx.planner.exec(ctx, primary.Alias, vx.plannedQuery)
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
 				mu.Lock()
-				results[master] = qr
+				results[primary] = qr
 				mu.Unlock()
 			}
-		}(ctx, master)
+		}(ctx, primary)
 	}
 	wg.Wait()
 	return results, allErrors.AggrError(vterrors.Aggregate)
@@ -232,8 +232,8 @@ func (vx *vexec) parseQuery() (err error) {
 	return nil
 }
 
-// getMasters identifies master tablet for all shards relevant to our keyspace
-func (vx *vexec) getMasters() error {
+// getPrimaries identifies primary tablet for all shards relevant to our keyspace
+func (vx *vexec) getPrimaries() error {
 	var err error
 	shards, err := vx.wr.ts.GetShardNames(vx.ctx, vx.keyspace)
 	if err != nil {
@@ -242,40 +242,48 @@ func (vx *vexec) getMasters() error {
 	if len(shards) == 0 {
 		return fmt.Errorf("no shards found in keyspace %s", vx.keyspace)
 	}
-	var allMasters []*topo.TabletInfo
-	var master *topo.TabletInfo
+	var allPrimaries []*topo.TabletInfo
+	var primary *topo.TabletInfo
 	for _, shard := range shards {
-		if master, err = vx.getMasterForShard(shard); err != nil {
+		if primary, err = vx.getPrimaryForShard(shard); err != nil {
 			return err
 		}
-		if master == nil {
-			return fmt.Errorf("no master found for shard %s", shard)
+		if primary == nil {
+			return fmt.Errorf("no primary found for shard %s", shard)
 		}
-		allMasters = append(allMasters, master)
+		allPrimaries = append(allPrimaries, primary)
 	}
-	vx.masters = allMasters
+	vx.primaries = allPrimaries
 	return nil
 }
 
-func (vx *vexec) getMasterForShard(shard string) (*topo.TabletInfo, error) {
+func (vx *vexec) getPrimaryForShard(shard string) (*topo.TabletInfo, error) {
 	si, err := vx.wr.ts.GetShard(vx.ctx, vx.keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
-	if si.MasterAlias == nil {
-		return nil, fmt.Errorf("no master found for shard %s", shard)
+	if si.PrimaryAlias == nil {
+		return nil, fmt.Errorf("no primary found for shard %s", shard)
 	}
-	master, err := vx.wr.ts.GetTablet(vx.ctx, si.MasterAlias)
+	primary, err := vx.wr.ts.GetTablet(vx.ctx, si.PrimaryAlias)
 	if err != nil {
 		return nil, err
 	}
-	if master == nil {
-		return nil, fmt.Errorf("could not get tablet for %s:%s", vx.keyspace, si.MasterAlias)
+	if primary == nil {
+		return nil, fmt.Errorf("could not get tablet for %s:%s", vx.keyspace, si.PrimaryAlias)
 	}
-	return master, nil
+	return primary, nil
 }
 
-// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all masters in the target keyspace of the workflow.
+func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletInfo]*querypb.QueryResult) map[*topo.TabletInfo]*sqltypes.Result {
+	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
+	for tablet, result := range results {
+		retResults[tablet] = sqltypes.Proto3ToResult(result)
+	}
+	return retResults
+}
+
+// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
 func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 
 	if action == "show" {
@@ -294,11 +302,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		return nil, err
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
-	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
-	for tablet, result := range results {
-		retResults[tablet] = sqltypes.Proto3ToResult(result)
-	}
-	return retResults, err
+	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
 func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
@@ -325,6 +329,13 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 }
 
+// WorkflowTagAction sets or clears the tags for a workflow in a keyspace
+func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	return wr.convertQueryResultToSQLTypesResult(results), err
+}
+
 // ReplicationStatusResult represents the result of trying to get the replication status for a given workflow.
 type ReplicationStatusResult struct {
 	// Workflow represents the name of the workflow relevant to the related replication statuses.
@@ -336,7 +347,7 @@ type ReplicationStatusResult struct {
 	// MaxVReplicationLag represents the maximum vreplication lag seen across all shards.
 	MaxVReplicationLag int64
 
-	// Statuses is a map of <shard>/<master tablet alias> : ShardReplicationStatus (for the given shard).
+	// Statuses is a map of <shard>/<primary tablet alias> : ShardReplicationStatus (for the given shard).
 	ShardStatuses map[string]*ShardReplicationStatus
 }
 
@@ -348,12 +359,12 @@ type ReplicationLocation struct {
 
 // ShardReplicationStatus holds relevant vreplication related info for the given shard.
 type ShardReplicationStatus struct {
-	// MasterReplicationStatuses represents all of the replication statuses for the master tablets in the given shard.
-	MasterReplicationStatuses []*ReplicationStatus
+	// PrimaryReplicationStatuses represents all of the replication statuses for the primary tablets in the given shard.
+	PrimaryReplicationStatuses []*ReplicationStatus
 	// TabletControls represents the tablet controls for the tablets in the shard.
 	TabletControls []*topodatapb.Shard_TabletControl
-	// MasterIsServing indicates whether the master tablet of the given shard is currently serving write traffic.
-	MasterIsServing bool
+	// PrimaryIsServing indicates whether the primary tablet of the given shard is currently serving write traffic.
+	PrimaryIsServing bool
 }
 
 type copyState struct {
@@ -370,7 +381,7 @@ type ReplicationStatus struct {
 	// ID represents the id column from the _vt.vreplication table.
 	ID int64
 	// Bls represents the BinlogSource.
-	Bls binlogdatapb.BinlogSource
+	Bls *binlogdatapb.BinlogSource
 	// Pos represents the pos column from the _vt.vreplication table.
 	Pos string
 	// StopPos represents the stop_pos column from the _vt.vreplication table.
@@ -385,24 +396,37 @@ type ReplicationStatus struct {
 	TimeUpdated int64
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
+	// Tags contain the tags specified for this stream
+	Tags string
 
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
 }
 
-func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, master *topo.TabletInfo) (*ReplicationStatus, string, error) {
+func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqltypes.Value, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
 	var id, timeUpdated, transactionTimestamp int64
-	var state, dbName, pos, stopPos, message string
+	var state, dbName, pos, stopPos, message, tags string
 	var bls binlogdatapb.BinlogSource
+	var mpos mysql.Position
+
 	id, err = evalengine.ToInt64(row[0])
 	if err != nil {
 		return nil, "", err
 	}
-	if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
+	if err := prototext.Unmarshal(row[1].ToBytes(), &bls); err != nil {
 		return nil, "", err
 	}
+
+	// gtid in the pos column can be compressed, so check and possibly uncompress
 	pos = row[2].ToString()
+	if pos != "" {
+		mpos, err = binlogplayer.DecodePosition(pos)
+		if err != nil {
+			return nil, "", err
+		}
+		pos = mpos.String()
+	}
 	stopPos = row[3].ToString()
 	state = row[5].ToString()
 	dbName = row[6].ToString()
@@ -415,11 +439,12 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		return nil, "", err
 	}
 	message = row[9].ToString()
+	tags = row[10].ToString()
 	status := &ReplicationStatus{
-		Shard:                master.Shard,
-		Tablet:               master.AliasString(),
+		Shard:                primary.Shard,
+		Tablet:               primary.AliasString(),
 		ID:                   id,
-		Bls:                  bls,
+		Bls:                  &bls,
 		Pos:                  pos,
 		StopPos:              stopPos,
 		State:                state,
@@ -427,8 +452,9 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row []sqlty
 		TransactionTimestamp: transactionTimestamp,
 		TimeUpdated:          timeUpdated,
 		Message:              message,
+		Tags:                 tags,
 	}
-	status.CopyState, err = wr.getCopyState(ctx, master, id)
+	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
 		return nil, "", err
 	}
@@ -442,7 +468,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	rsr.ShardStatuses = make(map[string]*ShardReplicationStatus)
 	rsr.Workflow = workflow
 	var results map[*topo.TabletInfo]*querypb.QueryResult
-	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message from _vt.vreplication"
+	query := "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, message, tags from _vt.vreplication"
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
 		return nil, err
@@ -454,14 +480,14 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	var sourceKeyspace string
 	sourceShards := sets.NewString()
 	targetShards := sets.NewString()
-	for master, result := range results {
+	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		qr := sqltypes.Proto3ToResult(result)
 		if len(qr.Rows) == 0 {
 			continue
 		}
 		for _, row := range qr.Rows {
-			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, master)
+			status, sk, err := wr.getReplicationStatusFromRow(ctx, row, primary)
 			if err != nil {
 				return nil, err
 			}
@@ -475,15 +501,15 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				rsr.MaxVReplicationLag = int64(replicationLag.Seconds())
 			}
 		}
-		si, err := wr.ts.GetShard(ctx, keyspace, master.Shard)
+		si, err := wr.ts.GetShard(ctx, keyspace, primary.Shard)
 		if err != nil {
 			return nil, err
 		}
 		targetShards.Insert(si.ShardName())
-		rsr.ShardStatuses[fmt.Sprintf("%s/%s", master.Shard, master.AliasString())] = &ShardReplicationStatus{
-			MasterReplicationStatuses: rsrStatus,
-			TabletControls:            si.TabletControls,
-			MasterIsServing:           si.IsMasterServing,
+		rsr.ShardStatuses[fmt.Sprintf("%s/%s", primary.Shard, primary.AliasString())] = &ShardReplicationStatus{
+			PrimaryReplicationStatuses: rsrStatus,
+			TabletControls:             si.TabletControls,
+			PrimaryIsServing:           si.IsPrimaryServing,
 		}
 	}
 	rsr.SourceLocation = ReplicationLocation{
@@ -523,7 +549,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 		qr := sqltypes.Proto3ToResult(result)
 		for _, row := range qr.Rows {
 			for _, value := range row {
-				// Even though we query for distinct, we must de-dup because we query per master tablet.
+				// Even though we query for distinct, we must de-dup because we query per primary tablet.
 				workflowsSet.Insert(value.ToString())
 			}
 		}

@@ -155,7 +155,6 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 			panic(err)
 		}
 		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
-		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
@@ -165,7 +164,6 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 				}
 			}
 		}
-		return masterConnectionExist
 	}
 	return false
 }
@@ -173,7 +171,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
 // endPointsCount: how many endpoints to wait for
 func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(15 * time.Second)
 	for time.Now().Before(timeout) {
 		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
@@ -193,6 +191,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 	if vtgate.proc == nil || vtgate.exit == nil {
 		return nil
 	}
+	// graceful shutdown is not currently working with vtgate, attempting a force-kill to make tests less flaky
 	// Attempt graceful shutdown with SIGTERM first
 	vtgate.proc.Process.Signal(syscall.SIGTERM)
 
@@ -203,7 +202,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 		vtgate.proc = nil
 		return nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		vtgate.proc.Process.Kill()
 		vtgate.proc = nil
 		return <-vtgate.exit

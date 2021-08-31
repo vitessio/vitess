@@ -306,11 +306,11 @@ func TestQueryExecutorPlans(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, &target, nil)
+			txid, alias, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, *alias, "Wrong alias returned by Begin")
-			defer tsv.Commit(ctx, &target, txid)
+			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			got, err = qre.Execute()
@@ -373,11 +373,11 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, &target, nil)
+			txid, alias, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, &target, txid)
+			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			got, err = qre.Execute()
@@ -387,6 +387,30 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 			assert.Equal(t, tcase.inTxWant, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 		}()
 	}
+}
+
+// TestDisableOnlineDDL checks whether disabling online DDLs throws the correct error or not
+func TestDisableOnlineDDL(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	query := "ALTER VITESS_MIGRATION CANCEL ALL"
+
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+
+	ctx := context.Background()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+
+	qre := newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err := qre.Execute()
+	require.NoError(t, err)
+	tsv.StopService()
+
+	tsv = newTestTabletServer(ctx, disableOnlineDDL, db)
+	defer tsv.StopService()
+
+	qre = newTestQueryExecutor(ctx, tsv, query, 0)
+	_, err = qre.Execute()
+	require.EqualError(t, err, "online ddl is disabled")
 }
 
 func TestQueryExecutorLimitFailure(t *testing.T) {
@@ -481,11 +505,11 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 
 			// Test inside a transaction.
 			target := tsv.sm.Target()
-			txid, alias, err := tsv.Begin(ctx, &target, nil)
+			txid, alias, err := tsv.Begin(ctx, target, nil)
 			require.NoError(t, err)
 			require.NotNil(t, alias, "alias should not be nil")
-			assert.Equal(t, tsv.alias, *alias, "Wrong tablet alias from Begin")
-			defer tsv.Commit(ctx, &target, txid)
+			assert.Equal(t, tsv.alias, alias, "Wrong tablet alias from Begin")
+			defer tsv.Commit(ctx, target, txid)
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			_, err = qre.Execute()
@@ -1001,7 +1025,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorBlacklistQRFail(t *testing.T) {
+func TestQueryExecutorDenyListQRFail(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
@@ -1026,7 +1050,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
-	rulesName := "blacklistedRulesQRFail"
+	rulesName := "denyListRulesQRFail"
 	rules := rules.New()
 	rules.Add(alterRule)
 
@@ -1048,14 +1072,14 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	defer tsv.StopService()
 
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
-	// execute should fail because query has been blacklisted
+	// execute should fail because query has a table which is part of the denylist
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
 	}
 }
 
-func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
+func TestQueryExecutorDenyListQRRetry(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	query := "select * from test_table where name = 1 limit 1000"
@@ -1080,7 +1104,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
-	rulesName := "blacklistedRulesQRRetry"
+	rulesName := "denyListRulesQRRetry"
 	rules := rules.New()
 	rules.Add(alterRule)
 
@@ -1117,6 +1141,7 @@ const (
 	noTwopc
 	shortTwopcAge
 	smallResultSize
+	disableOnlineDDL
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1138,6 +1163,11 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TwoPCEnable = true
 	}
+	if flags&disableOnlineDDL > 0 {
+		config.EnableOnlineDDL = false
+	} else {
+		config.EnableOnlineDDL = true
+	}
 	config.TwoPCCoordinatorAddress = "fake"
 	if flags&shortTwopcAge > 0 {
 		config.TwoPCAbandonAge = 0.5
@@ -1147,10 +1177,14 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	if flags&smallResultSize > 0 {
 		config.Oltp.MaxRows = 2
 	}
-	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbconfigs := newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
+	config.DB = dbconfigs
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	err := tsv.StartService(target, dbconfigs, nil /* mysqld */)
+	if config.TwoPCEnable {
+		tsv.TwoPCEngineWait()
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -1159,7 +1193,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 
 func newTransaction(tsv *TabletServer, options *querypb.ExecuteOptions) int64 {
 	target := tsv.sm.Target()
-	transactionID, _, err := tsv.Begin(context.Background(), &target, options)
+	transactionID, _, err := tsv.Begin(context.Background(), target, options)
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed to start a transaction"))
 	}

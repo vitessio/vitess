@@ -16,7 +16,7 @@ export TOPO="zk2"
 ./vttablet-up.sh --enable-grpc-static-auth
 ./vtgate-up.sh --enable-grpc-static-auth
 sleep 3
-./lvtctl.sh InitShardMaster -force test_keyspace/- test-100
+./lvtctl.sh InitShardPrimary -force test_keyspace/- test-100
 ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ./lvtctl.sh ApplyVSchema -vschema_file vschema.json test_keyspace
 ./lvtctl.sh RebuildVSchemaGraph

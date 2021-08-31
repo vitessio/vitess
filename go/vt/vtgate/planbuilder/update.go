@@ -27,7 +27,7 @@ import (
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(stmt sqlparser.Statement, reservedVars sqlparser.BindVars, vschema ContextVSchema) (engine.Primitive, error) {
+func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	upd := stmt.(*sqlparser.Update)
 	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {

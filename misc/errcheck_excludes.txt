@@ -1,0 +1,47 @@
+// This file contains one function signature per line, which errcheck should not warn about.
+//
+// The format for function signatures is `package.FunctionName`.
+// The format for method signatures is `(package.Receiver).MethodName` for value receivers,
+// and the format for pointer receivers is `(*package.Receiver).MethodName`.
+//
+// See https://github.com/kisielk/errcheck#excluding-functions for more details.
+
+flag.Set
+(*flag.FlagSet).Parse
+(flag.Value).Set
+
+fmt.Fprint
+fmt.Fprintf
+
+io.WriteString(fmt.State)
+io.WriteString(net/http.ResponseWriter)
+
+(net.Listener).Close
+(net/http.ResponseWriter).Write
+net/http.Serve
+
+(*os.File).Close
+os.Remove
+os.RemoveAll
+os.Rename
+
+(*github.com/spf13/cobra.Command).Help
+(*github.com/spf13/cobra.Command).MarkFlagRequired
+(*github.com/spf13/cobra.Command).MarkPersistentFlagFilename
+
+(*google.golang.org/grpc.ClientConn).Close
+(*google.golang.org/grpc.Server).Serve
+
+(*vitess.io/vitess/go/bytes2.Buffer).Write
+(*vitess.io/vitess/go/bytes2.Buffer).WriteByte
+(*vitess.io/vitess/go/bytes2.Buffer).WriteString
+
+(vitess.io/vitess/go/sqltypes.BinWriter).Write
+
+vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errore
+vitess.io/vitess/go/vt/orchestrator/external/golib/log.Errorf
+vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatal
+vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatale
+vitess.io/vitess/go/vt/orchestrator/external/golib/log.Fatalf
+
+(*vitess.io/vitess/go/vt/vttest.LocalCluster).TearDown

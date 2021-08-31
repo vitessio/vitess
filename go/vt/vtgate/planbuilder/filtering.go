@@ -72,7 +72,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		return node, nil
 	case *vindexFunc:
 		return filterVindexFunc(node, filter)
-	case *subquery:
+	case *simpleProjection:
 		return nil, errors.New("unsupported: filtering on results of cross-shard subquery")
 	case *orderedAggregate:
 		return nil, errors.New("unsupported: filtering on results of aggregates")

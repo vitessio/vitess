@@ -67,8 +67,8 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -95,11 +95,11 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
@@ -135,7 +135,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
 							Before: &replicationdatapb.Status{},
 							After: &replicationdatapb.Status{
-								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 								Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 							},
@@ -180,8 +180,8 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -208,11 +208,11 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
@@ -248,7 +248,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
 							Before: &replicationdatapb.Status{},
 							After: &replicationdatapb.Status{
-								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 								Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 							},
@@ -291,9 +291,9 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -321,7 +321,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -352,8 +352,8 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -380,11 +380,11 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "primary-demotion position",
 						},
 						Error: nil,
@@ -455,8 +455,8 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -483,11 +483,11 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "primary-demotion position",
 						},
 						Error: nil,
@@ -560,9 +560,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -590,7 +590,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }

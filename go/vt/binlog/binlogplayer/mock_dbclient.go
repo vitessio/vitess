@@ -18,19 +18,26 @@ package binlogplayer
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 )
 
+const mockClientUNameFiltered = "Filtered"
+const mockClientUNameDba = "Dba"
+
 // MockDBClient mocks a DBClient.
 // It must be configured to expect requests in a specific order.
 type MockDBClient struct {
-	t             *testing.T
-	expect        []*mockExpect
-	currentResult int
-	done          chan struct{}
+	t               *testing.T
+	UName           string
+	expect          []*mockExpect
+	currentResult   int
+	done            chan struct{}
+	queriesToIgnore []*mockExpect // these queries will return a standard nil result, you SHOULD NOT expect them in the tests
+	invariants      map[string]*sqltypes.Result
 }
 
 type mockExpect struct {
@@ -40,11 +47,43 @@ type mockExpect struct {
 	err    error
 }
 
-// NewMockDBClient returns a new DBClientMock.
+func getQueriesToIgnore() []*mockExpect {
+	var queriesToIgnore []*mockExpect
+	for _, query := range WithDDLInitialQueries {
+		exp := &mockExpect{
+			query:  query,
+			re:     nil,
+			result: &sqltypes.Result{},
+			err:    nil,
+		}
+		queriesToIgnore = append(queriesToIgnore, exp)
+
+	}
+	return queriesToIgnore
+}
+
+// NewMockDBClient returns a new DBClientMock with the default "Filtered" UName.
 func NewMockDBClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:    t,
-		done: make(chan struct{}),
+		t:               t,
+		UName:           mockClientUNameFiltered,
+		done:            make(chan struct{}),
+		queriesToIgnore: getQueriesToIgnore(),
+		invariants: map[string]*sqltypes.Result{
+			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
+			"select id, type, state, message from _vt.vreplication_log": {},
+			"insert into _vt.vreplication_log":                          {},
+		},
+	}
+}
+
+// NewMockDbaClient returns a new DBClientMock with the default "Dba" UName.
+func NewMockDbaClient(t *testing.T) *MockDBClient {
+	return &MockDBClient{
+		t:               t,
+		UName:           mockClientUNameDba,
+		done:            make(chan struct{}),
+		queriesToIgnore: getQueriesToIgnore(),
 	}
 }
 
@@ -129,6 +168,18 @@ func (dc *MockDBClient) Close() {
 func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
+
+	for _, q := range dc.queriesToIgnore {
+		if strings.EqualFold(q.query, query) || strings.Contains(strings.ToLower(query), strings.ToLower(q.query)) {
+			return q.result, q.err
+		}
+	}
+	for q, result := range dc.invariants {
+		if strings.Contains(query, q) {
+			return result, nil
+		}
+	}
+
 	if dc.currentResult >= len(dc.expect) {
 		dc.t.Fatalf("DBClientMock: query: %s, no more requests are expected", query)
 	}

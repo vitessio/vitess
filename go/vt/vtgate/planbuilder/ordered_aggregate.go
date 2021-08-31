@@ -17,9 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -74,8 +76,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 
 	// Check if we can allow aggregates.
-	hasAggregates := nodeHasAggregates(sel.SelectExprs) || len(sel.GroupBy) > 0
-
+	hasAggregates := sqlparser.ContainsAggregation(sel.SelectExprs) || len(sel.GroupBy) > 0
 	if !hasAggregates && !sel.Distinct {
 		return nil
 	}
@@ -86,7 +87,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// order by clauses.
 	if !isRoute {
 		if hasAggregates {
-			return errors.New("unsupported: cross-shard query with aggregates")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
 		pb.plan = newDistinct(pb.plan)
 		return nil
@@ -132,27 +133,6 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	}
 	pb.plan.Reorder(0)
 	return nil
-}
-
-func nodeHasAggregates(node sqlparser.SQLNode) bool {
-	hasAggregates := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case *sqlparser.FuncExpr:
-			if node.IsAggregate() {
-				hasAggregates = true
-				return false, errors.New("unused error")
-			}
-		case *sqlparser.GroupConcatExpr:
-			hasAggregates = true
-			return false, errors.New("unused error")
-		case *sqlparser.Subquery:
-			// Subqueries are analyzed by themselves.
-			return false, nil
-		}
-		return true, nil
-	}, node)
-	return hasAggregates
 }
 
 // groupbyHasUniqueVindex looks ahead at the group by expression to see if
@@ -262,7 +242,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		oa.extraDistinct = col
-		oa.eaggr.HasDistinct = true
+		oa.eaggr.PreProcess = true
 		var alias string
 		if expr.As.IsEmpty() {
 			alias = sqlparser.String(expr.Expr)
@@ -275,7 +255,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 		case engine.AggregateSum:
 			opcode = engine.AggregateSumDistinct
 		}
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 			Alias:  alias,
@@ -286,7 +266,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 			return nil, 0, err
 		}
 		pb.plan = newBuilder
-		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
 			Opcode: opcode,
 			Col:    innerCol,
 		})
@@ -331,14 +311,15 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
-	for i, colNumber := range oa.eaggr.Keys {
-		rc := oa.resultColumns[colNumber]
+	for i, gbk := range oa.eaggr.GroupByKeys {
+		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
 			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
+				oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+				oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 				continue
 			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
@@ -347,13 +328,14 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 				return err
 			}
 			oa.weightStrings[rc] = weightcolNumber
-			oa.eaggr.Keys[i] = weightcolNumber
+			oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
+			oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
 		}
 	}
 	return oa.input.Wireup(plan, jt)
 }
 
-func (oa *orderedAggregate) WireupV4(semTable *semantics.SemTable) error {
-	return oa.input.WireupV4(semTable)
+func (oa *orderedAggregate) WireupGen4(semTable *semantics.SemTable) error {
+	return oa.input.WireupGen4(semTable)
 }
