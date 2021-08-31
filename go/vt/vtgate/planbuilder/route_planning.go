@@ -88,18 +88,7 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
 	case *abstract.Concatenate:
-		var sources []queryTree
-		for _, source := range op.Sources {
-			qt, err := optimizeQuery(ctx, source)
-			if err != nil {
-				return nil, err
-			}
-			sources = append(sources, qt)
-		}
-		return &concatenateTree{
-			selectStmts: op.SelectStmts,
-			sources:     sources,
-		}, nil
+		return optimizeUnion(ctx, op)
 	case *abstract.Distinct:
 		qt, err := optimizeQuery(ctx, op.Source)
 		if err != nil {
@@ -111,6 +100,23 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
+}
+
+func optimizeUnion(ctx planningContext, op *abstract.Concatenate) (queryTree, error) {
+	var sources []queryTree
+	for _, source := range op.Sources {
+		qt, err := optimizeQuery(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+
+		sources = append(sources, qt)
+	}
+
+	return &concatenateTree{
+		selectStmts: op.SelectStmts,
+		sources:     sources,
+	}, nil
 }
 
 func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, error) {
@@ -221,7 +227,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast.SelectExprs = sel.SelectExprs
 	for i, expr := range ast.SelectExprs {
 		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
-			ast.SelectExprs[i] = removeQualifierFromColName(aliasedExpr)
+			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)
 		}
 	}
 }

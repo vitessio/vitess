@@ -148,7 +148,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 				return i, false, nil
 			}
 		}
-		expr = removeQualifierFromColName(expr)
+		expr = removeKeyspaceFromColName(expr)
 
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
@@ -218,7 +218,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	}
 }
 
-func removeQualifierFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
+func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
 	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
 		expr = sqlparser.CloneRefOfAliasedExpr(expr)
 		col := expr.Expr.(*sqlparser.ColName)
