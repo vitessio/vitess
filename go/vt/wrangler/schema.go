@@ -36,6 +36,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 const (
@@ -144,18 +145,53 @@ func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanager
 
 // ValidateSchemaShard will diff the schema from all the tablets in the shard.
 func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard string, excludeTables []string, includeViews bool, includeVSchema bool) error {
-	return grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaShard(ctx, keyspace, shard, excludeTables, includeViews, includeVSchema)
+	req := &vtctldatapb.ValidateSchemaShardRequest{
+		Keyspace:       keyspace,
+		Shard:          shard,
+		ExcludeTables:  excludeTables,
+		IncludeViews:   includeViews,
+		IncludeVSchema: includeVSchema,
+	}
+
+	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaShard(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ValidateSchemaKeyspace will diff the schema from all the tablets in
 // the keyspace.
 func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string, excludeTables []string, includeViews, skipNoPrimary bool, includeVSchema bool) error {
-	return grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaKeyspace(ctx, keyspace, excludeTables, includeViews, skipNoPrimary, includeVSchema)
+	req := &vtctldatapb.ValidateSchemaKeyspaceRequest{
+		Keyspace:       keyspace,
+		ExcludeTables:  excludeTables,
+		IncludeViews:   includeViews,
+		IncludeVSchema: includeVSchema,
+		SkipNoPrimary:  skipNoPrimary,
+	}
+
+	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaKeyspace(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
 func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards []string, excludeTables []string, includeViews bool) error {
-	return grpcvtctldserver.NewVtctldServer(wr.ts).ValidateVSchema(ctx, keyspace, shards, excludeTables, includeViews)
+	req := &vtctldatapb.ValidateVSchemaRequest{
+		Keyspace:      keyspace,
+		Shards:        shards,
+		IncludeViews:  includeViews,
+		ExcludeTables: excludeTables,
+	}
+
+	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateVSchema(ctx, req); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // PreflightSchema will try a schema change on the remote tablet.

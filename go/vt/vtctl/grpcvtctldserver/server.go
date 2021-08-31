@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -55,6 +56,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -2646,6 +2648,228 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 	<-done
 
 	return &resp, nil
+}
+
+// ValidateSchemaKeyspace will diff the schema from all the tablets in
+// the keyspace.
+func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetShardNames(%v) failed: %v", req.Keyspace, err)
+	}
+
+	sort.Strings(shards)
+	if len(shards) == 1 {
+		validateSchemaShardReq := &vtctldatapb.ValidateSchemaShardRequest{
+			Keyspace:       req.Keyspace,
+			ExcludeTables:  req.ExcludeTables,
+			Shard:          shards[0],
+			IncludeVSchema: req.IncludeVSchema,
+			IncludeViews:   req.IncludeViews,
+		}
+
+		if _, err := s.ValidateSchemaShard(ctx, validateSchemaShardReq); err != nil {
+			return nil, vterrors.Wrapf(err, "ValidateSchemaShard(%v) failed: %v", validateSchemaShardReq, err)
+		}
+		return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
+	}
+
+	var (
+		referenceSchema *tabletmanagerdatapb.SchemaDefinition
+		referenceAlias  *topodatapb.TabletAlias
+		rec             concurrency.AllErrorRecorder
+		wg              sync.WaitGroup
+	)
+
+	if req.IncludeVSchema {
+		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
+			Keyspace:      req.Keyspace,
+			Shards:        shards,
+			IncludeViews:  req.IncludeViews,
+			ExcludeTables: req.ExcludeTables,
+		}
+
+		if _, err := s.ValidateVSchema(ctx, validateVSchemaReq); err != nil {
+			return nil, vterrors.Wrapf(err, "ValidateVSchema(%v) failed: %v", validateVSchemaReq, err)
+		}
+	}
+
+	// then diffs all tablets in the other shards
+	for _, shard := range shards {
+		si, err := s.ts.GetShard(ctx, req.Keyspace, shard)
+		if err != nil {
+			rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", req.Keyspace, shard, err))
+			continue
+		}
+
+		if !si.HasPrimary() {
+			if !req.SkipNoPrimary {
+				rec.RecordError(fmt.Errorf("no primary in shard %v/%v", req.Keyspace, shard))
+			}
+			continue
+		}
+
+		if referenceSchema == nil {
+			referenceAlias = si.Shard.PrimaryAlias
+			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
+
+			getTabletReq := &vtctldata.GetTabletRequest{
+				TabletAlias: referenceAlias,
+			}
+
+			getTabletResp, err := s.GetTablet(ctx, getTabletReq)
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", referenceAlias, err)
+			}
+
+			referenceSchema, err = s.tmc.GetSchema(ctx, getTabletResp.GetTablet(), nil, req.ExcludeTables, req.IncludeViews)
+			if err != nil {
+				return nil, vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, req.ExcludeTables, req.IncludeViews, err)
+			}
+		}
+
+		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, shard)
+		if err != nil {
+			rec.RecordError(fmt.Errorf("FindAllTabletAliasesInShard(%v, %v) failed: %v", req.Keyspace, shard, err))
+			continue
+		}
+
+		for _, alias := range aliases {
+			// Don't diff schemas for self
+			if referenceAlias == alias {
+				continue
+			}
+			wg.Add(1)
+			go s.diffSchema(ctx, referenceSchema, referenceAlias, alias, req.ExcludeTables, req.IncludeViews, &wg, &rec)
+		}
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, vterrors.Wrapf(rec.Error(), "schema diffs: %v", rec.Error().Error())
+	}
+	return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
+}
+
+// ValidateSchemaShard will diff the schema from all the tablets in the shard.
+func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb.ValidateSchemaShardRequest) (*vtctldatapb.ValidateSchemaShardResponse, error) {
+	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err)
+	}
+
+	// get schema from the master, or error
+	if !si.HasPrimary() {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary in shard %v/%v", req.Keyspace, req.Shard)
+	}
+	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias))
+
+	getTabletReq := &vtctldata.GetTabletRequest{
+		TabletAlias: si.Shard.PrimaryAlias,
+	}
+
+	getTabletResponse, err := s.GetTablet(ctx, getTabletReq)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", getTabletReq.TabletAlias, err)
+	}
+
+	masterSchema, err := s.tmc.GetSchema(ctx, getTabletResponse.Tablet, nil, req.ExcludeTables, req.IncludeViews)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", si.Shard.PrimaryAlias, req.ExcludeTables, req.IncludeViews, err)
+	}
+
+	if req.IncludeVSchema {
+		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
+			Keyspace:      req.Keyspace,
+			Shards:        []string{req.Shard},
+			ExcludeTables: req.ExcludeTables,
+			IncludeViews:  req.IncludeViews,
+		}
+
+		if _, err := s.ValidateVSchema(ctx, validateVSchemaReq); err != nil {
+			return nil, vterrors.Wrapf(err, "ValidateVSchema(%v) failed: %v", validateVSchemaReq, err)
+		}
+	}
+
+	// read all the aliases in the shard, that is all tablets that are
+	// replicating from the master
+	aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, req.Shard)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "FindAllTabletAliasesInShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err)
+	}
+
+	// then diff with all replicas
+	var (
+		rec concurrency.AllErrorRecorder
+		wg  sync.WaitGroup
+	)
+
+	for _, alias := range aliases {
+		if topoproto.TabletAliasEqual(alias, si.Shard.PrimaryAlias) {
+			continue
+		}
+
+		wg.Add(1)
+		go s.diffSchema(ctx, masterSchema, si.Shard.PrimaryAlias, alias, req.ExcludeTables, req.IncludeViews, &wg, &rec)
+	}
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, vterrors.Wrapf(rec.Error(), "schema diffs: %v", rec.Error().Error())
+	}
+	return &vtctldatapb.ValidateSchemaShardResponse{}, nil
+}
+
+// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	vschm, err := s.ts.GetVSchema(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "GetVSchema(%s) failed: %v", req.Keyspace, err)
+	}
+	var (
+		shardFailures concurrency.AllErrorRecorder
+		wg            sync.WaitGroup
+	)
+
+	wg.Add(len(req.Shards))
+
+	for _, shard := range req.Shards {
+		go func(shard string) {
+			defer wg.Done()
+			notFoundTables := []string{}
+			si, err := s.ts.GetShard(ctx, req.Keyspace, shard)
+			if err != nil {
+				shardFailures.RecordError(vterrors.Wrapf(err, "GetShard(%v, %v) failed: %v", req.Keyspace, shard, err))
+				return
+			}
+
+			primaryTablet, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
+			if err != nil {
+				shardFailures.RecordError(vterrors.Wrapf(err, "GetTablet(%v) failed: %v", si.Shard.PrimaryAlias, err))
+				return
+			}
+
+			masterSchema, err := s.tmc.GetSchema(ctx, primaryTablet.Tablet, nil, req.ExcludeTables, req.IncludeViews)
+			if err != nil {
+				shardFailures.RecordError(vterrors.Wrapf(err, "GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.Shard.PrimaryAlias.String(),
+					req.ExcludeTables, req.IncludeViews, req.Keyspace, shard, err,
+				))
+				return
+			}
+			for _, tableDef := range masterSchema.TableDefinitions {
+				if _, ok := vschm.Tables[tableDef.Name]; !ok {
+					notFoundTables = append(notFoundTables, tableDef.Name)
+				}
+			}
+			if len(notFoundTables) > 0 {
+				shardFailure := fmt.Errorf("%v/%v has tables that are not in the vschema: %v", req.Keyspace, shard, notFoundTables)
+				shardFailures.RecordError(shardFailure)
+			}
+		}(shard)
+	}
+	wg.Wait()
+	if shardFailures.HasErrors() {
+		return nil, vterrors.Wrapf(shardFailures.Error(), "ValidateVSchema(%v, %v, %v, %v) failed: %v", req.Keyspace, req.Shards, req.ExcludeTables, req.IncludeViews, shardFailures.Error().Error())
+	}
+	return &vtctldatapb.ValidateVSchemaResponse{}, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

@@ -418,7 +418,8 @@ func TestVRWSchemaValidation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, vrwf)
 	shouldErr := vrwf.Create(ctx)
-	require.Contains(t, shouldErr.Error(), "Create ReshardWorkflow failed: ValidateVSchema")
+	errorMessage := fmt.Sprintf("ValidateVSchema(%v, %v, %v, %v) failed", p.SourceKeyspace, p.SourceShards, []string{}, true)
+	require.Contains(t, shouldErr.Error(), errorMessage)
 }
 
 func TestReshardV2Cancel(t *testing.T) {

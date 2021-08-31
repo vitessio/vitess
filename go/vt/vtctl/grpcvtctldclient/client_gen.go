@@ -523,6 +523,24 @@ func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctld
 	return client.c.ValidateKeyspace(ctx, in, opts...)
 }
 
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateSchemaKeyspace(ctx context.Context, in *vtctldatapb.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateSchemaKeyspace(ctx, in, opts...)
+}
+
+// ValidateSchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateSchemaShard(ctx context.Context, in *vtctldatapb.ValidateSchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateSchemaShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateSchemaShard(ctx, in, opts...)
+}
+
 // ValidateShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
 	if client.c == nil {
@@ -530,4 +548,13 @@ func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldata
 	}
 
 	return client.c.ValidateShard(ctx, in, opts...)
+}
+
+// ValidateVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateVSchema(ctx context.Context, in *vtctldatapb.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateVSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateVSchema(ctx, in, opts...)
 }

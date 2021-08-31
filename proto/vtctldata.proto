@@ -864,3 +864,34 @@ message ValidateShardRequest {
 message ValidateShardResponse {
   repeated string results = 1;
 }
+message ValidateSchemaKeyspaceRequest {
+  string keyspace = 1;
+  repeated string excludeTables = 2;
+  bool includeViews = 3;
+  bool skipNoPrimary = 4;
+  bool includeVSchema = 5;
+}
+
+message ValidateSchemaKeyspaceResponse {
+}
+
+message ValidateSchemaShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  repeated string excludeTables = 3;
+  bool includeViews = 4;
+  bool includeVSchema = 5;
+}
+
+message ValidateSchemaShardResponse {
+}
+
+message ValidateVSchemaRequest {
+  string keyspace = 1;
+  repeated string shards = 2;
+  repeated string excludeTables = 3;
+  bool includeViews = 4;
+}
+
+message ValidateVSchemaResponse {
+}
