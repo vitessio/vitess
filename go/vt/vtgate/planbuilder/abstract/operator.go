@@ -32,6 +32,8 @@ type (
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
+	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
+	//  *  Distinct - Represents elimination of duplicates from the output of the input source
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
