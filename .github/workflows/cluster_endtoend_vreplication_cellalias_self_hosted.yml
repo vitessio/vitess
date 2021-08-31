@@ -16,7 +16,21 @@ jobs:
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm cluster_test_vreplication_cellalias:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -docker=false -print-log -follow -shard vreplication_cellalias'
+        run: docker run --name "cluster_test_vreplication_cellalias_$GITHUB_SHA" cluster_test_vreplication_cellalias:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard vreplication_cellalias -- -- --keep-data=true'
+
+      - name: Print Volume Used
+        if: ${{ always() }}
+        run: |
+          docker inspect -f '{{ (index .Mounts 0).Name }}' cluster_test_vreplication_cellalias_$GITHUB_SHA
+
+      - name: Cleanup Docker Volume
+        run: |
+          docker rm -v cluster_test_vreplication_cellalias_$GITHUB_SHA
+
+      - name: Cleanup Docker Container
+        if: ${{ always() }}
+        run: |
+          docker rm -f cluster_test_vreplication_cellalias_$GITHUB_SHA
 
       - name: Cleanup Docker Image
         run: |

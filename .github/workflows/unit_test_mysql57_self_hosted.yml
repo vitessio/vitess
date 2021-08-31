@@ -16,7 +16,21 @@ jobs:
 
       - name: Run test
         timeout-minutes: 30
-        run: docker run --rm unit_test_mysql57:$GITHUB_SHA /bin/bash -c 'make unit_test'
+        run: docker run --name "unit_test_mysql57_$GITHUB_SHA" unit_test_mysql57:$GITHUB_SHA /bin/bash -c 'make unit_test'
+
+      - name: Print Volume Used
+        if: ${{ always() }}
+        run: |
+          docker inspect -f '{{ (index .Mounts 0).Name }}' unit_test_mysql57_$GITHUB_SHA
+
+      - name: Cleanup Docker Volume
+        run: |
+          docker rm -v unit_test_mysql57_$GITHUB_SHA
+
+      - name: Cleanup Docker Container
+        if: ${{ always() }}
+        run: |
+          docker rm -f unit_test_mysql57_$GITHUB_SHA
 
       - name: Cleanup Docker Image
         run: |
