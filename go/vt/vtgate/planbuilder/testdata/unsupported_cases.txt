@@ -360,12 +360,10 @@ Gen4 plan same as above
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "can't do ORDER BY on top of ORDER BY"
-Gen4 plan same as above
 
 # ambiguous ORDER BY
 "select id from user order by id union all select id from music order by id desc"
 "Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
-Gen4 plan same as above
 
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
@@ -385,7 +383,6 @@ Gen4 plan same as above
 # union with SQL_CALC_FOUND_ROWS 
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
-Gen4 plan same as above
 
 # set with DEFAULT - vitess aware
 "set workload = default"
