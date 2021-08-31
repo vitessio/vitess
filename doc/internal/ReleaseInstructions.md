@@ -274,6 +274,10 @@ And finally, click on `Publish release`.
 * Coordinate CNCF cross-posting Vitess Blog. 
 * Schedule and publish Tweet on Vitess account. 
 * Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
+* Run following script to once the `base` Docker image is live. 
+```
+https://github.com/vitessio/vitess/blob/master/helm/release.sh
+```
 * Add Java version and release by following Java Packages below. 
 
 ### Deploy & Release
