@@ -87,9 +87,15 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
+	case *abstract.Vindex:
+		return optimizeVindex(ctx, op)
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
+}
+
+func optimizeVindex(ctx planningContext, op *abstract.Vindex) (queryTree, error) {
+	return nil, nil
 }
 
 func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, error) {
