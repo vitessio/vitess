@@ -99,6 +99,7 @@ func optimizeVindex(ctx planningContext, op *abstract.Vindex) (queryTree, error)
 	plan := &vindexTree{
 		solved: solves,
 		table:  vindexTable{table: op.Table},
+		vindex: op.Vindex,
 	}
 	return plan, nil
 }

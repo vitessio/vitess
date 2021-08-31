@@ -42,10 +42,26 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *seman
 	case *subqueryTree:
 		return transformSubqueryTree(ctx, n, semTable)
 	case *vindexTree:
-		panic("vindexTree not supported for logicalPlan transformation")
+		return transformVindexTree(ctx, n, semTable)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
+}
+
+func transformVindexTree(ctx planningContext, n *vindexTree, semTable *semantics.SemTable) (logicalPlan, error) {
+	single, ok := n.vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, semantics.Gen4NotSupportedF("multi-column vindexes not supported")
+	}
+	plan := &vindexFunc{
+		order:         1,
+		resultColumns: nil,
+		eVindexFunc: &engine.VindexFunc{
+			Vindex: single,
+			Value:  sqltypes.PlanValue{},
+		},
+	}
+	return plan, nil
 }
 
 func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *semantics.SemTable) (logicalPlan, error) {

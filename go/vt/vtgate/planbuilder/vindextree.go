@@ -20,10 +20,12 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 type vindexTree struct {
 	table   vindexTable
+	vindex  vindexes.Vindex
 	solved  semantics.TableSet
 	columns []*sqlparser.ColName
 }
