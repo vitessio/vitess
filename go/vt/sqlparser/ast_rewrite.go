@@ -1428,11 +1428,6 @@ func (a *application) rewriteRefOfCreateTable(parent SQLNode, node *CreateTable,
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
-		parent.(*CreateTable).PartitionOption = newNode.(*PartitionOption)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4185,6 +4180,11 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	if !a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
+		parent.(*TableSpec).PartitionOption = newNode.(*PartitionOption)
 	}) {
 		return false
 	}

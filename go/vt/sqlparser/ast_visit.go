@@ -830,9 +830,6 @@ func VisitRefOfCreateTable(in *CreateTable, f Visit) error {
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
-	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
-		return err
-	}
 	return nil
 }
 func VisitRefOfCreateView(in *CreateView, f Visit) error {
@@ -2081,6 +2078,9 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 		}
 	}
 	if err := VisitTableOptions(in.Options, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
 		return err
 	}
 	return nil

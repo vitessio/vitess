@@ -654,7 +654,7 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(104)
+		size += int64(89)
 	}
 	// field Table vitess.io/vitess/go/vt/sqlparser.TableName
 	size += cached.Table.CachedSize(false)
@@ -669,8 +669,6 @@ func (cached *CreateTable) CachedSize(alloc bool) int64 {
 			size += int64(len(elem))
 		}
 	}
-	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
-	size += cached.PartitionOption.CachedSize(true)
 	return size
 }
 func (cached *CreateView) CachedSize(alloc bool) int64 {
@@ -2164,7 +2162,7 @@ func (cached *TableSpec) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(104)
 	}
 	// field Columns []*vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	{
@@ -2194,6 +2192,8 @@ func (cached *TableSpec) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
+	size += cached.PartitionOption.CachedSize(true)
 	return size
 }
 func (cached *TablespaceOperation) CachedSize(alloc bool) int64 {

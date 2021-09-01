@@ -519,6 +519,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 			buf.astPrintf(ts, " (%v)", opt.Tables)
 		}
 	}
+	if ts.PartitionOption != nil {
+		buf.astPrintf(ts, " %v", ts.PartitionOption)
+	}
 }
 
 // Format formats the node.
@@ -1519,9 +1522,6 @@ func (node *CreateTable) Format(buf *TrackedBuffer) {
 	}
 	if node.TableSpec != nil {
 		buf.astPrintf(node, " %v", node.TableSpec)
-	}
-	if node.PartitionOption != nil {
-		buf.astPrintf(node, " %v", node.PartitionOption)
 	}
 }
 

@@ -1389,8 +1389,7 @@ func EqualsRefOfCreateTable(a, b *CreateTable) bool {
 		EqualsTableName(a.Table, b.Table) &&
 		EqualsRefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		EqualsRefOfOptLike(a.OptLike, b.OptLike) &&
-		EqualsComments(a.Comments, b.Comments) &&
-		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption)
+		EqualsComments(a.Comments, b.Comments)
 }
 
 // EqualsRefOfCreateView does deep equals between the two objects.
@@ -2507,7 +2506,8 @@ func EqualsRefOfTableSpec(a, b *TableSpec) bool {
 	return EqualsSliceOfRefOfColumnDefinition(a.Columns, b.Columns) &&
 		EqualsSliceOfRefOfIndexDefinition(a.Indexes, b.Indexes) &&
 		EqualsSliceOfRefOfConstraintDefinition(a.Constraints, b.Constraints) &&
-		EqualsTableOptions(a.Options, b.Options)
+		EqualsTableOptions(a.Options, b.Options) &&
+		EqualsRefOfPartitionOption(a.PartitionOption, b.PartitionOption)
 }
 
 // EqualsRefOfTablespaceOperation does deep equals between the two objects.
