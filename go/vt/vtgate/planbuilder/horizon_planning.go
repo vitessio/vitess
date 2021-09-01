@@ -213,6 +213,8 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			}
 		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
+	case *limit:
+		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
@@ -525,6 +527,13 @@ func (hp *horizonPlanning) planOrderBy(ctx planningContext, orderExprs []abstrac
 			return nil, err
 		}
 		plan.underlying = newUnderlyingPlan
+		return plan, nil
+	case *limit:
+		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.input)
+		if err != nil {
+			return nil, err
+		}
+		plan.input = newUnderlyingPlan
 		return plan, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
