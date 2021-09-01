@@ -74,7 +74,7 @@ func newBuildSelectPlan(sel *sqlparser.Select, reservedVars *sqlparser.ReservedV
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = subqueryRewrite(ctx, sel)
+	err = queryRewrite(ctx, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -155,8 +155,8 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 }
 
 func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.Having != nil {
-		return semantics.Gen4NotSupportedF("HAVING")
+	if sel.SQLCalcFoundRows {
+		return semantics.Gen4NotSupportedF("sql_calc_found_rows")
 	}
 	return nil
 }

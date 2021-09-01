@@ -368,6 +368,16 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// TODO: this will eventually retry these queries on failure
+	return primitive.TryExecute(vc, bindVars, wantfields)
+}
+
+func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	// TODO: this will eventually retry these queries on failure
+	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+}
+
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession

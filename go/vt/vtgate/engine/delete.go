@@ -69,7 +69,7 @@ func (del *Delete) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+func (del *Delete) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if del.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -93,7 +93,7 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute performs a streaming exec.
-func (del *Delete) StreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
+func (del *Delete) TryStreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", del.Query)
 }
 

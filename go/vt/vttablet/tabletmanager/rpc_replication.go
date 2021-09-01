@@ -56,7 +56,7 @@ func (tm *TabletManager) MasterStatus(ctx context.Context) (*replicationdatapb.P
 	return tm.PrimaryStatus(ctx)
 }
 
-// PrimaryStatus returns the replication status fopr a primary tablet.
+// PrimaryStatus returns the replication status for a primary tablet.
 func (tm *TabletManager) PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
 	status, err := tm.MysqlDaemon.PrimaryStatus(ctx)
 	if err != nil {
@@ -81,6 +81,7 @@ func (tm *TabletManager) PrimaryPosition(ctx context.Context) (string, error) {
 
 // WaitForPosition waits until replication reaches the desired position
 func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error {
+	log.Infof("WaitForPosition: %v", pos)
 	mpos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
@@ -91,6 +92,7 @@ func (tm *TabletManager) WaitForPosition(ctx context.Context, pos string) error 
 // StopReplication will stop the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplication(ctx context.Context) error {
+	log.Infof("StopReplication")
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -143,6 +145,7 @@ func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
 // provided position. Works both when Vitess manages
 // replication or not (using hook if not).
 func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error) {
+	log.Infof("StopReplicationMinimum: position: %v waitTime: %v", position, waitTime)
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -170,6 +173,7 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 // StartReplication will start the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
 func (tm *TabletManager) StartReplication(ctx context.Context) error {
+	log.Infof("StartReplication")
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -197,6 +201,7 @@ func (tm *TabletManager) StartReplication(ctx context.Context) error {
 // StartReplicationUntilAfter will start the replication and let it catch up
 // until and including the transactions in `position`
 func (tm *TabletManager) StartReplicationUntilAfter(ctx context.Context, position string, waitTime time.Duration) error {
+	log.Infof("StartReplicationUntilAfter: position: %v waitTime: %v", position, waitTime)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -221,6 +226,7 @@ func (tm *TabletManager) GetReplicas(ctx context.Context) ([]string, error) {
 // ResetReplication completely resets the replication on the host.
 // All binary and relay logs are flushed. All replication positions are reset.
 func (tm *TabletManager) ResetReplication(ctx context.Context) error {
+	log.Infof("ResetReplication")
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -237,6 +243,7 @@ func (tm *TabletManager) InitMaster(ctx context.Context) (string, error) {
 
 // InitPrimary enables writes and returns the replication position.
 func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
+	log.Infof("InitPrimary")
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -276,6 +283,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context) (string, error) {
 
 // PopulateReparentJournal adds an entry into the reparent_journal table.
 func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreatedNS int64, actionName string, primaryAlias *topodatapb.TabletAlias, position string) error {
+	log.Infof("PopulateReparentJournal: action: %v parent: %v  position: %v", actionName, primaryAlias, position)
 	pos, err := mysql.DecodePosition(position)
 	if err != nil {
 		return err
@@ -289,6 +297,7 @@ func (tm *TabletManager) PopulateReparentJournal(ctx context.Context, timeCreate
 // InitReplica sets replication primary and position, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.TabletAlias, position string, timeCreatedNS int64) error {
+	log.Infof("InitReplica: parent: %v  position: %v", parent, position)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -352,6 +361,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 //
 // If a step fails in the middle, it will try to undo any changes it made.
 func (tm *TabletManager) DemotePrimary(ctx context.Context) (*replicationdatapb.PrimaryStatus, error) {
+	log.Infof("DemotePrimary")
 	// The public version always reverts on partial failure.
 	return tm.demotePrimary(ctx, true /* revertPartialFailure */)
 }
@@ -467,6 +477,7 @@ func (tm *TabletManager) UndoDemoteMaster(ctx context.Context) error {
 // it sets read-only to false, fixes semi-sync
 // and returns its primary position.
 func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
+	log.Infof("UndoDemotePrimary")
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -503,12 +514,14 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context) error {
 
 // ReplicaWasPromoted promotes a replica to primary, no questions asked.
 func (tm *TabletManager) ReplicaWasPromoted(ctx context.Context) error {
+	log.Infof("ReplicaWasPromoted")
 	return tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY)
 }
 
 // SetReplicationSource sets replication primary, and waits for the
 // reparent_journal table entry up to context timeout
 func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
+	log.Infof("SetReplicationSource: parent: %v  position: %v force: %v", parentAlias, waitPosition, forceStartReplication)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -648,6 +661,8 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 				return err
 			}
 		}
+		// Clear replication sentinel flag for this replica
+		tm.replManager.setReplicationStopped(false)
 	}
 
 	return nil
@@ -655,6 +670,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 
 // ReplicaWasRestarted updates the parent record for a tablet.
 func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error {
+	log.Infof("ReplicaWasRestarted: parent: %v", parent)
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -672,6 +688,7 @@ func (tm *TabletManager) ReplicaWasRestarted(ctx context.Context, parent *topoda
 // StopReplicationAndGetStatus stops MySQL replication, and returns the
 // current status.
 func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopReplicationMode replicationdatapb.StopReplicationMode) (StopReplicationAndGetStatusResponse, error) {
+	log.Infof("StopReplicationAndGetStatus: mode: %v", stopReplicationMode)
 	if err := tm.lock(ctx); err != nil {
 		return StopReplicationAndGetStatusResponse{}, err
 	}
@@ -762,6 +779,7 @@ type StopReplicationAndGetStatusResponse struct {
 
 // PromoteReplica makes the current tablet the primary
 func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
+	log.Infof("PromoteReplica")
 	if err := tm.lock(ctx); err != nil {
 		return "", err
 	}
@@ -780,6 +798,10 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite); err != nil {
 		return "", err
 	}
+
+	// Clear replication sentinel flag for this primary,
+	// or we might block replication the next time we demote it
+	tm.replManager.setReplicationStopped(false)
 
 	return mysql.EncodePosition(pos), nil
 }

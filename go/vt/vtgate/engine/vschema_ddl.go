@@ -64,7 +64,7 @@ func (v *AlterVSchema) GetTableName() string {
 }
 
 //Execute implements the Primitive interface
-func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func (v *AlterVSchema) Execute(vcursor VCursor, bindVars map[string]*query.BindV
 }
 
 //StreamExecute implements the Primitive interface
-func (v *AlterVSchema) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Alter vschema not supported in streaming")
 }
 

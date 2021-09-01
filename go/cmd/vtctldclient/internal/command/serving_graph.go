@@ -27,6 +27,22 @@ import (
 )
 
 var (
+	// DeleteSrvVSchema makes a DeleteSrvVSchema gRPC call to a vtctld.
+	DeleteSrvVSchema = &cobra.Command{
+		Use:                   "DeleteSrvVSchema <cell>",
+		Short:                 "Deletes the SrvVSchema object in the given cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandDeleteSrvVSchema,
+	}
+	// GetSrvKeyspaceNames makes a GetSrvKeyspaceNames gRPC call to a vtctld.
+	GetSrvKeyspaceNames = &cobra.Command{
+		Use:                   "GetSrvKeyspaceNames [<cell> ...]",
+		Short:                 "Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ArbitraryArgs,
+		RunE:                  commandGetSrvKeyspaceNames,
+	}
 	// GetSrvKeyspaces makes a GetSrvKeyspaces gRPC call to a vtctld.
 	GetSrvKeyspaces = &cobra.Command{
 		Use:                   "GetSrvKeyspaces <keyspace> [<cell> ...]",
@@ -60,6 +76,37 @@ var (
 		RunE:                  commandRebuildVSchemaGraph,
 	}
 )
+
+func commandDeleteSrvVSchema(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cell := cmd.Flags().Arg(0)
+	_, err := client.DeleteSrvVSchema(commandCtx, &vtctldatapb.DeleteSrvVSchemaRequest{
+		Cell: cell,
+	})
+
+	return err
+}
+
+func commandGetSrvKeyspaceNames(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cells := cmd.Flags().Args()
+	resp, err := client.GetSrvKeyspaceNames(commandCtx, &vtctldatapb.GetSrvKeyspaceNamesRequest{
+		Cells: cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Names)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
 
 func commandGetSrvKeyspaces(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -154,6 +201,9 @@ func commandRebuildVSchemaGraph(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
+	Root.AddCommand(DeleteSrvVSchema)
+
+	Root.AddCommand(GetSrvKeyspaceNames)
 	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
 	Root.AddCommand(GetSrvVSchemas)
