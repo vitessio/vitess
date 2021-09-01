@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -79,6 +80,39 @@ type keyspaceState struct {
 	lastError    error
 	lastKeyspace *topodatapb.SrvKeyspace
 	shards       map[string]*shardState
+}
+
+func (kss *keyspaceState) Format(f fmt.State, verb rune) {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+
+	fmt.Fprintf(f, "Keyspace(%s) = deleted: %v, consistent: %v, shards: [\n", kss.keyspace, kss.deleted, kss.consistent)
+	for shard, ss := range kss.shards {
+		fmt.Fprintf(f, "  Shard(%s) = target: [%s/%s %v], serving: %v, externally_reparented: %d, current_primary: %s\n",
+			shard,
+			ss.target.Keyspace, ss.target.Shard, ss.target.TabletType,
+			ss.serving, ss.externallyReparented,
+			ss.currentPrimary.String(),
+		)
+	}
+	fmt.Fprintf(f, "]\n")
+}
+
+func (kss *keyspaceState) beingResharded(currentShard string) bool {
+	kss.mu.Lock()
+	defer kss.mu.Unlock()
+
+	if kss.deleted || kss.consistent {
+		return false
+	}
+
+	for shard, sstate := range kss.shards {
+		if shard != currentShard && sstate.serving {
+			return true
+		}
+	}
+
+	return false
 }
 
 type shardState struct {
@@ -314,4 +348,12 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 		delete(kew.keyspaces, keyspace)
 	}
 	return kss
+}
+
+func (kew *KeyspaceEventWatcher) TargetIsBeingResharded(keyspace, shard string) bool {
+	ks := kew.getKeyspaceStatus(keyspace)
+	if ks == nil {
+		return false
+	}
+	return ks.beingResharded(shard)
 }
