@@ -21,6 +21,8 @@ import (
 	"sort"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -230,6 +232,16 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		for _, colVindex := range upd.Table.Owned {
 			// Update columns only if they're being changed.
 			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+				offset := updColValues.Offset
+				if !row[offset].IsNull() {
+					val, err := evalengine.ToInt64(row[offset])
+					if err != nil {
+						return err
+					}
+					if val == int64(1) { // 1 means that the old and new value are same and vindex update is not required.
+						continue
+					}
+				}
 				fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 				var vindexColumnKeys []sqltypes.Value
 				for _, vCol := range colVindex.Columns {
