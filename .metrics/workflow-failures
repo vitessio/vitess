@@ -1,10 +1,3 @@
-2021-05-03T05:26:19Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/805832846
-2021-05-03T05:29:27Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/805838409
-2021-05-03T05:29:27Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/805838425
-2021-05-03T05:42:21Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/805861633
-2021-05-03T07:28:10Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/806077828
-2021-05-03T10:04:36Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/806452606
-2021-05-03T10:40:43Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/806540669
 2021-05-03T12:27:13Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/806791271
 2021-05-03T13:58:06Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/807021842
 2021-05-03T14:28:25Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/807105359
@@ -9998,3 +9991,10 @@
 2021-09-01T18:33:31Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1191363701
 2021-09-01T18:33:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1191363726
 2021-09-01T18:40:02Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1191382707
+2021-09-01T21:11:25Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1191839633
+2021-09-01T21:11:25Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1191839631
+2021-09-01T21:11:28Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1191839840
+2021-09-01T21:11:28Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1191839821
+2021-09-01T21:11:28Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1191839797
+2021-09-01T21:11:28Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1191839844
+2021-09-01T21:11:28Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1191839845
