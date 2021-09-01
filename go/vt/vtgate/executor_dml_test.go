@@ -494,7 +494,7 @@ func TestDeleteScatter(t *testing.T) {
 }
 
 func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
-	executor, sbc1, _, _ := createLegacyExecutorEnv()
+	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
 	sbc1.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -511,7 +511,6 @@ func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 
 	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1", nil)
 	require.NoError(t, err)
-	// Queries get annotatted.
 	wantQueries := []*querypb.BoundQuery{
 		{
 			Sql:           "select id, wo_lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
@@ -528,6 +527,18 @@ func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
 		}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+
+	wantQueriesLookup := []*querypb.BoundQuery{
+		{
+			Sql:           "select id, wo_lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}}
+	if !reflect.DeepEqual(sbc2.Queries, wantQueriesLookup) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueriesLookup)
 	}
 }
 
