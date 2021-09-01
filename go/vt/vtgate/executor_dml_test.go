@@ -494,52 +494,92 @@ func TestDeleteScatter(t *testing.T) {
 }
 
 func TestDeleteEqualWithWriteOnlyLookupUniqueVindex(t *testing.T) {
-	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
-
-	sbc1.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "id", Type: sqltypes.Int64},
-			{Name: "wo_lu_col", Type: sqltypes.Int64},
-		},
-		RowsAffected: 1,
-		InsertID:     0,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(1),
-		}},
-	}})
+	res := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|wo_lu_col|lu_col", "int64|int64|int64"),
+		"1|1|1",
+	)}
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, res)
 
 	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
+			Sql:           "select id, wo_lu_col, lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
-		}, {
-			Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
-			BindVariables: map[string]*querypb.BindVariable{
-				"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
-				"wo_lu_col":   {Type: querypb.Type_INT64, Value: []byte("1")},
-			},
 		}, {
 			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
-	}
 
-	wantQueriesLookup := []*querypb.BoundQuery{
+	bq1 := &querypb.BoundQuery{
+		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"wo_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}
+	bq2 := &querypb.BoundQuery{
+		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": sqltypes.Uint64BindVariable(1),
+			"lu_col":      sqltypes.Int64BindVariable(1),
+		},
+	}
+	lookWant := []*querypb.BoundQuery{bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2, bq1, bq2}
+	utils.MustMatch(t, lookWant, sbcLookup.Queries)
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, wantQueries, sbc2.Queries)
+}
+
+func TestDeleteEqualWithMultipleLookupVindex(t *testing.T) {
+	executor, sbc1, sbc2, sbcLookup := createCustomExecutorSetValues(executorVSchema, nil)
+
+	sbcLookup.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("lu_col|keyspace_id", "int64|varbinary"),
+		"1|1",
+	)})
+
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|wo_lu_col|lu_col", "int64|int64|int64"),
+		"1|1|1",
+	)})
+
+	_, err := executorExec(executor, "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select id, wo_lu_col from t2_wo_lookup where wo_lu_col = 1 for update",
+			Sql:           "select id, wo_lu_col, lu_col from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}, {
-			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1",
+			Sql:           "delete from t2_wo_lookup where wo_lu_col = 1 and lu_col = 1",
 			BindVariables: map[string]*querypb.BindVariable{},
 		}}
-	if !reflect.DeepEqual(sbc2.Queries, wantQueriesLookup) {
-		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc2.Queries, wantQueriesLookup)
-	}
+
+	vars, _ := sqltypes.BuildBindVariable([]interface{}{
+		sqltypes.NewInt64(1),
+	})
+	lookWant := []*querypb.BoundQuery{{
+		Sql: "select lu_col, keyspace_id from lu_idx where lu_col in ::lu_col for update",
+		BindVariables: map[string]*querypb.BindVariable{
+			"lu_col": vars,
+		},
+	}, {
+		Sql: "delete from wo_lu_idx where wo_lu_col = :wo_lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": {Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")},
+			"wo_lu_col":   sqltypes.Int64BindVariable(1),
+		},
+	}, {
+		Sql: "delete from lu_idx where lu_col = :lu_col and keyspace_id = :keyspace_id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"keyspace_id": sqltypes.Uint64BindVariable(1),
+			"lu_col":      {Type: querypb.Type_INT64, Value: []byte("1")},
+		},
+	}}
+	utils.MustMatch(t, lookWant, sbcLookup.Queries)
+
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	assert.Nil(t, sbc2.Queries)
 }
 
 func TestDeleteByDestination(t *testing.T) {
