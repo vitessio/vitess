@@ -188,7 +188,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 			ImageName:         fmt.Sprintf("unit_test_%s", platform),
 			Platform:          platform,
 			directoryName:     directoryName,
-			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
+			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 			MakeTools:         true,
 			InstallXtraBackup: false,
 		}
@@ -214,7 +214,7 @@ func generateSelfHostedClusterWorkflows() error {
 			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
 			Platform:          "mysql57",
 			directoryName:     directoryName,
-			Dockerfile:        fmt.Sprintf("./.github/dockerFiles/%s/Dockerfile", directoryName),
+			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
 			Shard:             cluster,
 			MakeTools:         false,
 			InstallXtraBackup: false,
@@ -308,7 +308,7 @@ func generateUnitTestWorkflows() {
 
 func setupTestDockerFile(test *selfHostedTest) error {
 	// remove the directory
-	relDirectoryName := fmt.Sprintf("../.github/dockerFiles/%s", test.directoryName)
+	relDirectoryName := fmt.Sprintf("../.github/docker/%s", test.directoryName)
 	err := os.RemoveAll(relDirectoryName)
 	if err != nil {
 		return err

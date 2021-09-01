@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Build Docker Image
-        run: docker build -f ./.github/dockerFiles/cluster_test_vreplication_multicell/Dockerfile -t cluster_test_vreplication_multicell:$GITHUB_SHA  .
+        run: docker build -f ./.github/docker/cluster_test_vreplication_multicell/Dockerfile -t cluster_test_vreplication_multicell:$GITHUB_SHA  .
 
       - name: Run test
         timeout-minutes: 30
