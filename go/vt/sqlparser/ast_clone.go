@@ -1232,7 +1232,6 @@ func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
 		return nil
 	}
 	out := *n
-	out.HASH = CloneColIdent(n.HASH)
 	out.KeyColList = CloneColumns(n.KeyColList)
 	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
 	out.Expr = CloneExpr(n.Expr)
@@ -1539,7 +1538,6 @@ func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
 		return nil
 	}
 	out := *n
-	out.HASH = CloneColIdent(n.HASH)
 	out.KeyColList = CloneColumns(n.KeyColList)
 	out.Expr = CloneExpr(n.Expr)
 	return &out

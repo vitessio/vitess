@@ -406,11 +406,11 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *PartitionOption) Format(buf *TrackedBuffer) {
 	buf.WriteString("partition by")
-	if !node.HASH.IsEmpty() {
+	if node.isHASH {
 		if node.Linear != "" {
 			buf.astPrintf(node, " %s", node.Linear)
 		}
-		buf.astPrintf(node, " %v", node.HASH)
+		buf.WriteString(" hash")
 		if node.Expr != nil {
 			buf.astPrintf(node, " (%v)", node.Expr)
 		}
@@ -452,11 +452,11 @@ func (node *PartitionOption) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *SubPartition) Format(buf *TrackedBuffer) {
 	buf.WriteString("subpartition by")
-	if !node.HASH.IsEmpty() {
+	if node.isHASH {
 		if node.Linear != "" {
 			buf.astPrintf(node, " %s", node.Linear)
 		}
-		buf.astPrintf(node, " %v", node.HASH)
+		buf.WriteString(" hash")
 		if node.Expr != nil {
 			buf.astPrintf(node, " (%v)", node.Expr)
 		}

@@ -574,13 +574,12 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("partition by")
-	if !node.HASH.IsEmpty() {
+	if node.isHASH {
 		if node.Linear != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(node.Linear)
 		}
-		buf.WriteByte(' ')
-		node.HASH.formatFast(buf)
+		buf.WriteString(" hash")
 		if node.Expr != nil {
 			buf.WriteString(" (")
 			node.Expr.formatFast(buf)
@@ -631,13 +630,12 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("subpartition by")
-	if !node.HASH.IsEmpty() {
+	if node.isHASH {
 		if node.Linear != "" {
 			buf.WriteByte(' ')
 			buf.WriteString(node.Linear)
 		}
-		buf.WriteByte(' ')
-		node.HASH.formatFast(buf)
+		buf.WriteString(" hash")
 		if node.Expr != nil {
 			buf.WriteString(" (")
 			node.Expr.formatFast(buf)
