@@ -464,14 +464,13 @@ type (
 
 	// CreateTable represents a CREATE TABLE statement.
 	CreateTable struct {
-		Temp            bool
-		Table           TableName
-		IfNotExists     bool
-		TableSpec       *TableSpec
-		OptLike         *OptLike
-		Comments        Comments
-		FullyParsed     bool
-		PartitionOption *PartitionOption
+		Temp        bool
+		Table       TableName
+		IfNotExists bool
+		TableSpec   *TableSpec
+		OptLike     *OptLike
+		Comments    Comments
+		FullyParsed bool
 	}
 
 	// CreateView represents a CREATE VIEW query
@@ -1509,10 +1508,11 @@ type TableOptions []*TableOption
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	Options     TableOptions
+	Columns         []*ColumnDefinition
+	Indexes         []*IndexDefinition
+	Constraints     []*ConstraintDefinition
+	Options         TableOptions
+	PartitionOption *PartitionOption
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement

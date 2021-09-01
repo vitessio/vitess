@@ -780,11 +780,10 @@ set_session_or_global:
   }
 
 create_statement:
-  create_table_prefix table_spec partitions_options_opt
+  create_table_prefix table_spec
   {
     $1.TableSpec = $2
     $1.FullyParsed = true
-    $1.PartitionOption = $3
     $$ = $1
   }
 | create_table_prefix create_like
@@ -920,10 +919,11 @@ database_or_schema:
 | SCHEMA
 
 table_spec:
-  '(' table_column_list ')' table_option_list_opt
+  '(' table_column_list ')' table_option_list_opt partitions_options_opt
   {
     $$ = $2
     $$.Options = $4
+    $$.PartitionOption = $5
   }
 
 create_options_opt:

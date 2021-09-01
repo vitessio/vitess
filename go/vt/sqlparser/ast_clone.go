@@ -697,7 +697,6 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
 	out.Comments = CloneComments(n.Comments)
-	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	return &out
 }
 
@@ -1616,6 +1615,7 @@ func CloneRefOfTableSpec(n *TableSpec) *TableSpec {
 	out.Indexes = CloneSliceOfRefOfIndexDefinition(n.Indexes)
 	out.Constraints = CloneSliceOfRefOfConstraintDefinition(n.Constraints)
 	out.Options = CloneTableOptions(n.Options)
+	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	return &out
 }
 

@@ -719,6 +719,10 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(')')
 		}
 	}
+	if ts.PartitionOption != nil {
+		buf.WriteByte(' ')
+		ts.PartitionOption.formatFast(buf)
+	}
 }
 
 // formatFast formats the node.
@@ -2002,10 +2006,6 @@ func (node *CreateTable) formatFast(buf *TrackedBuffer) {
 	if node.TableSpec != nil {
 		buf.WriteByte(' ')
 		node.TableSpec.formatFast(buf)
-	}
-	if node.PartitionOption != nil {
-		buf.WriteByte(' ')
-		node.PartitionOption.formatFast(buf)
 	}
 }
 
