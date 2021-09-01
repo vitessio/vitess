@@ -573,7 +573,11 @@ func (set Mysql56GTIDSet) Difference(other Mysql56GTIDSet) Mysql56GTIDSet {
 			diffIntervals = append(diffIntervals, intervals...)
 		}
 
-		differenceSet[sid] = diffIntervals
+		if len(diffIntervals) == 0 {
+			delete(differenceSet, sid)
+		} else {
+			differenceSet[sid] = diffIntervals
+		}
 	}
 
 	return differenceSet

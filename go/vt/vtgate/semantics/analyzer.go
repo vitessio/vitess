@@ -240,15 +240,11 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.JoinTableExpr:
-		if node.Condition.Using != nil {
+		if node.Condition != nil && node.Condition.Using != nil {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
-		}
-	case *sqlparser.Select:
-		if node.Having != nil {
-			return Gen4NotSupportedF("HAVING")
 		}
 	case *sqlparser.Subquery:
 		sel, ok := node.Select.(*sqlparser.Select)

@@ -21,8 +21,6 @@ import (
 	"io"
 	"sort"
 
-	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -124,6 +122,9 @@ func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, er
 			return nil, mergeErr
 		}
 		if merged == nil {
+			if len(preds) > 0 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+			}
 			unmerged = append(unmerged, &subqueryTree{
 				subquery: inner.SelectStatement,
 				inner:    treeInner,
@@ -193,6 +194,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast := rb.Select.(*sqlparser.Select)
 	ast.Distinct = sel.Distinct
 	ast.GroupBy = sel.GroupBy
+	ast.Having = sel.Having
 	ast.OrderBy = sel.OrderBy
 	ast.Comments = sel.Comments
 	ast.SelectExprs = sel.SelectExprs
@@ -666,7 +668,8 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
 		if bRoute.routeOpCode == engine.SelectEqualUnique {
-			if aRoute.vindex == bRoute.vindex && gen4ValuesEqual(ctx, aRoute.valueExprs, bRoute.valueExprs) {
+			if aRoute.selectedVindex() == bRoute.selectedVindex() &&
+				gen4ValuesEqual(ctx, aRoute.vindexExpressions(), bRoute.vindexExpressions()) {
 				return merger(aRoute, bRoute), nil
 			}
 			return nil, nil
@@ -694,28 +697,26 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 	return nil, nil
 }
 
-func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFunc) queryTree {
+func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFunc) *routeTree {
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
-	var vindex vindexes.Vindex
-	vindexValues := []sqltypes.PlanValue{}
-	opCode := engine.NumRouteOpcodes
-	if aRoute.routeOpCode == engine.SelectReference {
+	var opCode engine.RouteOpcode
+	var selected *vindexOption
+
+	switch {
+	case aRoute.routeOpCode == engine.SelectReference:
+		selected = bRoute.selected
 		opCode = bRoute.routeOpCode
-		vindex = bRoute.vindex
-		vindexValues = bRoute.vindexValues
-	} else if bRoute.routeOpCode == engine.SelectReference {
+	case bRoute.routeOpCode == engine.SelectReference:
+		selected = aRoute.selected
 		opCode = aRoute.routeOpCode
-		vindex = aRoute.vindex
-		vindexValues = aRoute.vindexValues
+	default:
+		return nil
 	}
-	if opCode != engine.NumRouteOpcodes {
-		r := merger(aRoute, bRoute)
-		r.routeOpCode = opCode
-		r.vindex = vindex
-		r.vindexValues = vindexValues
-		return r
-	}
-	return nil
+
+	r := merger(aRoute, bRoute)
+	r.routeOpCode = opCode
+	r.selected = selected
+	return r
 }
 
 func makeRoute(j queryTree) *routeTree {
@@ -793,9 +794,8 @@ func createRoutePlanForInner(aRoute, bRoute *routeTree, newTabletSet semantics.T
 		SysTableTableName:   sysTableName,
 	}
 
-	if aRoute.vindex == bRoute.vindex {
-		r.vindex = aRoute.vindex
-		r.vindexValues = append(r.vindexValues, aRoute.vindexValues...)
+	if aRoute.selectedVindex() == bRoute.selectedVindex() {
+		r.selected = aRoute.selected
 	}
 
 	return r

@@ -4359,7 +4359,7 @@ type yySymType struct {
 	strs              []string
 	vindexParam       VindexParam
 	colIdent          ColIdent
-	joinCondition     JoinCondition
+	joinCondition     *JoinCondition
 	collateAndCharset CollateAndCharset
 	columnType        ColumnType
 	yys               int
@@ -10509,19 +10509,19 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3349
 		{
-			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].exprUnion()}
+			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 640:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:3351
 		{
-			yyVAL.joinCondition = JoinCondition{Using: yyDollar[3].columnsUnion()}
+			yyVAL.joinCondition = &JoinCondition{Using: yyDollar[3].columnsUnion()}
 		}
 	case 641:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:3355
 		{
-			yyVAL.joinCondition = JoinCondition{}
+			yyVAL.joinCondition = &JoinCondition{}
 		}
 	case 642:
 		yyDollar = yyS[yypt-1 : yypt+1]
@@ -10533,13 +10533,13 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:3361
 		{
-			yyVAL.joinCondition = JoinCondition{}
+			yyVAL.joinCondition = &JoinCondition{}
 		}
 	case 644:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:3363
 		{
-			yyVAL.joinCondition = JoinCondition{On: yyDollar[2].exprUnion()}
+			yyVAL.joinCondition = &JoinCondition{On: yyDollar[2].exprUnion()}
 		}
 	case 645:
 		yyDollar = yyS[yypt-0 : yypt+1]

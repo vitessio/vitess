@@ -319,6 +319,13 @@ message DeleteShardsRequest {
 message DeleteShardsResponse {
 }
 
+message DeleteSrvVSchemaRequest {
+  string cell = 1;
+}
+
+message DeleteSrvVSchemaResponse {
+}
+
 message DeleteTabletsRequest {
   // TabletAliases is the list of tablets to delete.
   repeated topodata.TabletAlias tablet_aliases = 1;
@@ -466,6 +473,19 @@ message GetShardRequest {
 
 message GetShardResponse {
   Shard shard = 1;
+}
+
+message GetSrvKeyspaceNamesRequest {
+  repeated string cells = 1;
+}
+
+message GetSrvKeyspaceNamesResponse {
+    // Names is a mapping of cell name to a list of SrvKeyspace names.
+    map<string, NameList> names = 1;
+
+    message NameList {
+      repeated string names = 1;
+    }
 }
 
 message GetSrvKeyspacesRequest {
