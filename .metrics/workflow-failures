@@ -1,4 +1,3 @@
-2021-04-28T13:15:07Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/792735361
 2021-04-28T13:23:01Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/792759271
 2021-04-28T13:23:01Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/792759261
 2021-04-28T13:58:26Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/792863417
@@ -9998,3 +9997,4 @@
 2021-09-01T09:16:35Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1189559604
 2021-09-01T09:16:35Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1189559658
 2021-09-01T09:16:35Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1189559607
+2021-09-01T09:55:15Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1189680878
