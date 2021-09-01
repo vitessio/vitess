@@ -74,8 +74,8 @@ func (r *RenameFields) Execute(vcursor VCursor, bindVars map[string]*querypb.Bin
 
 func (r *RenameFields) renameFields(qr *sqltypes.Result) {
 	for ind, index := range r.Indices {
-		if ind == len(qr.Fields) {
-			break
+		if index >= len(qr.Fields) {
+			continue
 		}
 		colName := r.Cols[ind]
 		qr.Fields[index].Name = colName
