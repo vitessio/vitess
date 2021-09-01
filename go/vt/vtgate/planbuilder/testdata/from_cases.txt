@@ -3810,3 +3810,147 @@ Gen4 plan same as above
     ]
   }
 }
+
+# join column selected as alias
+"SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "JoinVars": {
+      "u_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+        "Query": "select u.id as uid from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ue.id as ueid from user_extra as ue where 1 != 1",
+        "Query": "select ue.id as ueid from user_extra as ue where ue.id = :u_id",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT u.id as uid, ue.id as ueid FROM user u join user_extra ue where u.id = ue.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,-2",
+    "JoinVars": {
+      "ue_id": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ue.id, ue.id as ueid from user_extra as ue where 1 != 1",
+        "Query": "select ue.id, ue.id as ueid from user_extra as ue",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id as uid from `user` as u where 1 != 1",
+        "Query": "select u.id as uid from `user` as u where u.id = :ue_id",
+        "Table": "`user`",
+        "Values": [
+          ":ue_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# alias on column from derived table. TODO: to support alias in SimpleProjection engine primitive.
+"select a as k from (select count(*) as a from user) t"
+{
+  "QueryType": "SELECT",
+  "Original": "select a as k from (select count(*) as a from user) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a as k from (select count(*) as a from user) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
