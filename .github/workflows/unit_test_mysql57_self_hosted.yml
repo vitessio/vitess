@@ -2,6 +2,9 @@
 
 name: Unit Test Self Hosted (mysql57)
 on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test Self Hosted (mysql57)')
+  cancel-in-progress: true
 
 jobs:
   test:
