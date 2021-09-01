@@ -1852,4 +1852,34 @@ Gen4 plan same as above
   }
 }
 
-
+"((((select 1))))"
+{
+  "QueryType": "SELECT",
+  "Original": "((((select 1))))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "((((select 1 from dual where 1 != 1))))",
+    "Query": "((((select 1 from dual))))",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "((((select 1))))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual",
+    "Table": "dual"
+  }
+}
