@@ -159,16 +159,20 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		deps := semTable.BaseTableDependencies(expr.Expr)
 		var column int
 		var appended bool
+		passDownReuseCol := reuseCol
+		if !reuseCol {
+			passDownReuseCol = expr.As.IsEmpty()
+		}
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(expr, node.Left, semTable, inner, true)
+			offset, added, err := pushProjection(expr, node.Left, semTable, inner, passDownReuseCol)
 			if err != nil {
 				return 0, false, err
 			}
 			column = -(offset + 1)
 			appended = added
 		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, true)
+			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol)
 			if err != nil {
 				return 0, false, err
 			}
