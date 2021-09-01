@@ -148,6 +148,53 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "(SELECT id FROM user ORDER BY id DESC LIMIT 1) UNION ALL (SELECT id FROM music ORDER BY id DESC LIMIT 1)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+            "OrderBy": "(0|1) DESC",
+            "Query": "select id, weight_string(id) from `user` order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, weight_string(id) from music where 1 != 1",
+            "OrderBy": "(0|1) DESC",
+            "Query": "select id, weight_string(id) from music order by id desc limit :__upper_limit",
+            "ResultColumns": 1,
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
@@ -235,6 +282,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union all on scatter and single route
 "select id from user where id = 1 union select id from user where id = 1  union all select id from user"

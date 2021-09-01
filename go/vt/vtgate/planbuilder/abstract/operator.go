@@ -136,6 +136,17 @@ func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operat
 	return output, nil
 }
 
+func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
+	switch s := s.(type) {
+	case *sqlparser.Select:
+		return s
+	case *sqlparser.ParenSelect:
+		return getSelect(s.Select)
+	default:
+		return nil
+	}
+}
+
 // CreateOperatorFromSelectStmt creates an operator tree that represents the input SELECT or UNION query
 func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (Operator, error) {
 	switch node := selStmt.(type) {
@@ -147,7 +158,7 @@ func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *s
 			return nil, err
 		}
 		sources := []Operator{op}
-		sel, _ := node.FirstStatement.(*sqlparser.Select)
+		sel := getSelect(node.FirstStatement)
 		selectStmts := []*sqlparser.Select{sel}
 		for _, unionSelect := range node.UnionSelects {
 			op, err = CreateOperatorFromSelectStmt(unionSelect.Statement, semTable)
@@ -156,7 +167,7 @@ func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *s
 			}
 
 			sources = append(sources, op)
-			sel, _ = unionSelect.Statement.(*sqlparser.Select)
+			sel = getSelect(unionSelect.Statement)
 			selectStmts = append(selectStmts, sel)
 
 			if unionSelect.Distinct {
