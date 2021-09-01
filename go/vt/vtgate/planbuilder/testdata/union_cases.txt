@@ -55,6 +55,26 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user union select id from music",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
+        "Query": "select id from `user` union select id from music",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # union all between two SelectEqualUnique
 "select id from user where id = 1 union all select id from user where id = 5"
@@ -360,6 +380,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -399,6 +420,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
@@ -514,6 +536,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
@@ -574,6 +597,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union with the same target shard because of vindex
 "select * from music where id = 1 union select * from user where id = 1"
@@ -621,6 +645,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
@@ -668,6 +693,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
 "(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
@@ -808,6 +834,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union distinct between a scatter query and a join (other side)
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
@@ -866,6 +893,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"

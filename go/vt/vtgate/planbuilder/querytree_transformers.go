@@ -42,9 +42,27 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, e
 		return transformSubqueryTree(ctx, n)
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
+	case *distinctTree:
+		innerPlan, err := transformToLogicalPlan(ctx, n.source)
+		if err != nil {
+			return nil, err
+		}
+		err = pushDistinct(innerPlan)
+		if err != nil {
+			return nil, err
+		}
+		return newDistinct(innerPlan), nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
+}
+
+func pushDistinct(plan logicalPlan) error {
+	switch n := plan.(type) {
+	case *route:
+		n.Select.MakeDistinct()
+	}
+	return nil
 }
 
 func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
@@ -114,7 +132,7 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 			continue
 		}
 		last := sources[len(sources)-1]
-		newPlan := mergeLogicalPlans(last, plan)
+		newPlan := mergeUnionLogicalPlans(last, plan)
 		if newPlan != nil {
 			sources[len(sources)-1] = newPlan
 			continue
@@ -131,7 +149,7 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 	}, nil
 }
 
-func mergeLogicalPlans(left logicalPlan, right logicalPlan) logicalPlan {
+func mergeUnionLogicalPlans(left logicalPlan, right logicalPlan) logicalPlan {
 	lroute, ok := left.(*route)
 	if !ok {
 		return nil
