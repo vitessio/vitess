@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -33,10 +35,8 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *seman
 	switch n := tree.(type) {
 	case *routeTree:
 		return transformRoutePlan(n, semTable, ctx.sqToReplace)
-
 	case *joinTree:
 		return transformJoinPlan(ctx, n, semTable)
-
 	case *derivedTree:
 		return transformDerivedPlan(ctx, n, semTable)
 	case *subqueryTree:
@@ -83,7 +83,10 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semanti
 
 	rb, isRoute := plan.(*route)
 	if !isRoute {
-		return plan, nil
+		return &simpleProjection{
+			logicalPlanCommon: newBuilderCommon(plan),
+			eSimpleProj:       &engine.SimpleProjection{},
+		}, nil
 	}
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
@@ -113,13 +116,15 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 		}
 	}
 
-	for _, predicate := range n.vindexPredicates {
-		switch predicate := predicate.(type) {
-		case *sqlparser.ComparisonExpr:
-			if predicate.Operator == sqlparser.InOp {
-				switch predicate.Left.(type) {
-				case *sqlparser.ColName:
-					predicate.Right = sqlparser.ListArg(engine.ListVarName)
+	if n.selected != nil {
+		for _, predicate := range n.selected.predicates {
+			switch predicate := predicate.(type) {
+			case *sqlparser.ComparisonExpr:
+				if predicate.Operator == sqlparser.InOp {
+					switch predicate.Left.(type) {
+					case *sqlparser.ColName:
+						predicate.Right = sqlparser.ListArg(engine.ListVarName)
+					}
 				}
 			}
 		}
@@ -139,7 +144,7 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 		}
 		joinExpr := &sqlparser.JoinTableExpr{
 			Join: sqlparser.LeftJoinType,
-			Condition: sqlparser.JoinCondition{
+			Condition: &sqlparser.JoinCondition{
 				On: leftJoin.pred,
 			},
 			RightExpr: rightExpr,
@@ -158,8 +163,10 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 	}
 
 	var singleColumn vindexes.SingleColumn
-	if n.vindex != nil {
-		singleColumn = n.vindex.(vindexes.SingleColumn)
+	var values []sqltypes.PlanValue
+	if n.selectedVindex() != nil {
+		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
+		values = n.selected.values
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -191,7 +198,7 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
 			Vindex:              singleColumn,
-			Values:              n.vindexValues,
+			Values:              values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},
@@ -262,7 +269,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 			LeftExpr:  lExpr,
 			Join:      sqlparser.NormalJoinType,
 			RightExpr: rExpr,
-			Condition: sqlparser.JoinCondition{
+			Condition: &sqlparser.JoinCondition{
 				On: t.pred,
 			},
 		}, nil

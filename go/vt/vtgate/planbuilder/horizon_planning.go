@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
@@ -58,7 +60,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		return nil, err
 	}
 
-	if hp.qp.NeedsAggregation() {
+	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
@@ -157,16 +159,20 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		deps := semTable.BaseTableDependencies(expr.Expr)
 		var column int
 		var appended bool
+		passDownReuseCol := reuseCol
+		if !reuseCol {
+			passDownReuseCol = expr.As.IsEmpty()
+		}
 		switch {
 		case deps.IsSolvedBy(lhsSolves):
-			offset, added, err := pushProjection(expr, node.Left, semTable, inner, true)
+			offset, added, err := pushProjection(expr, node.Left, semTable, inner, passDownReuseCol)
 			if err != nil {
 				return 0, false, err
 			}
 			column = -(offset + 1)
 			appended = added
 		case deps.IsSolvedBy(rhsSolves):
-			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, true)
+			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol)
 			if err != nil {
 				return 0, false, err
 			}
@@ -190,7 +196,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		// push projection to the outer query
 		return pushProjection(expr, node.underlying, semTable, inner, reuseCol)
 	case *simpleProjection:
-		offset, _, err := pushProjection(expr, node.input, semTable, inner, reuseCol)
+		offset, _, err := pushProjection(expr, node.input, semTable, inner, true)
 		if err != nil {
 			return 0, false, err
 		}
@@ -306,6 +312,9 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 		pushExpr, alias, opcode := hp.createPushExprAndAlias(e, handleDistinct, innerAliased, opcode, oa)
 		offset, _, err := pushProjection(pushExpr, plan, ctx.semTable, true, false)
 		if err != nil {
+			if strings.HasPrefix(err.Error(), "unknown dependencies for") {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			}
 			return nil, err
 		}
 		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, &engine.AggregateParams{
@@ -322,6 +331,11 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 			return nil, err
 		}
 		hp.haveToTruncate(added)
+	}
+
+	err := hp.planHaving(ctx, newPlan)
+	if err != nil {
+		return nil, err
 	}
 
 	if !hp.qp.CanPushDownSorting && oa != nil {
@@ -831,4 +845,38 @@ func (hp *horizonPlanning) needDistinctHandling(ctx planningContext, funcExpr *s
 		return false, nil, nil
 	}
 	return true, innerAliased, nil
+}
+
+func (hp *horizonPlanning) planHaving(ctx planningContext, plan logicalPlan) error {
+	if hp.sel.Having == nil {
+		return nil
+	}
+	for _, expr := range sqlparser.SplitAndExpression(nil, hp.sel.Having.Expr) {
+		err := pushHaving(expr, plan, ctx.semTable)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
+	switch node := plan.(type) {
+	case *route:
+		sel, ok := node.Select.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on unexpected select statement: %T", node.Select)
+		}
+		sel.AddHaving(expr)
+		return nil
+	case *join:
+		return semantics.Gen4NotSupportedF("having on join")
+	case *pulloutSubquery:
+		return pushHaving(expr, node.underlying, semTable)
+	case *simpleProjection:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
+	case *orderedAggregate:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of aggregates")
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
 }

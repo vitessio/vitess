@@ -66,7 +66,7 @@ func formatTwoOptionsNicely(a, b string) string {
 var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // Execute performs a non-streaming exec.
-func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -124,7 +124,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		g.Go(func() error {
-			result, err := currSource.Execute(vcursor, bindVars, wantfields)
+			result, err := vcursor.ExecutePrimitive(currSource, bindVars, wantfields)
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // StreamExecute performs a streaming exec.
-func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
 	var cbMu sync.Mutex
@@ -154,7 +154,7 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		currIndex, currSource := i, source
 
 		g.Go(func() error {
-			err := currSource.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if currIndex == 0 && !fieldsSent {
 					defer fieldset.Done()

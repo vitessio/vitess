@@ -3412,13 +3412,24 @@ func commandGetSrvKeyspaceNames(ctx context.Context, wr *wrangler.Wrangler, subF
 		return fmt.Errorf("the <cell> argument is required for the GetSrvKeyspaceNames command")
 	}
 
-	srvKeyspaceNames, err := wr.TopoServer().GetSrvKeyspaceNames(ctx, subFlags.Arg(0))
+	cell := subFlags.Arg(0)
+	resp, err := wr.VtctldServer().GetSrvKeyspaceNames(ctx, &vtctldatapb.GetSrvKeyspaceNamesRequest{
+		Cells: []string{cell},
+	})
 	if err != nil {
 		return err
 	}
-	for _, ks := range srvKeyspaceNames {
+
+	names, ok := resp.Names[cell]
+	if !ok {
+		// Technically this should be impossible, but we handle it explicitly.
+		return nil
+	}
+
+	for _, ks := range names.Names {
 		wr.Logger().Printf("%v\n", ks)
 	}
+
 	return nil
 }
 
@@ -3471,7 +3482,10 @@ func commandDeleteSrvVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("the <cell> argument is required for the DeleteSrvVSchema command")
 	}
 
-	return wr.TopoServer().DeleteSrvVSchema(ctx, subFlags.Arg(0))
+	_, err := wr.VtctldServer().DeleteSrvVSchema(ctx, &vtctldatapb.DeleteSrvVSchemaRequest{
+		Cell: subFlags.Arg(0),
+	})
+	return err
 }
 
 func commandGetShardReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

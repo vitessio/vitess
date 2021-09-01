@@ -87,6 +87,7 @@ Gen4 plan same as above
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
 "unsupported: filtering on results of aggregates"
+Gen4 plan same as above
 
 # group by must reference select list
 "select a from user group by b"
@@ -487,3 +488,59 @@ Gen4 plan same as above
 "select distinct a, b as a from user"
 "generating order by clause: ambiguous symbol reference: a"
 Gen4 plan same as above
+
+# Aggregates and joins
+"select count(*) from user join user_extra"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
+
+# TODO this should be planned without using OA and MS
+"select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: filtering on results of aggregates
+
+"select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
+"symbol ue.col not found in subquery"
+Gen4 error: unsupported: filtering on results of aggregates
+
+# aggregation filtering by having on a route with no group by
+"select 1 from user having count(id) = 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select 1 from `user` where 1 != 1",
+    "Query": "select 1 from `user` having count(id) = 10",
+    "Table": "`user`"
+  }
+}
+Gen4 error: unsupported: filtering on results of aggregates
+
+# aggregation filtering by having on a route with no group by with non-unique vindex filter
+"select 1 from user having count(id) = 10 and name = 'a'"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user having count(id) = 10 and name = 'a'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select 1 from `user` where 1 != 1",
+    "Query": "select 1 from `user` having count(id) = 10 and `name` = 'a'",
+    "Table": "`user`",
+    "Values": [
+      "a"
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+Gen4 error: unsupported: filtering on results of aggregates

@@ -525,6 +525,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
+Gen4 plan same as above
 
 # group by a unique vindex should use a simple route
 "select id, count(*) from user group by id"
@@ -795,6 +796,44 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) c from user group by id having id=1 and c=10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
+    "Query": "select id, count(*) as c from `user` where id = 1 group by id having count(*) = 10",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
+
+# group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
+"select id, count(*) c from user group by id having max(col) > 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select id, count(*) c from user group by id having max(col) \u003e 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
+    "Query": "select id, count(*) as c from `user` group by id having max(col) \u003e 10",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
 
 # scatter aggregate in a subquery
 "select a from (select count(*) as a from user) t"
@@ -2225,51 +2264,6 @@ Gen4 plan same as above
   }
 }
 
-# Aggregates and joins
-"select count(*) from user join user_extra"
-"unsupported: cross-shard query with aggregates"
-{
-  "QueryType": "SELECT",
-  "Original": "select count(*) from user join user_extra",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(0) AS count(*)",
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
-
 # Grouping on join
 "select user.a from user join user_extra group by user.a"
 "unsupported: cross-shard query with aggregates"
@@ -2320,50 +2314,7 @@ Gen4 plan same as above
 # Aggregate on join
 "select user.a, count(*) from user join user_extra group by user.a"
 "unsupported: cross-shard query with aggregates"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.a, count(*) from user join user_extra group by user.a",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(*)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a, count(*), weight_string(`user`.a) from `user` where 1 != 1",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select `user`.a, count(*), weight_string(`user`.a) from `user` order by `user`.a asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Aggregate on other table in join
 "select user.a, count(user_extra.a) from user join user_extra group by user.a"
@@ -2558,3 +2509,88 @@ Gen4 plan same as above
     ]
   }
 }
+
+# join query on sharding key with group by a unique vindex with having clause.
+"select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) \u003e 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.id, count(*) as c from `user`, user_extra where 1 != 1 group by `user`.id",
+    "Query": "select `user`.id, count(*) as c from `user`, user_extra where `user`.id = user_extra.user_id group by `user`.id having max(`user`.col) \u003e 10",
+    "Table": "`user`, user_extra"
+  }
+}
+
+# correlated subquery on sharding key with group by a unique vindex with having clause.
+"select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) > 10)"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from user where exists (select 1 from user_extra where user_id = user.id group by user_id having max(col) \u003e 10)",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from `user` where 1 != 1",
+        "Query": "select count(*) from `user` where exists (select 1 from user_extra where user_id = `user`.id group by user_id having max(col) \u003e 10)",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# aggregation filtering by having on a route
+"select id from user group by id having count(id) = 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user group by id having count(id) = 10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id from `user` where 1 != 1 group by id",
+    "Query": "select id from `user` group by id having count(id) = 10",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
