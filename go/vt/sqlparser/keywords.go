@@ -237,6 +237,7 @@ var keywords = []keyword{
 	{"grouping", UNUSED},
 	{"groups", UNUSED},
 	{"group_concat", GROUP_CONCAT},
+	{"hash", HASH},
 	{"having", HAVING},
 	{"header", HEADER},
 	{"high_priority", UNUSED},

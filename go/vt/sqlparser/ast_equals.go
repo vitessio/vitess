@@ -2034,11 +2034,11 @@ func EqualsRefOfPartitionOption(a, b *PartitionOption) bool {
 		return false
 	}
 	return a.Linear == b.Linear &&
+		a.isHASH == b.isHASH &&
 		a.isKEY == b.isKEY &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
 		a.RangeOrList == b.RangeOrList &&
 		a.Partitions == b.Partitions &&
-		EqualsColIdent(a.HASH, b.HASH) &&
 		EqualsColumns(a.KeyColList, b.KeyColList) &&
 		EqualsRefOfExprOrColumns(a.ExprOrCol, b.ExprOrCol) &&
 		EqualsExpr(a.Expr, b.Expr) &&
@@ -2412,10 +2412,10 @@ func EqualsRefOfSubPartition(a, b *SubPartition) bool {
 		return false
 	}
 	return a.Linear == b.Linear &&
+		a.isHASH == b.isHASH &&
 		a.isKEY == b.isKEY &&
 		a.KeyAlgorithm == b.KeyAlgorithm &&
 		a.SubPartitions == b.SubPartitions &&
-		EqualsColIdent(a.HASH, b.HASH) &&
 		EqualsColumns(a.KeyColList, b.KeyColList) &&
 		EqualsExpr(a.Expr, b.Expr)
 }

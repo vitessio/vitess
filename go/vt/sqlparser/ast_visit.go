@@ -1524,9 +1524,6 @@ func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColIdent(in.HASH, f); err != nil {
-		return err
-	}
 	if err := VisitColumns(in.KeyColList, f); err != nil {
 		return err
 	}
@@ -1959,9 +1956,6 @@ func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitColIdent(in.HASH, f); err != nil {
 		return err
 	}
 	if err := VisitColumns(in.KeyColList, f); err != nil {

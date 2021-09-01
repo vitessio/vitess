@@ -1474,7 +1474,7 @@ type PartitionDefinition struct {
 // PartitionOption describes partitioning control (for create table statements)
 type PartitionOption struct {
 	Linear       string
-	HASH         ColIdent
+	isHASH       bool
 	isKEY        bool
 	KeyAlgorithm string
 	KeyColList   Columns
@@ -1495,7 +1495,7 @@ type ExprOrColumns struct {
 // SubPartition describes subpartitions control
 type SubPartition struct {
 	Linear        string
-	HASH          ColIdent
+	isHASH        bool
 	isKEY         bool
 	KeyAlgorithm  string
 	KeyColList    Columns

@@ -289,7 +289,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
 // Partitions tokens
-%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS
+%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
 
 %type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
 %type <statement> command
@@ -2287,12 +2287,12 @@ partitions_options_opt:
   {
     $$ = nil
   }
-| PARTITION BY linear_opt id_or_var '(' expression ')' partitions_opt
+| PARTITION BY linear_opt HASH '(' expression ')' partitions_opt
     subpartition_opt partition_definition_opt
     {
       $$ = &PartitionOption {
         Linear: $3,
-        HASH: $4,
+        isHASH: true,
         Expr: $6,
         Partitions: $8,
         SubPartition: $9,
@@ -2328,11 +2328,11 @@ subpartition_opt:
   {
     $$ = nil
   }
-| SUBPARTITION BY linear_opt id_or_var '(' expression ')' subpartitions_opt
+| SUBPARTITION BY linear_opt HASH '(' expression ')' subpartitions_opt
   {
     $$ = &SubPartition {
       Linear: $3,
-      HASH: $4,
+      isHASH: true,
       Expr: $6,
       SubPartitions: $8,
     }
@@ -5253,6 +5253,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
+| HASH
 | HEADER
 | HISTOGRAM
 | HISTORY

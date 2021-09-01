@@ -1265,9 +1265,9 @@ var (
 		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
 	}, {
-		input: "alter vschema create vindex hash_vdx using hash",
+		input: "alter vschema create vindex hash_vdx using `hash`",
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
 	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
@@ -1293,25 +1293,25 @@ var (
 	}, {
 		input: "alter vschema drop table ks.a",
 	}, {
-		input: "alter vschema on a add vindex hash (id)",
+		input: "alter vschema on a add vindex `hash` (id)",
 	}, {
-		input: "alter vschema on ks.a add vindex hash (id)",
+		input: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex hash (id)",
+		output: "alter vschema on a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex hash (id)",
+		output: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input: "alter vschema on a add vindex `add` (`add`)",
 	}, {
-		input: "alter vschema on a add vindex hash (id) using hash",
+		input: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
@@ -1319,15 +1319,15 @@ var (
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
-		input: "alter vschema on a drop vindex hash",
+		input: "alter vschema on a drop vindex `hash`",
 	}, {
-		input: "alter vschema on ks.a drop vindex hash",
+		input: "alter vschema on ks.a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",

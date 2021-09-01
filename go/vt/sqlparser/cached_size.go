@@ -1506,12 +1506,10 @@ func (cached *PartitionOption) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(152)
 	}
 	// field Linear string
 	size += int64(len(cached.Linear))
-	// field HASH vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.HASH.CachedSize(false)
 	// field KeyAlgorithm string
 	size += int64(len(cached.KeyAlgorithm))
 	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns
@@ -2034,12 +2032,10 @@ func (cached *SubPartition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(136)
+		size += int64(96)
 	}
 	// field Linear string
 	size += int64(len(cached.Linear))
-	// field HASH vitess.io/vitess/go/vt/sqlparser.ColIdent
-	size += cached.HASH.CachedSize(false)
 	// field KeyAlgorithm string
 	size += int64(len(cached.KeyAlgorithm))
 	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns

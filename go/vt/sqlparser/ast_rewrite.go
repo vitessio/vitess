@@ -2974,11 +2974,6 @@ func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *Partitio
 			return true
 		}
 	}
-	if !a.rewriteColIdent(node, node.HASH, func(newNode, parent SQLNode) {
-		parent.(*PartitionOption).HASH = newNode.(ColIdent)
-	}) {
-		return false
-	}
 	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
 		parent.(*PartitionOption).KeyColList = newNode.(Columns)
 	}) {
@@ -3908,11 +3903,6 @@ func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartitio
 		if !a.pre(&a.cur) {
 			return true
 		}
-	}
-	if !a.rewriteColIdent(node, node.HASH, func(newNode, parent SQLNode) {
-		parent.(*SubPartition).HASH = newNode.(ColIdent)
-	}) {
-		return false
 	}
 	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
 		parent.(*SubPartition).KeyColList = newNode.(Columns)
