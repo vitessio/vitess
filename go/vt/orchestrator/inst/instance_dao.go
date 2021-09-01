@@ -975,7 +975,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.HasReplicationFilters = m.GetBool("has_replication_filters")
 	instance.SupportsOracleGTID = m.GetBool("supports_oracle_gtid")
 	instance.UsingOracleGTID = m.GetBool("oracle_gtid")
-	instance.SourceUUID = m.GetString("primary_uuid")
+	instance.SourceUUID = m.GetString("source_uuid")
 	instance.AncestryUUID = m.GetString("ancestry_uuid")
 	instance.ExecutedGtidSet = m.GetString("executed_gtid_set")
 	instance.GTIDMode = m.GetString("gtid_mode")
@@ -984,17 +984,17 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.UsingMariaDBGTID = m.GetBool("mariadb_gtid")
 	instance.SelfBinlogCoordinates.LogFile = m.GetString("binary_log_file")
 	instance.SelfBinlogCoordinates.LogPos = m.GetInt64("binary_log_pos")
-	instance.ReadBinlogCoordinates.LogFile = m.GetString("primary_log_file")
-	instance.ReadBinlogCoordinates.LogPos = m.GetInt64("read_primary_log_pos")
-	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_primary_log_file")
-	instance.ExecBinlogCoordinates.LogPos = m.GetInt64("exec_primary_log_pos")
+	instance.ReadBinlogCoordinates.LogFile = m.GetString("source_log_file")
+	instance.ReadBinlogCoordinates.LogPos = m.GetInt64("read_source_log_pos")
+	instance.ExecBinlogCoordinates.LogFile = m.GetString("relay_source_log_file")
+	instance.ExecBinlogCoordinates.LogPos = m.GetInt64("exec_source_log_pos")
 	instance.IsDetached, _ = instance.ExecBinlogCoordinates.ExtractDetachedCoordinates()
 	instance.RelaylogCoordinates.LogFile = m.GetString("relay_log_file")
 	instance.RelaylogCoordinates.LogPos = m.GetInt64("relay_log_pos")
 	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
-	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_primary")
+	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_source")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
 	replicasJSON := m.GetString("replica_hosts")
@@ -1258,7 +1258,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
-				or (abs(cast(seconds_behind_primary as signed) - cast(sql_delay as signed)) > ?)
+				or (abs(cast(seconds_behind_source as signed) - cast(sql_delay as signed)) > ?)
 				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (gtid_errant != '')
 				or (replication_group_name != '' and replication_group_member_state != 'ONLINE')
@@ -2286,7 +2286,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"has_replication_filters",
 		"supports_oracle_gtid",
 		"oracle_gtid",
-		"primary_uuid",
+		"source_uuid",
 		"ancestry_uuid",
 		"executed_gtid_set",
 		"gtid_mode",
@@ -2294,15 +2294,15 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"gtid_errant",
 		"mariadb_gtid",
 		"pseudo_gtid",
-		"primary_log_file",
-		"read_primary_log_pos",
-		"relay_primary_log_file",
-		"exec_primary_log_pos",
+		"source_log_file",
+		"read_source_log_pos",
+		"relay_source_log_file",
+		"exec_source_log_pos",
 		"relay_log_file",
 		"relay_log_pos",
 		"last_sql_error",
 		"last_io_error",
-		"seconds_behind_primary",
+		"seconds_behind_source",
 		"replica_lag_seconds",
 		"sql_delay",
 		"num_replica_hosts",

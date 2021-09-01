@@ -27,7 +27,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_primary_log_pos
+			ADD COLUMN last_sql_error TEXT NOT NULL AFTER exec_source_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -47,7 +47,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_primary_log_pos
+			ADD COLUMN relay_log_file varchar(128) CHARACTER SET ascii NOT NULL AFTER exec_source_log_pos
 	`,
 	`
 		ALTER TABLE
@@ -513,7 +513,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN primary_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
+			ADD COLUMN source_uuid varchar(64) CHARACTER SET ascii NOT NULL AFTER oracle_gtid
 	`,
 	`
 		ALTER TABLE
@@ -523,7 +523,7 @@ var generateSQLPatches = []string{
 	`
 		ALTER TABLE
 			database_instance
-			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER primary_uuid
+			ADD COLUMN ancestry_uuid text CHARACTER SET ascii NOT NULL AFTER source_uuid
 	`,
 	`
 		ALTER TABLE
