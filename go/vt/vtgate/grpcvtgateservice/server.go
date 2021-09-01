@@ -194,8 +194,15 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, request *vtgatepb.Res
 func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+
+	// For backward compatibility.
+	// The mysql query equivalent has logic to use topodatapb.TabletType_MASTER if tablet_type is not set.
+	tabletType := request.TabletType
+	if tabletType == topodatapb.TabletType_UNKNOWN {
+		tabletType = topodatapb.TabletType_MASTER
+	}
 	vtgErr := vtg.server.VStream(ctx,
-		request.TabletType,
+		tabletType,
 		request.Vgtid,
 		request.Filter,
 		request.Flags,
