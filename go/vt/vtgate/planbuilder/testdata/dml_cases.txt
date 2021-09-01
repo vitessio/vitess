@@ -2462,7 +2462,7 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "KsidVindex": "xxhash",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select c1, c2 from t1 where c2 = 20 for update",
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
     "Query": "delete from t1 where c2 = 20",
     "Table": "t1"
   }
@@ -2483,13 +2483,39 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "ChangedVindexValues": [
-      "lookup_t1:2"
+      "lookup_t1:3"
     ],
     "KsidVindex": "xxhash",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select c1, c2, c2 = 1 from t1 where c2 = 20 for update",
+    "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
     "Query": "update t1 set c2 = 1 where c2 = 20",
     "Table": "t1"
+  }
+}
+Gen4 plan same as above
+
+# Delete on backfilling and non-backfilling unique lookup vindexes should be a delete equal
+"delete from zlookup_unique.t1 where c2 = 10 and c3 = 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
+    "Query": "delete from t1 where c2 = 10 and c3 = 20",
+    "Table": "t1",
+    "Values": [
+      20
+    ],
+    "Vindex": "lookup_t1_2"
   }
 }
 Gen4 plan same as above
