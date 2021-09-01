@@ -2,6 +2,9 @@
 
 name: Cluster Self Hosted (vreplication_basic)
 on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster Self Hosted (vreplication_basic)')
+  cancel-in-progress: true
 
 jobs:
   test:

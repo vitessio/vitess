@@ -2,6 +2,9 @@
 
 name: Unit Test Self Hosted (mariadb)
 on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Unit Test Self Hosted (mariadb)')
+  cancel-in-progress: true
 
 jobs:
   test:
