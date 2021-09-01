@@ -48,12 +48,12 @@ func (s SQLCalcFoundRows) GetTableName() string {
 }
 
 //Execute implements the Primitive interface
-func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	limitQr, err := s.LimitPrimitive.Execute(vcursor, bindVars, wantfields)
+func (s SQLCalcFoundRows) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	limitQr, err := vcursor.ExecutePrimitive(s.LimitPrimitive, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	countQr, err := s.CountPrimitive.Execute(vcursor, bindVars, false)
+	countQr, err := vcursor.ExecutePrimitive(s.CountPrimitive, bindVars, false)
 	if err != nil {
 		return nil, err
 	}
@@ -69,15 +69,15 @@ func (s SQLCalcFoundRows) Execute(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 //StreamExecute implements the Primitive interface
-func (s SQLCalcFoundRows) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := s.LimitPrimitive.StreamExecute(vcursor, bindVars, wantfields, callback)
+func (s SQLCalcFoundRows) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	err := vcursor.StreamExecutePrimitive(s.LimitPrimitive, bindVars, wantfields, callback)
 	if err != nil {
 		return err
 	}
 
 	var fr *uint64
 
-	err = s.CountPrimitive.StreamExecute(vcursor, bindVars, wantfields, func(countQr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(s.CountPrimitive, bindVars, wantfields, func(countQr *sqltypes.Result) error {
 		if len(countQr.Rows) == 0 && countQr.Fields != nil {
 			// this is the fields, which we can ignore
 			return nil

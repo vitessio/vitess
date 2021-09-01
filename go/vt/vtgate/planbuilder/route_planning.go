@@ -194,6 +194,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast := rb.Select.(*sqlparser.Select)
 	ast.Distinct = sel.Distinct
 	ast.GroupBy = sel.GroupBy
+	ast.Having = sel.Having
 	ast.OrderBy = sel.OrderBy
 	ast.Comments = sel.Comments
 	ast.SelectExprs = sel.SelectExprs

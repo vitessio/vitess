@@ -60,7 +60,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		return nil, err
 	}
 
-	if hp.qp.NeedsAggregation() {
+	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
@@ -331,6 +331,11 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 			return nil, err
 		}
 		hp.haveToTruncate(added)
+	}
+
+	err := hp.planHaving(ctx, newPlan)
+	if err != nil {
+		return nil, err
 	}
 
 	if !hp.qp.CanPushDownSorting && oa != nil {
@@ -840,4 +845,38 @@ func (hp *horizonPlanning) needDistinctHandling(ctx planningContext, funcExpr *s
 		return false, nil, nil
 	}
 	return true, innerAliased, nil
+}
+
+func (hp *horizonPlanning) planHaving(ctx planningContext, plan logicalPlan) error {
+	if hp.sel.Having == nil {
+		return nil
+	}
+	for _, expr := range sqlparser.SplitAndExpression(nil, hp.sel.Having.Expr) {
+		err := pushHaving(expr, plan, ctx.semTable)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
+	switch node := plan.(type) {
+	case *route:
+		sel, ok := node.Select.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on unexpected select statement: %T", node.Select)
+		}
+		sel.AddHaving(expr)
+		return nil
+	case *join:
+		return semantics.Gen4NotSupportedF("having on join")
+	case *pulloutSubquery:
+		return pushHaving(expr, node.underlying, semTable)
+	case *simpleProjection:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
+	case *orderedAggregate:
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of aggregates")
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
 }
