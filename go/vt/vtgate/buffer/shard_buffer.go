@@ -138,7 +138,7 @@ func (sb *shardBuffer) timeNow() time.Time {
 
 // disabled returns true if neither buffering nor the dry-run mode is enabled.
 func (sb *shardBuffer) disabled() bool {
-	return sb.mode == bufferDisabled
+	return sb.mode == bufferModeDisabled
 }
 
 func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard string, err error) (RetryDoneFunc, error) {
@@ -180,7 +180,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		if !sb.lastEnd.IsZero() && lastBufferingStopped < minTimeBetweenFailovers {
 			sb.mu.Unlock()
 			msg := "NOT starting buffering"
-			if sb.mode == bufferDryRun {
+			if sb.mode == bufferModeDryRun {
 				msg = "Dry-run: Would NOT have started buffering"
 			}
 
@@ -202,7 +202,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		if !sb.lastReparent.IsZero() && lastReparentAgo < minTimeBetweenFailovers {
 			sb.mu.Unlock()
 			msg := "NOT starting buffering"
-			if sb.mode == bufferDryRun {
+			if sb.mode == bufferModeDryRun {
 				msg = "Dry-run: Would NOT have started buffering"
 			}
 
@@ -218,7 +218,7 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		sb.startBufferingLocked(err)
 	}
 
-	if sb.mode == bufferDryRun {
+	if sb.mode == bufferModeDryRun {
 		sb.mu.Unlock()
 		// Dry-run. Do not actually buffer the request and return early.
 		lastRequestsDryRunMax.Add(sb.statsKey, 1)
@@ -273,7 +273,7 @@ func (sb *shardBuffer) startBufferingLocked(err error) {
 	sb.timeoutThread = newTimeoutThread(sb, sb.buf.config.MaxFailoverDuration)
 	sb.timeoutThread.start()
 	msg := "Starting buffering"
-	if sb.mode == bufferDryRun {
+	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have started buffering"
 	}
 	starts.Add(sb.statsKey, 1)
@@ -546,7 +546,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 
 	lastFailoverDurationMs.Set(sb.statsKey, int64(d/time.Millisecond))
 	failoverDurationSumMs.Add(sb.statsKey, int64(d/time.Millisecond))
-	if sb.mode == bufferDryRun {
+	if sb.mode == bufferModeDryRun {
 		utilDryRunMax := int64(
 			float64(lastRequestsDryRunMax.Counts()[sb.statsKeyJoined]) / float64(sb.buf.config.Size) * 100.0)
 		utilizationDryRunSum.Add(sb.statsKey, utilDryRunMax)
@@ -564,7 +564,7 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	sb.queue = nil
 
 	msg := "Stopping buffering"
-	if sb.mode == bufferDryRun {
+	if sb.mode == bufferModeDryRun {
 		msg = "Dry-run: Would have stopped buffering"
 	}
 	log.Infof("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q))

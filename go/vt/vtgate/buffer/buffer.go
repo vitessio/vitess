@@ -52,12 +52,12 @@ var (
 type bufferMode int
 
 const (
-	// bufferDisabled will let all requests pass through and do nothing.
-	bufferDisabled bufferMode = iota
-	// bufferEnabled means all requests should be buffered.
-	bufferEnabled
-	// bufferDryRun will track the failover, but not actually buffer requests.
-	bufferDryRun
+	// bufferModeDisabled will let all requests pass through and do nothing.
+	bufferModeDisabled bufferMode = iota
+	// bufferModeEnabled means all requests should be buffered.
+	bufferModeEnabled
+	// bufferModeDryRun will track the failover, but not actually buffer requests.
+	bufferModeDryRun
 )
 
 // RetryDoneFunc will be returned for each buffered request and must be called
