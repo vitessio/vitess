@@ -22,6 +22,8 @@ import (
 	stderrors "errors"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
+	stdsort "sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,7 +41,10 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/grpcserver"
 	vtadminhttp "vitess.io/vitess/go/vt/vtadmin/http"
+	"vitess.io/vitess/go/vt/vtadmin/http/debug"
+	"vitess.io/vitess/go/vt/vtadmin/http/experimental"
 	vthandlers "vitess.io/vitess/go/vt/vtadmin/http/handlers"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	"vitess.io/vitess/go/vt/vtadmin/sort"
 	"vitess.io/vitess/go/vt/vtadmin/vtadminproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -54,23 +59,35 @@ import (
 // API is the main entrypoint for the vtadmin server. It implements
 // vtadminpb.VTAdminServer.
 type API struct {
+	vtadminpb.UnimplementedVTAdminServer
+
 	clusters   []*cluster.Cluster
 	clusterMap map[string]*cluster.Cluster
 	serv       *grpcserver.Server
 	router     *mux.Router
 
+	authz *rbac.Authorizer
+
 	// See https://github.com/vitessio/vitess/issues/7723 for why this exists.
 	vtexplainLock sync.Mutex
 }
 
+// Options wraps the configuration options for different components of the
+// vtadmin API.
+type Options struct {
+	GRPCOpts grpcserver.Options
+	HTTPOpts vtadminhttp.Options
+	RBAC     *rbac.Config
+}
+
 // NewAPI returns a new API, configured to service the given set of clusters,
-// and configured with the given gRPC and HTTP server options.
+// and configured with the given options.
 //
-// If opts.Services is nil, NewAPI will automatically add
+// If opts.GRPCOpts.Services is nil, NewAPI will automatically add
 // "vtadmin.VTAdminServer" to the list of services queryable in the healthcheck
 // service. Callers can opt-out of this behavior by explicitly setting this
 // value to the empty slice.
-func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadminhttp.Options) *API {
+func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	clusterMap := make(map[string]*cluster.Cluster, len(clusters))
 	for _, cluster := range clusters {
 		clusterMap[cluster.ID] = cluster
@@ -80,11 +97,43 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		return c1.ID < c2.ID
 	}).Sort(clusters)
 
-	if opts.Services == nil {
-		opts.Services = []string{"vtadmin.VTAdminServer"}
+	if opts.GRPCOpts.Services == nil {
+		opts.GRPCOpts.Services = []string{"vtadmin.VTAdminServer"}
 	}
 
-	serv := grpcserver.New("vtadmin", opts)
+	var (
+		authn rbac.Authenticator
+		authz *rbac.Authorizer
+	)
+	if opts.RBAC != nil {
+		authn = opts.RBAC.GetAuthenticator()
+		authz = opts.RBAC.GetAuthorizer()
+
+		if authn != nil {
+			opts.GRPCOpts.StreamInterceptors = append(opts.GRPCOpts.StreamInterceptors, rbac.AuthenticationStreamInterceptor(authn))
+			opts.GRPCOpts.UnaryInterceptors = append(opts.GRPCOpts.UnaryInterceptors, rbac.AuthenticationUnaryInterceptor(authn))
+		}
+	}
+
+	if authz == nil {
+		authz, _ = rbac.NewAuthorizer(&rbac.Config{
+			Rules: []*struct {
+				Resource string
+				Actions  []string
+				Subjects []string
+				Clusters []string
+			}{
+				{
+					Resource: "*",
+					Actions:  []string{"*"},
+					Subjects: []string{"*"},
+					Clusters: []string{"*"},
+				},
+			},
+		})
+	}
+
+	serv := grpcserver.New("vtadmin", opts.GRPCOpts)
 	serv.Router().HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
@@ -96,18 +145,25 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 		clusterMap: clusterMap,
 		router:     router,
 		serv:       serv,
+		authz:      authz,
 	}
 
 	vtadminpb.RegisterVTAdminServer(serv.GRPCServer(), api)
 
-	httpAPI := vtadminhttp.NewAPI(api)
+	httpAPI := vtadminhttp.NewAPI(api, opts.HTTPOpts)
 
+	router.HandleFunc("/backups", httpAPI.Adapt(vtadminhttp.GetBackups)).Name("API.GetBackups")
 	router.HandleFunc("/clusters", httpAPI.Adapt(vtadminhttp.GetClusters)).Name("API.GetClusters")
 	router.HandleFunc("/gates", httpAPI.Adapt(vtadminhttp.GetGates)).Name("API.GetGates")
+	router.HandleFunc("/keyspace/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateKeyspace)).Name("API.CreateKeyspace").Methods("POST")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.DeleteKeyspace)).Name("API.DeleteKeyspace").Methods("DELETE")
+	router.HandleFunc("/keyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetKeyspace)).Name("API.GetKeyspace")
 	router.HandleFunc("/keyspaces", httpAPI.Adapt(vtadminhttp.GetKeyspaces)).Name("API.GetKeyspaces")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
+	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
+	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
@@ -116,24 +172,49 @@ func NewAPI(clusters []*cluster.Cluster, opts grpcserver.Options, httpOpts vtadm
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
 
+	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
+	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
+
+	if !opts.HTTPOpts.DisableDebug {
+		// Due to the way net/http/pprof insists on registering its handlers, we
+		// have to put these on the root router, and not on the /debug prefixed
+		// subrouter, which would make way more sense, but alas. Additional
+		// debug routes should still go on the /debug subrouter, though.
+		serv.Router().HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
+		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
+
+		dapi := &debugAPI{api}
+		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
+		debugRouter.HandleFunc("/env", debug.Env)
+		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
+		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
+	}
+
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares being optional) is:
 	// 	1. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
 	//	2. Compression
 	//	3. Tracing
+	//	4. Authentication
 	middlewares := []mux.MiddlewareFunc{}
 
-	if len(httpOpts.CORSOrigins) > 0 {
+	if len(opts.HTTPOpts.CORSOrigins) > 0 {
 		serv.Router().Use(handlers.CORS(
-			handlers.AllowCredentials(), handlers.AllowedOrigins(httpOpts.CORSOrigins)))
+			handlers.AllowCredentials(), handlers.AllowedOrigins(opts.HTTPOpts.CORSOrigins)))
 	}
 
-	if !httpOpts.DisableCompression {
+	if !opts.HTTPOpts.DisableCompression {
 		middlewares = append(middlewares, handlers.CompressHandler)
 	}
 
-	if httpOpts.EnableTracing {
+	if opts.HTTPOpts.EnableTracing {
 		middlewares = append(middlewares, vthandlers.TraceHandler)
+	}
+
+	if authn != nil {
+		middlewares = append(middlewares, vthandlers.NewAuthenticationHandler(authn))
 	}
 
 	router.Use(middlewares...)
@@ -147,6 +228,59 @@ func (api *API) ListenAndServe() error {
 	return api.serv.ListenAndServe()
 }
 
+// CreateKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspaceRequest) (*vtadminpb.CreateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CreateKeyspace")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.KeyspaceResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	ks, err := c.CreateKeyspace(ctx, req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtadminpb.CreateKeyspaceResponse{
+		Keyspace: ks,
+	}, nil
+}
+
+// DeleteKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.DeleteKeyspace")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.KeyspaceResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.DeleteKeyspace(ctx, req.Options)
+}
+
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest) (*vtadminpb.Schema, error) {
 	span, _ := trace.NewSpan(ctx, "API.FindSchema")
@@ -154,7 +288,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	span.Annotate("table", req.Table)
 
-	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+	clusters, clusterIDs := api.getClustersForRequest(req.ClusterIds)
 
 	var (
 		m       sync.Mutex
@@ -164,6 +298,10 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -217,12 +355,63 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 
 	switch len(results) {
 	case 0:
-		return nil, fmt.Errorf("%w: no schemas found with table named %s", errors.ErrNoSchema, req.Table)
+		return nil, &errors.NoSuchSchema{
+			Clusters: clusterIDs,
+			Table:    req.Table,
+		}
 	case 1:
 		return results[0], nil
 	default:
 		return nil, fmt.Errorf("%w: %d schemas found with table named %s", errors.ErrAmbiguousSchema, len(results), req.Table)
 	}
+}
+
+// GetBackups is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsRequest) (*vtadminpb.GetBackupsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetBackups")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		backups []*vtadminpb.ClusterBackup
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.BackupResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			bs, err := c.GetBackups(ctx, req)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			backups = append(backups, bs...)
+		}(c)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetBackupsResponse{
+		Backups: backups,
+	}, nil
 }
 
 // GetClusters is part of the vtadminpb.VTAdminServer interface.
@@ -233,6 +422,10 @@ func (api *API) GetClusters(ctx context.Context, req *vtadminpb.GetClustersReque
 	vcs := make([]*vtadminpb.Cluster, 0, len(api.clusters))
 
 	for _, c := range api.clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+			continue
+		}
+
 		vcs = append(vcs, &vtadminpb.Cluster{
 			Id:   c.ID,
 			Name: c.Name,
@@ -259,33 +452,25 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTGateResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			gs, err := c.Discovery.DiscoverVTGates(ctx, []string{})
+			gs, err := c.GetGates(ctx)
 			if err != nil {
-				er.RecordError(fmt.Errorf("DiscoverVTGates(cluster = %s): %w", c.ID, err))
+				er.RecordError(err)
 				return
 			}
 
 			m.Lock()
+			defer m.Unlock()
 
-			for _, g := range gs {
-				gates = append(gates, &vtadminpb.VTGate{
-					Cell: g.Cell,
-					Cluster: &vtadminpb.Cluster{
-						Id:   c.ID,
-						Name: c.Name,
-					},
-					Hostname:  g.Hostname,
-					Keyspaces: g.Keyspaces,
-					Pool:      g.Pool,
-				})
-			}
-
-			m.Unlock()
+			gates = append(gates, gs...)
 		}(c)
 	}
 
@@ -298,6 +483,23 @@ func (api *API) GetGates(ctx context.Context, req *vtadminpb.GetGatesRequest) (*
 	return &vtadminpb.GetGatesResponse{
 		Gates: gates,
 	}, nil
+}
+
+// GetKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetKeyspace(ctx context.Context, req *vtadminpb.GetKeyspaceRequest) (*vtadminpb.Keyspace, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetKeyspace")
+	defer span.Finish()
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.GetKeyspace(ctx, req.Keyspace)
 }
 
 // GetKeyspaces is part of the vtadminpb.VTAdminServer interface.
@@ -315,62 +517,20 @@ func (api *API) GetKeyspaces(ctx context.Context, req *vtadminpb.GetKeyspacesReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.KeyspaceResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
 
-			if err := c.Vtctld.Dial(ctx); err != nil {
+			kss, err := c.GetKeyspaces(ctx)
+			if err != nil {
 				er.RecordError(err)
 				return
 			}
-
-			getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
-			cluster.AnnotateSpan(c, getKeyspacesSpan)
-
-			resp, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
-			if err != nil {
-				er.RecordError(fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err))
-				getKeyspacesSpan.Finish()
-				return
-			}
-
-			getKeyspacesSpan.Finish()
-
-			kss := make([]*vtadminpb.Keyspace, 0, len(resp.Keyspaces))
-
-			var (
-				kwg sync.WaitGroup
-				km  sync.Mutex
-			)
-
-			for _, ks := range resp.Keyspaces {
-				kwg.Add(1)
-
-				// Find all shards for each keyspace in the cluster, in parallel
-				go func(c *cluster.Cluster, ks *vtctldatapb.Keyspace) {
-					defer kwg.Done()
-
-					shards, err := c.FindAllShardsInKeyspace(ctx, ks.Name, cluster.FindAllShardsInKeyspaceOptions{
-						SkipDial: true,
-					})
-
-					if err != nil {
-						er.RecordError(err)
-						return
-					}
-
-					km.Lock()
-					kss = append(kss, &vtadminpb.Keyspace{
-						Cluster:  c.ToProto(),
-						Keyspace: ks,
-						Shards:   shards,
-					})
-					km.Unlock()
-				}(c, ks)
-			}
-
-			kwg.Wait()
 
 			m.Lock()
 			keyspaces = append(keyspaces, kss...)
@@ -404,12 +564,28 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
 	}
 
-	return c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	schema, err := c.GetSchema(ctx, req.Keyspace, cluster.GetSchemaOptions{
 		BaseRequest: &vtctldatapb.GetSchemaRequest{
 			Tables: []string{req.Table},
 		},
 		TableSizeOptions: req.TableSizeOptions,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if schema == nil || len(schema.TableDefinitions) == 0 {
+		return nil, &errors.NoSuchSchema{
+			Clusters: []string{req.ClusterId},
+			Table:    req.Table,
+		}
+	}
+
+	return schema, nil
 }
 
 // GetSchemas is part of the vtadminpb.VTAdminServer interface.
@@ -427,6 +603,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		// Get schemas for the cluster
@@ -461,6 +641,10 @@ func (api *API) GetSchemas(ctx context.Context, req *vtadminpb.GetSchemasRequest
 	if er.HasErrors() {
 		return nil, er.Error()
 	}
+
+	stdsort.Slice(schemas, func(i, j int) bool {
+		return schemas[i].Cluster.Id < schemas[j].Cluster.Id
+	})
 
 	return &vtadminpb.GetSchemasResponse{
 		Schemas: schemas,
@@ -536,12 +720,88 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 	return schemas, nil
 }
 
+// GetSrvVSchema is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaRequest) (*vtadminpb.SrvVSchema, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchema")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("cell", req.Cell)
+
+	c, ok := api.clusterMap[req.ClusterId]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.GetSrvVSchema(ctx, req.Cell)
+}
+
+// GetSrvVSchemas is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvVSchemas(ctx context.Context, req *vtadminpb.GetSrvVSchemasRequest) (*vtadminpb.GetSrvVSchemasResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchemas")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		svs []*vtadminpb.SrvVSchema
+		wg  sync.WaitGroup
+		er  concurrency.AllErrorRecorder
+		m   sync.Mutex
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvVSchemaResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			s, err := c.GetSrvVSchemas(ctx, req.Cells)
+
+			if err != nil {
+				er.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			svs = append(svs, s...)
+			m.Unlock()
+		}(c)
+	}
+
+	wg.Wait()
+
+	if er.HasErrors() {
+		return nil, er.Error()
+	}
+
+	return &vtadminpb.GetSrvVSchemasResponse{
+		SrvVSchemas: svs,
+	}, nil
+}
+
 // GetTablet is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) (*vtadminpb.Tablet, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetTablet")
 	defer span.Finish()
 
-	span.Annotate("tablet_hostname", req.Hostname)
+	span.Annotate("tablet_alias", req.Alias)
+
+	alias, err := topoproto.ParseTabletAlias(req.Alias)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse tablet_alias %s: %w", req.Alias, err)
+	}
+
+	span.Annotate("tablet_cell", alias.Cell)
+	span.Annotate("tablet_uid", alias.Uid)
 
 	clusters, ids := api.getClustersForRequest(req.ClusterIds)
 
@@ -553,6 +813,10 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -567,7 +831,7 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 			var found []*vtadminpb.Tablet
 
 			for _, t := range ts {
-				if t.Tablet.Hostname == req.Hostname {
+				if t.Tablet.Alias.Cell == alias.Cell && t.Tablet.Alias.Uid == alias.Uid {
 					found = append(found, t)
 				}
 			}
@@ -586,12 +850,12 @@ func (api *API) GetTablet(ctx context.Context, req *vtadminpb.GetTabletRequest) 
 
 	switch len(tablets) {
 	case 0:
-		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Hostname, ids)
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrNoTablet, req.Alias, ids)
 	case 1:
 		return tablets[0], nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Hostname, ids)
+	return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: %s, searched clusters = %v", errors.ErrAmbiguousTablet, req.Alias, ids)
 }
 
 // GetTablets is part of the vtadminpb.VTAdminServer interface.
@@ -609,6 +873,10 @@ func (api *API) GetTablets(ctx context.Context, req *vtadminpb.GetTabletsRequest
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.TabletResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -649,6 +917,10 @@ func (api *API) GetVSchema(ctx context.Context, req *vtadminpb.GetVSchemaRequest
 
 	cluster.AnnotateSpan(c, span)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	if err := c.Vtctld.Dial(ctx); err != nil {
 		return nil, err
 	}
@@ -679,6 +951,10 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	}
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VSchemaResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -769,6 +1045,10 @@ func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowReque
 	span.Annotate("workflow_name", req.Name)
 	span.Annotate("active_only", req.ActiveOnly)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	return c.GetWorkflow(ctx, req.Keyspace, req.Name, cluster.GetWorkflowOptions{
 		ActiveOnly: req.ActiveOnly,
 	})
@@ -789,6 +1069,10 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 	)
 
 	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.WorkflowResource, rbac.GetAction) {
+			continue
+		}
+
 		wg.Add(1)
 
 		go func(c *cluster.Cluster) {
@@ -846,8 +1130,12 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	span.Annotate("keyspace", req.Keyspace)
 	cluster.AnnotateSpan(c, span)
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.VTExplainResource, rbac.GetAction) {
+		return nil, nil
+	}
+
 	tablet, err := c.FindTablet(ctx, func(t *vtadminpb.Tablet) bool {
-		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_MASTER && t.State == vtadminpb.Tablet_SERVING
+		return t.Tablet.Keyspace == req.Keyspace && topo.IsInServingGraph(t.Tablet.Type) && t.Tablet.Type != topodatapb.TabletType_PRIMARY && t.State == vtadminpb.Tablet_SERVING
 	})
 	if err != nil {
 		return nil, fmt.Errorf("cannot find serving, non-primary tablet in keyspace=%s: %w", req.Keyspace, err)

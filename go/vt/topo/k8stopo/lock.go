@@ -40,7 +40,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return s.lock(ctx, dirPath, contents, false)
 }
 
-// lock is used by both Lock() and master election.
+// lock is used by both Lock() and primary election.
 // it blocks until the lock is taken, interrupted, or times out
 func (s *Server) lock(ctx context.Context, nodePath, contents string, createMissing bool) (topo.LockDescriptor, error) {
 	// Satisfy the topo.Conn interface

@@ -51,6 +51,7 @@ var (
 	dbName          = "vt_" + keyspaceName
 	username        = "vt_dba"
 	hostname        = "localhost"
+	insertVal       = 1
 	insertSQL       = "insert into vt_insert_test(id, msg) values (%d, 'test %d')"
 	sqlSchema       = `
 	create table vt_insert_test (
@@ -64,7 +65,7 @@ var (
 //region cluster setup/teardown
 func setupRangeBasedCluster(ctx context.Context, t *testing.T) {
 	tablets := setupCluster(ctx, t, shardName, []string{cell1}, []int{2})
-	masterTablet, replicaTablet = tablets[0], tablets[1]
+	primaryTablet, replicaTablet = tablets[0], tablets[1]
 }
 
 func setupReparentCluster(t *testing.T) {
@@ -116,6 +117,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance.VtTabletExtraArgs = []string{
 		"-lock_tables_timeout", "5s",
 		"-enable_semi_sync",
+		"-init_populate_metadata",
 		"-track_schema_versions=true",
 	}
 
@@ -162,12 +164,12 @@ func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*
 	}
 
 	for _, tablet := range tablets {
-		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
 		require.NoError(t, err)
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardPrimary",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablets[0].Alias)
 	require.NoError(t, err)
 
@@ -176,13 +178,13 @@ func setupShard(ctx context.Context, t *testing.T, shardName string, tablets []*
 	// create Tables
 	runSQL(ctx, t, sqlSchema, tablets[0])
 
-	checkMasterTablet(t, tablets[0])
+	checkPrimaryTablet(t, tablets[0])
 
 	validateTopology(t, false)
 	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, true)
 	assert.Equal(t, len(tablets), len(strArray))
-	assert.Contains(t, strArray[0], "master") // master first
+	assert.Contains(t, strArray[0], "primary") // primary first
 }
 
 //endregion
@@ -235,9 +237,9 @@ func prsWithTimeout(t *testing.T, tab *cluster.Vttablet, avoid bool, actionTimeo
 		args = append(args, "-wait_replicas_timeout", waitTimeout)
 	}
 	if avoid {
-		args = append(args, "-avoid_master")
+		args = append(args, "-avoid_tablet")
 	} else {
-		args = append(args, "-new_master")
+		args = append(args, "-new_primary")
 	}
 	args = append(args, tab.Alias)
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
@@ -251,7 +253,7 @@ func ers(t *testing.T, tab *cluster.Vttablet, timeout string) (string, error) {
 func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabToIgnore *cluster.Vttablet) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	if tab != nil {
-		args = append(args, "-new_master", tab.Alias)
+		args = append(args, "-new_primary", tab.Alias)
 	}
 	if timeout != "" {
 		args = append(args, "-wait_replicas_timeout", "30s")
@@ -262,20 +264,20 @@ func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabToI
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
 
-func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downMaster bool, baseTime int64) {
+func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
-	if !downMaster {
+	if !downPrimary {
 		assertNodeCount(t, result, int(3))
 	} else {
 		assertNodeCount(t, result, int(2))
 	}
 
-	// make sure the master status page says it's the master
+	// make sure the primary status page says it's the primary
 	status := tablet.VttabletProcess.GetStatus()
-	assert.Contains(t, status, "Tablet Type: MASTER")
+	assert.Contains(t, status, "Tablet Type: PRIMARY")
 
-	// make sure the master health stream says it's the master too
+	// make sure the primary health stream says it's the primary too
 	// (health check is disabled on these servers, force it first)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	require.NoError(t, err)
@@ -288,7 +290,7 @@ func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downMaster
 	var streamHealthResponse querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
 	require.NoError(t, err)
-	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_MASTER)
+	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
 	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
 }
 
@@ -307,12 +309,13 @@ func validateTopology(t *testing.T, pingTablets bool) {
 	require.NoError(t, err)
 }
 
-func confirmReplication(t *testing.T, master *cluster.Vttablet, replicas []*cluster.Vttablet) {
+func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet) {
 	ctx := context.Background()
-	n := 2 // random value ...
-	// insert data into the new master, check the connected replica work
+	insertVal++
+	n := insertVal // unique value ...
+	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, n, n)
-	runSQL(ctx, t, insertSQL, master)
+	runSQL(ctx, t, insertSQL, primary)
 	time.Sleep(100 * time.Millisecond)
 	for _, tab := range replicas {
 		err := checkInsertedValues(ctx, t, tab, n)
@@ -320,18 +323,18 @@ func confirmReplication(t *testing.T, master *cluster.Vttablet, replicas []*clus
 	}
 }
 
-func confirmOldMasterIsHangingAround(t *testing.T) {
+func confirmOldPrimaryIsHangingAround(t *testing.T) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
-	require.Contains(t, out, "already has master")
+	require.Contains(t, out, "already has primary")
 }
 
 //	Waits for tablet B to catch up to the replication position of tablet A.
 func waitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
-	posA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
+	posA, _ := cluster.GetPrimaryPosition(t, *tabletA, hostname)
 	timeout := time.Now().Add(5 * time.Second)
 	for time.Now().Before(timeout) {
-		posB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
+		posB, _ := cluster.GetPrimaryPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletB, posA, posB) {
 			return nil
 		}
@@ -392,14 +395,14 @@ func checkReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttab
 	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
 }
 
-// Makes sure the tablet type is master, and its health check agrees.
-func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
+// Makes sure the tablet type is primary, and its health check agrees.
+func checkPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 	require.NoError(t, err)
 	var tabletInfo topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tabletInfo)
 	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_MASTER, tabletInfo.GetType())
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletInfo.GetType())
 
 	// make sure the health stream is updated
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
@@ -411,17 +414,17 @@ func checkMasterTablet(t *testing.T, tablet *cluster.Vttablet) {
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
-	assert.Equal(t, topodatapb.TabletType_MASTER, tabletType)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tabletType)
 }
 
-// isHealthyMasterTablet will return if tablet is master AND healthy.
-func isHealthyMasterTablet(t *testing.T, tablet *cluster.Vttablet) bool {
+// isHealthyPrimaryTablet will return if tablet is primary AND healthy.
+func isHealthyPrimaryTablet(t *testing.T, tablet *cluster.Vttablet) bool {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tablet.Alias)
 	require.Nil(t, err)
 	var tabletInfo topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tabletInfo)
 	require.Nil(t, err)
-	if tabletInfo.GetType() != topodatapb.TabletType_MASTER {
+	if tabletInfo.GetType() != topodatapb.TabletType_PRIMARY {
 		return false
 	}
 
@@ -435,12 +438,12 @@ func isHealthyMasterTablet(t *testing.T, tablet *cluster.Vttablet) bool {
 
 	assert.True(t, streamHealthResponse.GetServing())
 	tabletType := streamHealthResponse.GetTarget().GetTabletType()
-	return tabletType == topodatapb.TabletType_MASTER
+	return tabletType == topodatapb.TabletType_PRIMARY
 }
 
 func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, index int) error {
 	// wait until it gets the data
-	timeout := time.Now().Add(5 * time.Second)
+	timeout := time.Now().Add(15 * time.Second)
 	i := 0
 	for time.Now().Before(timeout) {
 		selectSQL := fmt.Sprintf("select msg from vt_insert_test where id=%d", index)
@@ -460,7 +463,7 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 // region tablet operations
 
 func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
-	err := tab.VttabletProcess.TearDown()
+	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 	require.NoError(t, err)
 	if stopDatabase {
 		err = tab.MysqlctlProcess.Stop()
@@ -483,20 +486,20 @@ func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
 	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
-	// As there is already a master the new replica will come directly in SERVING state
+	// As there is already a primary the new replica will come directly in SERVING state
 	tab1.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tab.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	err = checkInsertedValues(ctx, t, tab, 2)
+	err = checkInsertedValues(ctx, t, tab, insertVal)
 	require.NoError(t, err)
 }
 
 func deleteTablet(t *testing.T, tab *cluster.Vttablet) {
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand(
 		"DeleteTablet",
-		"-allow_master",
+		"-allow_primary",
 		tab.Alias)
 	require.NoError(t, err)
 }
@@ -505,16 +508,16 @@ func deleteTablet(t *testing.T, tab *cluster.Vttablet) {
 
 // region get info
 
-func getNewMaster(t *testing.T) *cluster.Vttablet {
-	var newMaster *cluster.Vttablet
+func getNewPrimary(t *testing.T) *cluster.Vttablet {
+	var newPrimary *cluster.Vttablet
 	for _, tablet := range []*cluster.Vttablet{tab2, tab3, tab4} {
-		if isHealthyMasterTablet(t, tablet) {
-			newMaster = tablet
+		if isHealthyPrimaryTablet(t, tablet) {
+			newPrimary = tablet
 			break
 		}
 	}
-	require.NotNil(t, newMaster)
-	return newMaster
+	require.NotNil(t, newPrimary)
+	return newPrimary
 }
 
 func getShardReplicationPositions(t *testing.T, keyspaceName, shardName string, doPrint bool) []string {

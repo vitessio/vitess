@@ -30,46 +30,46 @@ type AnalysisCode string
 type StructureAnalysisCode string
 
 const (
-	NoProblem                                               AnalysisCode = "NoProblem"
-	ClusterHasNoMaster                                      AnalysisCode = "ClusterHasNoMaster"
-	DeadMasterWithoutReplicas                               AnalysisCode = "DeadMasterWithoutReplicas"
-	DeadMaster                                              AnalysisCode = "DeadMaster"
-	DeadMasterAndReplicas                                   AnalysisCode = "DeadMasterAndReplicas"
-	DeadMasterAndSomeReplicas                               AnalysisCode = "DeadMasterAndSomeReplicas"
-	MasterHasMaster                                         AnalysisCode = "MasterHasMaster"
-	MasterIsReadOnly                                        AnalysisCode = "MasterIsReadOnly"
-	MasterSemiSyncMustBeSet                                 AnalysisCode = "MasterSemiSyncMustBeSet"
-	MasterSemiSyncMustNotBeSet                              AnalysisCode = "MasterSemiSyncMustNotBeSet"
-	ReplicaIsWritable                                       AnalysisCode = "ReplicaIsWritable"
-	NotConnectedToMaster                                    AnalysisCode = "NotConnectedToMaster"
-	ConnectedToWrongMaster                                  AnalysisCode = "ConnectedToWrongMaster"
-	ReplicationStopped                                      AnalysisCode = "ReplicationStopped"
-	ReplicaSemiSyncMustBeSet                                AnalysisCode = "ReplicaSemiSyncMustBeSet"
-	ReplicaSemiSyncMustNotBeSet                             AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
-	UnreachableMasterWithLaggingReplicas                    AnalysisCode = "UnreachableMasterWithLaggingReplicas"
-	UnreachableMaster                                       AnalysisCode = "UnreachableMaster"
-	MasterSingleReplicaNotReplicating                       AnalysisCode = "MasterSingleReplicaNotReplicating"
-	MasterSingleReplicaDead                                 AnalysisCode = "MasterSingleReplicaDead"
-	AllMasterReplicasNotReplicating                         AnalysisCode = "AllMasterReplicasNotReplicating"
-	AllMasterReplicasNotReplicatingOrDead                   AnalysisCode = "AllMasterReplicasNotReplicatingOrDead"
-	LockedSemiSyncMasterHypothesis                          AnalysisCode = "LockedSemiSyncMasterHypothesis"
-	LockedSemiSyncMaster                                    AnalysisCode = "LockedSemiSyncMaster"
-	MasterWithoutReplicas                                   AnalysisCode = "MasterWithoutReplicas"
-	DeadCoMaster                                            AnalysisCode = "DeadCoMaster"
-	DeadCoMasterAndSomeReplicas                             AnalysisCode = "DeadCoMasterAndSomeReplicas"
-	UnreachableCoMaster                                     AnalysisCode = "UnreachableCoMaster"
-	AllCoMasterReplicasNotReplicating                       AnalysisCode = "AllCoMasterReplicasNotReplicating"
-	DeadIntermediateMaster                                  AnalysisCode = "DeadIntermediateMaster"
-	DeadIntermediateMasterWithSingleReplica                 AnalysisCode = "DeadIntermediateMasterWithSingleReplica"
-	DeadIntermediateMasterWithSingleReplicaFailingToConnect AnalysisCode = "DeadIntermediateMasterWithSingleReplicaFailingToConnect"
-	DeadIntermediateMasterAndSomeReplicas                   AnalysisCode = "DeadIntermediateMasterAndSomeReplicas"
-	DeadIntermediateMasterAndReplicas                       AnalysisCode = "DeadIntermediateMasterAndReplicas"
-	UnreachableIntermediateMasterWithLaggingReplicas        AnalysisCode = "UnreachableIntermediateMasterWithLaggingReplicas"
-	UnreachableIntermediateMaster                           AnalysisCode = "UnreachableIntermediateMaster"
-	AllIntermediateMasterReplicasFailingToConnectOrDead     AnalysisCode = "AllIntermediateMasterReplicasFailingToConnectOrDead"
-	AllIntermediateMasterReplicasNotReplicating             AnalysisCode = "AllIntermediateMasterReplicasNotReplicating"
-	FirstTierReplicaFailingToConnectToMaster                AnalysisCode = "FirstTierReplicaFailingToConnectToMaster"
-	BinlogServerFailingToConnectToMaster                    AnalysisCode = "BinlogServerFailingToConnectToMaster"
+	NoProblem                                                AnalysisCode = "NoProblem"
+	ClusterHasNoPrimary                                      AnalysisCode = "ClusterHasNoPrimary"
+	DeadPrimaryWithoutReplicas                               AnalysisCode = "DeadPrimaryWithoutReplicas"
+	DeadPrimary                                              AnalysisCode = "DeadPrimary"
+	DeadPrimaryAndReplicas                                   AnalysisCode = "DeadPrimaryAndReplicas"
+	DeadPrimaryAndSomeReplicas                               AnalysisCode = "DeadPrimaryAndSomeReplicas"
+	PrimaryHasPrimary                                        AnalysisCode = "PrimaryHasPrimary"
+	PrimaryIsReadOnly                                        AnalysisCode = "PrimaryIsReadOnly"
+	PrimarySemiSyncMustBeSet                                 AnalysisCode = "PrimarySemiSyncMustBeSet"
+	PrimarySemiSyncMustNotBeSet                              AnalysisCode = "PrimarySemiSyncMustNotBeSet"
+	ReplicaIsWritable                                        AnalysisCode = "ReplicaIsWritable"
+	NotConnectedToPrimary                                    AnalysisCode = "NotConnectedToPrimary"
+	ConnectedToWrongPrimary                                  AnalysisCode = "ConnectedToWrongPrimary"
+	ReplicationStopped                                       AnalysisCode = "ReplicationStopped"
+	ReplicaSemiSyncMustBeSet                                 AnalysisCode = "ReplicaSemiSyncMustBeSet"
+	ReplicaSemiSyncMustNotBeSet                              AnalysisCode = "ReplicaSemiSyncMustNotBeSet"
+	UnreachablePrimaryWithLaggingReplicas                    AnalysisCode = "UnreachablePrimaryWithLaggingReplicas"
+	UnreachablePrimary                                       AnalysisCode = "UnreachablePrimary"
+	PrimarySingleReplicaNotReplicating                       AnalysisCode = "PrimarySingleReplicaNotReplicating"
+	PrimarySingleReplicaDead                                 AnalysisCode = "PrimarySingleReplicaDead"
+	AllPrimaryReplicasNotReplicating                         AnalysisCode = "AllPrimaryReplicasNotReplicating"
+	AllPrimaryReplicasNotReplicatingOrDead                   AnalysisCode = "AllPrimaryReplicasNotReplicatingOrDead"
+	LockedSemiSyncPrimaryHypothesis                          AnalysisCode = "LockedSemiSyncPrimaryHypothesis"
+	LockedSemiSyncPrimary                                    AnalysisCode = "LockedSemiSyncPrimary"
+	PrimaryWithoutReplicas                                   AnalysisCode = "PrimaryWithoutReplicas"
+	DeadCoPrimary                                            AnalysisCode = "DeadCoPrimary"
+	DeadCoPrimaryAndSomeReplicas                             AnalysisCode = "DeadCoPrimaryAndSomeReplicas"
+	UnreachableCoPrimary                                     AnalysisCode = "UnreachableCoPrimary"
+	AllCoPrimaryReplicasNotReplicating                       AnalysisCode = "AllCoPrimaryReplicasNotReplicating"
+	DeadIntermediatePrimary                                  AnalysisCode = "DeadIntermediatePrimary"
+	DeadIntermediatePrimaryWithSingleReplica                 AnalysisCode = "DeadIntermediatePrimaryWithSingleReplica"
+	DeadIntermediatePrimaryWithSingleReplicaFailingToConnect AnalysisCode = "DeadIntermediatePrimaryWithSingleReplicaFailingToConnect"
+	DeadIntermediatePrimaryAndSomeReplicas                   AnalysisCode = "DeadIntermediatePrimaryAndSomeReplicas"
+	DeadIntermediatePrimaryAndReplicas                       AnalysisCode = "DeadIntermediatePrimaryAndReplicas"
+	UnreachableIntermediatePrimaryWithLaggingReplicas        AnalysisCode = "UnreachableIntermediatePrimaryWithLaggingReplicas"
+	UnreachableIntermediatePrimary                           AnalysisCode = "UnreachableIntermediatePrimary"
+	AllIntermediatePrimaryReplicasFailingToConnectOrDead     AnalysisCode = "AllIntermediatePrimaryReplicasFailingToConnectOrDead"
+	AllIntermediatePrimaryReplicasNotReplicating             AnalysisCode = "AllIntermediatePrimaryReplicasNotReplicating"
+	FirstTierReplicaFailingToConnectToPrimary                AnalysisCode = "FirstTierReplicaFailingToConnectToPrimary"
+	BinlogServerFailingToConnectToPrimary                    AnalysisCode = "BinlogServerFailingToConnectToPrimary"
 )
 
 const (
@@ -81,7 +81,7 @@ const (
 	DifferentGTIDModesStructureWarning                   StructureAnalysisCode = "DifferentGTIDModesStructureWarning"
 	ErrantGTIDStructureWarning                           StructureAnalysisCode = "ErrantGTIDStructureWarning"
 	NoFailoverSupportStructureWarning                    StructureAnalysisCode = "NoFailoverSupportStructureWarning"
-	NoWriteableMasterStructureWarning                    StructureAnalysisCode = "NoWriteableMasterStructureWarning"
+	NoWriteablePrimaryStructureWarning                   StructureAnalysisCode = "NoWriteablePrimaryStructureWarning"
 	NotEnoughValidSemiSyncReplicasStructureWarning       StructureAnalysisCode = "NotEnoughValidSemiSyncReplicasStructureWarning"
 )
 
@@ -112,62 +112,60 @@ type ReplicationAnalysisHints struct {
 }
 
 const (
-	ForceMasterFailoverCommandHint    string = "force-master-failover"
-	ForceMasterTakeoverCommandHint    string = "force-master-takeover"
-	GracefulMasterTakeoverCommandHint string = "graceful-master-takeover"
+	ForcePrimaryFailoverCommandHint    string = "force-primary-failover"
+	ForcePrimaryTakeoverCommandHint    string = "force-primary-takeover"
+	GracefulPrimaryTakeoverCommandHint string = "graceful-primary-takeover"
 )
 
 type AnalysisInstanceType string
 
 const (
-	AnalysisInstanceTypeMaster             AnalysisInstanceType = "master"
-	AnalysisInstanceTypeCoMaster           AnalysisInstanceType = "co-master"
-	AnalysisInstanceTypeIntermediateMaster AnalysisInstanceType = "intermediate-master"
+	AnalysisInstanceTypePrimary             AnalysisInstanceType = "primary"
+	AnalysisInstanceTypeCoPrimary           AnalysisInstanceType = "co-primary"
+	AnalysisInstanceTypeIntermediatePrimary AnalysisInstanceType = "intermediate-primary"
 )
 
 // ReplicationAnalysis notes analysis on replication chain status, per instance
 type ReplicationAnalysis struct {
 	AnalyzedInstanceKey                       InstanceKey
-	AnalyzedInstanceMasterKey                 InstanceKey
+	AnalyzedInstancePrimaryKey                InstanceKey
 	TabletType                                topodatapb.TabletType
-	MasterTimeStamp                           time.Time
+	PrimaryTimeStamp                          time.Time
 	SuggestedClusterAlias                     string
 	ClusterDetails                            ClusterInfo
 	AnalyzedInstanceDataCenter                string
 	AnalyzedInstanceRegion                    string
 	AnalyzedInstancePhysicalEnvironment       string
 	AnalyzedInstanceBinlogCoordinates         BinlogCoordinates
-	IsMaster                                  bool
-	IsClusterMaster                           bool
-	IsCoMaster                                bool
+	IsPrimary                                 bool
+	IsClusterPrimary                          bool
+	IsCoPrimary                               bool
 	LastCheckValid                            bool
 	LastCheckPartialSuccess                   bool
 	CountReplicas                             uint
 	CountValidReplicas                        uint
 	CountValidReplicatingReplicas             uint
-	CountReplicasFailingToConnectToMaster     uint
+	CountReplicasFailingToConnectToPrimary    uint
 	CountDowntimedReplicas                    uint
 	ReplicationDepth                          uint
 	Replicas                                  InstanceKeyMap
-	SlaveHosts                                InstanceKeyMap // for backwards compatibility. Equals `Replicas`
-	IsFailingToConnectToMaster                bool
+	IsFailingToConnectToPrimary               bool
 	ReplicationStopped                        bool
 	Analysis                                  AnalysisCode
 	Description                               string
 	StructureAnalysis                         []StructureAnalysisCode
 	IsDowntimed                               bool
-	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllMasterReplicasNotReplicating)
+	IsReplicasDowntimed                       bool // as good as downtimed because all replicas are downtimed AND analysis is all about the replicas (e.e. AllPrimaryReplicasNotReplicating)
 	DowntimeEndTimestamp                      string
 	DowntimeRemainingSeconds                  int
 	IsBinlogServer                            bool
-	PseudoGTIDImmediateTopology               bool
 	OracleGTIDImmediateTopology               bool
 	MariaDBGTIDImmediateTopology              bool
 	BinlogServerImmediateTopology             bool
-	SemiSyncMasterEnabled                     bool
-	SemiSyncMasterStatus                      bool
-	SemiSyncMasterWaitForReplicaCount         uint
-	SemiSyncMasterClients                     uint
+	SemiSyncPrimaryEnabled                    bool
+	SemiSyncPrimaryStatus                     bool
+	SemiSyncPrimaryWaitForReplicaCount        uint
+	SemiSyncPrimaryClients                    uint
 	SemiSyncReplicaEnabled                    bool
 	CountSemiSyncReplicasEnabled              uint
 	CountLoggingReplicas                      uint
@@ -203,8 +201,6 @@ func (this *ReplicationAnalysis) MarshalJSON() ([]byte, error) {
 		ReplicationAnalysis
 	}{}
 	i.ReplicationAnalysis = *this
-	// backwards compatibility
-	i.SlaveHosts = i.Replicas
 
 	return json.Marshal(i)
 }
@@ -227,15 +223,15 @@ func (this *ReplicationAnalysis) AnalysisString() string {
 	return strings.Join(result, ", ")
 }
 
-// Get a string description of the analyzed instance type (master? co-master? intermediate-master?)
+// Get a string description of the analyzed instance type (primary? co-primary? intermediate-primary?)
 func (this *ReplicationAnalysis) GetAnalysisInstanceType() AnalysisInstanceType {
-	if this.IsCoMaster {
-		return AnalysisInstanceTypeCoMaster
+	if this.IsCoPrimary {
+		return AnalysisInstanceTypeCoPrimary
 	}
-	if this.IsMaster {
-		return AnalysisInstanceTypeMaster
+	if this.IsPrimary {
+		return AnalysisInstanceTypePrimary
 	}
-	return AnalysisInstanceTypeIntermediateMaster
+	return AnalysisInstanceTypeIntermediatePrimary
 }
 
 // ValidSecondsFromSeenToLastAttemptedCheck returns the maximum allowed elapsed time

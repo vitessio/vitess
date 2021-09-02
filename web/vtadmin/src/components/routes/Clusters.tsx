@@ -15,10 +15,16 @@
  */
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
+
+import style from './Clusters.module.scss';
 import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
 import { vtadmin as pb } from '../../proto/vtadmin';
+import { DataCell } from '../dataTable/DataCell';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
 
 export const Clusters = () => {
     useDocumentTitle('Clusters');
@@ -31,15 +37,22 @@ export const Clusters = () => {
     const renderRows = (rows: pb.Cluster[]) =>
         rows.map((cluster, idx) => (
             <tr key={idx}>
-                <td>{cluster.name}</td>
-                <td>{cluster.id}</td>
+                <DataCell>{cluster.name}</DataCell>
+                <DataCell>{cluster.id}</DataCell>
             </tr>
         ));
 
     return (
-        <div className="max-width-content">
-            <h1>Clusters</h1>
-            <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Clusters</WorkspaceTitle>
+            </WorkspaceHeader>
+
+            <ContentContainer>
+                <div className={style.container}>
+                    <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
+                </div>
+            </ContentContainer>
         </div>
     );
 };

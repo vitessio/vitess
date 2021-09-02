@@ -21,6 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/vtadmin";
 
 package vtadmin;
 
+import "mysqlctl.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
@@ -31,6 +32,10 @@ import "vtctldata.proto";
 // VTAdmin is the Vitess Admin API service. It provides RPCs that operate on
 // across a range of Vitess clusters.
 service VTAdmin {
+    // CreateKeyspace creates a new keyspace in the given cluster.
+    rpc CreateKeyspace(CreateKeyspaceRequest) returns (CreateKeyspaceResponse) {};
+    // DeleteKeyspace deletes a keyspace in the given cluster.
+    rpc DeleteKeyspace(DeleteKeyspaceRequest) returns (vtctldata.DeleteKeyspaceResponse) {};
     // FindSchema returns a single Schema that matches the provided table name
     // across all specified clusters IDs. Not specifying a set of cluster IDs
     // causes the search to span all configured clusters.
@@ -38,10 +43,14 @@ service VTAdmin {
     // An error occurs if either no table exists across any of the clusters with
     // the specified table name, or if multiple tables exist with that name.
     rpc FindSchema(FindSchemaRequest) returns (Schema) {};
+    // GetBackups returns backups grouped by cluster.
+    rpc GetBackups(GetBackupsRequest) returns (GetBackupsResponse) {};
     // GetClusters returns all configured clusters.
     rpc GetClusters(GetClustersRequest) returns (GetClustersResponse) {};
     // GetGates returns all gates across all the specified clusters.
     rpc GetGates(GetGatesRequest) returns (GetGatesResponse) {};
+    // GetKeyspace returns a keyspace by name in the specified cluster.
+    rpc GetKeyspace(GetKeyspaceRequest) returns (Keyspace) {};
     // GetKeyspaces returns all keyspaces across the specified clusters.
     rpc GetKeyspaces(GetKeyspacesRequest) returns (GetKeyspacesResponse) {};
     // GetSchema returns the schema for the specified (cluster, keyspace, table)
@@ -49,6 +58,10 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
+    rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
+    // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
+    rpc GetSrvVSchemas(GetSrvVSchemasRequest) returns (GetSrvVSchemasResponse) {};
     // GetTablet looks up a tablet by hostname across all clusters and returns
     // the result.
     rpc GetTablet(GetTabletRequest) returns (Tablet) {};
@@ -74,6 +87,11 @@ service VTAdmin {
 message Cluster {
     string id = 1;
     string name = 2;
+}
+
+message ClusterBackup {
+    Cluster cluster = 1;
+    mysqlctl.BackupInfo backup = 2;
 }
 
 message ClusterWorkflows {
@@ -113,6 +131,12 @@ message Schema {
     }
 }
 
+message SrvVSchema {
+    string cell = 1;
+    Cluster cluster = 2;
+    vschema.SrvVSchema srv_v_schema = 3;
+}
+
 // Tablet groups the topo information of a tablet together with the Vitess
 // cluster it belongs to.
 message Tablet {
@@ -126,6 +150,7 @@ message Tablet {
     }
 
     ServingState state = 3;
+    string FQDN = 4;
 }
 
 // VSchema represents the vschema for a keyspace in the cluster it belongs to.
@@ -140,6 +165,7 @@ message VSchema {
 message Vtctld {
     string hostname = 1;
     Cluster cluster = 2;
+    string FQDN = 3;
 }
 
 // VTGate represents information about a single VTGate host.
@@ -156,6 +182,7 @@ message VTGate {
     Cluster cluster = 4;
     // Keyspaces is the list of keyspaces-to-watch for the VTGate.
     repeated string keyspaces = 5;
+    string FQDN = 6;
 }
 
 message Workflow {
@@ -166,10 +193,46 @@ message Workflow {
 
 /* Request/Response types */
 
+message CreateKeyspaceRequest {
+    string cluster_id = 1;
+    vtctldata.CreateKeyspaceRequest options = 2;
+}
+
+message CreateKeyspaceResponse {
+    Keyspace keyspace = 1;
+}
+
+message DeleteKeyspaceRequest {
+    string cluster_id = 1;
+    vtctldata.DeleteKeyspaceRequest options = 2;
+}
+
 message FindSchemaRequest {
     string table = 1;
     repeated string cluster_ids = 2;
     GetSchemaTableSizeOptions table_size_options = 3;
+}
+
+message GetBackupsRequest {
+    repeated string cluster_ids = 1;
+    // Keyspaces, if set, limits backups to just the specified keyspaces.
+    // Applies to all clusters in the request.
+    repeated string keyspaces = 2;
+    // KeyspaceShards, if set, limits backups to just the specified
+    // keyspace/shards. Applies to all clusters in the request.
+    //
+    // This field takes precedence over Keyspaces. If KeyspaceShards is set,
+    // Keyspaces is ignored.
+    repeated string keyspace_shards = 3;
+    // RequestOptions controls the per-shard request options when making
+    // GetBackups requests to vtctlds. Note that the Keyspace and Shard fields
+    // of this field are ignored; it is used only to specify Limit and Detailed
+    // fields.
+    vtctldata.GetBackupsRequest request_options = 4;
+}
+
+message GetBackupsResponse {
+    repeated ClusterBackup backups = 1;
 }
 
 message GetClustersRequest {}
@@ -184,6 +247,11 @@ message GetGatesRequest {
 
 message GetGatesResponse {
     repeated VTGate gates = 1;
+}
+
+message GetKeyspaceRequest {
+    string cluster_id = 1;
+    string keyspace = 2;
 }
 
 message GetKeyspacesRequest {
@@ -210,12 +278,28 @@ message GetSchemasResponse {
     repeated Schema schemas = 1;
 }
 
+message GetSrvVSchemaRequest {
+    string cluster_id = 1;
+    string cell = 2;
+}
+
+message GetSrvVSchemasRequest {
+    repeated string cluster_ids = 1;
+    repeated string cells = 2;
+}
+
+message GetSrvVSchemasResponse {
+    repeated SrvVSchema srv_v_schemas = 1;
+}
+
 message GetSchemaTableSizeOptions {
     bool aggregate_sizes = 1;
+    bool include_non_serving_shards = 2;
 }
 
 message GetTabletRequest {
-    string hostname = 1;
+    // Unique (per cluster) tablet alias of the standard form: "$cell-$uid"
+    string alias = 1;
     // ClusterIDs is an optional parameter to narrow the scope of the search, if
     // the caller knows which cluster the tablet may be in, or, to disamiguate if
     // multiple clusters have a tablet with the same hostname.

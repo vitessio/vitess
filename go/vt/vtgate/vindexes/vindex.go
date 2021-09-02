@@ -101,6 +101,14 @@ type Reversible interface {
 	ReverseMap(vcursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
 }
 
+// A Prefixable vindex is one that maps the prefix of a id to a keyspace range
+// instead of a single keyspace id. It's being used to reduced the fan out for
+// 'LIKE' expressions.
+type Prefixable interface {
+	SingleColumn
+	PrefixVindex() SingleColumn
+}
+
 // A Lookup vindex is one that needs to lookup
 // a previously stored map to compute the keyspace
 // id from an id. This means that the creation of

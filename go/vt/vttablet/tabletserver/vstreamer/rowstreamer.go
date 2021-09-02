@@ -19,16 +19,19 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 )
 
 // RowStreamer exposes an externally usable interface to rowStreamer.
@@ -61,10 +64,12 @@ type rowStreamer struct {
 	send    func(*binlogdatapb.VStreamRowsResponse) error
 	vschema *localVSchema
 
-	plan      *Plan
-	pkColumns []int
-	sendQuery string
-	vse       *Engine
+	plan          *Plan
+	pkColumns     []int
+	ukColumnNames []string
+	sendQuery     string
+	vse           *Engine
+	pktsize       PacketSizer
 }
 
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *rowStreamer {
@@ -79,6 +84,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
+		pktsize: DefaultPacketSizer(),
 	}
 }
 
@@ -110,7 +116,7 @@ func (rs *rowStreamer) Stream() error {
 func (rs *rowStreamer) buildPlan() error {
 	// This pre-parsing is required to extract the table name
 	// and create its metadata.
-	_, fromTable, err := analyzeSelect(rs.query)
+	sel, fromTable, err := analyzeSelect(rs.query)
 	if err != nil {
 		return err
 	}
@@ -131,7 +137,16 @@ func (rs *rowStreamer) buildPlan() error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
-	rs.pkColumns, err = buildPKColumns(st)
+
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+	if s := directives.GetString("ukColumns", ""); s != "" {
+		rs.ukColumnNames, err = textutil.SplitUnescape(s, ",")
+		if err != nil {
+			return err
+		}
+	}
+
+	rs.pkColumns, err = rs.buildPKColumns(st)
 	if err != nil {
 		return err
 	}
@@ -142,7 +157,25 @@ func (rs *rowStreamer) buildPlan() error {
 	return err
 }
 
-func buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+// buildPKColumnsFromUniqueKey assumes a unique key is indicated,
+func (rs *rowStreamer) buildPKColumnsFromUniqueKey() ([]int, error) {
+	var pkColumns = make([]int, 0)
+	// We wish to utilize a UNIQUE KEY which is not the PRIMARY KEY/
+
+	for _, colName := range rs.ukColumnNames {
+		index := rs.plan.Table.FindColumn(sqlparser.NewColIdent(colName))
+		if index < 0 {
+			return pkColumns, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column %v is listed as unique key, but not present in table %v", colName, rs.plan.Table.Name)
+		}
+		pkColumns = append(pkColumns, index)
+	}
+	return pkColumns, nil
+}
+
+func (rs *rowStreamer) buildPKColumns(st *binlogdatapb.MinimalTable) ([]int, error) {
+	if len(rs.ukColumnNames) > 0 {
+		return rs.buildPKColumnsFromUniqueKey()
+	}
 	var pkColumns = make([]int, 0)
 	if len(st.PKColumns) == 0 {
 		pkColumns = make([]int, len(st.Fields))
@@ -166,7 +199,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	buf.Myprintf("select ")
 	prefix := ""
 	for _, col := range rs.plan.Table.Fields {
-		buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+		if rs.plan.isConvertColumnUsingUTF8(col.Name) {
+			buf.Myprintf("%sconvert(%v using utf8mb4) as %v", prefix, sqlparser.NewColIdent(col.Name), sqlparser.NewColIdent(col.Name))
+		} else {
+			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(col.Name))
+		}
 		prefix = ", "
 	}
 	buf.Myprintf(" from %v", sqlparser.NewTableIdent(rs.plan.Table.Name))
@@ -232,16 +269,19 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 		return fmt.Errorf("stream send error: %v", err)
 	}
 
-	response := &binlogdatapb.VStreamRowsResponse{}
+	var response binlogdatapb.VStreamRowsResponse
+	var rows []*querypb.Row
+	var rowCount int
+	var mysqlrow []sqltypes.Value
+
+	filtered := make([]sqltypes.Value, len(rs.plan.ColExprs))
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
 	byteCount := 0
 	for {
 		//log.Infof("StreamResponse for loop iteration starts")
-		select {
-		case <-rs.ctx.Done():
+		if rs.ctx.Err() != nil {
 			log.Infof("Stream ended because of ctx.Done")
 			return fmt.Errorf("stream ended: %v", rs.ctx.Err())
-		default:
 		}
 
 		// check throttler.
@@ -249,51 +289,59 @@ func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.V
 			continue
 		}
 
-		row, err := conn.FetchNext()
+		if mysqlrow != nil {
+			mysqlrow = mysqlrow[:0]
+		}
+		mysqlrow, err = conn.FetchNext(mysqlrow)
 		if err != nil {
 			return err
 		}
-		if row == nil {
+		if mysqlrow == nil {
 			break
 		}
 		// Compute lastpk here, because we'll need it
 		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
-			lastpk[i] = row[pk]
+			lastpk[i] = mysqlrow[pk]
 		}
 		// Reuse the vstreamer's filter.
-		ok, filtered, err := rs.plan.filter(row)
+		ok, err := rs.plan.filter(mysqlrow, filtered)
 		if err != nil {
 			return err
 		}
 		if ok {
-			response.Rows = append(response.Rows, sqltypes.RowToProto3(filtered))
-			for _, s := range filtered {
-				byteCount += s.Len()
+			if rowCount >= len(rows) {
+				rows = append(rows, &querypb.Row{})
 			}
+			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
+			rowCount++
 		}
 
-		if byteCount >= *PacketSize {
+		if rs.pktsize.ShouldSend(byteCount) {
+			response.Rows = rows[:rowCount]
+			response.Lastpk = sqltypes.RowToProto3(lastpk)
+
 			rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
 			rs.vse.rowStreamerNumPackets.Add(int64(1))
 
-			response.Lastpk = sqltypes.RowToProto3(lastpk)
-			err = send(response)
+			startSend := time.Now()
+			err = send(&response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
 				return err
 			}
-			// empty the rows so we start over, but we keep the
-			// same capacity
-			response.Rows = nil
+			rs.pktsize.Record(byteCount, time.Since(startSend))
+			rowCount = 0
 			byteCount = 0
 		}
 	}
 
-	if len(response.Rows) > 0 {
-		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+	if rowCount > 0 {
+		response.Rows = rows[:rowCount]
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
-		err = send(response)
+
+		rs.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
+		err = send(&response)
 		if err != nil {
 			return err
 		}

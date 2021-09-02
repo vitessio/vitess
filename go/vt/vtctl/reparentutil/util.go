@@ -57,8 +57,8 @@ func ChooseNewPrimary(
 	}
 
 	var primaryCell string
-	if shardInfo.MasterAlias != nil {
-		primaryCell = shardInfo.MasterAlias.Cell
+	if shardInfo.PrimaryAlias != nil {
+		primaryCell = shardInfo.PrimaryAlias.Cell
 	}
 
 	var (
@@ -94,14 +94,14 @@ func ChooseNewPrimary(
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
-// current primary is whichever tablet of type MASTER (if any) has the most
-// recent MasterTermStartTime, which is the same rule that vtgate uses to route
-// master traffic.
+// current primary is whichever tablet of type PRIMARY (if any) has the most
+// recent PrimaryTermStartTime, which is the same rule that vtgate uses to route
+// primary traffic.
 //
 // The return value is nil if the current primary cannot be definitively
-// determined. This can happen either if no tablet claims to be type MASTER, or
-// if multiple tablets claim to be type MASTER and happen to have the same
-// MasterTermStartTime timestamp (a tie).
+// determined. This can happen either if no tablet claims to be type PRIMARY, or
+// if multiple tablets claim to be type PRIMARY and happen to have the same
+// PrimaryTermStartTime timestamp (a tie).
 //
 // The tabletMap must be a complete map (not a partial result) for the shard.
 func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Logger) *topo.TabletInfo {
@@ -111,17 +111,17 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 	)
 
 	for _, tablet := range tabletMap {
-		if tablet.Type != topodatapb.TabletType_MASTER {
+		if tablet.Type != topodatapb.TabletType_PRIMARY {
 			continue
 		}
 
 		if currentPrimary == nil {
 			currentPrimary = tablet
-			currentTermStartTime = tablet.GetMasterTermStartTime()
+			currentTermStartTime = tablet.GetPrimaryTermStartTime()
 			continue
 		}
 
-		otherPrimaryTermStartTime := tablet.GetMasterTermStartTime()
+		otherPrimaryTermStartTime := tablet.GetPrimaryTermStartTime()
 		if otherPrimaryTermStartTime.After(currentTermStartTime) {
 			currentPrimary = tablet
 			currentTermStartTime = otherPrimaryTermStartTime
@@ -133,7 +133,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 			// Either way, we need to be safe and not assume we know who the
 			// true primary is.
 			logger.Warningf(
-				"Multiple primaries (%v and %v) are tied for MasterTermStartTime; can't determine the true primary.",
+				"Multiple primaries (%v and %v) are tied for PrimaryTermStartTime; can't determine the true primary.",
 				topoproto.TabletAliasString(currentPrimary.Alias),
 				topoproto.TabletAliasString(tablet.Alias),
 			)

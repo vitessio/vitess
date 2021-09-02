@@ -109,5 +109,5 @@ b) The `lvtcl.sh` Helper Script;
 
 The steps are same
 1. Do an EmergencyReparentShard to make a replica the new master.
-2. Ran InitShardMaster on the new master.
+2. Ran InitShardPrimary on the new master.
 3. If Vitess is wrong about who the MySQL master is, you can update it with TabletExternallyReparented

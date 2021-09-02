@@ -197,6 +197,7 @@ func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
 		}
 	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
+	log.Infof("TwoPC: Engine open succeeded")
 	return nil
 }
 
@@ -410,7 +411,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 	result.Dtid = qr.Rows[0][0].ToString()
 	st, err := evalengine.ToInt64(qr.Rows[0][1])
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "Error parsing state for dtid %s", dtid)
+		return nil, vterrors.Wrapf(err, "error parsing state for dtid %s", dtid)
 	}
 	result.State = querypb.TransactionState(st)
 	if result.State < querypb.TransactionState_PREPARE || result.State > querypb.TransactionState_ROLLBACK {
@@ -430,7 +431,7 @@ func (tpc *TwoPC) ReadTransaction(ctx context.Context, dtid string) (*querypb.Tr
 		participants = append(participants, &querypb.Target{
 			Keyspace:   row[0].ToString(),
 			Shard:      row[1].ToString(),
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		})
 	}
 	result.Participants = participants

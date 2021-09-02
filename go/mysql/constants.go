@@ -16,7 +16,13 @@ limitations under the License.
 
 package mysql
 
-import "strings"
+import (
+	"strings"
+
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
+)
 
 const (
 	// MaxPacketSize is the maximum payload length of a packet
@@ -28,20 +34,24 @@ const (
 	protocolVersion = 10
 )
 
+// AuthMethodDescription is the type for different supported and
+// implemented authentication methods.
+type AuthMethodDescription string
+
 // Supported auth forms.
 const (
 	// MysqlNativePassword uses a salt and transmits a hash on the wire.
-	MysqlNativePassword = "mysql_native_password"
+	MysqlNativePassword = AuthMethodDescription("mysql_native_password")
 
 	// MysqlClearPassword transmits the password in the clear.
-	MysqlClearPassword = "mysql_clear_password"
+	MysqlClearPassword = AuthMethodDescription("mysql_clear_password")
 
 	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
-	CachingSha2Password = "caching_sha2_password"
+	CachingSha2Password = AuthMethodDescription("caching_sha2_password")
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
-	MysqlDialog = "dialog"
+	MysqlDialog = AuthMethodDescription("dialog")
 )
 
 // Capability flags.
@@ -193,6 +203,9 @@ const (
 
 	// ComQuery is COM_QUERY.
 	ComQuery = 0x03
+
+	// ComFieldList is COM_Field_List.
+	ComFieldList = 0x04
 
 	// ComPing is COM_PING.
 	ComPing = 0x0e
@@ -516,6 +529,9 @@ const (
 	ERDataTooLong                  = 1406
 	ERForbidSchemaChange           = 1450
 	ERDataOutOfRange               = 1690
+
+	// server not available
+	ERServerIsntAvailable = 3168
 )
 
 // Sql states for errors.
@@ -526,9 +542,6 @@ const (
 	// const char *unknown_sqlstate= "HY000"
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
-
-	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
-	SSUnknownComError = "08S01"
 
 	// SSNetError is network related error
 	SSNetError = "08S01"
@@ -558,8 +571,11 @@ const (
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
 
-	//SSClientError is the state on client errors
+	// SSClientError is the state on client errors
 	SSClientError = "42000"
+
+	// SSDupFieldName is ER_DUP_FIELD_NAME
+	SSDupFieldName = "42S21"
 
 	// SSBadFieldError is ER_BAD_FIELD_ERROR
 	SSBadFieldError = "42S22"
@@ -624,6 +640,41 @@ var CharacterSetMap = map[string]uint8{
 	"geostd8":  92,
 	"cp932":    95,
 	"eucjpms":  97,
+}
+
+// CharacterSetEncoding maps a charset name to a golang encoder.
+// golang does not support encoders for all MySQL charsets.
+// A charset not in this map is unsupported.
+// A trivial encoding (e.g. utf8) has a `nil` encoder
+var CharacterSetEncoding = map[string]encoding.Encoding{
+	"cp850":   charmap.CodePage850,
+	"koi8r":   charmap.KOI8R,
+	"latin1":  charmap.Windows1252,
+	"latin2":  charmap.ISO8859_2,
+	"ascii":   nil,
+	"hebrew":  charmap.ISO8859_8,
+	"greek":   charmap.ISO8859_7,
+	"cp1250":  charmap.Windows1250,
+	"gbk":     simplifiedchinese.GBK,
+	"latin5":  charmap.ISO8859_9,
+	"utf8":    nil,
+	"cp866":   charmap.CodePage866,
+	"cp852":   charmap.CodePage852,
+	"latin7":  charmap.ISO8859_13,
+	"utf8mb4": nil,
+	"cp1251":  charmap.Windows1251,
+	"cp1256":  charmap.Windows1256,
+	"cp1257":  charmap.Windows1257,
+	"binary":  nil,
+}
+
+// ReverseCharacterSetMap maps a charset integer code to charset name
+var ReverseCharacterSetMap = map[uint8]string{}
+
+func init() {
+	for c, i := range CharacterSetMap {
+		ReverseCharacterSetMap[i] = c
+	}
 }
 
 // IsNum returns true if a MySQL type is a numeric value.

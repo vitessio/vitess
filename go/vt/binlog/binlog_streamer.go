@@ -22,9 +22,9 @@ import (
 	"io"
 	"strings"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -200,7 +200,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}
-		log.Infof("binlog stream client charset = %v, server charset = %v", *bls.clientCharset, cs)
+		log.Infof("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs)
 		if !proto.Equal(cs, bls.clientCharset) {
 			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", bls.clientCharset, cs)
 		}
@@ -322,7 +322,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		// tells us the size of the event header.
 		if format.IsZero() {
 			// The only thing that should come before the FORMAT_DESCRIPTION_EVENT
-			// is a fake ROTATE_EVENT, which the master sends to tell us the name
+			// is a fake ROTATE_EVENT, which the primary sends to tell us the name
 			// of the current log file.
 			if ev.IsRotate() {
 				continue

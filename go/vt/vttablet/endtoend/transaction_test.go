@@ -21,11 +21,12 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -304,7 +305,7 @@ func TestPrepareReparentCommit(t *testing.T) {
 	err = client.SetServingType(topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	// This should resurrect the prepared transaction.
-	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
 	err = client.CommitPrepared("aa")
 	require.NoError(t, err)
@@ -359,7 +360,7 @@ func TestShutdownGracePeriod(t *testing.T) {
 	}
 	assert.True(t, started)
 	start = time.Now()
-	err = client.SetServingType(topodatapb.TabletType_MASTER)
+	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
 	assert.True(t, time.Since(start) < 1*time.Second, time.Since(start))
 	client.Rollback()
@@ -418,11 +419,11 @@ func TestMMCommitFlow(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}, {
 			Keyspace:   "test2",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
 	utils.MustMatch(t, wantInfo, info, "ReadTransaction")
@@ -471,11 +472,11 @@ func TestMMRollbackFlow(t *testing.T) {
 		Participants: []*querypb.Target{{
 			Keyspace:   "test1",
 			Shard:      "0",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}, {
 			Keyspace:   "test2",
 			Shard:      "1",
-			TabletType: topodatapb.TabletType_MASTER,
+			TabletType: topodatapb.TabletType_PRIMARY,
 		}},
 	}
 	if !proto.Equal(info, wantInfo) {

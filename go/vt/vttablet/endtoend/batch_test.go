@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
@@ -27,13 +29,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
-)
-
-var mustMatch = utils.MustMatchFn(
-	[]interface{}{ // types with unexported fields
-		sqltypes.Value{},
-	},
-	[]string{}, // ignored fields
 )
 
 func TestBatchRead(t *testing.T) {
@@ -130,7 +125,7 @@ func TestBatchRead(t *testing.T) {
 
 	qrl, err := client.ExecuteBatch(queries, false)
 	require.NoError(t, err)
-	mustMatch(t, want, qrl)
+	utils.MustMatch(t, want, qrl)
 }
 
 func TestBatchTransaction(t *testing.T) {
@@ -185,7 +180,6 @@ func TestBatchTransaction(t *testing.T) {
 		require.NoError(t, err)
 		defer client.Rollback()
 		qrl, err = client.ExecuteBatch(queries, true)
-		want := "cannot start a new transaction in the scope of an existing one"
-		require.EqualError(t, err, want)
+		require.EqualError(t, mysql.NewSQLErrorFromError(err), "You are not allowed to execute this command in a transaction (errno 1179) (sqlstate 25000)")
 	}()
 }

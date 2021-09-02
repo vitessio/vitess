@@ -48,7 +48,12 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 	node.SelectExprs.formatFast(buf)
 	buf.WriteString(" from ")
 
-	node.From.formatFast(buf)
+	prefix := ""
+	for _, expr := range node.From {
+		buf.WriteString(prefix)
+		expr.formatFast(buf)
+		prefix = ", "
+	}
 
 	node.Where.formatFast(buf)
 
@@ -253,8 +258,9 @@ func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 		exists = "if exists "
 	}
 	buf.WriteString(DropStr)
-	buf.WriteString(" database ")
+	buf.WriteByte(' ')
 	node.Comments.formatFast(buf)
+	buf.WriteString("database ")
 	buf.WriteString(exists)
 	node.DBName.formatFast(buf)
 }
@@ -368,9 +374,18 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("revert vitess_migration '")
+	buf.WriteString("revert ")
+	node.Comments.formatFast(buf)
+	buf.WriteString("vitess_migration '")
 	buf.WriteString(node.UUID)
 	buf.WriteByte('\'')
+}
+
+// formatFast formats the node.
+func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_migration '")
+	buf.WriteString(node.UUID)
+	buf.WriteString("' logs")
 }
 
 // formatFast formats the node.
@@ -650,7 +665,7 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Collate)
 	}
-	if ct.Options.Null != nil {
+	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[NULL])
@@ -664,8 +679,17 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		buf.WriteByte(' ')
-		ct.Options.Default.formatFast(buf)
+		_, isLiteral := ct.Options.Default.(*Literal)
+		_, isBool := ct.Options.Default.(BoolVal)
+		_, isNullVal := ct.Options.Default.(*NullVal)
+		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
+		} else {
+			buf.WriteString(" (")
+			ct.Options.Default.formatFast(buf)
+			buf.WriteByte(')')
+		}
 	}
 	if ct.Options.OnUpdate != nil {
 		buf.WriteByte(' ')
@@ -674,6 +698,32 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(keywordStrings[UPDATE])
 		buf.WriteByte(' ')
 		ct.Options.OnUpdate.formatFast(buf)
+	}
+	if ct.Options.As != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[AS])
+		buf.WriteString(" (")
+		ct.Options.As.formatFast(buf)
+		buf.WriteByte(')')
+
+		if ct.Options.Storage == VirtualStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VIRTUAL])
+		} else if ct.Options.Storage == StoredStorage {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[STORED])
+		}
+		if ct.Options.Null != nil {
+			if *ct.Options.Null {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NULL])
+			} else {
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NOT])
+				buf.WriteByte(' ')
+				buf.WriteString(keywordStrings[NULL])
+			}
+		}
 	}
 	if ct.Options.Autoincrement {
 		buf.WriteByte(' ')
@@ -716,6 +766,10 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.KeyOpt == colKey {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[KEY])
+	}
+	if ct.Options.Reference != nil {
+		buf.WriteByte(' ')
+		ct.Options.Reference.formatFast(buf)
 	}
 }
 
@@ -835,18 +889,25 @@ func (a ReferenceAction) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (f *ForeignKeyDefinition) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("foreign key ")
+	f.IndexName.formatFast(buf)
 	f.Source.formatFast(buf)
-	buf.WriteString(" references ")
-	f.ReferencedTable.formatFast(buf)
 	buf.WriteByte(' ')
-	f.ReferencedColumns.formatFast(buf)
-	if f.OnDelete != DefaultAction {
+	f.ReferenceDefinition.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (ref *ReferenceDefinition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("references ")
+	ref.ReferencedTable.formatFast(buf)
+	buf.WriteByte(' ')
+	ref.ReferencedColumns.formatFast(buf)
+	if ref.OnDelete != DefaultAction {
 		buf.WriteString(" on delete ")
-		f.OnDelete.formatFast(buf)
+		ref.OnDelete.formatFast(buf)
 	}
-	if f.OnUpdate != DefaultAction {
+	if ref.OnUpdate != DefaultAction {
 		buf.WriteString(" on update ")
-		f.OnUpdate.formatFast(buf)
+		ref.OnUpdate.formatFast(buf)
 	}
 }
 
@@ -1147,7 +1208,10 @@ func (node *ParenTableExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JoinCondition) formatFast(buf *TrackedBuffer) {
+func (node *JoinCondition) formatFast(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.On != nil {
 		buf.WriteString(" on ")
 		node.On.formatFast(buf)
@@ -1260,9 +1324,9 @@ func (node *RangeCond) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *IsExpr) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Expr, true)
+	buf.printExpr(node, node.Left, true)
 	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
+	buf.WriteString(node.Right.ToString())
 }
 
 // formatFast formats the node.
@@ -1293,7 +1357,7 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node Argument) formatFast(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg(":", string(node))
 }
 
 // formatFast formats the node.
@@ -1342,7 +1406,7 @@ func (node *DerivedTable) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node ListArg) formatFast(buf *TrackedBuffer) {
-	buf.WriteArg(string(node))
+	buf.WriteArg("::", string(node))
 }
 
 // formatFast formats the node.
@@ -1815,6 +1879,7 @@ func (node *AlterDatabase) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *CreateTable) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("create ")
+	node.Comments.formatFast(buf)
 	if node.Temp {
 		buf.WriteString("temporary ")
 	}
@@ -1915,15 +1980,16 @@ func (node *AlterView) formatFast(buf *TrackedBuffer) {
 func (node *DropTable) formatFast(buf *TrackedBuffer) {
 	temp := ""
 	if node.Temp {
-		temp = " temporary"
+		temp = "temporary "
 	}
 	exists := ""
 	if node.IfExists {
 		exists = " if exists"
 	}
-	buf.WriteString("drop")
+	buf.WriteString("drop ")
+	node.Comments.formatFast(buf)
 	buf.WriteString(temp)
-	buf.WriteString(" table")
+	buf.WriteString("table")
 	buf.WriteString(exists)
 	buf.WriteByte(' ')
 	node.FromTables.formatFast(buf)
@@ -1943,7 +2009,9 @@ func (node *DropView) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the AlterTable node.
 func (node *AlterTable) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter table ")
+	buf.WriteString("alter ")
+	node.Comments.formatFast(buf)
+	buf.WriteString("table ")
 	node.Table.formatFast(buf)
 	prefix := ""
 	for i, option := range node.AlterOptions {
@@ -1981,9 +2049,8 @@ func (node *AddColumns) formatFast(buf *TrackedBuffer) {
 	if len(node.Columns) == 1 {
 		buf.WriteString("add column ")
 		node.Columns[0].formatFast(buf)
-		if node.First != nil {
-			buf.WriteString(" first ")
-			node.First.formatFast(buf)
+		if node.First {
+			buf.WriteString(" first")
 		}
 		if node.After != nil {
 			buf.WriteString(" after ")
@@ -2030,9 +2097,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 	node.OldColumn.formatFast(buf)
 	buf.WriteByte(' ')
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")
@@ -2044,9 +2110,8 @@ func (node *ChangeColumn) formatFast(buf *TrackedBuffer) {
 func (node *ModifyColumn) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("modify column ")
 	node.NewColDefinition.formatFast(buf)
-	if node.First != nil {
-		buf.WriteString(" first ")
-		node.First.formatFast(buf)
+	if node.First {
+		buf.WriteString(" first")
 	}
 	if node.After != nil {
 		buf.WriteString(" after ")

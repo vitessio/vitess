@@ -68,7 +68,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 		// If the shard already has sources, maybe it's already been restored,
 		// so let's be safe and abort right here.
 		if len(si.SourceShards) > 0 {
-			return fmt.Errorf("shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, *si.Shard)
+			return fmt.Errorf("shard %v/%v already has SourceShards, not overwriting them (full record: %v)", keyspace, shard, si.Shard)
 		}
 
 		si.SourceShards = sourceShards
@@ -86,10 +86,10 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 	if len(shardInfo.SourceShards) == 0 {
 		return fmt.Errorf("shard %v/%v has no source shard", keyspace, shard)
 	}
-	if !shardInfo.HasMaster() {
-		return fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	if !shardInfo.HasPrimary() {
+		return fmt.Errorf("shard %v/%v has no primary", keyspace, shard)
 	}
-	alias := shardInfo.MasterAlias
+	alias := shardInfo.PrimaryAlias
 	tabletInfo, err := wr.TopoServer().GetTablet(ctx, alias)
 	if err != nil {
 		return err
@@ -120,7 +120,7 @@ func (wr *Wrangler) WaitForFilteredReplication(ctx context.Context, keyspace, sh
 			return fmt.Errorf("no filtered replication running on tablet: %v health record: %v", alias, shr)
 		}
 
-		delaySecs := stats.SecondsBehindMasterFilteredReplication
+		delaySecs := stats.FilteredReplicationLagSeconds
 		lastSeenDelay = time.Duration(delaySecs) * time.Second
 		if lastSeenDelay < 0 {
 			return fmt.Errorf("last seen delay should never be negative. tablet: %v delay: %v", alias, lastSeenDelay)

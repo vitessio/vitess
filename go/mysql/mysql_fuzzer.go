@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -13,12 +16,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 package mysql
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -26,6 +29,8 @@ import (
 	"path"
 	"sync"
 	"time"
+
+	gofuzzheaders "github.com/AdaLogics/go-fuzz-headers"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -35,7 +40,7 @@ import (
 
 func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 	// Create a listener.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		fmt.Println("We got an error early on")
 		return nil, nil, nil
@@ -81,11 +86,9 @@ func createFuzzingSocketPair() (net.Listener, *Conn, *Conn) {
 type fuzztestRun struct{}
 
 func (t fuzztestRun) NewConnection(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ConnectionClosed(c *Conn) {
-	panic("implement me")
 }
 
 func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -93,11 +96,11 @@ func (t fuzztestRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Res
 }
 
 func (t fuzztestRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (t fuzztestRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	return nil
 }
 
 func (t fuzztestRun) WarningCount(c *Conn) uint16 {
@@ -105,7 +108,6 @@ func (t fuzztestRun) WarningCount(c *Conn) uint16 {
 }
 
 func (t fuzztestRun) ComResetConnection(c *Conn) {
-	panic("implement me")
 }
 
 var _ Handler = (*fuzztestRun)(nil)
@@ -117,8 +119,8 @@ type fuzztestConn struct {
 }
 
 func (t fuzztestConn) Read(b []byte) (n int, err error) {
-	for j, i := range t.queryPacket {
-		b[j] = i
+	for i := 0; i < len(b) && i < len(t.queryPacket); i++ {
+		b[i] = t.queryPacket[i]
 	}
 	return len(b), nil
 }
@@ -203,6 +205,7 @@ func FuzzHandleNextCommand(data []byte) int {
 		pos:         -1,
 		queryPacket: data,
 	})
+	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	handler := &fuzztestRun{}
 	_ = sConn.handleNextCommand(handler)
@@ -299,7 +302,33 @@ func (th *fuzzTestHandler) WarningCount(c *Conn) uint16 {
 	return th.warnings
 }
 
+func (c *Conn) writeFuzzedPacket(packet []byte) {
+	c.sequence = 0
+	data, pos := c.startEphemeralPacketWithHeader(len(packet) + 1)
+	copy(data[pos:], packet)
+	_ = c.writeEphemeralPacket()
+}
+
 func FuzzTLSServer(data []byte) int {
+	if len(data) < 40 {
+		return -1
+	}
+	// totalQueries is the number of queries the fuzzer
+	// makes in each fuzz iteration
+	totalQueries := 20
+	var queries [][]byte
+	c := gofuzzheaders.NewConsumer(data)
+	for i := 0; i < totalQueries; i++ {
+		query, err := c.GetBytes()
+		if err != nil {
+			return -1
+		}
+		if len(query) < 40 {
+			continue
+		}
+		queries = append(queries, query)
+	}
+
 	th := &fuzzTestHandler{}
 
 	authServer := NewAuthServerStatic("", "", 0)
@@ -307,15 +336,13 @@ func FuzzTLSServer(data []byte) int {
 		Password: "password1",
 	}}
 	defer authServer.close()
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
+	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false)
 	if err != nil {
 		return -1
 	}
 	defer l.Close()
-	host, err := os.Hostname()
-	if err != nil {
-		return -1
-	}
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
 	root, err := ioutil.TempDir("", "TestTLSServer")
 	if err != nil {
@@ -323,14 +350,15 @@ func FuzzTLSServer(data []byte) int {
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
-	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", host)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
 
 	serverConfig, err := vttls.ServerConfig(
 		path.Join(root, "server-cert.pem"),
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
-		"")
+		"",
+		tls.VersionTLS12)
 	if err != nil {
 		return -1
 	}
@@ -345,18 +373,19 @@ func FuzzTLSServer(data []byte) int {
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:   CapabilityClientSSL,
-		SslCa:   path.Join(root, "ca-cert.pem"),
-		SslCert: path.Join(root, "client-cert.pem"),
-		SslKey:  path.Join(root, "client-key.pem"),
+		SslMode:    vttls.VerifyIdentity,
+		SslCa:      path.Join(root, "ca-cert.pem"),
+		SslCert:    path.Join(root, "client-cert.pem"),
+		SslKey:     path.Join(root, "client-key.pem"),
+		ServerName: "server.example.com",
 	}
 	conn, err := Connect(context.Background(), params)
 	if err != nil {
 		return -1
 	}
-	_, err = conn.ExecuteFetch(string(data), 1000, true)
-	if err != nil {
-		return 0
+
+	for i := 0; i < len(queries); i++ {
+		conn.writeFuzzedPacket(queries[i])
 	}
 	return 1
 }

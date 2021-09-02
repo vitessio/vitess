@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	masterTablet  *cluster.Vttablet
+	primaryTablet *cluster.Vttablet
 	replicaTablet *cluster.Vttablet
 )
 
@@ -44,6 +44,6 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	_, err := prs(t, replicaTablet)
 	require.NoError(t, err)
 	validateTopology(t, false)
-	checkMasterTablet(t, replicaTablet)
-	confirmReplication(t, replicaTablet, []*cluster.Vttablet{masterTablet})
+	checkPrimaryTablet(t, replicaTablet)
+	confirmReplication(t, replicaTablet, []*cluster.Vttablet{primaryTablet})
 }

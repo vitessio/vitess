@@ -27,19 +27,86 @@ import (
 )
 
 var (
+	// DeleteSrvVSchema makes a DeleteSrvVSchema gRPC call to a vtctld.
+	DeleteSrvVSchema = &cobra.Command{
+		Use:                   "DeleteSrvVSchema <cell>",
+		Short:                 "Deletes the SrvVSchema object in the given cell.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandDeleteSrvVSchema,
+	}
+	// GetSrvKeyspaceNames makes a GetSrvKeyspaceNames gRPC call to a vtctld.
+	GetSrvKeyspaceNames = &cobra.Command{
+		Use:                   "GetSrvKeyspaceNames [<cell> ...]",
+		Short:                 "Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ArbitraryArgs,
+		RunE:                  commandGetSrvKeyspaceNames,
+	}
 	// GetSrvKeyspaces makes a GetSrvKeyspaces gRPC call to a vtctld.
 	GetSrvKeyspaces = &cobra.Command{
-		Use:  "GetSrvKeyspaces <keyspace> [<cell> ...]",
-		Args: cobra.MinimumNArgs(1),
-		RunE: commandGetSrvKeyspaces,
+		Use:                   "GetSrvKeyspaces <keyspace> [<cell> ...]",
+		Short:                 "Returns the SrvKeyspaces for the given keyspace in one or more cells.",
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandGetSrvKeyspaces,
+		DisableFlagsInUseLine: true,
 	}
 	// GetSrvVSchema makes a GetSrvVSchema gRPC call to a vtctld.
 	GetSrvVSchema = &cobra.Command{
-		Use:  "GetSrvVSchema cell",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetSrvVSchema,
+		Use:                   "GetSrvVSchema cell",
+		Short:                 "Returns the SrvVSchema for the given cell.",
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetSrvVSchema,
+		DisableFlagsInUseLine: true,
+	}
+	// GetSrvVSchemas makes a GetSrvVSchemas gRPC call to a vtctld.
+	GetSrvVSchemas = &cobra.Command{
+		Use:                   "GetSrvVSchemas [<cell> ...]",
+		Short:                 "Returns the SrvVSchema for all cells, optionally filtered by the given cells.",
+		Args:                  cobra.ArbitraryArgs,
+		RunE:                  commandGetSrvVSchemas,
+		DisableFlagsInUseLine: true,
+	}
+	// RebuildVSchemaGraph makes a RebuildVSchemaGraph gRPC call to a vtctld.
+	RebuildVSchemaGraph = &cobra.Command{
+		Use:                   "RebuildVSchemaGraph [--cells=c1,c2,...]",
+		Short:                 "Rebuilds the cell-specific SrvVSchema from the global VSchema objects in the provided cells (or all cells if none provided).",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.NoArgs,
+		RunE:                  commandRebuildVSchemaGraph,
 	}
 )
+
+func commandDeleteSrvVSchema(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cell := cmd.Flags().Arg(0)
+	_, err := client.DeleteSrvVSchema(commandCtx, &vtctldatapb.DeleteSrvVSchemaRequest{
+		Cell: cell,
+	})
+
+	return err
+}
+
+func commandGetSrvKeyspaceNames(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cells := cmd.Flags().Args()
+	resp, err := client.GetSrvKeyspaceNames(commandCtx, &vtctldatapb.GetSrvKeyspaceNamesRequest{
+		Cells: cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Names)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
 
 func commandGetSrvKeyspaces(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -87,7 +154,60 @@ func commandGetSrvVSchema(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandGetSrvVSchemas(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	cells := cmd.Flags().Args()[0:]
+
+	resp, err := client.GetSrvVSchemas(commandCtx, &vtctldatapb.GetSrvVSchemasRequest{
+		Cells: cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	// By default, an empty array will serialize as `null`, but `[]` is a little nicer.
+	data := []byte("[]")
+
+	if len(resp.SrvVSchemas) > 0 {
+		data, err = cli.MarshalJSON(resp.SrvVSchemas)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Printf("%s\n", data)
+
+	return nil
+}
+
+var rebuildVSchemaGraphOptions = struct {
+	Cells []string
+}{}
+
+func commandRebuildVSchemaGraph(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	_, err := client.RebuildVSchemaGraph(commandCtx, &vtctldatapb.RebuildVSchemaGraphRequest{
+		Cells: rebuildVSchemaGraphOptions.Cells,
+	})
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("RebuildVSchemaGraph: ok")
+
+	return nil
+}
+
 func init() {
+	Root.AddCommand(DeleteSrvVSchema)
+
+	Root.AddCommand(GetSrvKeyspaceNames)
 	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
+	Root.AddCommand(GetSrvVSchemas)
+
+	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets")
+	Root.AddCommand(RebuildVSchemaGraph)
 }

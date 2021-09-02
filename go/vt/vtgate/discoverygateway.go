@@ -17,14 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -54,7 +53,7 @@ func init() {
 	RegisterGatewayCreator(GatewayImplementationDiscovery, createDiscoveryGateway)
 }
 
-// DiscoveryGateway is the default Gateway implementation.
+// DiscoveryGateway is not the default Gateway implementation anymore.
 // This implementation uses the legacy healthcheck module.
 type DiscoveryGateway struct {
 	queryservice.QueryService
@@ -74,7 +73,7 @@ type DiscoveryGateway struct {
 	// keyspace/shard/tablet_type.
 	statusAggregators map[string]*TabletStatusAggregator
 
-	// buffer, if enabled, buffers requests during a detected MASTER failover.
+	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
 }
 
@@ -91,7 +90,7 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck,
 
 // NewDiscoveryGateway creates a new DiscoveryGateway using the provided healthcheck and toposerver.
 // cell is the cell where the gateway is located a.k.a localCell.
-// This gateway can route to MASTER in any cell provided by the cells_to_watch command line argument.
+// This gateway can route to PRIMARY in any cell provided by the cells_to_watch command line argument.
 // Other tablet type requests (REPLICA/RDONLY) are only routed to tablets in the same cell.
 func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtopo.Server, cell string, retryCount int) *DiscoveryGateway {
 	var topoServer *topo.Server
@@ -103,6 +102,8 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 	}
 
+	bufferCfg := buffer.NewConfigFromFlags()
+
 	dg := &DiscoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
@@ -111,10 +112,10 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		retryCount:        retryCount,
 		tabletsWatchers:   make([]*discovery.LegacyTopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
+		buffer:            buffer.New(bufferCfg),
 	}
 
-	// Set listener which will update LegacyTabletStatsCache and MasterBuffer.
+	// Set listener which will update LegacyTabletStatsCache and PrimaryBuffer.
 	// We set sendDownEvents=true because it's required by LegacyTabletStatsCache.
 	hc.SetListener(dg, true /* sendDownEvents */)
 
@@ -126,7 +127,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 		var recorder discovery.LegacyTabletRecorder = dg.hc
 		if len(discovery.TabletFilters) > 0 {
-			if len(discovery.KeyspacesToWatch) > 0 {
+			if discovery.FilteringKeyspaces() {
 				log.Exitf("Only one of -keyspaces_to_watch and -tablet_filters may be specified at a time")
 			}
 
@@ -135,7 +136,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			recorder = fbs
-		} else if len(discovery.KeyspacesToWatch) > 0 {
+		} else if discovery.FilteringKeyspaces() {
 			recorder = discovery.NewLegacyFilterByKeyspace(recorder, discovery.KeyspacesToWatch)
 		}
 
@@ -184,12 +185,12 @@ func (dg *DiscoveryGateway) topologyWatcherChecksum() int64 {
 	return checksum
 }
 
-// StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and MasterBuffer.
+// StatsUpdate forwards LegacyHealthCheck updates to LegacyTabletStatsCache and PrimaryBuffer.
 // It is part of the discovery.LegacyHealthCheckStatsListener interface.
 func (dg *DiscoveryGateway) StatsUpdate(ts *discovery.LegacyTabletStats) {
 	dg.tsc.StatsUpdate(ts)
 
-	if ts.Target.TabletType == topodatapb.TabletType_MASTER {
+	if ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
 		dg.buffer.StatsUpdate(ts)
 	}
 }
@@ -243,6 +244,11 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 	var err error
 	invalidTablets := make(map[string]bool)
 
+	if target == nil {
+		err = fmt.Errorf("withRetry called with nil target")
+		log.Errorf(err.Error())
+		return err
+	}
 	if len(discovery.AllowedTabletTypes) > 0 {
 		var match bool
 		for _, allowed := range discovery.AllowedTabletTypes {
@@ -258,12 +264,12 @@ func (dg *DiscoveryGateway) withRetry(ctx context.Context, target *querypb.Targe
 
 	bufferedOnce := false
 	for i := 0; i < dg.retryCount+1; i++ {
-		// Check if we should buffer MASTER queries which failed due to an ongoing
+		// Check if we should buffer PRIMARY queries which failed due to an ongoing
 		// failover.
 		// Note: We only buffer once and only "!inTransaction" queries i.e.
 		// a) no transaction is necessary (e.g. critical reads) or
 		// b) no transaction was created yet.
-		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_MASTER {
+		if !bufferedOnce && !inTransaction && target.TabletType == topodatapb.TabletType_PRIMARY {
 			// The next call blocks if we should buffer during a failover.
 			retryDone, bufferErr := dg.buffer.WaitForFailoverEnd(ctx, target.Keyspace, target.Shard, err)
 			if bufferErr != nil {
@@ -405,6 +411,6 @@ func (dg *DiscoveryGateway) getStatsAggregator(target *querypb.Target) *TabletSt
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (dg *DiscoveryGateway) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "DiscoveryGateway does not implement QueryServiceByAlias")
 }

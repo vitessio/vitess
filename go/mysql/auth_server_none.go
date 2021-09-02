@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"crypto/x509"
 	"net"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -27,32 +28,43 @@ import (
 // With this config, you can connect to a local vtgate using
 // the following command line: 'mysql -P port -h ::'.
 // It only uses MysqlNativePassword method.
-type AuthServerNone struct{}
-
-// AuthMethod is part of the AuthServer interface.
-// We always return MysqlNativePassword.
-func (a *AuthServerNone) AuthMethod(user string) (string, error) {
-	return MysqlNativePassword, nil
+type AuthServerNone struct {
+	methods []AuthMethod
 }
 
-// Salt makes salt
-func (a *AuthServerNone) Salt() ([]byte, error) {
-	return NewSalt()
+// AuthMethods returns the list of registered auth methods
+// implemented by this auth server.
+func (a *AuthServerNone) AuthMethods() []AuthMethod {
+	return a.methods
 }
 
-// ValidateHash validates hash
-func (a *AuthServerNone) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+// DefaultAuthMethodDescription returns MysqlNativePassword as the default
+// authentication method for the auth server implementation.
+func (a *AuthServerNone) DefaultAuthMethodDescription() AuthMethodDescription {
+	return MysqlNativePassword
+}
+
+// HandleUser validates if this user can use this auth method
+func (a *AuthServerNone) HandleUser(user string) bool {
+	return true
+}
+
+// UserEntryWithHash validates the user if it exists and returns the information.
+// Always accepts any user.
+func (a *AuthServerNone) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	return &NoneGetter{}, nil
 }
 
-// Negotiate is part of the AuthServer interface.
-// It will never be called.
-func (a *AuthServerNone) Negotiate(c *Conn, user string, remotAddr net.Addr) (Getter, error) {
-	panic("Negotiate should not be called as AuthMethod returned mysql_native_password")
+func init() {
+	a := NewAuthServerNone()
+	RegisterAuthServer("none", a)
 }
 
-func init() {
-	RegisterAuthServerImpl("none", &AuthServerNone{})
+// NewAuthServerNone returns an empty auth server. Always accepts all clients.
+func NewAuthServerNone() *AuthServerNone {
+	a := &AuthServerNone{}
+	a.methods = []AuthMethod{NewMysqlNativeAuthMethod(a, a)}
+	return a
 }
 
 // NoneGetter holds the empty string

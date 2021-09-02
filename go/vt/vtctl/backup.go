@@ -40,7 +40,7 @@ func init() {
 	addCommand("Shards", command{
 		"BackupShard",
 		commandBackupShard,
-		"[-allow_master=false] <keyspace/shard>",
+		"[-allow_primary=false] <keyspace/shard>",
 		"Chooses a tablet and creates a backup for a shard."})
 	addCommand("Shards", command{
 		"RemoveBackup",
@@ -51,7 +51,7 @@ func init() {
 	addCommand("Tablets", command{
 		"Backup",
 		commandBackup,
-		"[-concurrency=4] [-allow_master=false] <tablet alias>",
+		"[-concurrency=4] [-allow_primary=false] <tablet alias>",
 		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
 	addCommand("Tablets", command{
 		"RestoreFromBackup",
@@ -62,7 +62,11 @@ func init() {
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
-	allowMaster := subFlags.Bool("allow_master", false, "Allows backups to be taken on master. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
+
+	// handle deprecated flags
+	// should be deleted in a future release
+	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -79,13 +83,20 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
+	if *deprecatedAllowMaster {
+		*allowPrimary = *deprecatedAllowMaster
+	}
 
-	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowMaster)
+	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowPrimary)
 }
 
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
-	allowMaster := subFlags.Bool("allow_master", false, "Whether to use master tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your master mysql for as long as it takes to create a backup ")
+	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
+
+	// handle deprecated flags
+	// should be deleted in a future release
+	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -117,26 +128,26 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		// choose the first tablet as the baseline
 		if tabletForBackup == nil {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 			continue
 		}
 
 		// choose a new tablet if it is more up to date
-		if stats[i].SecondsBehindMaster < secondsBehind {
+		if stats[i].ReplicationLagSeconds < secondsBehind {
 			tabletForBackup = tablets[i].Tablet
-			secondsBehind = stats[i].SecondsBehindMaster
+			secondsBehind = stats[i].ReplicationLagSeconds
 		}
 	}
 
-	// if no other tablet is available and allowMaster is set to true
-	if tabletForBackup == nil && *allowMaster {
-	ChooseMaster:
+	// if no other tablet is available and allowPrimary is set to true
+	if tabletForBackup == nil && *allowPrimary {
+	ChooseTablet:
 		for i := range tablets {
 			switch tablets[i].Type {
-			case topodatapb.TabletType_MASTER:
+			case topodatapb.TabletType_PRIMARY:
 				tabletForBackup = tablets[i].Tablet
 				secondsBehind = 0 //nolint
-				break ChooseMaster
+				break ChooseTablet
 			default:
 				continue
 			}
@@ -147,12 +158,16 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return errors.New("no tablet available for backup")
 	}
 
-	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowMaster)
+	if *deprecatedAllowMaster {
+		*allowPrimary = *deprecatedAllowMaster
+	}
+
+	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowPrimary)
 }
 
 // execBackup is shared by Backup and BackupShard
-func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowMaster bool) error {
-	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowMaster)
+func execBackup(ctx context.Context, wr *wrangler.Wrangler, tablet *topodatapb.Tablet, concurrency int, allowPrimary bool) error {
+	stream, err := wr.TabletManagerClient().Backup(ctx, tablet, concurrency, allowPrimary)
 	if err != nil {
 		return err
 	}

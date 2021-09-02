@@ -16,37 +16,117 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 import { Link } from 'react-router-dom';
-import { TableDefinition, useTableDefinitions } from '../../hooks/api';
+
+import { useSchemas } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+import { useSyncedURLParam } from '../../hooks/useSyncedURLParam';
+import { filterNouns } from '../../util/filterNouns';
+import { formatBytes } from '../../util/formatBytes';
+import { getTableDefinitions } from '../../util/tableDefinitions';
+import { DataCell } from '../dataTable/DataCell';
+import { DataFilter } from '../dataTable/DataFilter';
 import { DataTable } from '../dataTable/DataTable';
+import { ContentContainer } from '../layout/ContentContainer';
+import { WorkspaceHeader } from '../layout/WorkspaceHeader';
+import { WorkspaceTitle } from '../layout/WorkspaceTitle';
+import { KeyspaceLink } from '../links/KeyspaceLink';
+import { HelpTooltip } from '../tooltip/HelpTooltip';
+
+const TABLE_COLUMNS = [
+    'Keyspace',
+    'Table',
+    <div className="text-align-right">
+        Approx. Size{' '}
+        <HelpTooltip
+            text={
+                <span>
+                    Size is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>.
+                </span>
+            }
+        />
+    </div>,
+    <div className="text-align-right">
+        Approx. Rows{' '}
+        <HelpTooltip
+            text={
+                // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
+                <span>
+                    Row count is an approximate value derived from{' '}
+                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>. Actual values may vary by as much
+                    as 40% to 50%.
+                </span>
+            }
+        />
+    </div>,
+];
 
 export const Schemas = () => {
     useDocumentTitle('Schemas');
-    const { data = [] } = useTableDefinitions();
 
-    const rows = React.useMemo(() => {
-        return orderBy(data, ['cluster.name', 'keyspace', 'tableDefinition.name']);
-    }, [data]);
+    const { data = [] } = useSchemas();
+    const { value: filter, updateValue: updateFilter } = useSyncedURLParam('filter');
 
-    const renderRows = (rows: TableDefinition[]) =>
+    const filteredData = React.useMemo(() => {
+        const tableDefinitions = getTableDefinitions(data);
+
+        const mapped = tableDefinitions.map((d) => ({
+            cluster: d.cluster?.name,
+            clusterID: d.cluster?.id,
+            keyspace: d.keyspace,
+            table: d.tableDefinition?.name,
+            _raw: d,
+        }));
+
+        const filtered = filterNouns(filter, mapped);
+        return orderBy(filtered, ['cluster', 'keyspace', 'table']);
+    }, [data, filter]);
+
+    const renderRows = (rows: typeof filteredData) =>
         rows.map((row, idx) => {
             const href =
-                row.cluster?.id && row.keyspace && row.tableDefinition?.name
-                    ? `/schema/${row.cluster.id}/${row.keyspace}/${row.tableDefinition.name}`
+                row.clusterID && row.keyspace && row.table
+                    ? `/schema/${row.clusterID}/${row.keyspace}/${row.table}`
                     : null;
             return (
                 <tr key={idx}>
-                    <td>{row.cluster?.name}</td>
-                    <td>{row.keyspace}</td>
-                    <td>{href ? <Link to={href}>{row.tableDefinition?.name}</Link> : row.tableDefinition?.name}</td>
+                    <DataCell>
+                        <KeyspaceLink clusterID={row.clusterID} name={row.keyspace}>
+                            <div>{row.keyspace}</div>
+                            <div className="font-size-small text-color-secondary">{row.cluster}</div>
+                        </KeyspaceLink>
+                    </DataCell>
+                    <DataCell className="font-weight-bold">
+                        {href ? <Link to={href}>{row.table}</Link> : row.table}
+                    </DataCell>
+                    <DataCell className="text-align-right">
+                        <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
+                        <div className="font-size-small text-color-secondary">
+                            {formatBytes(row._raw.tableSize?.data_length, 'B')}
+                        </div>
+                    </DataCell>
+                    <DataCell className="text-align-right">
+                        {(row._raw.tableSize?.row_count || 0).toLocaleString()}
+                    </DataCell>
                 </tr>
             );
         });
 
     return (
-        <div className="max-width-content">
-            <h1>Schemas</h1>
-            <DataTable columns={['Cluster', 'Keyspace', 'Table']} data={rows} renderRows={renderRows} />
+        <div>
+            <WorkspaceHeader>
+                <WorkspaceTitle>Schemas</WorkspaceTitle>
+            </WorkspaceHeader>
+            <ContentContainer>
+                <DataFilter
+                    autoFocus
+                    onChange={(e) => updateFilter(e.target.value)}
+                    onClear={() => updateFilter('')}
+                    placeholder="Filter schemas"
+                    value={filter || ''}
+                />
+                <DataTable columns={TABLE_COLUMNS} data={filteredData} renderRows={renderRows} />
+            </ContentContainer>
         </div>
     );
 };

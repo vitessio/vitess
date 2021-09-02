@@ -48,6 +48,9 @@ var (
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
 	forcePortStart     = flag.Int("force-port-start", 0, "force assigning ports based on this seed")
 	forceBaseTabletUID = flag.Int("force-base-tablet-uid", 0, "force assigning tablet ports based on this seed")
+
+	// PerfTest controls whether to run the slower end-to-end tests that check the system's performance
+	PerfTest = flag.Bool("perf-test", false, "include end-to-end performance tests")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -113,6 +116,7 @@ type Vttablet struct {
 	MysqlctlProcess  MysqlctlProcess
 	MysqlctldProcess MysqlctldProcess
 	VttabletProcess  *VttabletProcess
+	VtgrProcess      *VtgrProcess
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -129,8 +133,8 @@ type Shard struct {
 	Vttablets []*Vttablet
 }
 
-// MasterTablet get the 1st tablet which is master
-func (shard *Shard) MasterTablet() *Vttablet {
+// PrimaryTablet get the 1st tablet which is always elected as primary
+func (shard *Shard) PrimaryTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
@@ -145,7 +149,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 }
 
 // Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica, rdonly]
+// Mostly we have either 3 tablet setup [primary, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {
@@ -228,12 +232,12 @@ func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, re
 // StartKeyspace starts required number of shard and the corresponding tablets
 // keyspace : struct containing keyspace name, Sqlschema to apply, VSchema to apply
 // shardName : list of shard names
-// replicaCount: total number of replicas excluding master and rdonly
+// replicaCount: total number of replicas excluding shard primary and rdonly
 // rdonly: whether readonly tablets needed
 // customizers: functions like "func(*VttabletProcess)" that can modify settings of various objects
 // after they're created.
 func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames []string, replicaCount int, rdonly bool, customizers ...interface{}) (err error) {
-	totalTabletsRequired := replicaCount + 1 // + 1 is for master
+	totalTabletsRequired := replicaCount + 1 // + 1 is for primary
 	if rdonly {
 		totalTabletsRequired = totalTabletsRequired + 1 // + 1 for rdonly
 	}
@@ -260,7 +264,10 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				MySQLPort: cluster.GetAndReservePort(),
 				Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, tabletUID),
 			}
-			if i == 0 { // Make the first one as master
+			if i == 0 { // Make the first one as primary
+				// version_upgrade test depends on using older binaries
+				// which means we cannot use the new PRIMARY tabletType here
+				// TODO(deepthi): fix after v12.0
 				tablet.Type = "master"
 			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
 				tablet.Type = "rdonly"
@@ -327,8 +334,8 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 		}
 
-		// Make first tablet as master
-		if err = cluster.VtctlclientProcess.InitShardMaster(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
+		// Make first tablet as primary
+		if err = cluster.VtctlclientProcess.InitShardPrimary(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			log.Errorf("error running ISM on keyspace %v, shard %v: %v", keyspace.Name, shardName, err)
 			return
 		}
@@ -446,6 +453,9 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		cluster.Cell,
 		cluster.Cell,
 		cluster.Hostname,
+		// version_upgrade test depends on using older binaries
+		// which means we cannot use the new PRIMARY tablet_type here
+		// TODO(deepthi): fix after v12.0
 		"MASTER,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
@@ -496,7 +506,7 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			isRdOnlyPresent = false
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name), 1); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
 			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {
@@ -576,6 +586,9 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
 		log.Errorf("Error in topo server teardown: %v", err)
 	}
+
+	// reset the VTDATAROOT path.
+	os.Setenv("VTDATAROOT", cluster.OriginalVTDATAROOT)
 
 	cluster.teardownCompleted = true
 }
@@ -718,6 +731,19 @@ func (cluster *LocalProcessCluster) NewOrcProcess(configFile string) *VtorcProce
 		VtctlProcess: *base,
 		LogDir:       cluster.TmpDirectory,
 		Config:       configFile,
+	}
+}
+
+// NewVtgrProcess creates a new VtgrProcess object
+func (cluster *LocalProcessCluster) NewVtgrProcess(clusters []string, config string, grPort int) *VtgrProcess {
+	base := VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+	base.Binary = "vtgr"
+	return &VtgrProcess{
+		VtctlProcess: *base,
+		LogDir:       cluster.TmpDirectory,
+		clusters:     clusters,
+		config:       config,
+		grPort:       grPort,
 	}
 }
 

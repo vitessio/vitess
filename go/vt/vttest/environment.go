@@ -116,7 +116,7 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 	}
 
 	mycnf := []string{}
-	mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
+	mycnf = append(mycnf, "config/mycnf/test-suite.cnf")
 
 	for i, cnf := range mycnf {
 		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)
@@ -184,7 +184,7 @@ func (env *LocalTestEnv) ProcessHealthCheck(name string) HealthChecker {
 func (env *LocalTestEnv) VtcomboArguments() []string {
 	return []string{
 		"-service_map", strings.Join(
-			[]string{"grpc-vtgateservice", "grpc-vtctl"}, ",",
+			[]string{"grpc-vtgateservice", "grpc-vtctl", "grpc-vtctld"}, ",",
 		),
 		"-enable_queries",
 	}

@@ -45,11 +45,11 @@ var (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 
-	master        *cluster.Vttablet
+	primary       *cluster.Vttablet
 	replica       *cluster.Vttablet
-	shard0Master  *cluster.Vttablet
+	shard0Primary *cluster.Vttablet
 	shard0Replica *cluster.Vttablet
-	shard1Master  *cluster.Vttablet
+	shard1Primary *cluster.Vttablet
 	shard1Replica *cluster.Vttablet
 
 	cell           = "zone1"
@@ -131,16 +131,16 @@ func initializeCluster(t *testing.T) {
 	}
 
 	// Defining all the tablets
-	master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	primary = clusterInstance.NewVttabletInstance("replica", 0, "")
 	replica = clusterInstance.NewVttabletInstance("replica", 0, "")
-	shard0Master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard0Primary = clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard0Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
-	shard1Master = clusterInstance.NewVttabletInstance("replica", 0, "")
+	shard1Primary = clusterInstance.NewVttabletInstance("replica", 0, "")
 	shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, "")
 
-	shard.Vttablets = []*cluster.Vttablet{master, replica}
-	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica}
-	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica}
+	shard.Vttablets = []*cluster.Vttablet{primary, replica}
+	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica}
+	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica}
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
@@ -172,7 +172,7 @@ func initializeCluster(t *testing.T) {
 		"FLUSH PRIVILEGES;",
 	}
 
-	for _, tablet := range []*cluster.Vttablet{master, replica, shard0Master, shard0Replica, shard1Master, shard1Replica} {
+	for _, tablet := range []*cluster.Vttablet{primary, replica, shard0Primary, shard0Replica, shard1Primary, shard1Replica} {
 		for _, query := range queryCmds {
 			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
 			require.NoError(t, err)
@@ -182,7 +182,7 @@ func initializeCluster(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
 	require.NoError(t, err)
 
 	// Start vtgate
@@ -220,8 +220,8 @@ func createRestoreKeyspace(t *testing.T, timeToRecover, restoreKeyspaceName stri
 // Test pitr (Point in time recovery).
 // -------------------------------------------
 // The following test will:
-// - create a shard with master and replica
-// - run InitShardMaster
+// - create a shard with primary and replica
+// - run InitShardPrimary
 // - insert some data using vtgate (e.g. here we have inserted rows 1,2)
 // - verify the replication
 // - take backup of replica
@@ -244,7 +244,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	// Creating the table
-	_, err := master.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
+	_, err := primary.VttabletProcess.QueryTablet(createTable, keyspaceName, true)
 	require.NoError(t, err)
 
 	insertRow(t, 1, "prd-1", false)
@@ -278,7 +278,7 @@ func TestTLSPITRRecovery(t *testing.T) {
 	//   original mysql replica, which we use as a binlog source
 	createRestoreKeyspace(t, restoreTime1, restoreKS1Name)
 
-	// Launching a recovery tablet which recovers data from the master till the restoreTime1
+	// Launching a recovery tablet which recovers data from the primary till the restoreTime1
 	tlsTestTabletRecovery(t, replica, "2m", restoreKS1Name, "0", "INT64(4)")
 
 	// starting resharding process
@@ -404,10 +404,10 @@ func tlsPerformResharding(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "ks/-80", shard0Master.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/-80", shard0Primary.Alias)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardMaster", "-force", "ks/80-", shard1Master.Alias)
+	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "-force", "ks/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
 	// we need to create the schema, and the worker will do data copying
@@ -425,18 +425,18 @@ func tlsPerformResharding(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "-tablet_type=replica", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	// then serve master from the split shards
+	// then serve primary from the split shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchWrites", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
-	removeTablets(t, []*cluster.Vttablet{master, replica})
+	removeTablets(t, []*cluster.Vttablet{primary, replica})
 
 	for _, tablet := range []*cluster.Vttablet{replica} {
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 		require.NoError(t, err)
 	}
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary", primary.Alias)
 	require.NoError(t, err)
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
@@ -522,7 +522,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 	err = tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
 
-	tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
+	tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
 }
 
 func getCNFromCertPEM(filename string) string {

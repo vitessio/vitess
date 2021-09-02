@@ -53,7 +53,7 @@ func CreateFakeServers(t *testing.T) (*tabletconntest.FakeQueryService, *topo.Se
 		Serving:                             true,
 		TabletExternallyReparentedTimestamp: 1234589,
 		RealtimeStats: &querypb.RealtimeStats{
-			SecondsBehindMaster: 1,
+			ReplicationLagSeconds: 1,
 		},
 	}
 

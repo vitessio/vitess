@@ -83,6 +83,7 @@ deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
+	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
 	hostname              = "localhost"
@@ -158,7 +159,9 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtctldExtraArgs = []string{
 			"-schema_change_dir", schemaChangeDirectory,
 			"-schema_change_controller", "local",
-			"-schema_change_check_interval", "1"}
+			"-schema_change_check_interval", "1",
+			"-online_ddl_check_interval", "3s",
+		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
 			"-enable-lag-throttler",
@@ -212,7 +215,7 @@ func TestMain(m *testing.M) {
 
 func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	shards := clusterInstance.Keyspaces[0].Shards
+	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
 	var uuids []string
@@ -469,18 +472,19 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 		}
 	} else {
 		var err error
-		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, ddlStrategy)
+		uuid, err = clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		assert.NoError(t, err)
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	strategy, _, err := schema.ParseDDLStrategy(ddlStrategy)
+	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if !strategy.IsDirect() {
-		time.Sleep(time.Second * 20)
+	if !strategySetting.Strategy.IsDirect() {
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
 	if expectHint != "" {
@@ -644,7 +648,7 @@ func runSingleConnection(ctx context.Context, t *testing.T, done *int64) {
 			err = generateDelete(t, conn)
 		}
 		if err != nil {
-			if strings.Contains(err.Error(), "disallowed due to rule: enforce blacklisted tables") {
+			if strings.Contains(err.Error(), "disallowed due to rule: enforce denied tables") {
 				err = nil
 			}
 		}

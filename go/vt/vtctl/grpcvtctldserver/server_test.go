@@ -20,14 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -61,6 +64,419 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+}
+
+func TestAddCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		req       *vtctldatapb.AddCellInfoRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone2",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":2222",
+					Root:          "/zone2",
+				},
+			},
+		},
+		{
+			name: "cell already exists",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "no cell root",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.AddCellInfoRequest{
+				Name: "zone2",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":2222",
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.AddCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ci, err := tt.ts.GetCellInfo(ctx, tt.req.Name, true)
+			require.NoError(t, err, "failed to read new cell %s from topo", tt.req.Name)
+			utils.MustMatch(t, tt.req.CellInfo, ci)
+		})
+	}
+}
+
+func TestAddCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		setup     func(ts *topo.Server) error
+		req       *vtctldatapb.AddCellsAliasRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2", "zone3"),
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+		},
+		{
+			name: "alias exists",
+			ts:   memorytopo.NewServer("zone1", "zone2", "zone3"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "alias overlaps",
+			ts:   memorytopo.NewServer("zone1", "zone2", "zone3"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(context.Background(), "zone_a", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone3"},
+				})
+			},
+			req: &vtctldatapb.AddCellsAliasRequest{
+				Name:  "zone_b",
+				Cells: []string{"zone1", "zone2", "zone3"},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				err := tt.setup(tt.ts)
+				require.NoError(t, err, "test setup failed")
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.AddCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ca, err := tt.ts.GetCellsAlias(ctx, tt.req.Name, true)
+			require.NoError(t, err, "failed to read new cells alias %s from topo", tt.req.Name)
+			utils.MustMatch(t, &topodatapb.CellsAlias{Cells: tt.req.Cells}, ca)
+		})
+	}
+}
+
+func TestApplyRoutingRules(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name          string
+		cells         []string
+		req           *vtctldatapb.ApplyRoutingRulesRequest
+		expectedRules *vschemapb.RoutingRules
+		topoDown      bool
+		shouldErr     bool
+	}{
+		{
+			name:  "success",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+		},
+		{
+			name:  "rebuild failed (bad cell)",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			shouldErr: true,
+		},
+		{
+			// this test case is exactly like the previous, but we don't fail
+			// because we don't rebuild the vschema graph (which would fail the
+			// way we've set up the test case with the bogus cell).
+			name:  "rebuild skipped",
+			cells: []string{"zone1"},
+			req: &vtctldatapb.ApplyRoutingRulesRequest{
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{
+						{
+							FromTable: "t1",
+							ToTables:  []string{"t1", "t2"},
+						},
+					},
+				},
+				SkipRebuild:  true,
+				RebuildCells: []string{"zone1", "zone2"},
+			},
+			expectedRules: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t1", "t2"},
+					},
+				},
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "topo down",
+			cells:     []string{"zone1"},
+			req:       &vtctldatapb.ApplyRoutingRulesRequest{},
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory(tt.cells...)
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.ApplyRoutingRules(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err, "ApplyRoutingRules(%+v) failed", tt.req)
+
+			rr, err := ts.GetRoutingRules(ctx)
+			require.NoError(t, err, "failed to get routing rules from topo to compare")
+			utils.MustMatch(t, tt.expectedRules, rr)
+		})
+	}
+}
+
+func TestApplyVSchema(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		req       *vtctldatapb.ApplyVSchemaRequest
+		exp       *vtctldatapb.ApplyVSchemaResponse
+		shouldErr bool
+	}{
+		{
+			name: "normal",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+			},
+			shouldErr: false,
+		}, {
+			name: "skip rebuild",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				SkipRebuild: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+			},
+			shouldErr: false,
+		}, {
+			name: "both",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				Sql: "some vschema ddl here",
+			},
+			shouldErr: true,
+		}, {
+			name: "neither",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+			},
+			shouldErr: true,
+		}, {
+			name: "dry run",
+			req: &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: "testkeyspace",
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+				DryRun: true,
+			},
+			exp: &vtctldatapb.ApplyVSchemaResponse{
+				VSchema: &vschemapb.Keyspace{
+					Sharded: false,
+				},
+			},
+			shouldErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts := memorytopo.NewServer("zone1")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+				Name: tt.req.Keyspace,
+				Keyspace: &topodatapb.Keyspace{
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				},
+			})
+
+			origVSchema := &vschemapb.Keyspace{
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"v1": {
+						Type: "hash",
+					},
+				},
+			}
+			err := ts.SaveVSchema(ctx, tt.req.Keyspace, origVSchema)
+			require.NoError(t, err)
+
+			origSrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded: true,
+						Vindexes: map[string]*vschemapb.Vindex{
+							"v1": {
+								Type: "hash",
+							},
+						},
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+			err = ts.UpdateSrvVSchema(ctx, "zone1", origSrvVSchema)
+			require.NoError(t, err)
+
+			res, err := vtctld.ApplyVSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.exp, res)
+
+			if tt.req.DryRun {
+				actual, err := ts.GetVSchema(ctx, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, origVSchema, actual)
+			}
+
+			finalSrvVSchema, err := ts.GetSrvVSchema(ctx, "zone1")
+			require.NoError(t, err)
+
+			if tt.req.SkipRebuild || tt.req.DryRun {
+				utils.MustMatch(t, origSrvVSchema, finalSrvVSchema)
+			} else {
+				changedSrvVSchema := &vschemapb.SrvVSchema{
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"testkeyspace": {
+							Sharded: false,
+						},
+					},
+					RoutingRules: &vschemapb.RoutingRules{
+						Rules: []*vschemapb.RoutingRule{},
+					},
+				}
+				utils.MustMatch(t, changedSrvVSchema, finalSrvVSchema)
+			}
+		})
+	}
 }
 
 func TestChangeTabletType(t *testing.T) {
@@ -174,7 +590,7 @@ func TestChangeTabletType(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name:  "master promotions not allowed",
+			name:  "primary promotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -190,13 +606,13 @@ func TestChangeTabletType(t *testing.T) {
 					Cell: "zone1",
 					Uid:  100,
 				},
-				DbType: topodatapb.TabletType_MASTER,
+				DbType: topodatapb.TabletType_PRIMARY,
 			},
 			expected:  nil,
 			shouldErr: true,
 		},
 		{
-			name:  "master demotions not allowed",
+			name:  "primary demotions not allowed",
 			cells: []string{"zone1"},
 			tablets: []*topodatapb.Tablet{
 				{
@@ -204,7 +620,7 @@ func TestChangeTabletType(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
+					Type: topodatapb.TabletType_PRIMARY,
 				},
 			},
 			req: &vtctldatapb.ChangeTabletTypeRequest{
@@ -240,7 +656,7 @@ func TestChangeTabletType(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 
 			// If we are testing a dry-run, then the tablet in the actual
 			// topo should match the BeforeTablet in the response. Otherwise,
@@ -261,7 +677,7 @@ func TestChangeTabletType(t *testing.T) {
 				resp.AfterTablet.Type,
 				resp.WasDryRun,
 			)
-			assert.Equal(t, expectedRealType, tablet.Type, msg)
+			utils.MustMatch(t, expectedRealType, tablet.Type, msg)
 		})
 	}
 
@@ -566,7 +982,7 @@ func TestCreateKeyspace(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expectedVSchema, vs)
+			utils.MustMatch(t, tt.expectedVSchema, vs)
 		})
 	}
 }
@@ -606,8 +1022,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -633,8 +1049,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -696,8 +1112,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: false,
@@ -755,8 +1171,8 @@ func TestCreateShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 				ShardAlreadyExists: true,
@@ -787,7 +1203,6 @@ func TestCreateShard(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
 			if tt.req == nil {
 				t.Skip("focusing on other tests")
 			}
@@ -815,7 +1230,117 @@ func TestCreateShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestDeleteCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		req       *vtctldatapb.DeleteCellInfoRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2"),
+			req: &vtctldatapb.DeleteCellInfoRequest{
+				Name: "zone2",
+			},
+		},
+		{
+			name: "cell does not exist",
+			ts:   memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.DeleteCellInfoRequest{
+				Name: "zone2",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.DeleteCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ci, err := tt.ts.GetCellInfo(ctx, tt.req.Name, true)
+			assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell %s to no longer exist; found %+v", tt.req.Name, ci)
+		})
+	}
+}
+
+func TestDeleteCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		setup     func(ts *topo.Server) error
+		req       *vtctldatapb.DeleteCellsAliasRequest
+		shouldErr bool
+	}{
+		{
+			ts: memorytopo.NewServer("zone1", "zone2"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.DeleteCellsAliasRequest{
+				Name: "zone",
+			},
+		},
+		{
+			name: "alias does not exist",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			setup: func(ts *topo.Server) error {
+				return ts.CreateCellsAlias(ctx, "zone_a", &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				})
+			},
+			req: &vtctldatapb.DeleteCellsAliasRequest{
+				Name: "zone_b",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.setup != nil {
+				err := tt.setup(tt.ts)
+				require.NoError(t, err, "test setup failed")
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.DeleteCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			ca, err := tt.ts.GetCellsAlias(ctx, tt.req.Name, true)
+			assert.True(t, topo.IsErrType(err, topo.NoNode), "expected cell alias %s to no longer exist; found %+v", tt.req.Name, ca)
 		})
 	}
 }
@@ -1010,7 +1535,7 @@ func TestDeleteKeyspace(t *testing.T) {
 					remainingShards[ks] = shards
 				}
 
-				assert.Equal(t, tt.expectedRemainingShards, remainingShards)
+				utils.MustMatch(t, tt.expectedRemainingShards, remainingShards)
 			}()
 
 			resp, err := vtctld.DeleteKeyspace(ctx, tt.req)
@@ -1021,7 +1546,7 @@ func TestDeleteKeyspace(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -1159,7 +1684,7 @@ func TestDeleteShards(t *testing.T) {
 					"testkeyspace": &topodatapb.SrvKeyspace{
 						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 							{
-								ServedType: topodatapb.TabletType_MASTER,
+								ServedType: topodatapb.TabletType_PRIMARY,
 								ShardReferences: []*topodatapb.ShardReference{
 									{
 										Name:     "-",
@@ -1203,7 +1728,7 @@ func TestDeleteShards(t *testing.T) {
 					"testkeyspace": &topodatapb.SrvKeyspace{
 						Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
 							{
-								ServedType: topodatapb.TabletType_MASTER,
+								ServedType: topodatapb.TabletType_PRIMARY,
 								ShardReferences: []*topodatapb.ShardReference{
 									{
 										Name:     "-",
@@ -1449,7 +1974,109 @@ func TestDeleteShards(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestDeleteSrvKeyspace(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		vschemas  map[string]*vschemapb.SrvVSchema
+		req       *vtctldatapb.DeleteSrvVSchemaRequest
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			vschemas: map[string]*vschemapb.SrvVSchema{
+				"zone1": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {},
+						"ks2": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+				"zone2": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks3": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+			},
+			req: &vtctldatapb.DeleteSrvVSchemaRequest{
+				Cell: "zone2",
+			},
+		},
+		{
+			name: "cell not found",
+			vschemas: map[string]*vschemapb.SrvVSchema{
+				"zone1": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks1": {},
+						"ks2": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+				"zone2": {
+					Keyspaces: map[string]*vschemapb.Keyspace{
+						"ks3": {},
+					},
+					RoutingRules: &vschemapb.RoutingRules{Rules: []*vschemapb.RoutingRule{}},
+				},
+			},
+			req: &vtctldatapb.DeleteSrvVSchemaRequest{
+				Cell: "zone404",
+			},
+			shouldErr: true,
+		},
+		{
+			name:      "empty cell argument",
+			req:       &vtctldatapb.DeleteSrvVSchemaRequest{},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.vschemas))
+			finalVSchemas := make(map[string]*vschemapb.SrvVSchema, len(tt.vschemas)) // the set of vschemas that should be left after the Delete
+			for cell, vschema := range tt.vschemas {
+				cells = append(cells, cell)
+
+				if cell == tt.req.Cell {
+					vschema = nil
+				}
+
+				finalVSchemas[cell] = vschema
+			}
+
+			ts := memorytopo.NewServer(cells...)
+			for cell, vschema := range tt.vschemas {
+				err := ts.UpdateSrvVSchema(ctx, cell, vschema)
+				require.NoError(t, err, "failed to update SrvVSchema in cell = %v, vschema = %+v", cell, vschema)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.DeleteSrvVSchema(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+
+			resp, err := vtctld.GetSrvVSchemas(ctx, &vtctldatapb.GetSrvVSchemasRequest{})
+			require.NoError(t, err, "GetSrvVSchemas error")
+			utils.MustMatch(t, resp.SrvVSchemas, finalVSchemas)
 		})
 	}
 }
@@ -1503,10 +2130,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1533,10 +2160,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1625,10 +2252,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1640,10 +2267,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  101,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					},
@@ -1651,11 +2278,11 @@ func TestDeleteTablets(t *testing.T) {
 			},
 			shardFieldUpdates: map[string]func(*topo.ShardInfo) error{
 				"testkeyspace/-": func(si *topo.ShardInfo) error {
-					si.MasterAlias = &topodatapb.TabletAlias{
+					si.PrimaryAlias = &topodatapb.TabletAlias{
 						Cell: "zone1",
 						Uid:  101,
 					}
-					si.MasterTermStartTime = &vttime.Time{
+					si.PrimaryTermStartTime = &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					}
@@ -1681,10 +2308,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  101,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     1001,
 						Nanoseconds: 101,
 					},
@@ -1737,10 +2364,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1769,10 +2396,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1788,10 +2415,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-80",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     100,
 						Nanoseconds: 10,
 					},
@@ -1801,10 +2428,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "80-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     200,
 						Nanoseconds: 20,
 					},
@@ -1834,10 +2461,10 @@ func TestDeleteTablets(t *testing.T) {
 						Cell: "zone1",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "80-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds:     200,
 						Nanoseconds: 20,
 					},
@@ -1934,8 +2561,7 @@ func TestDeleteTablets(t *testing.T) {
 
 				resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 				assert.NoError(t, err, "cannot look up tablets from topo after issuing DeleteTablets request")
-
-				assert.ElementsMatch(t, tt.expectedRemainingTablets, resp.Tablets)
+				testutil.AssertSameTablets(t, tt.expectedRemainingTablets, resp.Tablets)
 			}
 
 			// Run the test
@@ -1951,7 +2577,7 @@ func TestDeleteTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 			checkRemainingTablets()
 		})
 	}
@@ -1980,8 +2606,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -2008,11 +2634,11 @@ func TestEmergencyReparentShard(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 						},
 					},
@@ -2045,7 +2671,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 						StopStatus: &replicationdatapb.StopReplicationStatus{
 							Before: &replicationdatapb.Status{},
 							After: &replicationdatapb.Status{
-								MasterUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+								SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
 								RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 								Position:         "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5",
 							},
@@ -2119,9 +2745,9 @@ func TestEmergencyReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -2149,7 +2775,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertEmergencyReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
 		})
 	}
 }
@@ -2191,13 +2817,15 @@ func TestFindAllShardsInKeyspace(t *testing.T) {
 		},
 	}
 
-	assert.Equal(t, expected, resp.Shards)
+	utils.MustMatch(t, expected, resp.Shards)
 
 	_, err = vtctld.FindAllShardsInKeyspace(ctx, &vtctldatapb.FindAllShardsInKeyspaceRequest{Keyspace: "nothing"})
 	assert.Error(t, err)
 }
 
 func TestGetBackups(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.Background()
 	ts := memorytopo.NewServer()
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -2213,10 +2841,14 @@ func TestGetBackups(t *testing.T) {
 			{
 				Directory: "testkeyspace/-",
 				Name:      "backup1",
+				Keyspace:  "testkeyspace",
+				Shard:     "-",
 			},
 			{
 				Directory: "testkeyspace/-",
 				Name:      "backup2",
+				Keyspace:  "testkeyspace",
+				Shard:     "-",
 			},
 		},
 	}
@@ -2226,7 +2858,7 @@ func TestGetBackups(t *testing.T) {
 		Shard:    "-",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp)
+	utils.MustMatch(t, expected, resp)
 
 	t.Run("no backupstorage", func(t *testing.T) {
 		*backupstorage.BackupStorageImplementation = "doesnotexist"
@@ -2248,6 +2880,53 @@ func TestGetBackups(t *testing.T) {
 			Shard:    "-",
 		})
 		assert.Error(t, err)
+	})
+
+	t.Run("parsing times and aliases", func(t *testing.T) {
+		testutil.BackupStorage.Backups["ks2/-80"] = []string{
+			"2021-06-11.123456.zone1-101",
+		}
+
+		resp, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "ks2",
+			Shard:    "-80",
+		})
+		require.NoError(t, err)
+		expected := &vtctldatapb.GetBackupsResponse{
+			Backups: []*mysqlctlpb.BackupInfo{
+				{
+					Directory: "ks2/-80",
+					Name:      "2021-06-11.123456.zone1-101",
+					Keyspace:  "ks2",
+					Shard:     "-80",
+					Time:      protoutil.TimeToProto(time.Date(2021, time.June, 11, 12, 34, 56, 0, time.UTC)),
+					TabletAlias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				},
+			},
+		}
+		utils.MustMatch(t, expected, resp)
+	})
+
+	t.Run("limiting", func(t *testing.T) {
+		unlimited, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+		})
+		require.NoError(t, err)
+
+		limited, err := vtctld.GetBackups(ctx, &vtctldatapb.GetBackupsRequest{
+			Keyspace: "testkeyspace",
+			Shard:    "-",
+			Limit:    1,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, len(limited.Backups), 1, "expected limited backups to have length 1")
+		assert.Less(t, len(limited.Backups), len(unlimited.Backups), "expected limited backups to be less than unlimited")
+		utils.MustMatch(t, limited.Backups[0], unlimited.Backups[len(unlimited.Backups)-1], "expected limiting to keep N most recent")
 	})
 }
 
@@ -2272,7 +2951,7 @@ func TestGetKeyspace(t *testing.T) {
 
 	ks, err := vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: expected.Keyspace.Name})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, ks)
+	utils.MustMatch(t, expected, ks)
 
 	_, err = vtctld.GetKeyspace(ctx, &vtctldatapb.GetKeyspaceRequest{Keyspace: "notfound"})
 	assert.Error(t, err)
@@ -2323,12 +3002,12 @@ func TestGetCellInfo(t *testing.T) {
 		ServerAddress: "example.com",
 		Root:          "vitess",
 	}
-	input := *expected // shallow copy
-	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", &input))
+	input := proto.Clone(expected).(*topodatapb.CellInfo)
+	require.NoError(t, ts.CreateCellInfo(ctx, "cell1", input))
 
 	resp, err := vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "cell1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.CellInfo)
+	utils.MustMatch(t, expected, resp.CellInfo)
 
 	_, err = vtctld.GetCellInfo(ctx, &vtctldatapb.GetCellInfoRequest{Cell: "does_not_exist"})
 	assert.Error(t, err)
@@ -2354,10 +3033,9 @@ func TestGetCellsAliases(t *testing.T) {
 	}
 
 	for i, alias := range []*topodatapb.CellsAlias{alias1, alias2} {
-		input := *alias // shallow copy
+		input := proto.Clone(alias).(*topodatapb.CellsAlias)
 		name := fmt.Sprintf("a%d", i+1)
-
-		require.NoError(t, ts.CreateCellsAlias(ctx, name, &input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, &input)
+		require.NoError(t, ts.CreateCellsAlias(ctx, name, input), "cannot create cells alias %d (idx = %d) = %+v", i+1, i, input)
 	}
 
 	expected := map[string]*topodatapb.CellsAlias{
@@ -2367,7 +3045,7 @@ func TestGetCellsAliases(t *testing.T) {
 
 	resp, err := vtctld.GetCellsAliases(ctx, &vtctldatapb.GetCellsAliasesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Aliases)
+	utils.MustMatch(t, expected, resp.Aliases)
 
 	ts, topofactory := memorytopo.NewServerAndFactory()
 	vtctld = testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -2418,7 +3096,7 @@ func TestGetKeyspaces(t *testing.T) {
 
 	resp, err = vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	assert.NoError(t, err)
-	assert.Equal(t, expected, resp.Keyspaces)
+	utils.MustMatch(t, expected, resp.Keyspaces)
 
 	topofactory.SetError(errors.New("error from toposerver"))
 
@@ -2426,45 +3104,76 @@ func TestGetKeyspaces(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestGetTablet(t *testing.T) {
+func TestGetRoutingRules(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.Background()
-	ts := memorytopo.NewServer("cell1")
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(ts)
-	})
-
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
+	tests := []struct {
+		name      string
+		topoDown  bool
+		rrIn      *vschemapb.RoutingRules
+		expected  *vschemapb.RoutingRules
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			rrIn: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
+			expected: &vschemapb.RoutingRules{
+				Rules: []*vschemapb.RoutingRule{
+					{
+						FromTable: "t1",
+						ToTables:  []string{"t2", "t3"},
+					},
+				},
+			},
 		},
-		Hostname: "localhost",
-		Keyspace: "testkeyspace",
-		Shard:    "-",
-		Type:     topodatapb.TabletType_REPLICA,
+		{
+			name:     "empty routing rules",
+			rrIn:     nil,
+			expected: &vschemapb.RoutingRules{},
+		},
+		{
+			name:      "topo error",
+			topoDown:  true,
+			shouldErr: true,
+		},
 	}
 
-	testutil.AddTablet(ctx, t, ts, tablet, nil)
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  100,
-		},
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, resp.Tablet, tablet)
+			ts, factory := memorytopo.NewServerAndFactory()
+			if tt.rrIn != nil {
+				err := ts.SaveRoutingRules(ctx, tt.rrIn)
+				require.NoError(t, err, "could not save routing rules: %+v", tt.rrIn)
+			}
 
-	// not found
-	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
-		TabletAlias: &topodatapb.TabletAlias{
-			Cell: "cell1",
-			Uid:  101,
-		},
-	})
-	assert.Error(t, err)
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.GetRoutingRules(ctx, &vtctldatapb.GetRoutingRulesRequest{})
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, resp.RoutingRules, tt.expected)
+		})
+	}
 }
 
 func TestGetSchema(t *testing.T) {
@@ -2655,7 +3364,7 @@ func TestGetSchema(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2689,8 +3398,8 @@ func TestGetShard(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						KeyRange:        &topodatapb.KeyRange{},
-						IsMasterServing: true,
+						KeyRange:         &topodatapb.KeyRange{},
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -2746,7 +3455,143 @@ func TestGetShard(t *testing.T) {
 				return
 			}
 
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetSrvKeyspaceNames(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name               string
+		srvKeyspacesByCell map[string]map[string]*topodatapb.SrvKeyspace
+		topoError          error
+		req                *vtctldatapb.GetSrvKeyspaceNamesRequest
+		expected           *vtctldatapb.GetSrvKeyspaceNamesResponse
+		shouldErr          bool
+	}{
+		{
+			name: "success",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{},
+			expected: &vtctldatapb.GetSrvKeyspaceNamesResponse{
+				Names: map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{
+					"zone1": {
+						Names: []string{"ks1", "ks2"},
+					},
+					"zone2": {
+						Names: []string{"ks1"},
+					},
+				},
+			},
+		},
+		{
+			name: "cell filtering",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{
+				Cells: []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetSrvKeyspaceNamesResponse{
+				Names: map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{
+					"zone2": {
+						Names: []string{"ks1"},
+					},
+				},
+			},
+		},
+		{
+			name: "all cells topo down",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req:       &vtctldatapb.GetSrvKeyspaceNamesRequest{},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+		{
+			name: "cell filtering topo down",
+			srvKeyspacesByCell: map[string]map[string]*topodatapb.SrvKeyspace{
+				"zone1": {
+					"ks1": {},
+					"ks2": {},
+				},
+				"zone2": {
+					"ks1": {},
+				},
+			},
+			req: &vtctldatapb.GetSrvKeyspaceNamesRequest{
+				Cells: []string{"zone2"},
+			},
+			topoError: errors.New("topo down for testing"),
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cells := make([]string, 0, len(tt.srvKeyspacesByCell))
+			for cell := range tt.srvKeyspacesByCell {
+				cells = append(cells, cell)
+			}
+
+			ts, factory := memorytopo.NewServerAndFactory(cells...)
+
+			for cell, srvKeyspaces := range tt.srvKeyspacesByCell {
+				for ks, srvks := range srvKeyspaces {
+					err := ts.UpdateSrvKeyspace(ctx, cell, ks, srvks)
+					require.NoError(t, err, "UpdateSrvKeyspace(%s, %s, %+v) failed", cell, ks, srvks)
+				}
+			}
+
+			if tt.topoError != nil {
+				factory.SetError(tt.topoError)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.GetSrvKeyspaceNames(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			for _, names := range resp.Names {
+				sort.Strings(names.Names)
+			}
+			for _, names := range tt.expected.Names {
+				sort.Strings(names.Names)
+			}
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2924,7 +3769,7 @@ func TestGetSrvKeyspaces(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -2983,7 +3828,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err := vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone1) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone1) rules mismatch")
 
 	expected = &vschemapb.SrvVSchema{ // have to copy our structs because of proto marshal artifacts
@@ -3003,7 +3848,7 @@ func TestGetSrvVSchema(t *testing.T) {
 	}
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone2"})
 	assert.NoError(t, err)
-	assert.Equal(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch %+v %+v", zone2SrvVSchema.Keyspaces["testkeyspace"], resp.SrvVSchema.Keyspaces["testkeyspace"])
+	utils.MustMatch(t, expected.Keyspaces, resp.SrvVSchema.Keyspaces, "GetSrvVSchema(zone2) mismatch")
 	assert.ElementsMatch(t, expected.RoutingRules.Rules, resp.SrvVSchema.RoutingRules.Rules, "GetSrvVSchema(zone2) rules mismatch")
 
 	resp, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "dne"})
@@ -3012,6 +3857,230 @@ func TestGetSrvVSchema(t *testing.T) {
 
 	topofactory.SetError(assert.AnError)
 	_, err = vtctld.GetSrvVSchema(ctx, &vtctldatapb.GetSrvVSchemaRequest{Cell: "zone1"})
+	assert.Error(t, err)
+}
+
+func TestGetSrvVSchemas(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		req       *vtctldatapb.GetSrvVSchemasRequest
+		expected  *vtctldatapb.GetSrvVSchemasResponse
+		topoErr   error
+		shouldErr bool
+	}{
+		{
+			name: "success",
+			req:  &vtctldatapb.GetSrvVSchemasRequest{},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "filtering by cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone2": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+							"unsharded": {
+								Sharded:                false,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "no SrvVSchema for single cell",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone3"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone3": {},
+				},
+			},
+		},
+		{
+			name: "topology error",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone2"},
+			},
+			topoErr:   assert.AnError,
+			shouldErr: true,
+		},
+		{
+			name: "cell doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{},
+			},
+		},
+		{
+			name: "one of many cells doesn't exist",
+			req: &vtctldatapb.GetSrvVSchemasRequest{
+				Cells: []string{"zone1", "doesnt-exist"},
+			},
+			expected: &vtctldatapb.GetSrvVSchemasResponse{
+				SrvVSchemas: map[string]*vschemapb.SrvVSchema{
+					"zone1": {
+						Keyspaces: map[string]*vschemapb.Keyspace{
+							"testkeyspace": {
+								Sharded:                true,
+								RequireExplicitRouting: false,
+							},
+						},
+						RoutingRules: &vschemapb.RoutingRules{
+							Rules: []*vschemapb.RoutingRule{},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := context.Background()
+			ts, topofactory := memorytopo.NewServerAndFactory("zone1", "zone2", "zone3")
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			zone1SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			zone2SrvVSchema := &vschemapb.SrvVSchema{
+				Keyspaces: map[string]*vschemapb.Keyspace{
+					"testkeyspace": {
+						Sharded:                true,
+						RequireExplicitRouting: false,
+					},
+					"unsharded": {
+						Sharded:                false,
+						RequireExplicitRouting: false,
+					},
+				},
+				RoutingRules: &vschemapb.RoutingRules{
+					Rules: []*vschemapb.RoutingRule{},
+				},
+			}
+
+			err := ts.UpdateSrvVSchema(ctx, "zone1", zone1SrvVSchema)
+			require.NoError(t, err, "cannot add zone1 srv vschema")
+			err = ts.UpdateSrvVSchema(ctx, "zone2", zone2SrvVSchema)
+			require.NoError(t, err, "cannot add zone2 srv vschema")
+
+			if tt.topoErr != nil {
+				topofactory.SetError(tt.topoErr)
+			}
+
+			resp, err := vtctld.GetSrvVSchemas(ctx, tt.req)
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestGetTablet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(ts)
+	})
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+		Hostname: "localhost",
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+	}
+
+	testutil.AddTablet(ctx, t, ts, tablet, nil)
+
+	resp, err := vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  100,
+		},
+	})
+	assert.NoError(t, err)
+	utils.MustMatch(t, resp.Tablet, tablet)
+
+	// not found
+	_, err = vtctld.GetTablet(ctx, &vtctldatapb.GetTabletRequest{
+		TabletAlias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+			Uid:  101,
+		},
+	})
 	assert.Error(t, err)
 }
 
@@ -3151,21 +4220,21 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  102,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Hostname:            "stale.primary",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Hostname:             "stale.primary",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{
@@ -3178,21 +4247,21 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  102,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Keyspace:            "ks2",
-					Shard:               "-",
-					Hostname:            "stale.primary",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks2",
+					Shard:                "-",
+					Hostname:             "stale.primary",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
@@ -3206,33 +4275,33 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  100,
 					},
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Hostname:            "slightly less stale",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Hostname:             "slightly less stale",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  101,
 					},
-					Hostname:            "stale primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Hostname:             "stale primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Hostname:            "true primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					Hostname:             "true primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			req: &vtctldatapb.GetTabletsRequest{},
@@ -3242,33 +4311,33 @@ func TestGetTablets(t *testing.T) {
 						Cell: "cell1",
 						Uid:  100,
 					},
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Hostname:            "slightly less stale",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Hostname:             "slightly less stale",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 15, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  101,
 					},
-					Hostname:            "stale primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_UNKNOWN,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
+					Hostname:             "stale primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 14, 4, 5, 0, time.UTC)),
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
 						Cell: "cell1",
 						Uid:  103,
 					},
-					Hostname:            "true primary",
-					Keyspace:            "ks1",
-					Shard:               "-",
-					Type:                topodatapb.TabletType_MASTER,
-					MasterTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
+					Hostname:             "true primary",
+					Keyspace:             "ks1",
+					Shard:                "-",
+					Type:                 topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: logutil.TimeToProto(time.Date(2006, time.January, 2, 16, 4, 5, 0, time.UTC)),
 				},
 			},
 			shouldErr: false,
@@ -3471,7 +4540,7 @@ func TestGetTablets(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.ElementsMatch(t, tt.expected, resp.Tablets)
+			testutil.AssertSameTablets(t, tt.expected, resp.Tablets)
 		})
 	}
 }
@@ -3513,7 +4582,7 @@ func TestGetVSchema(t *testing.T) {
 			Keyspace: "testkeyspace",
 		})
 		assert.NoError(t, err)
-		assert.Equal(t, expected, resp)
+		utils.MustMatch(t, expected, resp)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -3549,8 +4618,8 @@ func TestPlannedReparentShard(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_MASTER,
-					MasterTermStartTime: &vttime.Time{
+					Type: topodatapb.TabletType_PRIMARY,
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 100,
 					},
 					Keyspace: "testkeyspace",
@@ -3577,11 +4646,11 @@ func TestPlannedReparentShard(t *testing.T) {
 			},
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
-					Status *replicationdatapb.MasterStatus
+					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
 					"zone1-0000000100": {
-						Status: &replicationdatapb.MasterStatus{
+						Status: &replicationdatapb.PrimaryStatus{
 							Position: "primary-demotion position",
 						},
 						Error: nil,
@@ -3677,9 +4746,9 @@ func TestPlannedReparentShard(t *testing.T) {
 			t.Parallel()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster:  true,
-				ForceSetShardMaster: true,
-				SkipShardCreation:   false,
+				AlsoSetShardPrimary:  true,
+				ForceSetShardPrimary: true,
+				SkipShardCreation:    false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -3707,7 +4776,339 @@ func TestPlannedReparentShard(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			testutil.AssertPlannedReparentShardResponsesEqual(t, *tt.expected, *resp)
+			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestRebuildVSchemaGraph(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	req := &vtctldatapb.RebuildVSchemaGraphRequest{}
+	tests := []struct {
+		name      string
+		topoDown  bool
+		shouldErr bool
+	}{
+		{
+			name: "success",
+		},
+		{
+			name:      "topo down",
+			topoDown:  true,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory("zone1")
+			if tt.topoDown {
+				factory.SetError(errors.New("topo down for testing"))
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.RebuildVSchemaGraph(ctx, req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRefreshState(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name              string
+		ts                *topo.Server
+		tablet            *topodatapb.Tablet
+		refreshStateError error
+		req               *vtctldatapb.RefreshStateRequest
+		shouldErr         bool
+	}{
+		{
+			name: "success",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: nil,
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+		{
+			name:      "tablet alias nil",
+			ts:        memorytopo.NewServer(),
+			req:       &vtctldatapb.RefreshStateRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "tablet not found",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: nil,
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  400,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "RefreshState failed",
+			ts:   memorytopo.NewServer("zone1"),
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			refreshStateError: fmt.Errorf("%w: RefreshState failed", assert.AnError),
+			req: &vtctldatapb.RefreshStateRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var tmc testutil.TabletManagerClient
+			if tt.tablet != nil {
+				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
+				tmc.RefreshStateResults = map[string]error{
+					topoproto.TabletAliasString(tt.tablet.Alias): tt.refreshStateError,
+				}
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			_, err := vtctld.RefreshState(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestRefreshStateByShard(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name               string
+		ts                 *topo.Server
+		tablets            []*topodatapb.Tablet
+		refreshStateErrors []error // must have len(tablets)
+		req                *vtctldatapb.RefreshStateByShardRequest
+		expected           *vtctldatapb.RefreshStateByShardResponse
+		shouldErr          bool
+	}{
+		{
+			name: "success",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil, // zone1-100
+				nil, // zone2-100
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{},
+		},
+		{
+			name: "cell filtering",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil,
+				fmt.Errorf("%w: RefreshState failed on zone2-100", assert.AnError),
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+				Cells:    []string{"zone1"}, // If we didn't filter, we would get IsPartialRefresh=true because of the failure in zone2.
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{
+				IsPartialRefresh: false,
+			},
+			shouldErr: false,
+		},
+		{
+			name: "partial result",
+			ts:   memorytopo.NewServer("zone1", "zone2"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Hostname: "zone1-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+				{
+					Hostname: "zone2-100",
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+				},
+			},
+			refreshStateErrors: []error{
+				nil,
+				fmt.Errorf("%w: RefreshState failed on zone2-100", assert.AnError),
+			},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			expected: &vtctldatapb.RefreshStateByShardResponse{
+				IsPartialRefresh: true,
+			},
+			shouldErr: false,
+		},
+		{
+			name:      "missing keyspace argument",
+			ts:        memorytopo.NewServer(),
+			req:       &vtctldatapb.RefreshStateByShardRequest{},
+			shouldErr: true,
+		},
+		{
+			name: "missing shard argument",
+			ts:   memorytopo.NewServer(),
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "shard not found",
+			ts:   memorytopo.NewServer("zone1"),
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Keyspace: "ks",
+					Shard:    "-80",
+				},
+			},
+			refreshStateErrors: []error{nil},
+			req: &vtctldatapb.RefreshStateByShardRequest{
+				Keyspace: "ks2",
+				Shard:    "-",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, len(tt.tablets), len(tt.refreshStateErrors), "Invalid test case: must have one refreshStateError for each tablet")
+
+			tmc := &testutil.TabletManagerClient{
+				RefreshStateResults: make(map[string]error, len(tt.tablets)),
+			}
+			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
+			for i, tablet := range tt.tablets {
+				key := topoproto.TabletAliasString(tablet.Alias)
+				tmc.RefreshStateResults[key] = tt.refreshStateErrors[i]
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.RefreshStateByShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -3895,7 +5296,7 @@ func TestRemoveKeyspaceCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4199,7 +5600,7 @@ func TestRemoveShardCell(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4239,10 +5640,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4252,14 +5653,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4296,10 +5697,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4309,14 +5710,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4334,10 +5735,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4347,14 +5748,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4384,10 +5785,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4420,7 +5821,7 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						IsMasterServing: false,
+						IsPrimaryServing: false,
 					},
 				},
 			},
@@ -4450,10 +5851,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4463,14 +5864,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone3",
 							Uid:  300,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4484,7 +5885,7 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "shard primary is not type MASTER",
+			name: "shard primary is not type PRIMARY",
 			tablets: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -4510,14 +5911,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4547,10 +5948,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "otherkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4560,14 +5961,52 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1010,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
+					},
+				},
+			},
+			req: &vtctldatapb.ReparentTabletRequest{
+				Tablet: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+		{
+			name: "requested tablet is shard primary",
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type:     topodatapb.TabletType_PRIMARY,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				},
+			},
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+					Shard: &topodatapb.Shard{
+						PrimaryAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						PrimaryTermStartTime: &vttime.Time{
+							Seconds: 1010,
+						},
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4602,10 +6041,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4615,14 +6054,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4657,10 +6096,10 @@ func TestReparentTablet(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -4670,14 +6109,14 @@ func TestReparentTablet(t *testing.T) {
 					Keyspace: "testkeyspace",
 					Name:     "-",
 					Shard: &topodatapb.Shard{
-						MasterAlias: &topodatapb.TabletAlias{
+						PrimaryAlias: &topodatapb.TabletAlias{
 							Cell: "zone2",
 							Uid:  200,
 						},
-						MasterTermStartTime: &vttime.Time{
+						PrimaryTermStartTime: &vttime.Time{
 							Seconds: 1000,
 						},
-						IsMasterServing: true,
+						IsPrimaryServing: true,
 					},
 				},
 			},
@@ -4727,7 +6166,7 @@ func TestReparentTablet(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -4756,7 +6195,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -4809,7 +6248,7 @@ func TestShardReplicationPositions(t *testing.T) {
 						},
 						Keyspace: "testkeyspace",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 					"zone1-0000000101": {
 						Alias: &topodatapb.TabletAlias{
@@ -4835,7 +6274,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -4891,7 +6330,7 @@ func TestShardReplicationPositions(t *testing.T) {
 						},
 						Keyspace: "testkeyspace",
 						Shard:    "-",
-						Type:     topodatapb.TabletType_MASTER,
+						Type:     topodatapb.TabletType_PRIMARY,
 					},
 					"zone1-0000000101": {
 						Alias: &topodatapb.TabletAlias{
@@ -4917,7 +6356,7 @@ func TestShardReplicationPositions(t *testing.T) {
 					},
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -4977,8 +6416,8 @@ func TestShardReplicationPositions(t *testing.T) {
 			ctx := context.Background()
 
 			testutil.AddTablets(ctx, t, tt.ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
-				SkipShardCreation:  false,
+				AlsoSetShardPrimary: true,
+				SkipShardCreation:   false,
 			}, tt.tablets...)
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
@@ -5000,7 +6439,7 @@ func TestShardReplicationPositions(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }
@@ -5026,10 +6465,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5073,7 +6512,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			},
 			shouldErr: false,
 			// NOTE: this seems weird, right? Why is the old primary still a
-			// MASTER, and why is the new primary's term start 0,0? Well, our
+			// PRIMARY, and why is the new primary's term start 0,0? Well, our
 			// test client implementation is a little incomplete. See
 			// ./testutil/test_tmclient.go for reference.
 			expectedTopo: []*topodatapb.Tablet{
@@ -5082,10 +6521,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5094,10 +6533,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone2",
 						Uid:  200,
 					},
-					Type:                topodatapb.TabletType_UNKNOWN,
-					Keyspace:            "testkeyspace",
-					Shard:               "-",
-					MasterTermStartTime: &vttime.Time{},
+					Type:                 topodatapb.TabletType_UNKNOWN,
+					Keyspace:             "testkeyspace",
+					Shard:                "-",
+					PrimaryTermStartTime: &vttime.Time{},
 				},
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -5129,10 +6568,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5170,10 +6609,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5205,10 +6644,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5257,10 +6696,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5292,10 +6731,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5334,10 +6773,10 @@ func TestTabletExternallyReparented(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type:     topodatapb.TabletType_MASTER,
+					Type:     topodatapb.TabletType_PRIMARY,
 					Keyspace: "testkeyspace",
 					Shard:    "-",
-					MasterTermStartTime: &vttime.Time{
+					PrimaryTermStartTime: &vttime.Time{
 						Seconds: 1000,
 					},
 				},
@@ -5388,7 +6827,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
-				AlsoSetShardMaster: true,
+				AlsoSetShardPrimary: true,
 			}, tt.topo...)
 
 			if tt.topoErr != nil {
@@ -5406,7 +6845,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 
 					resp, err := vtctld.GetTablets(ctx, &vtctldatapb.GetTabletsRequest{})
 					require.NoError(t, err, "cannot get all tablets in the topo")
-					assert.ElementsMatch(t, tt.expectedTopo, resp.Tablets)
+					testutil.AssertSameTablets(t, tt.expectedTopo, resp.Tablets)
 				}()
 			}
 
@@ -5417,7 +6856,307 @@ func TestTabletExternallyReparented(t *testing.T) {
 			}
 
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, resp)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestUpdateCellInfo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name           string
+		cells          map[string]*topodatapb.CellInfo
+		forceTopoError bool
+		req            *vtctldatapb.UpdateCellInfoRequest
+		expected       *vtctldatapb.UpdateCellInfoResponse
+		shouldErr      bool
+	}{
+		{
+			name: "update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":0101",
+					Root:          "/zones/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":0101",
+					Root:          "/zones/zone1",
+				},
+			},
+		},
+		{
+			name: "partial update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zones/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zones/zone1",
+				},
+			},
+		},
+		{
+			name: "no update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zone1",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+		},
+		{
+			name: "cell not found",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone404",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":4040",
+					Root:          "/zone404",
+				},
+			},
+			expected: &vtctldatapb.UpdateCellInfoResponse{
+				Name: "zone404",
+				CellInfo: &topodatapb.CellInfo{
+					ServerAddress: ":4040",
+					Root:          "/zone404",
+				},
+			},
+		},
+		{
+			name: "cannot update",
+			cells: map[string]*topodatapb.CellInfo{
+				"zone1": {
+					ServerAddress: ":1111",
+					Root:          "/zone1",
+				},
+			},
+			forceTopoError: true,
+			req: &vtctldatapb.UpdateCellInfoRequest{
+				Name: "zone1",
+				CellInfo: &topodatapb.CellInfo{
+					Root: "/zone1",
+				},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts, factory := memorytopo.NewServerAndFactory()
+			for name, cell := range tt.cells {
+				err := ts.CreateCellInfo(ctx, name, cell)
+				require.NoError(t, err, "failed to create cell %s: %+v for test", name, cell)
+			}
+
+			if tt.forceTopoError {
+				factory.SetError(fmt.Errorf("%w: topo down for testing", assert.AnError))
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.UpdateCellInfo(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestUpdateCellsAlias(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cells     []string
+		aliases   map[string][]string
+		req       *vtctldatapb.UpdateCellsAliasRequest
+		expected  *vtctldatapb.UpdateCellsAliasResponse
+		shouldErr bool
+	}{
+		{
+			name: "remove one cell",
+			aliases: map[string][]string{
+				"zone": {
+					"zone1",
+					"zone2",
+					"zone3",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+		},
+		{
+			name:  "add one cell",
+			cells: []string{"zone4"}, // all other cells get created via the aliases map
+			aliases: map[string][]string{
+				"zone": {
+					"zone1",
+					"zone2",
+					"zone3",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3",
+						"zone4",
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3",
+						"zone4",
+					},
+				},
+			},
+		},
+		{
+			name:  "alias does not exist",
+			cells: []string{"zone1", "zone2"},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+			expected: &vtctldatapb.UpdateCellsAliasResponse{
+				Name: "zone",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{"zone1", "zone2"},
+				},
+			},
+		},
+		{
+			name: "invalid alias list",
+			aliases: map[string][]string{
+				"zone_a": {
+					"zone1",
+					"zone2",
+				},
+				"zone_b": {
+					"zone3",
+					"zone4",
+				},
+			},
+			req: &vtctldatapb.UpdateCellsAliasRequest{
+				Name: "zone_a",
+				CellsAlias: &topodatapb.CellsAlias{
+					Cells: []string{
+						"zone1",
+						"zone2",
+						"zone3", // this is invalid because it belongs to alias zone_b
+					},
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ts := memorytopo.NewServer(tt.cells...)
+			for name, cells := range tt.aliases {
+				for _, cell := range cells {
+					// We use UpdateCellInfoFields rather than CreateCellInfo
+					// for the update-or-create behavior.
+					err := ts.UpdateCellInfoFields(ctx, cell, func(ci *topodatapb.CellInfo) error {
+						ci.Root = "/" + cell
+						ci.ServerAddress = cell + ":8080"
+						return nil
+					})
+					require.NoError(t, err, "failed to create cell %v", cell)
+				}
+
+				err := ts.CreateCellsAlias(ctx, name, &topodatapb.CellsAlias{
+					Cells: cells,
+				})
+				require.NoError(t, err, "failed to create cell alias %v (cells = %v)", name, cells)
+			}
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			resp, err := vtctld.UpdateCellsAlias(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
 }

@@ -155,8 +155,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
-	case JoinCondition:
-		return CloneJoinCondition(in)
+	case *JoinCondition:
+		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
 		return CloneRefOfJoinTableExpr(in)
 	case *KeyState:
@@ -164,7 +164,7 @@ func CloneSQLNode(in SQLNode) SQLNode {
 	case *Limit:
 		return CloneRefOfLimit(in)
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
 	case *Load:
@@ -213,6 +213,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRangeCond(in)
 	case ReferenceAction:
 		return in
+	case *ReferenceDefinition:
+		return CloneRefOfReferenceDefinition(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameIndex:
@@ -253,6 +255,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowFilter(in)
 	case *ShowLegacy:
 		return CloneRefOfShowLegacy(in)
+	case *ShowMigrationLogs:
+		return CloneRefOfShowMigrationLogs(in)
 	case *StarExpr:
 		return CloneRefOfStarExpr(in)
 	case *Stream:
@@ -328,7 +332,6 @@ func CloneRefOfAddColumns(n *AddColumns) *AddColumns {
 	}
 	out := *n
 	out.Columns = CloneSliceOfRefOfColumnDefinition(n.Columns)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -426,6 +429,7 @@ func CloneRefOfAlterTable(n *AlterTable) *AlterTable {
 	out.Table = CloneTableName(n.Table)
 	out.AlterOptions = CloneSliceOfAlterOption(n.AlterOptions)
 	out.PartitionSpec = CloneRefOfPartitionSpec(n.PartitionSpec)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -527,7 +531,6 @@ func CloneRefOfChangeColumn(n *ChangeColumn) *ChangeColumn {
 	out := *n
 	out.OldColumn = CloneRefOfColName(n.OldColumn)
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -687,6 +690,7 @@ func CloneRefOfCreateTable(n *CreateTable) *CreateTable {
 	out.Table = CloneTableName(n.Table)
 	out.TableSpec = CloneRefOfTableSpec(n.TableSpec)
 	out.OptLike = CloneRefOfOptLike(n.OptLike)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -786,6 +790,7 @@ func CloneRefOfDropTable(n *DropTable) *DropTable {
 	}
 	out := *n
 	out.FromTables = CloneTableNames(n.FromTables)
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -865,8 +870,8 @@ func CloneRefOfForeignKeyDefinition(n *ForeignKeyDefinition) *ForeignKeyDefiniti
 	}
 	out := *n
 	out.Source = CloneColumns(n.Source)
-	out.ReferencedTable = CloneTableName(n.ReferencedTable)
-	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
+	out.IndexName = CloneColIdent(n.IndexName)
+	out.ReferenceDefinition = CloneRefOfReferenceDefinition(n.ReferenceDefinition)
 	return &out
 }
 
@@ -967,13 +972,19 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 		return nil
 	}
 	out := *n
-	out.Expr = CloneExpr(n.Expr)
+	out.Left = CloneExpr(n.Left)
 	return &out
 }
 
-// CloneJoinCondition creates a deep clone of the input.
-func CloneJoinCondition(n JoinCondition) JoinCondition {
-	return *CloneRefOfJoinCondition(&n)
+// CloneRefOfJoinCondition creates a deep clone of the input.
+func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.On = CloneExpr(n.On)
+	out.Using = CloneColumns(n.Using)
+	return &out
 }
 
 // CloneRefOfJoinTableExpr creates a deep clone of the input.
@@ -984,7 +995,7 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	out := *n
 	out.LeftExpr = CloneTableExpr(n.LeftExpr)
 	out.RightExpr = CloneTableExpr(n.RightExpr)
-	out.Condition = CloneJoinCondition(n.Condition)
+	out.Condition = CloneRefOfJoinCondition(n.Condition)
 	return &out
 }
 
@@ -1006,13 +1017,6 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	out.Offset = CloneExpr(n.Offset)
 	out.Rowcount = CloneExpr(n.Rowcount)
 	return &out
-}
-
-// CloneListArg creates a deep clone of the input.
-func CloneListArg(n ListArg) ListArg {
-	res := make(ListArg, 0, len(n))
-	copy(res, n)
-	return res
 }
 
 // CloneRefOfLiteral creates a deep clone of the input.
@@ -1070,7 +1074,6 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	}
 	out := *n
 	out.NewColDefinition = CloneRefOfColumnDefinition(n.NewColDefinition)
-	out.First = CloneRefOfColName(n.First)
 	out.After = CloneRefOfColName(n.After)
 	return &out
 }
@@ -1246,6 +1249,17 @@ func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
 	return &out
 }
 
+// CloneRefOfReferenceDefinition creates a deep clone of the input.
+func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ReferencedTable = CloneTableName(n.ReferencedTable)
+	out.ReferencedColumns = CloneColumns(n.ReferencedColumns)
+	return &out
+}
+
 // CloneRefOfRelease creates a deep clone of the input.
 func CloneRefOfRelease(n *Release) *Release {
 	if n == nil {
@@ -1293,6 +1307,7 @@ func CloneRefOfRevertMigration(n *RevertMigration) *RevertMigration {
 		return nil
 	}
 	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -1332,9 +1347,9 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
+	out.From = CloneSliceOfTableExpr(n.From)
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
-	out.From = CloneTableExprs(n.From)
 	out.Where = CloneRefOfWhere(n.Where)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
@@ -1457,6 +1472,16 @@ func CloneRefOfShowLegacy(n *ShowLegacy) *ShowLegacy {
 	out.Table = CloneTableName(n.Table)
 	out.ShowTablesOpt = CloneRefOfShowTablesOpt(n.ShowTablesOpt)
 	out.ShowCollationFilterOpt = CloneExpr(n.ShowCollationFilterOpt)
+	return &out
+}
+
+// CloneRefOfShowMigrationLogs creates a deep clone of the input.
+func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Comments = CloneComments(n.Comments)
 	return &out
 }
 
@@ -1845,7 +1870,7 @@ func CloneColTuple(in ColTuple) ColTuple {
 	}
 	switch in := in.(type) {
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case ValTuple:
@@ -1975,7 +2000,7 @@ func CloneExpr(in Expr) Expr {
 	case *IsExpr:
 		return CloneRefOfIsExpr(in)
 	case ListArg:
-		return CloneListArg(in)
+		return in
 	case *Literal:
 		return CloneRefOfLiteral(in)
 	case *MatchExpr:
@@ -2172,6 +2197,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfSetTransaction(in)
 	case *Show:
 		return CloneRefOfShow(in)
+	case *ShowMigrationLogs:
+		return CloneRefOfShowMigrationLogs(in)
 	case *Stream:
 		return CloneRefOfStream(in)
 	case *TruncateTable:
@@ -2278,7 +2305,9 @@ func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	out.Null = CloneRefOfBool(n.Null)
 	out.Default = CloneExpr(n.Default)
 	out.OnUpdate = CloneExpr(n.OnUpdate)
+	out.As = CloneExpr(n.As)
 	out.Comment = CloneRefOfLiteral(n.Comment)
+	out.Reference = CloneRefOfReferenceDefinition(n.Reference)
 	return &out
 }
 
@@ -2305,17 +2334,6 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
-}
-
-// CloneRefOfJoinCondition creates a deep clone of the input.
-func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.On = CloneExpr(n.On)
-	out.Using = CloneColumns(n.Using)
-	return &out
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.
@@ -2352,6 +2370,15 @@ func CloneRefOfBool(n *bool) *bool {
 	}
 	out := *n
 	return &out
+}
+
+// CloneSliceOfTableExpr creates a deep clone of the input.
+func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
+	res := make([]TableExpr, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneTableExpr(x))
+	}
+	return res
 }
 
 // CloneSliceOfCharacteristic creates a deep clone of the input.

@@ -38,29 +38,29 @@ var (
 	tab1, tab2, tab3, tab4 *cluster.Vttablet
 )
 
-func TestMasterToSpareStateChangeImpossible(t *testing.T) {
+func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 
-	// We cannot change a master to spare
+	// We cannot change a primary to spare
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ChangeTabletType", tab1.Alias, "spare")
 	require.Error(t, err, out)
-	require.Contains(t, out, "type change MASTER -> SPARE is not an allowed transition for ChangeTabletType")
+	require.Contains(t, out, "type change PRIMARY -> SPARE is not an allowed transition for ChangeTabletType")
 }
 
-func TestReparentDownMaster(t *testing.T) {
+func TestReparentDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 
 	ctx := context.Background()
 
-	// Make the current master agent and database unavailable.
+	// Make the current primary agent and database unavailable.
 	stopTablet(t, tab1, true)
 
 	// Perform a planned reparent operation, will try to contact
-	// the current master and fail somewhat quickly
+	// the current primary and fail somewhat quickly
 	_, err := prsWithTimeout(t, tab2, false, "1s", "5s")
 	require.Error(t, err)
 
@@ -71,50 +71,68 @@ func TestReparentDownMaster(t *testing.T) {
 	log.Infof("EmergencyReparentShard Output: %v", out)
 	require.NoError(t, err)
 
-	// Check that old master tablet is left around for human intervention.
-	confirmOldMasterIsHangingAround(t)
+	// Check that old primary tablet is left around for human intervention.
+	confirmOldPrimaryIsHangingAround(t)
 
-	// Now we'll manually remove it, simulating a human cleaning up a dead master.
+	// Now we'll manually remove it, simulating a human cleaning up a dead primary.
 	deleteTablet(t, tab1)
 
 	// Now validate topo is correct.
 	validateTopology(t, false)
-	checkMasterTablet(t, tab2)
+	checkPrimaryTablet(t, tab2)
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab3, tab4})
 	resurrectTablet(ctx, t, tab1)
 }
 
-func TestReparentNoChoiceDownMaster(t *testing.T) {
+func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 	var err error
+
 	ctx := context.Background()
 
 	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
-	// Make the current master agent and database unavailable.
+	// Make the current primary agent and database unavailable.
 	stopTablet(t, tab1, true)
 
 	// Run forced reparent operation, this should now proceed unimpeded.
 	out, err := ers(t, nil, "61s")
 	require.NoError(t, err, out)
 
-	// Check that old master tablet is left around for human intervention.
-	confirmOldMasterIsHangingAround(t)
-	// Now we'll manually remove the old master, simulating a human cleaning up a dead master.
+	// Check that old primary tablet is left around for human intervention.
+	confirmOldPrimaryIsHangingAround(t)
+	// Now we'll manually remove the old primary, simulating a human cleaning up a dead primary.
 	deleteTablet(t, tab1)
 	validateTopology(t, false)
-	newMaster := getNewMaster(t)
-	// Validate new master is not old master.
-	require.NotEqual(t, newMaster.Alias, tab1.Alias)
+	newPrimary := getNewPrimary(t)
+	// Validate new primary is not old primary.
+	require.NotEqual(t, newPrimary.Alias, tab1.Alias)
 
-	// Check new master has latest transaction.
-	err = checkInsertedValues(ctx, t, newMaster, 2)
+	// Check new primary has latest transaction.
+	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
 	require.NoError(t, err)
 
-	// bring back the old master as a replica, check that it catches up
+	// bring back the old primary as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
+}
+
+func TestTrivialERS(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	// We should be able to do a series of ERS-es, even if nothing
+	// is down, without issue
+	for i := 1; i <= 4; i++ {
+		out, err := ers(t, nil, "30s")
+		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
@@ -122,11 +140,12 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	setupReparentCluster(t)
 	defer teardownCluster()
 	var err error
+
 	ctx := context.Background()
 
 	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
-	// Make the current master agent and database unavailable.
+	// Make the current primary agent and database unavailable.
 	stopTablet(t, tab1, true)
 
 	// Take down a replica - this should cause the emergency reparent to fail.
@@ -143,17 +162,17 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	// We'll bring back the replica we took down.
 	restartTablet(t, tab3)
 
-	// Check that old master tablet is left around for human intervention.
-	confirmOldMasterIsHangingAround(t)
+	// Check that old primary tablet is left around for human intervention.
+	confirmOldPrimaryIsHangingAround(t)
 	deleteTablet(t, tab1)
 	validateTopology(t, false)
 
-	newMaster := getNewMaster(t)
-	// Check new master has latest transaction.
-	err = checkInsertedValues(ctx, t, newMaster, 2)
+	newPrimary := getNewPrimary(t)
+	// Check new primary has latest transaction.
+	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
 	require.Nil(t, err)
 
-	// bring back the old master as a replica, check that it catches up
+	// bring back the old primary as a replica, check that it catches up
 	resurrectTablet(ctx, t, tab1)
 }
 
@@ -167,7 +186,7 @@ func TestReparentCrossCell(t *testing.T) {
 	require.NoError(t, err)
 
 	validateTopology(t, false)
-	checkMasterTablet(t, tab4)
+	checkPrimaryTablet(t, tab4)
 }
 
 func TestReparentGraceful(t *testing.T) {
@@ -177,18 +196,18 @@ func TestReparentGraceful(t *testing.T) {
 
 	// Run this to make sure it succeeds.
 	strArray := getShardReplicationPositions(t, keyspaceName, shardName, false)
-	assert.Equal(t, 4, len(strArray))         // one master, three replicas
-	assert.Contains(t, strArray[0], "master") // master first
+	assert.Equal(t, 4, len(strArray))          // one primary, three replicas
+	assert.Contains(t, strArray[0], "primary") // primary first
 
 	// Perform a graceful reparent operation
 	prs(t, tab2)
 	validateTopology(t, false)
-	checkMasterTablet(t, tab2)
+	checkPrimaryTablet(t, tab2)
 
-	// A graceful reparent to the same master should be idempotent.
+	// A graceful reparent to the same primary should be idempotent.
 	prs(t, tab2)
 	validateTopology(t, false)
-	checkMasterTablet(t, tab2)
+	checkPrimaryTablet(t, tab2)
 
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
 }
@@ -205,7 +224,8 @@ func TestReparentReplicaOffline(t *testing.T) {
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
 	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
-	checkMasterTablet(t, tab2)
+
+	checkPrimaryTablet(t, tab2)
 }
 
 func TestReparentAvoid(t *testing.T) {
@@ -214,29 +234,29 @@ func TestReparentAvoid(t *testing.T) {
 	defer teardownCluster()
 	deleteTablet(t, tab3)
 
-	// Perform a reparent operation with avoid_master pointing to non-master. It
+	// Perform a reparent operation with avoid_tablet pointing to non-primary. It
 	// should succeed without doing anything.
 	_, err := prsAvoid(t, tab2)
 	require.NoError(t, err)
 
 	validateTopology(t, false)
-	checkMasterTablet(t, tab1)
+	checkPrimaryTablet(t, tab1)
 
-	// Perform a reparent operation with avoid_master pointing to master.
+	// Perform a reparent operation with avoid_tablet pointing to primary.
 	_, err = prsAvoid(t, tab1)
 	require.NoError(t, err)
 	validateTopology(t, false)
 
 	// tab2 is in the same cell and tab4 is in a different cell, so we must land on tab2
-	checkMasterTablet(t, tab2)
+	checkPrimaryTablet(t, tab2)
 
-	// If we kill the tablet in the same cell as master then reparent -avoid_master will fail.
+	// If we kill the tablet in the same cell as primary then reparent -avoid_tablet will fail.
 	stopTablet(t, tab1, true)
 	out, err := prsAvoid(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, "cannot find a tablet to reparent to")
+	assert.Contains(t, out, "cannot find a tablet to reparent to in the same cell as the current primary")
 	validateTopology(t, false)
-	checkMasterTablet(t, tab2)
+	checkPrimaryTablet(t, tab2)
 }
 
 func TestReparentFromOutside(t *testing.T) {
@@ -246,10 +266,11 @@ func TestReparentFromOutside(t *testing.T) {
 	reparentFromOutside(t, false)
 }
 
-func TestReparentFromOutsideWithNoMaster(t *testing.T) {
+func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
 	reparentFromOutside(t, true)
 
 	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
@@ -264,58 +285,58 @@ func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 	}
 }
 
-func reparentFromOutside(t *testing.T, downMaster bool) {
-	//This test will start a master and 3 replicas.
+func reparentFromOutside(t *testing.T, downPrimary bool) {
+	//This test will start a primary and 3 replicas.
 	//Then:
-	//- one replica will be the new master
-	//- one replica will be reparented to that new master
+	//- one replica will be the new primary
+	//- one replica will be reparented to that new primary
 	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
-	//downMaster: kills the old master first
+	//downPrimary: kills the old primary first
 	ctx := context.Background()
 
 	// now manually reparent 1 out of 2 tablets
-	// tab2 will be the new master
+	// tab2 will be the new primary
 	// tab3 won't be re-parented, so it will be busted
 
-	if !downMaster {
-		// commands to stop the current master
-		demoteMasterCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
-		runSQL(ctx, t, demoteMasterCommands, tab1)
+	if !downPrimary {
+		// commands to stop the current primary
+		demoteCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
+		runSQL(ctx, t, demoteCommands, tab1)
 
-		//Get the position of the old master and wait for the new one to catch up.
+		//Get the position of the old primary and wait for the new one to catch up.
 		err := waitForReplicationPosition(t, tab1, tab2)
 		require.NoError(t, err)
 	}
 
-	// commands to convert a replica to a master
+	// commands to convert a replica to be writable
 	promoteReplicaCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
 	runSQL(ctx, t, promoteReplicaCommands, tab2)
 
-	// Get master position
-	_, gtID := cluster.GetMasterPosition(t, *tab2, hostname)
+	// Get primary position
+	_, gtID := cluster.GetPrimaryPosition(t, *tab2, hostname)
 
 	// tab1 will now be a replica of tab2
-	changeMasterCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
+	changeReplicationSourceCommands := fmt.Sprintf("RESET MASTER; RESET SLAVE; SET GLOBAL gtid_purged = '%s';"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", gtID, hostname, tab2.MySQLPort)
-	runSQL(ctx, t, changeMasterCommands, tab1)
+	runSQL(ctx, t, changeReplicationSourceCommands, tab1)
 
-	// Capture time when we made tab2 master
+	// Capture time when we made tab2 writable
 	baseTime := time.Now().UnixNano() / 1000000000
 
 	// tab3 will be a replica of tab2
-	changeMasterCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
+	changeReplicationSourceCommands = fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", gtID, hostname, tab2.MySQLPort)
-	runSQL(ctx, t, changeMasterCommands, tab3)
+	runSQL(ctx, t, changeReplicationSourceCommands, tab3)
 
-	// To test the downMaster, we kill the old master first and delete its tablet record
-	if downMaster {
-		err := tab1.VttabletProcess.TearDown()
+	// To test the downPrimary, we kill the old primary first and delete its tablet record
+	if downPrimary {
+		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
-			"-allow_master", tab1.Alias)
+			"-allow_primary", tab1.Alias)
 		require.NoError(t, err)
 	}
 
@@ -324,10 +345,10 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 		tab2.Alias)
 	require.NoError(t, err)
 
-	checkReparentFromOutside(t, tab2, downMaster, baseTime)
+	checkReparentFromOutside(t, tab2, downPrimary, baseTime)
 
-	if !downMaster {
-		err := tab1.VttabletProcess.TearDown()
+	if !downPrimary {
+		err := tab1.VttabletProcess.TearDownWithTimeout(30 * time.Second)
 		require.NoError(t, err)
 	}
 }
@@ -336,21 +357,26 @@ func TestReparentWithDownReplica(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
 	ctx := context.Background()
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
 
 	// Stop replica mysql Process
 	err := tab3.MysqlctlProcess.Stop()
 	require.NoError(t, err)
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab4})
 
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
 	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab3.Alias))
 
-	// insert data into the new master, check the connected replica work
+	// insert data into the new primary, check the connected replica work
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})
 
-	// restart mysql on the old replica, should still be connecting to the old master
+	// restart mysql on the old replica, should still be connecting to the old primary
 	tab3.MysqlctlProcess.InitMysql = false
 	err = tab3.MysqlctlProcess.Start()
 	require.NoError(t, err)
@@ -360,7 +386,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait until it gets the data
-	err = checkInsertedValues(ctx, t, tab3, 2)
+	err = checkInsertedValues(ctx, t, tab3, insertVal)
 	require.NoError(t, err)
 }
 
@@ -368,10 +394,11 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
+
 	ctx := context.Background()
 
 	// Create new names for tablets, so this test is less confusing.
-	master, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
+	primary, replica, rdonly1, rdonly2 := tab1, tab2, tab3, tab4
 
 	// Updated rdonly tablet and set tablet type to rdonly
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly1.Alias, "rdonly")
@@ -381,7 +408,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 
 	validateTopology(t, true)
 
-	checkMasterTablet(t, master)
+	checkPrimaryTablet(t, primary)
 
 	// Stop replication on rdonly1, to make sure when we make it replica it doesn't start again.
 	// Note we do a similar test for replica -> rdonly below.
@@ -426,18 +453,18 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	checkDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
 }
 
-func TestReparentDoesntHangIfMasterFails(t *testing.T) {
+func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
 
 	// Change the schema of the _vt.reparent_journal table, so that
-	// inserts into it will fail. That will make the master fail.
+	// inserts into it will fail. That will make the primary fail.
 	_, err := tab1.VttabletProcess.QueryTabletWithDB(
 		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
 	require.NoError(t, err)
 
-	// Perform a planned reparent operation, the master will fail the
+	// Perform a planned reparent operation, the primary will fail the
 	// insert.  The replicas should then abort right away.
 	out, err := prs(t, tab2)
 	require.Error(t, err)

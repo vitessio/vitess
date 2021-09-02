@@ -25,7 +25,7 @@ import (
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -644,7 +644,9 @@ func (f *FakeQueryService) MessageStream(ctx context.Context, target *querypb.Ta
 	if name != MessageName {
 		f.t.Errorf("name: %s, want %s", name, MessageName)
 	}
-	callback(MessageStreamResult)
+	if err := callback(MessageStreamResult); err != nil {
+		f.t.Logf("MessageStream callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -677,11 +679,11 @@ var TestStreamHealthStreamHealthResponse = &querypb.StreamHealthResponse{
 	TabletExternallyReparentedTimestamp: 1234589,
 
 	RealtimeStats: &querypb.RealtimeStats{
-		CpuUsage:                               1.0,
-		HealthError:                            "random error",
-		SecondsBehindMaster:                    234,
-		BinlogPlayersCount:                     1,
-		SecondsBehindMasterFilteredReplication: 2,
+		CpuUsage:                      1.0,
+		HealthError:                   "random error",
+		ReplicationLagSeconds:         234,
+		BinlogPlayersCount:            1,
+		FilteredReplicationLagSeconds: 2,
 	},
 }
 
@@ -700,7 +702,9 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	if shr == nil {
 		shr = TestStreamHealthStreamHealthResponse
 	}
-	callback(shr)
+	if err := callback(shr); err != nil {
+		f.t.Logf("StreamHealth callback failed: %v", err)
+	}
 	return nil
 }
 
@@ -720,7 +724,7 @@ func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.T
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
-func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+func (f *FakeQueryService) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *querypb.Target) (queryservice.QueryService, error) {
 	panic("not implemented")
 }
 

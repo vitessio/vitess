@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"math"
@@ -31,10 +32,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
 
 	"context"
 
 	"vitess.io/vitess/go/vt/grpccommon"
+	"vitess.io/vitess/go/vt/grpcoptionaltls"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -63,6 +66,8 @@ var (
 
 	// GRPCCA is the CA to use if TLS is enabled
 	GRPCCA = flag.String("grpc_ca", "", "server CA to use for gRPC connections, requires TLS, and enforces client certificate check")
+
+	GRPCEnableOptionalTLS = flag.Bool("grpc_enable_optional_tls", false, "enable optional TLS mode when a server accepts both TLS and plain-text connections on the same port")
 
 	// GRPCServerCA if specified will combine server cert and server CA
 	GRPCServerCA = flag.String("grpc_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
@@ -128,13 +133,17 @@ func createGRPCServer() {
 
 	var opts []grpc.ServerOption
 	if GRPCPort != nil && *GRPCCert != "" && *GRPCKey != "" {
-		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA)
+		config, err := vttls.ServerConfig(*GRPCCert, *GRPCKey, *GRPCCA, *GRPCServerCA, tls.VersionTLS12)
 		if err != nil {
 			log.Exitf("Failed to log gRPC cert/key/ca: %v", err)
 		}
 
 		// create the creds server options
 		creds := credentials.NewTLS(config)
+		if *GRPCEnableOptionalTLS {
+			log.Warning("Optional TLS is active. Plain-text connections will be accepted")
+			creds = grpcoptionaltls.New(creds)
+		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}
 	// Override the default max message size for both send and receive
@@ -212,6 +221,9 @@ func serveGRPC() {
 	if GRPCPort == nil || *GRPCPort == 0 {
 		return
 	}
+
+	// register reflection to support list calls :)
+	reflection.Register(GRPCServer)
 
 	// listen on the port
 	log.Infof("Listening for gRPC calls on port %v", *GRPCPort)

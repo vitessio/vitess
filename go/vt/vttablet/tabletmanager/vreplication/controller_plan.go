@@ -152,7 +152,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
 			Operator: sqlparser.InOp,
-			Right:    sqlparser.ListArg("::ids"),
+			Right:    sqlparser.ListArg("ids"),
 		},
 	}
 
@@ -194,7 +194,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
 			Operator: sqlparser.InOp,
-			Right:    sqlparser.ListArg("::ids"),
+			Right:    sqlparser.ListArg("ids"),
 		},
 	}
 
@@ -206,7 +206,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		Expr: &sqlparser.ComparisonExpr{
 			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("vrepl_id")},
 			Operator: sqlparser.InOp,
-			Right:    sqlparser.ListArg("::ids"),
+			Right:    sqlparser.ListArg("ids"),
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
@@ -221,12 +221,12 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
-	switch sqlparser.String(sel.From) {
-	case vreplicationTableName, reshardingJournalTableName, copyStateTableName:
+	switch sqlparser.ToString(sel.From) {
+	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil
 	default:
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(sel.From))
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.ToString(sel.From))
 	}
 }

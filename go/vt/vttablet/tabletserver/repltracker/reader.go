@@ -44,7 +44,7 @@ const (
 
 // heartbeatReader reads the heartbeat table at a configured interval in order
 // to calculate replication lag. It is meant to be run on a replica, and paired
-// with a heartbeatWriter on a master.
+// with a heartbeatWriter on a primary.
 // Lag is calculated by comparing the most recent timestamp in the heartbeat
 // table against the current time at read time.
 type heartbeatReader struct {
@@ -89,7 +89,7 @@ func newHeartbeatReader(env tabletenv.Env) *heartbeatReader {
 }
 
 // InitDBConfig initializes the target name for the heartbeatReader.
-func (r *heartbeatReader) InitDBConfig(target querypb.Target) {
+func (r *heartbeatReader) InitDBConfig(target *querypb.Target) {
 	r.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
 }
 
@@ -146,12 +146,12 @@ func (r *heartbeatReader) readHeartbeat() {
 
 	res, err := r.fetchMostRecentHeartbeat(ctx)
 	if err != nil {
-		r.recordError(vterrors.Wrap(err, "Failed to read most recent heartbeat"))
+		r.recordError(vterrors.Wrap(err, "failed to read most recent heartbeat"))
 		return
 	}
 	ts, err := parseHeartbeatResult(res)
 	if err != nil {
-		r.recordError(vterrors.Wrap(err, "Failed to parse heartbeat result"))
+		r.recordError(vterrors.Wrap(err, "failed to parse heartbeat result"))
 		return
 	}
 

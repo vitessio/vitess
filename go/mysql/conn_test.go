@@ -18,7 +18,9 @@ package mysql
 
 import (
 	"bytes"
+	"context"
 	crypto_rand "crypto/rand"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/rand"
@@ -43,7 +45,7 @@ import (
 
 func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a listener.
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:")
 	if err != nil {
 		t.Fatalf("Listen failed: %v", err)
 	}
@@ -81,6 +83,7 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	// Create a Conn on both sides.
 	cConn := newConn(clientConn)
 	sConn := newConn(serverConn)
+	sConn.PrepareData = map[uint32]*PrepareData{}
 
 	return listener, sConn, cConn
 }
@@ -177,6 +180,17 @@ func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
 		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
 		sConn.recycleReadPacket()
 	}
+}
+
+func TestRawConnection(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+	assert.IsType(t, &net.TCPConn{}, sConn.GetRawConn())
+	assert.IsType(t, &net.TCPConn{}, cConn.GetRawConn())
 }
 
 func TestPackets(t *testing.T) {
@@ -632,49 +646,6 @@ func TestConnectionErrorWhileWritingComStmtExecute(t *testing.T) {
 	require.False(t, res, "we should beak the connection in case of error writing error packet")
 }
 
-type testRun struct {
-	t   *testing.T
-	err error
-}
-
-func (t testRun) NewConnection(c *Conn) {
-	panic("implement me")
-}
-
-func (t testRun) ConnectionClosed(c *Conn) {
-	panic("implement me")
-}
-
-func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-	if strings.Contains(query, "error") {
-		return t.err
-	}
-	if strings.Contains(query, "panic") {
-		panic("test panic attack!")
-	}
-	if strings.Contains(query, "twice") {
-		callback(selectRowsResult)
-	}
-	callback(selectRowsResult)
-	return nil
-}
-
-func (t testRun) ComPrepare(c *Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
-	panic("implement me")
-}
-
-func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
-}
-
-func (t testRun) WarningCount(c *Conn) uint16 {
-	return 0
-}
-
-func (t testRun) ComResetConnection(c *Conn) {
-	panic("implement me")
-}
-
 var _ Handler = (*testRun)(nil)
 
 type testConn struct {
@@ -737,3 +708,151 @@ func (m mockAddress) String() string {
 }
 
 var _ net.Addr = (*mockAddress)(nil)
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
+func TestPrepareAndExecute(t *testing.T) {
+	// this test starts a lot of clients that all send prepared statement parameter values
+	// and check that the handler received the correct input
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for i := 0; i < 100; i++ {
+		startGoRoutine(ctx, t, fmt.Sprintf("%d:%s", i, randSeq(i)))
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if t.Failed() {
+				return
+			}
+		}
+	}
+}
+
+func startGoRoutine(ctx context.Context, t *testing.T, s string) {
+	go func(longData string) {
+		listener, sConn, cConn := createSocketPair(t)
+		defer func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		}()
+
+		sql := "SELECT * FROM test WHERE id = ?"
+		mockData := preparePacket(t, sql)
+
+		err := cConn.writePacket(mockData)
+		require.NoError(t, err)
+
+		handler := &testRun{
+			t:              t,
+			expParamCounts: 1,
+			expQuery:       sql,
+			expStmtID:      1,
+		}
+
+		ok := sConn.handleNextCommand(handler)
+		require.True(t, ok, "error handling command for id: %s", s)
+
+		resp, err := cConn.ReadPacket()
+		require.NoError(t, err)
+		require.EqualValues(t, 0, resp[0])
+
+		for count := 0; ; count++ {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			cConn.sequence = 0
+			longDataPacket := createSendLongDataPacket(sConn.StatementID, 0, []byte(longData))
+			err = cConn.writePacket(longDataPacket)
+			assert.NoError(t, err)
+
+			assert.True(t, sConn.handleNextCommand(handler))
+			data := sConn.PrepareData[sConn.StatementID]
+			assert.NotNil(t, data)
+			variable := data.BindVars["v1"]
+			assert.NotNil(t, variable, fmt.Sprintf("%#v", data.BindVars))
+			assert.Equalf(t, []byte(longData), variable.Value[len(longData)*count:], "failed at: %d", count)
+		}
+	}(s)
+}
+
+func createSendLongDataPacket(stmtID uint32, paramID uint16, data []byte) []byte {
+	stmtIDBinary := make([]byte, 4)
+	binary.LittleEndian.PutUint32(stmtIDBinary, stmtID)
+
+	paramIDBinary := make([]byte, 2)
+	binary.LittleEndian.PutUint16(paramIDBinary, paramID)
+
+	packet := []byte{0, 0, 0, 0, ComStmtSendLongData}
+	packet = append(packet, stmtIDBinary...)  // append stmt ID
+	packet = append(packet, paramIDBinary...) // append param ID
+	packet = append(packet, data...)          // append data
+	return packet
+}
+
+type testRun struct {
+	t              *testing.T
+	err            error
+	expParamCounts int
+	expQuery       string
+	expStmtID      int
+}
+
+func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
+	panic("implement me")
+}
+
+func (t testRun) NewConnection(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ConnectionClosed(c *Conn) {
+	panic("implement me")
+}
+
+func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+	if strings.Contains(query, "error") {
+		return t.err
+	}
+	if strings.Contains(query, "panic") {
+		panic("test panic attack!")
+	}
+	if strings.Contains(query, "twice") {
+		callback(selectRowsResult)
+	}
+	callback(selectRowsResult)
+	return nil
+}
+
+func (t testRun) ComPrepare(c *Conn, query string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	assert.Equal(t.t, t.expQuery, query)
+	assert.EqualValues(t.t, t.expStmtID, c.StatementID)
+	assert.NotNil(t.t, c.PrepareData[c.StatementID])
+	assert.EqualValues(t.t, t.expParamCounts, c.PrepareData[c.StatementID].ParamsCount)
+	assert.Len(t.t, c.PrepareData, int(c.PrepareData[c.StatementID].ParamsCount))
+	return nil, nil
+}
+
+func (t testRun) WarningCount(c *Conn) uint16 {
+	return 0
+}
+
+func (t testRun) ComResetConnection(c *Conn) {
+	panic("implement me")
+}
+
+var _ Handler = (*testRun)(nil)

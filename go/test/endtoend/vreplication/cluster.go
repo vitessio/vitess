@@ -1,27 +1,24 @@
 package vreplication
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	debug = false // set to true to always use local env vtdataroot for local debugging
+	debug = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
 	originalVtdataroot    string
 	vtdataroot            string
@@ -44,6 +41,8 @@ type ClusterConfig struct {
 	tabletPortBase      int
 	tabletGrpcPortBase  int
 	tabletMysqlPortBase int
+
+	vreplicationCompressGTID bool
 }
 
 // VitessCluster represents all components within the test cluster
@@ -120,7 +119,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		vtgatePort:          basePort + 1,
 		vtgateGrpcPort:      basePort + 991,
 		vtgateMySQLPort:     basePort + 306,
-		tabletTypes:         "master",
+		tabletTypes:         "primary",
 		vtdataroot:          dataRootDir,
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
@@ -129,6 +128,11 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 }
 
 func init() {
+	// for local debugging set this variable so that each run uses VTDATAROOT instead of a random dir
+	// and also does not teardown the cluster for inspecting logs and the databases
+	if os.Getenv("VREPLICATION_E2E_DEBUG") != "" {
+		debug = true
+	}
 	rand.Seed(time.Now().UTC().UnixNano())
 	originalVtdataroot = os.Getenv("VTDATAROOT")
 	var mainVtDataRoot string
@@ -211,7 +215,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 	keyspace.VSchema = vschema
 	for _, cell := range cells {
 		if len(cell.Vtgates) == 0 {
-			fmt.Println("Starting vtgate")
+			log.Infof("Starting vtgate")
 			vc.StartVtgate(t, cell, cellsToWatch)
 		}
 	}
@@ -220,8 +224,19 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string,
 }
 
 // AddTablet creates new tablet with specified attributes
-func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
+func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
+
+	options := []string{
+		"-queryserver-config-schema-reload-time", "5",
+		"-enable-lag-throttler",
+		"-heartbeat_enable",
+		"-heartbeat_interval", "250ms",
+	} //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+
+	if mainClusterConfig.vreplicationCompressGTID {
+		options = append(options, "-vreplication_store_compressed_gtid=true")
+	}
 
 	vttablet := cluster.VttabletProcessInstance(
 		vc.ClusterConfig.tabletPortBase+tabletID,
@@ -235,12 +250,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		vc.Topo.Port,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
-		[]string{
-			"-queryserver-config-schema-reload-time", "5",
-			"-enable-lag-throttler",
-			"-heartbeat_enable",
-			"-heartbeat_interval", "250ms",
-		}, //FIXME: for multi-cell initial schema doesn't seem to load without "-queryserver-config-schema-reload-time"
+		options,
 		false)
 
 	require.NotNil(t, vttablet)
@@ -263,19 +273,19 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 }
 
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
-func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int) error {
+func (vc *VitessCluster) AddShards(t testing.TB, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int) error {
 	arrNames := strings.Split(names, ",")
-	fmt.Printf("Addshards got %d shards with %+v\n", len(arrNames), arrNames)
+	log.Infof("Addshards got %d shards with %+v", len(arrNames), arrNames)
 	isSharded := len(arrNames) > 1
-	masterTabletUID := 0
+	primaryTabletUID := 0
 	for ind, shardName := range arrNames {
 		tabletID := tabletIDBase + ind*100
 		tabletIndex := 0
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		if _, ok := keyspace.Shards[shardName]; ok {
-			fmt.Printf("Shard %s already exists, not adding\n", shardName)
+			log.Infof("Shard %s already exists, not adding", shardName)
 		} else {
-			fmt.Printf("Adding Shard %s\n", shardName)
+			log.Infof("Adding Shard %s", shardName)
 			if err := vc.VtctlClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName); err != nil {
 				t.Fatalf("CreateShard command failed with %+v\n", err)
 			}
@@ -285,20 +295,20 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			dbProcesses := make([]*exec.Cmd, 0)
 			tablets := make([]*Tablet, 0)
 			if i == 0 {
-				// only add master tablet for first cell, so first time CreateShard is called
-				fmt.Println("Adding Master tablet")
-				master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
+				// only add primary tablet for first cell, so first time CreateShard is called
+				log.Infof("Adding Primary tablet")
+				primary, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
-				require.NotNil(t, master)
+				require.NotNil(t, primary)
 				tabletIndex++
-				master.Vttablet.VreplicationTabletType = "MASTER"
-				tablets = append(tablets, master)
+				primary.Vttablet.VreplicationTabletType = "PRIMARY"
+				tablets = append(tablets, primary)
 				dbProcesses = append(dbProcesses, proc)
-				masterTabletUID = master.Vttablet.TabletUID
+				primaryTabletUID = primary.Vttablet.TabletUID
 			}
 
 			for i := 0; i < numReplicas; i++ {
-				fmt.Println("Adding Replica tablet")
+				log.Infof("Adding Replica tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletID+tabletIndex)
 				require.NoError(t, err)
 				require.NotNil(t, tablet)
@@ -307,7 +317,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 				dbProcesses = append(dbProcesses, proc)
 			}
 			for i := 0; i < numRdonly; i++ {
-				fmt.Println("Adding RdOnly tablet")
+				log.Infof("Adding RdOnly tablet")
 				tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletID+tabletIndex)
 				require.NoError(t, err)
 				require.NotNil(t, tablet)
@@ -317,40 +327,40 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			}
 
 			for ind, proc := range dbProcesses {
-				fmt.Printf("Waiting for mysql process for tablet %s\n", tablets[ind].Name)
+				log.Infof("Waiting for mysql process for tablet %s", tablets[ind].Name)
 				if err := proc.Wait(); err != nil {
 					t.Fatalf("%v :: Unable to start mysql server for %v", err, tablets[ind].Vttablet)
 				}
 			}
 			for ind, tablet := range tablets {
-				fmt.Printf("Creating vt_keyspace database for tablet %s\n", tablets[ind].Name)
+				log.Infof("Creating vt_keyspace database for tablet %s", tablets[ind].Name)
 				if _, err := tablet.Vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name),
 					keyspace.Name, false); err != nil {
 					t.Fatalf("Unable to start create database vt_%s for tablet %v", keyspace.Name, tablet.Vttablet)
 				}
-				fmt.Printf("Running Setup() for vttablet %s\n", tablets[ind].Name)
+				log.Infof("Running Setup() for vttablet %s", tablets[ind].Name)
 				if err := tablet.Vttablet.Setup(); err != nil {
 					t.Fatalf(err.Error())
 				}
 			}
 		}
-		require.NotEqual(t, 0, masterTabletUID, "Should have created a master tablet")
-		fmt.Printf("InitShardMaster for %d\n", masterTabletUID)
-		require.NoError(t, vc.VtctlClient.InitShardMaster(keyspace.Name, shardName, cells[0].Name, masterTabletUID))
-		fmt.Printf("Finished creating shard %s\n", shard.Name)
+		require.NotEqual(t, 0, primaryTabletUID, "Should have created a primary tablet")
+		log.Infof("InitShardPrimary for %d", primaryTabletUID)
+		require.NoError(t, vc.VtctlClient.InitShardPrimary(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
+		log.Infof("Finished creating shard %s", shard.Name)
 	}
 	return nil
 }
 
 // DeleteShard deletes a shard
-func (vc *VitessCluster) DeleteShard(t *testing.T, cellName string, ksName string, shardName string) {
+func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName string, shardName string) {
 	shard := vc.Cells[cellName].Keyspaces[ksName].Shards[shardName]
 	require.NotNil(t, shard)
 	for _, tab := range shard.Tablets {
-		fmt.Printf("Shutting down tablet %s\n", tab.Name)
+		log.Infof("Shutting down tablet %s", tab.Name)
 		tab.Vttablet.TearDown()
 	}
-	fmt.Printf("Deleting Shard %s\n", shardName)
+	log.Infof("Deleting Shard %s", shardName)
 	//TODO how can we avoid the use of even_if_serving?
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "-recursive", "-even_if_serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
@@ -359,7 +369,7 @@ func (vc *VitessCluster) DeleteShard(t *testing.T, cellName string, ksName strin
 }
 
 // StartVtgate starts a vtgate process
-func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell, cellsToWatch string) {
+func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch string) {
 	vtgate := cluster.VtgateProcessInstance(
 		vc.ClusterConfig.vtgatePort,
 		vc.ClusterConfig.vtgateGrpcPort,
@@ -379,98 +389,86 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell, cellsToWatch stri
 }
 
 // AddCell adds a new cell to the cluster
-func (vc *VitessCluster) AddCell(t *testing.T, name string) (*Cell, error) {
+func (vc *VitessCluster) AddCell(t testing.TB, name string) (*Cell, error) {
 	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates: make([]*cluster.VtgateProcess, 0)}
 	vc.Cells[name] = cell
 	return cell, nil
 }
 
-// TearDown brings down a cluster, deleting processes, removing topo keys
-func (vc *VitessCluster) TearDown() {
+func (vc *VitessCluster) teardown(t testing.TB) {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
 			if err := vtgate.TearDown(); err != nil {
 				log.Errorf("Error in vtgate teardown - %s", err.Error())
+			} else {
+				log.Infof("vtgate teardown successful")
 			}
 		}
 	}
+	//collect unique keyspaces across cells
+	keyspaces := make(map[string]*Keyspace)
 	for _, cell := range vc.Cells {
 		for _, keyspace := range cell.Keyspaces {
-			for _, shard := range keyspace.Shards {
-				for _, tablet := range shard.Tablets {
-					if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
-						if _, err := tablet.DbServer.StopProcess(); err != nil {
-							log.Errorf("Error stopping mysql process: %s", err.Error())
-						}
-					}
-					fmt.Printf("Stopping vttablet %s\n", tablet.Name)
-					if err := tablet.Vttablet.TearDown(); err != nil {
-						fmt.Printf("Stopped vttablet %s %s\n", tablet.Name, err.Error())
-					}
-				}
-			}
+			keyspaces[keyspace.Name] = keyspace
 		}
 	}
 
+	var wg sync.WaitGroup
+
+	for _, keyspace := range keyspaces {
+		for _, shard := range keyspace.Shards {
+			for _, tablet := range shard.Tablets {
+				wg.Add(1)
+				go func(tablet2 *Tablet) {
+					defer wg.Done()
+					if tablet2.DbServer != nil && tablet2.DbServer.TabletUID > 0 {
+						if _, err := tablet2.DbServer.StopProcess(); err != nil {
+							log.Infof("Error stopping mysql process: %s", err.Error())
+						}
+					}
+					if err := tablet2.Vttablet.TearDown(); err != nil {
+						log.Infof("Error stopping vttablet %s %s", tablet2.Name, err.Error())
+					} else {
+						log.Infof("Successfully stopped vttablet %s", tablet2.Name)
+					}
+				}(tablet)
+			}
+		}
+	}
+	wg.Wait()
 	if err := vc.Vtctld.TearDown(); err != nil {
-		fmt.Printf("Error stopping Vtctld:  %s\n", err.Error())
+		log.Infof("Error stopping Vtctld:  %s", err.Error())
+	} else {
+		log.Info("Successfully stopped vtctld")
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, originalVtdataroot, vtdataroot, false, "etcd2"); err != nil {
-			fmt.Printf("Error in etcd teardown - %s\n", err.Error())
+			log.Infof("Error in etcd teardown - %s", err.Error())
+		} else {
+			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
 		}
 	}
 }
 
-// WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vc *VitessCluster) WaitForVReplicationToCatchup(vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
-	queries := [3]string{
-		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
-		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
-		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
+// TearDown brings down a cluster, deleting processes, removing topo keys
+func (vc *VitessCluster) TearDown(t testing.TB) {
+	if debug {
+		return
 	}
-	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
-	var lastChecked time.Time
-	for ind, query := range queries {
-		waitDuration := 500 * time.Millisecond
-		for duration > 0 {
-			fmt.Printf("Executing query %s on %s\n", query, vttablet.Name)
-			lastChecked = time.Now()
-			qr, err := vc.execTabletQuery(vttablet, query)
-			if err != nil {
-				return err
-			}
-			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
-				break
-			} else {
-				fmt.Printf("In WaitForVReplicationToCatchup: %s %+v\n", query, qr.Rows)
-			}
-			time.Sleep(waitDuration)
-			duration -= waitDuration
-		}
-		if duration <= 0 {
-			fmt.Printf("WaitForVReplicationToCatchup timed out for workflow %s, keyspace %s\n", workflow, database)
-			return errors.New("WaitForVReplicationToCatchup timed out")
-		}
+	done := make(chan bool)
+	go func() {
+		vc.teardown(t)
+		done <- true
+	}()
+	select {
+	case <-done:
+		log.Infof("TearDown() was successful")
+	case <-time.After(1 * time.Minute):
+		log.Infof("TearDown() timed out")
 	}
-	fmt.Printf("WaitForVReplicationToCatchup succeeded at %v\n", lastChecked)
-	return nil
-}
-
-func (vc *VitessCluster) execTabletQuery(vttablet *cluster.VttabletProcess, query string) (*sqltypes.Result, error) {
-	vtParams := mysql.ConnParams{
-		UnixSocket: fmt.Sprintf("%s/mysql.sock", vttablet.Directory),
-		Uname:      "vt_dba",
-	}
-	ctx := context.Background()
-	var conn *mysql.Conn
-	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	return qr, err
+	// some processes seem to hang around for a bit
+	time.Sleep(5 * time.Second)
 }
 
 func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName string, tabletType string) map[string]*cluster.VttabletProcess {
@@ -479,7 +477,7 @@ func (vc *VitessCluster) getVttabletsInKeyspace(t *testing.T, cell *Cell, ksName
 	for _, shard := range keyspace.Shards {
 		for _, tablet := range shard.Tablets {
 			if tablet.Vttablet.GetTabletStatus() == "SERVING" && strings.EqualFold(tablet.Vttablet.VreplicationTabletType, tabletType) {
-				fmt.Printf("Serving status of tablet %s is %s, %s\n", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
+				log.Infof("Serving status of tablet %s is %s, %s", tablet.Name, tablet.Vttablet.ServingStatus, tablet.Vttablet.GetTabletStatus())
 				tablets[tablet.Name] = tablet.Vttablet
 			}
 		}

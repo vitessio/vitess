@@ -28,7 +28,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -131,7 +131,7 @@ func init() {
 	flag.StringVar(&topo.shards, "num_shards", "2",
 		"Comma separated shard count (one per keyspace)")
 	flag.IntVar(&topo.replicas, "replica_count", 2,
-		"Replica tablets per shard (includes master)")
+		"Replica tablets per shard (includes primary)")
 	flag.IntVar(&topo.rdonly, "rdonly_count", 1,
 		"Rdonly tablets per shard")
 
@@ -147,6 +147,10 @@ func init() {
 	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
 
 	flag.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+
+	flag.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
+	flag.BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
+	flag.BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
@@ -208,7 +212,7 @@ func parseFlags() (env vttest.Environment, err error) {
 		}
 	} else {
 		var topology vttestpb.VTTestTopology
-		err = proto.UnmarshalText(protoTopo, &topology)
+		err = prototext.Unmarshal([]byte(protoTopo), &topology)
 		if err != nil {
 			return
 		}

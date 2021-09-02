@@ -23,11 +23,12 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/golang/protobuf/jsonpb"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"context"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -99,10 +100,14 @@ func DecodeContent(filename string, data []byte, json bool) (string, error) {
 		return string(data), err
 	}
 
+	var marshalled []byte
+	var err error
 	if json {
-		return new(jsonpb.Marshaler).MarshalToString(p)
+		marshalled, err = protojson.Marshal(p)
+	} else {
+		marshalled, err = prototext.Marshal(p)
 	}
-	return proto.MarshalTextString(p), nil
+	return string(marshalled), err
 }
 
 func commandTopoCat(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

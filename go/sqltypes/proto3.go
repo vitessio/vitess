@@ -17,7 +17,7 @@ limitations under the License.
 package sqltypes
 
 import (
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -30,7 +30,17 @@ import (
 // RowToProto3 converts []Value to proto3.
 func RowToProto3(row []Value) *querypb.Row {
 	result := &querypb.Row{}
-	result.Lengths = make([]int64, 0, len(row))
+	_ = RowToProto3Inplace(row, result)
+	return result
+}
+
+// RowToProto3Inplace converts []Value to proto3 and stores the conversion in the provided Row
+func RowToProto3Inplace(row []Value, result *querypb.Row) int {
+	if result.Lengths == nil {
+		result.Lengths = make([]int64, 0, len(row))
+	} else {
+		result.Lengths = result.Lengths[:0]
+	}
 	total := 0
 	for _, c := range row {
 		if c.IsNull() {
@@ -41,14 +51,18 @@ func RowToProto3(row []Value) *querypb.Row {
 		result.Lengths = append(result.Lengths, int64(length))
 		total += length
 	}
-	result.Values = make([]byte, 0, total)
+	if result.Values == nil {
+		result.Values = make([]byte, 0, total)
+	} else {
+		result.Values = result.Values[:0]
+	}
 	for _, c := range row {
 		if c.IsNull() {
 			continue
 		}
 		result.Values = append(result.Values, c.Raw()...)
 	}
-	return result
+	return total
 }
 
 // RowsToProto3 converts [][]Value to proto3.

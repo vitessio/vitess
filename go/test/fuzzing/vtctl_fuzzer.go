@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-// +build gofuzz
 
 package fuzzing
 
@@ -70,7 +69,7 @@ func getCommandType(index int) string {
 		24: "ValidateShard",
 		25: "ShardReplicationPositions",
 		26: "ListShardTablets",
-		27: "SetShardIsMasterServing",
+		27: "SetShardIsPrimaryServing",
 		28: "SetShardTabletControl",
 		29: "UpdateSrvKeyspacePartition",
 		30: "SourceShardDelete",
@@ -82,7 +81,7 @@ func getCommandType(index int) string {
 		36: "ListBackups",
 		37: "BackupShard",
 		38: "RemoveBackup",
-		39: "InitShardMaster",
+		39: "InitShardPrimary",
 		40: "PlannedReparentShard",
 		41: "EmergencyReparentShard",
 		42: "TabletExternallyReparented",

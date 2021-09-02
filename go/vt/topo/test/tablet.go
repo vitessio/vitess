@@ -19,9 +19,9 @@ package test
 import (
 	"testing"
 
-	"context"
+	"google.golang.org/protobuf/proto"
 
-	"github.com/golang/protobuf/proto"
+	"context"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -45,7 +45,7 @@ func checkTablet(t *testing.T, ts *topo.Server) {
 
 		Tags:     map[string]string{"tag": "value"},
 		Keyspace: "test_keyspace",
-		Type:     topodatapb.TabletType_MASTER,
+		Type:     topodatapb.TabletType_PRIMARY,
 		KeyRange: newKeyRange("-10"),
 	}
 	tablet.MysqlPort = 3334

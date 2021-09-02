@@ -24,7 +24,7 @@ import (
 
 func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.OrderBy) (logicalPlan, error) {
 	switch node := input.(type) {
-	case *subquery, *vindexFunc:
+	case *simpleProjection, *vindexFunc:
 		if len(orderBy) == 0 {
 			return node, nil
 		}
@@ -48,7 +48,7 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.Ord
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "can't do ORDER BY on top of ORDER BY")
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
 	}
 	if orderBy == nil {
 		return input, nil
@@ -76,7 +76,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	}
 
 	// referenced tracks the keys referenced by the order by clause.
-	referenced := make([]bool, len(oa.eaggr.Keys))
+	referenced := make([]bool, len(oa.eaggr.GroupByKeys))
 	postSort := false
 	selOrderBy := make(sqlparser.OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
@@ -84,7 +84,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 		var orderByCol *column
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
-			num, err := ResultFromNumber(oa.resultColumns, expr)
+			num, err := ResultFromNumber(oa.resultColumns, expr, "order clause")
 			if err != nil {
 				return nil, err
 			}
@@ -103,8 +103,8 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 
 		// Match orderByCol against the group by columns.
 		found := false
-		for j, key := range oa.eaggr.Keys {
-			if oa.resultColumns[key].column != orderByCol {
+		for j, groupBy := range oa.eaggr.GroupByKeys {
+			if oa.resultColumns[groupBy.KeyCol].column != orderByCol {
 				continue
 			}
 
@@ -119,12 +119,12 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	}
 
 	// Append any unreferenced keys at the end of the order by.
-	for i, key := range oa.eaggr.Keys {
+	for i, groupByKey := range oa.eaggr.GroupByKeys {
 		if referenced[i] {
 			continue
 		}
 		// Build a brand new reference for the key.
-		col, err := BuildColName(oa.input.ResultColumns(), key)
+		col, err := BuildColName(oa.input.ResultColumns(), groupByKey.KeyCol)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "generating order by clause")
 		}
@@ -183,7 +183,7 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *joi
 		if e, ok := order.Expr.(*sqlparser.Literal); ok {
 			// This block handles constructs that use ordinals for 'ORDER BY'. For example:
 			// SELECT a, b, c FROM t1, t2 ORDER BY 1, 2, 3.
-			num, err := ResultFromNumber(node.ResultColumns(), e)
+			num, err := ResultFromNumber(node.ResultColumns(), e, "order clause")
 			if err != nil {
 				return nil, err
 			}
@@ -258,7 +258,7 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 		switch expr := order.Expr.(type) {
 		case *sqlparser.Literal:
 			var err error
-			if colNumber, err = ResultFromNumber(node.resultColumns, expr); err != nil {
+			if colNumber, err = ResultFromNumber(node.resultColumns, expr, "order clause"); err != nil {
 				return nil, err
 			}
 		case *sqlparser.ColName:
@@ -289,10 +289,35 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 		if colNumber == -1 {
 			return nil, fmt.Errorf("unsupported: in scatter query: order by must reference a column in the select list: %s", sqlparser.String(order))
 		}
-		ob := engine.OrderbyParams{
-			Col:             colNumber,
-			WeightStringCol: -1,
-			Desc:            order.Direction == sqlparser.DescOrder,
+		starColFixedIndex := colNumber
+		if selectStatement, ok := node.Select.(*sqlparser.Select); ok {
+			for i, selectExpr := range selectStatement.SelectExprs {
+				if starExpr, ok := selectExpr.(*sqlparser.StarExpr); ok {
+					if i < colNumber {
+						tableName := starExpr.TableName
+						tableMap := node.resultColumns[i].column.st.tables
+						var tableMeta *table
+						if tableName.IsEmpty() && len(tableMap) == 1 {
+							for j := range tableMap {
+								tableMeta = tableMap[j]
+							}
+						} else {
+							tableMeta = tableMap[tableName]
+						}
+						if tableMeta == nil {
+							break
+						}
+						starColFixedIndex += len(tableMeta.columnNames) - 1
+					}
+				}
+			}
+		}
+
+		ob := engine.OrderByParams{
+			Col:               colNumber,
+			WeightStringCol:   -1,
+			Desc:              order.Direction == sqlparser.DescOrder,
+			StarColFixedIndex: starColFixedIndex,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 

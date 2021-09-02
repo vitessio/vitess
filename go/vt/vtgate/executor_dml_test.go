@@ -134,7 +134,7 @@ func TestUpdateEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{
 				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 				"name":        sqltypes.Int32BindVariable(1),
-				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			},
 		},
 		{
@@ -142,7 +142,7 @@ func TestUpdateEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{
 				"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
 				"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
-				"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			},
 		},
 	}
@@ -310,7 +310,7 @@ func TestUpdateNormalize(t *testing.T) {
 	sbc1.Queries = nil
 
 	// Force the query to go to the "wrong" shard and ensure that normalization still happens
-	masterSession.TargetString = "TestExecutor/40-60"
+	primarySession.TargetString = "TestExecutor/40-60"
 	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
@@ -323,7 +323,7 @@ func TestUpdateNormalize(t *testing.T) {
 	assert.Empty(t, sbc1.Queries)
 	utils.MustMatch(t, sbc2.Queries, wantQueries, "didn't get expected queries")
 	sbc2.Queries = nil
-	masterSession.TargetString = ""
+	primarySession.TargetString = ""
 }
 
 func TestDeleteEqual(t *testing.T) {
@@ -449,7 +449,7 @@ func TestDeleteEqual(t *testing.T) {
 			BindVariables: map[string]*querypb.BindVariable{
 				"lastname":    sqltypes.ValueBindVariable(sqltypes.NewVarChar("foo")),
 				"name":        sqltypes.Int32BindVariable(1),
-				"keyspace_id": sqltypes.BytesBindVariable([]byte("\026k@\264J\272K\326")),
+				"keyspace_id": sqltypes.BytesBindVariable([]byte("\x16k@\xb4J\xbaK\xd6")),
 			},
 		},
 	}
@@ -934,16 +934,16 @@ func TestAutocommitFail(t *testing.T) {
 
 	query := "insert into user (id) values (1)"
 	sbc1.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 1
-	masterSession.Reset()
-	masterSession.Autocommit = true
+	primarySession.Reset()
+	primarySession.Autocommit = true
 	defer func() {
-		masterSession.Autocommit = false
+		primarySession.Autocommit = false
 	}()
 	_, err := executorExec(executor, query, nil)
 	require.Error(t, err)
 
 	// make sure we have closed and rolled back any transactions started
-	assert.False(t, masterSession.InTransaction, "left with tx open")
+	assert.False(t, primarySession.InTransaction, "left with tx open")
 }
 
 func TestInsertComments(t *testing.T) {
@@ -1044,7 +1044,7 @@ func TestInsertAutoincSharded(t *testing.T) {
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
-	assert.Equal(t, masterSession.LastInsertId, uint64(2))
+	assert.Equal(t, primarySession.LastInsertId, uint64(2))
 }
 
 func TestInsertGeneratorUnsharded(t *testing.T) {
@@ -1375,10 +1375,10 @@ func TestMultiInsertSharded(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{
 			"name_0":        sqltypes.BytesBindVariable([]byte("myname")),
 			"lastname_0":    sqltypes.BytesBindVariable([]byte("mylastname")),
-			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\006\347\352\"\316\222p\217")),
+			"keyspace_id_0": sqltypes.BytesBindVariable([]byte("\x06\xe7\xea\"Βp\x8f")),
 			"name_1":        sqltypes.BytesBindVariable([]byte("myname2")),
 			"lastname_1":    sqltypes.BytesBindVariable([]byte("mylastname2")),
-			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("N\261\220\311\242\372\026\234")),
+			"keyspace_id_1": sqltypes.BytesBindVariable([]byte("N\xb1\x90ɢ\xfa\x16\x9c")),
 		},
 	}}
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
@@ -1582,7 +1582,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 		t.Run(tc.targetString+" - "+tc.inputQuery, func(t *testing.T) {
 			executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 
-			masterSession.TargetString = tc.targetString
+			primarySession.TargetString = tc.targetString
 			_, err := executorExec(executor, tc.inputQuery, nil)
 			require.NoError(t, err)
 
@@ -1602,12 +1602,12 @@ func TestKeyDestRangeQuery(t *testing.T) {
 
 	// it does not work for inserts
 	executor, _, _, _ := createLegacyExecutorEnv()
-	masterSession.TargetString = "TestExecutor[-]"
+	primarySession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "range queries are not allowed for insert statement: TestExecutor[-]")
+	require.EqualError(t, err, "INSERT not supported when targeting a key range: TestExecutor[-]")
 
-	masterSession.TargetString = ""
+	primarySession.TargetString = ""
 }
 
 func assertQueriesContain(t *testing.T, sql, sbcName string, sbc *sandboxconn.SandboxConn) {
@@ -1694,7 +1694,7 @@ func TestUpdateLastInsertID(t *testing.T) {
 	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"
-	masterSession.LastInsertId = 43
+	primarySession.LastInsertId = 43
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{

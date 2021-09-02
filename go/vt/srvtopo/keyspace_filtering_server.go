@@ -17,9 +17,8 @@ limitations under the License.
 package srvtopo
 
 import (
-	"fmt"
-
 	"context"
+	"fmt"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -96,12 +95,29 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspace(
 	return ksf.server.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
+func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
+	ctx context.Context,
+	cell, keyspace string,
+	callback func(*topodatapb.SrvKeyspace, error) bool,
+) {
+	filteringCallback := func(ks *topodatapb.SrvKeyspace, err error) bool {
+		if ks != nil {
+			if !ksf.selectKeyspaces[keyspace] {
+				return callback(nil, topo.NewError(topo.NoNode, keyspace))
+			}
+		}
+		return callback(ks, err)
+	}
+
+	ksf.server.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
+}
+
 func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 	ctx context.Context,
 	cell string,
-	callback func(*vschemapb.SrvVSchema, error),
+	callback func(*vschemapb.SrvVSchema, error) bool,
 ) {
-	filteringCallback := func(schema *vschemapb.SrvVSchema, err error) {
+	filteringCallback := func(schema *vschemapb.SrvVSchema, err error) bool {
 		if schema != nil {
 			for ks := range schema.Keyspaces {
 				if !ksf.selectKeyspaces[ks] {
@@ -110,7 +126,7 @@ func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 			}
 		}
 
-		callback(schema, err)
+		return callback(schema, err)
 	}
 
 	ksf.server.WatchSrvVSchema(ctx, cell, filteringCallback)

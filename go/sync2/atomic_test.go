@@ -57,6 +57,24 @@ func TestAtomicInt64(t *testing.T) {
 	assert.Equal(t, int64(4), i.Get())
 }
 
+func TestAtomicFloat64(t *testing.T) {
+	i := NewAtomicFloat64(1.0)
+	assert.Equal(t, float64(1.0), i.Get())
+
+	i.Set(2.0)
+	assert.Equal(t, float64(2.0), i.Get())
+	{
+		swapped := i.CompareAndSwap(2.0, 4.0)
+		assert.Equal(t, float64(4), i.Get())
+		assert.Equal(t, true, swapped)
+	}
+	{
+		swapped := i.CompareAndSwap(2.0, 5.0)
+		assert.Equal(t, float64(4), i.Get())
+		assert.Equal(t, false, swapped)
+	}
+}
+
 func TestAtomicDuration(t *testing.T) {
 	d := NewAtomicDuration(time.Second)
 	assert.Equal(t, time.Second, d.Get())

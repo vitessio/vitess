@@ -84,7 +84,13 @@ func getTableSizeOpts(r Request) (*vtadminpb.GetSchemaTableSizeOptions, error) {
 		return nil, err
 	}
 
+	includeNonServingShards, err := r.ParseQueryParamAsBool("include_non_serving_shards", false)
+	if err != nil {
+		return nil, err
+	}
+
 	return &vtadminpb.GetSchemaTableSizeOptions{
-		AggregateSizes: aggregateSizes,
+		AggregateSizes:          aggregateSizes,
+		IncludeNonServingShards: includeNonServingShards,
 	}, nil
 }

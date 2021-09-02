@@ -24,7 +24,7 @@ import (
 )
 
 func TestKeyspaceChangeSyslog(t *testing.T) {
-	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: sharding_column_name:\"sharded_by_me\" "
+	wantSev, wantMsg := syslog.LOG_INFO, "keyspace-123 [keyspace] status value: sharding_column_name:\"sharded_by_me\""
 	kc := &KeyspaceChange{
 		KeyspaceName: "keyspace-123",
 		Keyspace: &topodatapb.Keyspace{
@@ -38,6 +38,6 @@ func TestKeyspaceChangeSyslog(t *testing.T) {
 		t.Errorf("wrong severity: got %v, want %v", gotSev, wantSev)
 	}
 	if gotMsg != wantMsg {
-		t.Errorf("wrong message: got %v, want %v", gotMsg, wantMsg)
+		t.Errorf("wrong message: got %q, want %q", gotMsg, wantMsg)
 	}
 }

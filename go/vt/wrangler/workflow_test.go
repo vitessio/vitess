@@ -17,17 +17,19 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/workflow"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func getMoveTablesWorkflow(t *testing.T, cells, tabletTypes string) *VReplicationWorkflow {
@@ -57,7 +59,7 @@ func testComplete(t *testing.T, vrwf *VReplicationWorkflow) error {
 func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 	mtwf := getMoveTablesWorkflow(t, "cell1,cell2", "replica,rdonly")
 	require.False(t, mtwf.Exists())
-	mtwf.ws = &workflowState{}
+	mtwf.ws = &workflow.State{}
 	require.True(t, mtwf.Exists())
 	require.Errorf(t, testComplete(t, mtwf), ErrWorkflowNotFullySwitched)
 	mtwf.ws.WritesSwitched = true
@@ -65,21 +67,21 @@ func TestReshardingWorkflowErrorsAndMisc(t *testing.T) {
 
 	require.ElementsMatch(t, mtwf.getCellsAsArray(), []string{"cell1", "cell2"})
 	require.ElementsMatch(t, mtwf.getTabletTypes(), []topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY})
-	hasReplica, hasRdonly, hasMaster, err := mtwf.parseTabletTypes()
+	hasReplica, hasRdonly, hasPrimary, err := mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
 	require.True(t, hasRdonly)
-	require.False(t, hasMaster)
+	require.False(t, hasPrimary)
 
-	mtwf.params.TabletTypes = "replica,rdonly,master"
+	mtwf.params.TabletTypes = "replica,rdonly,primary"
 	require.ElementsMatch(t, mtwf.getTabletTypes(),
-		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_MASTER})
+		[]topodata.TabletType{topodata.TabletType_REPLICA, topodata.TabletType_RDONLY, topodata.TabletType_PRIMARY})
 
-	hasReplica, hasRdonly, hasMaster, err = mtwf.parseTabletTypes()
+	hasReplica, hasRdonly, hasPrimary, err = mtwf.parseTabletTypes()
 	require.NoError(t, err)
 	require.True(t, hasReplica)
 	require.True(t, hasRdonly)
-	require.True(t, hasMaster)
+	require.True(t, hasPrimary)
 }
 
 func TestCopyProgress(t *testing.T) {
@@ -92,7 +94,7 @@ func TestCopyProgress(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -171,7 +173,7 @@ func TestMoveTablesV2(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -217,7 +219,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -248,7 +250,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 }
 
 func testSwitchForward(t *testing.T, wf *VReplicationWorkflow) error {
-	_, err := wf.SwitchTraffic(DirectionForward)
+	_, err := wf.SwitchTraffic(workflow.DirectionForward)
 	return err
 }
 
@@ -265,7 +267,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -321,7 +323,7 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 		TargetKeyspace: "ks2",
 		Tables:         "t1,t2",
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestTableMigrater(ctx, t)
@@ -360,7 +362,7 @@ func TestReshardV2(t *testing.T) {
 		SourceShards:   sourceShards,
 		TargetShards:   targetShards,
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
@@ -383,6 +385,42 @@ func TestReshardV2(t *testing.T) {
 	require.NotNil(t, si)
 }
 
+func TestVRWSchemaValidation(t *testing.T) {
+	ctx := context.Background()
+	sourceShards := []string{"-80", "80-"}
+	targetShards := []string{"-40", "40-80", "80-c0", "c0-"}
+	p := &VReplicationWorkflowParams{
+		Workflow:       "test",
+		SourceKeyspace: "ks",
+		TargetKeyspace: "ks",
+		SourceShards:   sourceShards,
+		TargetShards:   targetShards,
+		Cells:          "cell1,cell2",
+		TabletTypes:    "replica,rdonly,primary",
+		Timeout:        DefaultActionTimeout,
+	}
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "not_in_vschema",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)
+	for _, primary := range tme.sourcePrimaries {
+		primary.FakeMysqlDaemon.Schema = schm
+	}
+
+	defer tme.stopTablets(t)
+	vrwf, err := tme.wr.NewVReplicationWorkflow(ctx, ReshardWorkflow, p)
+	vrwf.ws = nil
+	require.NoError(t, err)
+	require.NotNil(t, vrwf)
+	shouldErr := vrwf.Create(ctx)
+	require.Contains(t, shouldErr.Error(), "Create ReshardWorkflow failed: ValidateVSchema")
+}
+
 func TestReshardV2Cancel(t *testing.T) {
 	ctx := context.Background()
 	sourceShards := []string{"-40", "40-"}
@@ -394,7 +432,7 @@ func TestReshardV2Cancel(t *testing.T) {
 		SourceShards:   sourceShards,
 		TargetShards:   targetShards,
 		Cells:          "cell1,cell2",
-		TabletTypes:    "replica,rdonly,master",
+		TabletTypes:    "replica,rdonly,primary",
 		Timeout:        DefaultActionTimeout,
 	}
 	tme := newTestShardMigrater(ctx, t, sourceShards, targetShards)

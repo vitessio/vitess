@@ -241,7 +241,7 @@ func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 // testCopySchemaShards tests that schema from source is correctly applied to destination
 func testCopySchemaShards(t *testing.T, source string, shard int) {
 	addNewShard(t, shard)
-	// InitShardMaster creates the db, but there shouldn't be any tables yet.
+	// InitShardPrimary creates the db, but there shouldn't be any tables yet.
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], 0)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	// Run the command twice to make sure it's idempotent.
@@ -249,7 +249,7 @@ func testCopySchemaShards(t *testing.T, source string, shard int) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 		require.Nil(t, err)
 	}
-	// shard_2_master should look the same as the replica we copied from
+	// shard2 primary should look the same as the replica we copied from
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], totalTableCount)
 
@@ -263,8 +263,8 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[1], 0)
 	source := fmt.Sprintf("%s/0", keyspaceName)
 
-	masterTabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
-	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", masterTabletAlias)
+	tabletAlias := clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0].VttabletProcess.TabletPath
+	schema, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetSchema", tabletAlias)
 	require.Nil(t, err)
 
 	resultMap := make(map[string]interface{})
@@ -278,14 +278,14 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	// (The different charset won't be corrected on the destination shard
 	//  because we use "CREATE DATABASE IF NOT EXISTS" and this doesn't fail if
 	//  there are differences in the options e.g. the character set.)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "-json", masterTabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", "-json", tabletAlias, "ALTER DATABASE vt_ks CHARACTER SET latin1")
 	require.Nil(t, err)
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas are different"))
 
-	// shard_2_master should have the same number of tables. Only the db
+	// shard2 primary should have the same number of tables. Only the db
 	// character set is different.
 	checkTablesCount(t, clusterInstance.Keyspaces[0].Shards[shard].Vttablets[0], totalTableCount)
 }

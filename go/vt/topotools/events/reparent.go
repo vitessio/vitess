@@ -29,7 +29,7 @@ import (
 type Reparent struct {
 	base.StatusUpdater
 
-	ShardInfo            topo.ShardInfo
-	OldMaster, NewMaster topodatapb.Tablet
-	ExternalID           string
+	ShardInfo              topo.ShardInfo
+	OldPrimary, NewPrimary *topodatapb.Tablet
+	ExternalID             string
 }

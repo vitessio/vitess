@@ -204,7 +204,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		log.Info("Inserting row for fast forward to find, locking t2")
 		conn.ExecuteFetch("lock tables t2 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+2)
-		log.Infof("Position after second insert into t1: %s", masterPosition(t))
+		log.Infof("Position after second insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted row for fast forward to find, unlocked tables")
 
@@ -219,7 +219,7 @@ func TestVStreamCopyCompleteFlow(t *testing.T) {
 		conn.ExecuteFetch("lock tables t3 write", 1, false)
 		insertRow(t, "t1", 1, numInitialRows+3)
 		insertRow(t, "t2", 2, numInitialRows+2)
-		log.Infof("Position after third insert into t1: %s", masterPosition(t))
+		log.Infof("Position after third insert into t1: %s", primaryPosition(t))
 		conn.ExecuteFetch("unlock tables", 1, false)
 		log.Info("Inserted rows for fast forward to find, unlocked tables")
 
@@ -293,7 +293,13 @@ func validateReceivedEvents(t *testing.T) {
 		if ev.Type == binlogdatapb.VEventType_FIELD {
 			for j := range ev.FieldEvent.Fields {
 				ev.FieldEvent.Fields[j].Flags = 0
+				ev.FieldEvent.Keyspace = ""
+				ev.FieldEvent.Shard = ""
 			}
+		}
+		if ev.Type == binlogdatapb.VEventType_ROW {
+			ev.RowEvent.Keyspace = ""
+			ev.RowEvent.Shard = ""
 		}
 		got := ev.String()
 		want := expectedEvents[i]
@@ -335,7 +341,7 @@ func insertMultipleRows(t *testing.T, table string, idx int, numRows int) {
 
 func initTables(t *testing.T, tables []string) {
 	var idx int
-	positions["start"] = masterPosition(t)
+	positions["start"] = primaryPosition(t)
 	for i, table := range tables {
 		idx = i + 1
 		execStatement(t, fmt.Sprintf(createTableQuery, table, idx, idx, idx))
@@ -344,7 +350,7 @@ func initTables(t *testing.T, tables []string) {
 		tableName := table
 		idx = i + 1
 		insertMultipleRows(t, table, idx, numInitialRows)
-		positions[fmt.Sprintf("%sBulkInsert", table)] = masterPosition(t)
+		positions[fmt.Sprintf("%sBulkInsert", table)] = primaryPosition(t)
 
 		callbacks[fmt.Sprintf("LASTPK.*%s.*%d", table, numInitialRows)] = func() {
 			ctx := context.Background()
@@ -364,11 +370,11 @@ func initTables(t *testing.T, tables []string) {
 					"commit",
 				}
 				env.Mysqld.ExecuteSuperQueryList(ctx, queries)
-				log.Infof("Position after first insert into t1 and t2: %s", masterPosition(t))
+				log.Infof("Position after first insert into t1 and t2: %s", primaryPosition(t))
 			}
 		}
 	}
-	positions["afterInitialInsert"] = masterPosition(t)
+	positions["afterInitialInsert"] = primaryPosition(t)
 }
 
 func initialize(t *testing.T) {
@@ -446,97 +452,97 @@ func startVStreamCopy(ctx context.Context, t *testing.T, filter *binlogdatapb.Fi
 var expectedEvents = []string{
 	"type:OTHER gtid:\"Copy Start t1\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63}}",
 	"type:GTID",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"110\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"220\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"330\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"440\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"550\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"660\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"770\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"880\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:1 lengths:2 values:\"990\" > > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"10100\" > > > ",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"110\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"220\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"330\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"440\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"550\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"660\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"770\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"880\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:1 lengths:2 values:\"990\"}}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"10100\"}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\" lastpk:{rows:{lengths:2 values:\"10\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t1\" > completed:true > ",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t1\"} completed:true}",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"11110\" > > > ",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"11110\"}}}",
 	"type:GTID",
 	"type:COMMIT", //insert for t2 done along with t1 does not generate an event since t2 is not yet copied
 	"type:OTHER gtid:\"Copy Start t2\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"12120\" > > > ",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"12120\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"120\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"240\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"360\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:2 values:\"480\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"5100\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"6120\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"7140\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"8160\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:1 lengths:3 values:\"9180\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"10200\" > > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"11220\" > > > ",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" lastpk:<rows:<lengths:2 values:\"11\" > > > > ",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"120\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"240\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"360\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:2 values:\"480\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"5100\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"6120\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"7140\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"8160\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:1 lengths:3 values:\"9180\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"10200\"}}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"11220\"}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\" lastpk:{rows:{lengths:2 values:\"11\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t2\" > completed:true > ",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t2\"} completed:true}",
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Start t3\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"13130\" > > > ",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"13130\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"12240\" > > > ",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"12240\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 > fields:<name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"130\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"260\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:2 values:\"390\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"4120\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"5150\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"6180\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"7210\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"8240\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:1 lengths:3 values:\"9270\" > > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"10300\" > > > ",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t3\" lastpk:<rows:<lengths:2 values:\"10\" > > > > ",
+	"type:FIELD field_event:{table_name:\"t3\" fields:{name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63} fields:{name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"130\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"260\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:2 values:\"390\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"4120\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"5150\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"6180\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"7210\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"8240\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:1 lengths:3 values:\"9270\"}}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"10300\"}}}",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\" lastpk:{rows:{lengths:2 values:\"10\"}}}}",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:LASTPK last_p_k_event:<table_last_p_k:<table_name:\"t3\" > completed:true > ",
+	"type:LASTPK last_p_k_event:{table_last_p_k:{table_name:\"t3\"} completed:true}",
 	"type:COMMIT",
 	"type:OTHER gtid:\"Copy Done\"",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t1\" fields:<name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63 > fields:<name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t1\" row_changes:<after:<lengths:2 lengths:3 values:\"14140\" > > > ",
+	"type:FIELD field_event:{table_name:\"t1\" fields:{name:\"id11\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id11\" column_length:11 charset:63} fields:{name:\"id12\" type:INT32 table:\"t1\" org_table:\"t1\" database:\"vttest\" org_name:\"id12\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t1\" row_changes:{after:{lengths:2 lengths:3 values:\"14140\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t2\" fields:<name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63 > fields:<name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t2\" row_changes:<after:<lengths:2 lengths:3 values:\"13260\" > > > ",
+	"type:FIELD field_event:{table_name:\"t2\" fields:{name:\"id21\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id21\" column_length:11 charset:63} fields:{name:\"id22\" type:INT32 table:\"t2\" org_table:\"t2\" database:\"vttest\" org_name:\"id22\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t2\" row_changes:{after:{lengths:2 lengths:3 values:\"13260\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 	"type:BEGIN",
-	"type:FIELD field_event:<table_name:\"t3\" fields:<name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63 > fields:<name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63 > > ",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"12360\" > > > ",
+	"type:FIELD field_event:{table_name:\"t3\" fields:{name:\"id31\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id31\" column_length:11 charset:63} fields:{name:\"id32\" type:INT32 table:\"t3\" org_table:\"t3\" database:\"vttest\" org_name:\"id32\" column_length:11 charset:63}}",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"12360\"}}}",
 	"type:SAVEPOINT statement:\"SAVEPOINT `a`\"",
 	"type:SAVEPOINT statement:\"SAVEPOINT `b`\"",
-	"type:ROW row_event:<table_name:\"t3\" row_changes:<after:<lengths:2 lengths:3 values:\"13390\" > > > ",
+	"type:ROW row_event:{table_name:\"t3\" row_changes:{after:{lengths:2 lengths:3 values:\"13390\"}}}",
 	"type:GTID",
 	"type:COMMIT",
 }

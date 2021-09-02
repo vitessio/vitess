@@ -133,8 +133,10 @@ func OpenOrchestrator() (db *sql.DB, err error) {
 		if err == nil && !fromCache {
 			log.Debugf("Connected to orchestrator backend: sqlite on %v", config.Config.SQLite3DataFile)
 		}
-		db.SetMaxOpenConns(1)
-		db.SetMaxIdleConns(1)
+		if db != nil {
+			db.SetMaxOpenConns(1)
+			db.SetMaxIdleConns(1)
+		}
 	} else {
 		if db, fromCache, err := openOrchestratorMySQLGeneric(); err != nil {
 			return db, log.Errore(err)

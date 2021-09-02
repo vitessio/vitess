@@ -18,16 +18,19 @@ import { Link, NavLink } from 'react-router-dom';
 
 import style from './NavRail.module.scss';
 import logo from '../img/vitess-icon-color.svg';
-import { useClusters, useGates, useKeyspaces, useTableDefinitions, useTablets, useWorkflows } from '../hooks/api';
+import { useClusters, useGates, useKeyspaces, useSchemas, useTablets, useWorkflows } from '../hooks/api';
 import { Icon, Icons } from './Icon';
+import { getTableDefinitions } from '../util/tableDefinitions';
 
 export const NavRail = () => {
     const { data: clusters = [] } = useClusters();
     const { data: keyspaces = [] } = useKeyspaces();
     const { data: gates = [] } = useGates();
-    const { data: schemas = [] } = useTableDefinitions();
+    const { data: schemas = [] } = useSchemas();
     const { data: tablets = [] } = useTablets();
     const { data: workflows = [] } = useWorkflows();
+
+    const tds = React.useMemo(() => getTableDefinitions(schemas), [schemas]);
 
     return (
         <div className={style.container}>
@@ -57,7 +60,7 @@ export const NavRail = () => {
                         <NavRailLink icon={Icons.keyK} text="Keyspaces" to="/keyspaces" count={keyspaces.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyS} text="Schemas" to="/schemas" count={schemas.length} />
+                        <NavRailLink icon={Icons.keyS} text="Schemas" to="/schemas" count={tds.length} />
                     </li>
                     <li>
                         <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={tablets.length} />
@@ -65,6 +68,9 @@ export const NavRail = () => {
                 </ul>
 
                 <ul className={style.navList}>
+                    <li>
+                        <NavRailLink icon={Icons.download} text="Backups" to="/backups" />
+                    </li>
                     <li>
                         <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
                     </li>

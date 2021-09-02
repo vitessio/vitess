@@ -91,7 +91,7 @@ type Conn struct {
 
 	// authPluginName is the name of server's authentication plugin.
 	// It is set during the initial handshake.
-	authPluginName string
+	authPluginName AuthMethodDescription
 
 	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
@@ -129,6 +129,7 @@ type Conn struct {
 
 	bufferedReader *bufio.Reader
 	flushTimer     *time.Timer
+	header         [packetHeaderSize]byte
 
 	// Keep track of how and of the buffer we allocated for an
 	// ephemeral packet on the read and write sides.
@@ -324,14 +325,13 @@ func (c *Conn) getReader() io.Reader {
 }
 
 func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
-	var header [packetHeaderSize]byte
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
 	//   then ReadFull will return an error (different than EOF),
 	//   something like 'read: connection reset by peer'.
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
-	if _, err := io.ReadFull(r, header[:]); err != nil {
+	if _, err := io.ReadFull(r, c.header[:]); err != nil {
 		// The special casing of propagating io.EOF up
 		// is used by the server side only, to suppress an error
 		// message if a client just disconnects.
@@ -344,14 +344,14 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 		return 0, vterrors.Wrapf(err, "io.ReadFull(header size) failed")
 	}
 
-	sequence := uint8(header[3])
+	sequence := uint8(c.header[3])
 	if sequence != c.sequence {
 		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
 
-	return int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16), nil
+	return int(uint32(c.header[0]) | uint32(c.header[1])<<8 | uint32(c.header[2])<<16), nil
 }
 
 // readEphemeralPacket attempts to read a packet into buffer from sync.Pool.  Do
@@ -860,6 +860,9 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		}
 		return false
 	}
+	if len(data) == 0 {
+		return false
+	}
 
 	switch data[0] {
 	case ComQuit:
@@ -893,11 +896,16 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	case ComResetConnection:
 		c.handleComResetConnection(handler)
 		return true
+	case ComFieldList:
+		c.recycleReadPacket()
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
+			return false
+		}
 
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "command handling not implemented yet: %v", data[0]) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
 	}
@@ -922,7 +930,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	c.recycleReadPacket()
 	if !ok {
 		log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -930,7 +938,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	prepare, ok := c.PrepareData[stmtID]
 	if !ok {
 		log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data) {
+		if !c.writeErrorAndLog(CRCommandsOutOfSync, SSNetError, "commands were executed in an improper order: %v", data) {
 			return false
 		}
 	}
@@ -949,7 +957,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 }
 
 func (c *Conn) handleComStmtSendLongData(data []byte) bool {
-	stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+	stmtID, paramID, chunk, ok := c.parseComStmtSendLongData(data)
 	c.recycleReadPacket()
 	if !ok {
 		err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
@@ -968,9 +976,6 @@ func (c *Conn) handleComStmtSendLongData(data []byte) bool {
 		err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
 		return c.writeErrorPacketFromErrorAndLog(err)
 	}
-
-	chunk := make([]byte, len(chunkData))
-	copy(chunk, chunkData)
 
 	key := fmt.Sprintf("v%d", paramID+1)
 	if val, ok := prepare.BindVars[key]; ok {
@@ -1118,7 +1123,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case sqlparser.Argument:
-			if strings.HasPrefix(string(node), ":v") {
+			if strings.HasPrefix(string(node), "v") {
 				paramsCount++
 			}
 		}
@@ -1163,7 +1168,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			c.Capabilities &^= CapabilityClientMultiStatements
 		default:
 			log.Errorf("Got unhandled packet (ComSetOption default) from client %v, returning error: %v", c.ConnectionID, data)
-			if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+			if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 				return false
 			}
 		}
@@ -1173,7 +1178,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 		}
 	} else {
 		log.Errorf("Got unhandled packet (ComSetOption else) from client %v, returning error: %v", c.ConnectionID, data)
-		if !c.writeErrorAndLog(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data) {
+		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "error handling packet: %v", data) {
 			return false
 		}
 	}
@@ -1472,7 +1477,7 @@ func ParseErrorPacket(data []byte) error {
 	pos++
 
 	// SQL state is 5 bytes
-	sqlState, pos, ok := readBytesCopy(data, pos, 5)
+	sqlState, pos, ok := readBytes(data, pos, 5)
 	if !ok {
 		return NewSQLError(CRUnknownError, SSUnknownSQLState, "invalid error packet sqlState: %v", data)
 	}
@@ -1489,4 +1494,20 @@ func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil
+}
+
+// TLSEnabled returns true if this connection is using TLS.
+func (c *Conn) TLSEnabled() bool {
+	return c.Capabilities&CapabilityClientSSL > 0
+}
+
+// IsUnixSocket returns true if this connection is over a Unix socket.
+func (c *Conn) IsUnixSocket() bool {
+	_, ok := c.listener.listener.(*net.UnixListener)
+	return ok
+}
+
+// GetRawConn returns the raw net.Conn for nefarious purposes.
+func (c *Conn) GetRawConn() net.Conn {
+	return c.conn
 }

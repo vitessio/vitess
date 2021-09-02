@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// This file contains the master election code for zk2topo.Server.
+// This file contains the primary election code for zk2topo.Server.
 
 // NewMasterParticipation is part of the topo.Server interface.
 // We use the full path: <root path>/election/<name>
@@ -129,14 +129,14 @@ func (mp *zkMasterParticipation) WaitForMastership() (context.Context, error) {
 	return ctx, nil
 }
 
-// watchMastership is the background go routine we run while we are the master.
+// watchMastership is the background go routine we run while we are the primary.
 // We will do two things:
 // - watch for changes to the proposal file. If anything happens there,
 //   it most likely means we lost the ZK session, so we want to stop
-//   being the master.
+//   being the primary.
 // - wait for mp.stop.
 func (mp *zkMasterParticipation) watchMastership(ctx context.Context, conn *ZkConn, proposal string, cancel context.CancelFunc) {
-	// any interruption of this routine means we're not master any more.
+	// any interruption of this routine means we're not primary any more.
 	defer cancel()
 
 	// get to work watching our own proposal
@@ -179,7 +179,7 @@ func (mp *zkMasterParticipation) GetCurrentMasterID(ctx context.Context) (string
 			return "", convertError(err, zkPath)
 		}
 		if len(children) == 0 {
-			// no current master
+			// no current primary
 			return "", nil
 		}
 		sort.Strings(children)
@@ -188,7 +188,7 @@ func (mp *zkMasterParticipation) GetCurrentMasterID(ctx context.Context) (string
 		data, _, err := mp.zs.conn.Get(ctx, childPath)
 		if err != nil {
 			if err == zk.ErrNoNode {
-				// master terminated in front of our own eyes,
+				// primary terminated in front of our own eyes,
 				// try again
 				continue
 			}
