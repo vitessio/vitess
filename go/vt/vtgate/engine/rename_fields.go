@@ -87,7 +87,11 @@ func (r *RenameFields) StreamExecute(vcursor VCursor, bindVars map[string]*query
 	if wantfields {
 		innerCallback := callback
 		callback = func(result *sqltypes.Result) error {
-			r.renameFields(result)
+			// Only the first callback will contain the fields.
+			// This check is to avoid going over the RenameFields indices when no fields are present in the result set.
+			if len(result.Fields) != 0 {
+				r.renameFields(result)
+			}
 			return innerCallback(result)
 		}
 	}
