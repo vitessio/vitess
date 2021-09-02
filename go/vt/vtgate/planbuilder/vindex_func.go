@@ -136,7 +136,7 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the
 // vindexFunc engine primitive. The method returns the offset of the new expression in the columns
-// list. If the column already exists, -1 will be returned as the offset along with a nil error.
+// list.
 func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr) (int, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	if !isColName {
