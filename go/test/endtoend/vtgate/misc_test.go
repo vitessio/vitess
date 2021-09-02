@@ -717,6 +717,26 @@ func TestSubqueryInINClause(t *testing.T) {
 	assertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
 }
 
+func TestRenameFieldsOnOLAP(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_ = exec(t, conn, "set workload = olap")
+	defer func() {
+		exec(t, conn, "set workload = oltp")
+	}()
+
+	qr := exec(t, conn, "show tables")
+	require.Equal(t, 1, len(qr.Fields))
+	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
+	_ = exec(t, conn, "use mysql")
+	qr = exec(t, conn, "select @@workload")
+	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
