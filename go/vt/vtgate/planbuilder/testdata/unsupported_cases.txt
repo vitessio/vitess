@@ -351,6 +351,7 @@ Gen4 plan same as above
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+Gen4 plan same as above
 
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"

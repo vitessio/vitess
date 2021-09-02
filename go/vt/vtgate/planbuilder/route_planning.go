@@ -290,6 +290,9 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 
 		plan.inner = newInner
 		return plan, nil
+	case *vindexTree:
+		// vindexFunc cannot accept predicates from the other side of a join
+		return node, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}
