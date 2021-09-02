@@ -43,15 +43,7 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, e
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
 	case *distinctTree:
-		innerPlan, err := transformToLogicalPlan(ctx, n.source)
-		if err != nil {
-			return nil, err
-		}
-		err = pushDistinct(innerPlan)
-		if err != nil {
-			return nil, err
-		}
-		return newDistinct(innerPlan), nil
+		return transformDistinctPlan(ctx, n)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
@@ -132,7 +124,7 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 			continue
 		}
 		last := sources[len(sources)-1]
-		newPlan := mergeUnionLogicalPlans(last, plan)
+		newPlan := mergeUnionLogicalPlans(ctx, last, plan)
 		if newPlan != nil {
 			sources[len(sources)-1] = newPlan
 			continue
@@ -149,7 +141,7 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 	}, nil
 }
 
-func mergeUnionLogicalPlans(left logicalPlan, right logicalPlan) logicalPlan {
+func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logicalPlan) logicalPlan {
 	lroute, ok := left.(*route)
 	if !ok {
 		return nil
@@ -159,7 +151,7 @@ func mergeUnionLogicalPlans(left logicalPlan, right logicalPlan) logicalPlan {
 		return nil
 	}
 
-	if lroute.unionCanMerge(rroute, false) {
+	if canMergePlans(ctx, lroute, rroute) {
 		elem := &sqlparser.UnionSelect{
 			Distinct:  false,
 			Statement: rroute.Select,
@@ -285,6 +277,11 @@ func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 
 	replaceSubQuery(ctx.sqToReplace, sel)
 
+	// TODO clean up when gen4 is the only planner
+	var condition sqlparser.Expr
+	if n.selected != nil && len(n.selected.valueExprs) > 0 {
+		condition = n.selected.valueExprs[0]
+	}
 	return &route{
 		eroute: &engine.Route{
 			Opcode:              n.routeOpCode,
@@ -295,9 +292,26 @@ func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},
-		Select: sel,
-		tables: n.solved,
+		Select:    sel,
+		tables:    n.solved,
+		condition: condition,
 	}, nil
+}
+
+func transformDistinctPlan(ctx planningContext, n *distinctTree) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, n.source)
+	if err != nil {
+		return nil, err
+	}
+	err = pushDistinct(innerPlan)
+	if err != nil {
+		return nil, err
+	}
+	if rb, isRoute := innerPlan.(*route); isRoute && rb.isSingleShard() {
+		// if we have a single shard route, we don't need to do anything to make it distinct
+		return innerPlan, nil
+	}
+	return newDistinct(innerPlan), nil
 }
 
 func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
