@@ -53,6 +53,13 @@ func pushDistinct(plan logicalPlan) error {
 	switch n := plan.(type) {
 	case *route:
 		n.Select.MakeDistinct()
+	case *concatenateGen4:
+		for _, source := range n.sources {
+			err := pushDistinct(source)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
