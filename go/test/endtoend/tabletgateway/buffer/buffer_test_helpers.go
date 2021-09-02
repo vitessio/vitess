@@ -35,9 +35,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"net/http"
-	"reflect"
-	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -52,9 +49,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
-var (
-	clusterInstance       *cluster.LocalProcessCluster
-	vtParams              mysql.ConnParams
+const (
 	keyspaceUnshardedName = "ks1"
 	cell                  = "zone1"
 	hostname              = "localhost"
@@ -64,16 +59,11 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
-	wg = &sync.WaitGroup{}
 )
 
 const (
-	criticalReadRowID          = 1
-	updateRowID                = 2
-	demoteQuery                = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	disableSemiSyncSourceQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
-	enableSemiSyncSourceQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
+	criticalReadRowID = 1
+	updateRowID       = 2
 )
 
 //threadParams is set of params passed into read and write threads
@@ -90,11 +80,14 @@ type threadParams struct {
 	executeFunction            func(c *threadParams, conn *mysql.Conn) error // Implement the method for read/update.
 	typ                        string
 	reservedConn               bool
+	slowQueries                bool
 }
 
 // Thread which constantly executes a query on vtgate.
-func (c *threadParams) threadRun() {
-	conn, err := mysql.Connect(ctx, &vtParams)
+func (c *threadParams) threadRun(wg *sync.WaitGroup, vtParams *mysql.ConnParams) {
+	defer wg.Done()
+
+	conn, err := mysql.Connect(context.Background(), vtParams)
 	if err != nil {
 		log.Errorf("error connecting to mysql with params %v: %v", vtParams, err)
 	}
@@ -126,10 +119,9 @@ func (c *threadParams) threadRun() {
 		// Wait 10ms seconds between two attempts.
 		time.Sleep(10 * time.Millisecond)
 	}
-	wg.Done()
 }
 
-func (c *threadParams) setNotifyAfterNSuccessfulRpcs(n int) {
+func (c *threadParams) ExpectQueries(n int) {
 	c.notifyLock.Lock()
 	c.notifyAfterNSuccessfulRpcs = n
 	c.rpcsSoFar = c.rpcs
@@ -143,7 +135,12 @@ func (c *threadParams) stop() {
 func readExecute(c *threadParams, conn *mysql.Conn) error {
 	attempt := c.index
 	c.index++
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM buffer WHERE id = %d", criticalReadRowID), 1000, true)
+
+	sel := "*"
+	if c.slowQueries {
+		sel = "*, SLEEP(1)"
+	}
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT %s FROM buffer WHERE id = %d", sel, criticalReadRowID), 1000, true)
 
 	if err != nil {
 		log.Errorf("select attempt #%d, failed with err: %v", attempt, err)
@@ -176,7 +173,11 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	// Sleep between [0, 1] seconds to prolong the time the transaction is in
 	// flight. This is more realistic because applications are going to keep
 	// their transactions open for longer as well.
-	time.Sleep(time.Duration(rand.Int31n(1000)) * time.Millisecond)
+	dur := time.Duration(rand.Int31n(1000)) * time.Millisecond
+	if c.slowQueries {
+		dur = dur + 1*time.Second
+	}
+	time.Sleep(dur)
 
 	if err == nil {
 		log.Infof("update attempt #%d affected %v rows", attempt, result.RowsAffected)
@@ -210,8 +211,8 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	return nil
 }
 
-func createCluster() (*cluster.LocalProcessCluster, int) {
-	clusterInstance = cluster.NewCluster(cell, hostname)
+func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
+	clusterInstance := cluster.NewCluster(cell, hostname)
 
 	// Start topo server
 	clusterInstance.VtctldExtraArgs = []string{"-remote_operation_timeout", "30s", "-topo_etcd_lease_ttl", "40"}
@@ -223,6 +224,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	keyspace := &cluster.Keyspace{
 		Name:      keyspaceUnshardedName,
 		SchemaSQL: sqlSchema,
+		VSchema:   bt.VSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = []string{"-health_check_interval", "1s",
 		"-queryserver-config-transaction-timeout", "20",
@@ -237,15 +239,15 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		"-buffer_window", "10m",
 		"-buffer_max_failover_duration", "10m",
 		"-buffer_min_time_between_failovers", "20m",
-		"-gateway_implementation", "tabletgateway"}
+		"-gateway_implementation", "tabletgateway",
+		"-buffer_implementation", "keyspace_events",
+		"-tablet_refresh_interval", "1s",
+	}
+	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 
 	// Start vtgate
 	if err := clusterInstance.StartVtgate(); err != nil {
 		return nil, 1
-	}
-	vtParams = mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
 	}
 	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0
@@ -258,34 +260,39 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	return qr
 }
 
-func TestBufferReparenting(t *testing.T) {
-	t.Run("TER without reserved connection", func(t *testing.T) {
-		testBufferBase(t, true, false)
-	})
-	t.Run("TER with reserved connection", func(t *testing.T) {
-		testBufferBase(t, true, true)
-	})
-	t.Run("PRS without reserved connections", func(t *testing.T) {
-		testBufferBase(t, false, false)
-	})
-	t.Run("PRS with reserved connections", func(t *testing.T) {
-		testBufferBase(t, false, true)
-	})
+type QueryEngine interface {
+	ExpectQueries(count int)
 }
 
-var ctx = context.Background()
+type BufferingTest struct {
+	Assert   func(t *testing.T, shard string, stats *VTGateBufferingStats)
+	Failover func(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace string, reads, writes QueryEngine)
 
-func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
+	ReserveConn bool
+	SlowQueries bool
+
+	VSchema         string
+	VtGateExtraArgs []string
+
+	wg sync.WaitGroup
+}
+
+func (bt *BufferingTest) Test(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance, exitCode := createCluster()
+	clusterInstance, exitCode := bt.createCluster()
 	if exitCode != 0 {
 		t.Fatal("failed to start cluster")
 	}
 	defer clusterInstance.Teardown()
 
+	vtParams := mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
-	conn, err := mysql.Connect(ctx, &vtParams)
+	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.Nil(t, err)
 	defer conn.Close()
 
@@ -299,43 +306,32 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 		typ:                 "read",
 		executeFunction:     readExecute,
 		waitForNotification: make(chan bool),
-		reservedConn:        useReservedConn,
+		reservedConn:        bt.ReserveConn,
+		slowQueries:         bt.SlowQueries,
 	}
-	wg.Add(1)
-	go readThreadInstance.threadRun()
+	bt.wg.Add(1)
+	go readThreadInstance.threadRun(&bt.wg, &vtParams)
 	updateThreadInstance := &threadParams{
 		index:               1,
 		typ:                 "write",
 		executeFunction:     updateExecute,
 		waitForNotification: make(chan bool),
-		reservedConn:        useReservedConn,
+		reservedConn:        bt.ReserveConn,
+		slowQueries:         bt.SlowQueries,
 	}
-	wg.Add(1)
-	go updateThreadInstance.threadRun()
+	bt.wg.Add(1)
+	go updateThreadInstance.threadRun(&bt.wg, &vtParams)
 
 	// Verify they got at least 2 RPCs through.
-	readThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
-	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(2)
+	readThreadInstance.ExpectQueries(2)
+	updateThreadInstance.ExpectQueries(2)
 
 	<-readThreadInstance.waitForNotification
 	<-updateThreadInstance.waitForNotification
 
-	// Execute the failover.
-	readThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
-	updateThreadInstance.setNotifyAfterNSuccessfulRpcs(10)
+	bt.Failover(t, clusterInstance, keyspaceUnshardedName, readThreadInstance, updateThreadInstance)
 
-	if isExternalParent {
-		err := externalReparenting(t, clusterInstance)
-		require.NoError(t, err)
-	} else {
-		//reparent call
-		err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-			fmt.Sprintf("%s/%s", keyspaceUnshardedName, "0"),
-			"-new_primary", clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].Alias)
-		require.NoError(t, err)
-	}
-
-	timeout := time.After(40 * time.Second)
+	timeout := time.After(120 * time.Second)
 	select {
 	case <-readThreadInstance.waitForNotification:
 	case <-timeout:
@@ -360,100 +356,29 @@ func testBufferBase(t *testing.T, isExternalParent bool, useReservedConn bool) {
 	//This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
 	require.Nil(t, err)
+	require.Equal(t, 200, resp.StatusCode)
+
+	var metadata VTGateBufferingStats
+	respByte, _ := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(respByte, &metadata)
+	require.NoError(t, err)
+
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
-	inFlightMax := 0
-	promotedCount := 0
-	durationMs := 0
-	bufferingStops := 0
-	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		if err != nil {
-			panic(err)
-		}
-		inFlightMax = getVarFromVtgate(t, label, "BufferLastRequestsInFlightMax", resultMap)
-		promotedCount = getVarFromVtgate(t, label, "HealthcheckPrimaryPromoted", resultMap)
-		durationMs = getVarFromVtgate(t, label, "BufferFailoverDurationSumMs", resultMap)
-		bufferingStops = getVarFromVtgate(t, "NewPrimarySeen", "BufferStops", resultMap)
-	}
-	if inFlightMax == 0 {
+	if metadata.BufferLastRequestsInFlightMax[label] == 0 {
 		// Missed buffering is okay when we observed the failover during the
 		// COMMIT (which cannot trigger the buffering).
 		assert.Greater(t, updateThreadInstance.internalErrs, 0, "No buffering took place and the update thread saw no error during COMMIT. But one of it must happen.")
 	} else {
-		assert.Greater(t, inFlightMax, 0)
+		bt.Assert(t, label, &metadata)
 	}
 
-	// There was a failover and the HealthCheck module must have seen it.
-	if promotedCount > 0 {
-		assert.Greater(t, promotedCount, 0)
-	}
-
-	if durationMs > 0 {
-		// Number of buffering stops must be equal to the number of seen failovers.
-		assert.Equal(t, promotedCount, bufferingStops)
-	}
-	wg.Wait()
+	bt.wg.Wait()
 }
 
-func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[string]interface{}) int {
-	paramVal := 0
-	var err error
-	object := reflect.ValueOf(resultMap[param])
-	if object.Kind() == reflect.Map {
-		for _, key := range object.MapKeys() {
-			if strings.Contains(key.String(), label) {
-				v := object.MapIndex(key)
-				s := fmt.Sprintf("%v", v.Interface())
-				paramVal, err = strconv.Atoi(s)
-				require.Nil(t, err)
-			}
-		}
-	}
-	return paramVal
-}
-
-func externalReparenting(t *testing.T, clusterInstance *cluster.LocalProcessCluster) error {
-	start := time.Now()
-
-	// Demote Query
-	primary := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
-	replica := clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
-	oldPrimary := primary
-	newPrimary := replica
-	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
-	if primary.VttabletProcess.EnableSemiSync {
-		primary.VttabletProcess.QueryTablet(disableSemiSyncSourceQuery, keyspaceUnshardedName, true)
-	}
-
-	// Wait for replica to catch up to primary.
-	cluster.WaitForReplicationPos(t, primary, replica, "localhost", 60.0)
-
-	duration := time.Since(start)
-	minUnavailabilityInS := 1.0
-	if duration.Seconds() < minUnavailabilityInS {
-		w := minUnavailabilityInS - duration.Seconds()
-		log.Infof("Waiting for %.1f seconds because the failover was too fast (took only %.3f seconds)", w, duration.Seconds())
-		time.Sleep(time.Duration(w) * time.Second)
-	}
-
-	// Promote replica to new primary.
-	replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true)
-
-	if replica.VttabletProcess.EnableSemiSync {
-		replica.VttabletProcess.QueryTablet(enableSemiSyncSourceQuery, keyspaceUnshardedName, true)
-	}
-
-	// Configure old primary to replicate from new primary.
-
-	_, gtID := cluster.GetPrimaryPosition(t, *newPrimary, hostname)
-
-	// Use 'localhost' as hostname because Travis CI worker hostnames
-	// are too long for MySQL replication.
-	changeSourceCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newPrimary.MySQLPort)
-	oldPrimary.VttabletProcess.QueryTablet(changeSourceCommands, keyspaceUnshardedName, true)
-
-	// Notify the new vttablet primary about the reparent.
-	return clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", newPrimary.Alias)
+type VTGateBufferingStats struct {
+	BufferLastRequestsInFlightMax map[string]int
+	HealthcheckPrimaryPromoted    map[string]int
+	BufferFailoverDurationSumMs   map[string]int
+	BufferRequestsBuffered        map[string]int
+	BufferStops                   map[string]int
 }
