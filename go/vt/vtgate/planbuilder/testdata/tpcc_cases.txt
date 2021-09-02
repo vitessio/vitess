@@ -911,6 +911,25 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select o.o_id,o.o_d_id from orders1 o, (select o_c_id,o_w_id,o_d_id,count(distinct o_w_id),o_id from orders1 where o_w_id=1  and o_id \u003e 2100 and o_id \u003c 11153 group by o_c_id,o_d_id,o_w_id having count( distinct o_id) \u003e 1 limit 1) t where t.o_w_id=o.o_w_id and t.o_d_id=o.o_d_id and t.o_c_id=o.o_c_id limit 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": true
+    },
+    "FieldQuery": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where 1 != 1) as t where 1 != 1",
+    "Query": "select o.o_id, o.o_d_id from orders1 as o, (select o_c_id, o_w_id, o_d_id, count(distinct o_w_id), o_id from orders1 where o_w_id = 1 and o_id \u003e 2100 and o_id \u003c 11153) as t where t.o_w_id = o.o_w_id and t.o_d_id = o.o_d_id and t.o_c_id = o.o_c_id limit 1",
+    "Table": "orders1",
+    "Values": [
+      1
+    ],
+    "Vindex": "hash"
+  }
+}
 
 # TPC-C delete order_line1
 "DELETE FROM order_line1 where ol_w_id=178 AND ol_d_id=1 AND ol_o_id=84"

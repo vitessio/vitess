@@ -1258,6 +1258,50 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          [
+            ":user_extra_col",
+            1
+          ]
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # correlated subquery merge-able into a route of a join tree
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id) and u.id in (user_extra.col, 1)"
@@ -1390,6 +1434,44 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = 5) and u.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # nested subquery
 "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)"
@@ -1425,6 +1507,50 @@ Gen4 plan same as above
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
         "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
+        "Table": "`user`",
+        "Values": [
+          [
+            ":user_extra_col",
+            1
+          ]
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_extra_col": 0
+    },
+    "TableName": "user_extra_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.m from `user` as u where 1 != 1",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
