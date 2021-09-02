@@ -74,7 +74,7 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(ctx, treeInner, treeOuter, []sqlparser.Expr{op.Exp}, true)
+		return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Exp), true)
 	case *abstract.Derived:
 		treeInner, err := optimizeQuery(ctx, op.Inner)
 		if err != nil {

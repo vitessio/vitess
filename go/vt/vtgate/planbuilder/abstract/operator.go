@@ -93,9 +93,11 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			op := createJoin(lhs, rhs)
-			err = op.PushPredicate(tableExpr.Condition.On, semTable)
-			if err != nil {
-				return nil, err
+			if tableExpr.Condition.On != nil {
+				err = op.PushPredicate(tableExpr.Condition.On, semTable)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
@@ -168,6 +170,9 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
+			if expr == nil {
+				continue
+			}
 			err := op.PushPredicate(expr, semTable)
 			if err != nil {
 				return nil, err
