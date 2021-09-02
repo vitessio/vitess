@@ -717,7 +717,8 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	}()
 
 	qr := exec(t, conn, "show tables")
-	assert.Equal(t, `[[VARCHAR("aggr_test")] [VARCHAR("t1")] [VARCHAR("t1_id2_idx")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t3")] [VARCHAR("t3_id7_idx")] [VARCHAR("t4")] [VARCHAR("t4_id2_idx")] [VARCHAR("t5_null_vindex")] [VARCHAR("t6")] [VARCHAR("t6_id2_idx")] [VARCHAR("t7_fk")] [VARCHAR("t7_xxhash")] [VARCHAR("t7_xxhash_idx")] [VARCHAR("t8")] [VARCHAR("vstream_test")]]`, fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, 1, len(qr.Fields))
+	assert.Equal(t, `Tables_in_ks`, fmt.Sprintf("%v", qr.Fields[0].Name))
 	_ = exec(t, conn, "use mysql")
 	qr = exec(t, conn, "select @@workload")
 	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
