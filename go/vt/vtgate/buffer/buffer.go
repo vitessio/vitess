@@ -68,7 +68,7 @@ type RetryDoneFunc context.CancelFunc
 
 // CausedByFailover returns true if "err" was supposedly caused by a failover.
 // To simplify things, we've merged the detection for different MySQL flavors
-// in one function. Supported flavors: MariaDB, MySQL, Google internal.
+// in one function. Supported flavors: MariaDB, MySQL
 func CausedByFailover(err error) bool {
 	log.V(2).Infof("Checking error (type: %T) if it is caused by a failover. err: %v", err, err)
 	return vterrors.Code(err) == vtrpcpb.Code_CLUSTER_EVENT
