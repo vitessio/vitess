@@ -63,6 +63,16 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 			Value:  n.value,
 		},
 	}
+
+	for _, col := range n.columns {
+		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 	return plan, nil
 }
 

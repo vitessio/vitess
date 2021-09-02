@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"fmt"
-	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -144,24 +143,26 @@ func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr) (int, error)
 		return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "unsupported: expression on results of a vindex function")
 	}
 
+	exists := false
 	for _, field := range vf.eVindexFunc.Fields {
 		if field.Name == colName.Name.String() {
-			return -1, nil
+			exists = true
+			break
 		}
 	}
-	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-		Name: colName.Name.String(),
-		Type: querypb.Type_VARBINARY,
-	})
+
+	if !exists {
+		vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
+			Name: colName.Name.String(),
+			Type: querypb.Type_VARBINARY,
+		})
+	}
 	index := vindexColumnToIndex(colName)
 	if index == -1 {
 		return 0, semantics.Gen4NotSupportedF("unknown vindex column: %s", colName.Name.String())
 	}
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, index)
-	if len(vf.eVindexFunc.Cols) > 1 && index < vf.eVindexFunc.Cols[len(vf.eVindexFunc.Cols)-2] {
-		sort.Ints(vf.eVindexFunc.Cols)
-	}
-	return len(vf.eVindexFunc.Fields) - 1, nil
+	return len(vf.eVindexFunc.Cols) - 1, nil
 }
 
 // UnsupportedSupplyWeightString represents the error where the supplying a weight string is not supported
@@ -199,15 +200,15 @@ func (vf *vindexFunc) Inputs() []logicalPlan {
 
 func vindexColumnToIndex(column *sqlparser.ColName) int {
 	switch column.Name.String() {
-	case "hex_keyspace_id":
-		return 0
 	case "id":
-		return 1
+		return 0
 	case "keyspace_id":
-		return 2
+		return 1
 	case "range_start":
-		return 3
+		return 2
 	case "range_end":
+		return 3
+	case "hex_keyspace_id":
 		return 4
 	case "shard":
 		return 5
