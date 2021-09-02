@@ -37,6 +37,9 @@ var _ logicalPlan = (*vindexFunc)(nil)
 type vindexFunc struct {
 	order int
 
+	// the tableID field is only used by the gen4 planner
+	tableID semantics.TableSet
+
 	// resultColumns represent the columns returned by this route.
 	resultColumns []*resultColumn
 
@@ -98,7 +101,7 @@ func (vf *vindexFunc) Wireup(logicalPlan, *jointab) error {
 	return nil
 }
 
-// Wireup2 implements the logicalPlan interface
+// WireupGen4 implements the logicalPlan interface
 func (vf *vindexFunc) WireupGen4(*semantics.SemTable) error {
 	return nil
 }
@@ -182,7 +185,7 @@ func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 
 // ContainsTables implements the logicalPlan interface
 func (vf *vindexFunc) ContainsTables() semantics.TableSet {
-	return 0
+	return vf.tableID
 }
 
 // Inputs implements the logicalPlan interface
