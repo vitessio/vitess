@@ -209,6 +209,15 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			}
 		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
+	case *vindexFunc:
+		i, err := node.SupplyProjection(expr)
+		if err != nil {
+			return 0, false, err
+		}
+		if i == -1 { // already exists
+			return i, false, nil
+		}
+		return i, true, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
