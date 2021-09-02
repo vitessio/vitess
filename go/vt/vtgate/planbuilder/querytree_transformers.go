@@ -58,8 +58,9 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 		tableID:       n.solved,
 		resultColumns: nil,
 		eVindexFunc: &engine.VindexFunc{
+			Opcode: n.opCode,
 			Vindex: single,
-			Value:  sqltypes.PlanValue{},
+			Value:  n.value,
 		},
 	}
 	return plan, nil

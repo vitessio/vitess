@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"fmt"
+	"sort"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -157,6 +158,9 @@ func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr) (int, error)
 		return 0, semantics.Gen4NotSupportedF("unknown vindex column: %s", colName.Name.String())
 	}
 	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, index)
+	if len(vf.eVindexFunc.Cols) > 1 && index < vf.eVindexFunc.Cols[len(vf.eVindexFunc.Cols)-2] {
+		sort.Ints(vf.eVindexFunc.Cols)
+	}
 	return len(vf.eVindexFunc.Fields) - 1, nil
 }
 
