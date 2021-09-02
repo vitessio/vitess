@@ -45,6 +45,7 @@ import (
 	topoprotopb "vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -368,14 +369,28 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+const MaxBufferingRetries = 3
+
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	// TODO: this will eventually retry these queries on failure
-	return primitive.TryExecute(vc, bindVars, wantfields)
+	for try := 0; try < MaxBufferingRetries; try++ {
+		res, err := primitive.TryExecute(vc, bindVars, wantfields)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return res, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
 func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	// TODO: this will eventually retry these queries on failure
-	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+	for try := 0; try < MaxBufferingRetries; try++ {
+		err := primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return err
+	}
+	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
 // Execute is part of the engine.VCursor interface.
