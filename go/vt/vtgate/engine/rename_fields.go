@@ -74,6 +74,9 @@ func (r *RenameFields) TryExecute(vcursor VCursor, bindVars map[string]*querypb.
 
 func (r *RenameFields) renameFields(qr *sqltypes.Result) {
 	for ind, index := range r.Indices {
+		if index >= len(qr.Fields) {
+			continue
+		}
 		colName := r.Cols[ind]
 		qr.Fields[index].Name = colName
 	}
@@ -84,7 +87,11 @@ func (r *RenameFields) TryStreamExecute(vcursor VCursor, bindVars map[string]*qu
 	if wantfields {
 		innerCallback := callback
 		callback = func(result *sqltypes.Result) error {
-			r.renameFields(result)
+			// Only the first callback will contain the fields.
+			// This check is to avoid going over the RenameFields indices when no fields are present in the result set.
+			if len(result.Fields) != 0 {
+				r.renameFields(result)
+			}
 			return innerCallback(result)
 		}
 	}
