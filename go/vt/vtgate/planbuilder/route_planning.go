@@ -107,20 +107,15 @@ func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, er
 		}
 
 		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
-		var mergeErr error
-		merger := func(a, b *routeTree) *routeTree {
-			var merged *routeTree
-			merged, mergeErr = mergeSubQuery(ctx, a, inner)
-			return merged
+		merger := func(a, b *routeTree) (*routeTree, error) {
+			return mergeSubQuery(ctx, a, inner)
 		}
 
-		merged, err := tryMerge(ctx, outerTree, treeInner, preds, merger)
+		merged, err := tryMergeSubQuery(ctx, outerTree, treeInner, inner, preds, merger)
 		if err != nil {
 			return nil, err
 		}
-		if mergeErr != nil {
-			return nil, mergeErr
-		}
+
 		if merged == nil {
 			if len(preds) > 0 {
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
@@ -150,6 +145,43 @@ func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, er
 		outerTree = tree
 	}
 	return outerTree, nil
+}
+
+func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner *abstract.SubQueryInner, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
+	var merged queryTree
+	var err error
+	switch outerTree := outer.(type) {
+	case *routeTree:
+		merged, err = tryMerge(ctx, outerTree, subq, joinPredicates, merger)
+		if err != nil {
+			return nil, err
+		}
+		return merged, err
+	case *joinTree:
+		if outerTree.outer {
+			return nil, nil
+		}
+		merged, err = tryMergeSubQuery(ctx, outerTree.lhs, subq, subQueryInner, joinPredicates, merger)
+		if err != nil {
+			return nil, err
+		}
+		if merged != nil {
+			outerTree.lhs = merged
+			return outerTree, nil
+		}
+
+		merged, err = tryMergeSubQuery(ctx, outerTree.rhs, subq, subQueryInner, joinPredicates, merger)
+		if err != nil {
+			return nil, err
+		}
+		if merged != nil {
+			outerTree.rhs = merged
+			return outerTree, nil
+		}
+		return nil, nil
+	default:
+		return nil, nil
+	}
 }
 
 func mergeSubQuery(ctx planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
@@ -315,11 +347,11 @@ func mergeOrJoinInner(ctx planningContext, lhs, rhs queryTree, joinPredicates []
 func mergeOrJoin(ctx planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
 	newTabletSet := lhs.tableID() | rhs.tableID()
 
-	merger := func(a, b *routeTree) *routeTree {
+	merger := func(a, b *routeTree) (*routeTree, error) {
 		if inner {
-			return createRoutePlanForInner(a, b, newTabletSet, joinPredicates)
+			return createRoutePlanForInner(a, b, newTabletSet, joinPredicates), nil
 		}
-		return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates)
+		return createRoutePlanForOuter(ctx, a, b, newTabletSet, joinPredicates), nil
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -643,10 +675,10 @@ func canMergeOnFilters(ctx planningContext, a, b *routeTree, joinPredicates []sq
 	return false
 }
 
-type mergeFunc func(a, b *routeTree) *routeTree
+type mergeFunc func(a, b *routeTree) (*routeTree, error)
 
 func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
-	aRoute, bRoute := joinTreesToRoutes(a.clone(), b.clone())
+	aRoute, bRoute := queryTreesToRoutes(a.clone(), b.clone())
 	if aRoute == nil || bRoute == nil {
 		return nil, nil
 	}
@@ -654,23 +686,23 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
 	if sameKeyspace {
-		tree := tryMergeReferenceTable(aRoute, bRoute, merger)
-		if tree != nil {
-			return tree, nil
+		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
+		if tree != nil || err != nil {
+			return tree, err
 		}
 	}
 
 	switch aRoute.routeOpCode {
 	case engine.SelectUnsharded, engine.SelectDBA:
 		if aRoute.routeOpCode == bRoute.routeOpCode {
-			return merger(aRoute, bRoute), nil
+			return merger(aRoute, bRoute)
 		}
 	case engine.SelectEqualUnique:
 		// if they are already both being sent to the same shard, we can merge
 		if bRoute.routeOpCode == engine.SelectEqualUnique {
 			if aRoute.selectedVindex() == bRoute.selectedVindex() &&
 				gen4ValuesEqual(ctx, aRoute.vindexExpressions(), bRoute.vindexExpressions()) {
-				return merger(aRoute, bRoute), nil
+				return merger(aRoute, bRoute)
 			}
 			return nil, nil
 		}
@@ -683,21 +715,21 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 			return nil, nil
 		}
 		if !sameKeyspace {
-			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unsupported: cross-shard correlated subquery")
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
 		if !canMerge {
 			return nil, nil
 		}
-		r := merger(aRoute, bRoute)
+		r, err := merger(aRoute, bRoute)
 		r.pickBestAvailableVindex()
-		return r, nil
+		return r, err
 	}
 	return nil, nil
 }
 
-func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFunc) *routeTree {
+func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFunc) (*routeTree, error) {
 	// if either side is a reference table, we can just merge it and use the opcode of the other side
 	var opCode engine.RouteOpcode
 	var selected *vindexOption
@@ -710,13 +742,16 @@ func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFu
 		selected = aRoute.selected
 		opCode = aRoute.routeOpCode
 	default:
-		return nil
+		return nil, nil
 	}
 
-	r := merger(aRoute, bRoute)
+	r, err := merger(aRoute, bRoute)
+	if err != nil {
+		return nil, err
+	}
 	r.routeOpCode = opCode
 	r.selected = selected
-	return r
+	return r, nil
 }
 
 func makeRoute(j queryTree) *routeTree {
@@ -750,7 +785,7 @@ func makeRoute(j queryTree) *routeTree {
 	return inner
 }
 
-func joinTreesToRoutes(a, b queryTree) (*routeTree, *routeTree) {
+func queryTreesToRoutes(a, b queryTree) (*routeTree, *routeTree) {
 	aRoute := makeRoute(a)
 	if aRoute == nil {
 		return nil, nil
