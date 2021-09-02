@@ -28,6 +28,7 @@ type rewriter struct {
 	err          error
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
+	isInSubquery int
 }
 
 func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
@@ -112,18 +113,58 @@ func queryRewrite(ctx planningContext, statement sqlparser.SelectStatement) erro
 		semTable:     ctx.semTable,
 		reservedVars: ctx.reservedVars,
 	}
-	sqlparser.Rewrite(statement, r.rewrite, nil)
+	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
 	return nil
 }
 
-func (r *rewriter) rewrite(cursor *sqlparser.Cursor) bool {
+func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
 	case *sqlparser.ExistsExpr:
 		return r.rewriteExistsSubquery(cursor, node)
 	case *sqlparser.Subquery:
+		r.isInSubquery++
 		rewriteSubquery(cursor, r, node)
+	case *sqlparser.AliasedTableExpr:
+		if r.isInSubquery == 0 {
+			break
+		}
+		if !node.As.IsEmpty() {
+			break
+		}
+		tableName, isNotDerived := node.Expr.(sqlparser.TableName)
+		if !isNotDerived {
+			break
+		}
+
+		tableSet := r.semTable.TableSetFor(node)
+		if tableSet == 0 {
+			break
+		}
+		tableInfo, err := r.semTable.TableInfoFor(tableSet)
+		if err != nil {
+			// Fail-safe code, should never happen
+			break
+		}
+		vindexTable := tableInfo.GetVindexTable()
+		if vindexTable == nil {
+			break
+		}
+		if sqlparser.EqualsTableIdent(vindexTable.Name, tableName.Name) {
+			break
+		}
+		node.As = tableName.Name
+		tableName.Name = vindexTable.Name
+		node.Expr = tableName
+	}
+	return true
+}
+
+func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
+	switch cursor.Node().(type) {
+	case *sqlparser.Subquery:
+		r.isInSubquery--
 	}
 	return true
 }
