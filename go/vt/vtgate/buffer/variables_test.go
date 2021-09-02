@@ -35,7 +35,7 @@ func TestVariables(t *testing.T) {
 	// Create new buffer which will the flags.
 	NewConfigFromFlags()
 
-	if got, want := bufferSize.Get(), int64(23); got != want {
+	if got, want := bufferSizeStat.Get(), int64(23); got != want {
 		t.Fatalf("BufferSize variable not set during initilization: got = %v, want = %v", got, want)
 	}
 }
