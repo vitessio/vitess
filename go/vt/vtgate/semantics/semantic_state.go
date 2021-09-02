@@ -35,6 +35,7 @@ type (
 		Authoritative() bool
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
+		GetVindexTable() *vindexes.Table
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
@@ -319,6 +320,11 @@ func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
 	return v.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+	return nil
+}
+
 func (v *vTableInfo) GetColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {
@@ -371,6 +377,11 @@ func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (a *AliasedTable) GetVindexTable() *vindexes.Table {
+	return a.Table
+}
+
 // Name implements the TableInfo interface
 func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 	return a.ASTNode.TableName()
@@ -394,6 +405,11 @@ func (r *RealTable) GetColumns() []ColumnInfo {
 // GetExpr implements the TableInfo interface
 func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
+}
+
+// GetVindexTable implements the TableInfo interface
+func (r *RealTable) GetVindexTable() *vindexes.Table {
+	return r.Table
 }
 
 // Name implements the TableInfo interface
