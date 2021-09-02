@@ -341,6 +341,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"

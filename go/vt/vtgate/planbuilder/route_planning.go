@@ -672,6 +672,31 @@ func canMergeOnFilters(ctx planningContext, a, b *routeTree, joinPredicates []sq
 
 type mergeFunc func(a, b *routeTree) *routeTree
 
+func canMergePlans(ctx planningContext, a, b *route) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
+	case engine.SelectScatter:
+		return b.eroute.Opcode == engine.SelectScatter
+	case engine.SelectNext:
+		return false
+	}
+	return false
+}
+
 func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
 	aRoute, bRoute := joinTreesToRoutes(a.clone(), b.clone())
 	if aRoute == nil || bRoute == nil {

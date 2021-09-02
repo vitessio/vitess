@@ -1317,6 +1317,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 # union with the same target shard last_insert_id
 "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
@@ -1339,6 +1340,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+Gen4 plan same as above
 
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
