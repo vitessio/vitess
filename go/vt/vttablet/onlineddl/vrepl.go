@@ -167,7 +167,7 @@ func (v *VRepl) readTableColumns(ctx context.Context, conn *dbconnpool.DBConnect
 		columnNames = append(columnNames, columnName)
 
 		extra := row.AsString("Extra", "")
-		if strings.Contains(extra, "VIRTUAL") || strings.Contains(extra, "GENERATED") {
+		if strings.Contains(extra, "STORED GENERATED") || strings.Contains(extra, "VIRTUAL GENERATED") {
 			virtualColumnNames = append(virtualColumnNames, columnName)
 		}
 
