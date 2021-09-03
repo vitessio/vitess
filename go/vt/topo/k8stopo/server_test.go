@@ -31,6 +31,7 @@ import (
 
 	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -111,7 +112,7 @@ func TestKubernetesTopo(t *testing.T) {
 
 		kubeyaml.NewYAMLOrJSONDecoder(crdFile, 2048).Decode(crd)
 
-		_, err = apiextensionsClientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(crd)
+		_, err = apiextensionsClientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}

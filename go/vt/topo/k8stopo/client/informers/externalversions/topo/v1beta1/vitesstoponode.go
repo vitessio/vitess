@@ -19,13 +19,13 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	time "time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
 	cache "k8s.io/client-go/tools/cache"
-
 	topov1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 	versioned "vitess.io/vitess/go/vt/topo/k8stopo/client/clientset/versioned"
 	internalinterfaces "vitess.io/vitess/go/vt/topo/k8stopo/client/informers/externalversions/internalinterfaces"
@@ -62,13 +62,13 @@ func NewFilteredVitessTopoNodeInformer(client versioned.Interface, namespace str
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TopoV1beta1().VitessTopoNodes(namespace).List(options)
+				return client.TopoV1beta1().VitessTopoNodes(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.TopoV1beta1().VitessTopoNodes(namespace).Watch(options)
+				return client.TopoV1beta1().VitessTopoNodes(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&topov1beta1.VitessTopoNode{},
