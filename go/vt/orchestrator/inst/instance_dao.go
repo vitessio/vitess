@@ -994,7 +994,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.RelaylogCoordinates.Type = RelayLog
 	instance.LastSQLError = m.GetString("last_sql_error")
 	instance.LastIOError = m.GetString("last_io_error")
-	instance.SecondsBehindPrimary = m.GetNullInt64("seconds_behind_source")
+	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
 	replicasJSON := m.GetString("replica_hosts")
@@ -1258,7 +1258,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
 				or (replication_sql_thread_state not in (-1 ,1))
 				or (replication_io_thread_state not in (-1 ,1))
-				or (abs(cast(seconds_behind_source as signed) - cast(sql_delay as signed)) > ?)
+				or (abs(cast(replication_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (abs(cast(replica_lag_seconds as signed) - cast(sql_delay as signed)) > ?)
 				or (gtid_errant != '')
 				or (replication_group_name != '' and replication_group_member_state != 'ONLINE')
@@ -2302,7 +2302,7 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"relay_log_pos",
 		"last_sql_error",
 		"last_io_error",
-		"seconds_behind_source",
+		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
 		"num_replica_hosts",

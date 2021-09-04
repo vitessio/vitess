@@ -39,7 +39,7 @@ var generateSQLBase = []string{
           read_source_log_pos bigint(20) unsigned NOT NULL,
           relay_source_log_file varchar(128) CHARACTER SET ascii NOT NULL,
           exec_source_log_pos bigint(20) unsigned NOT NULL,
-          seconds_behind_source bigint(20) unsigned DEFAULT NULL,
+          replication_lag_seconds bigint(20) unsigned DEFAULT NULL,
           replica_lag_seconds bigint(20) unsigned DEFAULT NULL,
           num_replica_hosts int(10) unsigned NOT NULL,
           replica_hosts text CHARACTER SET ascii NOT NULL,
