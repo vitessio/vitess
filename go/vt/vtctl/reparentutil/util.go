@@ -291,7 +291,7 @@ func ChooseNewPrimary(
 
 // promotePrimaryCandidateAndStartReplication promotes the primary candidate that we have, but it does not set to start accepting writes
 func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool) ([]*topodatapb.Tablet, error) {
+	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool, startReplication bool) ([]*topodatapb.Tablet, error) {
 	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
 		return nil, err
 	}
@@ -311,9 +311,11 @@ func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclien
 	//	err = moveGTIDFunc()
 	//}
 
-	err = tmc.StartReplication(ctx, newPrimary)
-	if err != nil {
-		return nil, err
+	if startReplication {
+		err = tmc.StartReplication(ctx, newPrimary)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	//log.Debugf("RegroupReplicasGTID: done")

@@ -42,7 +42,7 @@ func TestPrimaryElection(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0], true)
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
@@ -56,7 +56,7 @@ func TestSingleKeyspace(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0], true)
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 
@@ -70,7 +70,7 @@ func TestKeyspaceShard(t *testing.T) {
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 
-	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
+	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0], true)
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
 }
 

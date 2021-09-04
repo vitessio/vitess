@@ -132,8 +132,9 @@ func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Co
 	return nil
 }
 
+// TODO : Discuss correct way
 func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Duration {
-	return time.Duration(config.Config.LockShardTimeoutSeconds) * time.Second
+	return 1 * time.Second
 }
 
 // TODO : Discuss correct way
@@ -383,7 +384,7 @@ func ChooseCandidate(
 }
 
 // PromotedReplicaIsIdeal implements the ReparentFunctions interface
-func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, primaryStatus map[string]*replicationdatapb.PrimaryStatus, validCandidates map[string]mysql.Position) bool {
+func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, oldPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
 	AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", newPrimary.Alias))
 	newPrimaryKey := &inst.InstanceKey{
 		Hostname: newPrimary.MysqlHostname,
@@ -407,13 +408,15 @@ func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary *
 
 // PostReplicationChangeHook implements the ReparentFunctions interface
 func (vtOrcReparent *VtOrcReparentFunctions) PostTabletChangeHook(tablet *topodatapb.Tablet) {
-	inst.ReadTopologyInstance(&inst.InstanceKey{
+	instanceKey := &inst.InstanceKey{
 		Hostname: tablet.MysqlHostname,
 		Port:     int(tablet.MysqlPort),
-	})
+	}
+	inst.ReadTopologyInstance(instanceKey)
+	TabletRefresh(*instanceKey)
 }
 
-func (vtorcReparent *VtOrcReparentFunctions) GetBetterCandidate(newPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, primaryStatus map[string]*replicationdatapb.PrimaryStatus, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+func (vtorcReparent *VtOrcReparentFunctions) GetBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
 	if vtorcReparent.candidateInstanceKey != nil {
 		candidateTablet, _ := inst.ReadTablet(*vtorcReparent.candidateInstanceKey)
 		// return the requested candidate as long as it is valid
@@ -423,14 +426,7 @@ func (vtorcReparent *VtOrcReparentFunctions) GetBetterCandidate(newPrimary *topo
 			}
 		}
 	}
-	var oldPrimary *topodatapb.Tablet
-	if len(primaryStatus) == 1 {
-		for tablet := range primaryStatus {
-			ti := tabletMap[tablet]
-			oldPrimary = ti.Tablet
-		}
-	}
-	replacementCandidate := getReplacementForPromotedReplica(vtorcReparent.topologyRecovery, newPrimary, oldPrimary, validCandidates)
+	replacementCandidate := getReplacementForPromotedReplica(vtorcReparent.topologyRecovery, newPrimary, prevPrimary, validCandidates)
 	vtorcReparent.promotedReplica = getInstanceFromTablet(replacementCandidate)
 
 	return replacementCandidate
