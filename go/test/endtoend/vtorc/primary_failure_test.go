@@ -63,7 +63,7 @@ func TestDownPrimary(t *testing.T) {
 	}()
 
 	// check that the replica gets promoted
-	checkPrimaryTablet(t, clusterInstance, replica)
+	checkPrimaryTablet(t, clusterInstance, replica, true)
 	// also check that the replication is working correctly after failover
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
@@ -106,7 +106,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	}()
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
-	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
+	checkPrimaryTablet(t, clusterInstance, replicaInSameCell, true)
 	// also check that the replication is working correctly after failover
 	runAdditionalCommands(t, replicaInSameCell, []*cluster.Vttablet{crossCellReplica, rdonly}, 10*time.Second)
 }
@@ -143,9 +143,11 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// vtorc would run a deadPrimary failure but should not be able to elect any new primary
-	// it will try to undo the changes and should set the shard to have no primary in that case
-	checkShardNoPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	// wait for 20 seconds
+	time.Sleep(20 * time.Second)
+
+	// the previous primary should still be the primary since recovery of dead primary should fail
+	checkPrimaryTablet(t, clusterInstance, curPrimary, false)
 }
 
 // Failover will sometimes lead to a rdonly which can no longer replicate.
@@ -216,7 +218,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	changePrivileges(t, `GRANT SUPER ON *.* TO 'orc_client_user'@'%'`, rdonly, "orc_client_user")
 
 	// vtorc must promote the lagging replica and not the rdonly, since it has a MustNotPromoteRule promotion rule
-	checkPrimaryTablet(t, clusterInstance, replica)
+	checkPrimaryTablet(t, clusterInstance, replica, true)
 
 	// also check that the replication is setup correctly
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 15*time.Second)
@@ -264,7 +266,7 @@ func TestPromotionLagSuccess(t *testing.T) {
 	}()
 
 	// check that the replica gets promoted
-	checkPrimaryTablet(t, clusterInstance, replica)
+	checkPrimaryTablet(t, clusterInstance, replica, true)
 	// also check that the replication is working correctly after failover
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
@@ -305,9 +307,11 @@ func TestPromotionLagFailure(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// vtorc would run a deadPrimary failure but should not be able to elect any new primary
-	// it will try to undo the changes and should set the shard to have no primary in that case
-	checkShardNoPrimaryTablet(t, clusterInstance, keyspace, shard0)
+	// wait for 20 seconds
+	time.Sleep(20 * time.Second)
+
+	// the previous primary should still be the primary since recovery of dead primary should fail
+	checkPrimaryTablet(t, clusterInstance, curPrimary, false)
 }
 
 // covers the test case master-failover-candidate from orchestrator
@@ -349,7 +353,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	}()
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
-	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
+	checkPrimaryTablet(t, clusterInstance, crossCellReplica, true)
 	// also check that the replication is working correctly after failover
 	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 }
@@ -420,7 +424,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	}()
 
 	// the crossCellReplica is set to be preferred according to the durability requirements. So it must be promoted
-	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
+	checkPrimaryTablet(t, clusterInstance, crossCellReplica, true)
 
 	// assert that the crossCellReplica has indeed caught up
 	out, err = runSQL(t, "SELECT * FROM vt_insert_test", crossCellReplica, "vt_ks")
@@ -497,7 +501,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	}()
 
 	// the replica should be promoted since we have prevented cross cell promotions
-	checkPrimaryTablet(t, clusterInstance, replica)
+	checkPrimaryTablet(t, clusterInstance, replica, true)
 
 	// assert that the replica has indeed caught up
 	out, err = runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")

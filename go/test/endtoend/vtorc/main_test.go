@@ -417,7 +417,7 @@ func checkShardNoPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluste
 }
 
 // Makes sure the tablet type is primary, and its health check agrees.
-func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
+func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, checkServing bool) {
 	start := time.Now()
 	for {
 		now := time.Now()
@@ -435,7 +435,8 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue
-		} // make sure the health stream is updated
+		}
+		// make sure the health stream is updated
 		result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
 		require.NoError(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
@@ -445,7 +446,7 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 		//if !streamHealthResponse.GetServing() {
 		//	log.Exitf("stream health not updated")
 		//}
-		if !streamHealthResponse.GetServing() {
+		if checkServing && !streamHealthResponse.GetServing() {
 			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue

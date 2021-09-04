@@ -54,9 +54,9 @@ type (
 		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error)
-		PromotedReplicaIsIdeal(*topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]*replicationdatapb.PrimaryStatus, map[string]mysql.Position) bool
+		PromotedReplicaIsIdeal(*topodatapb.Tablet, *topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]mysql.Position) bool
 		PostTabletChangeHook(*topodatapb.Tablet)
-		GetBetterCandidate(*topodatapb.Tablet, []*topodatapb.Tablet, map[string]*replicationdatapb.PrimaryStatus, map[string]*topo.TabletInfo) *topodatapb.Tablet
+		GetBetterCandidate(*topodatapb.Tablet, *topodatapb.Tablet, []*topodatapb.Tablet, map[string]*topo.TabletInfo) *topodatapb.Tablet
 		CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
 		GetNewPrimary() *topodatapb.Tablet
@@ -209,16 +209,12 @@ func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Ta
 }
 
 // 	PromotedReplicaIsIdeal implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, primaryStatus map[string]*replicationdatapb.PrimaryStatus, validCandidates map[string]mysql.Position) bool {
+func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
 	if vtctlReparent.NewPrimaryAlias != nil {
 		//explicit request to promote a specific tablet
 		return true
 	}
-	if len(primaryStatus) == 1 {
-		var prevPrimary *topo.TabletInfo
-		for tablet := range primaryStatus {
-			prevPrimary = tabletMap[tablet]
-		}
+	if prevPrimary != nil {
 		if (newPrimary.Type == topodatapb.TabletType_PRIMARY || newPrimary.Type == topodatapb.TabletType_REPLICA) && newPrimary.Alias.Cell == prevPrimary.Alias.Cell {
 			return true
 		}
@@ -232,12 +228,9 @@ func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary *
 }
 
 // 	GetBetterCandidate implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, primaryStatus map[string]*replicationdatapb.PrimaryStatus, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
-	if len(primaryStatus) == 1 {
-		var prevPrimary *topo.TabletInfo
-		for tablet := range primaryStatus {
-			prevPrimary = tabletMap[tablet]
-		}
+func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+
+	if prevPrimary != nil {
 		// find one which is of the correct type and matches the cell of the previous primary
 		for _, candidate := range validCandidates {
 			if (candidate.Type == topodatapb.TabletType_PRIMARY || candidate.Type == topodatapb.TabletType_REPLICA) && prevPrimary.Alias.Cell == candidate.Alias.Cell {
