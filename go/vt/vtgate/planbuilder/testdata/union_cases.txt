@@ -197,7 +197,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
-    "Keyspace": {¡
+    "Keyspace": {
       "Name": "user",
       "Sharded": true
     },

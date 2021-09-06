@@ -63,7 +63,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			inner, err := CreateOperatorFromSelectStmt(tbl.Select, semTable)
+			inner, err := CreateOperatorFromAST(tbl.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
@@ -143,21 +143,21 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 	}
 }
 
-// CreateOperatorFromSelectStmt creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromSelectStmt(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (Operator, error) {
+// CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (Operator, error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
-		return CreateOperatorFromSelect(node, semTable)
+		return createOperatorFromSelect(node, semTable)
 	case *sqlparser.Union:
 		return createOperatorFromUnion(node, semTable)
 	case *sqlparser.ParenSelect:
-		return CreateOperatorFromSelectStmt(node.Select, semTable)
+		return CreateOperatorFromAST(node.Select, semTable)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
-	op, err := CreateOperatorFromSelectStmt(node.FirstStatement, semTable)
+	op, err := CreateOperatorFromAST(node.FirstStatement, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	distinctAt := lastDistinctAt(node)
 
 	for i, unionSelect := range node.UnionSelects {
-		op, err = CreateOperatorFromSelectStmt(unionSelect.Statement, semTable)
+		op, err = CreateOperatorFromAST(unionSelect.Statement, semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -219,14 +219,14 @@ func lastDistinctAt(node *sqlparser.Union) int {
 	return distinctAt
 }
 
-// CreateOperatorFromSelect creates an operator tree that represents the input SELECT query
-func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
+// createOperatorFromSelect creates an operator tree that represents the input SELECT query
+func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
 	var resultantOp *SubQuery
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
 			subquerySelectStatement := sq.SubQuery.Select.(*sqlparser.Select)
-			opInner, err := CreateOperatorFromSelect(subquerySelectStatement, semTable)
+			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
 			if err != nil {
 				return nil, err
 			}

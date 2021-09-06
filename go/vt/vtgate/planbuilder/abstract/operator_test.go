@@ -304,7 +304,7 @@ JoinPredicates:
 			stmt := tree.(sqlparser.SelectStatement)
 			semTable, err := semantics.Analyze(stmt, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromSelectStmt(stmt, semTable)
+			optree, err := CreateOperatorFromAST(stmt, semTable)
 			require.NoError(t, err)
 			assert.Equal(t, tc.output, testString(optree))
 			if t.Failed() {
