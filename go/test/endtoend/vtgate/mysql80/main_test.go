@@ -56,8 +56,8 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs,
-			"-enable_system_settings", "true",
-			"-mysql_server_version", "8.0.16-7",
+			"-enable_system_settings=true",
+			"-mysql_server_version=8.0.16-7",
 		)
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
