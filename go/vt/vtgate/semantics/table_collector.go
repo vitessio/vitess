@@ -139,7 +139,7 @@ func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.Al
 	}
 
 	if vindex != nil {
-		return VindexTable{
+		return &VindexTable{
 			Table:  table,
 			Vindex: vindex,
 		}

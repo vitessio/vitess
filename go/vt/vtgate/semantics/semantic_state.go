@@ -82,6 +82,9 @@ type (
 		cols        []sqlparser.Expr
 	}
 
+	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
+	// we are keeping information about, and the latter represents the additional table information
+	// (usually a RealTable or an AliasedTable) of our vindex.
 	VindexTable struct {
 		Table  TableInfo
 		Vindex vindexes.Vindex
@@ -145,23 +148,28 @@ type (
 	}
 )
 
-func (v VindexTable) GetVindex() *vindexes.Table {
+// GetVindex implements the TableInfo interface
+func (v *VindexTable) GetVindex() *vindexes.Table {
 	return v.Table.GetVindex()
 }
 
+// GetVindex implements the TableInfo interface
 func (v *vTableInfo) GetVindex() *vindexes.Table {
 	return nil
 }
 
+// GetVindex implements the TableInfo interface
 func (a *AliasedTable) GetVindex() *vindexes.Table {
 	return a.Table
 }
 
+// GetVindex implements the TableInfo interface
 func (r *RealTable) GetVindex() *vindexes.Table {
 	return r.Table
 }
 
-func (v VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
+// GetExprFor implements the TableInfo interface
+func (v *VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	panic("implement me")
 }
 
@@ -459,43 +467,53 @@ func (r *RealTable) IsVindexTable() bool {
 	return false
 }
 
-func (v VindexTable) IsVindexTable() bool {
+// IsVindexTable implements the TableInfo interface
+func (v *VindexTable) IsVindexTable() bool {
 	return true
 }
 
-func (v VindexTable) Matches(name sqlparser.TableName) bool {
+// Matches implements the TableInfo interface
+func (v *VindexTable) Matches(name sqlparser.TableName) bool {
 	return v.Table.Matches(name)
 }
 
-func (v VindexTable) Authoritative() bool {
+// Authoritative implements the TableInfo interface
+func (v *VindexTable) Authoritative() bool {
 	return true
 }
 
-func (v VindexTable) Name() (sqlparser.TableName, error) {
+// Name implements the TableInfo interface
+func (v *VindexTable) Name() (sqlparser.TableName, error) {
 	return v.Table.Name()
 }
 
-func (v VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
+// GetExpr implements the TableInfo interface
+func (v *VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return v.Table.GetExpr()
 }
 
-func (v VindexTable) GetColumns() []ColumnInfo {
+// GetColumns implements the TableInfo interface
+func (v *VindexTable) GetColumns() []ColumnInfo {
 	return v.Table.GetColumns()
 }
 
-func (v VindexTable) IsActualTable() bool {
+// IsActualTable implements the TableInfo interface
+func (v *VindexTable) IsActualTable() bool {
 	return true
 }
 
-func (v VindexTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+// RecursiveDepsFor implements the TableInfo interface
+func (v *VindexTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
 	return v.Table.RecursiveDepsFor(col, org, single)
 }
 
-func (v VindexTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+// DepsFor implements the TableInfo interface
+func (v *VindexTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
 	return v.Table.DepsFor(col, org, single)
 }
 
-func (v VindexTable) IsInfSchema() bool {
+// IsInfSchema implements the TableInfo interface
+func (v *VindexTable) IsInfSchema() bool {
 	return v.Table.IsInfSchema()
 }
 
