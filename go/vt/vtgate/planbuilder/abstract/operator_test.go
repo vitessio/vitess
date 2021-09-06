@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -238,14 +240,44 @@ JoinPredicates:
 		1:2 - u.id = (select id from user_extra where id = u.id)
 	}
 }`,
+	}, {
+		input: "select id from user_index where id = :id",
+		output: `Vindex: {
+	Name: user_index
+	Value: id
+}`,
+	}, {
+		input: "select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id",
+		output: `Join: {
+	LHS: 	Vindex: {
+		Name: user_index
+		Value: 1
+	}
+	RHS: 	QueryGraph: {
+	Tables:
+		2:` + "`user`" + ` AS u
+	}
+	Predicate: ui.id = u.id
+}`,
+	}, {
+		input: "select u.id from (select id from user_index where id = 2) as u",
+		output: `Derived u: {
+	Query: select id from user_index where id = 2
+	Inner:	Vindex: {
+		Name: user_index
+		Value: 2
+	}
+}`,
 	}}
 
+	hash, _ := vindexes.NewHash("user_index", map[string]string{})
+	si := &semantics.FakeSI{VindexTables: map[string]vindexes.Vindex{"user_index": hash}}
 	for i, tc := range tcases {
 		sql := tc.input
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{}, semantics.NoRewrite)
+			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", si, semantics.NoRewrite)
 			require.NoError(t, err)
 			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
 			require.NoError(t, err)
@@ -281,6 +313,12 @@ func testString(op Operator) string {
 		}
 		outer := indent(testString(op.Outer))
 		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)
+	case *Vindex:
+		value := op.Value.Value.ToString()
+		if value == "" {
+			value = op.Value.Key
+		}
+		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
 	}
 	return "implement me"
 }
