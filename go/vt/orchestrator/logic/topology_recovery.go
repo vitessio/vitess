@@ -616,6 +616,11 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
 		return false, nil, nil
 	}
+	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
+
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, !forceInstanceRecovery, !forceInstanceRecovery)
 	if topologyRecovery == nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another RecoverDeadPrimary.", analysisEntry.AnalyzedInstanceKey))
@@ -624,7 +629,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
 
 	reparentFunctions := NewVtorcReparentFunctions(analysisEntry, candidateInstanceKey, skipProcesses, topologyRecovery)
-	_, err = reparentutil.NewEmergencyReparenter(tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	_, err = reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		switch level {
@@ -635,7 +640,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		default:
 			log.Infof("ERP - %s", value)
 		}
-	})).ReparentShard(context.Background(), reparentFunctions)
+	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)
 
 	return reparentFunctions.recoveryAttempted, topologyRecovery, err
 }

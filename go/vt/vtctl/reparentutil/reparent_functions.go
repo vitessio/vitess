@@ -42,9 +42,6 @@ type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
 		LockShard(context.Context) (context.Context, func(*error), error)
-		GetTopoServer() *topo.Server
-		GetKeyspace() string
-		GetShard() string
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		GetWaitReplicasTimeout() time.Duration
@@ -91,21 +88,6 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 // LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
 	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
-}
-
-// GetTopoServer implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetTopoServer() *topo.Server {
-	return vtctlReparent.ts
-}
-
-// GetKeyspace implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetKeyspace() string {
-	return vtctlReparent.keyspace
-}
-
-// GetShard implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetShard() string {
-	return vtctlReparent.shard
 }
 
 // CheckIfFixed implements the ReparentFunctions interface

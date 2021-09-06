@@ -82,23 +82,6 @@ func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (con
 	return ctx, unlock, nil
 }
 
-// GetTopoServer implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) GetTopoServer() *topo.Server {
-	return ts
-}
-
-// GetKeyspace implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) GetKeyspace() string {
-	tablet, _ := inst.ReadTablet(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	return tablet.Keyspace
-}
-
-// GetShard implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) GetShard() string {
-	tablet, _ := inst.ReadTablet(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	return tablet.Shard
-}
-
 // CheckIfFixed implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 	// Check if someone else fixed the problem.
