@@ -76,7 +76,6 @@ type (
 		tabletMap           map[string]*topo.TabletInfo
 		statusMap           map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
-		validCandidates     map[string]mysql.Position
 	}
 )
 
@@ -181,14 +180,12 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 		}
 	}
 
-	vtctlReparent.validCandidates = validCandidates
-
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
 	if vtctlReparent.NewPrimaryAlias != nil {
 		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
-		pos, ok := vtctlReparent.validCandidates[winningPrimaryTabletAliasStr]
+		pos, ok := validCandidates[winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", winningPrimaryTabletAliasStr)
