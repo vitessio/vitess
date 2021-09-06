@@ -55,7 +55,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			if tableInfo.IsVindexTable() {
-				vt, _ := tableInfo.(semantics.VindexTable)
+				vt, _ := tableInfo.(*semantics.VindexTable)
 				return &Vindex{Table: VindexTable{
 					TableID: tableID,
 					Alias:   tableExpr,

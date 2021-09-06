@@ -27,12 +27,10 @@ import (
 type (
 	// Vindex stores the information about the vindex query
 	Vindex struct {
-		OpCode        engine.VindexOpcode
-		Table         VindexTable
-		Vindex        vindexes.Vindex
-		JoinPredicate []sqlparser.Expr
-		NoDeps        []sqlparser.Expr
-		Value         sqltypes.PlanValue
+		OpCode engine.VindexOpcode
+		Table  VindexTable
+		Vindex vindexes.Vindex
+		Value  sqltypes.PlanValue
 	}
 
 	// VindexTable contains information about the vindex table we want to query
@@ -56,10 +54,6 @@ func (v Vindex) TableID() semantics.TableSet {
 func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.BaseTableDependencies(e)
-		if deps.NumberOfTables() == 0 {
-			v.NoDeps = append(v.NoDeps, e)
-			continue
-		}
 		if deps.NumberOfTables() > 1 {
 			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (multiple tables involved)")
 		}
