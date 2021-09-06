@@ -74,8 +74,6 @@ type (
 		ts                  *topo.Server
 		lockAction          string
 		tabletMap           map[string]*topo.TabletInfo
-		statusMap           map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
 	}
 )
 
@@ -256,8 +254,6 @@ func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Contex
 
 func (vtctlReparent *VtctlReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
 	vtctlReparent.tabletMap = tabletMap
-	vtctlReparent.statusMap = statusMap
-	vtctlReparent.primaryStatusMap = primaryStatusMap
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
@@ -270,7 +266,7 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	return action
 }
 
-func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string) error {
+func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus) error {
 	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
 
@@ -288,6 +284,6 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, vtctlReparent.statusMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, statusMap, vtctlReparent, false)
 	return err
 }
