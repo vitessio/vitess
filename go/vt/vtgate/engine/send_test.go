@@ -146,7 +146,7 @@ func TestSendTable(t *testing.T) {
 				MultishardAutocommit: tc.multiShardAutocommit,
 			}
 			vc := &loggingVCursor{shards: tc.shards}
-			_, err := send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err := send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			if tc.expectedError != "" {
 				require.EqualError(t, err, tc.expectedError)
 			} else {
@@ -156,12 +156,12 @@ func TestSendTable(t *testing.T) {
 
 			// Failure cases
 			vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-			_, err = send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+			_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 			require.EqualError(t, err, "shard_error")
 
 			if !tc.sharded {
 				vc = &loggingVCursor{}
-				_, err = send.Execute(vc, map[string]*querypb.BindVariable{}, false)
+				_, err = send.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 				require.EqualError(t, err, "Keyspace does not have exactly one shard: []")
 			}
 		})

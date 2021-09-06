@@ -55296,7 +55296,6 @@ $root.vtrpc = (function() {
      * @property {number} NOT_FOUND=5 NOT_FOUND value
      * @property {number} ALREADY_EXISTS=6 ALREADY_EXISTS value
      * @property {number} PERMISSION_DENIED=7 PERMISSION_DENIED value
-     * @property {number} UNAUTHENTICATED=16 UNAUTHENTICATED value
      * @property {number} RESOURCE_EXHAUSTED=8 RESOURCE_EXHAUSTED value
      * @property {number} FAILED_PRECONDITION=9 FAILED_PRECONDITION value
      * @property {number} ABORTED=10 ABORTED value
@@ -55305,6 +55304,8 @@ $root.vtrpc = (function() {
      * @property {number} INTERNAL=13 INTERNAL value
      * @property {number} UNAVAILABLE=14 UNAVAILABLE value
      * @property {number} DATA_LOSS=15 DATA_LOSS value
+     * @property {number} UNAUTHENTICATED=16 UNAUTHENTICATED value
+     * @property {number} CLUSTER_EVENT=17 CLUSTER_EVENT value
      */
     vtrpc.Code = (function() {
         var valuesById = {}, values = Object.create(valuesById);
@@ -55316,7 +55317,6 @@ $root.vtrpc = (function() {
         values[valuesById[5] = "NOT_FOUND"] = 5;
         values[valuesById[6] = "ALREADY_EXISTS"] = 6;
         values[valuesById[7] = "PERMISSION_DENIED"] = 7;
-        values[valuesById[16] = "UNAUTHENTICATED"] = 16;
         values[valuesById[8] = "RESOURCE_EXHAUSTED"] = 8;
         values[valuesById[9] = "FAILED_PRECONDITION"] = 9;
         values[valuesById[10] = "ABORTED"] = 10;
@@ -55325,6 +55325,8 @@ $root.vtrpc = (function() {
         values[valuesById[13] = "INTERNAL"] = 13;
         values[valuesById[14] = "UNAVAILABLE"] = 14;
         values[valuesById[15] = "DATA_LOSS"] = 15;
+        values[valuesById[16] = "UNAUTHENTICATED"] = 16;
+        values[valuesById[17] = "CLUSTER_EVENT"] = 17;
         return values;
     })();
 
@@ -55487,7 +55489,6 @@ $root.vtrpc = (function() {
                 case 5:
                 case 6:
                 case 7:
-                case 16:
                 case 8:
                 case 9:
                 case 10:
@@ -55496,6 +55497,8 @@ $root.vtrpc = (function() {
                 case 13:
                 case 14:
                 case 15:
+                case 16:
+                case 17:
                     break;
                 }
             return null;
@@ -55548,10 +55551,6 @@ $root.vtrpc = (function() {
             case 7:
                 message.code = 7;
                 break;
-            case "UNAUTHENTICATED":
-            case 16:
-                message.code = 16;
-                break;
             case "RESOURCE_EXHAUSTED":
             case 8:
                 message.code = 8;
@@ -55583,6 +55582,14 @@ $root.vtrpc = (function() {
             case "DATA_LOSS":
             case 15:
                 message.code = 15;
+                break;
+            case "UNAUTHENTICATED":
+            case 16:
+                message.code = 16;
+                break;
+            case "CLUSTER_EVENT":
+            case 17:
+                message.code = 17;
                 break;
             }
             return message;
@@ -56300,216 +56307,6 @@ $root.replicationdata = (function() {
         values[valuesById[0] = "IOANDSQLTHREAD"] = 0;
         values[valuesById[1] = "IOTHREADONLY"] = 1;
         return values;
-    })();
-
-    replicationdata.PrimaryStatus = (function() {
-
-        /**
-         * Properties of a PrimaryStatus.
-         * @memberof replicationdata
-         * @interface IPrimaryStatus
-         * @property {string|null} [position] PrimaryStatus position
-         * @property {string|null} [file_position] PrimaryStatus file_position
-         */
-
-        /**
-         * Constructs a new PrimaryStatus.
-         * @memberof replicationdata
-         * @classdesc Represents a PrimaryStatus.
-         * @implements IPrimaryStatus
-         * @constructor
-         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
-         */
-        function PrimaryStatus(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * PrimaryStatus position.
-         * @member {string} position
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         */
-        PrimaryStatus.prototype.position = "";
-
-        /**
-         * PrimaryStatus file_position.
-         * @member {string} file_position
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         */
-        PrimaryStatus.prototype.file_position = "";
-
-        /**
-         * Creates a new PrimaryStatus instance using the specified properties.
-         * @function create
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus instance
-         */
-        PrimaryStatus.create = function create(properties) {
-            return new PrimaryStatus(properties);
-        };
-
-        /**
-         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @function encode
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        PrimaryStatus.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.file_position != null && Object.hasOwnProperty.call(message, "file_position"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        PrimaryStatus.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer.
-         * @function decode
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        PrimaryStatus.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.position = reader.string();
-                    break;
-                case 2:
-                    message.file_position = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        PrimaryStatus.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a PrimaryStatus message.
-         * @function verify
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        PrimaryStatus.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.position != null && message.hasOwnProperty("position"))
-                if (!$util.isString(message.position))
-                    return "position: string expected";
-            if (message.file_position != null && message.hasOwnProperty("file_position"))
-                if (!$util.isString(message.file_position))
-                    return "file_position: string expected";
-            return null;
-        };
-
-        /**
-         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         */
-        PrimaryStatus.fromObject = function fromObject(object) {
-            if (object instanceof $root.replicationdata.PrimaryStatus)
-                return object;
-            var message = new $root.replicationdata.PrimaryStatus();
-            if (object.position != null)
-                message.position = String(object.position);
-            if (object.file_position != null)
-                message.file_position = String(object.file_position);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.PrimaryStatus} message PrimaryStatus
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        PrimaryStatus.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.position = "";
-                object.file_position = "";
-            }
-            if (message.position != null && message.hasOwnProperty("position"))
-                object.position = message.position;
-            if (message.file_position != null && message.hasOwnProperty("file_position"))
-                object.file_position = message.file_position;
-            return object;
-        };
-
-        /**
-         * Converts this PrimaryStatus to JSON.
-         * @function toJSON
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        PrimaryStatus.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return PrimaryStatus;
     })();
 
     replicationdata.PrimaryStatus = (function() {
@@ -67980,6 +67777,353 @@ $root.vtctldata = (function() {
         return DeleteShardsResponse;
     })();
 
+    vtctldata.DeleteSrvVSchemaRequest = (function() {
+
+        /**
+         * Properties of a DeleteSrvVSchemaRequest.
+         * @memberof vtctldata
+         * @interface IDeleteSrvVSchemaRequest
+         * @property {string|null} [cell] DeleteSrvVSchemaRequest cell
+         */
+
+        /**
+         * Constructs a new DeleteSrvVSchemaRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteSrvVSchemaRequest.
+         * @implements IDeleteSrvVSchemaRequest
+         * @constructor
+         * @param {vtctldata.IDeleteSrvVSchemaRequest=} [properties] Properties to set
+         */
+        function DeleteSrvVSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteSrvVSchemaRequest cell.
+         * @member {string} cell
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @instance
+         */
+        DeleteSrvVSchemaRequest.prototype.cell = "";
+
+        /**
+         * Creates a new DeleteSrvVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest=} [properties] Properties to set
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest instance
+         */
+        DeleteSrvVSchemaRequest.create = function create(properties) {
+            return new DeleteSrvVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cell = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteSrvVSchemaRequest message.
+         * @function verify
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteSrvVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         */
+        DeleteSrvVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteSrvVSchemaRequest)
+                return object;
+            var message = new $root.vtctldata.DeleteSrvVSchemaRequest();
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.DeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteSrvVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.cell = "";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            return object;
+        };
+
+        /**
+         * Converts this DeleteSrvVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteSrvVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteSrvVSchemaRequest;
+    })();
+
+    vtctldata.DeleteSrvVSchemaResponse = (function() {
+
+        /**
+         * Properties of a DeleteSrvVSchemaResponse.
+         * @memberof vtctldata
+         * @interface IDeleteSrvVSchemaResponse
+         */
+
+        /**
+         * Constructs a new DeleteSrvVSchemaResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteSrvVSchemaResponse.
+         * @implements IDeleteSrvVSchemaResponse
+         * @constructor
+         * @param {vtctldata.IDeleteSrvVSchemaResponse=} [properties] Properties to set
+         */
+        function DeleteSrvVSchemaResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new DeleteSrvVSchemaResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse=} [properties] Properties to set
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse instance
+         */
+        DeleteSrvVSchemaResponse.create = function create(properties) {
+            return new DeleteSrvVSchemaResponse(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteSrvVSchemaResponse message.
+         * @function verify
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteSrvVSchemaResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteSrvVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         */
+        DeleteSrvVSchemaResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteSrvVSchemaResponse)
+                return object;
+            return new $root.vtctldata.DeleteSrvVSchemaResponse();
+        };
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.DeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteSrvVSchemaResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this DeleteSrvVSchemaResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteSrvVSchemaResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteSrvVSchemaResponse;
+    })();
+
     vtctldata.DeleteTabletsRequest = (function() {
 
         /**
@@ -73019,6 +73163,641 @@ $root.vtctldata = (function() {
         };
 
         return GetShardResponse;
+    })();
+
+    vtctldata.GetSrvKeyspaceNamesRequest = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspaceNamesRequest.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspaceNamesRequest
+         * @property {Array.<string>|null} [cells] GetSrvKeyspaceNamesRequest cells
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspaceNamesRequest.
+         * @implements IGetSrvKeyspaceNamesRequest
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest=} [properties] Properties to set
+         */
+        function GetSrvKeyspaceNamesRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspaceNamesRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @instance
+         */
+        GetSrvKeyspaceNamesRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest instance
+         */
+        GetSrvKeyspaceNamesRequest.create = function create(properties) {
+            return new GetSrvKeyspaceNamesRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesRequest message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspaceNamesRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspaceNamesRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         */
+        GetSrvKeyspaceNamesRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesRequest)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspaceNamesRequest();
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.GetSrvKeyspaceNamesRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.GetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspaceNamesRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspaceNamesRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspaceNamesRequest;
+    })();
+
+    vtctldata.GetSrvKeyspaceNamesResponse = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspaceNamesResponse.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspaceNamesResponse
+         * @property {Object.<string,vtctldata.GetSrvKeyspaceNamesResponse.INameList>|null} [names] GetSrvKeyspaceNamesResponse names
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspaceNamesResponse.
+         * @implements IGetSrvKeyspaceNamesResponse
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse=} [properties] Properties to set
+         */
+        function GetSrvKeyspaceNamesResponse(properties) {
+            this.names = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspaceNamesResponse names.
+         * @member {Object.<string,vtctldata.GetSrvKeyspaceNamesResponse.INameList>} names
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @instance
+         */
+        GetSrvKeyspaceNamesResponse.prototype.names = $util.emptyObject;
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse instance
+         */
+        GetSrvKeyspaceNamesResponse.create = function create(properties) {
+            return new GetSrvKeyspaceNamesResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.names != null && Object.hasOwnProperty.call(message, "names"))
+                for (var keys = Object.keys(message.names), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.encode(message.names[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.names === $util.emptyObject)
+                        message.names = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.names[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesResponse message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspaceNamesResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.names != null && message.hasOwnProperty("names")) {
+                if (!$util.isObject(message.names))
+                    return "names: object expected";
+                var key = Object.keys(message.names);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify(message.names[key[i]]);
+                    if (error)
+                        return "names." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspaceNamesResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         */
+        GetSrvKeyspaceNamesResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesResponse)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspaceNamesResponse();
+            if (object.names) {
+                if (typeof object.names !== "object")
+                    throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.names: object expected");
+                message.names = {};
+                for (var keys = Object.keys(object.names), i = 0; i < keys.length; ++i) {
+                    if (typeof object.names[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.names: object expected");
+                    message.names[keys[i]] = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.fromObject(object.names[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.GetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspaceNamesResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.names = {};
+            var keys2;
+            if (message.names && (keys2 = Object.keys(message.names)).length) {
+                object.names = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.names[keys2[j]] = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.toObject(message.names[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspaceNamesResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        GetSrvKeyspaceNamesResponse.NameList = (function() {
+
+            /**
+             * Properties of a NameList.
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+             * @interface INameList
+             * @property {Array.<string>|null} [names] NameList names
+             */
+
+            /**
+             * Constructs a new NameList.
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+             * @classdesc Represents a NameList.
+             * @implements INameList
+             * @constructor
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList=} [properties] Properties to set
+             */
+            function NameList(properties) {
+                this.names = [];
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NameList names.
+             * @member {Array.<string>} names
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @instance
+             */
+            NameList.prototype.names = $util.emptyArray;
+
+            /**
+             * Creates a new NameList instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList=} [properties] Properties to set
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList instance
+             */
+            NameList.create = function create(properties) {
+                return new NameList(properties);
+            };
+
+            /**
+             * Encodes the specified NameList message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList} message NameList message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NameList.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.names != null && message.names.length)
+                    for (var i = 0; i < message.names.length; ++i)
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.names[i]);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified NameList message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList} message NameList message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NameList.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NameList.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        if (!(message.names && message.names.length))
+                            message.names = [];
+                        message.names.push(reader.string());
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NameList.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a NameList message.
+             * @function verify
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            NameList.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.names != null && message.hasOwnProperty("names")) {
+                    if (!Array.isArray(message.names))
+                        return "names: array expected";
+                    for (var i = 0; i < message.names.length; ++i)
+                        if (!$util.isString(message.names[i]))
+                            return "names: string[] expected";
+                }
+                return null;
+            };
+
+            /**
+             * Creates a NameList message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             */
+            NameList.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList)
+                    return object;
+                var message = new $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList();
+                if (object.names) {
+                    if (!Array.isArray(object.names))
+                        throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.NameList.names: array expected");
+                    message.names = [];
+                    for (var i = 0; i < object.names.length; ++i)
+                        message.names[i] = String(object.names[i]);
+                }
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a NameList message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.NameList} message NameList
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            NameList.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.arrays || options.defaults)
+                    object.names = [];
+                if (message.names && message.names.length) {
+                    object.names = [];
+                    for (var j = 0; j < message.names.length; ++j)
+                        object.names[j] = message.names[j];
+                }
+                return object;
+            };
+
+            /**
+             * Converts this NameList to JSON.
+             * @function toJSON
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            NameList.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return NameList;
+        })();
+
+        return GetSrvKeyspaceNamesResponse;
     })();
 
     vtctldata.GetSrvKeyspacesRequest = (function() {

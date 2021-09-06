@@ -118,6 +118,23 @@ func TestReparentNoChoiceDownPrimary(t *testing.T) {
 	resurrectTablet(ctx, t, tab1)
 }
 
+func TestTrivialERS(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	// We should be able to do a series of ERS-es, even if nothing
+	// is down, without issue
+	for i := 1; i <= 4; i++ {
+		out, err := ers(t, nil, "30s")
+		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(5 * time.Second)
+	}
+}
+
 func TestReparentIgnoreReplicas(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)

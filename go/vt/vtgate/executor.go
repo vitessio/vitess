@@ -1110,7 +1110,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		}
 	}
 
-	err = plan.Instructions.StreamExecute(vc, bindVars, true, callbackGen)
+	err = vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, callbackGen)
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
