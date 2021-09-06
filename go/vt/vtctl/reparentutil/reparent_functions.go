@@ -77,7 +77,6 @@ type (
 		statusMap           map[string]*replicationdatapb.StopReplicationStatus
 		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
 		validCandidates     map[string]mysql.Position
-		winningPosition     mysql.Position
 	}
 )
 
@@ -174,9 +173,10 @@ func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandid
 func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
 	// Elect the candidate with the most up-to-date position.
 	var winningPrimaryTabletAliasStr string
+	var winningPosition mysql.Position
 	for alias, position := range validCandidates {
-		if vtctlReparent.winningPosition.IsZero() || position.AtLeast(vtctlReparent.winningPosition) {
-			vtctlReparent.winningPosition = position
+		if winningPosition.IsZero() || position.AtLeast(winningPosition) {
+			winningPosition = position
 			winningPrimaryTabletAliasStr = alias
 		}
 	}
@@ -192,8 +192,8 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 		switch {
 		case !ok:
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", winningPrimaryTabletAliasStr)
-		case !pos.AtLeast(vtctlReparent.winningPosition):
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
+		case !pos.AtLeast(winningPosition):
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", winningPrimaryTabletAliasStr, pos, winningPosition)
 		}
 	}
 
