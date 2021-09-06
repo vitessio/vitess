@@ -88,6 +88,8 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, reparentFunct
 
 	err = erp.reparentShardLocked(ctx, ev, reparentFunctions)
 
+	reparentFunctions.PostERSCompletionHook(ctx, ev, erp.logger, erp.tmc)
+
 	return ev, err
 }
 
@@ -204,12 +206,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 	reparentFunctions.PostTabletChangeHook(newPrimary)
 
-	if err := reparentFunctions.StartReplication(ctx, ev, erp.logger, erp.tmc); err != nil {
-		return err
-	}
-
 	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
-
 	return errInPromotion
 }
 
