@@ -73,7 +73,6 @@ type (
 		shard               string
 		ts                  *topo.Server
 		lockAction          string
-		tabletMap           map[string]*topo.TabletInfo
 	}
 )
 
@@ -253,7 +252,6 @@ func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Contex
 }
 
 func (vtctlReparent *VtctlReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
-	vtctlReparent.tabletMap = tabletMap
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
@@ -266,11 +264,11 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	return action
 }
 
-func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus) error {
+func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus, tabletMap map[string]*topo.TabletInfo) error {
 	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
 
-	newPrimaryTabletInfo, ok := vtctlReparent.tabletMap[winningPrimaryTabletAliasStr]
+	newPrimaryTabletInfo, ok := tabletMap[winningPrimaryTabletAliasStr]
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", winningPrimaryTabletAliasStr)
 	}
@@ -284,6 +282,6 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, vtctlReparent.tabletMap, statusMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, tabletMap, statusMap, vtctlReparent, false)
 	return err
 }
