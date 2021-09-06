@@ -1,4 +1,3 @@
-2021-05-11T15:30:00Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/832233422
 2021-05-11T15:30:00Z,unit_race,https://github.com/vitessio/vitess/actions/runs/832233429
 2021-05-11T15:52:00Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/832300985
 2021-05-11T15:52:00Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/832300983
@@ -9998,3 +9997,4 @@
 2021-09-06T14:40:17Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1206386646
 2021-09-06T14:40:17Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1206386554
 2021-09-06T14:41:08Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1206388630
+2021-09-06T14:41:08Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1206388666
