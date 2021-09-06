@@ -59,7 +59,6 @@ type (
 		GetBetterCandidate(*topodatapb.Tablet, *topodatapb.Tablet, []*topodatapb.Tablet, map[string]*topo.TabletInfo) *topodatapb.Tablet
 		CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error
 		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
-		GetNewPrimary() *topodatapb.Tablet
 
 		// TODO: remove this
 		SetMaps(map[string]*topo.TabletInfo, map[string]*replicationdatapb.StopReplicationStatus, map[string]*replicationdatapb.PrimaryStatus)
@@ -256,11 +255,6 @@ func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Contex
 	// Do the promotion.
 	//return vtctlReparent.promoteNewPrimary(ctx, ev, logger, tmc)
 	return nil
-}
-
-// GetNewPrimary implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetNewPrimary() *topodatapb.Tablet {
-	return vtctlReparent.tabletMap[vtctlReparent.winningPrimaryTabletAliasStr].Tablet
 }
 
 func (vtctlReparent *VtctlReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
