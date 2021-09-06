@@ -3124,3 +3124,22 @@ Gen4 plan same as above
     ]
   }
 }
+
+# routing rules subquery merge with alias
+"select col from user where id = (select id from route1 as a where a.id = user.id)"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = (select id from route1 as a where a.id = user.id)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = (select id from `user` as a where a.id = `user`.id)",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
