@@ -93,7 +93,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	opTree, err := abstract.CreateOperatorFromSelectStmt(selStmt, semTable)
+	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}

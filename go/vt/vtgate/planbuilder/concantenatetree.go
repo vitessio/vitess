@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -55,33 +57,5 @@ func (c *concatenateTree) cost() int {
 }
 
 func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
-	panic("implement me")
-	//var indexPushed []int
-	//sourceColumns := make([][]*sqlparser.ColName, len(c.sources))
-	//for _, col := range columns {
-	//	deps := semTable.BaseTableDependencies(col)
-	//	isSolved := false
-	//	for i, source := range c.sources {
-	//		if deps.IsSolvedBy(source.tableID()) {
-	//			isSolved = true
-	//			sourceColumns[i] = append(sourceColumns[i], col)
-	//			indexPushed = append(indexPushed, i)
-	//		}
-	//	}
-	//	if !isSolved {
-	//		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unable to push output column to any of the sources in concatenate")
-	//	}
-	//}
-	//
-	//offSetColumns := make([][]int, len(c.sources))
-	//for i, source := range c.sources {
-	//	offsets, err := source.pushOutputColumns(sourceColumns[i], semTable)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//	offSetColumns[i] = offsets
-	//}
-	//
-	//outputColumns := make([]int, len(indexPushed))
-	//return outputColumns, nil
+	return nil, vterrors.New(vtrpc.Code_INTERNAL, "pushOutputColumns should not be called on this struct")
 }
