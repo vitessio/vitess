@@ -43,17 +43,19 @@ import (
 
 // EmergencyReparenter performs EmergencyReparentShard operations.
 type EmergencyReparenter struct {
+	ts     *topo.Server
 	tmc    tmclient.TabletManagerClient
 	logger logutil.Logger
 }
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
-// perform EmergencyReparentShard operations using the given
+// perform EmergencyReparentShard operations using the given topo.Server,
 // TabletManagerClient, and logger.
 //
 // Providing a nil logger instance is allowed.
-func NewEmergencyReparenter(tmc tmclient.TabletManagerClient, logger logutil.Logger) *EmergencyReparenter {
+func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger) *EmergencyReparenter {
 	erp := EmergencyReparenter{
+		ts:     ts,
 		tmc:    tmc,
 		logger: logger,
 	}
@@ -69,7 +71,7 @@ func NewEmergencyReparenter(tmc tmclient.TabletManagerClient, logger logutil.Log
 
 // ReparentShard performs the EmergencyReparentShard operation on the given
 // keyspace and shard.
-func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
+func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
 	ctx, unlock, err := reparentFunctions.LockShard(ctx)
 	if err != nil {
 		return nil, err
@@ -86,30 +88,27 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, reparentFunct
 		}
 	}()
 
-	err = erp.reparentShardLocked(ctx, ev, reparentFunctions)
+	err = erp.reparentShardLocked(ctx, ev, keyspace, shard, reparentFunctions)
 
 	reparentFunctions.PostERSCompletionHook(ctx, ev, erp.logger, erp.tmc)
 
 	return ev, err
 }
 
-func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, reparentFunctions ReparentFunctions) error {
+func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, reparentFunctions ReparentFunctions) error {
 
 	if reparentFunctions.CheckIfFixed() {
 		return nil
 	}
 
-	ts := reparentFunctions.GetTopoServer()
-	keyspace := reparentFunctions.GetKeyspace()
-	shard := reparentFunctions.GetShard()
-	shardInfo, err := ts.GetShard(ctx, keyspace, shard)
+	shardInfo, err := erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
 	ev.ShardInfo = *shardInfo
 	event.DispatchUpdate(ev, "reading all tablets")
 
-	prevPrimary, err := ts.GetTablet(ctx, shardInfo.PrimaryAlias)
+	prevPrimary, err := erp.ts.GetTablet(ctx, shardInfo.PrimaryAlias)
 	if err != nil {
 		return err
 	}
@@ -122,7 +121,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	tabletMap, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
+	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
 	}
@@ -164,7 +163,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, prevPrimary.Tablet, tabletMap, validCandidates)
 
 	// TODO := LockAction and RP
-	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal, true)
+	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal, true)
 	if err != nil {
 		return err
 	}
@@ -180,7 +179,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
-		err = replaceWithBetterCandidate(ctx, erp.tmc, ts, ev, erp.logger, newPrimary, betterCandidate, "", "", tabletMap, statusMap, reparentFunctions)
+		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, "", "", tabletMap, statusMap, reparentFunctions)
 		if err != nil {
 			return err
 		}
@@ -190,7 +189,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	errInPromotion := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
 	if errInPromotion != nil {
 		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
-		newPrimary, err = erp.undoPromotion(ctx, ts, ev, keyspace, shard, prevPrimary.Tablet, "", "", tabletMap, statusMap, reparentFunctions)
+		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary.Tablet, "", "", tabletMap, statusMap, reparentFunctions)
 		if err != nil {
 			return err
 		}

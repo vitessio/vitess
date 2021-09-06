@@ -60,7 +60,7 @@ func TestNewEmergencyReparenter(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			er := NewEmergencyReparenter(nil, tt.logger)
+			er := NewEmergencyReparenter(nil, nil, tt.logger)
 			assert.NotNil(t, er.logger, "NewEmergencyReparenter should never result in a nil logger instance on the EmergencyReparenter")
 		})
 	}
@@ -1007,9 +1007,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				ctx = lctx // make the reparentShardLocked call use the lock ctx
 			}
 
-			erp := NewEmergencyReparenter(tt.tmc, logger)
+			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
 
-			err := erp.reparentShardLocked(ctx, ev, tt.vtctlReparentFunctions)
+			err := erp.reparentShardLocked(ctx, ev, tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard, tt.vtctlReparentFunctions)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
