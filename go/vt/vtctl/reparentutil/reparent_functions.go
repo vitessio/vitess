@@ -63,9 +63,9 @@ type (
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
 	VtctlReparentFunctions struct {
-		NewPrimaryAlias     *topodatapb.TabletAlias
-		IgnoreReplicas      sets.String
-		WaitReplicasTimeout time.Duration
+		newPrimaryAlias     *topodatapb.TabletAlias
+		ignoreReplicas      sets.String
+		waitReplicasTimeout time.Duration
 		keyspace            string
 		shard               string
 		ts                  *topo.Server
@@ -79,9 +79,9 @@ var (
 // NewVtctlReparentFunctions creates a new VtctlReparentFunctions which is used in ERS ans PRS
 func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, keyspace string, shard string, ts *topo.Server) *VtctlReparentFunctions {
 	return &VtctlReparentFunctions{
-		NewPrimaryAlias:     newPrimaryAlias,
-		IgnoreReplicas:      ignoreReplicas,
-		WaitReplicasTimeout: waitReplicasTimeout,
+		newPrimaryAlias:     newPrimaryAlias,
+		ignoreReplicas:      ignoreReplicas,
+		waitReplicasTimeout: waitReplicasTimeout,
 		keyspace:            keyspace,
 		shard:               shard,
 		ts:                  ts,
@@ -90,7 +90,7 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 
 // LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
-	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias))
+	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
 }
 
 // GetTopoServer implements the ReparentFunctions interface
@@ -119,11 +119,11 @@ func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Co
 }
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) GetWaitReplicasTimeout() time.Duration {
-	return vtctlReparentFunctions.WaitReplicasTimeout
+	return vtctlReparentFunctions.waitReplicasTimeout
 }
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
-	return vtctlReparentFunctions.WaitReplicasTimeout
+	return vtctlReparentFunctions.waitReplicasTimeout
 }
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) HandleRelayLogFailure(err error) error {
@@ -131,7 +131,7 @@ func (vtctlReparentFunctions *VtctlReparentFunctions) HandleRelayLogFailure(err 
 }
 
 func (vtctlReparentFunctions *VtctlReparentFunctions) GetIgnoreReplicas() sets.String {
-	return vtctlReparentFunctions.IgnoreReplicas
+	return vtctlReparentFunctions.ignoreReplicas
 }
 
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface
@@ -174,8 +174,8 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
-	if vtctlReparent.NewPrimaryAlias != nil {
-		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
+	if vtctlReparent.newPrimaryAlias != nil {
+		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.newPrimaryAlias)
 		pos, ok := validCandidates[winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
@@ -197,7 +197,7 @@ func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Ta
 
 // 	PromotedReplicaIsIdeal implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
-	if vtctlReparent.NewPrimaryAlias != nil {
+	if vtctlReparent.newPrimaryAlias != nil {
 		//explicit request to promote a specific tablet
 		return true
 	}
@@ -273,6 +273,6 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias), rp, tabletMap, statusMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias), rp, tabletMap, statusMap, vtctlReparent, false)
 	return err
 }
