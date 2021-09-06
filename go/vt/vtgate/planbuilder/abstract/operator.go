@@ -63,15 +63,11 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
-			sel, isSel := tbl.Select.(*sqlparser.Select)
-			if !isSel {
-				return nil, semantics.Gen4NotSupportedF("UNION")
-			}
-			inner, err := CreateOperatorFromSelect(sel, semTable)
+			inner, err := CreateOperatorFromSelectStmt(tbl.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: sel}, nil
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select}, nil
 		default:
 			return nil, semantics.Gen4NotSupportedF("%T", tbl)
 		}

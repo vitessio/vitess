@@ -197,7 +197,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Route",
     "Variant": "SelectScatter",
-    "Keyspace": {
+    "Keyspace": {¡
       "Name": "user",
       "Sharded": true
     },
@@ -206,6 +206,25 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+
+# union operations in derived table, without star expression (FROM)¡
+"select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col1, col2 from (select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1) as t where 1 != 1",
+    "Query": "select col1, col2 from (select col1, col2 from `user` union all select col1, col2 from user_extra) as t",
+    "Table": "`user`"
+  }
+}
+Gen4 plan same as above
 
 # union all between two scatter selects, with order by
 "(select id from user order by id limit 5) union all (select id from music order by id desc limit 5)"
@@ -1248,6 +1267,109 @@ Gen4 plan same as above
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
                 "Query": "select 1 from user_extra where user_extra.extra = 'asdf'",
                 "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# unmergable because we are using aggregation
+"select count(*) as s from user union select count(*) as s from music"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) as s from user union select count(*) as s from music",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count(0)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as s from `user` where 1 != 1",
+                "Query": "select count(*) as s from `user`",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count(0)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as s from music where 1 != 1",
+                "Query": "select count(*) as s from music",
+                "Table": "music"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) as s from user union select count(*) as s from music",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count(0) AS s",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as s from `user` where 1 != 1",
+                "Query": "select count(*) as s from `user`",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Ordered",
+            "Aggregates": "count(0) AS s",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(*) as s from music where 1 != 1",
+                "Query": "select count(*) as s from music",
+                "Table": "music"
               }
             ]
           }
