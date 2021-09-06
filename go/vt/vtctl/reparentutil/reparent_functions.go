@@ -192,7 +192,6 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 
 // 	PostReplicationChangeHook implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Tablet) {
-	return
 }
 
 // 	PromotedReplicaIsIdeal implements the ReparentFunctions interface

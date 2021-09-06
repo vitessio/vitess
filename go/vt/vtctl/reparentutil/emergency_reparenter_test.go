@@ -1417,9 +1417,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				}()
 			}
 
-			var err error
-
-			err = tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc, tt.newPrimaryTabletAlias, tt.statusMap, tt.tabletMap)
+			err := tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc, tt.newPrimaryTabletAlias, tt.statusMap, tt.tabletMap)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
