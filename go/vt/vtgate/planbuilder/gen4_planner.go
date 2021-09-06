@@ -180,22 +180,25 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	return nil
 }
 
-func planHorizon(ctx planningContext, plan logicalPlan, sel *sqlparser.Select) (logicalPlan, error) {
-	hp := horizonPlanning{
-		sel: sel,
+func planHorizon(ctx planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+	sel, isSel := in.(*sqlparser.Select)
+	if isSel {
+		hp := horizonPlanning{
+			sel: sel,
+		}
+
+		replaceSubQuery(ctx.sqToReplace, sel)
+		var err error
+		plan, err = hp.planHorizon(ctx, plan)
+		if err != nil {
+			return nil, err
+		}
+		plan, err = planLimit(sel.Limit, plan)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	replaceSubQuery(ctx.sqToReplace, sel)
-	var err error
-	plan, err = hp.planHorizon(ctx, plan)
-	if err != nil {
-		return nil, err
-	}
-
-	plan, err = planLimit(sel.Limit, plan)
-	if err != nil {
-		return nil, err
-	}
 	return plan, nil
 
 }

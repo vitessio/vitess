@@ -395,7 +395,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 		tbls := innerTables.(*sqlparser.ParenTableExpr)
 
 		sel := &sqlparser.Select{
-			SelectExprs: t.query.SelectExprs,
+			SelectExprs: sqlparser.GetFirstSelect(t.query).SelectExprs,
 			From:        tbls.Exprs,
 			Where:       &sqlparser.Where{Expr: sqlparser.AndExpressions(t.predicates...)},
 		}

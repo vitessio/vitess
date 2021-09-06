@@ -46,22 +46,36 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
-		sel, isSelect := t.Select.(*sqlparser.Select)
-		if !isSelect {
+		switch sel := t.Select.(type) {
+		case *sqlparser.Select:
+			tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
+			if err := tableInfo.checkForDuplicates(); err != nil {
+				return err
+			}
+
+			tableInfo.ASTNode = node
+			tableInfo.tableName = node.As.String()
+
+			tc.Tables = append(tc.Tables, tableInfo)
+			scope := tc.scoper.currentScope()
+			return scope.addTable(tableInfo)
+
+		case *sqlparser.Union:
+			tableInfo := createVTableInfoForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs)
+			if err := tableInfo.checkForDuplicates(); err != nil {
+				return err
+			}
+			tableInfo.ASTNode = node
+			tableInfo.tableName = node.As.String()
+
+			tc.Tables = append(tc.Tables, tableInfo)
+			scope := tc.scoper.currentScope()
+			return scope.addTable(tableInfo)
+
+		default:
 			return Gen4NotSupportedF("union in derived table")
 		}
 
-		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
-		if err := tableInfo.checkForDuplicates(); err != nil {
-			return err
-		}
-
-		tableInfo.ASTNode = node
-		tableInfo.tableName = node.As.String()
-
-		tc.Tables = append(tc.Tables, tableInfo)
-		scope := tc.scoper.currentScope()
-		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var isInfSchema bool

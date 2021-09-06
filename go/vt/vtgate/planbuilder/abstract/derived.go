@@ -23,7 +23,7 @@ import (
 
 // Derived represents a derived table in the query
 type Derived struct {
-	Sel   *sqlparser.Select
+	Sel   sqlparser.SelectStatement
 	Inner Operator
 	Alias string
 }
