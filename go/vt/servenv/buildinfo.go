@@ -88,6 +88,7 @@ func (v *versionInfo) MySQLVersion() string {
 }
 
 func init() {
+	flag.Parse()
 	t, err := time.Parse(time.UnixDate, buildTime)
 	if buildTime != "" && err != nil {
 		panic(fmt.Sprintf("Couldn't parse build timestamp %q: %v", buildTime, err))
