@@ -710,11 +710,5 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 	return nil
 }
 
-// GetNewPrimary implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) GetNewPrimary() *topodatapb.Tablet {
-	tablet, _ := inst.ReadTablet(vtorcReparent.promotedReplica.Key)
-	return tablet
-}
-
 func (vtorcReparent *VtOrcReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
 }
