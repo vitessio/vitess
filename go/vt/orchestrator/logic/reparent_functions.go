@@ -60,7 +60,6 @@ type VtOrcReparentFunctions struct {
 	lostReplicas         [](*inst.Instance)
 	recoveryAttempted    bool
 	hasBestPromotionRule bool
-	postponedAll         bool
 }
 
 func NewVtorcReparentFunctions(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *inst.InstanceKey, skipProcesses bool, topologyRecovery *TopologyRecovery) *VtOrcReparentFunctions {
@@ -170,7 +169,6 @@ func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandid
 
 // FindPrimaryCandidates implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
-	vtorcReparent.postponedAll = false
 	//promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
 	//	if promoted == nil {
 	//		return false
@@ -397,7 +395,6 @@ func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, 
 		if newPrimaryInst.PromotionRule == inst.MustPromoteRule || newPrimaryInst.PromotionRule == inst.PreferPromoteRule ||
 			(vtOrcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != inst.MustNotPromoteRule) {
 			AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", newPrimaryInst.Key))
-			vtOrcReparent.postponedAll = true
 			return true
 		}
 	}
