@@ -752,6 +752,8 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("TestExecutor", "name_lastname_keyspace_id_map", "lookup", "from=name,lastname; table=name_lastname_keyspace_id_map; to=keyspace_id", "user2"),
 			buildVarCharRow("TestExecutor", "name_user_map", "lookup_hash", "from=name; table=name_user_map; to=user_id", "user"),
 			buildVarCharRow("TestExecutor", "t1_lkp_vdx", "consistent_lookup_unique", "from=unq_col; table=t1_lkp_idx; to=keyspace_id", "t1"),
+			buildVarCharRow("TestExecutor", "t2_lu_vdx", "lookup_hash_unique", "from=lu_col; table=TestUnsharded.lu_idx; to=keyspace_id", "t2_wo_lookup"),
+			buildVarCharRow("TestExecutor", "t2_wo_lu_vdx", "lookup_unique", "from=wo_lu_col; table=TestUnsharded.wo_lu_idx; to=keyspace_id; write_only=true", "t2_wo_lookup"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -882,6 +884,7 @@ func TestExecutorShow(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			buildVarCharRow("dual"),
 			buildVarCharRow("ins_lookup"),
+			buildVarCharRow("lu_idx"),
 			buildVarCharRow("main1"),
 			buildVarCharRow("music_user_map"),
 			buildVarCharRow("name_lastname_keyspace_id_map"),
@@ -889,6 +892,7 @@ func TestExecutorShow(t *testing.T) {
 			buildVarCharRow("simple"),
 			buildVarCharRow("user_msgs"),
 			buildVarCharRow("user_seq"),
+			buildVarCharRow("wo_lu_idx"),
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -1344,12 +1348,12 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table"}, vschemaTables...), executor)
 
 	stmt = "alter vschema add table test_table2"
 	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table", "test_table2"}, vschemaTables...), executor)
 
 	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
