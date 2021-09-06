@@ -1,4 +1,3 @@
-2021-05-10T10:33:28Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/827693248
 2021-05-10T10:33:28Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/827693272
 2021-05-10T10:33:28Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/827693241
 2021-05-10T10:33:28Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/827693237
@@ -9997,4 +9996,5 @@
 2021-09-06T09:17:23Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1205414318
 2021-09-06T09:17:23Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1205414369
 2021-09-06T09:17:23Z,local_example,https://github.com/vitessio/vitess/actions/runs/1205414329
+2021-09-06T09:17:23Z,local_example,https://github.com/vitessio/vitess/actions/runs/1205414368
 2021-09-06T09:17:23Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1205414365
