@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -708,7 +706,4 @@ func (vtorcReparent *VtOrcReparentFunctions) StartReplication(ctx context.Contex
 		recoverDeadPrimaryFailureCounter.Inc(1)
 	}
 	return nil
-}
-
-func (vtorcReparent *VtOrcReparentFunctions) SetMaps(tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, primaryStatusMap map[string]*replicationdatapb.PrimaryStatus) {
 }
