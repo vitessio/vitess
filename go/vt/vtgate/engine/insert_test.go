@@ -44,7 +44,7 @@ func TestInsertUnsharded(t *testing.T) {
 		InsertID: 4,
 	}}
 
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,11 +56,11 @@ func TestInsertUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `shard_error`)
 
 	vc = &loggingVCursor{}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `Keyspace does not have exactly one shard: []`)
 }
 
@@ -102,7 +102,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestInsertUnshardedGenerate_Zeros(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestInsertShardedSimple(t *testing.T) {
 	vc = newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vc := &loggingVCursor{}
 
 	// The lookup will fail to map to a keyspace id.
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `could not map [INT64(1)] to a keyspace id`)
 }
 
@@ -441,7 +441,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 		{InsertID: 1},
 	}
 
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func TestInsertShardedOwned(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20", "20-"}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,7 +756,7 @@ func TestInsertShardedGeo(t *testing.T) {
 	vc := newDMLTestVCursor("-20", "20-")
 	vc.shardForKsid = []string{"20-", "-20"}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -926,7 +926,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		ksid0,
 	}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1043,7 +1043,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 		ksid0,
 	}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1175,7 +1175,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 		nonemptyResult,
 		nonemptyResult,
 	}
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1291,7 +1291,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		{},
 		nonemptyResult,
 	}
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1377,7 +1377,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 
 	vc := newDMLTestVCursor("-20", "20-")
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `values [[INT64(2)]] for column [c3] does not map to keyspace ids`)
 }
 
@@ -1497,7 +1497,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 		nonemptyResult,
 	}
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1581,6 +1581,6 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 
 	vc := newDMLTestVCursor("-20", "20-")
 
-	_, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := ins.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 	require.EqualError(t, err, `value must be supplied for column [c3]`)
 }

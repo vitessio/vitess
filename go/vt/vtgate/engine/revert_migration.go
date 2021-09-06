@@ -70,7 +70,7 @@ func (v *RevertMigration) GetTableName() string {
 }
 
 // Execute implements the Primitive interface
-func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
+func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -101,7 +101,7 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}
-		if _, err := s.Execute(vcursor, bindVars, wantfields); err != nil {
+		if _, err := vcursor.ExecutePrimitive(&s, bindVars, wantfields); err != nil {
 			return result, err
 		}
 	} else {
@@ -117,8 +117,8 @@ func (v *RevertMigration) Execute(vcursor VCursor, bindVars map[string]*query.Bi
 }
 
 //StreamExecute implements the Primitive interface
-func (v *RevertMigration) StreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	results, err := v.Execute(vcursor, bindVars, wantfields)
+func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {
 		return err
 	}

@@ -1,10 +1,10 @@
 # Release Instructions
 
-This page describes the steps for cutting a new [open source release](https://github.com/vitessio/vitess/releases).
+This page describes the steps for cutting a new [open source release](https://github.com/vitessio/vitess/releases). We will be using v11.0.0 for example. 
 
 ## Versioning
 
-Our versioning strategy is based on [Semantic Versioning](https://semver.org/).
+Our versioning strategy is based on [VEP5](https://github.com/vitessio/enhancements/blob/main/veps/vep-5.md).
 
 ### Major Release (vX)
 
@@ -107,44 +107,7 @@ pushing to upstream, you must increment the version number and create a new tag
 
 ## Docker Images
 
-Note: You'll require an account on Docker Hub to execute the `docker push`
-command.
-
-```bash
-# Rebuild all dependent images locally. Full chain: common->mysql57->base->lite.
-make docker_bootstrap DOCKER_IMAGES="common mysql57"
-make docker_base
-
-make docker_lite
-make docker_guestbook
-
-MINOR=vX.Y
-PATCH=vX.Y.Z
-
-# Tag the new PATCH version.
-docker tag vitess/lite vitess/lite:$PATCH
-docker tag vitess/guestbook vitess/guestbook:$PATCH
-
-# NOTE: Skip these two steps for pre-releases (e.g. alpha.1, rc.1 releases).
-# Update the MINOR Docker tag to point to the latest PATCH version.
-docker tag -f vitess/lite vitess/lite:$MINOR
-docker tag -f vitess/guestbook vitess/guestbook:$MINOR
-
-# Push the tags and images to Docker Hub.
-docker push vitess/lite:$PATCH
-docker push vitess/lite:latest
-docker push vitess/guestbook:$PATCH
-docker push vitess/guestbook:latest
-# NOTE: Skip the next two steps for pre-releases (e.g. alpha.1, rc.1 releases).
-docker push vitess/lite:$MINOR
-docker push vitess/guestbook:$MINOR
-```
-
-Note that you **do not** push the `base` image you built. That gets built
-automatically by Docker Hub when you push the branch.
-
-After pushing the Docker images, you have to make sure that our tutorials still
-work with them.
+Docker images built automatically on DockerHub and can be found [here](https://hub.docker.com/repository/docker/vitess/lite/)
 
 ## Testing
 
@@ -197,6 +160,125 @@ Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnu
 **Login configuration**
 
 Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [instructions](https://central.sonatype.org/pages/apache-maven.html).
+
+## Release Cutover 
+*Please note we'll be using v11.0 as an example below. Numbers need to change in each release*
+
+### Pre-Requisites for Release Candidate
+
+* Announce dates on Vitess slack #release-planning
+
+* Build a Release Notes Document 
+```
+git fetch --all
+make RELEASE_BRANCH=“release-11” FROM=“740c3799dc824977608d29c793b3bf1dbe1e9811" TO=“cc2de83572ea6116ebef7e051b9a8ca7597d1164” release-notes
+```
+ * Check to make sure all labels and categories set for each PR.
+
+ * This will be used when running the release script
+
+ * Put the output in ./doc/releasenotes/12_0_0_release_notes.md
+
+ * Create a new release branch from master.
+```
+git checkout -b release-12.0 upstream/main
+```
+ * Run the release script:
+```
+make RELEASE_VERSION="12.0.0-rc1" GODOC_RELEASE_VERSION="0.12.0" DEV_VERSION="12.0.0-SNAPSHOT" do_release
+```
+* Push the current dev branch to upstream. No PR needed
+```
+git push upstream release-12.0
+```
+### Pre-Requisites All Other Releases
+
+* Dry Run and Build a Release Notes Document 
+```
+git fetch --all
+
+make RELEASE_BRANCH=“release-12” FROM=“740c3799dc824977608d29c793b3bf1dbe1e9811" TO=“cc2de83572ea6116ebef7e051b9a8ca7597d1164” release-notes
+```
+* Make sure to stand in the latest commit of the dev-branch
+```
+git fetch upstream 
+git checkout -b at-release-12.0.0 upstream/release-12.0
+```
+* Run the release script:
+```
+make RELEASE_VERSION="12.0.0" GODOC_RELEASE_VERSION="0.12.0" DEV_VERSION="12.0.1-SNAPSHOT" do_release
+```
+* Build a Release Notes Document
+```
+make FROM="29a494f7b45faf26eaaa3e6727b452a2ef254101" TO="upstream/release-11.0" release-notes
+```
+ * This will be used when running the release script
+ * Put the output in ./doc/releasenotes/12_0_0_release_notes.md
+
+* Push current dev branch and create a PR against the existing release-12.0 dev branch
+```
+git push origin at-release-12.0.1
+```
+* Push created tag to upstream so it can be used for the release
+```
+git push upstream v12.0.0
+```
+* Release the tag on GitHub UI
+
+### Creating Release (or Candidate)
+
+#### 1. Create a new branch
+
+If needed, create a new branch with the following existing naming convention. We usually do this while creating RC1 and re-use it for GA release, as well as any patch release of the same major release.
+
+> **For instance:**
+> 
+> - If we are currently on release 8, and we want to release `v9.0.0-rc1`, we will create a `release-9.0` branch.
+> - Once `v9.0.0-rc1` is out, any new commit on the `release-9.0` branch will be used to publish the next releases of the same major increment (`v9.0.0`, `v9.0.1`, `v9.0.2`, etc).
+
+![alt text](.images/release-01.png)
+
+#### 2. Open the releases page
+
+On Vitess' GitHub repository main page, click on Code -> [Releases](https://github.com/vitessio/vitess/releases).
+
+![alt text](.images/release-02.png)
+
+#### 3. Draft a new release
+
+On the Releases page, click on `Draft a new release`.
+
+![alt text](.images/release-03.png)
+
+#### 4. Tag a new release
+
+When drafting a new release, we are asked to choose the release's tag and branch. The tag is formated this way: `v9.0.0`. The naming convention for release candidates is to append `-rc1` to the tag name. The branch is the same one as the one we've created in the first step. 
+
+![alt text](.images/release-04.png)
+
+#### 5. Add release notes and release
+
+Copy/paste the previously built Release Notes into the description of the release.
+
+If this is a pre-release (RC) select the `pre-release` checkbox.
+
+And finally, click on `Publish release`.
+
+![alt text](.images/release-05.png)
+
+### Post Release Steps
+* Announce new release in Vitess Slack #general channel. 
+* Create a new [PR](https://github.com/vitessio/website/pull/670) for Vitess Blog.
+ - Netlify -> Sites →vitess.io → Deploy
+![GitHub Post Release01](/doc/internal/.images/post-release-01.png)
+* Coordinate CNCF cross-posting Vitess Blog. 
+* Schedule and publish Tweet on Vitess account. 
+* Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
+* Run following script to once the `base` Docker image is live. 
+```
+https://github.com/vitessio/vitess/blob/master/helm/release.sh
+```
+* Add Java version and release by following Java Packages below. 
 
 ### Deploy & Release
 

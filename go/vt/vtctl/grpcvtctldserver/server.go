@@ -541,6 +541,22 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	return &vtctldatapb.DeleteShardsResponse{}, nil
 }
 
+// DeleteSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) DeleteSrvVSchema(ctx context.Context, req *vtctldatapb.DeleteSrvVSchemaRequest) (*vtctldatapb.DeleteSrvVSchemaResponse, error) {
+	if req.Cell == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "cell must be non-empty")
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancel()
+
+	if err := s.ts.DeleteSrvVSchema(ctx, req.Cell); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.DeleteSrvVSchemaResponse{}, nil
+}
+
 // DeleteTablets is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) DeleteTablets(ctx context.Context, req *vtctldatapb.DeleteTabletsRequest) (*vtctldatapb.DeleteTabletsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.DeleteTablets")
@@ -890,6 +906,41 @@ func (s *VtctldServer) GetShard(ctx context.Context, req *vtctldatapb.GetShardRe
 			Name:     req.ShardName,
 			Shard:    shard.Shard,
 		},
+	}, nil
+}
+
+// GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) GetSrvKeyspaceNames(ctx context.Context, req *vtctldatapb.GetSrvKeyspaceNamesRequest) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
+	cells := req.Cells
+	if len(cells) == 0 {
+		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer cancel()
+
+		var err error
+		cells, err = s.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	namesByCell := make(map[string]*vtctldatapb.GetSrvKeyspaceNamesResponse_NameList, len(cells))
+
+	// Contact each cell sequentially, each cell is bounded by *topo.RemoteOperationTimeout.
+	// Total runtime is O(len(cells) * topo.RemoteOperationTimeout).
+	for _, cell := range cells {
+		ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		names, err := s.ts.GetSrvKeyspaceNames(ctx, cell)
+		if err != nil {
+			cancel()
+			return nil, err
+		}
+
+		cancel()
+		namesByCell[cell] = &vtctldatapb.GetSrvKeyspaceNamesResponse_NameList{Names: names}
+	}
+
+	return &vtctldatapb.GetSrvKeyspaceNamesResponse{
+		Names: namesByCell,
 	}, nil
 }
 

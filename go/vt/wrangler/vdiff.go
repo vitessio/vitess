@@ -834,7 +834,7 @@ func newPrimitiveExecutor(ctx context.Context, prim engine.Primitive) *primitive
 	vcursor := &contextVCursor{ctx: ctx}
 	go func() {
 		defer close(pe.resultch)
-		pe.err = pe.prim.StreamExecute(vcursor, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
+		pe.err = vcursor.StreamExecutePrimitive(pe.prim, make(map[string]*querypb.BindVariable), true, func(qr *sqltypes.Result) error {
 			select {
 			case pe.resultch <- qr:
 			case <-ctx.Done():
@@ -1143,6 +1143,14 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 type contextVCursor struct {
 	engine.VCursor
 	ctx context.Context
+}
+
+func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(vc, bindVars, wantfields)
+}
+
+func (vc *contextVCursor) StreamExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	return primitive.TryStreamExecute(vc, bindVars, wantfields, callback)
 }
 
 func (vc *contextVCursor) Context() context.Context {

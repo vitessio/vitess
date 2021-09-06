@@ -72,22 +72,22 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_tablet.hostname,
 		vitess_tablet.port,
 		vitess_tablet.tablet_type,
-		vitess_tablet.master_timestamp,
-		master_instance.read_only AS read_only,
-		MIN(master_instance.data_center) AS data_center,
-		MIN(master_instance.region) AS region,
-		MIN(master_instance.physical_environment) AS physical_environment,
-		MIN(master_instance.master_host) AS master_host,
-		MIN(master_instance.master_port) AS master_port,
-		MIN(master_instance.cluster_name) AS cluster_name,
-		MIN(master_instance.binary_log_file) AS binary_log_file,
-		MIN(master_instance.binary_log_pos) AS binary_log_pos,
-		MIN(master_instance.suggested_cluster_alias) AS suggested_cluster_alias,
-		MIN(master_tablet.info) AS master_tablet_info,
+		vitess_tablet.primary_timestamp,
+		primary_instance.read_only AS read_only,
+		MIN(primary_instance.data_center) AS data_center,
+		MIN(primary_instance.region) AS region,
+		MIN(primary_instance.physical_environment) AS physical_environment,
+		MIN(primary_instance.source_host) AS source_host,
+		MIN(primary_instance.source_port) AS source_port,
+		MIN(primary_instance.cluster_name) AS cluster_name,
+		MIN(primary_instance.binary_log_file) AS binary_log_file,
+		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
+		MIN(primary_instance.suggested_cluster_alias) AS suggested_cluster_alias,
+		MIN(primary_tablet.info) AS primary_tablet_info,
 		MIN(
 			IFNULL(
-				master_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
-				AND master_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
+				primary_instance.binary_log_file = database_instance_stale_binlog_coordinates.binary_log_file
+				AND primary_instance.binary_log_pos = database_instance_stale_binlog_coordinates.binary_log_pos
 				AND database_instance_stale_binlog_coordinates.first_seen < NOW() - interval ? second,
 				0
 			)
@@ -95,42 +95,42 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(
 			IFNULL(
 				cluster_alias.alias,
-				master_instance.cluster_name
+				primary_instance.cluster_name
 			)
 		) AS cluster_alias,
 		MIN(
 			IFNULL(
 				cluster_domain_name.domain_name,
-				master_instance.cluster_name
+				primary_instance.cluster_name
 			)
 		) AS cluster_domain,
 		MIN(
-			master_instance.last_checked <= master_instance.last_seen
-			and master_instance.last_attempted_check <= master_instance.last_seen + interval ? second
+			primary_instance.last_checked <= primary_instance.last_seen
+			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
 		) = 1 AS is_last_check_valid,
 		/* To be considered a primary, traditional async replication must not be present/valid AND the host should either */
 		/* not be a replication group member OR be the primary of the replication group */
-		MIN(master_instance.last_check_partial_success) as last_check_partial_success,
+		MIN(primary_instance.last_check_partial_success) as last_check_partial_success,
 		MIN(
 			(
-				master_instance.master_host IN ('', '_')
-				OR master_instance.master_port = 0
-				OR substr(master_instance.master_host, 1, 2) = '//'
+				primary_instance.source_host IN ('', '_')
+				OR primary_instance.source_port = 0
+				OR substr(primary_instance.source_host, 1, 2) = '//'
 			)
 			AND (
-				master_instance.replication_group_name = ''
-				OR master_instance.replication_group_member_role = 'PRIMARY'
+				primary_instance.replication_group_name = ''
+				OR primary_instance.replication_group_member_role = 'PRIMARY'
 			)
-		) AS is_master,
-		MIN(master_instance.is_co_master) AS is_co_master,
+		) AS is_primary,
+		MIN(primary_instance.is_co_primary) AS is_co_primary,
 		MIN(
 			CONCAT(
-				master_instance.hostname,
+				primary_instance.hostname,
 				':',
-				master_instance.port
-			) = master_instance.cluster_name
-		) AS is_cluster_master,
-		MIN(master_instance.gtid_mode) AS gtid_mode,
+				primary_instance.port
+			) = primary_instance.cluster_name
+		) AS is_cluster_primary,
+		MIN(primary_instance.gtid_mode) AS gtid_mode,
 		COUNT(replica_instance.server_id) AS count_replicas,
 		IFNULL(
 			SUM(
@@ -141,72 +141,72 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running != 0
-				AND replica_instance.slave_sql_running != 0
+				AND replica_instance.replica_io_running != 0
+				AND replica_instance.replica_sql_running != 0
 			),
 			0
 		) AS count_valid_replicating_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.last_checked <= replica_instance.last_seen
-				AND replica_instance.slave_io_running = 0
+				AND replica_instance.replica_io_running = 0
 				AND replica_instance.last_io_error like '%%error %%connecting to master%%'
-				AND replica_instance.slave_sql_running = 1
+				AND replica_instance.replica_sql_running = 1
 			),
 			0
-		) AS count_replicas_failing_to_connect_to_master,
-		MIN(master_instance.replication_depth) AS replication_depth,
+		) AS count_replicas_failing_to_connect_to_primary,
+		MIN(primary_instance.replication_depth) AS replication_depth,
 		GROUP_CONCAT(
 			concat(
 				replica_instance.Hostname,
 				':',
 				replica_instance.Port
 			)
-		) as slave_hosts,
+		) as replica_hosts,
 		MIN(
-			master_instance.slave_sql_running = 1
-			AND master_instance.slave_io_running = 0
-			AND master_instance.last_io_error like '%%error %%connecting to master%%'
-		) AS is_failing_to_connect_to_master,
+			primary_instance.replica_sql_running = 1
+			AND primary_instance.replica_io_running = 0
+			AND primary_instance.last_io_error like '%%error %%connecting to master%%'
+		) AS is_failing_to_connect_to_primary,
 		MIN(
-			master_instance.slave_sql_running = 0
-			AND master_instance.slave_io_running = 0
+			primary_instance.replica_sql_running = 0
+			AND primary_instance.replica_io_running = 0
 		) AS replication_stopped,
 		MIN(
-			master_downtime.downtime_active is not null
-			and ifnull(master_downtime.end_timestamp, now()) > now()
+			primary_downtime.downtime_active is not null
+			and ifnull(primary_downtime.end_timestamp, now()) > now()
 		) AS is_downtimed,
 		MIN(
-			IFNULL(master_downtime.end_timestamp, '')
+			IFNULL(primary_downtime.end_timestamp, '')
 		) AS downtime_end_timestamp,
 		MIN(
 			IFNULL(
-				unix_timestamp() - unix_timestamp(master_downtime.end_timestamp),
+				unix_timestamp() - unix_timestamp(primary_downtime.end_timestamp),
 				0
 			)
 		) AS downtime_remaining_seconds,
 		MIN(
-			master_instance.binlog_server
+			primary_instance.binlog_server
 		) AS is_binlog_server,
 		MIN(
-			master_instance.supports_oracle_gtid
+			primary_instance.supports_oracle_gtid
 		) AS supports_oracle_gtid,
 		MIN(
-			master_instance.semi_sync_master_enabled
-		) AS semi_sync_master_enabled,
+			primary_instance.semi_sync_primary_enabled
+		) AS semi_sync_primary_enabled,
 		MIN(
-			master_instance.semi_sync_master_wait_for_slave_count
-		) AS semi_sync_master_wait_for_slave_count,
+			primary_instance.semi_sync_primary_wait_for_replica_count
+		) AS semi_sync_primary_wait_for_replica_count,
 		MIN(
-			master_instance.semi_sync_master_clients
-		) AS semi_sync_master_clients,
+			primary_instance.semi_sync_primary_clients
+		) AS semi_sync_primary_clients,
 		MIN(
-			master_instance.semi_sync_master_status
-		) AS semi_sync_master_status,
+			primary_instance.semi_sync_primary_status
+		) AS semi_sync_primary_status,
 		MIN(
-			master_instance.semi_sync_replica_enabled
+			primary_instance.semi_sync_replica_enabled
 		) AS semi_sync_replica_enabled,
-		SUM(replica_instance.is_co_master) AS count_co_master_replicas,
+		SUM(replica_instance.is_co_primary) AS count_co_primary_replicas,
 		SUM(replica_instance.oracle_gtid) AS count_oracle_gtid_replicas,
 		IFNULL(
 			SUM(
@@ -236,7 +236,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_valid_semi_sync_replicas,
 		MIN(
-			master_instance.mariadb_gtid
+			primary_instance.mariadb_gtid
 		) AS is_mariadb_gtid,
 		SUM(replica_instance.mariadb_gtid) AS count_mariadb_gtid_replicas,
 		IFNULL(
@@ -249,14 +249,14 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 			),
 			0
 		) AS count_logging_replicas,
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'STATEMENT'
 			),
 			0
@@ -264,7 +264,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'MIXED'
 			),
 			0
@@ -272,7 +272,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		IFNULL(
 			SUM(
 				replica_instance.log_bin
-				AND replica_instance.log_slave_updates
+				AND replica_instance.log_replica_updates
 				AND replica_instance.binlog_format = 'ROW'
 			),
 			0
@@ -282,7 +282,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			0
 		) AS count_delayed_replicas,
 		IFNULL(
-			SUM(replica_instance.slave_lag_seconds > ?),
+			SUM(replica_instance.replica_lag_seconds > ?),
 			0
 		) AS count_lagging_replicas,
 		IFNULL(MIN(replica_instance.gtid_mode), '') AS min_replica_gtid_mode,
@@ -303,41 +303,41 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		) AS count_downtimed_replicas,
 		COUNT(
 			DISTINCT case when replica_instance.log_bin
-			AND replica_instance.log_slave_updates then replica_instance.major_version else NULL end
+			AND replica_instance.log_replica_updates then replica_instance.major_version else NULL end
 		) AS count_distinct_logging_major_versions
 	FROM
 		vitess_tablet
-		LEFT JOIN database_instance master_instance ON (
-			vitess_tablet.hostname = master_instance.hostname
-			AND vitess_tablet.port = master_instance.port
+		LEFT JOIN database_instance primary_instance ON (
+			vitess_tablet.hostname = primary_instance.hostname
+			AND vitess_tablet.port = primary_instance.port
 		)
-		LEFT JOIN vitess_tablet master_tablet ON (
-			master_tablet.hostname = master_instance.master_host
-			AND master_tablet.port = master_instance.master_port
+		LEFT JOIN vitess_tablet primary_tablet ON (
+			primary_tablet.hostname = primary_instance.source_host
+			AND primary_tablet.port = primary_instance.source_port
 		)
 		LEFT JOIN hostname_resolve ON (
-			master_instance.hostname = hostname_resolve.hostname
+			primary_instance.hostname = hostname_resolve.hostname
 		)
 		LEFT JOIN database_instance replica_instance ON (
 			COALESCE(
 				hostname_resolve.resolved_hostname,
-				master_instance.hostname
-			) = replica_instance.master_host
-			AND master_instance.port = replica_instance.master_port
+				primary_instance.hostname
+			) = replica_instance.source_host
+			AND primary_instance.port = replica_instance.source_port
 		)
 		LEFT JOIN database_instance_maintenance ON (
-			master_instance.hostname = database_instance_maintenance.hostname
-			AND master_instance.port = database_instance_maintenance.port
+			primary_instance.hostname = database_instance_maintenance.hostname
+			AND primary_instance.port = database_instance_maintenance.port
 			AND database_instance_maintenance.maintenance_active = 1
 		)
 		LEFT JOIN database_instance_stale_binlog_coordinates ON (
-			master_instance.hostname = database_instance_stale_binlog_coordinates.hostname
-			AND master_instance.port = database_instance_stale_binlog_coordinates.port
+			primary_instance.hostname = database_instance_stale_binlog_coordinates.hostname
+			AND primary_instance.port = database_instance_stale_binlog_coordinates.port
 		)
-		LEFT JOIN database_instance_downtime as master_downtime ON (
-			master_instance.hostname = master_downtime.hostname
-			AND master_instance.port = master_downtime.port
-			AND master_downtime.downtime_active = 1
+		LEFT JOIN database_instance_downtime as primary_downtime ON (
+			primary_instance.hostname = primary_downtime.hostname
+			AND primary_instance.port = primary_downtime.port
+			AND primary_downtime.downtime_active = 1
 		)
 		LEFT JOIN database_instance_downtime as replica_downtime ON (
 			replica_instance.hostname = replica_downtime.hostname
@@ -345,20 +345,20 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND replica_downtime.downtime_active = 1
 		)
 		LEFT JOIN cluster_alias ON (
-			cluster_alias.cluster_name = master_instance.cluster_name
+			cluster_alias.cluster_name = primary_instance.cluster_name
 		)
 		LEFT JOIN cluster_domain_name ON (
-			cluster_domain_name.cluster_name = master_instance.cluster_name
+			cluster_domain_name.cluster_name = primary_instance.cluster_name
 		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
-		AND ? IN ('', master_instance.cluster_name)
+		AND ? IN ('', primary_instance.cluster_name)
 	GROUP BY
 		vitess_tablet.hostname,
 		vitess_tablet.port
 	ORDER BY
 		vitess_tablet.tablet_type ASC,
-		vitess_tablet.master_timestamp DESC
+		vitess_tablet.primary_timestamp DESC
 	`
 
 	clusters := make(map[string]*clusterAnalysis)
@@ -376,7 +376,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		primaryTablet := &topodatapb.Tablet{}
-		if str := m.GetString("master_tablet_info"); str != "" {
+		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := prototext.Unmarshal([]byte(str), primaryTablet); err != nil {
 				log.Errorf("could not read tablet %v: %v", str, err)
 				return nil
@@ -384,13 +384,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 
 		a.TabletType = tablet.Type
-		a.PrimaryTimeStamp = m.GetTime("master_timestamp")
+		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
-		a.IsPrimary = m.GetBool("is_master")
-		countCoPrimaryReplicas := m.GetUint("count_co_master_replicas")
-		a.IsCoPrimary = m.GetBool("is_co_master") || (countCoPrimaryReplicas > 0)
+		a.IsPrimary = m.GetBool("is_primary")
+		countCoPrimaryReplicas := m.GetUint("count_co_primary_replicas")
+		a.IsCoPrimary = m.GetBool("is_co_primary") || (countCoPrimaryReplicas > 0)
 		a.AnalyzedInstanceKey = InstanceKey{Hostname: m.GetString("hostname"), Port: m.GetInt("port")}
-		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("master_host"), Port: m.GetInt("master_port")}
+		a.AnalyzedInstancePrimaryKey = InstanceKey{Hostname: m.GetString("source_host"), Port: m.GetInt("source_port")}
 		a.AnalyzedInstanceDataCenter = m.GetString("data_center")
 		a.AnalyzedInstanceRegion = m.GetString("region")
 		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
@@ -410,10 +410,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.CountReplicas = m.GetUint("count_replicas")
 		a.CountValidReplicas = m.GetUint("count_valid_replicas")
 		a.CountValidReplicatingReplicas = m.GetUint("count_valid_replicating_replicas")
-		a.CountReplicasFailingToConnectToPrimary = m.GetUint("count_replicas_failing_to_connect_to_master")
+		a.CountReplicasFailingToConnectToPrimary = m.GetUint("count_replicas_failing_to_connect_to_primary")
 		a.CountDowntimedReplicas = m.GetUint("count_downtimed_replicas")
 		a.ReplicationDepth = m.GetUint("replication_depth")
-		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_master")
+		a.IsFailingToConnectToPrimary = m.GetBool("is_failing_to_connect_to_primary")
 		a.ReplicationStopped = m.GetBool("replication_stopped")
 		a.IsDowntimed = m.GetBool("is_downtimed")
 		a.DowntimeEndTimestamp = m.GetString("downtime_end_timestamp")
@@ -422,7 +422,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.ClusterDetails.ReadRecoveryInfo()
 
 		a.Replicas = *NewInstanceKeyMap()
-		a.Replicas.ReadCommaDelimitedList(m.GetString("slave_hosts"))
+		a.Replicas.ReadCommaDelimitedList(m.GetString("replica_hosts"))
 
 		countValidOracleGTIDReplicas := m.GetUint("count_valid_oracle_gtid_replicas")
 		a.OracleGTIDImmediateTopology = countValidOracleGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
@@ -430,13 +430,13 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.MariaDBGTIDImmediateTopology = countValidMariaDBGTIDReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
 		countValidBinlogServerReplicas := m.GetUint("count_valid_binlog_server_replicas")
 		a.BinlogServerImmediateTopology = countValidBinlogServerReplicas == a.CountValidReplicas && a.CountValidReplicas > 0
-		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_master_enabled")
-		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_master_status")
+		a.SemiSyncPrimaryEnabled = m.GetBool("semi_sync_primary_enabled")
+		a.SemiSyncPrimaryStatus = m.GetBool("semi_sync_primary_status")
 		a.SemiSyncReplicaEnabled = m.GetBool("semi_sync_replica_enabled")
 		a.CountSemiSyncReplicasEnabled = m.GetUint("count_semi_sync_replicas")
 		// countValidSemiSyncReplicasEnabled := m.GetUint("count_valid_semi_sync_replicas")
-		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_master_wait_for_slave_count")
-		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_master_clients")
+		a.SemiSyncPrimaryWaitForReplicaCount = m.GetUint("semi_sync_primary_wait_for_replica_count")
+		a.SemiSyncPrimaryClients = m.GetUint("semi_sync_primary_clients")
 
 		a.MinReplicaGTIDMode = m.GetString("min_replica_gtid_mode")
 		a.MaxReplicaGTIDMode = m.GetString("max_replica_gtid_mode")

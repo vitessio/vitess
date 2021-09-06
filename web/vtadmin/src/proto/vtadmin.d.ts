@@ -23476,7 +23476,6 @@ export namespace vtrpc {
         NOT_FOUND = 5,
         ALREADY_EXISTS = 6,
         PERMISSION_DENIED = 7,
-        UNAUTHENTICATED = 16,
         RESOURCE_EXHAUSTED = 8,
         FAILED_PRECONDITION = 9,
         ABORTED = 10,
@@ -23484,7 +23483,9 @@ export namespace vtrpc {
         UNIMPLEMENTED = 12,
         INTERNAL = 13,
         UNAVAILABLE = 14,
-        DATA_LOSS = 15
+        DATA_LOSS = 15,
+        UNAUTHENTICATED = 16,
+        CLUSTER_EVENT = 17
     }
 
     /** Properties of a RPCError. */
@@ -23843,102 +23844,6 @@ export namespace replicationdata {
     enum StopReplicationMode {
         IOANDSQLTHREAD = 0,
         IOTHREADONLY = 1
-    }
-
-    /** Properties of a PrimaryStatus. */
-    interface IPrimaryStatus {
-
-        /** PrimaryStatus position */
-        position?: (string|null);
-
-        /** PrimaryStatus file_position */
-        file_position?: (string|null);
-    }
-
-    /** Represents a PrimaryStatus. */
-    class PrimaryStatus implements IPrimaryStatus {
-
-        /**
-         * Constructs a new PrimaryStatus.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: replicationdata.IPrimaryStatus);
-
-        /** PrimaryStatus position. */
-        public position: string;
-
-        /** PrimaryStatus file_position. */
-        public file_position: string;
-
-        /**
-         * Creates a new PrimaryStatus instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns PrimaryStatus instance
-         */
-        public static create(properties?: replicationdata.IPrimaryStatus): replicationdata.PrimaryStatus;
-
-        /**
-         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @param message PrimaryStatus message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: replicationdata.IPrimaryStatus, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @param message PrimaryStatus message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: replicationdata.IPrimaryStatus, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): replicationdata.PrimaryStatus;
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): replicationdata.PrimaryStatus;
-
-        /**
-         * Verifies a PrimaryStatus message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns PrimaryStatus
-         */
-        public static fromObject(object: { [k: string]: any }): replicationdata.PrimaryStatus;
-
-        /**
-         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
-         * @param message PrimaryStatus
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: replicationdata.PrimaryStatus, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this PrimaryStatus to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
     }
 
     /** Properties of a PrimaryStatus. */
@@ -28546,6 +28451,180 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a DeleteSrvVSchemaRequest. */
+    interface IDeleteSrvVSchemaRequest {
+
+        /** DeleteSrvVSchemaRequest cell */
+        cell?: (string|null);
+    }
+
+    /** Represents a DeleteSrvVSchemaRequest. */
+    class DeleteSrvVSchemaRequest implements IDeleteSrvVSchemaRequest {
+
+        /**
+         * Constructs a new DeleteSrvVSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteSrvVSchemaRequest);
+
+        /** DeleteSrvVSchemaRequest cell. */
+        public cell: string;
+
+        /**
+         * Creates a new DeleteSrvVSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteSrvVSchemaRequest instance
+         */
+        public static create(properties?: vtctldata.IDeleteSrvVSchemaRequest): vtctldata.DeleteSrvVSchemaRequest;
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @param message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @param message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteSrvVSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteSrvVSchemaRequest;
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteSrvVSchemaRequest;
+
+        /**
+         * Verifies a DeleteSrvVSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteSrvVSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteSrvVSchemaRequest;
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @param message DeleteSrvVSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteSrvVSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteSrvVSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteSrvVSchemaResponse. */
+    interface IDeleteSrvVSchemaResponse {
+    }
+
+    /** Represents a DeleteSrvVSchemaResponse. */
+    class DeleteSrvVSchemaResponse implements IDeleteSrvVSchemaResponse {
+
+        /**
+         * Constructs a new DeleteSrvVSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IDeleteSrvVSchemaResponse);
+
+        /**
+         * Creates a new DeleteSrvVSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteSrvVSchemaResponse instance
+         */
+        public static create(properties?: vtctldata.IDeleteSrvVSchemaResponse): vtctldata.DeleteSrvVSchemaResponse;
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @param message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IDeleteSrvVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @param message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IDeleteSrvVSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.DeleteSrvVSchemaResponse;
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.DeleteSrvVSchemaResponse;
+
+        /**
+         * Verifies a DeleteSrvVSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteSrvVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteSrvVSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.DeleteSrvVSchemaResponse;
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaResponse message. Also converts values to other types if specified.
+         * @param message DeleteSrvVSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.DeleteSrvVSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteSrvVSchemaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a DeleteTabletsRequest. */
     interface IDeleteTabletsRequest {
 
@@ -30782,6 +30861,279 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvKeyspaceNamesRequest. */
+    interface IGetSrvKeyspaceNamesRequest {
+
+        /** GetSrvKeyspaceNamesRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvKeyspaceNamesRequest. */
+    class GetSrvKeyspaceNamesRequest implements IGetSrvKeyspaceNamesRequest {
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvKeyspaceNamesRequest);
+
+        /** GetSrvKeyspaceNamesRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspaceNamesRequest instance
+         */
+        public static create(properties?: vtctldata.IGetSrvKeyspaceNamesRequest): vtctldata.GetSrvKeyspaceNamesRequest;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvKeyspaceNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvKeyspaceNamesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvKeyspaceNamesRequest;
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvKeyspaceNamesRequest;
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspaceNamesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspaceNamesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvKeyspaceNamesRequest;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesRequest message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspaceNamesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvKeyspaceNamesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvKeyspaceNamesResponse. */
+    interface IGetSrvKeyspaceNamesResponse {
+
+        /** GetSrvKeyspaceNamesResponse names */
+        names?: ({ [k: string]: vtctldata.GetSrvKeyspaceNamesResponse.INameList }|null);
+    }
+
+    /** Represents a GetSrvKeyspaceNamesResponse. */
+    class GetSrvKeyspaceNamesResponse implements IGetSrvKeyspaceNamesResponse {
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IGetSrvKeyspaceNamesResponse);
+
+        /** GetSrvKeyspaceNamesResponse names. */
+        public names: { [k: string]: vtctldata.GetSrvKeyspaceNamesResponse.INameList };
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspaceNamesResponse instance
+         */
+        public static create(properties?: vtctldata.IGetSrvKeyspaceNamesResponse): vtctldata.GetSrvKeyspaceNamesResponse;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @param message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IGetSrvKeyspaceNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @param message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IGetSrvKeyspaceNamesResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvKeyspaceNamesResponse;
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvKeyspaceNamesResponse;
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspaceNamesResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspaceNamesResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvKeyspaceNamesResponse;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesResponse message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspaceNamesResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.GetSrvKeyspaceNamesResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    namespace GetSrvKeyspaceNamesResponse {
+
+        /** Properties of a NameList. */
+        interface INameList {
+
+            /** NameList names */
+            names?: (string[]|null);
+        }
+
+        /** Represents a NameList. */
+        class NameList implements INameList {
+
+            /**
+             * Constructs a new NameList.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.GetSrvKeyspaceNamesResponse.INameList);
+
+            /** NameList names. */
+            public names: string[];
+
+            /**
+             * Creates a new NameList instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns NameList instance
+             */
+            public static create(properties?: vtctldata.GetSrvKeyspaceNamesResponse.INameList): vtctldata.GetSrvKeyspaceNamesResponse.NameList;
+
+            /**
+             * Encodes the specified NameList message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @param message NameList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.GetSrvKeyspaceNamesResponse.INameList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified NameList message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @param message NameList message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.GetSrvKeyspaceNamesResponse.INameList, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.GetSrvKeyspaceNamesResponse.NameList;
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.GetSrvKeyspaceNamesResponse.NameList;
+
+            /**
+             * Verifies a NameList message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a NameList message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns NameList
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.GetSrvKeyspaceNamesResponse.NameList;
+
+            /**
+             * Creates a plain object from a NameList message. Also converts values to other types if specified.
+             * @param message NameList
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.GetSrvKeyspaceNamesResponse.NameList, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this NameList to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
     }
 
     /** Properties of a GetSrvKeyspacesRequest. */
