@@ -187,8 +187,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		newPrimary = betterCandidate
 	}
 
-	var errInPromotion error
-	errInPromotion = reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
+	errInPromotion := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
 	if errInPromotion != nil {
 		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
 		newPrimary, err = erp.undoPromotion(ctx, ts, ev, keyspace, shard, prevPrimary.Tablet, "", "", tabletMap, statusMap, reparentFunctions)

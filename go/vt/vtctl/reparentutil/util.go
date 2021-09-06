@@ -332,6 +332,9 @@ func promotePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ts *t
 		return err
 	}
 	ti, err := ts.GetTablet(ctx, newPrimary.Alias)
+	if err != nil {
+		return err
+	}
 	newPrimary = ti.Tablet
 	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancel()

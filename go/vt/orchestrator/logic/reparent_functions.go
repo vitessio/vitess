@@ -57,7 +57,6 @@ type VtOrcReparentFunctions struct {
 	skipProcesses        bool
 	topologyRecovery     *TopologyRecovery
 	promotedReplica      *inst.Instance
-	lostReplicas         [](*inst.Instance)
 	recoveryAttempted    bool
 	hasBestPromotionRule bool
 }
@@ -301,21 +300,21 @@ func ChooseCandidate(
 	if err != nil {
 		return emptyReplicas, candidateReplica, false, err
 	}
-	if candidateReplica != nil {
-		mostUpToDateReplica := replicas[0]
-		if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateReplica.ExecBinlogCoordinates) {
-			log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
-		}
+	if candidateReplica == nil {
+		return emptyReplicas, candidateReplica, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "could not find a candidate replica for ERS")
 	}
+	mostUpToDateReplica := replicas[0]
+	if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateReplica.ExecBinlogCoordinates) {
+		log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
+	}
+
 	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
 
 	replicasToMove := append(equalReplicas, laterReplicas...)
 	hasBestPromotionRule = true
-	if candidateReplica != nil {
-		for _, replica := range replicasToMove {
-			if replica.PromotionRule.BetterThan(candidateReplica.PromotionRule) {
-				hasBestPromotionRule = false
-			}
+	for _, replica := range replicasToMove {
+		if replica.PromotionRule.BetterThan(candidateReplica.PromotionRule) {
+			hasBestPromotionRule = false
 		}
 	}
 
