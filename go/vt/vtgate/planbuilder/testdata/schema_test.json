@@ -292,6 +292,54 @@
       "tables": {
       }
     },
+    "zlookup_unique": {
+      "sharded": true,
+      "vindexes": {
+        "hash": {
+          "type": "hash"
+        },
+        "xxhash": {
+          "type": "xxhash"
+        },
+        "lookup_t1": {
+          "type": "lookup_unique",
+          "params": {
+            "from": "c2",
+            "table": "targetkeyspace.lookup_t1_backing",
+            "to": "keyspace_id",
+            "write_only": "true"
+          },
+          "owner": "t1"
+        },
+        "lookup_t1_2": {
+          "type": "lookup_unique",
+          "params": {
+            "from": "c3",
+            "table": "targetkeyspace.lookup_t1_2_backing",
+            "to": "keyspace_id"
+          },
+          "owner": "t1"
+        }
+      },
+      "tables": {
+        "t1": {
+          "columnVindexes": [
+            {
+              "column": "c1",
+              "name": "xxhash"
+            },
+            {
+              "column": "c2",
+              "name": "lookup_t1"
+            },
+            {
+              "column": "c3",
+              "name": "lookup_t1_2"
+            }
+          ]
+        }
+      }
+    },
     "main": {
       "tables": {
         "unsharded": {

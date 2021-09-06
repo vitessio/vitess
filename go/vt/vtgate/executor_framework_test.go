@@ -109,7 +109,26 @@ var executorVSchema = `
         		"from": "unq_col",
         		"to": "keyspace_id"
       		},
-      	"owner": "t1"
+      		"owner": "t1"
+    	},
+		"t2_wo_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.wo_lu_idx",
+        		"from": "wo_lu_col",
+        		"to": "keyspace_id",
+				"write_only": "true"
+      		},
+      		"owner": "t2_wo_lookup"
+    	},
+		"t2_lu_vdx": {
+      		"type": "lookup_hash_unique",
+      		"params": {
+        		"table": "TestUnsharded.lu_idx",
+        		"from": "lu_col",
+        		"to": "keyspace_id"
+      		},
+      		"owner": "t2_wo_lookup"
     	}
 	},
 	"tables": {
@@ -266,7 +285,23 @@ var executorVSchema = `
 				  	"name": "hash_index"
 				}
 			]
-		}
+		},
+		"t2_wo_lookup": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+				  	"column": "wo_lu_col",
+				  	"name": "t2_wo_lu_vdx"
+				},
+				{
+				  	"column": "lu_col",
+				  	"name": "t2_lu_vdx"
+				}
+            ]
+    	}
 	}
 }
 `
@@ -298,6 +333,8 @@ var unshardedVSchema = `
 				"sequence": "user_seq"
 			}
 		},
+		"wo_lu_idx": {},
+		"lu_idx": {},
 		"simple": {}
 	}
 }
@@ -455,6 +492,31 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 
 	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil)
 	return executor, sbc1, sbc2, sbclookup
+}
+
+func createCustomExecutorSetValues(vschema string, values []*sqltypes.Result) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	cell := "aa"
+	hc := discovery.NewFakeLegacyHealthCheck()
+	s := createSandbox("TestExecutor")
+	s.VSchema = vschema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestLegacyResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	sbcs := []*sandboxconn.SandboxConn{}
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, "TestExecutor", shard, topodatapb.TabletType_MASTER, true, 1, nil)
+		if values != nil {
+			sbc.SetResults(values)
+		}
+		sbcs = append(sbcs, sbc)
+	}
+
+	createSandbox(KsTestUnsharded)
+	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+
+	executor = NewExecutor(context.Background(), serv, cell, resolver, false, false, testBufferSize, cache.DefaultConfig, nil)
+	return executor, sbcs[0], sbcs[1], sbclookup
 }
 
 func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

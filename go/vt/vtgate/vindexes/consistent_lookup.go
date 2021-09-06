@@ -384,3 +384,8 @@ func (lu *clCommon) addWhere(buf *bytes.Buffer, cols []string) {
 		buf.WriteString(column + " = :" + lu.lkp.FromColumns[colIdx])
 	}
 }
+
+// IsBackfilling implements the LookupBackfill interface
+func (lu *ConsistentLookupUnique) IsBackfilling() bool {
+	return lu.writeOnly
+}

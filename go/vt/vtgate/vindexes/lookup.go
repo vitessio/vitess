@@ -286,3 +286,8 @@ func (lu *LookupUnique) Delete(vcursor VCursor, rowsColValues [][]sqltypes.Value
 func (lu *LookupUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lu.lkp)
 }
+
+// IsBackfilling implements the LookupBackfill interface
+func (lu *LookupUnique) IsBackfilling() bool {
+	return lu.writeOnly
+}

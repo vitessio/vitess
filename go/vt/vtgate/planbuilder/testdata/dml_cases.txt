@@ -2446,3 +2446,166 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Delete on backfilling unique lookup vindex should be a scatter
+"delete from zlookup_unique.t1 where c2 = 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 20 for update",
+    "Query": "delete from t1 where c2 = 20",
+    "Table": "t1"
+  }
+}
+Gen4 plan same as above
+
+# Update on backfilling unique lookup vindex should be a scatter
+"update zlookup_unique.t1 set c2 = 1 where c2 = 20"
+{
+  "QueryType": "UPDATE",
+  "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 20",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "lookup_t1:3"
+    ],
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 20 for update",
+    "Query": "update t1 set c2 = 1 where c2 = 20",
+    "Table": "t1"
+  }
+}
+Gen4 plan same as above
+
+# Delete on backfilling and non-backfilling unique lookup vindexes should be a delete equal
+"delete from zlookup_unique.t1 where c2 = 10 and c3 = 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 = 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 = 20 for update",
+    "Query": "delete from t1 where c2 = 10 and c3 = 20",
+    "Table": "t1",
+    "Values": [
+      20
+    ],
+    "Vindex": "lookup_t1_2"
+  }
+}
+Gen4 plan same as above
+
+# Update on backfilling and non-backfilling unique lookup vindexes should be an equal
+"update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20"
+{
+  "QueryType": "UPDATE",
+  "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 = 20",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Equal",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "lookup_t1:3"
+    ],
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 = 20 for update",
+    "Query": "update t1 set c2 = 1 where c2 = 10 and c3 = 20",
+    "Table": "t1",
+    "Values": [
+      20
+    ],
+    "Vindex": "lookup_t1_2"
+  }
+}
+Gen4 plan same as above
+
+# Delete EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be a delete IN
+"delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from zlookup_unique.t1 where c2 = 10 and c3 in (20, 21)",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3 from t1 where c2 = 10 and c3 in (20, 21) for update",
+    "Query": "delete from t1 where c2 = 10 and c3 in (20, 21)",
+    "Table": "t1",
+    "Values": [
+      [
+        20,
+        21
+      ]
+    ],
+    "Vindex": "lookup_t1_2"
+  }
+}
+Gen4 plan same as above
+
+# Update EQUAL and IN on backfilling and non-backfilling unique lookup vindexes should be an update IN
+"update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)"
+{
+  "QueryType": "UPDATE",
+  "Original": "update zlookup_unique.t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "In",
+    "Keyspace": {
+      "Name": "zlookup_unique",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "lookup_t1:3"
+    ],
+    "KsidVindex": "xxhash",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select c1, c2, c3, c2 = 1 from t1 where c2 = 10 and c3 in (20, 21) for update",
+    "Query": "update t1 set c2 = 1 where c2 = 10 and c3 in (20, 21)",
+    "Table": "t1",
+    "Values": [
+      [
+        20,
+        21
+      ]
+    ],
+    "Vindex": "lookup_t1_2"
+  }
+}
+Gen4 plan same as above
