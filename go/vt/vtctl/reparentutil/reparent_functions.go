@@ -58,7 +58,7 @@ type (
 		PostTabletChangeHook(*topodatapb.Tablet)
 		GetBetterCandidate(*topodatapb.Tablet, *topodatapb.Tablet, []*topodatapb.Tablet, map[string]*topo.TabletInfo) *topodatapb.Tablet
 		CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error
-		StartReplication(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient) error
+		PostERSCompletionHook(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient)
 	}
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
@@ -238,11 +238,8 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newP
 	return nil
 }
 
-// StartReplication implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) StartReplication(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
-	// Do the promotion.
-	//return vtctlReparent.promoteNewPrimary(ctx, ev, logger, tmc)
-	return nil
+// PostERSCompletionHook implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
 }
 
 func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
