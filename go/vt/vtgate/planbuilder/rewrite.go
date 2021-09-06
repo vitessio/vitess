@@ -130,18 +130,11 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		if r.isInSubquery == 0 {
 			break
 		}
-		if !node.As.IsEmpty() {
+		_, isDerived := node.Expr.(*sqlparser.DerivedTable)
+		if isDerived {
 			break
 		}
-		tableName, isNotDerived := node.Expr.(sqlparser.TableName)
-		if !isNotDerived {
-			break
-		}
-
 		tableSet := r.semTable.TableSetFor(node)
-		if tableSet == 0 {
-			break
-		}
 		tableInfo, err := r.semTable.TableInfoFor(tableSet)
 		if err != nil {
 			// Fail-safe code, should never happen
@@ -151,10 +144,13 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		if vindexTable == nil {
 			break
 		}
+		tableName := node.Expr.(sqlparser.TableName)
 		if sqlparser.EqualsTableIdent(vindexTable.Name, tableName.Name) {
 			break
 		}
-		node.As = tableName.Name
+		if node.As.IsEmpty() {
+			node.As = tableName.Name
+		}
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
 	}
