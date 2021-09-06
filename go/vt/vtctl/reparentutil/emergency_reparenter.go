@@ -134,9 +134,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	// TODO: remove this entirely
-	reparentFunctions.SetMaps(tabletMap, statusMap, primaryStatusMap)
-
 	validCandidates, err := FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
 	if err != nil {
 		return err
