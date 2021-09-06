@@ -1418,11 +1418,10 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			}
 
 			var err error
-			tt.vtctlReparentFunctions.winningPrimaryTabletAliasStr = tt.newPrimaryTabletAlias
 			tt.vtctlReparentFunctions.tabletMap = tt.tabletMap
 			tt.vtctlReparentFunctions.statusMap = tt.statusMap
 
-			err = tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc)
+			err = tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc, tt.newPrimaryTabletAlias)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
