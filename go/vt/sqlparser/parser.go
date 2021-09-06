@@ -34,6 +34,7 @@ import (
 // and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
 // a specific MySQL version with the vitess version appended to it
 var MySQLServerVersion = flag.String("mysql_server_version", "", "MySQL server version to advertise.")
+var versionFlagSync sync.Once
 
 // parserPool is a pool for parser objects.
 var parserPool = sync.Pool{
@@ -107,14 +108,16 @@ func Parse2(sql string) (Statement, BindVars, error) {
 }
 
 func checkParserVersionFlag() {
-	if MySQLVersion == "" && flag.Parsed() {
-		convVersion, err := convertMySQLVersionToCommentVersion(*MySQLServerVersion)
-		if err != nil {
-			log.Error(err)
-			MySQLVersion = "50709" // default version if nothing else is stated
-		} else {
-			MySQLVersion = convVersion
-		}
+	if flag.Parsed() {
+		versionFlagSync.Do(func() {
+			convVersion, err := convertMySQLVersionToCommentVersion(*MySQLServerVersion)
+			if err != nil {
+				log.Error(err)
+				MySQLVersion = "50709" // default version if nothing else is stated
+			} else {
+				MySQLVersion = convVersion
+			}
+		})
 	}
 }
 
