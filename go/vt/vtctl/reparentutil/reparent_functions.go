@@ -69,7 +69,6 @@ type (
 		keyspace            string
 		shard               string
 		ts                  *topo.Server
-		lockAction          string
 	}
 )
 
@@ -91,9 +90,7 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 
 // LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
-	vtctlReparent.lockAction = vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias)
-
-	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.lockAction)
+	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias))
 }
 
 // GetTopoServer implements the ReparentFunctions interface
@@ -276,6 +273,6 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.lockAction, rp, tabletMap, statusMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.getLockAction(vtctlReparent.NewPrimaryAlias), rp, tabletMap, statusMap, vtctlReparent, false)
 	return err
 }
