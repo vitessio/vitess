@@ -344,3 +344,8 @@ func (lhu *LookupHashUnique) Update(vcursor VCursor, oldValues []sqltypes.Value,
 func (lhu *LookupHashUnique) MarshalJSON() ([]byte, error) {
 	return json.Marshal(lhu.lkp)
 }
+
+// IsBackfilling implements the LookupBackfill interface
+func (lhu *LookupHashUnique) IsBackfilling() bool {
+	return lhu.writeOnly
+}
