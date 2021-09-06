@@ -66,19 +66,18 @@ type (
 
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
 	VtctlReparentFunctions struct {
-		NewPrimaryAlias              *topodatapb.TabletAlias
-		IgnoreReplicas               sets.String
-		WaitReplicasTimeout          time.Duration
-		keyspace                     string
-		shard                        string
-		ts                           *topo.Server
-		lockAction                   string
-		tabletMap                    map[string]*topo.TabletInfo
-		statusMap                    map[string]*replicationdatapb.StopReplicationStatus
-		primaryStatusMap             map[string]*replicationdatapb.PrimaryStatus
-		validCandidates              map[string]mysql.Position
-		winningPosition              mysql.Position
-		winningPrimaryTabletAliasStr string
+		NewPrimaryAlias     *topodatapb.TabletAlias
+		IgnoreReplicas      sets.String
+		WaitReplicasTimeout time.Duration
+		keyspace            string
+		shard               string
+		ts                  *topo.Server
+		lockAction          string
+		tabletMap           map[string]*topo.TabletInfo
+		statusMap           map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap    map[string]*replicationdatapb.PrimaryStatus
+		validCandidates     map[string]mysql.Position
+		winningPosition     mysql.Position
 	}
 )
 
@@ -174,10 +173,11 @@ func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandid
 // FindPrimaryCandidates implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
 	// Elect the candidate with the most up-to-date position.
+	var winningPrimaryTabletAliasStr string
 	for alias, position := range validCandidates {
 		if vtctlReparent.winningPosition.IsZero() || position.AtLeast(vtctlReparent.winningPosition) {
 			vtctlReparent.winningPosition = position
-			vtctlReparent.winningPrimaryTabletAliasStr = alias
+			winningPrimaryTabletAliasStr = alias
 		}
 	}
 
@@ -187,18 +187,18 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidates(ctx context.C
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
 	if vtctlReparent.NewPrimaryAlias != nil {
-		vtctlReparent.winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
-		pos, ok := vtctlReparent.validCandidates[vtctlReparent.winningPrimaryTabletAliasStr]
+		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.NewPrimaryAlias)
+		pos, ok := vtctlReparent.validCandidates[winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", vtctlReparent.winningPrimaryTabletAliasStr)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v has errant GTIDs", winningPrimaryTabletAliasStr)
 		case !pos.AtLeast(vtctlReparent.winningPosition):
-			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", vtctlReparent.winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "master elect %v at position %v is not fully caught up. Winning position: %v", winningPrimaryTabletAliasStr, pos, vtctlReparent.winningPosition)
 		}
 	}
 
 	// TODO:= handle not found error
-	newPrimaryAlias := tabletMap[vtctlReparent.winningPrimaryTabletAliasStr]
+	newPrimaryAlias := tabletMap[winningPrimaryTabletAliasStr]
 	return newPrimaryAlias.Tablet, tabletMap, nil
 }
 
@@ -273,18 +273,18 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	return action
 }
 
-func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) error {
-	logger.Infof("promoting tablet %v to master", vtctlReparent.winningPrimaryTabletAliasStr)
+func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string) error {
+	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
 
-	newPrimaryTabletInfo, ok := vtctlReparent.tabletMap[vtctlReparent.winningPrimaryTabletAliasStr]
+	newPrimaryTabletInfo, ok := vtctlReparent.tabletMap[winningPrimaryTabletAliasStr]
 	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", vtctlReparent.winningPrimaryTabletAliasStr)
+		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", winningPrimaryTabletAliasStr)
 	}
 
 	rp, err := tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", vtctlReparent.winningPrimaryTabletAliasStr, err)
+		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", winningPrimaryTabletAliasStr, err)
 	}
 
 	if err := topo.CheckShardLocked(ctx, vtctlReparent.keyspace, vtctlReparent.shard); err != nil {
