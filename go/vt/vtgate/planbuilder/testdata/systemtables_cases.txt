@@ -858,3 +858,88 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# expand star with information schema in a derived table
+"select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.id = user.id"
+{
+  "QueryType": "SELECT",
+  "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.id = user.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "x_id": 1
+    },
+    "TableName": "information_schema.key_column_usage_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select x.table_name, x.id from (select a.* from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+        "Query": "select x.table_name, x.id from (select a.* from information_schema.key_column_usage as a) as x",
+        "Table": "information_schema.key_column_usage"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where `user`.id = :x_id",
+        "Table": "`user`",
+        "Values": [
+          ":x_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x join user on x.id = user.id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "x_id": 0
+    },
+    "TableName": "information_schema.key_column_usage_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select x.id, x.table_name from (select id, a.* from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+        "Query": "select x.id, x.table_name from (select id, a.* from information_schema.key_column_usage as a) as x",
+        "Table": "information_schema.key_column_usage"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where `user`.id = :x_id",
+        "Table": "`user`",
+        "Values": [
+          ":x_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
