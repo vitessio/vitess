@@ -109,32 +109,41 @@ func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Co
 	return nil
 }
 
+// GetWaitReplicasTimeout implements the ReparentFunctions interface
 // TODO : Discuss correct way
 func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Duration {
 	return 1 * time.Second
 }
 
+// GetWaitForRelayLogsTimeout implements the ReparentFunctions interface
 // TODO : Discuss correct way
 func (vtorcReparent *VtOrcReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
 	return 1 * time.Second
 }
 
+// HandleRelayLogFailure implements the ReparentFunctions interface
 // TODO : Discuss correct way
-func (vtorcReparent *VtOrcReparentFunctions) HandleRelayLogFailure(err error) error {
-	log.Infof("failed to apply all relay logs - %v", err)
+func (vtorcReparent *VtOrcReparentFunctions) HandleRelayLogFailure(logger logutil.Logger, err error) error {
+	// We do not want to throw an error from vtorc, since there could be replicas which are
+	// so far lagging that they may take days to apply all their relay logs
+	logger.Infof("failed to apply all relay logs - %v", err)
 	return nil
 }
 
+// GetIgnoreReplicas implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
+	// vtorc does not ignore any replicas
 	return nil
 }
 
 // CheckPrimaryRecoveryType implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType() error {
+func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType(logger logutil.Logger) error {
 	vtorcReparent.topologyRecovery.RecoveryType = GetPrimaryRecoveryType(&vtorcReparent.topologyRecovery.AnalysisEntry)
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: masterRecoveryType=%+v", vtorcReparent.topologyRecovery.RecoveryType))
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: primaryRecoveryType=%+v", vtorcReparent.topologyRecovery.RecoveryType))
 	if vtorcReparent.topologyRecovery.RecoveryType != PrimaryRecoveryGTID {
-		return vtorcReparent.topologyRecovery.AddError(log.Errorf("RecoveryType unknown/unsupported"))
+		err := fmt.Errorf("RecoveryType unknown/unsupported")
+		logger.Error(err)
+		return vtorcReparent.topologyRecovery.AddError(err)
 	}
 	return nil
 }
@@ -147,30 +156,10 @@ func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandid
 	return validCandidates, nil
 }
 
-// FindPrimaryCandidates implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
-	//promotedReplicaIsIdeal := func(promoted *inst.Instance, hasBestPromotionRule bool) bool {
-	//	if promoted == nil {
-	//		return false
-	//	}
-	//	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", promoted.Key))
-	//	if vtorcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
-	//		return promoted.Key.Equals(vtorcReparent.candidateInstanceKey)
-	//	}
-	//	if promoted.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
-	//		promoted.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
-	//		if promoted.PromotionRule == inst.MustPromoteRule || promoted.PromotionRule == inst.PreferPromoteRule ||
-	//			(hasBestPromotionRule && promoted.PromotionRule != inst.MustNotPromoteRule) {
-	//			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", promoted.Key))
-	//			vtorcReparent.postponedAll = true
-	//			return true
-	//		}
-	//	}
-	//	return false
-	//}
-
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, "RecoverDeadMaster: regrouping replicas via GTID")
-	lostReplicas, promotedReplica, hasBestPromotionRule, err := ChooseCandidate(tmc, &vtorcReparent.analysisEntry.AnalyzedInstanceKey, validCandidates, tabletMap)
+// FindPrimaryCandidate implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidate(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, "RecoverDeadPrimary: regrouping replicas via GTID")
+	lostReplicas, promotedReplica, hasBestPromotionRule, err := ChooseCandidate(&vtorcReparent.analysisEntry.AnalyzedInstanceKey, validCandidates, tabletMap, logger)
 	vtorcReparent.topologyRecovery.AddError(err)
 	vtorcReparent.hasBestPromotionRule = hasBestPromotionRule
 	if err != nil {
@@ -182,19 +171,20 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	}
 
 	for _, replica := range lostReplicas {
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: - lost replica: %+v", replica.Key))
+		AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: - lost replica: %+v", replica.Key))
 	}
 
+	// detach lost replicas if the configuration specifies it
 	if promotedReplica != nil && len(lostReplicas) > 0 && config.Config.DetachLostReplicasAfterPrimaryFailover {
 		postponedFunction := func() error {
-			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: lost %+v replicas during recovery process; detaching them", len(lostReplicas)))
 			for _, replica := range lostReplicas {
 				replica := replica
 				inst.DetachReplicaPrimaryHost(&replica.Key)
 			}
 			return nil
 		}
-		vtorcReparent.topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadMaster, detach %+v lost replicas", len(lostReplicas)))
+		vtorcReparent.topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadPrimary, detach %+v lost replicas", len(lostReplicas)))
 	}
 
 	func() error {
@@ -208,12 +198,13 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 		return nil
 	}()
 
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: %d postponed functions", vtorcReparent.topologyRecovery.PostponedFunctionsContainer.Len()))
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: %d postponed functions", vtorcReparent.topologyRecovery.PostponedFunctionsContainer.Len()))
 
 	vtorcReparent.promotedReplica = promotedReplica
 	vtorcReparent.topologyRecovery.LostReplicas.AddInstances(lostReplicas)
 	vtorcReparent.recoveryAttempted = true
 
+	// we now remove the lost replicas from the tabletMap so that we do not try to move them below the newly elected candidate now
 	tabletMapWithoutLostReplicas := map[string]*topo.TabletInfo{}
 
 	for alias, info := range tabletMap {
@@ -233,12 +224,12 @@ func (vtorcReparent *VtOrcReparentFunctions) FindPrimaryCandidates(ctx context.C
 	return newPrimary, tabletMapWithoutLostReplicas, nil
 }
 
-// ChooseCandidate will choose a candidate replica of a given instance, and take its siblings using GTID
+// ChooseCandidate will choose a candidate replica of a given instance and also returns whether the chosen candidate has the best promotion rule or not
 func ChooseCandidate(
-	tmc tmclient.TabletManagerClient,
-	masterKey *inst.InstanceKey,
+	primaryKey *inst.InstanceKey,
 	validCandidates map[string]mysql.Position,
 	tabletMap map[string]*topo.TabletInfo,
+	logger logutil.Logger,
 ) (
 	lostReplicas [](*inst.Instance),
 	candidateReplica *inst.Instance,
@@ -246,12 +237,10 @@ func ChooseCandidate(
 	err error,
 ) {
 	var emptyReplicas [](*inst.Instance)
-	var unmovedReplicas [](*inst.Instance)
-	//var movedReplicas [](*inst.Instance)
 
 	dataCenterHint := ""
-	if master, _, _ := inst.ReadInstance(masterKey); master != nil {
-		dataCenterHint = master.DataCenter
+	if primary, _, _ := inst.ReadInstance(primaryKey); primary != nil {
+		dataCenterHint = primary.DataCenter
 	}
 
 	var replicas [](*inst.Instance)
@@ -266,7 +255,7 @@ func ChooseCandidate(
 			Port:     int(candidateInfo.MysqlPort),
 		})
 		if err != nil {
-			log.Errorf("%v", err)
+			logger.Errorf("%v", err)
 			return emptyReplicas, candidateReplica, false, err
 		}
 		replicas = append(replicas, candidateInstance)
@@ -274,7 +263,7 @@ func ChooseCandidate(
 
 	inst.SortInstancesDataCenterHint(replicas, dataCenterHint)
 	for _, replica := range replicas {
-		log.Debugf("- sorted replica: %+v %+v", replica.Key, replica.ExecBinlogCoordinates)
+		logger.Infof("ChooseCandidate - sorted replica: %+v %+v", replica.Key, replica.ExecBinlogCoordinates)
 	}
 
 	candidateReplica, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := inst.ChooseCandidateReplica(replicas)
@@ -286,10 +275,10 @@ func ChooseCandidate(
 	}
 	mostUpToDateReplica := replicas[0]
 	if candidateReplica.ExecBinlogCoordinates.SmallerThan(&mostUpToDateReplica.ExecBinlogCoordinates) {
-		log.Warningf("GetCandidateReplica: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
+		logger.Warningf("ChooseCandidate: chosen replica: %+v is behind most-up-to-date replica: %+v", candidateReplica.Key, mostUpToDateReplica.Key)
 	}
 
-	log.Debugf("GetCandidateReplica: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
+	logger.Infof("ChooseCandidate: candidate: %+v, ahead: %d, equal: %d, late: %d, break: %d", candidateReplica.Key, len(aheadReplicas), len(equalReplicas), len(laterReplicas), len(cannotReplicateReplicas))
 
 	replicasToMove := append(equalReplicas, laterReplicas...)
 	hasBestPromotionRule = true
@@ -299,82 +288,28 @@ func ChooseCandidate(
 		}
 	}
 
-	//now := time.Now().UnixNano()
-	//if err := inst.SwitchMaster(candidateReplica.Key, *masterKey); err != nil {
-	//	return emptyReplicas, candidateReplica, err
-	//}
-	//
-	//candidateReplicaTablet, err := inst.ReadTablet(candidateReplica.Key)
-	//if err != nil {
-	//	return emptyReplicas, candidateReplica, err
-	//}
-	//
-	//moveGTIDFunc := func() error {
-	//	log.Debugf("RegroupReplicasGTID: working on %d replicas", len(replicasToMove))
-	//
-	//	for _, instance := range replicasToMove {
-	//		tablet, err := inst.ReadTablet(instance.Key)
-	//		if err != nil {
-	//			goto Cleanup
-	//		}
-	//
-	//		if maintenanceToken, merr := inst.BeginMaintenance(&instance.Key, inst.GetMaintenanceOwner(), fmt.Sprintf("move below %+v", candidateReplica.Key)); merr != nil {
-	//			err = fmt.Errorf("Cannot begin maintenance on %+v: %v", instance.Key, merr)
-	//			goto Cleanup
-	//		} else {
-	//			defer inst.EndMaintenance(maintenanceToken)
-	//		}
-	//
-	//		err = tmc.SetReplicationSource(context.Background(), tablet, candidateReplicaTablet.Alias, now, "", false)
-	//		if err != nil {
-	//			unmovedReplicas = append(unmovedReplicas, instance)
-	//			err = vterrors.Wrapf(err, "tablet %v SetMaster failed: %v", tablet.Alias, err)
-	//			goto Cleanup
-	//		}
-	//		movedReplicas = append(movedReplicas, instance)
-	//
-	//	Cleanup:
-	//		tmc.StartReplication(context.Background(), tablet)
-	//		return err
-	//	}
-	//
-	unmovedReplicas = append(unmovedReplicas, aheadReplicas...)
-	unmovedReplicas = append(unmovedReplicas, cannotReplicateReplicas...)
-	//	if err != nil {
-	//		log.Errore(err)
-	//	}
-	//	return nil
-	//}
-	//
-	//if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
-	//	postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
-	//} else {
-	//	err = moveGTIDFunc()
-	//}
-	//
-	//inst.StartReplication(&candidateReplica.Key)
-	//
-	//log.Debugf("RegroupReplicasGTID: done")
-	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
-	return unmovedReplicas, candidateReplica, hasBestPromotionRule, err
+	lostReplicas = append(lostReplicas, aheadReplicas...)
+	lostReplicas = append(lostReplicas, cannotReplicateReplicas...)
+	return lostReplicas, candidateReplica, hasBestPromotionRule, nil
 }
 
 // PromotedReplicaIsIdeal implements the ReparentFunctions interface
-func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, oldPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
-	AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: promotedReplicaIsIdeal(%+v)", newPrimary.Alias))
+func (vtorcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, oldPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: promotedReplicaIsIdeal(%+v)", newPrimary.Alias))
 	newPrimaryKey := &inst.InstanceKey{
 		Hostname: newPrimary.MysqlHostname,
 		Port:     int(newPrimary.MysqlPort),
 	}
 	newPrimaryInst, _, _ := inst.ReadInstance(newPrimaryKey)
-	if vtOrcReparent.candidateInstanceKey != nil { //explicit request to promote a specific server
-		return newPrimaryKey.Equals(vtOrcReparent.candidateInstanceKey)
+	if vtorcReparent.candidateInstanceKey != nil {
+		// explicit request to promote a specific server
+		return newPrimaryKey.Equals(vtorcReparent.candidateInstanceKey)
 	}
-	if newPrimaryInst.DataCenter == vtOrcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
-		newPrimaryInst.PhysicalEnvironment == vtOrcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
+	if newPrimaryInst.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
+		newPrimaryInst.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
 		if newPrimaryInst.PromotionRule == inst.MustPromoteRule || newPrimaryInst.PromotionRule == inst.PreferPromoteRule ||
-			(vtOrcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != inst.MustNotPromoteRule) {
-			AuditTopologyRecovery(vtOrcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: found %+v to be ideal candidate; will optimize recovery", newPrimaryInst.Key))
+			(vtorcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != inst.MustNotPromoteRule) {
+			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: found %+v to be ideal candidate; will optimize recovery", newPrimaryInst.Key))
 			return true
 		}
 	}
@@ -382,7 +317,7 @@ func (vtOrcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, 
 }
 
 // PostReplicationChangeHook implements the ReparentFunctions interface
-func (vtOrcReparent *VtOrcReparentFunctions) PostTabletChangeHook(tablet *topodatapb.Tablet) {
+func (vtorcReparent *VtOrcReparentFunctions) PostTabletChangeHook(tablet *topodatapb.Tablet) {
 	instanceKey := &inst.InstanceKey{
 		Hostname: tablet.MysqlHostname,
 		Port:     int(tablet.MysqlPort),
@@ -544,6 +479,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	return newPrimary
 }
 
+// TODO: handle error from this
 func getInstanceFromTablet(tablet *topodatapb.Tablet) *inst.Instance {
 	instance, _, _ := inst.ReadInstance(&inst.InstanceKey{
 		Hostname: tablet.MysqlHostname,

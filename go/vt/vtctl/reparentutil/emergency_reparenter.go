@@ -128,29 +128,36 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	if err := reparentFunctions.CheckPrimaryRecoveryType(); err != nil {
+	// check that the primary recovery type is a valid one
+	if err := reparentFunctions.CheckPrimaryRecoveryType(erp.logger); err != nil {
 		return err
 	}
 
+	// read all the tablets and there information
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
 	}
 
+	// Stop replication on all the tablets and build their status map
 	statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, reparentFunctions.GetWaitReplicasTimeout(), reparentFunctions.GetIgnoreReplicas(), erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
 
+	// check that we still have the shard lock. If we don't then we can terminate at this point
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
+	// find the valid candidates for becoming the primary
+	// this is where we check for errant GTIDs and remove the tablets that have them from consideration
 	validCandidates, err := FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
 	if err != nil {
 		return err
 	}
+	// Now, we restrict the valid candidates list according to the ReparentFunctions implementations
 	validCandidates, err = reparentFunctions.RestrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
@@ -160,18 +167,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Wait for all candidates to apply relay logs
 	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, reparentFunctions.GetWaitForRelayLogsTimeout()); err != nil {
-		err = reparentFunctions.HandleRelayLogFailure(err)
+		// We handle the error from relay logs separately for each implementation of ReparentFunctions
+		err = reparentFunctions.HandleRelayLogFailure(erp.logger, err)
 		if err != nil {
 			return err
 		}
 	}
 
+	// find the primary candidate that we want to promote
 	var newPrimary *topodatapb.Tablet
-	newPrimary, tabletMap, err = reparentFunctions.FindPrimaryCandidates(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
+	newPrimary, tabletMap, err = reparentFunctions.FindPrimaryCandidate(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
 	if err != nil {
 		return err
 	}
 
+	// check weather the primary candidate selected is ideal or if it can be improved later
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, prevPrimary, tabletMap, validCandidates)
 
 	// TODO := LockAction and RP
