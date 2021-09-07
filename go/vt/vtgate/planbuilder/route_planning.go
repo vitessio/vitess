@@ -372,11 +372,10 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 		}
 
 		return &joinTree{
-			lhs:     node.lhs,
-			rhs:     rhsPlan,
-			outer:   node.outer,
-			vars:    node.vars,
-			columns: node.columns,
+			lhs:   node.lhs,
+			rhs:   rhsPlan,
+			outer: node.outer,
+			vars:  node.vars,
 		}, nil
 	case *derivedTree:
 		plan := node.clone().(*derivedTree)
@@ -409,7 +408,11 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 	}
 }
 
-func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+func breakPredicateInLHSandRHS(
+	expr sqlparser.Expr,
+	semTable *semantics.SemTable,
+	lhs semantics.TableSet,
+) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
 	predicate = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
