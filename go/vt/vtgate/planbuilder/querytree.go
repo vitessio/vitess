@@ -74,7 +74,7 @@ type (
 
 		alias string
 
-		query *sqlparser.Select
+		query sqlparser.SelectStatement
 	}
 )
 

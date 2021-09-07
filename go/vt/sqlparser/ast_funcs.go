@@ -1441,3 +1441,16 @@ func IsAggregation(node SQLNode) bool {
 	}
 	return false
 }
+
+// GetFirstSelect gets the first select statement
+func GetFirstSelect(selStmt SelectStatement) *Select {
+	switch node := selStmt.(type) {
+	case *Select:
+		return node
+	case *Union:
+		return GetFirstSelect(node.FirstStatement)
+	case *ParenSelect:
+		return GetFirstSelect(node.Select)
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}
