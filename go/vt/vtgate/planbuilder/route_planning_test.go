@@ -171,8 +171,8 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	assert.NotNil(merge)
 }
 
-func fakeMerger(a, _ *routeTree) *routeTree {
-	return a
+func fakeMerger(a, _ *routeTree) (*routeTree, error) {
+	return a, nil
 }
 
 func equals(left, right sqlparser.Expr) sqlparser.Expr {
