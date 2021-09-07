@@ -115,6 +115,8 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		tmc                    *testutil.TabletManagerClient
 		// setup
 		ts         *topo.Server
+		keyspace   string
+		shard      string
 		unlockTopo bool
 		shards     []*vtctldatapb.Shard
 		tablets    []*topodatapb.Tablet
@@ -123,7 +125,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}{
 		{
 			name:                   "success",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000102": nil,
@@ -219,6 +221,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "most up-to-date position, wins election",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
 		{
@@ -228,7 +233,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			vtctlReparentFunctions: NewVtctlReparentFunctions(&topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  101,
-			}, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			}, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000101": nil,
@@ -323,11 +328,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Shard:    "-",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
 		{
 			name:                   "success with existing primary",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -425,19 +433,25 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "most up-to-date position, wins election",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
 		{
 			name:                   "shard not found",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc:                    &testutil.TabletManagerClient{},
 			unlockTopo:             true, // we shouldn't try to lock the nonexistent shard
 			shards:                 nil,
+			keyspace:               "testkeyspace",
+			shard:                  "-",
+			ts:                     memorytopo.NewServer("zone1"),
 			shouldErr:              true,
 		},
 		{
 			name:                   "cannot stop replication",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -488,11 +502,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Shard:    "-",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "lost topo lock",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -543,11 +560,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Shard:    "-",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "cannot get reparent candidates",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -610,11 +630,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "has a zero relay log position",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "zero valid reparent candidates",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc:                    &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
 				{
@@ -623,11 +646,14 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 			shouldErr: true,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 		},
 		{
 			name: "error waiting for relay logs to apply",
 			// one replica is going to take a minute to apply relay logs
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, time.Millisecond*50, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, time.Millisecond*50),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -709,13 +735,16 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				},
 			},
 			shouldErr: true,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 		},
 		{
 			name: "requested primary-elect is not in tablet map",
 			vtctlReparentFunctions: NewVtctlReparentFunctions(&topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  200,
-			}, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			}, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -791,6 +820,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Shard:    "-",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
@@ -798,8 +830,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			vtctlReparentFunctions: NewVtctlReparentFunctions(&topodatapb.TabletAlias{ // we're requesting a tablet that's behind in replication
 				Cell: "zone1",
 				Uid:  102,
-			}, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
-			ts: memorytopo.NewServer("zone1"),
+			}, nil, 0),
+			keyspace: "testkeyspace",
+			shard:    "-",
+			ts:       memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -887,7 +921,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				&topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  102,
-				}, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+				}, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -972,6 +1006,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 					Hostname: "not most up-to-date position",
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 	}
@@ -990,18 +1027,18 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 				tablet.Type = topodatapb.TabletType_REPLICA
 				tt.tablets[i] = tablet
 			}
-			tt.tmc.TopoServer = tt.vtctlReparentFunctions.ts
+			tt.tmc.TopoServer = tt.ts
 
-			testutil.AddShards(ctx, t, tt.vtctlReparentFunctions.ts, tt.shards...)
-			testutil.AddTablets(ctx, t, tt.vtctlReparentFunctions.ts, nil, tt.tablets...)
+			testutil.AddShards(ctx, t, tt.ts, tt.shards...)
+			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
 
 			if !tt.unlockTopo {
-				lctx, unlock, lerr := tt.vtctlReparentFunctions.ts.LockShard(ctx, tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard, "test lock")
-				require.NoError(t, lerr, "could not lock %s/%s for testing", tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard)
+				lctx, unlock, lerr := tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				require.NoError(t, lerr, "could not lock %s/%s for testing", tt.keyspace, tt.shard)
 
 				defer func() {
 					unlock(&lerr)
-					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard)
+					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.keyspace, tt.shard)
 				}()
 
 				ctx = lctx // make the reparentShardLocked call use the lock ctx
@@ -1009,7 +1046,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
 
-			err := erp.reparentShardLocked(ctx, ev, tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard, tt.vtctlReparentFunctions)
+			err := erp.reparentShardLocked(ctx, ev, tt.keyspace, tt.shard, tt.vtctlReparentFunctions)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -1029,13 +1066,16 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		tmc                    *testutil.TabletManagerClient
 		unlockTopo             bool
 		newPrimaryTabletAlias  string
+		ts                     *topo.Server
+		keyspace               string
+		shard                  string
 		tabletMap              map[string]*topo.TabletInfo
 		statusMap              map[string]*replicationdatapb.StopReplicationStatus
 		shouldErr              bool
 	}{
 		{
 			name:                   "success",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, sets.NewString("zone1-0000000404"), 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, sets.NewString("zone1-0000000404"), 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1106,23 +1146,29 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 					},
 				},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
 		{
 			name:                   "primary not in tablet map",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc:                    &testutil.TabletManagerClient{},
 			newPrimaryTabletAlias:  "zone2-0000000200",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 			},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
 			shouldErr: true,
 		},
 		{
 			name:                   "PromoteReplica error",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -1153,11 +1199,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "lost topology lock",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -1189,11 +1238,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "cannot repopulate reparent journal on new primary",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
@@ -1227,11 +1279,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "all replicas failing to SetMaster does fail the promotion",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1278,11 +1333,14 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: true,
 		},
 		{
 			name:                   "all replicas slow to SetMaster does fail the promotion",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, time.Millisecond*10, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, time.Millisecond*10),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1334,10 +1392,13 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
 			shouldErr: true,
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 		},
 		{
 			name:                   "one replica failing to SetMaster does not fail the promotion",
-			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0, "testkeyspace", "-", memorytopo.NewServer("zone1")),
+			vtctlReparentFunctions: NewVtctlReparentFunctions(nil, nil, 0),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1383,6 +1444,9 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 				},
 			},
 			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
 		},
 	}
@@ -1397,9 +1461,9 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 			ev := &events.Reparent{}
 
-			testutil.AddShards(ctx, t, tt.vtctlReparentFunctions.ts, &vtctldatapb.Shard{
-				Keyspace: tt.vtctlReparentFunctions.keyspace,
-				Name:     tt.vtctlReparentFunctions.shard,
+			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+				Keyspace: tt.keyspace,
+				Name:     tt.shard,
 			})
 
 			if !tt.unlockTopo {
@@ -1408,16 +1472,16 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 					lerr   error
 				)
 
-				ctx, unlock, lerr = tt.vtctlReparentFunctions.ts.LockShard(ctx, tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard, "test lock")
-				require.NoError(t, lerr, "could not lock %s/%s for test", tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard)
+				ctx, unlock, lerr = tt.ts.LockShard(ctx, tt.keyspace, tt.shard, "test lock")
+				require.NoError(t, lerr, "could not lock %s/%s for test", tt.keyspace, tt.shard)
 
 				defer func() {
 					unlock(&lerr)
-					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.vtctlReparentFunctions.keyspace, tt.vtctlReparentFunctions.shard)
+					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.keyspace, tt.shard)
 				}()
 			}
 
-			err := tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc, tt.newPrimaryTabletAlias, tt.statusMap, tt.tabletMap)
+			err := tt.vtctlReparentFunctions.promoteNewPrimary(ctx, ev, logger, tt.tmc, tt.newPrimaryTabletAlias, tt.statusMap, tt.tabletMap, tt.keyspace, tt.shard)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return

@@ -150,13 +150,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 		ctx,
 		keyspace,
 		shard,
-		reparentutil.NewVtctlReparentFunctions(primaryElectTabletAlias,
-			ignoredTablets,
-			waitReplicasTimeout,
-			keyspace,
-			shard,
-			wr.ts,
-		))
+		reparentutil.NewVtctlReparentFunctions(primaryElectTabletAlias, ignoredTablets, waitReplicasTimeout))
 
 	return err
 }
