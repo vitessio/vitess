@@ -49,18 +49,17 @@ func (d *derivedTree) clone() queryTree {
 }
 
 func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int, err error) {
+	var noQualifierNames []*sqlparser.ColName
 	for _, name := range names {
 		_, err := d.findOutputColumn(name)
 		if err != nil {
 			return nil, err
 		}
 		offsets = append(offsets, len(d.columns))
-		if !name.Qualifier.IsEmpty() {
-			name.Qualifier = sqlparser.TableName{}
-		}
 		d.columns = append(d.columns, name)
+		noQualifierNames = append(noQualifierNames, sqlparser.NewColName(name.Name.String()))
 	}
-	_, _ = d.inner.pushOutputColumns(names, nil)
+	_, _ = d.inner.pushOutputColumns(noQualifierNames, nil)
 	return
 }
 
