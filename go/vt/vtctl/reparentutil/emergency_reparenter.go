@@ -72,12 +72,15 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 // ReparentShard performs the EmergencyReparentShard operation on the given
 // keyspace and shard.
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
-	ctx, unlock, err := reparentFunctions.LockShard(ctx, erp.ts, keyspace, shard)
+	// First step is to lock the shard for the given operation
+	ctx, unlock, err := reparentFunctions.LockShard(ctx, erp.logger, erp.ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
+	// defer the unlock-shard function
 	defer unlock(&err)
 
+	// dispatch success or failure of ERS
 	ev := &events.Reparent{}
 	defer func() {
 		switch err {
@@ -88,6 +91,7 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 		}
 	}()
 
+	// run ERS with shard already locked
 	err = erp.reparentShardLocked(ctx, ev, keyspace, shard, reparentFunctions)
 
 	reparentFunctions.PostERSCompletionHook(ctx, ev, erp.logger, erp.tmc)
@@ -95,19 +99,21 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 	return ev, err
 }
 
+// reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
 func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, reparentFunctions ReparentFunctions) error {
-
+	// check whether ERS is required or it has been fixed via an external agent
 	if reparentFunctions.CheckIfFixed() {
 		return nil
 	}
 
+	// get the shard information from the topology server
 	shardInfo, err := erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
 	ev.ShardInfo = *shardInfo
-	event.DispatchUpdate(ev, "reading all tablets")
 
+	// get the previous primary according to the topology server
 	var prevPrimary *topodatapb.Tablet
 	if shardInfo.PrimaryAlias != nil {
 		prevPrimaryInfo, err := erp.ts.GetTablet(ctx, shardInfo.PrimaryAlias)
@@ -117,6 +123,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
 
+	// run the pre recovery processes
 	if err := reparentFunctions.PreRecoveryProcesses(ctx); err != nil {
 		return err
 	}
@@ -125,6 +132,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)

@@ -71,12 +71,10 @@ func NewVtorcReparentFunctions(analysisEntry inst.ReplicationAnalysis, candidate
 }
 
 // LockShard implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
+func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context, logger logutil.Logger, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
 	ctx, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
-		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
-			"skipProcesses: %v: NOT detecting/recovering host, could not obtain shard lock (%v)",
-			vtorcReparent.analysisEntry.Analysis, vtorcReparent.analysisEntry.AnalyzedInstanceKey, vtorcReparent.candidateInstanceKey, vtorcReparent.skipProcesses, err)
+		logger.Infof("could not obtain shard lock (%v)", err)
 		return nil, nil, err
 	}
 	return ctx, unlock, nil
@@ -93,21 +91,21 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 		// TODO(sougou): see if we have to reset the cluster as healthy.
 		return true
 	}
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("will handle DeadMaster event on %+v", vtorcReparent.analysisEntry.ClusterDetails.ClusterName))
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("will handle DeadPrimary event on %+v", vtorcReparent.analysisEntry.ClusterDetails.ClusterName))
 	recoverDeadPrimaryCounter.Inc(1)
 	return false
 }
 
 // PreRecoveryProcesses implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
-	inst.AuditOperation("recover-dead-master", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, "problem found; will recover")
+	inst.AuditOperation("recover-dead-primary", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, "problem found; will recover")
 	if !vtorcReparent.skipProcesses {
 		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", vtorcReparent.topologyRecovery, true); err != nil {
 			return vtorcReparent.topologyRecovery.AddError(err)
 		}
 	}
 
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadMaster: will recover %+v", vtorcReparent.analysisEntry.AnalyzedInstanceKey))
+	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: will recover %+v", vtorcReparent.analysisEntry.AnalyzedInstanceKey))
 	return nil
 }
 

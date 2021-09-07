@@ -41,14 +41,14 @@ import (
 type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
-		LockShard(context.Context, *topo.Server, string, string) (context.Context, func(*error), error)
+		LockShard(context.Context, logutil.Logger, *topo.Server, string, string) (context.Context, func(*error), error)
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
+		CheckPrimaryRecoveryType() error
 		GetWaitReplicasTimeout() time.Duration
 		GetWaitForRelayLogsTimeout() time.Duration
 		HandleRelayLogFailure(err error) error
 		GetIgnoreReplicas() sets.String
-		CheckPrimaryRecoveryType() error
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidates(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error)
 		PromotedReplicaIsIdeal(*topodatapb.Tablet, *topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]mysql.Position) bool
@@ -80,17 +80,20 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 }
 
 // LockShard implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
+func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context, logger logutil.Logger, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
 	return ts.LockShard(ctx, keyspace, shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
 }
 
 // CheckIfFixed implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
+	// For vtctl command, we know there is no other third party to fix this.
+	// If a user has called this command, then we should execute EmergencyReparentShard
 	return false
 }
 
 // PreRecoveryProcesses implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
+	// there are no pre-recovery processes to be run
 	return nil
 }
 
