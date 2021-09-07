@@ -21,6 +21,8 @@ import (
 	"io"
 	"sort"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -656,11 +658,22 @@ func createRoutePlan(ctx planningContext, table *abstract.QueryTable, solves sem
 	case !vschemaTable.Keyspace.Sharded:
 		plan.routeOpCode = engine.SelectUnsharded
 	case vschemaTable.Pinned != nil:
-
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
 		plan.routeOpCode = engine.SelectEqualUnique
+		vindex, _ := vindexes.NewBinary("binary", nil)
+		plan.selected = &vindexOption{
+			ready:       true,
+			values:      []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}},
+			valueExprs:  nil,
+			predicates:  nil,
+			opcode:      engine.SelectEqualUnique,
+			foundVindex: vindex,
+			cost: cost{
+				opCode: engine.SelectEqualUnique,
+			},
+		}
 	default:
 		plan.routeOpCode = engine.SelectScatter
 	}
