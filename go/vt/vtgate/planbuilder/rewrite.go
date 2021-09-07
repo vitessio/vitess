@@ -127,30 +127,37 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		r.isInSubquery++
 		rewriteSubquery(cursor, r, node)
 	case *sqlparser.AliasedTableExpr:
-		if r.isInSubquery == 0 {
+		// rewrite names of the routed tables for the subquery
+		// We only need to do this for non-derived tables and if they are in a subquery
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.isInSubquery == 0 {
 			break
 		}
-		_, isDerived := node.Expr.(*sqlparser.DerivedTable)
-		if isDerived {
-			break
-		}
+		// find the tableSet and tableInfo that this table points to
+		// tableInfo should contain the information for the original table that the routed table points to
 		tableSet := r.semTable.TableSetFor(node)
 		tableInfo, err := r.semTable.TableInfoFor(tableSet)
 		if err != nil {
 			// Fail-safe code, should never happen
 			break
 		}
+		// vindexTable is the original table
 		vindexTable := tableInfo.GetVindexTable()
 		if vindexTable == nil {
 			break
 		}
 		tableName := node.Expr.(sqlparser.TableName)
+		// if the table name matches what the original is, then we do not need to rewrite
 		if sqlparser.EqualsTableIdent(vindexTable.Name, tableName.Name) {
 			break
 		}
+		// if there is no as clause, then move the routed table to the as clause.
+		// i.e
+		// routed as x -> original as x
+		// routed -> original as routed
 		if node.As.IsEmpty() {
 			node.As = tableName.Name
 		}
+		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
 	}

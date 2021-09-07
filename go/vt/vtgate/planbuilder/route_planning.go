@@ -192,23 +192,30 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 }
 
 func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
+	// first we find the other side of the tree by comparing the tableIDs
+	// other side is RHS if the subquery is in the LHS, otherwise it is LHS
 	otherTree := outerTree.lhs
 	if a.tableID() == outerTree.lhs.tableID() {
 		otherTree = outerTree.rhs
 	}
 
 	var rewriteError error
+	// go over the entire where expression in the subquery
 	sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
+			// check weather the column name belongs to the other side of the join tree
 			if ctx.semTable.Dependencies(node).IsSolvedBy(otherTree.tableID()) {
+				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := node.CompliantName()
 				cursor.Replace(sqlparser.NewArgument(bindVar))
+				// check wether the bindVariable already exists in the joinVars of the other tree
 				_, alreadyExists := outerTree.vars[bindVar]
 				if alreadyExists {
 					return false
 				}
+				// if it does not exist, then push this as an output column there and add it to the joinVars
 				columnIndexes, err := otherTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
 				if err != nil {
 					rewriteError = err
@@ -222,6 +229,7 @@ func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQu
 		return true
 	}, nil)
 
+	// return any error while rewriting
 	return rewriteError
 }
 
