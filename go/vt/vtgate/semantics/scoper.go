@@ -76,10 +76,6 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			s.push(nScope)
 			s.sqlNodeScope[scopeKey{node: node}] = nScope
 		}
-	case *sqlparser.Union:
-		scope := newScope(s.currentScope())
-		s.push(scope)
-		s.sqlNodeScope[scopeKey{node: node}] = scope
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
 		if !parentIsSelect {
@@ -106,7 +102,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case sqlparser.SelectStatement, sqlparser.OrderBy, sqlparser.GroupBy:
+	case *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
 		s.popScope()
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
@@ -185,22 +181,28 @@ func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
 }
 
 func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) {
-	sel, ok := cursor.Parent().(*sqlparser.Select)
-	if !ok {
-		return
-	}
-	// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
-	// so before walking the rest of the tree, we change the scope to match this behaviour
-	incomingScope := s.currentScope()
-	nScope := newScope(incomingScope)
-	s.push(nScope)
-	s.sqlNodeScope[k] = nScope
-	wScope := s.wScope[sel]
-	nScope.tables = append(nScope.tables, wScope.tables...)
-	nScope.selectStmt = incomingScope.selectStmt
+	switch parent := cursor.Parent().(type) {
+	case *sqlparser.Select:
+		// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
+		// so before walking the rest of the tree, we change the scope to match this behaviour
+		incomingScope := s.currentScope()
+		nScope := newScope(incomingScope)
+		s.push(nScope)
+		s.sqlNodeScope[k] = nScope
+		wScope := s.wScope[parent]
+		nScope.tables = append(nScope.tables, wScope.tables...)
+		nScope.selectStmt = incomingScope.selectStmt
 
-	if s.rScope[sel] != incomingScope {
-		panic("BUG: scope counts did not match")
+		if s.rScope[parent] != incomingScope {
+			panic("BUG: scope counts did not match")
+		}
+	case *sqlparser.Union:
+		nScope := newScope(nil)
+		nScope.selectStmt = sqlparser.GetFirstSelect(parent)
+		s.push(nScope)
+		s.sqlNodeScope[k] = nScope
+	default:
+		return
 	}
 }
 

@@ -21,35 +21,24 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Derived represents a derived table in the query
-type Derived struct {
-	Sel   sqlparser.SelectStatement
-	Inner Operator
-	Alias string
+// Distinct eliminates duplicate rows.
+type Distinct struct {
+	Source Operator
 }
 
-var _ Operator = (*Derived)(nil)
+var _ Operator = (*Distinct)(nil)
 
 // TableID implements the Operator interface
-func (d *Derived) TableID() semantics.TableSet {
-	return d.Inner.TableID()
+func (d *Distinct) TableID() semantics.TableSet {
+	return d.Source.TableID()
 }
 
 // PushPredicate implements the Operator interface
-func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	tableInfo, err := semTable.TableInfoForExpr(expr)
-	if err != nil {
-		return err
-	}
-
-	newExpr, err := semantics.RewriteDerivedExpression(expr, tableInfo)
-	if err != nil {
-		return err
-	}
-	return d.Inner.PushPredicate(newExpr, semTable)
+func (d *Distinct) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+	return d.Source.PushPredicate(expr, semTable)
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	return d.Inner.UnsolvedPredicates(semTable)
+func (d *Distinct) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	return d.Source.UnsolvedPredicates(semTable)
 }

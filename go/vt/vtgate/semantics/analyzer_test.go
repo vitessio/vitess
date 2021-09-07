@@ -351,6 +351,27 @@ func TestUnion(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
+func TestUnionWithOrderBy(t *testing.T) {
+	query := "select col1 from tabl1 union (select col2 from tabl2) order by 1"
+
+	stmt, semTable := parseAndAnalyze(t, query, "")
+	union, _ := stmt.(*sqlparser.Union)
+	sel1 := union.FirstStatement.(*sqlparser.Select)
+	sel2 := union.UnionSelects[0].Statement.(*sqlparser.ParenSelect).Select.(*sqlparser.Select)
+
+	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
+	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
+	ts1 := semTable.TableSetFor(t1)
+	ts2 := semTable.TableSetFor(t2)
+	assert.EqualValues(t, 1, ts1)
+	assert.EqualValues(t, 2, ts2)
+
+	d1 := semTable.BaseTableDependencies(extract(sel1, 0))
+	d2 := semTable.BaseTableDependencies(extract(sel2, 0))
+	assert.Equal(t, T1, d1)
+	assert.Equal(t, T2, d2)
+}
+
 func TestBindingMultiTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 
