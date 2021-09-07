@@ -17,14 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
@@ -103,6 +102,8 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		}
 	}
 
+	bufferCfg := buffer.NewConfigFromFlags()
+
 	dg := &DiscoveryGateway{
 		hc:                hc,
 		tsc:               discovery.NewTabletStatsCacheDoNotSetListener(topoServer, cell),
@@ -111,7 +112,7 @@ func NewDiscoveryGateway(ctx context.Context, hc discovery.LegacyHealthCheck, se
 		retryCount:        retryCount,
 		tabletsWatchers:   make([]*discovery.LegacyTopologyWatcher, 0, 1),
 		statusAggregators: make(map[string]*TabletStatusAggregator),
-		buffer:            buffer.New(),
+		buffer:            buffer.New(bufferCfg),
 	}
 
 	// Set listener which will update LegacyTabletStatsCache and PrimaryBuffer.

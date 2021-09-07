@@ -471,9 +471,18 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"tabletgateway_buffer": {
+		"tabletgateway_buffer_reparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reparent"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "13",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"tabletgateway_buffer_reshard": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletgateway/buffer/reshard"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "13",
