@@ -68,7 +68,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
 			Expr: col,
 			As:   sqlparser.ColIdent{},
-		})
+		}, false)
 		if err != nil {
 			return nil, err
 		}

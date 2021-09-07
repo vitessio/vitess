@@ -146,7 +146,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "_unsharded",
+    "Inputs": [
+      {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1
+        ],
+        "Fields": {
+          "user_index.keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id from unsharded",
+        "Table": "unsharded"
+      }
+    ]
+  }
+}
 
 # Join vindexFunc on RHS
 "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id"
@@ -185,7 +219,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,-1",
+    "TableName": "unsharded_",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id from unsharded",
+        "Table": "unsharded"
+      },
+      {
+        "OperatorType": "VindexFunc",
+        "Variant": "VindexMap",
+        "Columns": [
+          1
+        ],
+        "Fields": {
+          "user_index.keyspace_id": "VARBINARY"
+        },
+        "Value": ":id",
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
 
 # Join with vindexFunc on a column of it, already present in select list
 "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id"
@@ -235,7 +303,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "-1,-2,1",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -246,12 +314,11 @@ Gen4 plan same as above
         "Variant": "VindexMap",
         "Columns": [
           0,
-          0,
           1
         ],
         "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
+          "user_index.id": "VARBINARY",
+          "user_index.keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -319,7 +386,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
-    "JoinColumnIndexes": "-2,-3,1",
+    "JoinColumnIndexes": "-2,-1,1",
     "JoinVars": {
       "user_index_id": 0
     },
@@ -330,12 +397,11 @@ Gen4 plan same as above
         "Variant": "VindexMap",
         "Columns": [
           0,
-          1,
-          0
+          1
         ],
         "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
+          "user_index.id": "VARBINARY",
+          "user_index.keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -417,8 +483,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
+          "user_index.id": "VARBINARY",
+          "user_index.keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
@@ -500,8 +566,8 @@ Gen4 plan same as above
           1
         ],
         "Fields": {
-          "id": "VARBINARY",
-          "keyspace_id": "VARBINARY"
+          "ui.id": "VARBINARY",
+          "ui.keyspace_id": "VARBINARY"
         },
         "Value": ":id",
         "Vindex": "user_index"
