@@ -35,6 +35,7 @@ type (
 		Authoritative() bool
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
+		GetVindexTable() *vindexes.Table
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
@@ -80,6 +81,14 @@ type (
 		columnNames []string
 		cols        []sqlparser.Expr
 		tables      []TableInfo
+	}
+
+	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
+	// we are keeping information about, and the latter represents the additional table information
+	// (usually a RealTable or an AliasedTable) of our vindex.
+	VindexTable struct {
+		Table  TableInfo
+		Vindex vindexes.Vindex
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -140,6 +149,10 @@ type (
 	}
 )
 
+func (v *VindexTable) GetTables() []TableInfo {
+	return v.Table.GetTables()
+}
+
 func (v *vTableInfo) GetTables() []TableInfo {
 	return v.tables
 }
@@ -150,6 +163,11 @@ func (a *AliasedTable) GetTables() []TableInfo {
 
 func (r *RealTable) GetTables() []TableInfo {
 	return []TableInfo{r}
+}
+
+// GetExprFor implements the TableInfo interface
+func (v *VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
+	panic("implement me")
 }
 
 // CopyDependencies copies the dependencies from one expression into the other
@@ -329,6 +347,7 @@ func (r *RealTable) IsActualTable() bool {
 var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
+var _ TableInfo = (*VindexTable)(nil)
 
 func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
 	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
@@ -344,6 +363,16 @@ func (v *vTableInfo) Name() (sqlparser.TableName, error) {
 
 func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
 	return v.ASTNode
+}
+
+// GetVindexTable implements the TableInfo interface
+func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+	return nil
+}
+
+// GetVindexTable implements the TableInfo interface
+func (v *VindexTable) GetVindexTable() *vindexes.Table {
+	return v.Table.GetVindexTable()
 }
 
 func (v *vTableInfo) GetColumns() []ColumnInfo {
@@ -398,6 +427,11 @@ func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (a *AliasedTable) GetVindexTable() *vindexes.Table {
+	return a.Table
+}
+
 // Name implements the TableInfo interface
 func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 	return a.ASTNode.TableName()
@@ -423,6 +457,11 @@ func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (r *RealTable) GetVindexTable() *vindexes.Table {
+	return r.Table
+}
+
 // Name implements the TableInfo interface
 func (r *RealTable) Name() (sqlparser.TableName, error) {
 	return r.ASTNode.TableName()
@@ -441,6 +480,51 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 		}
 	}
 	return r.tableName == name.Name.String()
+}
+
+// Matches implements the TableInfo interface
+func (v *VindexTable) Matches(name sqlparser.TableName) bool {
+	return v.Table.Matches(name)
+}
+
+// Authoritative implements the TableInfo interface
+func (v *VindexTable) Authoritative() bool {
+	return true
+}
+
+// Name implements the TableInfo interface
+func (v *VindexTable) Name() (sqlparser.TableName, error) {
+	return v.Table.Name()
+}
+
+// GetExpr implements the TableInfo interface
+func (v *VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
+	return v.Table.GetExpr()
+}
+
+// GetColumns implements the TableInfo interface
+func (v *VindexTable) GetColumns() []ColumnInfo {
+	return v.Table.GetColumns()
+}
+
+// IsActualTable implements the TableInfo interface
+func (v *VindexTable) IsActualTable() bool {
+	return true
+}
+
+// RecursiveDepsFor implements the TableInfo interface
+func (v *VindexTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+	return v.Table.RecursiveDepsFor(col, org, single)
+}
+
+// DepsFor implements the TableInfo interface
+func (v *VindexTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
+	return v.Table.DepsFor(col, org, single)
+}
+
+// IsInfSchema implements the TableInfo interface
+func (v *VindexTable) IsInfSchema() bool {
+	return v.Table.IsInfSchema()
 }
 
 // NewSemTable creates a new empty SemTable
