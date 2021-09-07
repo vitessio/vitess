@@ -133,6 +133,20 @@ func TestBindingSingleTableNegative(t *testing.T) {
 	}
 }
 
+func Test(t *testing.T) {
+	queries := []string{
+		"select foo.col from tabl",
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(t, err)
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, NoRewrite)
+			require.Error(t, err)
+		})
+	}
+}
+
 func TestOrderByBindingSingleTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 		tcases := []struct {
@@ -687,6 +701,10 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:                "select t.baz = 1 from (select id as baz from user) as t",
 			expectation:          T2,
 			recursiveExpectation: T1,
+		}, {
+			query:                "select t.id from (select * from user, music) as t",
+			expectation:          T1 | T2,
+			recursiveExpectation: T1 | T2,
 		},
 	}
 	for _, query := range queries {

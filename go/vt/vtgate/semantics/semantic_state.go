@@ -47,6 +47,7 @@ type (
 		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
 		GetExprFor(s string) (sqlparser.Expr, error)
+		GetTables() []TableInfo
 	}
 
 	// ColumnInfo contains information about columns
@@ -78,6 +79,7 @@ type (
 		ASTNode     *sqlparser.AliasedTableExpr
 		columnNames []string
 		cols        []sqlparser.Expr
+		tables      []TableInfo
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -138,6 +140,18 @@ type (
 	}
 )
 
+func (v *vTableInfo) GetTables() []TableInfo {
+	return v.tables
+}
+
+func (a *AliasedTable) GetTables() []TableInfo {
+	return []TableInfo{a}
+}
+
+func (r *RealTable) GetTables() []TableInfo {
+	return []TableInfo{r}
+}
+
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.ExprBaseTableDeps[to] = st.BaseTableDependencies(from)
@@ -189,7 +203,13 @@ func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, si
 	if found {
 		return &tsF, qtF, nil
 	}
-	return nil, nil, nil
+	if len(v.tables) == 0 {
+		return nil, nil, nil
+	}
+	for _, table := range v.tables {
+		tsF |= org.tableSetFor(table.GetExpr())
+	}
+	return &tsF, nil, nil
 }
 
 // DepsFor implements the TableInfo interface
@@ -207,7 +227,14 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*T
 			return &ts, nil
 		}
 	}
-	return nil, nil
+	if len(v.tables) == 0 {
+		return nil, nil
+	}
+	var ts TableSet
+	for _, table := range v.tables {
+		ts |= org.tableSetFor(table.GetExpr())
+	}
+	return &ts, nil
 }
 
 // RecursiveDepsFor implements the TableInfo interface
