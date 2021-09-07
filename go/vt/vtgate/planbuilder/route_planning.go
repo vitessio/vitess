@@ -166,37 +166,7 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 			if err != nil {
 				return nil, err
 			}
-			otherTree := outerTree.lhs
-			if a.tableID() == outerTree.lhs.tableID() {
-				otherTree = outerTree.rhs
-			}
-
-			var rewriteError error
-			sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
-				sqlNode := cursor.Node()
-				switch node := sqlNode.(type) {
-				case *sqlparser.ColName:
-					if ctx.semTable.Dependencies(node).IsSolvedBy(otherTree.tableID()) {
-						bindVar := node.CompliantName()
-						cursor.Replace(sqlparser.NewArgument(bindVar))
-						_, alreadyExists := outerTree.vars[bindVar]
-						if alreadyExists {
-							return false
-						}
-						columnIndexes, err := otherTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
-						if err != nil {
-							rewriteError = err
-							return false
-						}
-						columnIndex := columnIndexes[0]
-						outerTree.vars[bindVar] = columnIndex
-						return false
-					}
-				}
-				return true
-			}, nil)
-
-			return rt, rewriteError
+			return rt, rewriteSubqueryDependenciesForJoin(a, outerTree, subQueryInner, ctx)
 		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.lhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
@@ -219,6 +189,40 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 	default:
 		return nil, nil
 	}
+}
+
+func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
+	otherTree := outerTree.lhs
+	if a.tableID() == outerTree.lhs.tableID() {
+		otherTree = outerTree.rhs
+	}
+
+	var rewriteError error
+	sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
+		sqlNode := cursor.Node()
+		switch node := sqlNode.(type) {
+		case *sqlparser.ColName:
+			if ctx.semTable.Dependencies(node).IsSolvedBy(otherTree.tableID()) {
+				bindVar := node.CompliantName()
+				cursor.Replace(sqlparser.NewArgument(bindVar))
+				_, alreadyExists := outerTree.vars[bindVar]
+				if alreadyExists {
+					return false
+				}
+				columnIndexes, err := otherTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
+				if err != nil {
+					rewriteError = err
+					return false
+				}
+				columnIndex := columnIndexes[0]
+				outerTree.vars[bindVar] = columnIndex
+				return false
+			}
+		}
+		return true
+	}, nil)
+
+	return rewriteError
 }
 
 func mergeSubQuery(ctx planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
