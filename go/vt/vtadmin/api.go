@@ -722,7 +722,49 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 
 // GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) (*vtadminpb.GetShardReplicationPositionsResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetShardReplicationPositions")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m         sync.Mutex
+		wg        sync.WaitGroup
+		rec       concurrency.AllErrorRecorder
+		positions []*vtadminpb.ClusterShardReplicationPosition
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.ShardReplicationPositionResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			clusterPositions, err := c.GetShardReplicationPositions(ctx, req)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+			positions = append(positions, clusterPositions...)
+		}(c)
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetShardReplicationPositionsResponse{
+		ReplicationPositions: positions,
+	}, nil
 }
 
 // GetSrvVSchema is part of the vtadminpb.VTAdminServer interface.
