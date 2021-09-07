@@ -143,6 +143,86 @@ Gen4 plan same as above
     "Table": "information_schema.a"
   }
 }
+Gen4 plan same as above
+
+# union between information_schema tables that should not be merged
+"select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
+            "Query": "select * from information_schema.`tables` where table_schema = :__vtschemaname",
+            "SysTableTableSchema": "[VARBINARY(\"user\")]",
+            "Table": "information_schema.`tables`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
+            "Query": "select * from information_schema.`tables` where table_schema = :__vtschemaname",
+            "SysTableTableSchema": "[VARBINARY(\"main\")]",
+            "Table": "information_schema.`tables`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
+            "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
+            "SysTableTableSchema": "[VARBINARY(\"user\")]",
+            "Table": "information_schema.`tables`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
+            "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
+            "SysTableTableSchema": "[VARBINARY(\"main\")]",
+            "Table": "information_schema.`tables`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # Select from information schema query with two tables that route should be merged
 "SELECT DELETE_RULE, UPDATE_RULE FROM  INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KCU INNER JOIN INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS AS RC ON KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME WHERE KCU.TABLE_SCHEMA = 'test' AND KCU.TABLE_NAME = 'data_type_table' AND KCU.COLUMN_NAME = 'id' AND KCU.REFERENCED_TABLE_SCHEMA = 'test' AND KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' ORDER BY KCU.CONSTRAINT_NAME, KCU.COLUMN_NAME"

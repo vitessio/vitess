@@ -678,8 +678,14 @@ func canMergePlans(ctx planningContext, a, b *route) bool {
 		return false
 	}
 	switch a.eroute.Opcode {
-	case engine.SelectUnsharded, engine.SelectDBA, engine.SelectReference:
+	case engine.SelectUnsharded, engine.SelectReference:
 		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return b.eroute.Opcode == engine.SelectDBA &&
+			len(a.eroute.SysTableTableSchema) == 0 &&
+			len(a.eroute.SysTableTableName) == 0 &&
+			len(b.eroute.SysTableTableSchema) == 0 &&
+			len(b.eroute.SysTableTableName) == 0
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if b.eroute.Opcode == engine.SelectEqualUnique &&
