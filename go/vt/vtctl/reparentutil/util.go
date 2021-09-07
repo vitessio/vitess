@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -100,9 +101,10 @@ func waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc 
 	return nil
 }
 
-func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger,
-	tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction, rp string,
-	tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
+func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient,
+	newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions,
+	waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
 
@@ -128,9 +130,13 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 	replWg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 
-	handlePrimary := func(alias string, ti *topodatapb.Tablet) error {
+	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
+		position, err := tmc.MasterPosition(replCtx, tablet)
+		if err != nil {
+			return err
+		}
 		logger.Infof("populating reparent journal on new master %v", alias)
-		return tmc.PopulateReparentJournal(replCtx, ti, now, lockAction, newPrimaryTablet.Alias, rp)
+		return tmc.PopulateReparentJournal(replCtx, tablet, now, lockAction, newPrimaryTablet.Alias, position)
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
@@ -291,7 +297,7 @@ func ChooseNewPrimary(
 
 // promotePrimaryCandidateAndStartReplication promotes the primary candidate that we have, but it does not set to start accepting writes
 func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool, startReplication bool) ([]*topodatapb.Tablet, error) {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool, startReplication bool) ([]*topodatapb.Tablet, error) {
 	if err := promotePrimary(ctx, tmc, ts, logger, newPrimary); err != nil {
 		return nil, err
 	}
@@ -299,17 +305,10 @@ func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclien
 	reparentFunctions.PostTabletChangeHook(newPrimary)
 
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, !isIdeal)
+	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, reparentFunctions, !isIdeal)
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO := add as a postponed function
-	//if postponedFunctionsContainer != nil && postponeAllMatchOperations != nil && postponeAllMatchOperations(candidateReplica, hasBestPromotionRule) {
-	//	postponedFunctionsContainer.AddPostponedFunction(moveGTIDFunc, fmt.Sprintf("regroup-replicas-gtid %+v", candidateReplica.Key))
-	//} else {
-	//	err = moveGTIDFunc()
-	//}
 
 	if startReplication {
 		err = tmc.StartReplication(ctx, newPrimary)
@@ -318,9 +317,7 @@ func promotePrimaryCandidateAndStartReplication(ctx context.Context, tmc tmclien
 		}
 	}
 
-	//log.Debugf("RegroupReplicasGTID: done")
-	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
-	return replicasStartedReplication, nil //unmovedReplicas, candidateReplica, err
+	return replicasStartedReplication, nil
 }
 
 // promotePrimary makes the new tablet the primary and proactively performs
@@ -418,7 +415,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 
 // replaceWithBetterCandidate promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
 func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) error {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) error {
 
 	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
 	if err != nil {
@@ -437,7 +434,7 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	reparentFunctions.PostTabletChangeHook(newPrimary)
 
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, reparentFunctions, false)
 	if err != nil {
 		return err
 	}
@@ -452,4 +449,14 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	//log.Debugf("RegroupReplicasGTID: done")
 	//inst.AuditOperation("regroup-replicas-gtid", masterKey, fmt.Sprintf("regrouped replicas of %+v via GTID; promoted %+v", *masterKey, candidateReplica.Key))
 	return nil //unmovedReplicas, candidateReplica, err
+}
+
+func getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
+	action := "EmergencyReparentShard"
+
+	if newPrimaryAlias != nil {
+		action += fmt.Sprintf("(%v)", topoproto.TabletAliasString(newPrimaryAlias))
+	}
+
+	return action
 }
