@@ -49,6 +49,10 @@ type (
 		tableNames() []string
 	}
 
+	vindexTable struct {
+		table abstract.VindexTable
+	}
+
 	joinTables struct {
 		lhs, rhs relation
 		pred     sqlparser.Expr
@@ -88,6 +92,11 @@ var _ relation = (*routeTable)(nil)
 var _ relation = (*joinTables)(nil)
 var _ relation = (parenTables)(nil)
 var _ relation = (*derivedTable)(nil)
+var _ relation = (*vindexTable)(nil)
+
+func (v vindexTable) tableID() semantics.TableSet { return v.table.TableID }
+
+func (v vindexTable) tableNames() []string { return []string{v.table.Table.Name.String()} }
 
 func (d *derivedTable) tableID() semantics.TableSet { return d.tables.tableID() }
 

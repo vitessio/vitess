@@ -32,6 +32,7 @@ type (
 	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
 	//	*  Join - A join represents inner join.
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
+	//  *  Vindex - Represents a query that selects from vindex tables.
 	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
 	//  *  Distinct - Represents elimination of duplicates from the output of the input source
 	Operator interface {
@@ -52,12 +53,21 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
 		case sqlparser.TableName:
-			qg := newQueryGraph()
 			tableID := semTable.TableSetFor(tableExpr)
 			tableInfo, err := semTable.TableInfoFor(tableID)
 			if err != nil {
 				return nil, err
 			}
+
+			if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
+				return &Vindex{Table: VindexTable{
+					TableID: tableID,
+					Alias:   tableExpr,
+					Table:   tbl,
+					VTable:  vt.Table.GetVindexTable(),
+				}, Vindex: vt.Vindex}, nil
+			}
+			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
 			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
@@ -83,9 +93,11 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				return nil, err
 			}
 			op := createJoin(lhs, rhs)
-			err = op.PushPredicate(tableExpr.Condition.On, semTable)
-			if err != nil {
-				return nil, err
+			if tableExpr.Condition.On != nil {
+				err = op.PushPredicate(tableExpr.Condition.On, semTable)
+				if err != nil {
+					return nil, err
+				}
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:

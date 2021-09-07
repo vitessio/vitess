@@ -76,7 +76,7 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(ctx, treeInner, treeOuter, []sqlparser.Expr{op.Exp}, true)
+		return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Exp), true)
 	case *abstract.Derived:
 		treeInner, err := optimizeQuery(ctx, op.Inner)
 		if err != nil {
@@ -89,6 +89,8 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
+	case *abstract.Vindex:
+		return createVindexTree(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
 	case *abstract.Distinct:
@@ -119,6 +121,18 @@ func optimizeUnion(ctx planningContext, op *abstract.Concatenate) (queryTree, er
 		selectStmts: op.SelectStmts,
 		sources:     sources,
 	}, nil
+}
+
+func createVindexTree(ctx planningContext, op *abstract.Vindex) (*vindexTree, error) {
+	solves := ctx.semTable.TableSetFor(op.Table.Alias)
+	plan := &vindexTree{
+		opCode: op.OpCode,
+		solved: solves,
+		table:  vindexTable{table: op.Table},
+		vindex: op.Vindex,
+		value:  op.Value,
+	}
+	return plan, nil
 }
 
 func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, error) {
@@ -386,6 +400,9 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 
 		plan.inner = newInner
 		return plan, nil
+	case *vindexTree:
+		// vindexFunc cannot accept predicates from the other side of a join
+		return node, nil
 	default:
 		panic(fmt.Sprintf("BUG: unknown type %T", node))
 	}

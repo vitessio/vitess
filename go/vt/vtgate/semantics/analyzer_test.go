@@ -731,6 +731,48 @@ func TestScopingWDerivedTables(t *testing.T) {
 	}
 }
 
+func TestScopingWVindexTables(t *testing.T) {
+	queries := []struct {
+		query                string
+		errorMessage         string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{
+		{
+			query:                "select id from user_index where id = 1",
+			recursiveExpectation: T1,
+			expectation:          T1,
+		}, {
+			query:                "select u.id + t.id from t as t join user_index as u where u.id = 1 and u.id = t.id",
+			recursiveExpectation: T1 | T2,
+			expectation:          T1 | T2,
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			hash, _ := vindexes.NewHash("user_index", nil)
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+				VindexTables: map[string]vindexes.Vindex{
+					"user_index": hash,
+				},
+			}, NoRewrite)
+			if query.errorMessage != "" {
+				require.EqualError(t, err, query.errorMessage)
+			} else {
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				assert.Equal(t, query.recursiveExpectation, st.BaseTableDependencies(extract(sel, 0)))
+				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
+			}
+		})
+	}
+}
+
 func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *SemTable) {
 	t.Helper()
 	parse, err := sqlparser.Parse(query)

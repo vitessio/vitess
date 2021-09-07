@@ -44,6 +44,8 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, e
 		return transformConcatenatePlan(ctx, n)
 	case *distinctTree:
 		return transformDistinctPlan(ctx, n)
+	case *vindexTree:
+		return transformVindexTree(n)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
@@ -62,6 +64,34 @@ func pushDistinct(plan logicalPlan) error {
 		}
 	}
 	return nil
+}
+
+func transformVindexTree(n *vindexTree) (logicalPlan, error) {
+	single, ok := n.vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+	plan := &vindexFunc{
+		order:         1,
+		tableID:       n.solved,
+		resultColumns: nil,
+		eVindexFunc: &engine.VindexFunc{
+			Opcode: n.opCode,
+			Vindex: single,
+			Value:  n.value,
+		},
+	}
+
+	for _, col := range n.columns {
+		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		}, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }
 
 func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
