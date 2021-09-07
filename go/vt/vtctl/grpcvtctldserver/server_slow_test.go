@@ -42,7 +42,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 	tests := []struct {
 		name    string
 		ts      *topo.Server
-		tmc     tmclient.TabletManagerClient
+		tmc     *testutil.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
 		req                 *vtctldatapb.EmergencyReparentShardRequest
@@ -295,6 +295,8 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				ForceSetShardPrimary: true,
 				SkipShardCreation:    false,
 			}, tt.tablets...)
+
+			tt.tmc.TopoServer = tt.ts
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
