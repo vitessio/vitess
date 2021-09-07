@@ -18,7 +18,6 @@ package reparentutil
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/event"
@@ -42,6 +41,7 @@ type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
 		LockShard(context.Context, logutil.Logger, *topo.Server, string, string) (context.Context, func(*error), error)
+		LockAction() string
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		CheckPrimaryRecoveryType(logutil.Logger) error
@@ -81,7 +81,12 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 
 // LockShard implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context, logger logutil.Logger, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
-	return ts.LockShard(ctx, keyspace, shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
+	return ts.LockShard(ctx, keyspace, shard, getLockAction(vtctlReparent.newPrimaryAlias))
+}
+
+// LockAction implements the ReparentFunctions interface
+func (vtctlReparent *VtctlReparentFunctions) LockAction() string {
+	return getLockAction(vtctlReparent.newPrimaryAlias)
 }
 
 // CheckIfFixed implements the ReparentFunctions interface
@@ -226,16 +231,6 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newP
 func (vtctlReparent *VtctlReparentFunctions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
 }
 
-func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
-	action := "EmergencyReparentShard"
-
-	if newPrimaryAlias != nil {
-		action += fmt.Sprintf("(%v)", topoproto.TabletAliasString(newPrimaryAlias))
-	}
-
-	return action
-}
-
 func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus, tabletMap map[string]*topo.TabletInfo, keyspace, shard string) error {
 	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
@@ -245,7 +240,7 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", winningPrimaryTabletAliasStr)
 	}
 
-	rp, err := tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
+	_, err := tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
 	if err != nil {
 		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", winningPrimaryTabletAliasStr, err)
 	}
@@ -254,6 +249,6 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias), rp, tabletMap, statusMap, vtctlReparent, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, getLockAction(vtctlReparent.newPrimaryAlias), tabletMap, statusMap, vtctlReparent, false)
 	return err
 }

@@ -80,6 +80,11 @@ func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context, logg
 	return ctx, unlock, nil
 }
 
+// LockAction implements the ReparentFunctions interface
+func (vtorcReparent *VtOrcReparentFunctions) LockAction() string {
+	return "Orc Recovery"
+}
+
 // CheckIfFixed implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 	// Check if someone else fixed the problem.

@@ -184,8 +184,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// check weather the primary candidate selected is ideal or if it can be improved later
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, prevPrimary, tabletMap, validCandidates)
 
-	// TODO := LockAction and RP
-	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, "", "", tabletMap, statusMap, reparentFunctions, isIdeal, true)
+	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions, isIdeal, true)
 	if err != nil {
 		return err
 	}
@@ -201,7 +200,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
-		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, "", "", tabletMap, statusMap, reparentFunctions)
+		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions)
 		if err != nil {
 			return err
 		}
@@ -211,7 +210,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	errInPromotion := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
 	if errInPromotion != nil {
 		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
-		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, "", "", tabletMap, statusMap, reparentFunctions)
+		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions)
 		if err != nil {
 			return err
 		}
@@ -231,11 +230,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 }
 
 func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Server, ev *events.Reparent, keyspace, shard string, prevPrimary *topodatapb.Tablet,
-	lockAction, rp string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) (*topodatapb.Tablet, error) {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) (*topodatapb.Tablet, error) {
 	var primaryAlias *topodatapb.TabletAlias
 
 	if prevPrimary != nil {
-		_, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, rp, tabletMap, statusMap, reparentFunctions, true, false)
+		_, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, tabletMap, statusMap, reparentFunctions, true, false)
 		if err == nil {
 			return prevPrimary, nil
 		}
