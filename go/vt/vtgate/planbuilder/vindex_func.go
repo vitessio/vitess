@@ -137,31 +137,37 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 // SupplyProjection pushes the given aliased expression into the fields and cols slices of the
 // vindexFunc engine primitive. The method returns the offset of the new expression in the columns
 // list.
-func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr) (int, error) {
+func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) (int, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	if !isColName {
 		return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "unsupported: expression on results of a vindex function")
 	}
 
-	exists := false
-	for _, field := range vf.eVindexFunc.Fields {
-		if field.Name == colName.Name.String() {
-			exists = true
-			break
+	enum := vindexColumnToIndex(colName)
+	if enum == -1 {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown vindex column: %s", colName.Name.String())
+	}
+
+	if reuse {
+		for i, col := range vf.eVindexFunc.Cols {
+			if col == enum {
+				return i, nil
+			}
 		}
 	}
 
-	if !exists {
-		vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
-			Name: colName.Name.String(),
-			Type: querypb.Type_VARBINARY,
-		})
+	var name string
+	if expr.As.IsEmpty() {
+		name = sqlparser.String(colName)
+	} else {
+		name = expr.As.String()
 	}
-	index := vindexColumnToIndex(colName)
-	if index == -1 {
-		return 0, semantics.Gen4NotSupportedF("unknown vindex column: %s", colName.Name.String())
-	}
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, index)
+
+	vf.eVindexFunc.Fields = append(vf.eVindexFunc.Fields, &querypb.Field{
+		Name: name,
+		Type: querypb.Type_VARBINARY,
+	})
+	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, enum)
 	return len(vf.eVindexFunc.Cols) - 1, nil
 }
 
