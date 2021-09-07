@@ -1392,7 +1392,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
 {
@@ -1410,7 +1409,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
 {
@@ -1428,7 +1426,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
 {
@@ -1446,7 +1443,6 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
-Gen4 plan same as above
 
 # routing rules: ensure directives are not lost
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
@@ -1759,7 +1755,6 @@ Gen4 plan same as above
 # Union after into outfile is incorrect
 "select id from user into outfile 'out_file_name' union all select id from music"
 "Incorrect usage/placement of 'INTO'"
-Gen4 plan same as above
 
 # Into outfile s3 in sub-query is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
@@ -1859,4 +1854,34 @@ Gen4 plan same as above
   }
 }
 
-
+"((((select 1))))"
+{
+  "QueryType": "SELECT",
+  "Original": "((((select 1))))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "((((select 1 from dual where 1 != 1))))",
+    "Query": "((((select 1 from dual))))",
+    "Table": "dual"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "((((select 1))))",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from dual where 1 != 1",
+    "Query": "select 1 from dual",
+    "Table": "dual"
+  }
+}

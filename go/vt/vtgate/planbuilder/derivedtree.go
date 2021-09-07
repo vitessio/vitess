@@ -24,7 +24,7 @@ import (
 )
 
 type derivedTree struct {
-	query *sqlparser.Select
+	query sqlparser.SelectStatement
 	inner queryTree
 	alias string
 }
@@ -57,7 +57,7 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, _ *semantics
 }
 
 func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
-	for j, exp := range d.query.SelectExprs {
+	for j, exp := range sqlparser.GetFirstSelect(d.query).SelectExprs {
 		ae, ok := exp.(*sqlparser.AliasedExpr)
 		if !ok {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedExpr")

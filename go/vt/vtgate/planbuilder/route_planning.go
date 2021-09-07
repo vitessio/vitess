@@ -87,9 +87,36 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
+	case *abstract.Concatenate:
+		return optimizeUnion(ctx, op)
+	case *abstract.Distinct:
+		qt, err := optimizeQuery(ctx, op.Source)
+		if err != nil {
+			return nil, err
+		}
+		return &distinctTree{
+			source: qt,
+		}, nil
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
+}
+
+func optimizeUnion(ctx planningContext, op *abstract.Concatenate) (queryTree, error) {
+	var sources []queryTree
+	for _, source := range op.Sources {
+		qt, err := optimizeQuery(ctx, source)
+		if err != nil {
+			return nil, err
+		}
+
+		sources = append(sources, qt)
+	}
+
+	return &concatenateTree{
+		selectStmts: op.SelectStmts,
+		sources:     sources,
+	}, nil
 }
 
 func optimizeSubQuery(ctx planningContext, op *abstract.SubQuery) (queryTree, error) {
@@ -200,7 +227,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast.SelectExprs = sel.SelectExprs
 	for i, expr := range ast.SelectExprs {
 		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
-			ast.SelectExprs[i] = removeQualifierFromColName(aliasedExpr)
+			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)
 		}
 	}
 }
@@ -644,6 +671,37 @@ func canMergeOnFilters(ctx planningContext, a, b *routeTree, joinPredicates []sq
 }
 
 type mergeFunc func(a, b *routeTree) *routeTree
+
+func canMergePlans(ctx planningContext, a, b *route) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return b.eroute.Opcode == engine.SelectDBA &&
+			len(a.eroute.SysTableTableSchema) == 0 &&
+			len(a.eroute.SysTableTableName) == 0 &&
+			len(b.eroute.SysTableTableSchema) == 0 &&
+			len(b.eroute.SysTableTableName) == 0
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
+	case engine.SelectScatter:
+		return b.eroute.Opcode == engine.SelectScatter
+	case engine.SelectNext:
+		return false
+	}
+	return false
+}
 
 func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
 	aRoute, bRoute := joinTreesToRoutes(a.clone(), b.clone())
