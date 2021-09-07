@@ -760,3 +760,22 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# expand star with information schema
+"select x.table_name from (select a.* from information_schema.key_column_usage a) x"
+{
+  "QueryType": "SELECT",
+  "Original": "select x.table_name from (select a.* from information_schema.key_column_usage a) x",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select x.table_name from (select a.* from information_schema.key_column_usage as a where 1 != 1) as x where 1 != 1",
+    "Query": "select x.table_name from (select a.* from information_schema.key_column_usage as a) as x",
+    "Table": "information_schema.key_column_usage"
+  }
+}
+Gen4 plan same as above
