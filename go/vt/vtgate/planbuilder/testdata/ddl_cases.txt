@@ -267,7 +267,6 @@ Gen4 plan same as above
     "Query": "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5"
   }
 }
-Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace with multiple UNION clauses
 "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
@@ -283,7 +282,6 @@ Gen4 plan same as above
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)"
   }
 }
-Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace with UNION clauses in subqueries
 "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)"
@@ -299,7 +297,6 @@ Gen4 plan same as above
     "Query": "create view view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)"
   }
 }
-Gen4 plan same as above
 
 # Alter View
 "alter view user.user_extra as select* from user.user"

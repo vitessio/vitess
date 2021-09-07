@@ -93,6 +93,13 @@ func TestCheckConstraint(t *testing.T) {
 	exec(t, conn, cleanup)
 }
 
+func TestVersionCommentWorks(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	exec(t, conn, "/*!80000 SET SESSION information_schema_stats_expiry=0 */")
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)

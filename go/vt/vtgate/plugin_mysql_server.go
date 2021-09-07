@@ -428,8 +428,8 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *servenv.MySQLServerVersion != "" {
-			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
+		if *sqlparser.MySQLServerVersion != "" {
+			mysqlListener.ServerVersion = *sqlparser.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(*mysqlTLSMinVersion)

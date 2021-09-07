@@ -35,7 +35,7 @@ type (
 		Authoritative() bool
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
-		GetVindex() *vindexes.Table
+		GetVindexTable() *vindexes.Table
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
@@ -146,26 +146,6 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
-
-// GetVindex implements the TableInfo interface
-func (v *VindexTable) GetVindex() *vindexes.Table {
-	return v.Table.GetVindex()
-}
-
-// GetVindex implements the TableInfo interface
-func (v *vTableInfo) GetVindex() *vindexes.Table {
-	return nil
-}
-
-// GetVindex implements the TableInfo interface
-func (a *AliasedTable) GetVindex() *vindexes.Table {
-	return a.Table
-}
-
-// GetVindex implements the TableInfo interface
-func (r *RealTable) GetVindex() *vindexes.Table {
-	return r.Table
-}
 
 // GetExprFor implements the TableInfo interface
 func (v *VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
@@ -354,6 +334,16 @@ func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
 	return v.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (v *vTableInfo) GetVindexTable() *vindexes.Table {
+	return nil
+}
+
+// GetVindexTable implements the TableInfo interface
+func (v *VindexTable) GetVindexTable() *vindexes.Table {
+	return v.Table.GetVindexTable()
+}
+
 func (v *vTableInfo) GetColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {
@@ -406,6 +396,11 @@ func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (a *AliasedTable) GetVindexTable() *vindexes.Table {
+	return a.Table
+}
+
 // Name implements the TableInfo interface
 func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 	return a.ASTNode.TableName()
@@ -429,6 +424,11 @@ func (r *RealTable) GetColumns() []ColumnInfo {
 // GetExpr implements the TableInfo interface
 func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
+}
+
+// GetVindexTable implements the TableInfo interface
+func (r *RealTable) GetVindexTable() *vindexes.Table {
+	return r.Table
 }
 
 // Name implements the TableInfo interface
