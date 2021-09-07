@@ -51,7 +51,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return Gen4NotSupportedF("union in derived table")
 		}
 
-		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
+		tables := tc.scoper.wScope[sel]
+		tableInfo := createVTableInfoForExpressions(sel.SelectExprs, tables.tables)
 		if err := tableInfo.checkForDuplicates(); err != nil {
 			return err
 		}

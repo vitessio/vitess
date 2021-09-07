@@ -280,24 +280,27 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
+func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *vTableInfo {
 	vTbl := &vTableInfo{}
 	for _, selectExpr := range expressions {
-		expr, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			continue
-		}
-		vTbl.cols = append(vTbl.cols, expr.Expr)
-		if expr.As.IsEmpty() {
-			switch expr := expr.Expr.(type) {
-			case *sqlparser.ColName:
-				// for projections, we strip out the qualifier and keep only the column name
-				vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-			default:
-				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+		switch expr := selectExpr.(type) {
+		case *sqlparser.AliasedExpr:
+			vTbl.cols = append(vTbl.cols, expr.Expr)
+			if expr.As.IsEmpty() {
+				switch expr := expr.Expr.(type) {
+				case *sqlparser.ColName:
+					// for projections, we strip out the qualifier and keep only the column name
+					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+				default:
+					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+				}
+			} else {
+				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 			}
-		} else {
-			vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+		case *sqlparser.StarExpr:
+			for _, table := range tables {
+				vTbl.tables = append(vTbl.tables, table.GetTables()...)
+			}
 		}
 	}
 	return vTbl
