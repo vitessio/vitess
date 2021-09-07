@@ -321,7 +321,7 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast.Having = sel.Having
 	ast.OrderBy = sel.OrderBy
 	ast.Comments = sel.Comments
-	ast.SelectExprs = sel.SelectExprs
+	ast.SelectExprs = append(ast.SelectExprs, sel.SelectExprs...)
 	for i, expr := range ast.SelectExprs {
 		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
 			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)

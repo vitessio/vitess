@@ -143,8 +143,10 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, err
 		As:   sqlparser.NewTableIdent(n.alias),
 	}
 	selectExprs := sqlparser.SelectExprs{}
-	if sel, isSel := rb.Select.(*sqlparser.Select); isSel {
-		selectExprs = append(selectExprs, sel.SelectExprs...)
+	for _, colName := range n.columns {
+		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{
+			Expr: colName,
+		})
 	}
 	rb.Select = &sqlparser.Select{
 		From:        []sqlparser.TableExpr{tblExpr},
