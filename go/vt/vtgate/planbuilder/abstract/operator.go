@@ -54,8 +54,8 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if err != nil {
 				return nil, err
 			}
-			if tableInfo.IsVindexTable() {
-				vt, _ := tableInfo.(*semantics.VindexTable)
+
+			if vt, isVindex := tableInfo.(*semantics.VindexTable); isVindex {
 				return &Vindex{Table: VindexTable{
 					TableID: tableID,
 					Alias:   tableExpr,
@@ -170,9 +170,6 @@ func CreateOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			if expr == nil {
-				continue
-			}
 			err := op.PushPredicate(expr, semTable)
 			if err != nil {
 				return nil, err

@@ -115,7 +115,13 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	panic("unknown table")
 }
 
-func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool, vindex vindexes.Vindex) TableInfo {
+func (tc *tableCollector) createTable(
+	t sqlparser.TableName,
+	alias *sqlparser.AliasedTableExpr,
+	tbl *vindexes.Table,
+	isInfSchema bool,
+	vindex vindexes.Vindex,
+) TableInfo {
 	dbName := t.Qualifier.String()
 	if dbName == "" {
 		dbName = tc.currentDb

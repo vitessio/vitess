@@ -88,13 +88,13 @@ func optimizeQuery(ctx planningContext, opTree abstract.Operator) (queryTree, er
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)
 	case *abstract.Vindex:
-		return optimizeVindex(ctx, op)
+		return createVindexTree(ctx, op)
 	default:
 		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
 	}
 }
 
-func optimizeVindex(ctx planningContext, op *abstract.Vindex) (queryTree, error) {
+func createVindexTree(ctx planningContext, op *abstract.Vindex) (*vindexTree, error) {
 	solves := ctx.semTable.TableSetFor(op.Table.Alias)
 	plan := &vindexTree{
 		opCode: op.OpCode,
