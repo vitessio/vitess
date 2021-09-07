@@ -134,7 +134,7 @@ func UpdateClusterAliases() error {
 					order by
 						ifnull(last_checked <= last_seen, 0) asc,
 						read_only desc,
-						num_slave_hosts asc
+						num_replica_hosts asc
 			`, DowntimeLostInRecoveryMessage)
 		return log.Errore(err)
 	}

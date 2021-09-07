@@ -767,7 +767,7 @@ func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-	log.Infof("Reset master %+v", instanceKey)
+	log.Infof("Reset primary %+v", instanceKey)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
