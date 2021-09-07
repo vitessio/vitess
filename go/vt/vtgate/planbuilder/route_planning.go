@@ -248,10 +248,11 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 		}
 
 		return &joinTree{
-			lhs:   node.lhs,
-			rhs:   rhsPlan,
-			outer: node.outer,
-			vars:  node.vars,
+			lhs:     node.lhs,
+			rhs:     rhsPlan,
+			outer:   node.outer,
+			vars:    node.vars,
+			columns: node.columns,
 		}, nil
 	case *derivedTree:
 		plan := node.clone().(*derivedTree)

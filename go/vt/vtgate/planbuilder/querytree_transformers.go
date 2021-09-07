@@ -94,8 +94,15 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semanti
 		Expr: derivedTable,
 		As:   sqlparser.NewTableIdent(n.alias),
 	}
+	selectExprs := sqlparser.SelectExprs{}
+	if sel, isSel := rb.Select.(*sqlparser.Select); isSel {
+		for _, selExpr := range sel.SelectExprs {
+			selectExprs = append(selectExprs, selExpr)
+		}
+	}
 	rb.Select = &sqlparser.Select{
-		From: []sqlparser.TableExpr{tblExpr},
+		From:        []sqlparser.TableExpr{tblExpr},
+		SelectExprs: selectExprs,
 	}
 	return plan, nil
 }

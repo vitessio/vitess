@@ -27,6 +27,9 @@ type derivedTree struct {
 	query *sqlparser.Select
 	inner queryTree
 	alias string
+
+	// columns needed to feed other plans
+	columns []*sqlparser.ColName
 }
 
 var _ queryTree = (*derivedTree)(nil)
@@ -47,21 +50,29 @@ func (d *derivedTree) clone() queryTree {
 
 func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, _ *semantics.SemTable) (offsets []int, err error) {
 	for _, name := range names {
-		offset, err := d.findOutputColumn(name)
+		_, err := d.findOutputColumn(name)
 		if err != nil {
 			return nil, err
 		}
-		offsets = append(offsets, offset)
+		offsets = append(offsets, len(d.columns))
+		if !name.Qualifier.IsEmpty() {
+			name.Qualifier = sqlparser.TableName{}
+		}
+		d.columns = append(d.columns, name)
 	}
+	_, _ = d.inner.pushOutputColumns(names, nil)
 	return
 }
 
 func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
+	found := false
 	for j, exp := range d.query.SelectExprs {
 		ae, ok := exp.(*sqlparser.AliasedExpr)
 		if !ok {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedExpr")
+			continue
+			// return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected AliasedExpr")
 		}
+		found = true
 		if !ae.As.IsEmpty() && ae.As.Equal(name.Name) {
 			return j, nil
 		}
@@ -73,6 +84,15 @@ func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
 			if name.Name.Equal(col.Name) {
 				return j, nil
 			}
+		}
+	}
+	if !found {
+		for j, exp := range d.query.SelectExprs {
+			_, ok := exp.(*sqlparser.StarExpr)
+			if !ok {
+				continue
+			}
+			return j, nil
 		}
 	}
 	return 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", name.Name.String())
