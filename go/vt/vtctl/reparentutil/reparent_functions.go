@@ -41,7 +41,7 @@ import (
 type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
-		LockShard(context.Context) (context.Context, func(*error), error)
+		LockShard(context.Context, *topo.Server, string, string) (context.Context, func(*error), error)
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
 		GetWaitReplicasTimeout() time.Duration
@@ -63,9 +63,6 @@ type (
 		newPrimaryAlias     *topodatapb.TabletAlias
 		ignoreReplicas      sets.String
 		waitReplicasTimeout time.Duration
-		keyspace            string
-		shard               string
-		ts                  *topo.Server
 	}
 )
 
@@ -74,20 +71,17 @@ var (
 )
 
 // NewVtctlReparentFunctions creates a new VtctlReparentFunctions which is used in ERS ans PRS
-func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, keyspace string, shard string, ts *topo.Server) *VtctlReparentFunctions {
+func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration) *VtctlReparentFunctions {
 	return &VtctlReparentFunctions{
 		newPrimaryAlias:     newPrimaryAlias,
 		ignoreReplicas:      ignoreReplicas,
 		waitReplicasTimeout: waitReplicasTimeout,
-		keyspace:            keyspace,
-		shard:               shard,
-		ts:                  ts,
 	}
 }
 
 // LockShard implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
-	return vtctlReparent.ts.LockShard(ctx, vtctlReparent.keyspace, vtctlReparent.shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
+func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
+	return ts.LockShard(ctx, keyspace, shard, vtctlReparent.getLockAction(vtctlReparent.newPrimaryAlias))
 }
 
 // CheckIfFixed implements the ReparentFunctions interface
@@ -233,7 +227,7 @@ func (vtctlReparent *VtctlReparentFunctions) getLockAction(newPrimaryAlias *topo
 	return action
 }
 
-func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus, tabletMap map[string]*topo.TabletInfo) error {
+func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus, tabletMap map[string]*topo.TabletInfo, keyspace, shard string) error {
 	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
 	event.DispatchUpdate(ev, "promoting replica")
 
@@ -247,7 +241,7 @@ func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Conte
 		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", winningPrimaryTabletAliasStr, err)
 	}
 
-	if err := topo.CheckShardLocked(ctx, vtctlReparent.keyspace, vtctlReparent.shard); err != nil {
+	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 

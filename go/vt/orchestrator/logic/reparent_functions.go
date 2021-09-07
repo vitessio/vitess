@@ -71,7 +71,7 @@ func NewVtorcReparentFunctions(analysisEntry inst.ReplicationAnalysis, candidate
 }
 
 // LockShard implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context) (context.Context, func(*error), error) {
+func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
 	ctx, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		log.Infof("CheckAndRecover: Analysis: %+v, InstanceKey: %+v, candidateInstanceKey: %+v, "+
