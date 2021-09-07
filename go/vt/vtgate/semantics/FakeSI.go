@@ -27,10 +27,15 @@ var _ SchemaInformation = (*FakeSI)(nil)
 
 // FakeSI is a fake SchemaInformation for testing
 type FakeSI struct {
-	Tables map[string]*vindexes.Table
+	Tables       map[string]*vindexes.Table
+	VindexTables map[string]vindexes.Vindex
 }
 
 // FindTableOrVindex implements the SchemaInformation interface
 func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
-	return s.Tables[sqlparser.String(tablename)], nil, "", 0, nil, nil
+	table, ok := s.Tables[sqlparser.String(tablename)]
+	if ok {
+		return table, nil, "", 0, nil, nil
+	}
+	return nil, s.VindexTables[sqlparser.String(tablename)], "", 0, nil, nil
 }
