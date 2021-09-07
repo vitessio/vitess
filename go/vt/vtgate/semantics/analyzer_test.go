@@ -705,6 +705,14 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:                "select t.id from (select * from user, music) as t",
 			expectation:          T3,
 			recursiveExpectation: T1 | T2,
+		}, {
+			query:                "select t.id from (select * from user, music) as t order by t.id",
+			expectation:          T3,
+			recursiveExpectation: T1 | T2,
+		}, {
+			query:                "select t.id, u.id from (select * from user) as t join user as u on t.id = u.id",
+			expectation:          T2,
+			recursiveExpectation: T1,
 		},
 	}
 	for _, query := range queries {
