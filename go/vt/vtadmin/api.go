@@ -720,6 +720,11 @@ func (api *API) getSchemas(ctx context.Context, c *cluster.Cluster, opts cluster
 	return schemas, nil
 }
 
+// GetShardReplicationPositions is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) (*vtadminpb.GetShardReplicationPositionsResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetSrvVSchema is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetSrvVSchema(ctx context.Context, req *vtadminpb.GetSrvVSchemaRequest) (*vtadminpb.SrvVSchema, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchema")
