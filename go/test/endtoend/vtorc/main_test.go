@@ -393,29 +393,6 @@ func shardPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keys
 	}
 }
 
-// checkShardNoPrimaryTablet waits till the given shard has no primary tablet. It times out after 1 minute
-func checkShardNoPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keyspace *cluster.Keyspace, shard *cluster.Shard) {
-	start := time.Now()
-	for {
-		now := time.Now()
-		if now.Sub(start) > time.Second*60 {
-			assert.FailNow(t, "failed to find a point in time when shard had no primary before timeout")
-		}
-		result, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace.Name, shard.Name))
-		assert.Nil(t, err)
-
-		var shardInfo topodatapb.Shard
-		err = json2.Unmarshal([]byte(result), &shardInfo)
-		assert.Nil(t, err)
-		if shardInfo.PrimaryAlias == nil {
-			return
-		}
-		log.Warningf("Shard %v/%v has a primary yet, sleep for 1 second\n", keyspace.Name, shard.Name)
-		time.Sleep(time.Second)
-		continue
-	}
-}
-
 // Makes sure the tablet type is primary, and its health check agrees.
 func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, checkServing bool) {
 	start := time.Now()
