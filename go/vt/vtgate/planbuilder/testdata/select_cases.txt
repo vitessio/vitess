@@ -608,6 +608,7 @@ Gen4 plan same as above
     "Vindex": "binary"
   }
 }
+Gen4 plan same as above
 
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
