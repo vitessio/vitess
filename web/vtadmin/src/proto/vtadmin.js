@@ -381,6 +381,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getShardReplicationPositions}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetShardReplicationPositionsCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetShardReplicationPositionsResponse} [response] GetShardReplicationPositionsResponse
+         */
+
+        /**
+         * Calls GetShardReplicationPositions.
+         * @function getShardReplicationPositions
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} request GetShardReplicationPositionsRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetShardReplicationPositionsCallback} callback Node-style callback called with the error, if any, and GetShardReplicationPositionsResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getShardReplicationPositions = function getShardReplicationPositions(request, callback) {
+            return this.rpcCall(getShardReplicationPositions, $root.vtadmin.GetShardReplicationPositionsRequest, $root.vtadmin.GetShardReplicationPositionsResponse, request, callback);
+        }, "name", { value: "GetShardReplicationPositions" });
+
+        /**
+         * Calls GetShardReplicationPositions.
+         * @function getShardReplicationPositions
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} request GetShardReplicationPositionsRequest message or plain object
+         * @returns {Promise<vtadmin.GetShardReplicationPositionsResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetSrvVSchemaCallback
@@ -1108,6 +1141,270 @@ $root.vtadmin = (function() {
         };
 
         return ClusterBackup;
+    })();
+
+    vtadmin.ClusterShardReplicationPosition = (function() {
+
+        /**
+         * Properties of a ClusterShardReplicationPosition.
+         * @memberof vtadmin
+         * @interface IClusterShardReplicationPosition
+         * @property {vtadmin.ICluster|null} [cluster] ClusterShardReplicationPosition cluster
+         * @property {string|null} [keyspace] ClusterShardReplicationPosition keyspace
+         * @property {string|null} [shard] ClusterShardReplicationPosition shard
+         * @property {vtctldata.IShardReplicationPositionsResponse|null} [position_info] ClusterShardReplicationPosition position_info
+         */
+
+        /**
+         * Constructs a new ClusterShardReplicationPosition.
+         * @memberof vtadmin
+         * @classdesc Represents a ClusterShardReplicationPosition.
+         * @implements IClusterShardReplicationPosition
+         * @constructor
+         * @param {vtadmin.IClusterShardReplicationPosition=} [properties] Properties to set
+         */
+        function ClusterShardReplicationPosition(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ClusterShardReplicationPosition cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.cluster = null;
+
+        /**
+         * ClusterShardReplicationPosition keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.keyspace = "";
+
+        /**
+         * ClusterShardReplicationPosition shard.
+         * @member {string} shard
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.shard = "";
+
+        /**
+         * ClusterShardReplicationPosition position_info.
+         * @member {vtctldata.IShardReplicationPositionsResponse|null|undefined} position_info
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.position_info = null;
+
+        /**
+         * Creates a new ClusterShardReplicationPosition instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition=} [properties] Properties to set
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition instance
+         */
+        ClusterShardReplicationPosition.create = function create(properties) {
+            return new ClusterShardReplicationPosition(properties);
+        };
+
+        /**
+         * Encodes the specified ClusterShardReplicationPosition message. Does not implicitly {@link vtadmin.ClusterShardReplicationPosition.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition} message ClusterShardReplicationPosition message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterShardReplicationPosition.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
+            if (message.position_info != null && Object.hasOwnProperty.call(message, "position_info"))
+                $root.vtctldata.ShardReplicationPositionsResponse.encode(message.position_info, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ClusterShardReplicationPosition message, length delimited. Does not implicitly {@link vtadmin.ClusterShardReplicationPosition.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition} message ClusterShardReplicationPosition message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterShardReplicationPosition.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ClusterShardReplicationPosition message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterShardReplicationPosition.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterShardReplicationPosition();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.shard = reader.string();
+                    break;
+                case 4:
+                    message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ClusterShardReplicationPosition message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterShardReplicationPosition.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ClusterShardReplicationPosition message.
+         * @function verify
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ClusterShardReplicationPosition.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.position_info != null && message.hasOwnProperty("position_info")) {
+                var error = $root.vtctldata.ShardReplicationPositionsResponse.verify(message.position_info);
+                if (error)
+                    return "position_info." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ClusterShardReplicationPosition message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         */
+        ClusterShardReplicationPosition.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.ClusterShardReplicationPosition)
+                return object;
+            var message = new $root.vtadmin.ClusterShardReplicationPosition();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.ClusterShardReplicationPosition.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.position_info != null) {
+                if (typeof object.position_info !== "object")
+                    throw TypeError(".vtadmin.ClusterShardReplicationPosition.position_info: object expected");
+                message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.fromObject(object.position_info);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ClusterShardReplicationPosition message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.ClusterShardReplicationPosition} message ClusterShardReplicationPosition
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ClusterShardReplicationPosition.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.keyspace = "";
+                object.shard = "";
+                object.position_info = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.position_info != null && message.hasOwnProperty("position_info"))
+                object.position_info = $root.vtctldata.ShardReplicationPositionsResponse.toObject(message.position_info, options);
+            return object;
+        };
+
+        /**
+         * Converts this ClusterShardReplicationPosition to JSON.
+         * @function toJSON
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ClusterShardReplicationPosition.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ClusterShardReplicationPosition;
     })();
 
     vtadmin.ClusterWorkflows = (function() {
@@ -7576,6 +7873,494 @@ $root.vtadmin = (function() {
         };
 
         return GetSchemasResponse;
+    })();
+
+    vtadmin.GetShardReplicationPositionsRequest = (function() {
+
+        /**
+         * Properties of a GetShardReplicationPositionsRequest.
+         * @memberof vtadmin
+         * @interface IGetShardReplicationPositionsRequest
+         * @property {Array.<string>|null} [cluster_ids] GetShardReplicationPositionsRequest cluster_ids
+         * @property {Array.<string>|null} [keyspaces] GetShardReplicationPositionsRequest keyspaces
+         * @property {Array.<string>|null} [keyspace_shards] GetShardReplicationPositionsRequest keyspace_shards
+         */
+
+        /**
+         * Constructs a new GetShardReplicationPositionsRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetShardReplicationPositionsRequest.
+         * @implements IGetShardReplicationPositionsRequest
+         * @constructor
+         * @param {vtadmin.IGetShardReplicationPositionsRequest=} [properties] Properties to set
+         */
+        function GetShardReplicationPositionsRequest(properties) {
+            this.cluster_ids = [];
+            this.keyspaces = [];
+            this.keyspace_shards = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardReplicationPositionsRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * GetShardReplicationPositionsRequest keyspaces.
+         * @member {Array.<string>} keyspaces
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.keyspaces = $util.emptyArray;
+
+        /**
+         * GetShardReplicationPositionsRequest keyspace_shards.
+         * @member {Array.<string>} keyspace_shards
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.keyspace_shards = $util.emptyArray;
+
+        /**
+         * Creates a new GetShardReplicationPositionsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest instance
+         */
+        GetShardReplicationPositionsRequest.create = function create(properties) {
+            return new GetShardReplicationPositionsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsRequest message. Does not implicitly {@link vtadmin.GetShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            if (message.keyspaces != null && message.keyspaces.length)
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspaces[i]);
+            if (message.keyspace_shards != null && message.keyspace_shards.length)
+                for (var i = 0; i < message.keyspace_shards.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace_shards[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsRequest message, length delimited. Does not implicitly {@link vtadmin.GetShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                case 2:
+                    if (!(message.keyspaces && message.keyspaces.length))
+                        message.keyspaces = [];
+                    message.keyspaces.push(reader.string());
+                    break;
+                case 3:
+                    if (!(message.keyspace_shards && message.keyspace_shards.length))
+                        message.keyspace_shards = [];
+                    message.keyspace_shards.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardReplicationPositionsRequest message.
+         * @function verify
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardReplicationPositionsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!Array.isArray(message.keyspaces))
+                    return "keyspaces: array expected";
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    if (!$util.isString(message.keyspaces[i]))
+                        return "keyspaces: string[] expected";
+            }
+            if (message.keyspace_shards != null && message.hasOwnProperty("keyspace_shards")) {
+                if (!Array.isArray(message.keyspace_shards))
+                    return "keyspace_shards: array expected";
+                for (var i = 0; i < message.keyspace_shards.length; ++i)
+                    if (!$util.isString(message.keyspace_shards[i]))
+                        return "keyspace_shards: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetShardReplicationPositionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         */
+        GetShardReplicationPositionsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetShardReplicationPositionsRequest)
+                return object;
+            var message = new $root.vtadmin.GetShardReplicationPositionsRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            if (object.keyspaces) {
+                if (!Array.isArray(object.keyspaces))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.keyspaces: array expected");
+                message.keyspaces = [];
+                for (var i = 0; i < object.keyspaces.length; ++i)
+                    message.keyspaces[i] = String(object.keyspaces[i]);
+            }
+            if (object.keyspace_shards) {
+                if (!Array.isArray(object.keyspace_shards))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.keyspace_shards: array expected");
+                message.keyspace_shards = [];
+                for (var i = 0; i < object.keyspace_shards.length; ++i)
+                    message.keyspace_shards[i] = String(object.keyspace_shards[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardReplicationPositionsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.GetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardReplicationPositionsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.cluster_ids = [];
+                object.keyspaces = [];
+                object.keyspace_shards = [];
+            }
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            if (message.keyspaces && message.keyspaces.length) {
+                object.keyspaces = [];
+                for (var j = 0; j < message.keyspaces.length; ++j)
+                    object.keyspaces[j] = message.keyspaces[j];
+            }
+            if (message.keyspace_shards && message.keyspace_shards.length) {
+                object.keyspace_shards = [];
+                for (var j = 0; j < message.keyspace_shards.length; ++j)
+                    object.keyspace_shards[j] = message.keyspace_shards[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetShardReplicationPositionsRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardReplicationPositionsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardReplicationPositionsRequest;
+    })();
+
+    vtadmin.GetShardReplicationPositionsResponse = (function() {
+
+        /**
+         * Properties of a GetShardReplicationPositionsResponse.
+         * @memberof vtadmin
+         * @interface IGetShardReplicationPositionsResponse
+         * @property {Array.<vtadmin.IClusterShardReplicationPosition>|null} [replication_positions] GetShardReplicationPositionsResponse replication_positions
+         */
+
+        /**
+         * Constructs a new GetShardReplicationPositionsResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetShardReplicationPositionsResponse.
+         * @implements IGetShardReplicationPositionsResponse
+         * @constructor
+         * @param {vtadmin.IGetShardReplicationPositionsResponse=} [properties] Properties to set
+         */
+        function GetShardReplicationPositionsResponse(properties) {
+            this.replication_positions = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardReplicationPositionsResponse replication_positions.
+         * @member {Array.<vtadmin.IClusterShardReplicationPosition>} replication_positions
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @instance
+         */
+        GetShardReplicationPositionsResponse.prototype.replication_positions = $util.emptyArray;
+
+        /**
+         * Creates a new GetShardReplicationPositionsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse instance
+         */
+        GetShardReplicationPositionsResponse.create = function create(properties) {
+            return new GetShardReplicationPositionsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsResponse message. Does not implicitly {@link vtadmin.GetShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.replication_positions != null && message.replication_positions.length)
+                for (var i = 0; i < message.replication_positions.length; ++i)
+                    $root.vtadmin.ClusterShardReplicationPosition.encode(message.replication_positions[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsResponse message, length delimited. Does not implicitly {@link vtadmin.GetShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.replication_positions && message.replication_positions.length))
+                        message.replication_positions = [];
+                    message.replication_positions.push($root.vtadmin.ClusterShardReplicationPosition.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardReplicationPositionsResponse message.
+         * @function verify
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardReplicationPositionsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.replication_positions != null && message.hasOwnProperty("replication_positions")) {
+                if (!Array.isArray(message.replication_positions))
+                    return "replication_positions: array expected";
+                for (var i = 0; i < message.replication_positions.length; ++i) {
+                    var error = $root.vtadmin.ClusterShardReplicationPosition.verify(message.replication_positions[i]);
+                    if (error)
+                        return "replication_positions." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetShardReplicationPositionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         */
+        GetShardReplicationPositionsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetShardReplicationPositionsResponse)
+                return object;
+            var message = new $root.vtadmin.GetShardReplicationPositionsResponse();
+            if (object.replication_positions) {
+                if (!Array.isArray(object.replication_positions))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsResponse.replication_positions: array expected");
+                message.replication_positions = [];
+                for (var i = 0; i < object.replication_positions.length; ++i) {
+                    if (typeof object.replication_positions[i] !== "object")
+                        throw TypeError(".vtadmin.GetShardReplicationPositionsResponse.replication_positions: object expected");
+                    message.replication_positions[i] = $root.vtadmin.ClusterShardReplicationPosition.fromObject(object.replication_positions[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardReplicationPositionsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.GetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardReplicationPositionsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.replication_positions = [];
+            if (message.replication_positions && message.replication_positions.length) {
+                object.replication_positions = [];
+                for (var j = 0; j < message.replication_positions.length; ++j)
+                    object.replication_positions[j] = $root.vtadmin.ClusterShardReplicationPosition.toObject(message.replication_positions[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetShardReplicationPositionsResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardReplicationPositionsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardReplicationPositionsResponse;
     })();
 
     vtadmin.GetSrvVSchemaRequest = (function() {
