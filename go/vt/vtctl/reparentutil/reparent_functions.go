@@ -179,11 +179,11 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidate(ctx context.Co
 	return newPrimaryAlias.Tablet, tabletMap, nil
 }
 
-// 	PostReplicationChangeHook implements the ReparentFunctions interface
+// PostTabletChangeHook implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Tablet) {
 }
 
-// 	PromotedReplicaIsIdeal implements the ReparentFunctions interface
+// PromotedReplicaIsIdeal implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
 	if vtctlReparent.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
@@ -203,9 +203,8 @@ func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, 
 	return false
 }
 
-// 	GetBetterCandidate implements the ReparentFunctions interface
+// GetBetterCandidate implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
-
 	if prevPrimary != nil {
 		// find one which is of the correct type and matches the cell of the previous primary
 		for _, candidate := range validCandidates {
@@ -222,7 +221,7 @@ func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary, prev
 	return newPrimary
 }
 
-// CheckIfNeedToOverridePrimary implements the ReparentFunctions interface
+// CheckIfNeedToOverridePromotion implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error {
 	return nil
 }

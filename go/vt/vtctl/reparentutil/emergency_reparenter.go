@@ -184,7 +184,8 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// check weather the primary candidate selected is ideal or if it can be improved later
 	isIdeal := reparentFunctions.PromotedReplicaIsIdeal(newPrimary, prevPrimary, tabletMap, validCandidates)
 
-	validReplacementCandidates, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions, isIdeal, true)
+	// we now promote our primary candidate and also reparent all the other tablets to start replicating from this candidate
+	validReplacementCandidates, err := promotePrimaryCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions, isIdeal)
 	if err != nil {
 		return err
 	}
@@ -194,11 +195,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
+	// try to find a better candidate if we do not already have the most ideal one
 	betterCandidate := newPrimary
 	if !isIdeal {
 		betterCandidate = reparentFunctions.GetBetterCandidate(newPrimary, prevPrimary, validReplacementCandidates, tabletMap)
 	}
 
+	// if our better candidate is different from our previous candidate, then we replace our primary
 	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
 		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions)
 		if err != nil {
@@ -207,9 +210,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		newPrimary = betterCandidate
 	}
 
+	// now we check if there is a need to override the promotion of the newPrimary
 	errInPromotion := reparentFunctions.CheckIfNeedToOverridePromotion(newPrimary)
 	if errInPromotion != nil {
 		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
+		// we try and undo the promotion
 		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, reparentFunctions.LockAction(), tabletMap, statusMap, reparentFunctions)
 		if err != nil {
 			return err
@@ -219,10 +224,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
+	// Finally, we call PromoteReplica which fixes the semi-sync, set the primary to read-write and flushes the binlogs
 	_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}
+	// call the post tablet change hook on the new primary
 	reparentFunctions.PostTabletChangeHook(newPrimary)
 
 	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
@@ -232,9 +239,10 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Server, ev *events.Reparent, keyspace, shard string, prevPrimary *topodatapb.Tablet,
 	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) (*topodatapb.Tablet, error) {
 	var primaryAlias *topodatapb.TabletAlias
-
+	var err error
 	if prevPrimary != nil {
-		_, err := promotePrimaryCandidateAndStartReplication(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, tabletMap, statusMap, reparentFunctions, true, false)
+		// promote the original primary back
+		_, err = promotePrimaryCandidate(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, tabletMap, statusMap, reparentFunctions, true)
 		if err == nil {
 			return prevPrimary, nil
 		}
@@ -243,7 +251,7 @@ func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Serv
 	}
 
 	newTerm := time.Now()
-	_, err := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+	_, errInUpdate := ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 		if proto.Equal(si.PrimaryAlias, primaryAlias) {
 			return nil
 		}
@@ -251,5 +259,8 @@ func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Serv
 		si.PrimaryTermStartTime = logutil.TimeToProto(newTerm)
 		return nil
 	})
+	if errInUpdate != nil {
+		return nil, errInUpdate
+	}
 	return prevPrimary, err
 }
