@@ -231,8 +231,8 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*T
 		return nil, nil
 	}
 	var ts TableSet
-	for _, table := range v.tables {
-		ts |= org.tableSetFor(table.GetExpr())
+	for range v.tables {
+		ts |= org.tableSetFor(v.ASTNode)
 	}
 	return &ts, nil
 }
