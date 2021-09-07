@@ -209,7 +209,7 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 			if err != nil {
 				return nil, err
 			}
-			return rt, rewriteSubqueryDependenciesForJoin(a, outerTree, subQueryInner, ctx)
+			return rt, rewriteSubqueryDependenciesForJoin(outerTree.rhs, outerTree, subQueryInner, ctx)
 		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.lhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
@@ -220,6 +220,13 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 			return outerTree, nil
 		}
 
+		newMergefunc = func(a, b *routeTree) (*routeTree, error) {
+			rt, err := merger(a, b)
+			if err != nil {
+				return nil, err
+			}
+			return rt, rewriteSubqueryDependenciesForJoin(outerTree.lhs, outerTree, subQueryInner, ctx)
+		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.rhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
 			return nil, err
@@ -234,17 +241,14 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 	}
 }
 
-func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
+// outerTree is the joinTree within whose children the subquery lives in
+// the child of joinTree which does not contain the subquery is the otherTree
+func rewriteSubqueryDependenciesForJoin(otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
 	// first we find the other side of the tree by comparing the tableIDs
 	// other side is RHS if the subquery is in the LHS, otherwise it is LHS
-	otherTree := outerTree.lhs
-	if a.tableID() == outerTree.lhs.tableID() {
-		otherTree = outerTree.rhs
-	}
-
 	var rewriteError error
 	// go over the entire where expression in the subquery
-	sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(subQueryInner.SelectStatement, func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
@@ -278,7 +282,20 @@ func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQu
 
 func mergeSubQuery(ctx planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
-	err := outer.resetRoutingSelections(ctx)
+	// go over the subquery and add its tables to the one's solved by the route it is merged with
+	// this is needed to so that later when we try to push projections, we get the correct
+	// solved tableID from the route, since it also includes the tables from the subquery after merging
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch n := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			outer.solved |= ctx.semTable.TableSetFor(n)
+		}
+		return true, nil
+	}, subq.SelectStatement)
+	if err != nil {
+		return nil, err
+	}
+	err = outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}

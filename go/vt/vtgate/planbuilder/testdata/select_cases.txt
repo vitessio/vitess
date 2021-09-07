@@ -896,6 +896,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # Case preservation
 "select user.Col, user_extra.Id from user join user_extra"
