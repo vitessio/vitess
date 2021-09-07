@@ -24,7 +24,7 @@ import (
 )
 
 type derivedTree struct {
-	query *sqlparser.Select
+	query sqlparser.SelectStatement
 	inner queryTree
 	alias string
 
@@ -66,7 +66,7 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, _ *semantics
 
 func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
 	found := false
-	for j, exp := range d.query.SelectExprs {
+	for j, exp := range sqlparser.GetFirstSelect(d.query).SelectExprs {
 		ae, ok := exp.(*sqlparser.AliasedExpr)
 		if !ok {
 			continue
@@ -87,7 +87,7 @@ func (d *derivedTree) findOutputColumn(name *sqlparser.ColName) (int, error) {
 		}
 	}
 	if !found {
-		for j, exp := range d.query.SelectExprs {
+		for j, exp := range sqlparser.GetFirstSelect(d.query).SelectExprs {
 			_, ok := exp.(*sqlparser.StarExpr)
 			if !ok {
 				continue

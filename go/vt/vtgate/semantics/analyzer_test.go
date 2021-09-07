@@ -365,6 +365,27 @@ func TestUnion(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
+func TestUnionWithOrderBy(t *testing.T) {
+	query := "select col1 from tabl1 union (select col2 from tabl2) order by 1"
+
+	stmt, semTable := parseAndAnalyze(t, query, "")
+	union, _ := stmt.(*sqlparser.Union)
+	sel1 := union.FirstStatement.(*sqlparser.Select)
+	sel2 := union.UnionSelects[0].Statement.(*sqlparser.ParenSelect).Select.(*sqlparser.Select)
+
+	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
+	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
+	ts1 := semTable.TableSetFor(t1)
+	ts2 := semTable.TableSetFor(t2)
+	assert.EqualValues(t, 1, ts1)
+	assert.EqualValues(t, 2, ts2)
+
+	d1 := semTable.BaseTableDependencies(extract(sel1, 0))
+	d2 := semTable.BaseTableDependencies(extract(sel2, 0))
+	assert.Equal(t, T1, d1)
+	assert.Equal(t, T2, d2)
+}
+
 func TestBindingMultiTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 
@@ -722,6 +743,48 @@ func TestScopingWDerivedTables(t *testing.T) {
 			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+			}, NoRewrite)
+			if query.errorMessage != "" {
+				require.EqualError(t, err, query.errorMessage)
+			} else {
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				assert.Equal(t, query.recursiveExpectation, st.BaseTableDependencies(extract(sel, 0)))
+				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)))
+			}
+		})
+	}
+}
+
+func TestScopingWVindexTables(t *testing.T) {
+	queries := []struct {
+		query                string
+		errorMessage         string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{
+		{
+			query:                "select id from user_index where id = 1",
+			recursiveExpectation: T1,
+			expectation:          T1,
+		}, {
+			query:                "select u.id + t.id from t as t join user_index as u where u.id = 1 and u.id = t.id",
+			recursiveExpectation: T1 | T2,
+			expectation:          T1 | T2,
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			hash, _ := vindexes.NewHash("user_index", nil)
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+				VindexTables: map[string]vindexes.Vindex{
+					"user_index": hash,
 				},
 			}, NoRewrite)
 			if query.errorMessage != "" {
