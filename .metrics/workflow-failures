@@ -1,12 +1,3 @@
-2021-05-12T23:32:39Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/837211950
-2021-05-12T23:32:39Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/837211933
-2021-05-12T23:32:39Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/837211952
-2021-05-12T23:32:39Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/837211942
-2021-05-12T23:32:39Z,endtoend,https://github.com/vitessio/vitess/actions/runs/837211900
-2021-05-12T23:32:39Z,unit_race,https://github.com/vitessio/vitess/actions/runs/837211939
-2021-05-12T23:58:49Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/837262627
-2021-05-12T23:58:49Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/837262604
-2021-05-12T23:58:49Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/837262569
 2021-05-12T23:58:49Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/837262579
 2021-05-12T23:58:49Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/837262620
 2021-05-12T23:58:49Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/837262609
@@ -9994,7 +9985,16 @@
 2021-09-07T11:56:50Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1209307237
 2021-09-07T11:56:50Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1209307225
 2021-09-07T11:56:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1209307193
+2021-09-07T13:10:22Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1209547878
 2021-09-07T13:10:22Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1209547835
 2021-09-07T13:10:22Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1209547830
+2021-09-07T13:10:22Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1209547823
+2021-09-07T13:10:22Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1209547804
+2021-09-07T13:10:22Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1209547805
+2021-09-07T13:10:22Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1209547871
 2021-09-07T13:10:22Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1209547845
 2021-09-07T13:10:22Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1209547827
+2021-09-07T13:10:22Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1209547869
+2021-09-07T13:24:01Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1209594264
+2021-09-07T13:24:01Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1209594239
+2021-09-07T13:24:02Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1209594322
