@@ -47,7 +47,6 @@ type (
 		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
 		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
-		IsVindexTable() bool
 		GetExprFor(s string) (sqlparser.Expr, error)
 	}
 
@@ -450,26 +449,6 @@ func (r *RealTable) Matches(name sqlparser.TableName) bool {
 		}
 	}
 	return r.tableName == name.Name.String()
-}
-
-// IsVindexTable implements the TableInfo interface
-func (v *vTableInfo) IsVindexTable() bool {
-	return false
-}
-
-// IsVindexTable implements the TableInfo interface
-func (a *AliasedTable) IsVindexTable() bool {
-	return false
-}
-
-// IsVindexTable implements the TableInfo interface
-func (r *RealTable) IsVindexTable() bool {
-	return false
-}
-
-// IsVindexTable implements the TableInfo interface
-func (v *VindexTable) IsVindexTable() bool {
-	return true
 }
 
 // Matches implements the TableInfo interface

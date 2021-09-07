@@ -18,7 +18,9 @@ package abstract
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -50,42 +52,44 @@ func (v Vindex) TableID() semantics.TableSet {
 	return v.Table.TableID
 }
 
+const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val>"
+
 // PushPredicate implements the Operator interface
 func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := semTable.BaseTableDependencies(e)
 		if deps.NumberOfTables() > 1 {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (multiple tables involved)")
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
 		}
 		if comparison.Operator != sqlparser.EqualOp {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (not equality)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
 		}
 		if !colname.Name.EqualString("id") {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
 		}
 
 		// check RHS
 		if !sqlparser.IsValue(comparison.Right) {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
 		}
 		var err error
 		v.Value, err = sqlparser.NewPlanValue(comparison.Right)
 		if err != nil {
-			return semantics.Gen4NotSupportedF("unsupported: where clause for vindex function must be of the form id = <val>: %v", err)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)

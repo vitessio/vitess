@@ -51,7 +51,7 @@ func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *seman
 func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 	single, ok := n.vindex.(vindexes.SingleColumn)
 	if !ok {
-		return nil, semantics.Gen4NotSupportedF("multi-column vindexes not supported")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
 	}
 	plan := &vindexFunc{
 		order:         1,
