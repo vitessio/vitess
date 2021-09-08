@@ -262,7 +262,25 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 
 // CreateShard is part of the vtadminpb.VTAdminServver interface.
 func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.CreateShard")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ShardResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create shard in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.CreateShard(ctx, req.Options)
 }
 
 // DeleteKeyspace is part of the vtadminpb.VTAdminServer interface.
@@ -290,7 +308,25 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 
 // DeleteShards is part of the vtadminpb.VTAdminServer interface.
 func (api *API) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.DeleteShards")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ShardResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete shards in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.DeleteShards(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
