@@ -206,6 +206,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # union operations in derived table, without star expression (FROM)¡
 "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
