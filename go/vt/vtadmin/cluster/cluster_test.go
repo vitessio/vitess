@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -2147,6 +2148,247 @@ func TestGetSchema(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestGetShardReplicationPositions(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		cfg       testutil.TestClusterConfig
+		req       *vtadminpb.GetShardReplicationPositionsRequest
+		expected  []*vtadminpb.ClusterShardReplicationPosition
+		shouldErr bool
+	}{
+		{
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					GetKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.GetKeyspaceResponse
+						Error    error
+					}{
+						"ks": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Keyspace: &topodatapb.Keyspace{},
+								},
+							},
+						},
+					},
+					FindAllShardsInKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+						Error    error
+					}{
+						"ks": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-": {
+										Keyspace: "ks",
+										Name:     "-",
+										Shard:    &topodatapb.Shard{},
+									},
+								},
+							},
+						},
+					},
+					ShardReplicationPositionsResults: map[string]struct {
+						Response *vtctldatapb.ShardReplicationPositionsResponse
+						Error    error
+					}{
+						"ks/-": {
+							Response: &vtctldatapb.ShardReplicationPositionsResponse{
+								ReplicationStatuses: map[string]*replicationdatapb.Status{
+									"zone1-001": {
+										IoThreadRunning:  false,
+										SqlThreadRunning: false,
+										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+									},
+									"zone1-002": { // Note: in reality other fields will be set on replicating hosts as well, but this is sufficient to illustrate in the testing.
+										IoThreadRunning:  true,
+										SqlThreadRunning: true,
+										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+									},
+									"zone1-003": {
+										IoThreadRunning:  true,
+										SqlThreadRunning: true,
+										Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+									},
+								},
+								TabletMap: map[string]*topodatapb.Tablet{
+									"zone1-001": {
+										Keyspace: "ks",
+										Shard:    "-",
+										Type:     topodatapb.TabletType_PRIMARY,
+										Alias: &topodatapb.TabletAlias{
+											Cell: "zone1",
+											Uid:  1,
+										},
+									},
+									"zone1-002": {
+										Keyspace: "ks",
+										Shard:    "-",
+										Type:     topodatapb.TabletType_REPLICA,
+										Alias: &topodatapb.TabletAlias{
+											Cell: "zone1",
+											Uid:  2,
+										},
+									},
+									"zone1-003": {
+										Keyspace: "ks",
+										Shard:    "-",
+										Type:     topodatapb.TabletType_RDONLY,
+										Alias: &topodatapb.TabletAlias{
+											Cell: "zone1",
+											Uid:  3,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetShardReplicationPositionsRequest{
+				KeyspaceShards: []string{"ks/-"},
+			},
+			expected: []*vtadminpb.ClusterShardReplicationPosition{
+				{
+					Cluster: &vtadminpb.Cluster{
+						Id:   "c1",
+						Name: "cluster1",
+					},
+					Keyspace: "ks",
+					Shard:    "-",
+					PositionInfo: &vtctldatapb.ShardReplicationPositionsResponse{
+						ReplicationStatuses: map[string]*replicationdatapb.Status{
+							"zone1-001": {
+								IoThreadRunning:  false,
+								SqlThreadRunning: false,
+								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+							},
+							"zone1-002": {
+								IoThreadRunning:  true,
+								SqlThreadRunning: true,
+								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+							},
+							"zone1-003": {
+								IoThreadRunning:  true,
+								SqlThreadRunning: true,
+								Position:         "MySQL56/08d0dbbb-be29-11eb-9fea-0aafb9701138:1-109848265",
+							},
+						},
+						TabletMap: map[string]*topodatapb.Tablet{
+							"zone1-001": {
+								Keyspace: "ks",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_PRIMARY,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  1,
+								},
+							},
+							"zone1-002": {
+								Keyspace: "ks",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_REPLICA,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  2,
+								},
+							},
+							"zone1-003": {
+								Keyspace: "ks",
+								Shard:    "-",
+								Type:     topodatapb.TabletType_RDONLY,
+								Alias: &topodatapb.TabletAlias{
+									Cell: "zone1",
+									Uid:  3,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "error",
+			cfg: testutil.TestClusterConfig{
+				Cluster: &vtadminpb.Cluster{
+					Id:   "c1",
+					Name: "cluster1",
+				},
+				VtctldClient: &fakevtctldclient.VtctldClient{
+					GetKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.GetKeyspaceResponse
+						Error    error
+					}{
+						"ks": {
+							Response: &vtctldatapb.GetKeyspaceResponse{
+								Keyspace: &vtctldatapb.Keyspace{
+									Keyspace: &topodatapb.Keyspace{},
+								},
+							},
+						},
+					},
+					FindAllShardsInKeyspaceResults: map[string]struct {
+						Response *vtctldatapb.FindAllShardsInKeyspaceResponse
+						Error    error
+					}{
+						"ks": {
+							Response: &vtctldatapb.FindAllShardsInKeyspaceResponse{
+								Shards: map[string]*vtctldatapb.Shard{
+									"-": {
+										Keyspace: "ks",
+										Name:     "-",
+										Shard:    &topodatapb.Shard{},
+									},
+								},
+							},
+						},
+					},
+					ShardReplicationPositionsResults: map[string]struct {
+						Response *vtctldatapb.ShardReplicationPositionsResponse
+						Error    error
+					}{
+						"ks/-": {
+							Error: assert.AnError,
+						},
+					},
+				},
+			},
+			req: &vtadminpb.GetShardReplicationPositionsRequest{
+				KeyspaceShards: []string{"ks/-"},
+			},
+			expected:  nil,
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			c := testutil.BuildCluster(t, tt.cfg)
+			err := c.Vtctld.Dial(ctx)
+			require.NoError(t, err, "failed to dial test vtctld")
+
+			resp, err := c.GetShardReplicationPositions(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
 }
 
 // This test only validates the error handling on dialing database connections.
