@@ -29,7 +29,7 @@ import (
 type (
 	// SelectExpr provides whether the columns is aggregation expression or not.
 	SelectExpr struct {
-		Col  *sqlparser.AliasedExpr
+		Col  sqlparser.SelectExpr
 		Aggr bool
 	}
 
@@ -60,6 +60,18 @@ type (
 		DistinctAggrIndex int
 	}
 )
+
+func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
+	switch sel := s.Col.(type) {
+	case *sqlparser.StarExpr:
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "starExpr does not have expr")
+	case *sqlparser.AliasedExpr:
+		return sel.Expr, nil
+	case *sqlparser.Nextval:
+		return sel.Expr, nil
+	}
+	return nil, nil
+}
 
 // CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
@@ -157,20 +169,24 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Expr {
+func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.SelectExpr {
 	for _, expr := range qp.SelectExprs {
 		if expr.Aggr {
 			continue
 		}
 		isGroupByOk := false
 		for _, groupByExpr := range qp.GroupByExprs {
-			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, expr.Col.Expr) {
+			exp, err := expr.GetExpr()
+			if err != nil {
+				return expr.Col
+			}
+			if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
 				isGroupByOk = true
 				break
 			}
 		}
 		if !isGroupByOk {
-			return expr.Col.Expr
+			return expr.Col
 		}
 	}
 	for _, order := range qp.OrderExprs {
@@ -186,7 +202,9 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 			}
 		}
 		if !isGroupByOk {
-			return order.Inner.Expr
+			return &sqlparser.AliasedExpr{
+				Expr: order.Inner.Expr,
+			}
 		}
 	}
 	return nil
@@ -203,7 +221,10 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 		if num > len(qp.SelectExprs) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
 		}
-		aliasedExpr := qp.SelectExprs[num-1].Col
+		aliasedExpr, isAliasedExpr := qp.SelectExprs[num-1].Col.(*sqlparser.AliasedExpr)
+		if !isAliasedExpr {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", qp.SelectExprs[num-1].Col)
+		}
 		expr = aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {
 			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
@@ -222,9 +243,13 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 	colExpr, isColName := e.(*sqlparser.ColName)
 	if isColName && colExpr.Qualifier.IsEmpty() {
 		for _, selectExpr := range qp.SelectExprs {
-			isAliasExpr := !selectExpr.Col.As.IsEmpty()
-			if isAliasExpr && colExpr.Name.Equal(selectExpr.Col.As) {
-				return e, selectExpr.Col.Expr, nil
+			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
+			if !isAliasedExpr {
+				continue
+			}
+			isAliasExpr := !aliasedExpr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
+				return e, aliasedExpr.Expr, nil
 			}
 		}
 	}
@@ -252,14 +277,10 @@ func (qp *QueryProjection) toString() string {
 	}
 
 	for _, expr := range qp.SelectExprs {
-		e := sqlparser.String(expr.Col.Expr)
+		e := sqlparser.String(expr.Col)
 
 		if expr.Aggr {
 			e = "aggr: " + e
-		}
-
-		if !expr.Col.As.IsEmpty() {
-			e += " AS " + expr.Col.As.String()
 		}
 		out.Select = append(out.Select, e)
 	}
