@@ -133,20 +133,6 @@ func TestBindingSingleTableNegative(t *testing.T) {
 	}
 }
 
-func Test(t *testing.T) {
-	queries := []string{
-		"select foo.col from tabl",
-	}
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
-			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, NoRewrite)
-			require.Error(t, err)
-		})
-	}
-}
-
 func TestOrderByBindingSingleTable(t *testing.T) {
 	t.Run("positive tests", func(t *testing.T) {
 		tcases := []struct {
