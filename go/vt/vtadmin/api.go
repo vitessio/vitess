@@ -260,6 +260,11 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 	}, nil
 }
 
+// CreateShard is part of the vtadminpb.VTAdminServver interface.
+func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // DeleteKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.DeleteKeyspace")
@@ -281,6 +286,11 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 	}
 
 	return c.DeleteKeyspace(ctx, req.Options)
+}
+
+// DeleteShards is part of the vtadminpb.VTAdminServer interface.
+func (api *API) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	panic("unimplemented!")
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
