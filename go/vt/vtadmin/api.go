@@ -241,9 +241,9 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 		return nil, fmt.Errorf("%w: cannot create keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
@@ -276,9 +276,9 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 		return nil, fmt.Errorf("%w: cannot delete keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
@@ -571,9 +571,9 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("table", req.Table)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(req.TableSizeOptions, span)
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
@@ -1381,6 +1381,15 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
+	c, ok := api.clusterMap[id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, id)
+	}
+
+	return c, nil
 }
 
 func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {
