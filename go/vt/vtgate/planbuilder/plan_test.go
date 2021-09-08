@@ -558,7 +558,7 @@ func escapeNewLines(in string) string {
 }
 
 func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkGen4equalPlan bool) {
-	var checkAllTests = !false
+	var checkAllTests = false
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
 		fail := checkAllTests
