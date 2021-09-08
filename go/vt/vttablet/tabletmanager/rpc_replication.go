@@ -795,7 +795,7 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
+	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite); err != nil {
 		return "", err
 	}
 
