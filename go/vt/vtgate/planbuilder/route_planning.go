@@ -242,6 +242,10 @@ func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQu
 		otherTree = outerTree.rhs
 	}
 
+	if subQueryInner.SelectStatement.Where == nil {
+		return nil
+	}
+
 	var rewriteError error
 	// go over the entire where expression in the subquery
 	sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
