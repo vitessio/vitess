@@ -331,19 +331,65 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	return false
 }
 
-func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
-	ast := rb.Select.(*sqlparser.Select)
-	ast.Distinct = sel.Distinct
-	ast.GroupBy = sel.GroupBy
-	ast.Having = sel.Having
-	ast.OrderBy = sel.OrderBy
-	ast.Comments = sel.Comments
-	ast.SelectExprs = sel.SelectExprs
-	for i, expr := range ast.SelectExprs {
-		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
-			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)
-		}
+func createSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
+	err := stripDownQuery(sel, rb.Select)
+	if err != nil {
+		return err
 	}
+	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
+		if aliasedExpr, ok := cursor.Node().(*sqlparser.AliasedExpr); ok {
+			cursor.Replace(removeKeyspaceFromColName(aliasedExpr))
+		}
+		return true
+	}, nil)
+	return nil
+}
+
+func stripDownQuery(from, to sqlparser.SelectStatement) error {
+	var err error
+
+	switch node := from.(type) {
+	case *sqlparser.Select:
+		toNode, ok := to.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		toNode.Distinct = node.Distinct
+		toNode.GroupBy = node.GroupBy
+		toNode.Having = node.Having
+		toNode.OrderBy = node.OrderBy
+		toNode.Comments = node.Comments
+		toNode.SelectExprs = node.SelectExprs
+	case *sqlparser.Union:
+		toNode, ok := to.(*sqlparser.Union)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		err = stripDownQuery(node.FirstStatement, toNode.FirstStatement)
+		if err != nil {
+			return err
+		}
+		for i, s := range node.UnionSelects {
+			err = stripDownQuery(s.Statement, toNode.UnionSelects[i].Statement)
+			if err != nil {
+				return err
+			}
+		}
+		toNode.OrderBy = node.OrderBy
+	case *sqlparser.ParenSelect:
+		toNode, ok := to.(*sqlparser.ParenSelect)
+		if !ok {
+			// we might have lost the parenthesis, so let's check if we can work with the child
+			return stripDownQuery(node.Select, to)
+		}
+		err = stripDownQuery(node.Select, toNode.Select)
+		if err != nil {
+			return err
+		}
+	default:
+		panic("this should not happen - we have covered all implementations of SelectStatement")
+	}
+	return nil
 }
 
 func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTree) (queryTree, error) {

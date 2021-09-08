@@ -1293,6 +1293,7 @@ Gen4 plan same as above
 # duplicate columns not allowed in derived table
 "select * from (select user.id, user_extra.id from user join user_extra) as t"
 "duplicate column names in subquery: id"
+Gen4 error: Duplicate column name 'id'
 
 # non-existent symbol in cross-shard derived table
 "select t.col from (select user.id from user join user_extra) as t"
