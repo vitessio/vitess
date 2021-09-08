@@ -128,6 +128,8 @@ type TabletManagerClient struct {
 	// a test, set tmc.TopoServer = nil.
 	TopoServer *topo.Server
 	// keyed by tablet alias.
+	ChangeTabletTypeResult map[string]error
+	// keyed by tablet alias.
 	DemoteMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
 	DemoteMasterResults map[string]struct {
@@ -209,6 +211,10 @@ type TabletManagerClient struct {
 
 // ChangeType is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, newType topodatapb.TabletType) error {
+	if result, ok := fake.ChangeTabletTypeResult[topoproto.TabletAliasString(tablet.Alias)]; ok {
+		return result
+	}
+
 	if fake.TopoServer == nil {
 		return assert.AnError
 	}
@@ -435,6 +441,7 @@ func (fake *TabletManagerClient) SetMaster(ctx context.Context, tablet *topodata
 	return assert.AnError
 }
 
+// StartReplication is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
 	if tablet == nil {
 		return assert.AnError
