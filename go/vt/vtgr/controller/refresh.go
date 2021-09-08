@@ -22,19 +22,17 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtgr/config"
-
-	"vitess.io/vitess/go/vt/vtgr/db"
-
-	"vitess.io/vitess/go/stats"
-
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtgr/config"
+	"vitess.io/vitess/go/vt/vtgr/db"
 )
 
 var (
@@ -44,10 +42,10 @@ var (
 // grInstance represents an instance that's running MySQL GR
 // it wraps a InstanceKey plus some tablet related information
 type grInstance struct {
-	instanceKey      *inst.InstanceKey
-	tablet           *topodatapb.Tablet
-	primaryTimeStamp time.Time
-	alias            string
+	instanceKey     *inst.InstanceKey
+	tablet          *topodatapb.Tablet
+	masterTimeStamp time.Time
+	alias           string
 }
 
 // GRTopo is VTGR wrapper for topo server
@@ -91,6 +89,8 @@ type GRShard struct {
 	lastDiagnoseResult DiagnoseType
 	lastDiagnoseSince  time.Time
 
+	isActive sync2.AtomicBool
+
 	// lock prevents multiple go routine fights with each other
 	sync.Mutex
 }
@@ -126,8 +126,9 @@ func NewGRShard(
 	ts GRTopo,
 	dbAgent db.Agent,
 	config *config.VTGRConfig,
-	localDbPort int) *GRShard {
-	return &GRShard{
+	localDbPort int,
+	isActive bool) *GRShard {
+	grShard := &GRShard{
 		KeyspaceShard:             &topo.KeyspaceShard{Keyspace: keyspace, Shard: shard},
 		cells:                     cells,
 		shardStatusCollector:      newShardStatusCollector(keyspace, shard),
@@ -142,6 +143,8 @@ func NewGRShard(
 		transientErrorWaitTime:    time.Duration(config.BackoffErrorWaitTimeSeconds) * time.Second,
 		bootstrapWaitTime:         time.Duration(config.BootstrapWaitTimeSeconds) * time.Second,
 	}
+	grShard.isActive.Set(isActive)
+	return grShard
 }
 
 // refreshTabletsInShardLocked is called by repair to get a fresh view of the shard
@@ -182,7 +185,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 	var newReplicas []*grInstance
 	for alias, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		// Only monitor primary, replica and ronly tablet types
+		// Only monitor master, replica and ronly tablet types
 		switch tablet.Type {
 		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running
@@ -192,10 +195,10 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 				Port:     int(tablet.MysqlPort),
 			}
 			grInstance := grInstance{
-				instanceKey:      &instanceKey,
-				tablet:           tablet,
-				primaryTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
-				alias:            alias,
+				instanceKey:     &instanceKey,
+				tablet:          tablet,
+				masterTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
+				alias:           alias,
 			}
 			newReplicas = append(newReplicas, &grInstance)
 		}
@@ -277,6 +280,12 @@ func (shard *GRShard) GetUnlock() func(*error) {
 	shard.unlockMu.Lock()
 	defer shard.unlockMu.Unlock()
 	return shard.unlock
+}
+
+// SetIsActive sets isActive for the shard
+func (shard *GRShard) SetIsActive(isActive bool) {
+	log.Infof("Setting is active to %v", isActive)
+	shard.isActive.Set(isActive)
 }
 
 func (collector *shardStatusCollector) isUnreachable(instance *grInstance) bool {

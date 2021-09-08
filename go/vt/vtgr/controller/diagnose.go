@@ -142,7 +142,9 @@ func (shard *GRShard) Diagnose(ctx context.Context) (DiagnoseType, error) {
 }
 
 func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) {
-	if shard.localDbPort != 0 {
+	// fast path only diagnose problem Vitess primary
+	// which does not needed if the shard is inactive
+	if shard.localDbPort != 0 && shard.isActive.Get() {
 		localView := shard.getLocalView()
 		if localView != nil {
 			fastDiagnose := shard.fastPathDiagnose(ctx, localView)
@@ -183,50 +185,60 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 		return DiagnoseTypeShardHasInactiveGroup, nil
 	}
 
-	// Secondly, we check if there is a primary tablet.
-	// If there is a group but we cannot find a primary tablet
-	// we should set it based on mysql group
-	hasWrongPrimary, err := shard.hasWrongPrimaryTablet(ctx)
-	if err != nil {
-		// errMissingGroup means we cannot find a mysql group for the shard
-		// we are in DiagnoseTypeShardHasNoGroup state
-		if err == errMissingGroup {
-			log.Warning("Missing mysql group")
-			return DiagnoseTypeShardHasNoGroup, nil
+	// We only check Vitess primary iff shard is active.
+	// Otherwise VTGR will only make sure there is a mysql group in the shard.
+	if shard.isActive.Get() {
+		// Secondly, we check if there is a primary tablet.
+		// If there is a group but we cannot find a primary tablet
+		// we should set it based on mysql group
+		hasWrongPrimary, err := shard.hasWrongPrimaryTablet(ctx)
+		if err != nil {
+			// errMissingGroup means we cannot find a mysql group for the shard
+			// we are in DiagnoseTypeShardHasNoGroup state
+			if err == errMissingGroup {
+				log.Warning("Missing mysql group")
+				return DiagnoseTypeShardHasNoGroup, nil
+			}
+			// errMissingPrimaryTablet means we cannot find a tablet based on mysql primary
+			// which means the tablet disconnected from topo server and we cannot find it
+			if err == errMissingPrimaryTablet {
+				return DiagnoseTypeUnreachablePrimary, nil
+			}
+			return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose shardNeedsInitialized")
 		}
-		// errMissingPrimaryTablet means we cannot find a tablet based on mysql primary
-		// which means the tablet disconnected from topo server and we cannot find it
-		if err == errMissingPrimaryTablet {
+		if hasWrongPrimary {
+			return DiagnoseTypeWrongPrimaryTablet, nil
+		}
+
+		// Thirdly, we check if primary tablet is reachable
+		isPrimaryReachable, err := shard.isPrimaryReachable(ctx)
+		if err != nil {
+			return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose isPrimaryReachable")
+		}
+		if !isPrimaryReachable {
 			return DiagnoseTypeUnreachablePrimary, nil
 		}
-		return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose shardNeedsInitialized")
-	}
-	if hasWrongPrimary {
-		return DiagnoseTypeWrongPrimaryTablet, nil
 	}
 
-	// Thirdly, we check if primary tablet is reachable
-	isPrimaryReachable, err := shard.isPrimaryReachable(ctx)
-	if err != nil {
-		return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose isPrimaryReachable")
+	// At this point, the primary tablet should be consistent with mysql primary
+	// so the view from priamry tablet should be accurate
+	onlineMembers, isReadOnly := shard.getOnlineGroupInfo()
+	// If we found a writable shard in the inactive shard
+	// we should consider the shard as InsufficientGroupSize to set read only
+	if !isReadOnly && !shard.isActive.Get() {
+		return DiagnoseTypeInsufficientGroupSize, nil
 	}
-	if !isPrimaryReachable {
-		return DiagnoseTypeUnreachablePrimary, nil
-	}
-
 	// Then we check if we satisfy the minimum replica requirement
 	if shard.minNumReplicas > 0 {
-		// At this point, the primary tablet should be consistent with mysql primary
-		// so the view from priamry tablet should be accurate
-		onlineMembers, isReadOnly := shard.getOnlineGroupInfo()
-		if onlineMembers >= shard.minNumReplicas && isReadOnly {
+		if onlineMembers >= shard.minNumReplicas && isReadOnly && shard.isActive.Get() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
 		// If we disable readonly protection and still found we have a read only shard,
 		// we should return DiagnoseTypeReadOnlyShard so that VTGR can turn off read only
-		if shard.disableReadOnlyProtection && isReadOnly {
+		if shard.disableReadOnlyProtection && isReadOnly && shard.isActive.Get() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
+		// We don't check isActive here since if it is inactive, VTGR should already return InsufficientGroupSize
 		if !shard.disableReadOnlyProtection && onlineMembers < shard.minNumReplicas && !isReadOnly {
 			return DiagnoseTypeInsufficientGroupSize, nil
 		}
@@ -364,16 +376,16 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 // findShardPrimaryTablet iterates through the replicas stored in grShard and returns
 // the one that's marked as primary
 func (shard *GRShard) findShardPrimaryTablet() *grInstance {
-	var latestPrimaryTimestamp time.Time
+	var latestMasterTimestamp time.Time
 	var primaryInstance *grInstance
 	foundPrimary := false
 	for _, instance := range shard.instances {
-		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
+		if instance.tablet.Type == topodatapb.TabletType_MASTER {
 			foundPrimary = true
-			// It is possible that there are more than one primary in topo server
+			// It is possible that there are more than one master in topo server
 			// we should compare timestamp to pick the latest one
-			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
-				latestPrimaryTimestamp = instance.primaryTimeStamp
+			if latestMasterTimestamp.Before(instance.masterTimeStamp) {
+				latestMasterTimestamp = instance.masterTimeStamp
 				primaryInstance = instance
 			}
 		}
@@ -408,9 +420,9 @@ func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 		shard.instances[i], shard.instances[j] = shard.instances[j], shard.instances[i]
 	})
 	for _, instance := range shard.instances {
-		// Skip primary because VTGR always join group and then update tablet type
-		// which means if a tablet has type primary then it should have a group already
-		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
+		// Skip master because VTGR always join group and then update tablet type
+		// which means if a tablet has type master then it should have a group already
+		if instance.tablet.Type == topodatapb.TabletType_MASTER {
 			continue
 		}
 		// Skip instance without hostname because they are not up and running

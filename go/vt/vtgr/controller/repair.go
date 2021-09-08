@@ -294,7 +294,7 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 	return shard.dbAgent.BootstrapGroupLocked(candidate.instanceKey)
 }
 
-func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *concurrency.AllErrorRecorder, error) {
+func (shard *GRShard) getGTIDSetFromAll(skipMaster bool) (*groupGTIDRecorder, *concurrency.AllErrorRecorder, error) {
 	if len(shard.instances) == 0 {
 		return nil, nil, fmt.Errorf("%v has 0 instance", formatKeyspaceShard(shard.KeyspaceShard))
 	}
@@ -308,9 +308,9 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 	primary := shard.findShardPrimaryTablet()
 	var mysqlPrimaryHost string
 	var mysqlPrimaryPort int
-	// skipPrimary is true when we manual failover or if there is a unreachalbe primary tablet
+	// skipMaster is true when we manual failover or if there is a unreachalbe primary tablet
 	// in both case, there should be a reconciled primary tablet
-	if skipPrimary && primary != nil {
+	if skipMaster && primary != nil {
 		status := shard.sqlGroup.GetStatus(primary.instanceKey)
 		mysqlPrimaryHost, mysqlPrimaryPort = status.HostName, status.Port
 		log.Infof("Found primary instance from MySQL on %v", mysqlPrimaryHost)
@@ -321,7 +321,7 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 	// that is unreachable
 	errorRecorder := shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
-		if skipPrimary && instance.instanceKey.Hostname == mysqlPrimaryHost && instance.instanceKey.Port == mysqlPrimaryPort {
+		if skipMaster && instance.instanceKey.Hostname == mysqlPrimaryHost && instance.instanceKey.Port == mysqlPrimaryPort {
 			log.Infof("Skip %v to failover to a non-primary node", mysqlPrimaryHost)
 			return
 		}
@@ -397,15 +397,10 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	})
 	var candidate *grInstance
 	candidate, err = shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, func(c context.Context, instance *grInstance) bool {
-		for _, unreachable := range shard.shardStatusCollector.status.Unreachables {
-			if unreachable == instance.alias {
-				return false
-			}
-		}
-		return true
+		return !shard.shardStatusCollector.isUnreachable(instance)
 	})
 	if err != nil {
-		log.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)
+		log.Errorf("Failed to find failover candidate by GTID after fanout: %v", err)
 		return nil, err
 	}
 	if candidate == nil {
@@ -458,9 +453,9 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
+	err := shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
 	if err != nil {
-		return fmt.Errorf("failed to change type to primary on %v: %v", candidate.alias, err)
+		return fmt.Errorf("failed to change type to master on %v: %v", candidate.alias, err)
 	}
 	log.Infof("Successfully make %v the primary tablet", candidate.alias)
 	return nil
@@ -655,7 +650,7 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
+	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_MASTER)
 	if err != nil {
 		log.Errorf("Failed to failover Vitess %v", candidate.alias)
 		return err
