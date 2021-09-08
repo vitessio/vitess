@@ -34,6 +34,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # unqualified '*' expression for simple route
 "select * from user"
@@ -52,6 +53,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # select with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user"
@@ -70,6 +72,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # select aggregation with timeout directive sets QueryTimeout in the route
 "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user"
@@ -141,6 +144,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # select with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS */ * from user"
@@ -160,6 +164,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # select aggregation with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
@@ -283,6 +288,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # qualified '*' expression for simple route
 "select user.* from user"
@@ -301,6 +307,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # fully qualified '*' expression for simple route
 "select user.user.* from user.user"
@@ -319,6 +326,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # select * from authoritative table
 "select * from authoritative"
@@ -957,6 +965,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # sharded limit offset
 "select user_id from music order by user_id limit 10, 20"

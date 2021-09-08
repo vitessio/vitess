@@ -686,6 +686,10 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 func containEscapableChars(s string, at AtCount) bool {
 	isDbSystemVariable := at != NoAt
 
+	// stars (i.e "*") are not escapable
+	if len(s) == 1 && isStar(uint16(s[0])) {
+		return false
+	}
 	for i := range s {
 		c := uint16(s[i])
 		letter := isLetter(c)

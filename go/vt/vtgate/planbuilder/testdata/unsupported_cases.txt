@@ -404,6 +404,7 @@ Gen4 plan same as above
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "INTO is not supported on sharded keyspace"
+Gen4 plan same as above
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
@@ -436,6 +437,7 @@ Gen4 plan same as above
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+Gen4 plan same as above
 
 # table_schema OR predicate
 # It is unsupported because we do not route queries to multiple keyspaces right now
