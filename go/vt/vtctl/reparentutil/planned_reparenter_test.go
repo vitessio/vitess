@@ -721,6 +721,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						"position1": nil,
 					},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
 			},
 			ev:       &events.Reparent{},
 			keyspace: "testkeyspace",
@@ -1096,6 +1099,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error:  nil,
 					},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -1291,6 +1297,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: assert.AnError,
 					},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
@@ -1358,6 +1367,9 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					"zone1-0000000200": {
 						Error: nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil,
@@ -1665,6 +1677,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 						Result: "reparent journal position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000100": nil,
 				},
 			},
 			unlockTopo: false,
@@ -2000,6 +2015,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 						Error:  assert.AnError,
 					},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000100": nil,
+				},
 			},
 			unlockTopo: false,
 			keyspace:   "testkeyspace",
@@ -2076,6 +2094,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 						Result: "reparent journal position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000100": nil,
 				},
 			},
 			timeout:    time.Millisecond * 50,
@@ -2217,6 +2238,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Result: "reparent journal position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000100": nil, // zone1-100 gets reparented under zone1-200
@@ -2376,6 +2400,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Result: "reparent journal position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make oldPrimary a replica of newPrimary
