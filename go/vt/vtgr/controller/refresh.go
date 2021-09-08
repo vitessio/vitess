@@ -42,10 +42,10 @@ var (
 // grInstance represents an instance that's running MySQL GR
 // it wraps a InstanceKey plus some tablet related information
 type grInstance struct {
-	instanceKey     *inst.InstanceKey
-	tablet          *topodatapb.Tablet
-	masterTimeStamp time.Time
-	alias           string
+	instanceKey      *inst.InstanceKey
+	tablet           *topodatapb.Tablet
+	primaryTimeStamp time.Time
+	alias            string
 }
 
 // GRTopo is VTGR wrapper for topo server
@@ -185,7 +185,7 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 	var newReplicas []*grInstance
 	for alias, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		// Only monitor master, replica and ronly tablet types
+		// Only monitor primary, replica and ronly tablet types
 		switch tablet.Type {
 		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			// mysql hostname and port might be empty here if tablet is not running
@@ -195,10 +195,10 @@ func parseTabletInfos(tablets map[string]*topo.TabletInfo) []*grInstance {
 				Port:     int(tablet.MysqlPort),
 			}
 			grInstance := grInstance{
-				instanceKey:     &instanceKey,
-				tablet:          tablet,
-				masterTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
-				alias:           alias,
+				instanceKey:      &instanceKey,
+				tablet:           tablet,
+				primaryTimeStamp: logutil.ProtoToTime(tablet.PrimaryTermStartTime),
+				alias:            alias,
 			}
 			newReplicas = append(newReplicas, &grInstance)
 		}
