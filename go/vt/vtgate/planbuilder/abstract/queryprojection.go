@@ -68,24 +68,34 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 
 	for _, selExp := range sel.SelectExprs {
-		exp, ok := selExp.(*sqlparser.AliasedExpr)
-		if !ok {
+		switch selExp := selExp.(type) {
+		case *sqlparser.AliasedExpr:
+			err := checkForInvalidAggregations(selExp)
+			if err != nil {
+				return nil, err
+			}
+			col := SelectExpr{
+				Col: selExp,
+			}
+			if sqlparser.ContainsAggregation(selExp.Expr) {
+				col.Aggr = true
+				qp.HasAggr = true
+			}
+
+			qp.SelectExprs = append(qp.SelectExprs, col)
+		case *sqlparser.StarExpr:
+			col := SelectExpr{
+				Col: &sqlparser.AliasedExpr{
+					Expr: &sqlparser.ColName{
+						Name:      sqlparser.NewColIdent("*"),
+						Qualifier: selExp.TableName,
+					},
+				},
+			}
+			qp.SelectExprs = append(qp.SelectExprs, col)
+		default:
 			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
 		}
-
-		err := checkForInvalidAggregations(exp)
-		if err != nil {
-			return nil, err
-		}
-		col := SelectExpr{
-			Col: exp,
-		}
-		if sqlparser.ContainsAggregation(exp.Expr) {
-			col.Aggr = true
-			qp.HasAggr = true
-		}
-
-		qp.SelectExprs = append(qp.SelectExprs, col)
 	}
 
 	for _, group := range sel.GroupBy {
