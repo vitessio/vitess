@@ -20,8 +20,6 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/event"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -228,26 +225,4 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newP
 
 // PostERSCompletionHook implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
-}
-
-func (vtctlReparent *VtctlReparentFunctions) promoteNewPrimary(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, winningPrimaryTabletAliasStr string, statusMap map[string]*replicationdatapb.StopReplicationStatus, tabletMap map[string]*topo.TabletInfo, keyspace, shard string) error {
-	logger.Infof("promoting tablet %v to master", winningPrimaryTabletAliasStr)
-	event.DispatchUpdate(ev, "promoting replica")
-
-	newPrimaryTabletInfo, ok := tabletMap[winningPrimaryTabletAliasStr]
-	if !ok {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "attempted to promote master-elect %v that was not in the tablet map; this an impossible situation", winningPrimaryTabletAliasStr)
-	}
-
-	_, err := tmc.PromoteReplica(ctx, newPrimaryTabletInfo.Tablet)
-	if err != nil {
-		return vterrors.Wrapf(err, "master-elect tablet %v failed to be upgraded to master: %v", winningPrimaryTabletAliasStr, err)
-	}
-
-	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
-		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
-	}
-
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimaryTabletInfo.Tablet, getLockAction(vtctlReparent.newPrimaryAlias), tabletMap, statusMap, vtctlReparent, false)
-	return err
 }
