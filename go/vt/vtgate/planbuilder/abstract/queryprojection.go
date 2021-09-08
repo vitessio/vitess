@@ -42,6 +42,7 @@ type (
 		GroupByExprs       []GroupBy
 		OrderExprs         []OrderBy
 		CanPushDownSorting bool
+		HasStar            bool
 	}
 
 	// OrderBy contains the expression to used in order by and also if ordering is needed at VTGate level then what the weight_string function expression to be sent down for evaluation.
@@ -96,13 +97,9 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		case *sqlparser.StarExpr:
+			qp.HasStar = true
 			col := SelectExpr{
-				Col: &sqlparser.AliasedExpr{
-					Expr: &sqlparser.ColName{
-						Name:      sqlparser.NewColIdent("*"),
-						Qualifier: selExp.TableName,
-					},
-				},
+				Col: selExp,
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
