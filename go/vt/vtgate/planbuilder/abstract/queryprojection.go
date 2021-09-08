@@ -61,7 +61,7 @@ type (
 	}
 )
 
-// CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
+// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
@@ -99,20 +99,9 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	canPushDownSorting := true
-	for _, order := range sel.OrderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
-		if err != nil {
-			return nil, err
-		}
-		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-			Inner: &sqlparser.Order{
-				Expr:      expr,
-				Direction: order.Direction,
-			},
-			WeightStrExpr: weightStrExpr,
-		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	err := qp.addOrderBy(sel.OrderBy, semTable)
+	if err != nil {
+		return nil, err
 	}
 
 	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
@@ -130,9 +119,52 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	if qp.Distinct && !qp.HasAggr {
 		qp.GroupByExprs = nil
 	}
-	qp.CanPushDownSorting = canPushDownSorting
 
 	return qp, nil
+}
+
+// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*QueryProjection, error) {
+	qp := &QueryProjection{}
+
+	sel := sqlparser.GetFirstSelect(union)
+	for _, selExp := range sel.SelectExprs {
+		exp, ok := selExp.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
+		}
+		col := SelectExpr{
+			Col: exp,
+		}
+		qp.SelectExprs = append(qp.SelectExprs, col)
+	}
+
+	err := qp.addOrderBy(union.OrderBy, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return qp, nil
+}
+
+func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
+	canPushDownSorting := true
+	for _, order := range orderBy {
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
+		if err != nil {
+			return err
+		}
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      expr,
+				Direction: order.Direction,
+			},
+			WeightStrExpr: weightStrExpr,
+		})
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	}
+	qp.CanPushDownSorting = canPushDownSorting
+	return nil
 }
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
