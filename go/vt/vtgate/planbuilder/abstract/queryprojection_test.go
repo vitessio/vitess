@@ -36,8 +36,7 @@ func TestQP(t *testing.T) {
 		expOrder []OrderBy
 	}{
 		{
-			sql:    "select * from user",
-			expErr: "gen4 does not yet support: *sqlparser.StarExpr in select list",
+			sql: "select * from user",
 		},
 		{
 			sql:    "select next value from user_seq",
