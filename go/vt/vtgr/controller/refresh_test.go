@@ -49,7 +49,7 @@ func TestRefreshTabletsInShard(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
 	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	assert.Equal(t, "ks", shard.shardStatusCollector.status.Keyspace)
 	assert.Equal(t, "0", shard.shardStatusCollector.status.Shard)
 	shard.refreshTabletsInShardLocked(context.Background())
@@ -61,7 +61,7 @@ func TestRefreshTabletsInShard(t *testing.T) {
 	})
 	assert.Equal(t, testHost, instances[0].tablet.Hostname)
 	assert.Equal(t, int32(testPort0), instances[0].tablet.MysqlPort)
-	assert.Equal(t, topodatapb.TabletType_PRIMARY, instances[0].tablet.Type)
+	assert.Equal(t, topodatapb.TabletType_MASTER, instances[0].tablet.Type)
 	// host 3 is missing mysql host but we still put it in the instances list here
 	assert.Equal(t, testHost, instances[1].instanceKey.Hostname)
 	assert.Equal(t, int32(0), instances[1].tablet.MysqlPort)
@@ -81,7 +81,7 @@ func TestRefreshWithCells(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
 	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", []string{"cell1", "cell3"}, nil, ts, nil, cfg, testPort0)
+	shard := NewGRShard("ks", "0", []string{"cell1", "cell3"}, nil, ts, nil, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(context.Background())
 	instances := shard.instances
 	// only have 2 instances here because we are not watching cell2
@@ -106,7 +106,7 @@ func TestRefreshWithEmptyCells(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
 	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(context.Background())
 	instances := shard.instances
 	// nil cell will return everything
@@ -126,7 +126,7 @@ func TestLockRelease(t *testing.T) {
 	ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
 	ts.CreateShard(ctx, "ks", "0")
 	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 0, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0)
+	shard := NewGRShard("ks", "0", nil, nil, ts, nil, cfg, testPort0, true)
 	ctx, err := shard.LockShard(ctx, "")
 	assert.NoError(t, err)
 	// make sure we get the lock
@@ -139,11 +139,11 @@ func TestLockRelease(t *testing.T) {
 	assert.EqualError(t, err, "lost topology lock; aborting: shard ks/0 is not locked (no lockInfo in map)")
 }
 
-func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
-	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, primaryTermTime)
+func buildTabletInfo(id uint32, host string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
+	return buildTabletInfoWithCell(id, host, "test_cell", mysqlPort, ttype, masterTermTime)
 }
 
-func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, primaryTermTime time.Time) *topo.TabletInfo {
+func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype topodatapb.TabletType, masterTermTime time.Time) *topo.TabletInfo {
 	alias := &topodatapb.TabletAlias{Cell: cell, Uid: id}
 	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{
 		Alias:                alias,
@@ -153,7 +153,7 @@ func buildTabletInfoWithCell(id uint32, host, cell string, mysqlPort int, ttype 
 		Keyspace:             "ks",
 		Shard:                "0",
 		Type:                 ttype,
-		PrimaryTermStartTime: logutil.TimeToProto(primaryTermTime),
+		PrimaryTermStartTime: logutil.TimeToProto(masterTermTime),
 		Tags:                 map[string]string{"hostname": fmt.Sprintf("host_%d", id)},
 	}}
 }

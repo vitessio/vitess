@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -87,7 +88,7 @@ func TestShardIsHealthy(t *testing.T) {
 		AnyTimes()
 	tmc.EXPECT().Ping(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	cfg := &config.VTGRConfig{GroupSize: 3, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-	shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0)
+	shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 	shard.refreshTabletsInShardLocked(ctx)
 	diagnose, _ := shard.Diagnose(ctx)
 	assert.Equal(t, DiagnoseTypeHealthy, string(diagnose))
@@ -198,7 +199,7 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 
 			ctx := context.Background()
 			cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
-			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0)
+			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, cfg, testPort0, true)
 			shard.refreshTabletsInShardLocked(ctx)
 			diagnose, err := shard.Diagnose(ctx)
 			assert.Equal(t, expected, diagnose)
@@ -563,7 +564,184 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 			tmc.EXPECT().Ping(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
 			ctx := context.Background()
-			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, conf, testPort0)
+			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, conf, testPort0, true)
+			shard.refreshTabletsInShardLocked(ctx)
+			diagnose, err := shard.Diagnose(ctx)
+			assert.Equal(t, expected, diagnose)
+			if tt.errMessage == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.True(t, strings.Contains(err.Error(), tt.errMessage), err.Error())
+			}
+		})
+	}
+}
+
+func TestDiagnoseWithInactive(t *testing.T) {
+	cfg := &config.VTGRConfig{GroupSize: diagnoseGroupSize, MinNumReplica: 2, BackoffErrorWaitTimeSeconds: 1, BootstrapWaitTimeSeconds: 1}
+	type data struct {
+		alias      string
+		groupName  string
+		readOnly   bool
+		pingable   bool
+		groupInput []db.TestGroupState
+		ttype      topodatapb.TabletType
+	}
+	var sqltests = []struct {
+		name          string
+		expected      DiagnoseType
+		errMessage    string
+		config        *config.VTGRConfig
+		inputs        []data
+		removeTablets []string // to simulate missing tablet in topology
+	}{
+		// although mysql and vitess has different primary, but since this is an active shard, VTGR won't fix that
+		{name: "mysql and tablet has different primary", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
+			{alias0, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+		}},
+		{name: "different primary with unconnected node", expected: DiagnoseTypeUnconnectedReplica, errMessage: "", inputs: []data{
+			{alias0, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "OFFLINE", MemberRole: ""},
+			}, topodatapb.TabletType_REPLICA},
+		}},
+		{name: "primary tablet is not pingable", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
+			{alias0, "group", true, false, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+		}},
+		// This is a read only shard, but since it's an inactive shard we will diagnose it as healthy
+		{name: "read only healthy shard", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
+			{alias0, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+		}},
+		{name: "writable shard", expected: DiagnoseTypeInsufficientGroupSize, errMessage: "", inputs: []data{
+			{alias0, "group", false, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_PRIMARY},
+			{alias1, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+			{alias2, "group", true, true, []db.TestGroupState{
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort0), MemberState: "ONLINE", MemberRole: "PRIMARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort1), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+				{MemberHost: testHost, MemberPort: strconv.Itoa(testPort2), MemberState: "ONLINE", MemberRole: "SECONDARY"},
+			}, topodatapb.TabletType_REPLICA},
+		}},
+	}
+	for _, tt := range sqltests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ctx := context.Background()
+			ts := memorytopo.NewServer("test_cell")
+			defer ts.Close()
+			ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{})
+			ts.CreateShard(ctx, "ks", "0")
+			tmc := NewMockGRTmcClient(ctrl)
+			dbAgent := db.NewMockAgent(ctrl)
+			expected := tt.expected
+			inputMap := make(map[string]testGroupInput)
+			pingable := make(map[string]bool)
+			if tt.config == nil {
+				tt.config = cfg
+			}
+			conf := tt.config
+			for i, input := range tt.inputs {
+				tablet := buildTabletInfo(uint32(i), testHost, testPort0+i, input.ttype, time.Now())
+				testutil.AddTablet(ctx, t, ts, tablet.Tablet, nil)
+				inputMap[input.alias] = testGroupInput{
+					input.groupName,
+					input.readOnly,
+					input.groupInput,
+					nil,
+				}
+				pingable[input.alias] = input.pingable
+				dbAgent.
+					EXPECT().
+					FetchGroupView(gomock.Any(), gomock.Any()).
+					DoAndReturn(func(alias string, target *inst.InstanceKey) (*db.GroupView, error) {
+						if target.Hostname == "" || target.Port == 0 {
+							return nil, errors.New("invalid mysql instance key")
+						}
+						s := inputMap[alias]
+						view := db.BuildGroupView(alias, s.groupName, target.Hostname, target.Port, s.readOnly, s.groupState)
+						return view, nil
+					}).
+					AnyTimes()
+				tmc.
+					EXPECT().
+					Ping(gomock.Any(), &topodatapb.Tablet{
+						Alias:                tablet.Alias,
+						Hostname:             tablet.Hostname,
+						Keyspace:             tablet.Keyspace,
+						Shard:                tablet.Shard,
+						Type:                 tablet.Type,
+						Tags:                 tablet.Tags,
+						MysqlHostname:        tablet.MysqlHostname,
+						MysqlPort:            tablet.MysqlPort,
+						PrimaryTermStartTime: tablet.PrimaryTermStartTime,
+					}).
+					DoAndReturn(func(_ context.Context, t *topodatapb.Tablet) error {
+						if !pingable[tablet.Alias.String()] {
+							return errors.New("unreachable")
+						}
+						return nil
+					}).
+					AnyTimes()
+			}
+			shard := NewGRShard("ks", "0", nil, tmc, ts, dbAgent, conf, testPort0, false)
 			shard.refreshTabletsInShardLocked(ctx)
 			diagnose, err := shard.Diagnose(ctx)
 			assert.Equal(t, expected, diagnose)
