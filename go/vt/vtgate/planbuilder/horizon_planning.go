@@ -74,12 +74,15 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 			}
 		}
 		for _, e := range hp.qp.SelectExprs {
-			aliasExpr, isAlias := e.Col.(*sqlparser.AliasedExpr)
-			if !isAlias {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e.Col)
-			}
-			if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
-				return nil, err
+			switch e := e.Col.(type) {
+			case *sqlparser.StarExpr:
+
+			case *sqlparser.AliasedExpr:
+				if _, _, err := pushProjection(e, plan, ctx.semTable, true, false); err != nil {
+					return nil, err
+				}
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e)
 			}
 		}
 	}
@@ -500,7 +503,7 @@ func (hp *horizonPlanning) planOrderByUsingGroupBy(ctx planningContext, plan log
 func (hp *horizonPlanning) planOrderBy(ctx planningContext, orderExprs []abstract.OrderBy, plan logicalPlan) (logicalPlan, error) {
 	switch plan := plan.(type) {
 	case *route:
-		newPlan, truncate, err := planOrderByForRoute(orderExprs, plan, ctx.semTable)
+		newPlan, truncate, err := planOrderByForRoute(orderExprs, plan, ctx.semTable, hp.qp.HasStar)
 		if err != nil {
 			return nil, err
 		}
@@ -560,9 +563,13 @@ func (hp *horizonPlanning) planOrderBy(ctx planningContext, orderExprs []abstrac
 	}
 }
 
-func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable) (logicalPlan, bool, error) {
+func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
+		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
+		if err != nil {
+			return nil, false, err
+		}
 		plan.Select.AddOrder(order.Inner)
 		if sqlparser.IsNull(order.Inner.Expr) {
 			continue
@@ -579,6 +586,27 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 		})
 	}
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
+}
+
+// checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
+// It checks if the expression exists in the plan's select list when the query is a scatter.
+func checkOrderExprCanBePlannedInScatter(plan *route, order abstract.OrderBy, hasStar bool) error {
+	if !hasStar {
+		return nil
+	}
+	sel := sqlparser.GetFirstSelect(plan.Select)
+	found := false
+	for _, expr := range sel.SelectExprs {
+		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
+		if isAliasedExpr && sqlparser.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: order by must reference a column in the select list: "+sqlparser.String(order.Inner))
+	}
+	return nil
 }
 
 // wrapAndPushExpr pushes the expression and weighted_string function to the plan using semantics.SemTable
