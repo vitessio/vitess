@@ -149,24 +149,28 @@ type (
 	}
 )
 
+// GetTables implements the TableInfo interface
 func (v *VindexTable) GetTables() []TableInfo {
 	return v.Table.GetTables()
 }
 
+// GetTables implements the TableInfo interface
 func (v *vTableInfo) GetTables() []TableInfo {
 	return v.tables
 }
 
+// GetTables implements the TableInfo interface
 func (a *AliasedTable) GetTables() []TableInfo {
 	return []TableInfo{a}
 }
 
+// GetTables implements the TableInfo interface
 func (r *RealTable) GetTables() []TableInfo {
 	return []TableInfo{r}
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *VindexTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
 	panic("implement me")
 }
 
@@ -197,7 +201,7 @@ func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
 }
 
 // RecursiveDepsFor implements the TableInfo interface
-func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
+func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, *querypb.Type, error) {
 	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
@@ -578,8 +582,8 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
 		table := st.Dependencies(expr)
-		key := columnName{Table: table, ColumnName: expr.Name.String()}
-		result = append(result, st.ColumnEqualities[key]...)
+		k := columnName{Table: table, ColumnName: expr.Name.String()}
+		result = append(result, st.ColumnEqualities[k]...)
 	}
 	return result
 }
