@@ -933,6 +933,42 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectReference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1 union all (select null from dual where 1 != 1) union all (select 1.0 from dual where 1 != 1) union all (select '1' from dual where 1 != 1) union (select 2 from dual where 1 != 1)",
+            "Query": "(select 1 from dual) union all (select null from dual) union all (select 1.0 from dual) union all (select '1' from dual) union (select 2 from dual)",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 2.0 from `user` where 1 != 1",
+            "Query": "select distinct 2.0 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # union distinct between a scatter query and a join (other side)
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
