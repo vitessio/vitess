@@ -55,7 +55,7 @@ func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 				r.err = err
 				return false
 			}
-			if !starExpanded {
+			if !starExpanded || colNames == nil {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}

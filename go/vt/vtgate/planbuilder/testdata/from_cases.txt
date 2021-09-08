@@ -3978,3 +3978,22 @@ Gen4 plan same as above
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+
+# select star from derived table on expandable and unsharded table
+"select u.* from (select * from unsharded) u"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.* from (select * from unsharded) u",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select u.* from (select * from unsharded where 1 != 1) as u where 1 != 1",
+    "Query": "select u.* from (select * from unsharded) as u",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
