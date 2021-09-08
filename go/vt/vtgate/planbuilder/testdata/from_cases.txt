@@ -162,6 +162,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -180,6 +181,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -198,6 +200,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's an alias.
 "select * from route1 as a"
@@ -216,6 +219,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules with primary targeting
 "select * from primary_redirect"
@@ -234,6 +238,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules bad table
 "select * from bad_table"

@@ -644,6 +644,23 @@ Gen4 plan same as above
     "Table": "information_schema.`tables`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT table_name FROM (SELECT * FROM information_schema.tables WHERE table_schema = 'table_schema') _subquery WHERE _subquery.table_type = 'table_type' AND _subquery.table_name = 'table_name'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
+    "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname and _subquery.table_type = 'table_type' and _subquery.table_name = :_subquery_table_name) as _subquery",
+    "SysTableTableName": "[_subquery_table_name:VARBINARY(\"table_name\")]",
+    "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
+    "Table": "information_schema.`tables`"
+  }
+}
 
 # two predicates specifying the database for the same table work if the database is the same
 "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.table_schema = 'a'"
@@ -704,6 +721,44 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# subquery of information_schema with itself and star expression in outer select
+"select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
+"unsupported: '*' expression in cross-shard query"
+{
+  "QueryType": "SELECT",
+  "Original": "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "information_schema.a_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a.* from information_schema.a as a where 1 != 1",
+        "Query": "select a.* from information_schema.a as a where a.id in (select * from information_schema.b)",
+        "Table": "information_schema.a"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
@@ -943,3 +998,22 @@ Gen4 plan same as above
     ]
   }
 }
+
+# join of information_schema queries with select stars exprs
+"select a.*, b.* from information_schema.a a, information_schema.b b"
+{
+  "QueryType": "SELECT",
+  "Original": "select a.*, b.* from information_schema.a a, information_schema.b b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select a.*, b.* from information_schema.a as a, information_schema.b as b where 1 != 1",
+    "Query": "select a.*, b.* from information_schema.a as a, information_schema.b as b",
+    "Table": "information_schema.a, information_schema.b"
+  }
+}
+Gen4 plan same as above
