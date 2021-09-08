@@ -755,7 +755,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'val' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'val as id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"

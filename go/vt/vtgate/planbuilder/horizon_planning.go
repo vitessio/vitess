@@ -74,7 +74,11 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 			}
 		}
 		for _, e := range hp.qp.SelectExprs {
-			if _, _, err := pushProjection(e.Col, plan, ctx.semTable, true, false); err != nil {
+			aliasExpr, isAlias := e.Col.(*sqlparser.AliasedExpr)
+			if !isAlias {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e.Col)
+			}
+			if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
 				return nil, err
 			}
 		}
@@ -295,16 +299,20 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 	}
 
 	for _, e := range hp.qp.SelectExprs {
+		aliasExpr, isAlias := e.Col.(*sqlparser.AliasedExpr)
+		if !isAlias {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e.Col)
+		}
 		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
 		if !e.Aggr || oa == nil {
-			_, _, err := pushProjection(e.Col, plan, ctx.semTable, true, false)
+			_, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false)
 			if err != nil {
 				return nil, err
 			}
 			continue
 		}
 
-		fExpr, isFunc := e.Col.Expr.(*sqlparser.FuncExpr)
+		fExpr, isFunc := aliasExpr.Expr.(*sqlparser.FuncExpr)
 		if !isFunc {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
@@ -371,7 +379,10 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 	if _, planIsRoute := plan.(*route); !planIsRoute {
 		// if we had to build up additional operators around the route, we have to fail this query
 		for _, expr := range hp.qp.SelectExprs {
-			colExpr := expr.Col.Expr
+			colExpr, err := expr.GetExpr()
+			if err != nil {
+				return nil, err
+			}
 			if !sqlparser.IsAggregation(colExpr) && sqlparser.ContainsAggregation(colExpr) {
 				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 			}
@@ -390,15 +401,18 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 	opcode engine.AggregateOpcode,
 	oa *orderedAggregate,
 ) (*sqlparser.AliasedExpr, string, engine.AggregateOpcode) {
-	pushExpr := expr.Col
+	aliasExpr, isAlias := expr.Col.(*sqlparser.AliasedExpr)
+	if !isAlias {
+		return nil, "", 0
+	}
 	var alias string
-	if expr.Col.As.IsEmpty() {
-		alias = sqlparser.String(expr.Col.Expr)
+	if aliasExpr.As.IsEmpty() {
+		alias = sqlparser.String(aliasExpr.Expr)
 	} else {
-		alias = expr.Col.As.String()
+		alias = aliasExpr.As.String()
 	}
 	if handleDistinct {
-		pushExpr = innerAliased
+		aliasExpr = innerAliased
 
 		switch opcode {
 		case engine.AggregateCount:
@@ -416,7 +430,7 @@ func (hp *horizonPlanning) createPushExprAndAlias(
 		}
 		hp.qp.GroupByExprs = append(hp.qp.GroupByExprs, by)
 	}
-	return pushExpr, alias, opcode
+	return aliasExpr, alias, opcode
 }
 
 func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, groupByExprs []abstract.GroupBy) bool {
@@ -737,9 +751,13 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) (logicalPl
 		eaggr: eaggr,
 	}
 	for _, sExpr := range hp.qp.SelectExprs {
+		expr, err := sExpr.GetExpr()
+		if err != nil {
+			return nil, err
+		}
 		found := false
 		for _, grpParam := range currPlan.eaggr.GroupByKeys {
-			if sqlparser.EqualsExpr(sExpr.Col.Expr, grpParam.Expr) {
+			if sqlparser.EqualsExpr(expr, grpParam.Expr) {
 				found = true
 				eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
 				break
@@ -749,7 +767,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) (logicalPl
 			continue
 		}
 		for _, aggrParam := range currPlan.eaggr.Aggregates {
-			if sqlparser.EqualsExpr(sExpr.Col.Expr, aggrParam.Expr) {
+			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
 				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
 				break
@@ -766,11 +784,15 @@ func (hp *horizonPlanning) addDistinct(ctx planningContext, plan logicalPlan) (l
 	eaggr := &engine.OrderedAggregate{}
 	var orderExprs []abstract.OrderBy
 	for index, sExpr := range hp.qp.SelectExprs {
-		if isAmbiguousOrderBy(index, sExpr.Col.As, hp.qp.SelectExprs) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(sExpr.Col.As))
+		aliasExpr, isAlias := sExpr.Col.(*sqlparser.AliasedExpr)
+		if !isAlias {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", sExpr.Col)
+		}
+		if isAmbiguousOrderBy(index, aliasExpr.As, hp.qp.SelectExprs) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As))
 		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
-		_, wOffset, added, err := wrapAndPushExpr(sExpr.Col.Expr, sExpr.Col.Expr, plan, ctx.semTable)
+		_, wOffset, added, err := wrapAndPushExpr(aliasExpr.Expr, aliasExpr.Expr, plan, ctx.semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -779,15 +801,15 @@ func (hp *horizonPlanning) addDistinct(ctx planningContext, plan logicalPlan) (l
 		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
 
 		var inner sqlparser.Expr
-		if !sExpr.Col.As.IsEmpty() {
-			inner = sqlparser.NewColName(sExpr.Col.As.String())
-			ctx.semTable.CopyDependencies(sExpr.Col.Expr, inner)
+		if !aliasExpr.As.IsEmpty() {
+			inner = sqlparser.NewColName(aliasExpr.As.String())
+			ctx.semTable.CopyDependencies(aliasExpr.Expr, inner)
 		} else {
-			inner = sExpr.Col.Expr
+			inner = aliasExpr.Expr
 		}
 		orderExprs = append(orderExprs, abstract.OrderBy{
 			Inner:         &sqlparser.Order{Expr: inner},
-			WeightStrExpr: sExpr.Col.Expr},
+			WeightStrExpr: aliasExpr.Expr},
 		)
 	}
 	innerPlan, err := hp.planOrderBy(ctx, orderExprs, plan)
@@ -813,9 +835,14 @@ func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.Sele
 		if i == index {
 			continue
 		}
-		alias := expr.Col.As
+		aliasExpr, isAlias := expr.Col.(*sqlparser.AliasedExpr)
+		if !isAlias {
+			// TODO: handle star expression error
+			return true
+		}
+		alias := aliasExpr.As
 		if alias.IsEmpty() {
-			if col, ok := expr.Col.Expr.(*sqlparser.ColName); ok {
+			if col, ok := aliasExpr.Expr.(*sqlparser.ColName); ok {
 				alias = col.Name
 			}
 		}
@@ -828,7 +855,12 @@ func isAmbiguousOrderBy(index int, col sqlparser.ColIdent, exprs []abstract.Sele
 
 func selectHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, sel []abstract.SelectExpr) bool {
 	for _, expr := range sel {
-		if exprHasUniqueVindex(vschema, semTable, expr.Col.Expr) {
+		exp, err := expr.GetExpr()
+		if err != nil {
+			// TODO: handle star expression error
+			return false
+		}
+		if exprHasUniqueVindex(vschema, semTable, exp) {
 			return true
 		}
 	}
