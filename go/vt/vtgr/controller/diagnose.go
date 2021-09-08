@@ -376,16 +376,16 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 // findShardPrimaryTablet iterates through the replicas stored in grShard and returns
 // the one that's marked as primary
 func (shard *GRShard) findShardPrimaryTablet() *grInstance {
-	var latestMasterTimestamp time.Time
+	var latestPrimaryTimestamp time.Time
 	var primaryInstance *grInstance
 	foundPrimary := false
 	for _, instance := range shard.instances {
-		if instance.tablet.Type == topodatapb.TabletType_MASTER {
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
 			foundPrimary = true
-			// It is possible that there are more than one master in topo server
+			// It is possible that there are more than one primary in topo server
 			// we should compare timestamp to pick the latest one
-			if latestMasterTimestamp.Before(instance.masterTimeStamp) {
-				latestMasterTimestamp = instance.masterTimeStamp
+			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
+				latestPrimaryTimestamp = instance.primaryTimeStamp
 				primaryInstance = instance
 			}
 		}
@@ -420,9 +420,9 @@ func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 		shard.instances[i], shard.instances[j] = shard.instances[j], shard.instances[i]
 	})
 	for _, instance := range shard.instances {
-		// Skip master because VTGR always join group and then update tablet type
-		// which means if a tablet has type master then it should have a group already
-		if instance.tablet.Type == topodatapb.TabletType_MASTER {
+		// Skip primary because VTGR always join group and then update tablet type
+		// which means if a tablet has type primary then it should have a group already
+		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
 			continue
 		}
 		// Skip instance without hostname because they are not up and running
