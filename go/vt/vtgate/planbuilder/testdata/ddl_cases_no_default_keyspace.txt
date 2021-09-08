@@ -184,6 +184,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
   }
 }
+
 # create view with select authoritative.* with intermixing still expands
 "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
 {
@@ -466,7 +467,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
+    "Query": "create view view_a as (select * from music where user_id = 1) union (select * from `user` where id = 1)"
   }
 }
 

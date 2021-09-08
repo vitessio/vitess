@@ -1311,8 +1311,8 @@ Gen4 error: Duplicate column name 'id'
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
-    "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
+    "FieldQuery": "select * from music where 1 != 1 union (select * from `user` where 1 != 1)",
+    "Query": "(select * from music where user_id = 1) union (select * from `user` where id = 1)",
     "Table": "music",
     "Values": [
       1
@@ -1334,8 +1334,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
-    "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
+    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union (select * from `user` where 1 != 1)",
+    "Query": "(select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1) union (select * from `user` where id = 1)",
     "Table": "music",
     "Values": [
       1
@@ -1356,8 +1356,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
-    "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
+    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union (select col1, col2 from unsharded where 1 != 1)) as a where 1 != 1",
+    "Query": "select * from ((select col1, col2 from unsharded where id = 1) union (select col1, col2 from unsharded where id = 3)) as a",
     "Table": "unsharded"
   }
 }
@@ -1374,7 +1374,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select id, `name` from unsharded where 1 != 1",
-    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
+    "Query": "select id, `name` from unsharded where id in ((select id from unsharded where id = 1) union (select id from unsharded where id = 3))",
     "Table": "unsharded"
   }
 }
@@ -1407,8 +1407,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
-    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
+    "FieldQuery": "select id from unsharded where 1 != 1 union (select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1)",
+    "Query": "(select id from unsharded) union (select id from unsharded_auto) union (select id from unsharded_auto where id in (132))",
     "Table": "unsharded"
   }
 }
@@ -1424,8 +1424,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1)",
-    "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select `name` from unsharded)",
+    "FieldQuery": "(select id from unsharded where 1 != 1 union (select id from unsharded_auto where 1 != 1)) union (select id from unsharded_auto where 1 != 1 union (select `name` from unsharded where 1 != 1))",
+    "Query": "((select id from unsharded) union (select id from unsharded_auto)) union ((select id from unsharded_auto) union (select `name` from unsharded))",
     "Table": "unsharded"
   }
 }

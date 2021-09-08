@@ -77,7 +77,23 @@ func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparse
 	return nil
 }
 
+// TODO this is needed because our parser creates weird AST structs around parenthesis and SELECT
+// should be removed once the parser parses UNION and parenthesised SELECTs better
+func fixUnionWithSingleSelect(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.Union:
+		if len(node.UnionSelects) == 0 {
+			cursor.Replace(&sqlparser.ParenSelect{
+				Select: node.FirstStatement,
+			})
+		}
+	}
+	return true
+}
+
 func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
+	selStmt = sqlparser.Rewrite(selStmt, nil, fixUnionWithSingleSelect).(sqlparser.SelectStatement)
+
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
