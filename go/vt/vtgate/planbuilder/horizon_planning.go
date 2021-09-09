@@ -45,7 +45,10 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 	}
 
 	if isRoute && rb.isSingleShard() {
-		createSingleShardRoutePlan(hp.sel, rb)
+		err := createSingleShardRoutePlan(hp.sel, rb)
+		if err != nil {
+			return nil, err
+		}
 		return plan, nil
 	}
 
@@ -78,7 +81,10 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		}
 
 		if canShortcut {
-			createSingleShardRoutePlan(hp.sel, rb)
+			err := createSingleShardRoutePlan(hp.sel, rb)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			for _, e := range hp.qp.SelectExprs {
 				aliasExpr, err := e.GetAliasedExpr()
@@ -156,13 +162,16 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if !inner && badExpr {
 			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
 		}
-		sel := node.Select.(*sqlparser.Select)
 		if reuseCol {
-			if i := checkIfAlreadyExists(expr, sel, semTable); i != -1 {
+			if i := checkIfAlreadyExists(expr, node.Select, semTable); i != -1 {
 				return i, false, nil
 			}
 		}
 		expr = removeKeyspaceFromColName(expr)
+		sel, isSel := node.Select.(*sqlparser.Select)
+		if !isSel {
+			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
+		}
 
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
@@ -249,8 +258,14 @@ func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedEx
 	return expr
 }
 
-func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, sel *sqlparser.Select, semTable *semantics.SemTable) int {
+func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
 	exprDep := semTable.BaseTableDependencies(expr.Expr)
+	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
+	// input is a Select -> In this case we want to search in the select
+	// input is a Union -> In this case we want to search in the First Select of the Union
+	// input is a Parenthesised Select -> In this case we want to search in the select
+	// all these three cases are handled by the call to GetFirstSelect.
+	sel := sqlparser.GetFirstSelect(node)
 
 	for i, selectExpr := range sel.SelectExprs {
 		selectExpr, ok := selectExpr.(*sqlparser.AliasedExpr)
