@@ -1,4 +1,3 @@
-2021-05-18T13:15:55Z,endtoend,https://github.com/vitessio/vitess/actions/runs/853431209
 2021-05-18T13:15:55Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/853431177
 2021-05-18T13:15:55Z,local_example,https://github.com/vitessio/vitess/actions/runs/853431174
 2021-05-18T13:15:55Z,local_example,https://github.com/vitessio/vitess/actions/runs/853431200
@@ -9998,3 +9997,4 @@
 2021-09-09T05:20:51Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1216041049
 2021-09-09T05:20:51Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1216041097
 2021-09-09T05:20:51Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1216041118
+2021-09-09T06:08:00Z,Cluster Self Hosted (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1216140957
