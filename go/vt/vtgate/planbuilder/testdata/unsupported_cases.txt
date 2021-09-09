@@ -79,10 +79,12 @@ Gen4 plan same as above
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"

@@ -327,9 +327,16 @@ func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
 	ast.Comments = sel.Comments
 	ast.SelectExprs = append(ast.SelectExprs, sel.SelectExprs...)
 	for i, expr := range ast.SelectExprs {
-		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
-			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)
-		}
+		removeKeyspaceFromSelectExpr(expr, ast, i)
+	}
+}
+
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr, ast *sqlparser.Select, i int) {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedExpr:
+		ast.SelectExprs[i] = removeKeyspaceFromColName(expr)
+	case *sqlparser.StarExpr:
+		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
 	}
 }
 
