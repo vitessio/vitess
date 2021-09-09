@@ -25,29 +25,77 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx planningContext, tree queryTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
-		return transformRoutePlan(n, semTable, ctx.sqToReplace)
+		return transformRoutePlan(ctx, n)
 	case *joinTree:
-		return transformJoinPlan(ctx, n, semTable)
+		return transformJoinPlan(ctx, n)
 	case *derivedTree:
-		return transformDerivedPlan(ctx, n, semTable)
+		return transformDerivedPlan(ctx, n)
 	case *subqueryTree:
-		return transformSubqueryTree(ctx, n, semTable)
+		return transformSubqueryTree(ctx, n)
+	case *concatenateTree:
+		return transformConcatenatePlan(ctx, n)
+	case *distinctTree:
+		return transformDistinctPlan(ctx, n)
+	case *vindexTree:
+		return transformVindexTree(n)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
-func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *semantics.SemTable) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+func pushDistinct(plan logicalPlan) error {
+	switch n := plan.(type) {
+	case *route:
+		n.Select.MakeDistinct()
+	case *concatenateGen4:
+		for _, source := range n.sources {
+			err := pushDistinct(source)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func transformVindexTree(n *vindexTree) (logicalPlan, error) {
+	single, ok := n.vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+	}
+	plan := &vindexFunc{
+		order:         1,
+		tableID:       n.solved,
+		resultColumns: nil,
+		eVindexFunc: &engine.VindexFunc{
+			Opcode: n.opCode,
+			Vindex: single,
+			Value:  n.value,
+		},
+	}
+
+	for _, col := range n.columns {
+		_, err := plan.SupplyProjection(&sqlparser.AliasedExpr{
+			Expr: col,
+			As:   sqlparser.ColIdent{},
+		}, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +105,7 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *seman
 	}
 
 	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
-	outerPlan, err := transformToLogicalPlan(ctx, n.outer, semTable)
+	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +113,14 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree, semTable *seman
 	return plan, err
 }
 
-func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semantics.SemTable) (logicalPlan, error) {
+func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased
 	// expression containing our derived table's inner select and the derived
 	// table's alias.
 
-	plan, err := transformToLogicalPlan(ctx, n.inner, semTable)
+	plan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +148,81 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree, semTable *semanti
 	return plan, nil
 }
 
-func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace map[string]*sqlparser.Select) (*route, error) {
+func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalPlan, error) {
+	var sources []logicalPlan
+
+	for i, source := range n.sources {
+		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		if i == 0 {
+			sources = append(sources, plan)
+			continue
+		}
+		last := sources[len(sources)-1]
+		newPlan := mergeUnionLogicalPlans(ctx, last, plan)
+		if newPlan != nil {
+			sources[len(sources)-1] = newPlan
+			continue
+		}
+		sources = append(sources, plan)
+	}
+
+	if len(sources) == 1 {
+		return sources[0], nil
+	}
+
+	return &concatenateGen4{
+		sources: sources,
+	}, nil
+}
+
+func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logicalPlan) logicalPlan {
+	lroute, ok := left.(*route)
+	if !ok {
+		return nil
+	}
+	rroute, ok := right.(*route)
+	if !ok {
+		return nil
+	}
+
+	if canMergePlans(ctx, lroute, rroute) {
+		elem := &sqlparser.UnionSelect{
+			Distinct:  false,
+			Statement: rroute.Select,
+		}
+		switch n := lroute.Select.(type) {
+		case *sqlparser.Union:
+			n.UnionSelects = append(n.UnionSelects, elem)
+		default:
+			lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
+		}
+
+		return lroute
+	}
+	return nil
+}
+
+func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
+	plan, err := transformToLogicalPlan(ctx, source)
+	if err != nil {
+		return nil, err
+	}
+	if selStmt != nil {
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
+		if err := setMiscFunc(plan, selStmt); err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
+}
+
+func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -187,11 +309,16 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 		SelectExprs: expressions,
 		From:        tablesForSelect,
 		Where:       where,
-		Comments:    semTable.Comments,
+		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(sqToReplace, sel)
+	replaceSubQuery(ctx.sqToReplace, sel)
 
+	// TODO clean up when gen4 is the only planner
+	var condition sqlparser.Expr
+	if n.selected != nil && len(n.selected.valueExprs) > 0 {
+		condition = n.selected.valueExprs[0]
+	}
 	return &route{
 		eroute: &engine.Route{
 			Opcode:              n.routeOpCode,
@@ -202,17 +329,34 @@ func transformRoutePlan(n *routeTree, semTable *semantics.SemTable, sqToReplace 
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},
-		Select: sel,
-		tables: n.solved,
+		Select:    sel,
+		tables:    n.solved,
+		condition: condition,
 	}, nil
 }
 
-func transformJoinPlan(ctx planningContext, n *joinTree, semTable *semantics.SemTable) (logicalPlan, error) {
-	lhs, err := transformToLogicalPlan(ctx, n.lhs, semTable)
+func transformDistinctPlan(ctx planningContext, n *distinctTree) (logicalPlan, error) {
+	innerPlan, err := transformToLogicalPlan(ctx, n.source)
 	if err != nil {
 		return nil, err
 	}
-	rhs, err := transformToLogicalPlan(ctx, n.rhs, semTable)
+	err = pushDistinct(innerPlan)
+	if err != nil {
+		return nil, err
+	}
+	if rb, isRoute := innerPlan.(*route); isRoute && rb.isSingleShard() {
+		// if we have a single shard route, we don't need to do anything to make it distinct
+		return innerPlan, nil
+	}
+	return newDistinct(innerPlan), nil
+}
+
+func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
+	lhs, err := transformToLogicalPlan(ctx, n.lhs)
+	if err != nil {
+		return nil, err
+	}
+	rhs, err := transformToLogicalPlan(ctx, n.rhs)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +425,7 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 		tbls := innerTables.(*sqlparser.ParenTableExpr)
 
 		sel := &sqlparser.Select{
-			SelectExprs: t.query.SelectExprs,
+			SelectExprs: sqlparser.GetFirstSelect(t.query).SelectExprs,
 			From:        tbls.Exprs,
 			Where:       &sqlparser.Where{Expr: sqlparser.AndExpressions(t.predicates...)},
 		}
