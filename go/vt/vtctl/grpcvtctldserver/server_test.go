@@ -2652,6 +2652,15 @@ func TestEmergencyReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -4676,6 +4685,9 @@ func TestPlannedReparentShard(t *testing.T) {
 						Result: "promotion position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
