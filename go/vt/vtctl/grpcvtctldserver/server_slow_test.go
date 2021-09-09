@@ -42,7 +42,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 	tests := []struct {
 		name    string
 		ts      *topo.Server
-		tmc     *testutil.TabletManagerClient
+		tmc     tmclient.TabletManagerClient
 		tablets []*topodatapb.Tablet
 
 		req                 *vtctldatapb.EmergencyReparentShardRequest
@@ -113,6 +113,15 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
+				}{
+					"zone1-0000000200": {},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
 				}{
 					"zone1-0000000200": {},
 				},
@@ -229,6 +238,15 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {},
+				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -295,8 +313,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				ForceSetShardPrimary: true,
 				SkipShardCreation:    false,
 			}, tt.tablets...)
-
-			tt.tmc.TopoServer = tt.ts
 
 			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
@@ -416,6 +432,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error:  nil,
 					},
 				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
+				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
 					// reparent SetMaster calls
@@ -518,6 +537,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Result: "promotion position",
 						Error:  nil,
 					},
+				},
+				ChangeTabletTypeResult: map[string]error{
+					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
