@@ -13,7 +13,6 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v0.9.0 // indirect
 	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/aquarapid/vaultlib v0.5.1
-	github.com/armon/consul-api v0.0.0-20180202201655-eb2c6b5be1b6
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v1.34.2
 	github.com/buger/jsonparser v0.0.0-20200322175846-f7e751efca13
