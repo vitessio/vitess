@@ -351,6 +351,47 @@ func TestUnion(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
+func TestUnionColumns(t *testing.T) {
+	queries := []string{
+		"select 1,2 union select 1",
+		"(select 1,2 union select 3,4) union (select 5,6 union select 7)",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo(), NoRewrite)
+
+			require.Error(t, err)
+		})
+	}
+}
+
+func fakeSchemaInfo() *FakeSI {
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("id"),
+		Type: querypb.Type_INT64,
+	}}
+	cols2 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("uid"),
+		Type: querypb.Type_INT64,
+	}, {
+		Name: sqlparser.NewColIdent("name"),
+		Type: querypb.Type_VARCHAR,
+	}}
+
+	si := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t":  {Name: sqlparser.NewTableIdent("t")},
+			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
+			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
+		},
+	}
+	return si
+}
+
 func TestUnionWithOrderBy(t *testing.T) {
 	query := "select col1 from tabl1 union (select col2 from tabl2) order by 1"
 
@@ -778,25 +819,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 
-	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("id"),
-		Type: querypb.Type_INT64,
-	}}
-	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("uid"),
-		Type: querypb.Type_INT64,
-	}, {
-		Name: sqlparser.NewColIdent("name"),
-		Type: querypb.Type_VARCHAR,
-	}}
-
-	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, &FakeSI{
-		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewTableIdent("t")},
-			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
-			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
-		},
-	}, NoRewrite)
+	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, fakeSchemaInfo(), NoRewrite)
 	require.NoError(t, err)
 	return parse, semTable
 }

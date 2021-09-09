@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
 
@@ -35,7 +36,7 @@ Result mismatch:
 '[[2 1] [1 2]]'
 RowsReturned mismatch: 2, want 1
 Rewritten mismatch:
-'["select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b limit 10001"]' does not match
+'["(select eid, id from vitess_a where 1 != 1) union (select eid, id from vitess_b where 1 != 1)" "(select /* fail */ eid, id from vitess_a) union (select eid, id from vitess_b) limit 10001"]' does not match
 '["select eid id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1" "select /* fail */ eid, id from vitess_a union select eid, id from vitess_b"]'
 Plan mismatch: Select, want aa`
 
@@ -71,8 +72,8 @@ var TestQueryCases = []framework.Testable{
 			{"1", "2"},
 		},
 		Rewritten: []string{
-			"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1",
-			"select /* union */ eid, id from vitess_a union select eid, id from vitess_b limit 10001",
+			"(select eid, id from vitess_a where 1 != 1) union (select eid, id from vitess_b where 1 != 1)",
+			"(select /* union */ eid, id from vitess_a) union (select eid, id from vitess_b) limit 10001",
 		},
 		RowsReturned: 2,
 	},
@@ -84,8 +85,8 @@ var TestQueryCases = []framework.Testable{
 			{"1", "2"},
 		},
 		Rewritten: []string{
-			"select eid, id from vitess_a where 1 != 1 union select eid, id from vitess_b where 1 != 1 union select eid, id from vitess_d where 1 != 1",
-			"select /* double union */ eid, id from vitess_a union select eid, id from vitess_b union select eid, id from vitess_d limit 10001",
+			"(select eid, id from vitess_a where 1 != 1) union (select eid, id from vitess_b where 1 != 1) union (select eid, id from vitess_d where 1 != 1)",
+			"(select /* double union */ eid, id from vitess_a) union (select eid, id from vitess_b) union (select eid, id from vitess_d) limit 10001",
 		},
 		RowsReturned: 2,
 	},
@@ -1785,10 +1786,21 @@ func TestQueries(t *testing.T) {
 	client := framework.NewClient()
 
 	for _, tcase := range TestQueryCases {
-		if err := tcase.Test("", client); err != nil {
-			t.Error(err)
-		}
+		t.Run(name(tcase), func(t *testing.T) {
+			err := tcase.Test("", client)
+			require.NoError(t, err)
+		})
 	}
+}
+
+func name(tc framework.Testable) string {
+	switch tc := tc.(type) {
+	case *framework.TestCase:
+		return tc.Name
+	case *framework.MultiCase:
+		return tc.Name
+	}
+	return fmt.Sprintf("%T", tc)
 }
 
 func BenchmarkTabletQueries(b *testing.B) {
