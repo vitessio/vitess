@@ -1297,6 +1297,24 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 	}, nil
 }
 
+// GetVtctlds returns a list of all Vtctlds in the cluster.
+func (c *Cluster) GetVtctlds(ctx context.Context) ([]*vtadminpb.Vtctld, error) {
+	vtctlds, err := c.Discovery.DiscoverVtctlds(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVtctlds(cluster = %s): %w", c.ID, err)
+	}
+
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
+	cpb := c.ToProto()
+
+	for _, v := range vtctlds {
+		v.Cluster = cpb
+	}
+
+	return vtctlds, nil
+}
+
 // GetWorkflowOptions is the set of filtering options for GetWorkflow requests.
 type GetWorkflowOptions struct {
 	ActiveOnly bool
