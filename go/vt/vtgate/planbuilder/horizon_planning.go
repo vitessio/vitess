@@ -243,7 +243,11 @@ func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedEx
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
 	exprDep := semTable.BaseTableDependencies(expr.Expr)
-	// TODO - comment
+	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
+	// input is a Select -> In this case we want to search in the select
+	// input is a Union -> In this case we want to search in the First Select of the Union
+	// input is a Parenthesised Select -> In this case we want to search in the select
+	// all these three cases are handled by the call to GetFirstSelect.
 	sel := sqlparser.GetFirstSelect(node)
 
 	for i, selectExpr := range sel.SelectExprs {
