@@ -1,10 +1,3 @@
-2021-05-18T12:33:01Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/853310873
-2021-05-18T12:33:01Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/853310850
-2021-05-18T12:33:01Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/853310864
-2021-05-18T12:33:01Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/853310892
-2021-05-18T12:33:01Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/853310879
-2021-05-18T12:33:01Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/853310855
-2021-05-18T12:33:01Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/853310893
 2021-05-18T12:33:01Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/853310859
 2021-05-18T12:33:01Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/853310857
 2021-05-18T12:33:01Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/853310863
@@ -9995,6 +9988,13 @@
 2021-09-09T02:12:13Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1215642863
 2021-09-09T02:12:13Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1215642876
 2021-09-09T02:12:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1215642875
+2021-09-09T02:12:15Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1215643012
+2021-09-09T02:12:15Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1215642990
+2021-09-09T02:12:15Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1215643021
+2021-09-09T02:12:15Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1215642982
+2021-09-09T02:12:15Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1215642973
 2021-09-09T02:12:15Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1215642996
 2021-09-09T02:12:15Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1215643023
+2021-09-09T02:12:15Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1215643031
 2021-09-09T02:12:15Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1215643005
+2021-09-09T02:12:15Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1215643010
