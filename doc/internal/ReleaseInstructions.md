@@ -199,7 +199,7 @@ git fetch --all
 
 make RELEASE_BRANCH=“release-12” FROM=“740c3799dc824977608d29c793b3bf1dbe1e9811" TO=“cc2de83572ea6116ebef7e051b9a8ca7597d1164” release-notes
 ```
-* Make sure to stand in the latest commit of the dev-branch
+* Make sure to stand in the latest commit of the release-branch. Then, checkout to a new branch that will be used to push our release commits.
 ```
 git fetch upstream 
 git checkout -b at-release-12.0.0 upstream/release-12.0
@@ -273,31 +273,17 @@ And finally, click on `Publish release`.
 ![GitHub Post Release01](/doc/internal/.images/post-release-01.png)
 * Coordinate CNCF cross-posting Vitess Blog. 
 * Schedule and publish Tweet on Vitess account. 
-* Update “.github/workflows/cluster_endtoend_upgrade.yml” workflow file on the main(master) branch with the new release.
 * Run following script to once the `base` Docker image is live. 
+
 ```
 https://github.com/vitessio/vitess/blob/master/helm/release.sh
 ```
+
 * Add Java version and release by following Java Packages below. 
 
-### Deploy & Release
+### Java Packages Deploy & Release
 
-1.  Make sure you are in the release branch.
-
-1.  Change the version number in all `pom.xml` files with the "versions" plugin:
-
-    ```bash
-    # The Java version must not have the leading "v".
-    # Example: 2.1.0 and not v2.1.0.
-    # Use Bash substitution to remove the leading "v".
-    JAVA_VERSION=${PATCH/v/}
-    cd java
-    mvn versions:set -DnewVersion=$JAVA_VERSION
-    ```
-
-1.  Run `git diff java/` to double check that the version was updated correctly.
-
-1.  Create a Git commit with the version change while you are in the **release** branch (not main). You will push it later.
+1.  Checkout to the release commit.
 
 1.  Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
 
@@ -312,11 +298,9 @@ https://github.com/vitessio/vitess/blob/master/helm/release.sh
     <p class="warning"><b>Warning:</b> After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
     ```bash
-    mvn clean deploy -P release
+    mvn clean deploy -P release -DskipTests
     cd ..
     ```
-
-At the end of the release, you will also have to bump the SNAPSHOT version in the main branch (see [below](#bump-java-snapshot-version)).
 
 ## Push the release branch and tag to upstream
 
