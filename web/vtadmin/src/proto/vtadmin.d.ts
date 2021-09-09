@@ -261,6 +261,20 @@ export namespace vtadmin {
         public getVSchemas(request: vtadmin.IGetVSchemasRequest): Promise<vtadmin.GetVSchemasResponse>;
 
         /**
+         * Calls GetVtctlds.
+         * @param request GetVtctldsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetVtctldsResponse
+         */
+        public getVtctlds(request: vtadmin.IGetVtctldsRequest, callback: vtadmin.VTAdmin.GetVtctldsCallback): void;
+
+        /**
+         * Calls GetVtctlds.
+         * @param request GetVtctldsRequest message or plain object
+         * @returns Promise
+         */
+        public getVtctlds(request: vtadmin.IGetVtctldsRequest): Promise<vtadmin.GetVtctldsResponse>;
+
+        /**
          * Calls GetWorkflow.
          * @param request GetWorkflowRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and Workflow
@@ -423,6 +437,13 @@ export namespace vtadmin {
          * @param [response] GetVSchemasResponse
          */
         type GetVSchemasCallback = (error: (Error|null), response?: vtadmin.GetVSchemasResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVtctlds}.
+         * @param error Error, if any
+         * @param [response] GetVtctldsResponse
+         */
+        type GetVtctldsCallback = (error: (Error|null), response?: vtadmin.GetVtctldsResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getWorkflow}.
@@ -4522,6 +4543,186 @@ export namespace vtadmin {
 
         /**
          * Converts this GetVSchemasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVtctldsRequest. */
+    interface IGetVtctldsRequest {
+
+        /** GetVtctldsRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+    }
+
+    /** Represents a GetVtctldsRequest. */
+    class GetVtctldsRequest implements IGetVtctldsRequest {
+
+        /**
+         * Constructs a new GetVtctldsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetVtctldsRequest);
+
+        /** GetVtctldsRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /**
+         * Creates a new GetVtctldsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVtctldsRequest instance
+         */
+        public static create(properties?: vtadmin.IGetVtctldsRequest): vtadmin.GetVtctldsRequest;
+
+        /**
+         * Encodes the specified GetVtctldsRequest message. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @param message GetVtctldsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetVtctldsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVtctldsRequest message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @param message GetVtctldsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetVtctldsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetVtctldsRequest;
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetVtctldsRequest;
+
+        /**
+         * Verifies a GetVtctldsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVtctldsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVtctldsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetVtctldsRequest;
+
+        /**
+         * Creates a plain object from a GetVtctldsRequest message. Also converts values to other types if specified.
+         * @param message GetVtctldsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetVtctldsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVtctldsRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetVtctldsResponse. */
+    interface IGetVtctldsResponse {
+
+        /** GetVtctldsResponse vtctlds */
+        vtctlds?: (vtadmin.IVtctld[]|null);
+    }
+
+    /** Represents a GetVtctldsResponse. */
+    class GetVtctldsResponse implements IGetVtctldsResponse {
+
+        /**
+         * Constructs a new GetVtctldsResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetVtctldsResponse);
+
+        /** GetVtctldsResponse vtctlds. */
+        public vtctlds: vtadmin.IVtctld[];
+
+        /**
+         * Creates a new GetVtctldsResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetVtctldsResponse instance
+         */
+        public static create(properties?: vtadmin.IGetVtctldsResponse): vtadmin.GetVtctldsResponse;
+
+        /**
+         * Encodes the specified GetVtctldsResponse message. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @param message GetVtctldsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetVtctldsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetVtctldsResponse message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @param message GetVtctldsResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetVtctldsResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetVtctldsResponse;
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetVtctldsResponse;
+
+        /**
+         * Verifies a GetVtctldsResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetVtctldsResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetVtctldsResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetVtctldsResponse;
+
+        /**
+         * Creates a plain object from a GetVtctldsResponse message. Also converts values to other types if specified.
+         * @param message GetVtctldsResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetVtctldsResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetVtctldsResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
