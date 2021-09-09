@@ -209,7 +209,7 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 			if err != nil {
 				return nil, err
 			}
-			return rt, rewriteSubqueryDependenciesForJoin(a, outerTree, subQueryInner, ctx)
+			return rt, rewriteSubqueryDependenciesForJoin(outerTree.rhs, outerTree, subQueryInner, ctx)
 		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.lhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
@@ -220,6 +220,13 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 			return outerTree, nil
 		}
 
+		newMergefunc = func(a, b *routeTree) (*routeTree, error) {
+			rt, err := merger(a, b)
+			if err != nil {
+				return nil, err
+			}
+			return rt, rewriteSubqueryDependenciesForJoin(outerTree.lhs, outerTree, subQueryInner, ctx)
+		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.rhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
 			return nil, err
@@ -234,17 +241,14 @@ func tryMergeSubQuery(ctx planningContext, outer, subq queryTree, subQueryInner 
 	}
 }
 
-func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
+// outerTree is the joinTree within whose children the subquery lives in
+// the child of joinTree which does not contain the subquery is the otherTree
+func rewriteSubqueryDependenciesForJoin(otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner, ctx planningContext) error {
 	// first we find the other side of the tree by comparing the tableIDs
 	// other side is RHS if the subquery is in the LHS, otherwise it is LHS
-	otherTree := outerTree.lhs
-	if a.tableID() == outerTree.lhs.tableID() {
-		otherTree = outerTree.rhs
-	}
-
 	var rewriteError error
 	// go over the entire where expression in the subquery
-	sqlparser.Rewrite(subQueryInner.SelectStatement.Where.Expr, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(subQueryInner.SelectStatement, func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
@@ -278,7 +282,20 @@ func rewriteSubqueryDependenciesForJoin(a *routeTree, outerTree *joinTree, subQu
 
 func mergeSubQuery(ctx planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
-	err := outer.resetRoutingSelections(ctx)
+	// go over the subquery and add its tables to the one's solved by the route it is merged with
+	// this is needed to so that later when we try to push projections, we get the correct
+	// solved tableID from the route, since it also includes the tables from the subquery after merging
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch n := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			outer.solved |= ctx.semTable.TableSetFor(n)
+		}
+		return true, nil
+	}, subq.SelectStatement)
+	if err != nil {
+		return nil, err
+	}
+	err = outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -314,19 +331,65 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	return false
 }
 
-func createSingleShardRoutePlan(sel *sqlparser.Select, rb *route) {
-	ast := rb.Select.(*sqlparser.Select)
-	ast.Distinct = sel.Distinct
-	ast.GroupBy = sel.GroupBy
-	ast.Having = sel.Having
-	ast.OrderBy = sel.OrderBy
-	ast.Comments = sel.Comments
-	ast.SelectExprs = sel.SelectExprs
-	for i, expr := range ast.SelectExprs {
-		if aliasedExpr, ok := expr.(*sqlparser.AliasedExpr); ok {
-			ast.SelectExprs[i] = removeKeyspaceFromColName(aliasedExpr)
-		}
+func createSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
+	err := stripDownQuery(sel, rb.Select)
+	if err != nil {
+		return err
 	}
+	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
+		if aliasedExpr, ok := cursor.Node().(*sqlparser.AliasedExpr); ok {
+			cursor.Replace(removeKeyspaceFromColName(aliasedExpr))
+		}
+		return true
+	}, nil)
+	return nil
+}
+
+func stripDownQuery(from, to sqlparser.SelectStatement) error {
+	var err error
+
+	switch node := from.(type) {
+	case *sqlparser.Select:
+		toNode, ok := to.(*sqlparser.Select)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		toNode.Distinct = node.Distinct
+		toNode.GroupBy = node.GroupBy
+		toNode.Having = node.Having
+		toNode.OrderBy = node.OrderBy
+		toNode.Comments = node.Comments
+		toNode.SelectExprs = node.SelectExprs
+	case *sqlparser.Union:
+		toNode, ok := to.(*sqlparser.Union)
+		if !ok {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+		}
+		err = stripDownQuery(node.FirstStatement, toNode.FirstStatement)
+		if err != nil {
+			return err
+		}
+		for i, s := range node.UnionSelects {
+			err = stripDownQuery(s.Statement, toNode.UnionSelects[i].Statement)
+			if err != nil {
+				return err
+			}
+		}
+		toNode.OrderBy = node.OrderBy
+	case *sqlparser.ParenSelect:
+		toNode, ok := to.(*sqlparser.ParenSelect)
+		if !ok {
+			// we might have lost the parenthesis, so let's check if we can work with the child
+			return stripDownQuery(node.Select, to)
+		}
+		err = stripDownQuery(node.Select, toNode.Select)
+		if err != nil {
+			return err
+		}
+	default:
+		panic("this should not happen - we have covered all implementations of SelectStatement")
+	}
+	return nil
 }
 
 func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTree) (queryTree, error) {
