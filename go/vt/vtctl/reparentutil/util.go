@@ -384,6 +384,7 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	}
 
 	// Wait until the new primary has caught upto that position
+	// TODO - discuss, what happens in case of timeout
 	err = tmc.WaitForPosition(ctx, newPrimary, pos)
 	if err != nil {
 		return err
