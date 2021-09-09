@@ -1,12 +1,3 @@
-2021-05-21T14:49:42Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/864236628
-2021-05-21T14:49:42Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/864236594
-2021-05-21T14:49:42Z,unit_race,https://github.com/vitessio/vitess/actions/runs/864236617
-2021-05-21T15:00:58Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/864267335
-2021-05-21T15:00:58Z,unit_race,https://github.com/vitessio/vitess/actions/runs/864267356
-2021-05-21T16:36:05Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/864524775
-2021-05-21T16:36:05Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/864524747
-2021-05-21T16:36:05Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/864524777
-2021-05-21T16:36:05Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/864524735
 2021-05-21T16:36:05Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/864524746
 2021-05-21T16:36:05Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/864524794
 2021-05-21T16:36:05Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/864524771
@@ -9998,3 +9989,12 @@
 2021-09-09T20:01:55Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1218757497
 2021-09-09T20:01:55Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1218757466
 2021-09-09T20:01:56Z,Cluster (onlineddl_vrepl_stress_suite),https://github.com/vitessio/vitess/actions/runs/1218757529
+2021-09-09T20:04:06Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1218765704
+2021-09-09T20:04:06Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1218765678
+2021-09-09T20:04:06Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1218765684
+2021-09-09T20:04:06Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1218765688
+2021-09-09T20:04:06Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1218765668
+2021-09-09T20:04:06Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1218765645
+2021-09-09T20:04:06Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1218765696
+2021-09-09T20:08:49Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1218781201
+2021-09-09T20:08:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1218781258
