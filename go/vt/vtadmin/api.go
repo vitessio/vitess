@@ -1080,7 +1080,48 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 
 // GetVtctlds is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetVtctlds(ctx context.Context, req *vtadminpb.GetVtctldsRequest) (*vtadminpb.GetVtctldsResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "API.GetVtctlds")
+	defer span.Finish()
+
+	clusters, _ := api.getClustersForRequest(req.ClusterIds)
+
+	var (
+		m       sync.Mutex
+		wg      sync.WaitGroup
+		rec     concurrency.AllErrorRecorder
+		vtctlds []*vtadminpb.Vtctld
+	)
+
+	for _, c := range clusters {
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VtctldResource, rbac.GetAction) {
+			continue
+		}
+
+		wg.Add(1)
+		go func(c *cluster.Cluster) {
+			defer wg.Done()
+
+			vs, err := c.GetVtctlds(ctx)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			m.Lock()
+			defer m.Unlock()
+
+			vtctlds = append(vtctlds, vs...)
+		}(c)
+	}
+
+	wg.Wait()
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return &vtadminpb.GetVtctldsResponse{
+		Vtctlds: vtctlds,
+	}, nil
 }
 
 // GetWorkflow is part of the vtadminpb.VTAdminServer interface.
