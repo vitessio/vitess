@@ -725,40 +725,7 @@ Gen4 plan same as above
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
 "unsupported: '*' expression in cross-shard query"
-{
-  "QueryType": "SELECT",
-  "Original": "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
-    "TableName": "information_schema.a_`user`",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectDBA",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select a.* from information_schema.a as a where 1 != 1",
-        "Query": "select a.* from information_schema.a as a where a.id in (select * from information_schema.b)",
-        "Table": "information_schema.a"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.id from `user` as u where 1 != 1",
-        "Query": "select u.id from `user` as u",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"

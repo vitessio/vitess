@@ -62,6 +62,7 @@ type (
 	}
 )
 
+// GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	switch sel := s.Col.(type) {
 	case *sqlparser.StarExpr:
@@ -72,6 +73,19 @@ func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 		return sel.Expr, nil
 	}
 	return nil, nil
+}
+
+// GetAliasedExpr returns the SelectExpr as a *sqlparser.AliasedExpr if its type allows it,
+// otherwise an error is returned.
+func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
+	switch expr := s.Col.(type) {
+	case *sqlparser.AliasedExpr:
+		return expr, nil
+	case *sqlparser.StarExpr:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not an aliased expression: %T", expr)
+	}
 }
 
 // CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
@@ -218,9 +232,9 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 		if num > len(qp.SelectExprs) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
 		}
-		aliasedExpr, isAliasedExpr := qp.SelectExprs[num-1].Col.(*sqlparser.AliasedExpr)
-		if !isAliasedExpr {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", qp.SelectExprs[num-1].Col)
+		aliasedExpr, err := qp.SelectExprs[num-1].GetAliasedExpr()
+		if err != nil {
+			return nil, nil, err
 		}
 		expr = aliasedExpr.Expr
 		if !aliasedExpr.As.IsEmpty() {

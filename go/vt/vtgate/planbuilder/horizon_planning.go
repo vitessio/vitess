@@ -39,12 +39,12 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
-	rb, ok := plan.(*route)
-	if !ok && ctx.semTable.ProjectionErr != nil {
+	rb, isRoute := plan.(*route)
+	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
 	}
 
-	if ok && rb.isSingleShard() {
+	if isRoute && rb.isSingleShard() {
 		createSingleShardRoutePlan(hp.sel, rb)
 		return plan, nil
 	}
@@ -60,7 +60,10 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		return nil, err
 	}
 
-	if hp.qp.NeedsAggregation() || hp.sel.Having != nil {
+	needAggrOrHaving := hp.qp.NeedsAggregation() || hp.sel.Having != nil
+	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0
+
+	if needAggrOrHaving {
 		plan, err = hp.planAggregations(ctx, plan)
 		if err != nil {
 			return nil, err
@@ -73,31 +76,35 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 				eSimpleProj:       &engine.SimpleProjection{},
 			}
 		}
-		for _, e := range hp.qp.SelectExprs {
-			switch e := e.Col.(type) {
-			case *sqlparser.StarExpr:
 
-			case *sqlparser.AliasedExpr:
-				if _, _, err := pushProjection(e, plan, ctx.semTable, true, false); err != nil {
+		if canShortcut {
+			createSingleShardRoutePlan(hp.sel, rb)
+		} else {
+			for _, e := range hp.qp.SelectExprs {
+				aliasExpr, err := e.GetAliasedExpr()
+				if err != nil {
 					return nil, err
 				}
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e)
+				if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
-	if len(hp.qp.OrderExprs) > 0 {
-		plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
-		if err != nil {
-			return nil, err
+	if needAggrOrHaving || !canShortcut {
+		if len(hp.qp.OrderExprs) > 0 {
+			plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
+			if err != nil {
+				return nil, err
+			}
 		}
-	}
 
-	if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
-		plan, err = hp.planOrderByUsingGroupBy(ctx, plan)
-		if err != nil {
-			return nil, err
+		if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
+			plan, err = hp.planOrderByUsingGroupBy(ctx, plan)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -302,10 +309,11 @@ func (hp *horizonPlanning) planAggregations(ctx planningContext, plan logicalPla
 	}
 
 	for _, e := range hp.qp.SelectExprs {
-		aliasExpr, isAlias := e.Col.(*sqlparser.AliasedExpr)
-		if !isAlias {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", e.Col)
+		aliasExpr, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
 		}
+
 		// push all expression if they are non-aggregating or the plan is not ordered aggregated plan.
 		if !e.Aggr || oa == nil {
 			_, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false)
@@ -812,9 +820,9 @@ func (hp *horizonPlanning) addDistinct(ctx planningContext, plan logicalPlan) (l
 	eaggr := &engine.OrderedAggregate{}
 	var orderExprs []abstract.OrderBy
 	for index, sExpr := range hp.qp.SelectExprs {
-		aliasExpr, isAlias := sExpr.Col.(*sqlparser.AliasedExpr)
-		if !isAlias {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not an aliased expression: %T", sExpr.Col)
+		aliasExpr, err := sExpr.GetAliasedExpr()
+		if err != nil {
+			return nil, err
 		}
 		if isAmbiguousOrderBy(index, aliasExpr.As, hp.qp.SelectExprs) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As))
