@@ -88,39 +88,16 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	}
 }
 
-// CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
+// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
 
-	for _, selExp := range sel.SelectExprs {
-		switch selExp := selExp.(type) {
-		case *sqlparser.AliasedExpr:
-			err := checkForInvalidAggregations(selExp)
-			if err != nil {
-				return nil, err
-			}
-			col := SelectExpr{
-				Col: selExp,
-			}
-			if sqlparser.ContainsAggregation(selExp.Expr) {
-				col.Aggr = true
-				qp.HasAggr = true
-			}
-
-			qp.SelectExprs = append(qp.SelectExprs, col)
-		case *sqlparser.StarExpr:
-			qp.HasStar = true
-			col := SelectExpr{
-				Col: selExp,
-			}
-			qp.SelectExprs = append(qp.SelectExprs, col)
-		default:
-			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
-		}
+	err := qp.addSelectExpressions(sel)
+	if err != nil {
+		return nil, err
 	}
-
 	for _, group := range sel.GroupBy {
 		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, semTable)
 		if err != nil {
@@ -132,20 +109,9 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	canPushDownSorting := true
-	for _, order := range sel.OrderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
-		if err != nil {
-			return nil, err
-		}
-		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-			Inner: &sqlparser.Order{
-				Expr:      expr,
-				Direction: order.Direction,
-			},
-			WeightStrExpr: weightStrExpr,
-		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	err = qp.addOrderBy(sel.OrderBy, semTable)
+	if err != nil {
+		return nil, err
 	}
 
 	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
@@ -163,9 +129,76 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	if qp.Distinct && !qp.HasAggr {
 		qp.GroupByExprs = nil
 	}
-	qp.CanPushDownSorting = canPushDownSorting
 
 	return qp, nil
+}
+
+func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
+	for _, selExp := range sel.SelectExprs {
+		switch selExp := selExp.(type) {
+		case *sqlparser.AliasedExpr:
+			err := checkForInvalidAggregations(selExp)
+			if err != nil {
+				return err
+			}
+			col := SelectExpr{
+				Col: selExp,
+			}
+			if sqlparser.ContainsAggregation(selExp.Expr) {
+				col.Aggr = true
+				qp.HasAggr = true
+			}
+
+			qp.SelectExprs = append(qp.SelectExprs, col)
+		case *sqlparser.StarExpr:
+			qp.HasStar = true
+			col := SelectExpr{
+				Col: selExp,
+			}
+			qp.SelectExprs = append(qp.SelectExprs, col)
+		default:
+			return semantics.Gen4NotSupportedF("%T in select list", selExp)
+		}
+	}
+	return nil
+}
+
+// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*QueryProjection, error) {
+	qp := &QueryProjection{}
+
+	sel := sqlparser.GetFirstSelect(union)
+	err := qp.addSelectExpressions(sel)
+	if err != nil {
+		return nil, err
+	}
+
+	err = qp.addOrderBy(union.OrderBy, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return qp, nil
+}
+
+func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
+	canPushDownSorting := true
+	for _, order := range orderBy {
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
+		if err != nil {
+			return err
+		}
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      expr,
+				Direction: order.Direction,
+			},
+			WeightStrExpr: weightStrExpr,
+		})
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	}
+	qp.CanPushDownSorting = canPushDownSorting
+	return nil
 }
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
