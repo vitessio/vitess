@@ -612,6 +612,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVtctlds}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVtctldsCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetVtctldsResponse} [response] GetVtctldsResponse
+         */
+
+        /**
+         * Calls GetVtctlds.
+         * @function getVtctlds
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVtctldsRequest} request GetVtctldsRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVtctldsCallback} callback Node-style callback called with the error, if any, and GetVtctldsResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVtctlds = function getVtctlds(request, callback) {
+            return this.rpcCall(getVtctlds, $root.vtadmin.GetVtctldsRequest, $root.vtadmin.GetVtctldsResponse, request, callback);
+        }, "name", { value: "GetVtctlds" });
+
+        /**
+         * Calls GetVtctlds.
+         * @function getVtctlds
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVtctldsRequest} request GetVtctldsRequest message or plain object
+         * @returns {Promise<vtadmin.GetVtctldsResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getWorkflow}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetWorkflowCallback
@@ -10489,6 +10522,417 @@ $root.vtadmin = (function() {
         };
 
         return GetVSchemasResponse;
+    })();
+
+    vtadmin.GetVtctldsRequest = (function() {
+
+        /**
+         * Properties of a GetVtctldsRequest.
+         * @memberof vtadmin
+         * @interface IGetVtctldsRequest
+         * @property {Array.<string>|null} [cluster_ids] GetVtctldsRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new GetVtctldsRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVtctldsRequest.
+         * @implements IGetVtctldsRequest
+         * @constructor
+         * @param {vtadmin.IGetVtctldsRequest=} [properties] Properties to set
+         */
+        function GetVtctldsRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVtctldsRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetVtctldsRequest
+         * @instance
+         */
+        GetVtctldsRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new GetVtctldsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest instance
+         */
+        GetVtctldsRequest.create = function create(properties) {
+            return new GetVtctldsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVtctldsRequest message. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest} message GetVtctldsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVtctldsRequest message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest} message GetVtctldsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVtctldsRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVtctldsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVtctldsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         */
+        GetVtctldsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVtctldsRequest)
+                return object;
+            var message = new $root.vtadmin.GetVtctldsRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetVtctldsRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVtctldsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.GetVtctldsRequest} message GetVtctldsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVtctldsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVtctldsRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVtctldsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVtctldsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVtctldsRequest;
+    })();
+
+    vtadmin.GetVtctldsResponse = (function() {
+
+        /**
+         * Properties of a GetVtctldsResponse.
+         * @memberof vtadmin
+         * @interface IGetVtctldsResponse
+         * @property {Array.<vtadmin.IVtctld>|null} [vtctlds] GetVtctldsResponse vtctlds
+         */
+
+        /**
+         * Constructs a new GetVtctldsResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVtctldsResponse.
+         * @implements IGetVtctldsResponse
+         * @constructor
+         * @param {vtadmin.IGetVtctldsResponse=} [properties] Properties to set
+         */
+        function GetVtctldsResponse(properties) {
+            this.vtctlds = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVtctldsResponse vtctlds.
+         * @member {Array.<vtadmin.IVtctld>} vtctlds
+         * @memberof vtadmin.GetVtctldsResponse
+         * @instance
+         */
+        GetVtctldsResponse.prototype.vtctlds = $util.emptyArray;
+
+        /**
+         * Creates a new GetVtctldsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse instance
+         */
+        GetVtctldsResponse.create = function create(properties) {
+            return new GetVtctldsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetVtctldsResponse message. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse} message GetVtctldsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.vtctlds != null && message.vtctlds.length)
+                for (var i = 0; i < message.vtctlds.length; ++i)
+                    $root.vtadmin.Vtctld.encode(message.vtctlds[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVtctldsResponse message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse} message GetVtctldsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.vtctlds && message.vtctlds.length))
+                        message.vtctlds = [];
+                    message.vtctlds.push($root.vtadmin.Vtctld.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVtctldsResponse message.
+         * @function verify
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVtctldsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.vtctlds != null && message.hasOwnProperty("vtctlds")) {
+                if (!Array.isArray(message.vtctlds))
+                    return "vtctlds: array expected";
+                for (var i = 0; i < message.vtctlds.length; ++i) {
+                    var error = $root.vtadmin.Vtctld.verify(message.vtctlds[i]);
+                    if (error)
+                        return "vtctlds." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVtctldsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         */
+        GetVtctldsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVtctldsResponse)
+                return object;
+            var message = new $root.vtadmin.GetVtctldsResponse();
+            if (object.vtctlds) {
+                if (!Array.isArray(object.vtctlds))
+                    throw TypeError(".vtadmin.GetVtctldsResponse.vtctlds: array expected");
+                message.vtctlds = [];
+                for (var i = 0; i < object.vtctlds.length; ++i) {
+                    if (typeof object.vtctlds[i] !== "object")
+                        throw TypeError(".vtadmin.GetVtctldsResponse.vtctlds: object expected");
+                    message.vtctlds[i] = $root.vtadmin.Vtctld.fromObject(object.vtctlds[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVtctldsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.GetVtctldsResponse} message GetVtctldsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVtctldsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.vtctlds = [];
+            if (message.vtctlds && message.vtctlds.length) {
+                object.vtctlds = [];
+                for (var j = 0; j < message.vtctlds.length; ++j)
+                    object.vtctlds[j] = $root.vtadmin.Vtctld.toObject(message.vtctlds[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVtctldsResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVtctldsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVtctldsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVtctldsResponse;
     })();
 
     vtadmin.GetWorkflowRequest = (function() {

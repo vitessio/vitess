@@ -1078,6 +1078,11 @@ func (api *API) GetVSchemas(ctx context.Context, req *vtadminpb.GetVSchemasReque
 	}, nil
 }
 
+// GetVtctlds is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetVtctlds(ctx context.Context, req *vtadminpb.GetVtctldsRequest) (*vtadminpb.GetVtctldsResponse, error) {
+	panic("unimplemented!")
+}
+
 // GetWorkflow is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetWorkflow(ctx context.Context, req *vtadminpb.GetWorkflowRequest) (*vtadminpb.Workflow, error) {
 	span, ctx := trace.NewSpan(ctx, "API.GetWorkflow")
