@@ -19,6 +19,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	"context"
 	"time"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,12 +67,13 @@ func newVitessTopoNodes(c *TopoV1beta1Client, namespace string) *vitessTopoNodes
 // Get takes name of the vitessTopoNode, and returns the corresponding vitessTopoNode object, and an error if there is any.
 func (c *vitessTopoNodes) Get(name string, options v1.GetOptions) (result *v1beta1.VitessTopoNode, err error) {
 	result = &v1beta1.VitessTopoNode{}
+	ctx := context.Background()
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		Name(name).
 		VersionedParams(&options, scheme.ParameterCodec).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
@@ -83,12 +85,13 @@ func (c *vitessTopoNodes) List(opts v1.ListOptions) (result *v1beta1.VitessTopoN
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
 	result = &v1beta1.VitessTopoNodeList{}
+	ctx := context.Background()
 	err = c.client.Get().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
@@ -100,22 +103,24 @@ func (c *vitessTopoNodes) Watch(opts v1.ListOptions) (watch.Interface, error) {
 		timeout = time.Duration(*opts.TimeoutSeconds) * time.Second
 	}
 	opts.Watch = true
+	ctx := context.Background()
 	return c.client.Get().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		VersionedParams(&opts, scheme.ParameterCodec).
 		Timeout(timeout).
-		Watch()
+		Watch(ctx)
 }
 
 // Create takes the representation of a vitessTopoNode and creates it.  Returns the server's representation of the vitessTopoNode, and an error, if there is any.
 func (c *vitessTopoNodes) Create(vitessTopoNode *v1beta1.VitessTopoNode) (result *v1beta1.VitessTopoNode, err error) {
 	result = &v1beta1.VitessTopoNode{}
+	ctx := context.Background()
 	err = c.client.Post().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		Body(vitessTopoNode).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
@@ -123,24 +128,26 @@ func (c *vitessTopoNodes) Create(vitessTopoNode *v1beta1.VitessTopoNode) (result
 // Update takes the representation of a vitessTopoNode and updates it. Returns the server's representation of the vitessTopoNode, and an error, if there is any.
 func (c *vitessTopoNodes) Update(vitessTopoNode *v1beta1.VitessTopoNode) (result *v1beta1.VitessTopoNode, err error) {
 	result = &v1beta1.VitessTopoNode{}
+	ctx := context.Background()
 	err = c.client.Put().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		Name(vitessTopoNode.Name).
 		Body(vitessTopoNode).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
 
 // Delete takes name of the vitessTopoNode and deletes it. Returns an error if one occurs.
 func (c *vitessTopoNodes) Delete(name string, options *v1.DeleteOptions) error {
+	ctx := context.Background()
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		Name(name).
 		Body(options).
-		Do().
+		Do(ctx).
 		Error()
 }
 
@@ -150,26 +157,28 @@ func (c *vitessTopoNodes) DeleteCollection(options *v1.DeleteOptions, listOption
 	if listOptions.TimeoutSeconds != nil {
 		timeout = time.Duration(*listOptions.TimeoutSeconds) * time.Second
 	}
+	ctx := context.Background()
 	return c.client.Delete().
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		VersionedParams(&listOptions, scheme.ParameterCodec).
 		Timeout(timeout).
 		Body(options).
-		Do().
+		Do(ctx).
 		Error()
 }
 
 // Patch applies the patch and returns the patched vitessTopoNode.
 func (c *vitessTopoNodes) Patch(name string, pt types.PatchType, data []byte, subresources ...string) (result *v1beta1.VitessTopoNode, err error) {
 	result = &v1beta1.VitessTopoNode{}
+	ctx := context.Background()
 	err = c.client.Patch(pt).
 		Namespace(c.ns).
 		Resource("vitesstoponodes").
 		SubResource(subresources...).
 		Name(name).
 		Body(data).
-		Do().
+		Do(ctx).
 		Into(result)
 	return
 }
