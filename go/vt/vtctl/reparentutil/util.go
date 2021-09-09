@@ -162,6 +162,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 			return
 		}
 
+		// TODO: data race over here
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
 		// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
 		reparentFunctions.PostTabletChangeHook(ti.Tablet)
