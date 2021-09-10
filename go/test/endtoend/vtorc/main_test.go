@@ -330,7 +330,7 @@ func TestMain(m *testing.M) {
 	})
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell2,
-		numReplicas: 1,
+		numReplicas: 2,
 		numRdonly:   0,
 		uidBase:     200,
 	})
