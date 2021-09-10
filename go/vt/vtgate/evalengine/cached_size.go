@@ -17,6 +17,8 @@ limitations under the License.
 
 package evalengine
 
+import hack "vitess.io/vitess/go/hack"
+
 type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
@@ -52,7 +54,7 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 		size += int64(16)
 	}
 	// field Key string
-	size += int64(len(cached.Key))
+	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
 	return size
 }
 func (cached *Column) CachedSize(alloc bool) int64 {
@@ -71,10 +73,10 @@ func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(56)
+		size += int64(64)
 	}
 	// field bytes []byte
-	size += int64(cap(cached.bytes))
+	size += hack.RuntimeAllocSize(int64(cap(cached.bytes)))
 	return size
 }
 func (cached *Literal) CachedSize(alloc bool) int64 {
@@ -83,7 +85,7 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(56)
+		size += int64(64)
 	}
 	// field Val vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
 	size += cached.Val.CachedSize(false)
