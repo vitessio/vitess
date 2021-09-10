@@ -25,21 +25,20 @@ import (
 type (
 	dependencies interface {
 		Empty() bool
-		Get() (direct TableSet, recursive TableSet, typ *querypb.Type, err error)
+		Get() (dependency, error)
 		Merge(dependencies) (dependencies, error)
 	}
 	dependency struct {
 		direct    TableSet
 		recursive TableSet
+		typ *querypb.Type
 	}
 	nothing struct{}
 	certain struct {
 		dependency
-		typ *querypb.Type
 	}
 	uncertain struct {
 		dependency
-		typ  *querypb.Type
 		fail bool
 	}
 )
@@ -52,11 +51,11 @@ func (u *uncertain) Empty() bool {
 	return false
 }
 
-func (u *uncertain) Get() (TableSet, TableSet, *querypb.Type, error) {
+func (u *uncertain) Get() (dependency, error) {
 	if u.fail {
-		return 0, 0, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
+		return dependency{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
 	}
-	return u.direct, u.recursive, u.typ, nil
+	return u.dependency, nil
 }
 
 func (u *uncertain) Merge(d dependencies) (dependencies, error) {
@@ -79,8 +78,8 @@ func (c *certain) Empty() bool {
 	return false
 }
 
-func (c *certain) Get() (TableSet, TableSet, *querypb.Type, error) {
-	return c.direct, c.recursive, c.typ, nil
+func (c *certain) Get() (dependency, error) {
+	return c.dependency, nil
 }
 
 func (c *certain) Merge(d dependencies) (dependencies, error) {
@@ -100,8 +99,8 @@ func (n *nothing) Empty() bool {
 	return true
 }
 
-func (n *nothing) Get() (TableSet, TableSet, *querypb.Type, error) {
-	return 0, 0, nil, nil
+func (n *nothing) Get() (dependency, error) {
+	return dependency{}, nil
 }
 
 func (n *nothing) Merge(d dependencies) (dependencies, error) {

@@ -152,7 +152,7 @@ type (
 )
 
 func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
-	panic("implement me")
+	return v.Table.Dependencies(colName, org)
 }
 
 func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
@@ -163,16 +163,16 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 		recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
 		// TODO: deal with nil ASTNodes (group/order by) better
-		var directDeps TableSet
+		directDeps := recursiveDeps
 		if v.ASTNode != nil {
 			directDeps = org.tableSetFor(v.ASTNode)
 		}
 		return &certain{
 			dependency: dependency{
-				direct:    recursiveDeps,
-				recursive: directDeps,
+				direct:    directDeps,
+				recursive: recursiveDeps,
+				typ:        qt,
 			},
-			typ:        qt,
 		}, nil
 	}
 
@@ -184,11 +184,16 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 	for _, table := range v.tables {
 		 ts |= org.tableSetFor(table.GetExpr())
 	}
+
+	d := dependency{
+		direct:    ts,
+		recursive: ts,
+	}
+	if v.ASTNode != nil {
+		d.direct = org.tableSetFor(v.ASTNode)
+	}
 	return &uncertain{
-		dependency: dependency{
-			direct:    ts,
-			recursive: ts,
-		},
+		dependency: d,
 	}, nil
 }
 
@@ -210,9 +215,9 @@ func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser
 
 	for _, info := range columns {
 		if colName == info.Name {
+			d.typ = &info.Type
 			return &certain{
 				dependency: d,
-				typ:        &info.Type,
 			}, nil
 		}
 	}
