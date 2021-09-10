@@ -1,7 +1,3 @@
-2021-05-25T08:24:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/874172725
-2021-05-25T08:32:25Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/874194786
-2021-05-25T08:45:03Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/874232003
-2021-05-25T08:54:22Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/874260026
 2021-05-25T08:54:22Z,unit,https://github.com/vitessio/vitess/actions/runs/874260040
 2021-05-25T09:14:08Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/874321084
 2021-05-25T09:14:34Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/874322348
@@ -9988,6 +9984,8 @@
 2021-09-10T13:47:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1221464162
 2021-09-10T14:29:13Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1221609727
 2021-09-10T14:29:13Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1221609757
+2021-09-10T14:29:13Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/1221609770
+2021-09-10T14:29:13Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1221609707
 2021-09-10T14:29:13Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1221609720
 2021-09-10T14:29:13Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1221609729
 2021-09-10T14:29:13Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1221609704
@@ -9997,4 +9995,6 @@
 2021-09-10T14:29:13Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1221609741
 2021-09-10T14:29:13Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1221609768
 2021-09-10T14:29:13Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1221609725
+2021-09-10T14:29:13Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1221609719
 2021-09-10T14:29:13Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1221609705
+2021-09-10T14:29:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1221609724
