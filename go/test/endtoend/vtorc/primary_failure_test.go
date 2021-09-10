@@ -131,9 +131,10 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 	}
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
-	crossCellReplica := startVttablet(t, cell2, false)
+	crossCellReplica1 := startVttablet(t, cell2, false)
+	crossCellReplica2 := startVttablet(t, cell2, false)
 	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica, rdonly}, 25*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{crossCellReplica1, crossCellReplica2, rdonly}, 25*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
@@ -275,7 +276,7 @@ func TestPromotionLagSuccess(t *testing.T) {
 // covers the test case master-failover-fail-promotion-lag-minutes-failure from orchestrator
 func TestPromotionLagFailure(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_promotion_failure.json")
+	setupVttabletsAndVtorc(t, 3, 1, nil, "test_config_promotion_failure.json")
 	keyspace := &clusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	// find primary from topo
@@ -283,21 +284,26 @@ func TestPromotionLagFailure(t *testing.T) {
 	assert.NotNil(t, curPrimary, "should have elected a primary")
 
 	// find the replica and rdonly tablets
-	var replica, rdonly *cluster.Vttablet
+	var replica1, replica2, rdonly *cluster.Vttablet
 	for _, tablet := range shard0.Vttablets {
 		// we know we have only two replcia tablets, so the one not the primary must be the other replica
 		if tablet.Alias != curPrimary.Alias && tablet.Type == "replica" {
-			replica = tablet
+			if replica1 == nil {
+				replica1 = tablet
+			} else {
+				replica2 = tablet
+			}
 		}
 		if tablet.Type == "rdonly" {
 			rdonly = tablet
 		}
 	}
-	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, replica1, "could not find replica tablet")
+	assert.NotNil(t, replica2, "could not find second replica tablet")
 	assert.NotNil(t, rdonly, "could not find rdonly tablet")
 
 	// check that the replication is setup correctly before we failover
-	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{rdonly, replica1, replica2}, 10*time.Second)
 
 	// Make the current primary database unavailable.
 	err := curPrimary.MysqlctlProcess.Stop()
