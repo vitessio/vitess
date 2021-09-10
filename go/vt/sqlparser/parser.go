@@ -47,7 +47,7 @@ var parserPool = sync.Pool{
 var zeroParser yyParserImpl
 
 // MySQLVersion is the version of MySQL that the parser would emulate
-var MySQLVersion string
+var MySQLVersion = "50709" // default version if nothing else is stated
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
@@ -110,7 +110,6 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			MySQLVersion = "50709" // default version if nothing else is stated
 			if *MySQLServerVersion != "" {
 				convVersion, err := convertMySQLVersionToCommentVersion(*MySQLServerVersion)
 				if err != nil {
