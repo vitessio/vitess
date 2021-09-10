@@ -75,6 +75,8 @@ service VTAdmin {
     rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
     // GetVSchemas returns the VSchemas for all specified clusters.
     rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
+    // GetVtctlds returns the Vtctlds for all specified clusters.
+    rpc GetVtctlds(GetVtctldsRequest) returns (GetVtctldsResponse) {};
     // GetWorkflow returns a single Workflow for a given cluster, keyspace, and
     // workflow name.
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
@@ -352,6 +354,14 @@ message GetVSchemasRequest {
 
 message GetVSchemasResponse {
     repeated VSchema v_schemas = 1;
+}
+
+message GetVtctldsRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetVtctldsResponse {
+    repeated Vtctld vtctlds = 1;
 }
 
 message GetWorkflowRequest {
