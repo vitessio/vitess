@@ -17,12 +17,9 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -92,14 +89,14 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			}
 		}
 	case *sqlparser.ColName:
-		baseTableTS, ts, typ, err := b.resolveColumn(node, b.scoper.currentScope())
+		deps, err := b.resolveColumn(node, b.scoper.currentScope())
 		if err != nil {
 			return err
 		}
-		b.exprRecursiveDeps[node] = baseTableTS
-		b.exprDeps[node] = ts
-		if typ != nil {
-			b.typer.setTypeFor(node, *typ)
+		b.exprRecursiveDeps[node] = deps.recursive
+		b.exprDeps[node] = deps.direct
+		if deps.typ != nil {
+			b.typer.setTypeFor(node, *deps.typ)
 		}
 	case *sqlparser.FuncExpr:
 		// need special handling so that any lingering `*` expressions are bound to all local tables
@@ -149,7 +146,7 @@ func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, calle
 	return nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (TableSet, TableSet, *querypb.Type, error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (dependency, error) {
 	if colName.Qualifier.IsEmpty() {
 		return b.resolveUnQualifiedColumn(current, colName)
 	}
@@ -157,91 +154,52 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (Tabl
 }
 
 // resolveQualifiedColumn handles column expressions where the table is explicitly stated
-func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
+func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (dependency, error) {
 	// search up the scope stack until we find a match
 	for current != nil {
-		for _, table := range current.tables {
-			if !table.Matches(expr.Qualifier) {
-				continue
-			}
-			if table.IsActualTable() {
-				actualTable, ts, typ := b.resolveQualifiedColumnOnActualTable(table, expr)
-				return actualTable, ts, typ, nil
-			}
-			recursiveTs, typ, err := table.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs == nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-			}
-
-			ts, err := table.DepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			return *recursiveTs, *ts, typ, nil
+		deps, err := b.resolveColumnInScope(current, expr, func(table TableInfo) bool {
+			return !table.Matches(expr.Qualifier)
+		})
+		if err != nil {
+			return dependency{}, err
+		}
+		if !deps.Empty() {
+			return deps.Get()
 		}
 		current = current.parent
 	}
-	return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
 // resolveUnQualifiedColumn handles column that do not specify which table they belong to
-func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type, error) {
-	var tspRecursive, tsp *TableSet
-	var typp *querypb.Type
-
-	for current != nil && tspRecursive == nil {
-		for _, tbl := range current.tables {
-			recursiveTs, typ, err := tbl.RecursiveDepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if recursiveTs != nil && tspRecursive != nil {
-				return 0, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))
-			}
-			if recursiveTs != nil {
-				tspRecursive = recursiveTs
-				typp = typ
-			}
-			if tbl.IsActualTable() {
-				tsp = tspRecursive
-				continue
-			}
-			ts, err := tbl.DepsFor(expr, b.org, len(current.tables) == 1)
-			if err != nil {
-				return 0, 0, nil, err
-			}
-			if ts != nil {
-				tsp = ts
-			}
+func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (dependency, error) {
+	for current != nil {
+		deps, err := b.resolveColumnInScope(current, expr, nil)
+		if err != nil {
+			return dependency{}, err
 		}
-
+		if !deps.Empty() {
+			return deps.Get()
+		}
 		current = current.parent
 	}
-
-	if tspRecursive == nil {
-		return 0, 0, nil, ProjError{vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, fmt.Sprintf("Column '%s' in field list is ambiguous", sqlparser.String(expr)))}
-	}
-
-	if tsp == nil {
-		return *tspRecursive, 0, typp, nil
-	}
-	return *tspRecursive, *tsp, typp, nil
+	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
 }
 
-func (b *binder) resolveQualifiedColumnOnActualTable(table TableInfo, expr *sqlparser.ColName) (TableSet, TableSet, *querypb.Type) {
-	ts := b.tc.tableSetFor(table.GetExpr())
-	for _, colInfo := range table.GetColumns() {
-		if expr.Name.EqualString(colInfo.Name) {
-			// A column can't be of type NULL, that is the default value indicating that we dont know the actual type
-			// But expressions can be of NULL type, so we use nil to represent an unknown type
-			if colInfo.Type == querypb.Type_NULL_TYPE {
-				return ts, ts, nil
-			}
-			return ts, ts, &colInfo.Type
+func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, skipTable func(table TableInfo) bool) (dependencies, error) {
+	var deps dependencies = &nothing{}
+	for _, table := range current.tables {
+		if skipTable != nil && skipTable(table) {
+			continue
+		}
+		thisDeps, err := table.Dependencies(expr.Name.String(), b.org)
+		if err != nil {
+			return nil, err
+		}
+		deps, err = thisDeps.Merge(deps)
+		if err != nil {
+			return nil, err
 		}
 	}
-	return ts, ts, nil
+	return deps, nil
 }
