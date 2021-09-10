@@ -1,5 +1,3 @@
-2021-05-23T08:01:53Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/868252984
-2021-05-23T08:01:53Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/868252989
 2021-05-23T08:01:53Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/868252962
 2021-05-23T08:01:53Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/868252978
 2021-05-23T08:01:53Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/868252982
@@ -9997,4 +9995,6 @@
 2021-09-10T09:50:55Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1220760481
 2021-09-10T09:50:55Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1220760475
 2021-09-10T09:50:55Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1220760455
+2021-09-10T11:02:42Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1220963054
+2021-09-10T11:02:42Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1220963137
 2021-09-10T11:02:42Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1220963074
