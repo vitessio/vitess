@@ -3861,6 +3861,93 @@ func TestGetVSchemas(t *testing.T) {
 	}
 }
 
+func TestGetVtctlds(t *testing.T) {
+	t.Parallel()
+
+	fakedisco1 := fakediscovery.New()
+	cluster1 := &cluster.Cluster{
+		ID:        "c1",
+		Name:      "cluster1",
+		Discovery: fakedisco1,
+	}
+	cluster1Vtctlds := []*vtadminpb.Vtctld{
+		{
+			Hostname: "cluster1-vtctld1",
+		},
+		{
+			Hostname: "cluster1-vtctld2",
+		},
+		{
+			Hostname: "cluster1-vtctld3",
+		},
+	}
+	fakedisco1.AddTaggedVtctlds(nil, cluster1Vtctlds...)
+
+	expectedCluster1Vtctlds := []*vtadminpb.Vtctld{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-vtctld1",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-vtctld2",
+		},
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster1.ID,
+				Name: cluster1.Name,
+			},
+			Hostname: "cluster1-vtctld3",
+		},
+	}
+
+	fakedisco2 := fakediscovery.New()
+	cluster2 := &cluster.Cluster{
+		ID:        "c2",
+		Name:      "cluster2",
+		Discovery: fakedisco2,
+	}
+	cluster2Vtctlds := []*vtadminpb.Vtctld{
+		{
+			Hostname: "cluster2-vtctld1",
+		},
+	}
+	fakedisco2.AddTaggedVtctlds(nil, cluster2Vtctlds...)
+
+	expectedCluster2Vtctlds := []*vtadminpb.Vtctld{
+		{
+			Cluster: &vtadminpb.Cluster{
+				Id:   cluster2.ID,
+				Name: cluster2.Name,
+			},
+			Hostname: "cluster2-vtctld1",
+		},
+	}
+
+	api := NewAPI([]*cluster.Cluster{cluster1, cluster2}, Options{})
+	ctx := context.Background()
+
+	resp, err := api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, append(expectedCluster1Vtctlds, expectedCluster2Vtctlds...), resp.Vtctlds)
+
+	resp, err = api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{ClusterIds: []string{cluster1.ID}})
+	assert.NoError(t, err)
+	assert.ElementsMatch(t, expectedCluster1Vtctlds, resp.Vtctlds)
+
+	fakedisco1.SetVtctldsError(true)
+
+	resp, err = api.GetVtctlds(ctx, &vtadminpb.GetVtctldsRequest{})
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+}
+
 func TestGetWorkflow(t *testing.T) {
 	t.Parallel()
 
