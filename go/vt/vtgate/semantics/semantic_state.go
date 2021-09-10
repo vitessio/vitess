@@ -59,14 +59,6 @@ type (
 		Type querypb.Type
 	}
 
-	// RealTable contains the alias table expr and vindex table
-	RealTable struct {
-		dbName, tableName string
-		ASTNode           *sqlparser.AliasedTableExpr
-		Table             *vindexes.Table
-		isInfSchema       bool
-	}
-
 	// AliasedTable contains the alias table expr and vindex table
 	AliasedTable struct {
 		tableName   string
@@ -171,7 +163,7 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 			dependency: dependency{
 				direct:    directDeps,
 				recursive: recursiveDeps,
-				typ:        qt,
+				typ:       qt,
 			},
 		}, nil
 	}
@@ -182,7 +174,7 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 
 	var ts TableSet
 	for _, table := range v.tables {
-		 ts |= org.tableSetFor(table.GetExpr())
+		ts |= org.tableSetFor(table.GetExpr())
 	}
 
 	d := dependency{
@@ -199,11 +191,6 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 
 func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
-}
-
-
-func (r *RealTable) Dependencies(colName string, org originable) (dependencies, error) {
-	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.GetColumns(), r.Authoritative())
 }
 
 func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
@@ -249,11 +236,6 @@ func (a *AliasedTable) GetTables() []TableInfo {
 	return []TableInfo{a}
 }
 
-// GetTables implements the TableInfo interface
-func (r *RealTable) GetTables() []TableInfo {
-	return []TableInfo{r}
-}
-
 // GetExprFor implements the TableInfo interface
 func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
 	panic("implement me")
@@ -277,11 +259,6 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 
 // GetExprFor implements the TableInfo interface
 func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// GetExprFor implements the TableInfo interface
-func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
@@ -355,17 +332,6 @@ func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bo
 	return ts, err
 }
 
-// RecursiveDepsFor implements the TableInfo interface
-func (r *RealTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
-}
-
-// DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	ts, _, err := r.RecursiveDepsFor(col, org, single)
-	return ts, err
-}
-
 // depsFor implements the TableInfo interface for RealTable and AliasedTable
 func depsFor(
 	col *sqlparser.ColName,
@@ -413,11 +379,6 @@ func (a *AliasedTable) IsInfSchema() bool {
 	return a.isInfSchema
 }
 
-// IsInfSchema implements the TableInfo interface
-func (r *RealTable) IsInfSchema() bool {
-	return r.isInfSchema
-}
-
 // IsActualTable implements the TableInfo interface
 func (v *vTableInfo) IsActualTable() bool {
 	return false
@@ -428,12 +389,6 @@ func (a *AliasedTable) IsActualTable() bool {
 	return true
 }
 
-// IsActualTable implements the TableInfo interface
-func (r *RealTable) IsActualTable() bool {
-	return true
-}
-
-var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*vTableInfo)(nil)
 var _ TableInfo = (*VindexTable)(nil)
@@ -534,41 +489,6 @@ func (a *AliasedTable) Authoritative() bool {
 // Matches implements the TableInfo interface
 func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
 	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
-}
-
-// GetColumns implements the TableInfo interface
-func (r *RealTable) GetColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(r.Table)
-}
-
-// GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
-	return r.ASTNode
-}
-
-// GetVindexTable implements the TableInfo interface
-func (r *RealTable) GetVindexTable() *vindexes.Table {
-	return r.Table
-}
-
-// Name implements the TableInfo interface
-func (r *RealTable) Name() (sqlparser.TableName, error) {
-	return r.ASTNode.TableName()
-}
-
-// Authoritative implements the TableInfo interface
-func (r *RealTable) Authoritative() bool {
-	return r.Table != nil && r.Table.ColumnListAuthoritative
-}
-
-// Matches implements the TableInfo interface
-func (r *RealTable) Matches(name sqlparser.TableName) bool {
-	if !name.Qualifier.IsEmpty() {
-		if r.dbName != name.Qualifier.String() {
-			return false
-		}
-	}
-	return r.tableName == name.Name.String()
 }
 
 // Matches implements the TableInfo interface
