@@ -67,16 +67,6 @@ type (
 		isInfSchema bool
 	}
 
-	// vTableInfo is used to represent projected results, not real tables. It is used for
-	// ORDER BY, GROUP BY and HAVING that need to access result columns, and also for derived tables.
-	vTableInfo struct {
-		tableName   string
-		ASTNode     *sqlparser.AliasedTableExpr
-		columnNames []string
-		cols        []sqlparser.Expr
-		tables      []TableInfo
-	}
-
 	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
 	// we are keeping information about, and the latter represents the additional table information
 	// (usually a RealTable or an AliasedTable) of our vindex.
@@ -147,48 +137,6 @@ func (v *VindexTable) Dependencies(colName string, org originable) (dependencies
 	return v.Table.Dependencies(colName, org)
 }
 
-func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
-	for i, name := range v.columnNames {
-		if name != colName {
-			continue
-		}
-		recursiveDeps, qt := org.depsForExpr(v.cols[i])
-
-		// TODO: deal with nil ASTNodes (group/order by) better
-		directDeps := recursiveDeps
-		if v.ASTNode != nil {
-			directDeps = org.tableSetFor(v.ASTNode)
-		}
-		return &certain{
-			dependency: dependency{
-				direct:    directDeps,
-				recursive: recursiveDeps,
-				typ:       qt,
-			},
-		}, nil
-	}
-
-	if !v.hasStar() {
-		return &nothing{}, nil
-	}
-
-	var ts TableSet
-	for _, table := range v.tables {
-		ts |= org.tableSetFor(table.GetExpr())
-	}
-
-	d := dependency{
-		direct:    ts,
-		recursive: ts,
-	}
-	if v.ASTNode != nil {
-		d.direct = org.tableSetFor(v.ASTNode)
-	}
-	return &uncertain{
-		dependency: d,
-	}, nil
-}
-
 func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
@@ -217,18 +165,9 @@ func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser
 	}, nil
 }
 
-func (v *vTableInfo) hasStar() bool {
-	return len(v.tables) > 0
-}
-
 // GetTables implements the TableInfo interface
 func (v *VindexTable) GetTables() []TableInfo {
 	return v.Table.GetTables()
-}
-
-// GetTables implements the TableInfo interface
-func (v *vTableInfo) GetTables() []TableInfo {
-	return v.tables
 }
 
 // GetTables implements the TableInfo interface
@@ -248,77 +187,8 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
-	for i, colName := range v.columnNames {
-		if colName == s {
-			return v.cols[i], nil
-		}
-	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
-}
-
-// GetExprFor implements the TableInfo interface
 func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil, nil
-	}
-	var tsF TableSet
-	var qtF *querypb.Type
-	found := false
-	for i, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts, qt := org.depsForExpr(v.cols[i])
-			if !found {
-				tsF = ts
-				qtF = qt
-			} else if tsF != ts {
-				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
-				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
-			}
-			found = true
-		}
-	}
-	if found {
-		return &tsF, qtF, nil
-	}
-	if len(v.tables) == 0 {
-		return nil, nil, nil
-	}
-	for _, table := range v.tables {
-		tsF |= org.tableSetFor(table.GetExpr())
-	}
-	return &tsF, nil, nil
-}
-
-// DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
-	if v.ASTNode == nil {
-		return nil, nil
-	}
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil
-	}
-	for _, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts := org.tableSetFor(v.ASTNode)
-			return &ts, nil
-		}
-	}
-	if len(v.tables) == 0 {
-		return nil, nil
-	}
-	var ts TableSet
-	for range v.tables {
-		ts |= org.tableSetFor(v.ASTNode)
-	}
-	return &ts, nil
 }
 
 // RecursiveDepsFor implements the TableInfo interface
@@ -370,18 +240,8 @@ func depsFor(
 }
 
 // IsInfSchema implements the TableInfo interface
-func (v *vTableInfo) IsInfSchema() bool {
-	return false
-}
-
-// IsInfSchema implements the TableInfo interface
 func (a *AliasedTable) IsInfSchema() bool {
 	return a.isInfSchema
-}
-
-// IsActualTable implements the TableInfo interface
-func (v *vTableInfo) IsActualTable() bool {
-	return false
 }
 
 // IsActualTable implements the TableInfo interface
@@ -390,43 +250,11 @@ func (a *AliasedTable) IsActualTable() bool {
 }
 
 var _ TableInfo = (*AliasedTable)(nil)
-var _ TableInfo = (*vTableInfo)(nil)
 var _ TableInfo = (*VindexTable)(nil)
-
-func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
-}
-
-func (v *vTableInfo) Authoritative() bool {
-	return true
-}
-
-func (v *vTableInfo) Name() (sqlparser.TableName, error) {
-	return v.ASTNode.TableName()
-}
-
-func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
-	return v.ASTNode
-}
-
-// GetVindexTable implements the TableInfo interface
-func (v *vTableInfo) GetVindexTable() *vindexes.Table {
-	return nil
-}
 
 // GetVindexTable implements the TableInfo interface
 func (v *VindexTable) GetVindexTable() *vindexes.Table {
 	return v.Table.GetVindexTable()
-}
-
-func (v *vTableInfo) GetColumns() []ColumnInfo {
-	cols := make([]ColumnInfo, 0, len(v.columnNames))
-	for _, col := range v.columnNames {
-		cols = append(cols, ColumnInfo{
-			Name: col,
-		})
-	}
-	return cols
 }
 
 func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
