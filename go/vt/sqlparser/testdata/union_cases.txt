@@ -1,0 +1,6 @@
+INPUT
+select 1 from dual union select 2 from dual
+END
+OUTPUT
+select 1 from dual union select 2 from dual
+END
