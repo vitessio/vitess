@@ -99,12 +99,15 @@ func waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc 
 	return nil
 }
 
+// reparentReplicasAndPopulateJournal reparents all the replicas provided and populates the reparent journal on the primary.
+// Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient,
 	newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo,
 	statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions,
 	waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
+	var replicaMutex sync.Mutex
 
 	replCtx, replCancel := context.WithTimeout(ctx, reparentFunctions.GetWaitReplicasTimeout())
 	defer replCancel()
@@ -162,8 +165,9 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 			return
 		}
 
-		// TODO: data race over here
+		replicaMutex.Lock()
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
+		replicaMutex.Unlock()
 		// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
 		reparentFunctions.PostTabletChangeHook(ti.Tablet)
 
@@ -212,7 +216,8 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 	select {
 	case <-replSuccessCtx.Done():
 		// At least one replica was able to SetMaster successfully
-		return replicasStartedReplication, nil
+		// Here we do not need to return the replicas which started replicating
+		return nil, nil
 	case <-allReplicasDoneCtx.Done():
 		// There are certain timing issues between replSuccessCtx.Done firing
 		// and allReplicasDoneCtx.Done firing, so we check again if truly all
