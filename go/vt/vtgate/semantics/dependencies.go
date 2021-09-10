@@ -31,7 +31,7 @@ type (
 	dependency struct {
 		direct    TableSet
 		recursive TableSet
-		typ *querypb.Type
+		typ       *querypb.Type
 	}
 	nothing struct{}
 	certain struct {
