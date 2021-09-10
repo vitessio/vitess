@@ -39,6 +39,8 @@ type (
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
+		Dependencies(colName string, org originable) (dependencies, error)
+
 		// RecursiveDepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
 		// if the column is not found, nil will be returned instead. If the column is a derived table column, this method
 		// will recursively find the dependencies of the expression inside the derived table
@@ -148,6 +150,84 @@ type (
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
 	}
 )
+
+func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
+	panic("implement me")
+}
+
+func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
+	for i, name := range v.columnNames {
+		if name != colName {
+			continue
+		}
+		recursiveDeps, qt := org.depsForExpr(v.cols[i])
+
+		// TODO: deal with nil ASTNodes (group/order by) better
+		var directDeps TableSet
+		if v.ASTNode != nil {
+			directDeps = org.tableSetFor(v.ASTNode)
+		}
+		return &certain{
+			dependency: dependency{
+				direct:    recursiveDeps,
+				recursive: directDeps,
+			},
+			typ:        qt,
+		}, nil
+	}
+
+	if !v.hasStar() {
+		return &nothing{}, nil
+	}
+
+	var ts TableSet
+	for _, table := range v.tables {
+		 ts |= org.tableSetFor(table.GetExpr())
+	}
+	return &uncertain{
+		dependency: dependency{
+			direct:    ts,
+			recursive: ts,
+		},
+	}, nil
+}
+
+func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
+	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
+}
+
+
+func (r *RealTable) Dependencies(colName string, org originable) (dependencies, error) {
+	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.GetColumns(), r.Authoritative())
+}
+
+func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
+	ts := org.tableSetFor(node)
+	d := dependency{
+		direct:    ts,
+		recursive: ts,
+	}
+
+	for _, info := range columns {
+		if colName == info.Name {
+			return &certain{
+				dependency: d,
+				typ:        &info.Type,
+			}, nil
+		}
+	}
+
+	if authoritative {
+		return &nothing{}, nil
+	}
+	return &uncertain{
+		dependency: d,
+	}, nil
+}
+
+func (v *vTableInfo) hasStar() bool {
+	return len(v.tables) > 0
+}
 
 // GetTables implements the TableInfo interface
 func (v *VindexTable) GetTables() []TableInfo {
