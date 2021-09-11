@@ -34,6 +34,7 @@ type vTableInfo struct {
 
 var _ TableInfo = (*vTableInfo)(nil)
 
+// Dependencies implements the TableInfo interface
 func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
 	for i, name := range v.columnNames {
 		if name != colName {

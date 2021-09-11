@@ -60,6 +60,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 	return vTbl
 }
 
+// Dependencies implements the TableInfo interface
 func (dt *derivedTable) Dependencies(colName string, org originable) (dependencies, error) {
 	for i, name := range dt.columnNames {
 		if name != colName {

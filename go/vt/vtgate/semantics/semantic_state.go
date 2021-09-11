@@ -126,10 +126,12 @@ type (
 	}
 )
 
+// Dependencies implements the TableInfo interface
 func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return v.Table.Dependencies(colName, org)
 }
 
+// Dependencies implements the TableInfo interface
 func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
 }
@@ -411,12 +413,18 @@ func newScope(parent *scope) *scope {
 }
 
 func (s *scope) addTable(info TableInfo) error {
+	name, err := info.Name()
+	if err != nil {
+		return err
+	}
+	tblName := name.Name.String()
 	for _, scopeTable := range s.tables {
 		scopeTableName, err := scopeTable.Name()
 		if err != nil {
 			return err
 		}
-		if info.Matches(scopeTableName) {
+
+		if tblName == scopeTableName.Name.String() {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", scopeTableName.Name.String())
 		}
 	}
