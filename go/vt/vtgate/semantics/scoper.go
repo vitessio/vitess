@@ -29,6 +29,7 @@ type scoper struct {
 	wScope       map[*sqlparser.Select]*scope
 	sqlNodeScope map[scopeKey]*scope
 	scopes       []*scope
+	org          originable
 }
 
 type scopeKey struct {
@@ -82,13 +83,13 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			break
 		}
 
-		// adding a VTableInfo for each select so it can be used by GROUP BY, HAVING, ORDER BY
+		// adding a VTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
 		// the VTableInfo we are creating here should not be confused with derived tables' VTableInfo
 		wScope, exists := s.wScope[sel]
 		if !exists {
 			break
 		}
-		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables))
+		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables, s.org))
 	case sqlparser.OrderBy:
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
 	case sqlparser.GroupBy:
