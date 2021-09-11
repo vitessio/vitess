@@ -246,7 +246,7 @@ func TestGroupByBinding(t *testing.T) {
 		"select t1.id from t1, t2 group by id",
 		T1,
 	}, {
-		"select id from t, t1 group by id",
+		"select id from t, t1 group by id", // TODO: is this the correct behaviour?
 		T1,
 	}}
 	for _, tc := range tcases {
@@ -525,12 +525,6 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		query: "select max(X.col+s.col) from t as X, s",
 		deps:  T1 | T2,
 	}, {
-		query: "select b.t.col from b.t, t",
-		deps:  T1,
-	}, {
-		query: "select t.col from k.t, t",
-		deps:  T2,
-	}, {
 		query: "select u1.a + u2.a from u1, u2",
 		deps:  T1 | T2,
 	}}
@@ -548,6 +542,8 @@ func TestBindingMultiTableNegative(t *testing.T) {
 		"select 1 from d.tabl, d.tabl",
 		"select 1 from d.tabl, tabl",
 		"select 1 from user join user_extra user",
+		"select t.col from k.t, t",
+		"select b.t.col from b.t, t",
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {

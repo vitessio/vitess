@@ -33,6 +33,7 @@ type RealTable struct {
 
 var _ TableInfo = (*RealTable)(nil)
 
+// Dependencies implements the TableInfo interface
 func (r *RealTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.GetColumns(), r.Authoritative())
 }
@@ -84,10 +85,5 @@ func (r *RealTable) Authoritative() bool {
 
 // Matches implements the TableInfo interface
 func (r *RealTable) Matches(name sqlparser.TableName) bool {
-	if !name.Qualifier.IsEmpty() {
-		if r.dbName != name.Qualifier.String() {
-			return false
-		}
-	}
 	return r.tableName == name.Name.String()
 }
