@@ -85,5 +85,5 @@ func (r *RealTable) Authoritative() bool {
 
 // Matches implements the TableInfo interface
 func (r *RealTable) Matches(name sqlparser.TableName) bool {
-	return r.tableName == name.Name.String()
+	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
