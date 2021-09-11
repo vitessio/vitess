@@ -418,14 +418,14 @@ func (s *scope) addTable(info TableInfo) error {
 		return err
 	}
 	tblName := name.Name.String()
-	for _, scopeTable := range s.tables {
-		scopeTableName, err := scopeTable.Name()
+	for _, table := range s.tables {
+		name, err := table.Name()
 		if err != nil {
 			return err
 		}
 
-		if tblName == scopeTableName.Name.String() {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", scopeTableName.Name.String())
+		if tblName == name.Name.String() {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
 		}
 	}
 	s.tables = append(s.tables, info)

@@ -604,12 +604,14 @@ func TestMissingTable(t *testing.T) {
 }
 
 func TestUnknownColumnMap2(t *testing.T) {
-	query := "select col from a, b"
+	varchar := querypb.Type_VARCHAR
+	int := querypb.Type_INT32
+
 	authoritativeTblA := vindexes.Table{
 		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col2"),
-			Type: querypb.Type_VARCHAR,
+			Type: varchar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -617,7 +619,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: querypb.Type_VARCHAR,
+			Type: varchar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -629,7 +631,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: querypb.Type_INT32,
+			Type: int,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -637,71 +639,62 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewTableIdent("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewColIdent("col"),
-			Type: querypb.Type_INT32,
+			Type: int,
 		}},
 		ColumnListAuthoritative: true,
 	}
 
-	varchar := querypb.Type_VARCHAR
-	int := querypb.Type_INT32
-
-	parse, _ := sqlparser.Parse(query)
-	expr := extract(parse.(*sqlparser.Select), 0)
 	tests := []struct {
 		name   string
 		schema map[string]*vindexes.Table
 		err    bool
 		typ    *querypb.Type
-	}{
-		{
-			name:   "no info about tables",
-			schema: map[string]*vindexes.Table{"a": {}, "b": {}},
-			err:    true,
-		},
-		{
-			name:   "non authoritative columns",
-			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
-			err:    true,
-		},
-		{
-			name:   "non authoritative columns - one authoritative and one not",
-			schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
-			err:    false,
-			typ:    &varchar,
-		},
-		{
-			name:   "non authoritative columns - one authoritative and one not",
-			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
-			err:    false,
-			typ:    &varchar,
-		},
-		{
-			name:   "authoritative columns",
-			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
-			err:    false,
-			typ:    &varchar,
-		},
-		{
-			name:   "authoritative columns",
-			schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
-			err:    false,
-			typ:    &int,
-		},
-		{
-			name:   "authoritative columns with overlap",
-			schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
-			err:    true,
-		},
-	}
+	}{{
+		name:   "no info about tables",
+		schema: map[string]*vindexes.Table{"a": {}, "b": {}},
+		err:    true,
+	}, {
+		name:   "non authoritative columns",
+		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &nonAuthoritativeTblA},
+		err:    true,
+	}, {
+		name:   "non authoritative columns - one authoritative and one not",
+		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
+		err:    false,
+		typ:    &varchar,
+	}, {
+		name:   "non authoritative columns - one authoritative and one not",
+		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
+		err:    false,
+		typ:    &varchar,
+	}, {
+		name:   "authoritative columns",
+		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
+		err:    false,
+		typ:    &varchar,
+	}, {
+		name:   "authoritative columns",
+		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
+		err:    false,
+		typ:    &int,
+	}, {
+		name:   "authoritative columns with overlap",
+		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
+		err:    true,
+	}}
+	query := "select col from a, b"
+	parse, _ := sqlparser.Parse(query)
+	expr := extract(parse.(*sqlparser.Select), 0)
+
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
 			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
-			require.NoError(t, err)
 
 			if test.err {
-				require.Error(t, tbl.ProjectionErr)
+				require.True(t, err != nil || tbl.ProjectionErr != nil)
 			} else {
+				require.NoError(t, err)
 				require.NoError(t, tbl.ProjectionErr)
 				typ := tbl.TypeFor(expr)
 				assert.Equal(t, test.typ, typ)

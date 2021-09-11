@@ -43,6 +43,8 @@ type (
 	}
 )
 
+var ambigousErr = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
+
 func createCertain(direct TableSet, recursive TableSet, qt *querypb.Type) *certain {
 	return &certain{
 		dependency: dependency{
@@ -72,7 +74,7 @@ func (u *uncertain) Empty() bool {
 
 func (u *uncertain) Get() (dependency, error) {
 	if u.fail {
-		return dependency{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
+		return dependency{}, ambigousErr
 	}
 	return u.dependency, nil
 }
@@ -90,7 +92,7 @@ func (u *uncertain) Merge(d dependencies) (dependencies, error) {
 	case *certain:
 		return d, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
+	return nil, ambigousErr
 }
 
 func (c *certain) Empty() bool {
@@ -111,7 +113,7 @@ func (c *certain) Merge(d dependencies) (dependencies, error) {
 		}
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
+	return nil, ambigousErr
 }
 
 func (n *nothing) Empty() bool {
