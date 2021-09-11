@@ -43,6 +43,25 @@ type (
 	}
 )
 
+func createCertain(direct TableSet, recursive TableSet, qt *querypb.Type) *certain {
+	return &certain{
+		dependency: dependency{
+			direct:    direct,
+			recursive: recursive,
+			typ:       qt,
+		},
+	}
+}
+
+func createUncertain(direct TableSet, recursive TableSet) *uncertain {
+	return &uncertain{
+		dependency: dependency{
+			direct:    direct,
+			recursive: recursive,
+		},
+	}
+}
+
 var _ dependencies = (*nothing)(nil)
 var _ dependencies = (*certain)(nil)
 var _ dependencies = (*uncertain)(nil)

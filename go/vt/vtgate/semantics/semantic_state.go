@@ -143,26 +143,16 @@ func (a *AliasedTable) Dependencies(colName string, org originable) (dependencie
 
 func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
 	ts := org.tableSetFor(node)
-	d := dependency{
-		direct:    ts,
-		recursive: ts,
-	}
-
 	for _, info := range columns {
 		if colName == info.Name {
-			d.typ = &info.Type
-			return &certain{
-				dependency: d,
-			}, nil
+			return createCertain(ts, ts, &info.Type), nil
 		}
 	}
 
 	if authoritative {
 		return &nothing{}, nil
 	}
-	return &uncertain{
-		dependency: d,
-	}, nil
+	return createUncertain(ts, ts), nil
 }
 
 // GetTables implements the TableInfo interface
