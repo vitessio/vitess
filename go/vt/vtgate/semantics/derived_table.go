@@ -28,8 +28,7 @@ type derivedTable struct {
 	ASTNode     *sqlparser.AliasedTableExpr
 	columnNames []string
 	cols        []sqlparser.Expr
-	tables      []TableInfo
-	tables2     TableSet
+	tables      TableSet
 }
 
 var _ TableInfo = (*derivedTable)(nil)
@@ -53,7 +52,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables2 |= table.GetTables(org)
+				vTbl.tables |= table.GetTables(org)
 			}
 		}
 	}
@@ -68,7 +67,6 @@ func (dt *derivedTable) Dependencies(colName string, org originable) (dependenci
 		}
 		recursiveDeps, qt := org.depsForExpr(dt.cols[i])
 
-		// TODO: deal with nil ASTNodes (group/order by) better
 		directDeps := recursiveDeps
 		if dt.ASTNode != nil {
 			directDeps = org.tableSetFor(dt.ASTNode)
@@ -80,21 +78,10 @@ func (dt *derivedTable) Dependencies(colName string, org originable) (dependenci
 		return &nothing{}, nil
 	}
 
-	var ts TableSet
-	for _, table := range dt.tables {
-		ts |= org.tableSetFor(table.GetExpr())
-	}
+	recursive := dt.tables
+	direct := org.tableSetFor(dt.ASTNode)
 
-	d := dependency{
-		direct:    ts,
-		recursive: ts,
-	}
-	if dt.ASTNode != nil {
-		d.direct = org.tableSetFor(dt.ASTNode)
-	}
-	return &uncertain{
-		dependency: d,
-	}, nil
+	return createUncertain(direct, recursive), nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -139,12 +126,12 @@ func (dt *derivedTable) GetColumns() []ColumnInfo {
 }
 
 func (dt *derivedTable) hasStar() bool {
-	return len(dt.tables) > 0
+	return dt.tables > 0
 }
 
 // GetTables implements the TableInfo interface
 func (dt *derivedTable) GetTables(org originable) TableSet {
-	return dt.tables2
+	return dt.tables
 }
 
 // GetExprFor implements the TableInfo interface
