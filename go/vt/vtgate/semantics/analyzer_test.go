@@ -766,48 +766,6 @@ func TestScoping(t *testing.T) {
 	}
 }
 
-func TestAaa(t *testing.T) {
-	queries := []struct {
-		query                string
-		errorMessage         string
-		recursiveExpectation TableSet
-		expectation          TableSet
-	}{
-		{
-			query:        "select uu.test from (select id from t1) uu",
-			errorMessage: "symbol uu.test not found",
-		}, {
-			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
-		}, {
-			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
-		}, {
-			query:        "select * from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
-			errorMessage: "symbol uu.id not found",
-		},
-	}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
-			require.NoError(t, err)
-			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
-				Tables: map[string]*vindexes.Table{
-					"t": {Name: sqlparser.NewTableIdent("t")},
-				},
-			}, NoRewrite)
-			if query.errorMessage != "" {
-				require.EqualError(t, err, query.errorMessage)
-			} else {
-				require.NoError(t, err)
-				sel := parse.(*sqlparser.Select)
-				assert.Equal(t, query.recursiveExpectation, st.BaseTableDependencies(extract(sel, 0)), "BaseTableDependencies")
-				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)), "Dependencies")
-			}
-		})
-	}
-}
-
 func TestScopingWDerivedTables(t *testing.T) {
 	queries := []struct {
 		query                string
@@ -868,8 +826,20 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:                "select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
 			expectation:          T4,
 			recursiveExpectation: T2,
-		},
-	}
+		}, {
+			query:        "select uu.test from (select id from t1) uu",
+			errorMessage: "symbol uu.test not found",
+		}, {
+			query:        "select uu.id from (select id as col from t1) uu",
+			errorMessage: "symbol uu.id not found",
+		}, {
+			query:        "select uu.id from (select id as col from t1) uu",
+			errorMessage: "symbol uu.id not found",
+		}, {
+			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
+			expectation:          T2,
+			recursiveExpectation: T1,
+		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
