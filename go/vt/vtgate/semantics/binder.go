@@ -146,11 +146,20 @@ func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, calle
 	return nil
 }
 
-func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (dependency, error) {
+func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
 	if colName.Qualifier.IsEmpty() {
-		return b.resolveUnQualifiedColumn(current, colName)
+		deps, err = b.resolveUnQualifiedColumn(current, colName)
+	} else {
+		deps, err = b.resolveQualifiedColumn(current, colName)
 	}
-	return b.resolveQualifiedColumn(current, colName)
+
+	if err != nil {
+		if err == ambigousErr {
+			err = vterrors.Wrapf(err, "ambiguous column %s", sqlparser.String(colName))
+		}
+		return dependency{}, err
+	}
+	return deps, nil
 }
 
 // resolveQualifiedColumn handles column expressions where the table is explicitly stated
@@ -199,6 +208,12 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, s
 		deps, err = thisDeps.Merge(deps)
 		if err != nil {
 			return nil, err
+		}
+	}
+	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
+		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
+		return nil, ProjError{
+			inner: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't bind %s to a single table", sqlparser.String(expr)),
 		}
 	}
 	return deps, nil
