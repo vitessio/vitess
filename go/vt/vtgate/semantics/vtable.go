@@ -25,10 +25,9 @@ import (
 )
 
 // vTableInfo is used to represent projected results, not real tables. It is used for
-// ORDER BY, GROUP BY and HAVING that need to access result columns, and also for derived tables.
+// ORDER BY, GROUP BY and HAVING that need to access result columns
 type vTableInfo struct {
 	tableName   string
-	ASTNode     *sqlparser.AliasedTableExpr
 	columnNames []string
 	cols        []sqlparser.Expr
 	tables      []TableInfo
@@ -43,18 +42,20 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 		}
 		recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
-		// TODO: deal with nil ASTNodes (group/order by) better
-		directDeps := recursiveDeps
-		if v.ASTNode != nil {
-			directDeps = org.tableSetFor(v.ASTNode)
+		var directDeps TableSet
+		/*
+				If we find a match, it means the query looks something like:
+				SELECT 1 as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/0
+				SELECT t1.x as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/1
+				SELECT x FROM t1 ORDER BY/GROUP BY x - d/r: 1/1
+
+			    Now, after figuring out the recursive deps
+		*/
+		if recursiveDeps.NumberOfTables() > 0 {
+			directDeps = recursiveDeps
 		}
-		return &certain{
-			dependency: dependency{
-				direct:    directDeps,
-				recursive: recursiveDeps,
-				typ:       qt,
-			},
-		}, nil
+
+		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
 
 	if !v.hasStar() {
@@ -66,16 +67,7 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 		ts |= org.tableSetFor(table.GetExpr())
 	}
 
-	d := dependency{
-		direct:    ts,
-		recursive: ts,
-	}
-	if v.ASTNode != nil {
-		d.direct = org.tableSetFor(v.ASTNode)
-	}
-	return &uncertain{
-		dependency: d,
-	}, nil
+	return createUncertain(ts, ts), nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -97,11 +89,11 @@ func (v *vTableInfo) Authoritative() bool {
 }
 
 func (v *vTableInfo) Name() (sqlparser.TableName, error) {
-	return v.ASTNode.TableName()
+	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
 func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
-	return v.ASTNode
+	return nil
 }
 
 // GetVindexTable implements the TableInfo interface
@@ -140,7 +132,7 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 
 // RecursiveDepsFor implements the TableInfo interface
 func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
+	if !col.Qualifier.IsEmpty() && (v.tableName != col.Qualifier.Name.String()) {
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil, nil
 	}
@@ -174,16 +166,13 @@ func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ 
 
 // DepsFor implements the TableInfo interface
 func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
-	if v.ASTNode == nil {
-		return nil, nil
-	}
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
+	if !col.Qualifier.IsEmpty() && (v.tableName != col.Qualifier.Name.String()) {
 		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
 		return nil, nil
 	}
 	for _, colName := range v.columnNames {
 		if col.Name.String() == colName {
-			ts := org.tableSetFor(v.ASTNode)
+			ts := TableSet(0)
 			return &ts, nil
 		}
 	}
@@ -191,8 +180,31 @@ func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*T
 		return nil, nil
 	}
 	var ts TableSet
-	for range v.tables {
-		ts |= org.tableSetFor(v.ASTNode)
-	}
 	return &ts, nil
+}
+
+func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *vTableInfo {
+	vTbl := &vTableInfo{}
+	for _, selectExpr := range expressions {
+		switch expr := selectExpr.(type) {
+		case *sqlparser.AliasedExpr:
+			vTbl.cols = append(vTbl.cols, expr.Expr)
+			if expr.As.IsEmpty() {
+				switch expr := expr.Expr.(type) {
+				case *sqlparser.ColName:
+					// for projections, we strip out the qualifier and keep only the column name
+					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+				default:
+					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+				}
+			} else {
+				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+			}
+		case *sqlparser.StarExpr:
+			for _, table := range tables {
+				vTbl.tables = append(vTbl.tables, table.GetTables()...)
+			}
+		}
+	}
+	return vTbl
 }

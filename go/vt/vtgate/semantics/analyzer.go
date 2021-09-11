@@ -262,20 +262,6 @@ func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
 	return ts, &qt
 }
 
-func (v *vTableInfo) checkForDuplicates() error {
-	for i, name := range v.columnNames {
-		for j, name2 := range v.columnNames {
-			if i == j {
-				continue
-			}
-			if name == name2 {
-				return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DupFieldName, "Duplicate column name '%s'", name)
-			}
-		}
-	}
-	return nil
-}
-
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	_ = sqlparser.Rewrite(statement, a.analyzeDown, a.analyzeUp)
 	return a.err
@@ -322,32 +308,6 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	}
 
 	return nil
-}
-
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *vTableInfo {
-	vTbl := &vTableInfo{}
-	for _, selectExpr := range expressions {
-		switch expr := selectExpr.(type) {
-		case *sqlparser.AliasedExpr:
-			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if expr.As.IsEmpty() {
-				switch expr := expr.Expr.(type) {
-				case *sqlparser.ColName:
-					// for projections, we strip out the qualifier and keep only the column name
-					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-				default:
-					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-				}
-			} else {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-			}
-		case *sqlparser.StarExpr:
-			for _, table := range tables {
-				vTbl.tables = append(vTbl.tables, table.GetTables()...)
-			}
-		}
-	}
-	return vTbl
 }
 
 func (a *analyzer) shouldContinue() bool {
