@@ -45,13 +45,15 @@ type analyzer struct {
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
 		scoper: s,
 		tables: newTableCollector(s, si, dbName),
 		typer:  newTyper(),
 	}
-
+	s.org = a
+	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
 
 	return a

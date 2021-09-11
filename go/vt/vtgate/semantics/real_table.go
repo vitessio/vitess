@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -39,24 +38,13 @@ func (r *RealTable) Dependencies(colName string, org originable) (dependencies, 
 }
 
 // GetTables implements the TableInfo interface
-func (r *RealTable) GetTables() []TableInfo {
-	return []TableInfo{r}
+func (r *RealTable) GetTables(org originable) TableSet {
+	return org.tableSetFor(r.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
 func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (r *RealTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
-}
-
-// DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	ts, _, err := r.RecursiveDepsFor(col, org, single)
-	return ts, err
 }
 
 // IsInfSchema implements the TableInfo interface

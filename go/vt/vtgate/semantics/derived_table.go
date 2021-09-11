@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,11 +29,12 @@ type derivedTable struct {
 	columnNames []string
 	cols        []sqlparser.Expr
 	tables      []TableInfo
+	tables2     TableSet
 }
 
 var _ TableInfo = (*derivedTable)(nil)
 
-func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *derivedTable {
+func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *derivedTable {
 	vTbl := &derivedTable{}
 	for _, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
@@ -53,7 +53,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables = append(vTbl.tables, table.GetTables()...)
+				vTbl.tables2 |= table.GetTables(org)
 			}
 		}
 	}
@@ -142,8 +142,8 @@ func (dt *derivedTable) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (dt *derivedTable) GetTables() []TableInfo {
-	return dt.tables
+func (dt *derivedTable) GetTables(org originable) TableSet {
+	return dt.tables2
 }
 
 // GetExprFor implements the TableInfo interface
@@ -154,65 +154,6 @@ func (dt *derivedTable) GetExprFor(s string) (sqlparser.Expr, error) {
 		}
 	}
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (dt *derivedTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() && (dt.ASTNode == nil || dt.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil, nil
-	}
-	var tsF TableSet
-	var qtF *querypb.Type
-	found := false
-	for i, colName := range dt.columnNames {
-		if col.Name.String() == colName {
-			ts, qt := org.depsForExpr(dt.cols[i])
-			if !found {
-				tsF = ts
-				qtF = qt
-			} else if tsF != ts {
-				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
-				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
-			}
-			found = true
-		}
-	}
-	if found {
-		return &tsF, qtF, nil
-	}
-	if len(dt.tables) == 0 {
-		return nil, nil, nil
-	}
-	for _, table := range dt.tables {
-		tsF |= org.tableSetFor(table.GetExpr())
-	}
-	return &tsF, nil, nil
-}
-
-// DepsFor implements the TableInfo interface
-func (dt *derivedTable) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
-	if dt.ASTNode == nil {
-		return nil, nil
-	}
-	if !col.Qualifier.IsEmpty() && (dt.ASTNode == nil || dt.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil
-	}
-	for _, colName := range dt.columnNames {
-		if col.Name.String() == colName {
-			ts := org.tableSetFor(dt.ASTNode)
-			return &ts, nil
-		}
-	}
-	if len(dt.tables) == 0 {
-		return nil, nil
-	}
-	var ts TableSet
-	for range dt.tables {
-		ts |= org.tableSetFor(dt.ASTNode)
-	}
-	return &ts, nil
 }
 
 func (dt *derivedTable) checkForDuplicates() error {

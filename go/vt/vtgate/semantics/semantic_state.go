@@ -41,16 +41,9 @@ type (
 
 		Dependencies(colName string, org originable) (dependencies, error)
 
-		// RecursiveDepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
-		// if the column is not found, nil will be returned instead. If the column is a derived table column, this method
-		// will recursively find the dependencies of the expression inside the derived table
-		RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
-
-		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
-		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
 		GetExprFor(s string) (sqlparser.Expr, error)
-		GetTables() []TableInfo
+		GetTables(org originable) TableSet
 	}
 
 	// ColumnInfo contains information about columns
@@ -156,13 +149,13 @@ func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser
 }
 
 // GetTables implements the TableInfo interface
-func (v *VindexTable) GetTables() []TableInfo {
-	return v.Table.GetTables()
+func (v *VindexTable) GetTables(org originable) TableSet {
+	return v.Table.GetTables(org)
 }
 
 // GetTables implements the TableInfo interface
-func (a *AliasedTable) GetTables() []TableInfo {
-	return []TableInfo{a}
+func (a *AliasedTable) GetTables(org originable) TableSet {
+	return org.tableSetFor(a.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
@@ -179,54 +172,6 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 // GetExprFor implements the TableInfo interface
 func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (a *AliasedTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return depsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
-}
-
-// DepsFor implements the TableInfo interface
-func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	ts, _, err := a.RecursiveDepsFor(col, org, single)
-	return ts, err
-}
-
-// depsFor implements the TableInfo interface for RealTable and AliasedTable
-func depsFor(
-	col *sqlparser.ColName,
-	org originable,
-	single bool,
-	astNode *sqlparser.AliasedTableExpr,
-	cols []ColumnInfo,
-	authoritative bool,
-) (*TableSet, *querypb.Type, error) {
-	// if we know that we are the only table in the scope, there is no doubt - the column must belong to the table
-	if single {
-		ts := org.tableSetFor(astNode)
-
-		for _, info := range cols {
-			if col.Name.EqualString(info.Name) {
-				return &ts, &info.Type, nil
-			}
-		}
-
-		if authoritative {
-			// if we are authoritative and we can't find the column, we should fail
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col.Name.String())
-		}
-
-		// it's probably the correct table, but we don't have enough info to be sure or figure out the type of the column
-		return &ts, nil, nil
-	}
-
-	for _, info := range cols {
-		if col.Name.EqualString(info.Name) {
-			ts := org.tableSetFor(astNode)
-			return &ts, &info.Type, nil
-		}
-	}
-	return nil, nil, nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -337,16 +282,6 @@ func (v *VindexTable) GetColumns() []ColumnInfo {
 // IsActualTable implements the TableInfo interface
 func (v *VindexTable) IsActualTable() bool {
 	return true
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (v *VindexTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return v.Table.RecursiveDepsFor(col, org, single)
-}
-
-// DepsFor implements the TableInfo interface
-func (v *VindexTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	return v.Table.DepsFor(col, org, single)
 }
 
 // IsInfSchema implements the TableInfo interface

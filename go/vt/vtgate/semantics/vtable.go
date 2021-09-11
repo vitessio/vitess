@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -30,7 +29,7 @@ type vTableInfo struct {
 	tableName   string
 	columnNames []string
 	cols        []sqlparser.Expr
-	tables      []TableInfo
+	tables      TableSet
 }
 
 var _ TableInfo = (*vTableInfo)(nil)
@@ -62,12 +61,7 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 		return &nothing{}, nil
 	}
 
-	var ts TableSet
-	for _, table := range v.tables {
-		ts |= org.tableSetFor(table.GetExpr())
-	}
-
-	return createUncertain(ts, ts), nil
+	return createUncertain(v.tables, v.tables), nil
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -112,11 +106,11 @@ func (v *vTableInfo) GetColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return len(v.tables) > 0
+	return v.tables > 0
 }
 
 // GetTables implements the TableInfo interface
-func (v *vTableInfo) GetTables() []TableInfo {
+func (v *vTableInfo) GetTables(org originable) TableSet {
 	return v.tables
 }
 
@@ -130,60 +124,7 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
 }
 
-// RecursiveDepsFor implements the TableInfo interface
-func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() && (v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil, nil
-	}
-	var tsF TableSet
-	var qtF *querypb.Type
-	found := false
-	for i, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts, qt := org.depsForExpr(v.cols[i])
-			if !found {
-				tsF = ts
-				qtF = qt
-			} else if tsF != ts {
-				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
-				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
-			}
-			found = true
-		}
-	}
-	if found {
-		return &tsF, qtF, nil
-	}
-	if len(v.tables) == 0 {
-		return nil, nil, nil
-	}
-	for _, table := range v.tables {
-		tsF |= org.tableSetFor(table.GetExpr())
-	}
-	return &tsF, nil, nil
-}
-
-// DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
-	if !col.Qualifier.IsEmpty() && (v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil
-	}
-	for _, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts := TableSet(0)
-			return &ts, nil
-		}
-	}
-	if len(v.tables) == 0 {
-		return nil, nil
-	}
-	var ts TableSet
-	return &ts, nil
-}
-
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo) *vTableInfo {
+func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
 	vTbl := &vTableInfo{}
 	for _, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
@@ -202,7 +143,7 @@ func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables = append(vTbl.tables, table.GetTables()...)
+				vTbl.tables |= table.GetTables(org)
 			}
 		}
 	}
