@@ -3523,26 +3523,27 @@ func testFile(t *testing.T, filename, tempDir string) {
 		fail := false
 		expected := strings.Builder{}
 		for tcase := range iterateExecFile(filename) {
+			fmt.Println(tcase)
 			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
 				}
-				expected.WriteString(fmt.Sprintf("%sINPUT\n%sEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
 				tree, err := Parse(tcase.input)
 				if tcase.errStr != "" {
-					expected.WriteString(fmt.Sprintf("ERROR\n%sEND\n", escapeNewLines(err.Error())))
+					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					}
 				}  else {
 					if err != nil {
-						expected.WriteString(fmt.Sprintf("ERROR\n%sEND\n", escapeNewLines(err.Error())))
+						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					} else {
 						out := String(tree)
-						expected.WriteString(fmt.Sprintf("OUTPUT\n%sEND\n", escapeNewLines(out)))
+						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
 						if tcase.output != out {
 							fail = true
 							t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
@@ -3566,6 +3567,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 	if err != nil {
 		panic(fmt.Sprintf("Could not open file %s", name))
 	}
+
 	testCaseIterator = make(chan testCase)
 	var comments string
 	go func() {
@@ -3573,25 +3575,12 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 
 		r := bufio.NewReader(fd)
 		lineno := 0
-		for {
-			binput, err := r.ReadBytes('\n')
-			if err != nil {
-				if err != io.EOF {
-					panic(fmt.Errorf("error reading file %s: line %d: %s", name, lineno, err.Error()))
-				}
+		for  {
+			input, lineno, _ := parsePartial(r, []string{"INPUT"}, lineno, name)
+			if input == "" && lineno == 0 {
 				break
 			}
-			lineno++
-			input := string(binput)
-			if input == "" || input == "\n"  {
-				continue
-			}
-			if input[0] == '#' {
-				comments = comments + input
-				continue
-			}
-			input, lineno, _ = parsePartial(r, []string{"INPUT"}, lineno, name)
-			output, lineno, returnTypeNumber := parsePartial(r, []string{"OUTPUT, ERROR"}, lineno, name)
+			output, lineno, returnTypeNumber := parsePartial(r, []string{"OUTPUT", "ERROR"}, lineno, name)
 			var errStr string
 			if returnTypeNumber == 1 {
 				errStr = output
@@ -3613,26 +3602,29 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 }
 
 func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName string) (string, int, int) {
-	var returnTypeNumber int
+	returnTypeNumber := -1
 	for {
 		binput, err := r.ReadBytes('\n')
 		if err != nil {
 			if err != io.EOF {
 				panic(fmt.Errorf("error reading file %s: line %d: %s", fileName, lineno, err.Error()))
 			}
-			break
+			return "", 0, 0
 		}
 		lineno++
 		input := string(binput)
+		input = strings.TrimSpace(input)
 		if input == "" || input == "\n" {
 			continue
 		}
-		input = strings.TrimSpace(input)
 		for i, str := range readType {
 			if input == str {
 				returnTypeNumber = i
 				break
 			}
+		}
+		if returnTypeNumber != -1 {
+			break
 		}
 		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
 	}
