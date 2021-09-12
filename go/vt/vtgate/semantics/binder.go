@@ -155,7 +155,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps
 
 	if err != nil {
 		if err == ambigousErr {
-			err = vterrors.Wrapf(err, "ambiguous column %s", sqlparser.String(colName))
+			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(colName))
 		}
 		return dependency{}, err
 	}
@@ -213,7 +213,7 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, s
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
 		return nil, ProjError{
-			inner: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "can't bind %s to a single table", sqlparser.String(expr)),
+			inner: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(expr)),
 		}
 	}
 	return deps, nil
