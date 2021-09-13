@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strconv"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,17 +27,22 @@ import (
 type earlyRewriter struct {
 	err      error
 	semTable *SemTable
+	scoper   *scoper
+	clause   string
 }
 
-func starRewrite(statement sqlparser.SelectStatement, semTable *SemTable) error {
+// earlyRewrite rewrites the query before the binder has had a chance to work on the query
+// it introduces new expressions that the binder will later need to bind correctly
+func earlyRewrite(statement sqlparser.SelectStatement, semTable *SemTable, scoper *scoper) error {
 	r := earlyRewriter{
 		semTable: semTable,
+		scoper:   scoper,
 	}
-	sqlparser.Rewrite(statement, r.starRewrite, nil)
+	sqlparser.Rewrite(statement, r.rewrite, nil)
 	return r.err
 }
 
-func (r *earlyRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
+func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		tables := r.semTable.GetSelectTables(node)
@@ -58,6 +65,46 @@ func (r *earlyRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 			selExprs = append(selExprs, colNames...)
 		}
 		node.SelectExprs = selExprs
+	case *sqlparser.Order:
+		r.clause = "order clause"
+	case sqlparser.GroupBy:
+		r.clause = "group statement"
+
+	case *sqlparser.Literal:
+		currScope, found := r.scoper.specialExprScopes[node]
+		if !found {
+			break
+		}
+		num, err := strconv.Atoi(node.Val)
+		if err != nil {
+			r.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+			break
+		}
+		if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
+			r.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
+			break
+		}
+
+		for i := 0; i < num; i++ {
+			expr := currScope.selectStmt.SelectExprs[i]
+			_, ok := expr.(*sqlparser.AliasedExpr)
+			if !ok {
+				r.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
+				return true
+			}
+		}
+
+		aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+		if !ok {
+			r.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
+			break
+		}
+
+		if !aliasedExpr.As.IsEmpty() {
+			cursor.Replace(sqlparser.NewColName(aliasedExpr.As.String()))
+		} else {
+			cursor.Replace(aliasedExpr.Expr)
+		}
 	}
 	return true
 }

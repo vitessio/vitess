@@ -29,6 +29,9 @@ type scoper struct {
 	wScope       map[*sqlparser.Select]*scope
 	sqlNodeScope map[scopeKey]*scope
 	scopes       []*scope
+
+	// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
+	specialExprScopes map[*sqlparser.Literal]*scope
 }
 
 type scopeKey struct {
@@ -47,9 +50,10 @@ const (
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope:       map[*sqlparser.Select]*scope{},
-		wScope:       map[*sqlparser.Select]*scope{},
-		sqlNodeScope: map[scopeKey]*scope{},
+		rScope:            map[*sqlparser.Select]*scope{},
+		wScope:            map[*sqlparser.Select]*scope{},
+		sqlNodeScope:      map[scopeKey]*scope{},
+		specialExprScopes: map[*sqlparser.Literal]*scope{},
 	}
 }
 
@@ -90,15 +94,33 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
 	case sqlparser.OrderBy:
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		for _, order := range node {
+			lit := keepIntLiteral(order.Expr)
+			s.specialExprScopes[lit] = s.currentScope()
+		}
 	case sqlparser.GroupBy:
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
-
+		for _, expr := range node {
+			lit := keepIntLiteral(expr)
+			s.specialExprScopes[lit] = s.currentScope()
+		}
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
 			break
 		}
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
 	}
+}
+
+func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
+	l, ok := e.(*sqlparser.Literal)
+	if !ok {
+		return nil
+	}
+	if l.Type != sqlparser.IntVal {
+		return nil
+	}
+	return l
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
