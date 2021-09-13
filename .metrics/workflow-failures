@@ -1,6 +1,3 @@
-2021-05-28T08:33:24Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/884956238
-2021-05-28T08:33:24Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/884956241
-2021-05-28T08:33:24Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/884956257
 2021-05-28T08:33:24Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/884956268
 2021-05-28T08:33:24Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/884956283
 2021-05-28T08:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/884956273
@@ -9998,3 +9995,6 @@
 2021-09-13T16:05:59Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1230314910
 2021-09-13T16:05:59Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1230314961
 2021-09-13T16:05:59Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1230314949
+2021-09-13T17:26:20Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1230565124
+2021-09-13T17:26:20Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1230565054
+2021-09-13T17:26:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1230565055
