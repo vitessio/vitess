@@ -151,9 +151,15 @@ func NewExecutor(
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
 			return int64(e.plans.Len())
 		})
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.UsedCapacity)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.MaxCapacity)
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
+			return e.plans.UsedCapacity()
+		})
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", func() int64 {
+			return e.plans.MaxCapacity()
+		})
+		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
+			return e.plans.Evictions()
+		})
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)
