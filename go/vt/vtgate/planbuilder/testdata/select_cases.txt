@@ -1890,3 +1890,55 @@ Gen4 plan same as above
     "Table": "dual"
   }
 }
+
+# Merging dual with user
+"select 42, id from dual, user"
+{
+  "QueryType": "SELECT",
+  "Original": "select 42, id from dual, user",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "dual_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectReference",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 42 from dual where 1 != 1",
+        "Query": "select 42 from dual",
+        "Table": "dual"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 42, id from dual, user",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
+    "Query": "select 42, id from dual, `user`",
+    "Table": "`user`, dual"
+  }
+}
