@@ -92,19 +92,6 @@ func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
 	return false
 }
 
-// PreRecoveryProcesses implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
-	inst.AuditOperation("recover-dead-primary", &vtorcReparent.analysisEntry.AnalyzedInstanceKey, "problem found; will recover")
-	if !vtorcReparent.skipProcesses {
-		if err := executeProcesses(config.Config.PreFailoverProcesses, "PreFailoverProcesses", vtorcReparent.topologyRecovery, true); err != nil {
-			return vtorcReparent.topologyRecovery.AddError(err)
-		}
-	}
-
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: will recover %+v", vtorcReparent.analysisEntry.AnalyzedInstanceKey))
-	return nil
-}
-
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
 // TODO : Discuss correct way
 func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Duration {
