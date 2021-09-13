@@ -37,7 +37,6 @@ import (
 type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
-		LockShard(context.Context, logutil.Logger, *topo.Server, string, string) (context.Context, func(*error), error)
 		LockAction() string
 		CheckIfFixed() bool
 		PreRecoveryProcesses(context.Context) error
@@ -74,11 +73,6 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 		ignoreReplicas:      ignoreReplicas,
 		waitReplicasTimeout: waitReplicasTimeout,
 	}
-}
-
-// LockShard implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) LockShard(ctx context.Context, logger logutil.Logger, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
-	return ts.LockShard(ctx, keyspace, shard, getLockAction(vtctlReparent.newPrimaryAlias))
 }
 
 // LockAction implements the ReparentFunctions interface

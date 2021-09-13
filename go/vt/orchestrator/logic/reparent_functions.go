@@ -71,16 +71,6 @@ func NewVtorcReparentFunctions(analysisEntry inst.ReplicationAnalysis, candidate
 	}
 }
 
-// LockShard implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) LockShard(ctx context.Context, logger logutil.Logger, ts *topo.Server, keyspace string, shard string) (context.Context, func(*error), error) {
-	ctx, unlock, err := LockShard(ctx, vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	if err != nil {
-		logger.Infof("could not obtain shard lock (%v)", err)
-		return nil, nil, err
-	}
-	return ctx, unlock, nil
-}
-
 // LockAction implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) LockAction() string {
 	return "Orc Recovery"

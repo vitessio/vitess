@@ -19,6 +19,7 @@ package logic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	goos "os"
@@ -627,6 +628,15 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+
+	// check if we have received SIGTERM, if we have, we should not continue with the recovery
+	val := atomic.LoadInt32(&hasReceivedSIGTERM)
+	if val > 0 {
+		return false, topologyRecovery, errors.New("Can't lock shard: SIGTERM received")
+	}
+	// add to the shard lock counter since ERS will lock the shard
+	atomic.AddInt32(&shardsLockCounter, -1)
+	defer atomic.AddInt32(&shardsLockCounter, -1)
 
 	reparentFunctions := NewVtorcReparentFunctions(analysisEntry, candidateInstanceKey, skipProcesses, topologyRecovery)
 	_, err = reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {

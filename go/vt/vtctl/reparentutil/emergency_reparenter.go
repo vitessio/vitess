@@ -73,7 +73,7 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 // keyspace and shard.
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
 	// First step is to lock the shard for the given operation
-	ctx, unlock, err := reparentFunctions.LockShard(ctx, erp.logger, erp.ts, keyspace, shard)
+	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, reparentFunctions.LockAction())
 	if err != nil {
 		return nil, err
 	}
