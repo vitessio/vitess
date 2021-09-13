@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -126,6 +128,11 @@ type (
 	}
 )
 
+var (
+	// ErrMultipleTables refers to an error happening when something should be used only for single tables
+	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+)
+
 // Dependencies implements the TableInfo interface
 func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
 	return v.Table.Dependencies(colName, org)
@@ -139,7 +146,7 @@ func (a *AliasedTable) Dependencies(colName string, org originable) (dependencie
 func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
 	ts := org.tableSetFor(node)
 	for _, info := range columns {
-		if colName == info.Name {
+		if strings.EqualFold(info.Name, colName) {
 			return createCertain(ts, ts, &info.Type), nil
 		}
 	}
@@ -309,7 +316,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 // TableInfoFor returns the table info for the table set. It should contains only single table.
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	if id.NumberOfTables() > 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+		return nil, ErrMultipleTables
 	}
 	return st.Tables[id.TableOffset()], nil
 }

@@ -113,7 +113,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 func (a *analyzer) setError(err error) {
 	prErr, ok := err.(ProjError)
 	if ok {
-		a.projErr = prErr.inner
+		a.projErr = prErr.Inner
 		return
 	}
 
@@ -164,7 +164,7 @@ func checkForStar(s sqlparser.SelectExprs) error {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
 			return ProjError{
-				inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
+				Inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
 			}
 		}
 	}
@@ -334,9 +334,9 @@ func Gen4NotSupportedF(format string, args ...interface{}) error {
 // ProjError is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
 type ProjError struct {
-	inner error
+	Inner error
 }
 
 func (p ProjError) Error() string {
-	return p.inner.Error()
+	return p.Inner.Error()
 }
