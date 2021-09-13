@@ -31,26 +31,26 @@ import (
 // While doing this, it will also find the types for columns and
 // store these in the typer:s expression map
 type binder struct {
-	exprRecursiveDeps ExprDependencies
-	exprDeps          ExprDependencies
-	scoper            *scoper
-	tc                *tableCollector
-	org               originable
-	typer             *typer
-	subqueryMap       map[*sqlparser.Select][]*subquery
-	subqueryRef       map[*sqlparser.Subquery]*subquery
+	recursive   ExprDependencies
+	direct      ExprDependencies
+	scoper      *scoper
+	tc          *tableCollector
+	org         originable
+	typer       *typer
+	subqueryMap map[*sqlparser.Select][]*subquery
+	subqueryRef map[*sqlparser.Subquery]*subquery
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
 	return &binder{
-		exprRecursiveDeps: map[sqlparser.Expr]TableSet{},
-		exprDeps:          map[sqlparser.Expr]TableSet{},
-		scoper:            scoper,
-		org:               org,
-		tc:                tc,
-		typer:             typer,
-		subqueryMap:       map[*sqlparser.Select][]*subquery{},
-		subqueryRef:       map[*sqlparser.Subquery]*subquery{},
+		recursive:   map[sqlparser.Expr]TableSet{},
+		direct:      map[sqlparser.Expr]TableSet{},
+		scoper:      scoper,
+		org:         org,
+		tc:          tc,
+		typer:       typer,
+		subqueryMap: map[*sqlparser.Select][]*subquery{},
+		subqueryRef: map[*sqlparser.Subquery]*subquery{},
 	}
 }
 
@@ -93,8 +93,8 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		if err != nil {
 			return err
 		}
-		b.exprRecursiveDeps[node] = deps.recursive
-		b.exprDeps[node] = deps.direct
+		b.recursive[node] = deps.recursive
+		b.direct[node] = deps.direct
 		if deps.typ != nil {
 			b.typer.setTypeFor(node, *deps.typ)
 		}
@@ -114,8 +114,8 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			}
 			ts |= b.tc.tableSetFor(table.GetExpr())
 		}
-		b.exprRecursiveDeps[node] = ts
-		b.exprDeps[node] = ts
+		b.recursive[node] = ts
+		b.direct[node] = ts
 	}
 	return nil
 }
@@ -142,7 +142,7 @@ func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, calle
 		return nil
 	}
 
-	b.exprRecursiveDeps[input] = b.exprRecursiveDeps.Dependencies(expr.Expr)
+	b.recursive[input] = b.recursive.Dependencies(expr.Expr)
 	return nil
 }
 

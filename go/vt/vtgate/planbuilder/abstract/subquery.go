@@ -58,14 +58,14 @@ func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.
 	var result []sqlparser.Expr
 
 	for _, expr := range s.Outer.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
 	for _, inner := range s.Inner {
 		for _, expr := range inner.Inner.UnsolvedPredicates(semTable) {
-			deps := semTable.Dependencies(expr)
+			deps := semTable.DirectDeps(expr)
 			if !deps.IsSolvedBy(ts) {
 				result = append(result, expr)
 			}

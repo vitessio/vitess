@@ -253,7 +253,7 @@ func rewriteSubqueryDependenciesForJoin(otherTree queryTree, outerTree *joinTree
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check weather the column name belongs to the other side of the join tree
-			if ctx.semTable.Dependencies(node).IsSolvedBy(otherTree.tableID()) {
+			if ctx.semTable.DirectDeps(node).IsSolvedBy(otherTree.tableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := node.CompliantName()
 				cursor.Replace(sqlparser.NewArgument(bindVar))
@@ -307,7 +307,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	if !isCol {
 		return false
 	}
-	ts := semTable.BaseTableDependencies(expr)
+	ts := semTable.RecursiveDeps(expr)
 	tableInfo, err := semTable.TableInfoFor(ts)
 	if err != nil {
 		return false
@@ -492,7 +492,7 @@ func breakPredicateInLHSandRHS(
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.BaseTableDependencies(node)
+			deps := semTable.RecursiveDeps(node)
 			if deps == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -798,7 +798,7 @@ func findColumnVindex(ctx planningContext, a *routeTree, exp sqlparser.Expr) vin
 		if !isCol {
 			continue
 		}
-		leftDep := ctx.semTable.BaseTableDependencies(expr)
+		leftDep := ctx.semTable.RecursiveDeps(expr)
 		_ = visitRelations(a.tables, func(rel relation) (bool, error) {
 			rb, isRoute := rel.(*routeTable)
 			if !isRoute {
@@ -1074,7 +1074,7 @@ func createRoutePlanForOuter(ctx planningContext, aRoute, bRoute *routeTree, new
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := ctx.semTable.BaseTableDependencies(predicate)
+		deps := ctx.semTable.RecursiveDeps(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
@@ -1131,7 +1131,7 @@ func gen4ValEqual(ctx planningContext, a, b sqlparser.Expr) bool {
 				return false
 			}
 
-			return ctx.semTable.Dependencies(a) == ctx.semTable.Dependencies(b)
+			return ctx.semTable.DirectDeps(a) == ctx.semTable.DirectDeps(b)
 		}
 	case sqlparser.Argument:
 		b, ok := b.(sqlparser.Argument)

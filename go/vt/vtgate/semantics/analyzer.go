@@ -97,16 +97,16 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 
 func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 	return &SemTable{
-		ExprBaseTableDeps: a.binder.exprRecursiveDeps,
-		ExprDeps:          a.binder.exprDeps,
-		exprTypes:         a.typer.exprTypes,
-		Tables:            a.tables.Tables,
-		selectScope:       a.scoper.rScope,
-		ProjectionErr:     a.projErr,
-		Comments:          statement.GetComments(),
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+		Recursive:        a.binder.recursive,
+		Direct:           a.binder.direct,
+		exprTypes:        a.typer.exprTypes,
+		Tables:           a.tables.Tables,
+		selectScope:      a.scoper.rScope,
+		ProjectionErr:    a.projErr,
+		Comments:         statement.GetComments(),
+		SubqueryMap:      a.binder.subqueryMap,
+		SubqueryRef:      a.binder.subqueryRef,
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
 	}
 }
 
@@ -258,7 +258,7 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.binder.exprRecursiveDeps.Dependencies(expr)
+	ts := a.binder.recursive.Dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return ts, nil

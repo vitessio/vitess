@@ -179,7 +179,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
-		deps := semTable.BaseTableDependencies(expr.Expr)
+		deps := semTable.RecursiveDeps(expr.Expr)
 		var column int
 		var appended bool
 		passDownReuseCol := reuseCol
@@ -259,7 +259,7 @@ func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedEx
 }
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
-	exprDep := semTable.BaseTableDependencies(expr.Expr)
+	exprDep := semTable.RecursiveDeps(expr.Expr)
 	// Here to find if the expr already exists in the SelectStatement, we have 3 cases
 	// input is a Select -> In this case we want to search in the select
 	// input is a Union -> In this case we want to search in the First Select of the Union
@@ -275,7 +275,7 @@ func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStat
 
 		selectExprCol, isSelectExprCol := selectExpr.Expr.(*sqlparser.ColName)
 		exprCol, isExprCol := expr.Expr.(*sqlparser.ColName)
-		selectExprDep := semTable.BaseTableDependencies(selectExpr.Expr)
+		selectExprDep := semTable.RecursiveDeps(selectExpr.Expr)
 
 		// Check that the two expressions have the same dependencies
 		if selectExprDep != exprDep {
@@ -760,7 +760,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx planningContext, plan logica
 
 func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
 	for _, expr := range orderExprs {
-		exprDependencies := semTable.BaseTableDependencies(expr.Inner.Expr)
+		exprDependencies := semTable.RecursiveDeps(expr.Inner.Expr)
 		if !exprDependencies.IsSolvedBy(lhsTables) {
 			return false
 		}
