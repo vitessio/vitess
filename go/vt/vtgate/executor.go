@@ -19,6 +19,8 @@ package vtgate
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -1235,7 +1238,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey := vcursor.planPrefixKey() + ":" + query
+	planHash := sha256.New()
+	planHash.Write([]byte(vcursor.planPrefixKey()))
+	planHash.Write([]byte{':'})
+	planHash.Write(hack.StringBytes(query))
+	planKey := hex.EncodeToString(planHash.Sum(nil))
+
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
@@ -1253,6 +1261,15 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
+	planHash := sha256.Sum256([]byte(planKey))
+	planHex := hex.EncodeToString(planHash[:])
+	if plan, ok := e.plans.Get(planHex); ok {
+		return plan.(*engine.Plan), true
+	}
+	return nil, false
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
