@@ -89,6 +89,9 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 			for _, e := range hp.qp.SelectExprs {
 				aliasExpr, err := e.GetAliasedExpr()
 				if err != nil {
+					if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+						return nil, abstract.ErrStarExprInCrossShard
+					}
 					return nil, err
 				}
 				if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {

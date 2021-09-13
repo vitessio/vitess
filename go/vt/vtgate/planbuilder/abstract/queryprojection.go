@@ -62,6 +62,11 @@ type (
 	}
 )
 
+var (
+	// ErrStarExprInCrossShard is an error that happens when we try to use a '*' in a cross shard query
+	ErrStarExprInCrossShard = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
+)
+
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	switch sel := s.Col.(type) {
@@ -81,8 +86,6 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	switch expr := s.Col.(type) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
-	case *sqlparser.StarExpr:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not an aliased expression: %T", expr)
 	}
@@ -265,8 +268,12 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 		if num > len(qp.SelectExprs) {
 			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
 		}
-		aliasedExpr, err := qp.SelectExprs[num-1].GetAliasedExpr()
+		selectExpr := qp.SelectExprs[num-1]
+		aliasedExpr, err := selectExpr.GetAliasedExpr()
 		if err != nil {
+			if _, isStar := selectExpr.Col.(*sqlparser.StarExpr); isStar {
+				return nil, nil, ErrStarExprInCrossShard
+			}
 			return nil, nil, err
 		}
 		expr = aliasedExpr.Expr
