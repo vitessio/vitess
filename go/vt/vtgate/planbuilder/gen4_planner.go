@@ -98,17 +98,17 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema, starRewrite)
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = queryRewrite(ctx, selStmt)
-	if err != nil {
-		return nil, err
-	}
-
 	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
