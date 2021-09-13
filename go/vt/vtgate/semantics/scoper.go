@@ -92,6 +92,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
 	case sqlparser.GroupBy:
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
 			break
