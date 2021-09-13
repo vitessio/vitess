@@ -123,11 +123,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
 
-	// check that the primary recovery type is a valid one
-	if err := reparentFunctions.CheckPrimaryRecoveryType(erp.logger); err != nil {
-		return err
-	}
-
 	// read all the tablets and there information
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)

@@ -39,7 +39,6 @@ type (
 	ReparentFunctions interface {
 		LockAction() string
 		CheckIfFixed() bool
-		CheckPrimaryRecoveryType(logutil.Logger) error
 		GetWaitReplicasTimeout() time.Duration
 		GetWaitForRelayLogsTimeout() time.Duration
 		HandleRelayLogFailure(logutil.Logger, error) error
@@ -106,11 +105,6 @@ func (vtctlReparent *VtctlReparentFunctions) HandleRelayLogFailure(logger loguti
 // GetIgnoreReplicas implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) GetIgnoreReplicas() sets.String {
 	return vtctlReparent.ignoreReplicas
-}
-
-// CheckPrimaryRecoveryType implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) CheckPrimaryRecoveryType(logutil.Logger) error {
-	return nil
 }
 
 // RestrictValidCandidates implements the ReparentFunctions interface
