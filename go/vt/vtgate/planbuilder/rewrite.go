@@ -25,45 +25,9 @@ import (
 )
 
 type rewriter struct {
-	err          error
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
 	isInSubquery int
-}
-
-func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
-	r := rewriter{
-		semTable: semTable,
-	}
-	sqlparser.Rewrite(statement, r.starRewrite, nil)
-	return r.err
-}
-
-func (r *rewriter) starRewrite(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Select:
-		tables := r.semTable.GetSelectTables(node)
-		var selExprs sqlparser.SelectExprs
-		for _, selectExpr := range node.SelectExprs {
-			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
-			if !isStarExpr {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
-			if err != nil {
-				r.err = err
-				return false
-			}
-			if !starExpanded {
-				selExprs = append(selExprs, selectExpr)
-				continue
-			}
-			selExprs = append(selExprs, colNames...)
-		}
-		node.SelectExprs = selExprs
-	}
-	return true
 }
 
 func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
