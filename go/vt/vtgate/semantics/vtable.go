@@ -36,6 +36,8 @@ var _ TableInfo = (*vTableInfo)(nil)
 
 // Dependencies implements the TableInfo interface
 func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
+	var deps dependencies = &nothing{}
+	var err error
 	for i, name := range v.columnNames {
 		if name != colName {
 			continue
@@ -55,14 +57,16 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 			directDeps = recursiveDeps
 		}
 
-		return createCertain(directDeps, recursiveDeps, qt), nil
+		newDeps := createCertain(directDeps, recursiveDeps, qt)
+		deps, err = deps.Merge(newDeps)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	if !v.hasStar() {
-		return &nothing{}, nil
+	if deps.Empty() && v.hasStar() {
+		return createUncertain(v.tables, v.tables), nil
 	}
-
-	return createUncertain(v.tables, v.tables), nil
+	return deps, nil
 }
 
 // IsInfSchema implements the TableInfo interface

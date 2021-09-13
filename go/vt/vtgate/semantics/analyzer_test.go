@@ -174,27 +174,7 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 	}, {
 		"select 1 as c from tabl order by c",
 		T0,
-	}}
-	for _, tc := range tcases {
-		t.Run(tc.sql, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				require.Nil(t, r, "panicked")
-			}()
-			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-			order := sel.OrderBy[0].Expr
-			d := semTable.BaseTableDependencies(order)
-			require.Equal(t, tc.deps, d, tc.sql)
-		})
-	}
-}
-
-func TestOrderByBindingMultiTable(t *testing.T) {
-	tcases := []struct {
-		sql  string
-		deps TableSet
-	}{{
+	}, {
 		"select name, name from t1, t2 order by name",
 		T2,
 	}}
@@ -204,7 +184,6 @@ func TestOrderByBindingMultiTable(t *testing.T) {
 				r := recover()
 				require.Nil(t, r, "panicked")
 			}()
-
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			order := sel.OrderBy[0].Expr
@@ -839,6 +818,10 @@ func TestScopingWDerivedTables(t *testing.T) {
 			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
 			expectation:          T2,
 			recursiveExpectation: T1,
+		}, {
+			query:                "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			expectation:          T0,
+			recursiveExpectation: T0,
 		}}
 	for _, query := range queries {
 		t.Run(query.query, func(t *testing.T) {
@@ -856,6 +839,43 @@ func TestScopingWDerivedTables(t *testing.T) {
 				sel := parse.(*sqlparser.Select)
 				assert.Equal(t, query.recursiveExpectation, st.BaseTableDependencies(extract(sel, 0)), "BaseTableDependencies")
 				assert.Equal(t, query.expectation, st.Dependencies(extract(sel, 0)), "Dependencies")
+			}
+		})
+	}
+}
+
+func TestScopingWComplexDerivedTables(t *testing.T) {
+	queries := []struct {
+		query            string
+		errorMessage     string
+		rightExpectation TableSet
+		leftExpectation  TableSet
+	}{
+		{
+			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+			rightExpectation: T1,
+			leftExpectation:  T1,
+		},
+	}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+				Tables: map[string]*vindexes.Table{
+					"t": {Name: sqlparser.NewTableIdent("t")},
+				},
+			}, NoRewrite)
+			if query.errorMessage != "" {
+				require.EqualError(t, err, query.errorMessage)
+			} else {
+				require.NoError(t, err)
+				sel := parse.(*sqlparser.Select)
+				comparisonExpr := sel.Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ExistsExpr).Subquery.Select.(*sqlparser.Select).Where.Expr.(*sqlparser.ComparisonExpr)
+				left := comparisonExpr.Left
+				right := comparisonExpr.Right
+				assert.Equal(t, query.leftExpectation, st.BaseTableDependencies(left), "Left BaseTableDependencies")
+				assert.Equal(t, query.rightExpectation, st.BaseTableDependencies(right), "Right BaseTableDependencies")
 			}
 		})
 	}
