@@ -1,20 +1,3 @@
-2021-05-28T08:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/884956273
-2021-05-28T08:33:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/884956259
-2021-05-28T08:33:24Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/884956253
-2021-05-28T08:33:24Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/884956256
-2021-05-28T08:33:24Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/884956265
-2021-05-28T08:33:24Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/884956242
-2021-05-28T08:33:24Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/884956231
-2021-05-28T08:33:24Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/884956235
-2021-05-28T08:33:24Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/884956252
-2021-05-28T08:33:24Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/884956250
-2021-05-28T08:33:24Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/884956270
-2021-05-28T08:33:24Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/884956267
-2021-05-28T08:33:24Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/884956276
-2021-05-28T08:33:24Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/884956258
-2021-05-28T08:33:24Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/884956244
-2021-05-28T08:33:24Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/884956232
-2021-05-28T08:33:24Z,endtoend,https://github.com/vitessio/vitess/actions/runs/884956289
 2021-05-28T08:33:24Z,local_example,https://github.com/vitessio/vitess/actions/runs/884956248
 2021-05-28T08:33:24Z,local_example,https://github.com/vitessio/vitess/actions/runs/884956251
 2021-05-28T08:33:24Z,region_example,https://github.com/vitessio/vitess/actions/runs/884956266
@@ -9998,3 +9981,20 @@
 2021-09-13T17:26:20Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1230565054
 2021-09-13T17:26:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1230565055
 2021-09-13T17:26:20Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1230565077
+2021-09-13T17:54:30Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1230648373
+2021-09-13T17:54:30Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/1230648317
+2021-09-13T17:54:30Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/1230648378
+2021-09-13T17:54:30Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1230648352
+2021-09-13T17:54:30Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1230648348
+2021-09-13T17:54:30Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1230648356
+2021-09-13T17:54:30Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/1230648316
+2021-09-13T17:54:30Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/1230648369
+2021-09-13T17:54:30Z,Cluster Self Hosted (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1230648343
+2021-09-13T17:54:30Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1230648384
+2021-09-13T17:54:30Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1230648329
+2021-09-13T17:54:30Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1230648322
+2021-09-13T17:54:30Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1230648349
+2021-09-13T17:57:57Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1230656420
+2021-09-13T17:57:57Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1230656480
+2021-09-13T17:57:57Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1230656441
+2021-09-13T17:57:57Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1230656447
