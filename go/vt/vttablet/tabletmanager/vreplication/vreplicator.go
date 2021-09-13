@@ -295,7 +295,7 @@ func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*Colum
 				}
 			}
 			extra := strings.ToLower(row[5].ToString())
-			if strings.Contains(extra, "generated") || strings.Contains(extra, "virtual") {
+			if strings.Contains(extra, "stored generated") || strings.Contains(extra, "virtual generated") {
 				isGenerated = true
 			}
 			colInfo = append(colInfo, &ColumnInfo{
