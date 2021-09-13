@@ -123,11 +123,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
 
-	// run the pre recovery processes
-	if err := reparentFunctions.PreRecoveryProcesses(ctx); err != nil {
-		return err
-	}
-
 	// check that the primary recovery type is a valid one
 	if err := reparentFunctions.CheckPrimaryRecoveryType(erp.logger); err != nil {
 		return err

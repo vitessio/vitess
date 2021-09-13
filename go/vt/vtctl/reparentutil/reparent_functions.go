@@ -39,7 +39,6 @@ type (
 	ReparentFunctions interface {
 		LockAction() string
 		CheckIfFixed() bool
-		PreRecoveryProcesses(context.Context) error
 		CheckPrimaryRecoveryType(logutil.Logger) error
 		GetWaitReplicasTimeout() time.Duration
 		GetWaitForRelayLogsTimeout() time.Duration
@@ -85,12 +84,6 @@ func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
 	// For vtctl command, we know there is no other third party to fix this.
 	// If a user has called this command, then we should execute EmergencyReparentShard
 	return false
-}
-
-// PreRecoveryProcesses implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PreRecoveryProcesses(ctx context.Context) error {
-	// there are no pre-recovery processes to be run
-	return nil
 }
 
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
