@@ -119,18 +119,6 @@ func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
 	return nil
 }
 
-// CheckPrimaryRecoveryType implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) CheckPrimaryRecoveryType(logger logutil.Logger) error {
-	vtorcReparent.topologyRecovery.RecoveryType = GetPrimaryRecoveryType(&vtorcReparent.topologyRecovery.AnalysisEntry)
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: primaryRecoveryType=%+v", vtorcReparent.topologyRecovery.RecoveryType))
-	if vtorcReparent.topologyRecovery.RecoveryType != PrimaryRecoveryGTID {
-		err := fmt.Errorf("RecoveryType unknown/unsupported")
-		logger.Error(err)
-		return vtorcReparent.topologyRecovery.AddError(err)
-	}
-	return nil
-}
-
 // RestrictValidCandidates implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
 	// we do not restrict the valid candidates for VtOrc for 2 reasons -
