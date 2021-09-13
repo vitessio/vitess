@@ -42,27 +42,6 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 	return in.SelectExprs[idx].(*sqlparser.AliasedExpr).Expr
 }
 
-/*
-   authoritative - yes and no
-   column - unqualified, table qualified, and db.table qualified
-   table - table qualified, and db.table qualified
-   table - aliased and unaliased
-   scope - from, order by/having/group by, derived table, subquery, order by after group by, order by followed by distinct
-   situation -
-   	clash in same scope - SELECT part.col1, part.col2 FROM ks.part, part
-   	clash in different sco - FROM otherTable as uu WHERE EXISTS(SELECT * from uu where uu.id = uu.uid)
-   	no column found in scope - FROM uu WHERE EXISTS(SELECT * from u where u.id = u.uid)
-
-   select x.id, z.col, x.col from (select tbl1.a+tbl2.b as id, 1 as col from tvl1, tbl2) as x, z
-
-   x.id : direct dependencies: x, recursive dependencies: tbl1, tbl2
-   z.col: direct dependencies: z, recursive dependencies: z
-   x.col: direct dependencies: x, recursive dependencies: 0
-
-
-
-*/
-
 func TestScopeForSubqueries(t *testing.T) {
 	tcases := []struct {
 		sql  string
