@@ -27,7 +27,7 @@ type earlyRewriter struct {
 	semTable *SemTable
 }
 
-func StarRewrite(statement sqlparser.SelectStatement, semTable *SemTable) error {
+func starRewrite(statement sqlparser.SelectStatement, semTable *SemTable) error {
 	r := earlyRewriter{
 		semTable: semTable,
 	}

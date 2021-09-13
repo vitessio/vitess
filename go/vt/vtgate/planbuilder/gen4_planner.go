@@ -98,7 +98,7 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema, semantics.StarRewrite)
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
 	if err != nil {
 		return nil, err
 	}
