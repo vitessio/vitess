@@ -136,8 +136,10 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.setError(err)
 			return true
 		}
-
-		a.scoper.down(cursor)
+		if err := a.scoper.down(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
 	} else { // after expand star
 		if err := checkUnionColumns(cursor); err != nil {
 			a.setError(err)
