@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package semantics
 
 import (
 	"testing"
@@ -24,12 +24,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestExpandStar(t *testing.T) {
-	schemaInfo := &semantics.FakeSI{
+	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{
 			"t1": {
 				Name: sqlparser.NewTableIdent("t1"),
@@ -114,7 +113,7 @@ func TestExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			_, err = semantics.Analyze(selectStatement, cDB, schemaInfo, starRewrite)
+			_, err = Analyze(selectStatement, cDB, schemaInfo, StarRewrite)
 			if tcase.expErr == "" {
 				require.NoError(t, err)
 				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
@@ -126,7 +125,7 @@ func TestExpandStar(t *testing.T) {
 }
 
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
-	schemaInfo := &semantics.FakeSI{Tables: map[string]*vindexes.Table{
+	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {
 			Name: sqlparser.NewTableIdent("t1"),
 			Columns: []vindexes.Column{{
@@ -160,7 +159,7 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			require.NoError(t, err)
 			selectStatement, isSelectStatement := ast.(*sqlparser.Select)
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
-			semTable, err := semantics.Analyze(selectStatement, "", schemaInfo, starRewrite)
+			semTable, err := Analyze(selectStatement, "", schemaInfo, StarRewrite)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			if tcase.otherTbl != -1 {

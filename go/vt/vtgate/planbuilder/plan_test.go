@@ -826,7 +826,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		return
 	}
 
-	_, _ = semantics.Analyze(sel, database, s, starRewrite)
+	_, _ = semantics.Analyze(sel, database, s, semantics.StarRewrite)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {
