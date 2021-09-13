@@ -124,6 +124,59 @@ func TestExpandStar(t *testing.T) {
 	}
 }
 
+func TestOrderByGroupByLiteral(t *testing.T) {
+	schemaInfo := &FakeSI{
+		Tables: map[string]*vindexes.Table{},
+	}
+	cDB := "db"
+	tcases := []struct {
+		sql    string
+		expSQL string
+		expErr string
+	}{{
+		sql:    "select 1 as id from t1 order by 1",
+		expSQL: "select 1 as id from t1 order by id asc",
+	}, {
+		sql:    "select t1.col from t1 order by 1",
+		expSQL: "select t1.col from t1 order by t1.col asc",
+	}, {
+		sql:    "select t1.col from t1 group by 1",
+		expSQL: "select t1.col from t1 group by t1.col",
+	}, {
+		sql:    "select t1.col as xyz from t1 group by 1",
+		expSQL: "select t1.col as xyz from t1 group by xyz",
+	}, {
+		sql:    "select t1.col as xyz, count(*) from t1 group by 1 order by 2",
+		expSQL: "select t1.col as xyz, count(*) from t1 group by xyz order by count(*) asc",
+	}, {
+		sql:    "select id from t1 group by 2",
+		expErr: "Unknown column '2' in 'group statement'",
+	}, {
+		sql:    "select id from t1 order by 2",
+		expErr: "Unknown column '2' in 'order clause'",
+	}, {
+		sql:    "select *, id from t1 order by 2",
+		expErr: "cannot use column offsets in order clause when using `*`",
+	}, {
+		sql:    "select *, id from t1 group by 2",
+		expErr: "cannot use column offsets in group statement when using `*`",
+	}}
+	for _, tcase := range tcases {
+		t.Run(tcase.sql, func(t *testing.T) {
+			ast, err := sqlparser.Parse(tcase.sql)
+			require.NoError(t, err)
+			selectStatement := ast.(*sqlparser.Select)
+			_, err = Analyze(selectStatement, cDB, schemaInfo)
+			if tcase.expErr == "" {
+				require.NoError(t, err)
+				assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
+			} else {
+				require.EqualError(t, err, tcase.expErr)
+			}
+		})
+	}
+}
+
 func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 	schemaInfo := &FakeSI{Tables: map[string]*vindexes.Table{
 		"t1": {

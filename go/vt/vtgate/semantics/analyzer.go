@@ -70,8 +70,8 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	// Rewriting operation (expand star)
-	if err = starRewrite(statement, semTable); err != nil {
+	// Rewriting operation
+	if err = earlyRewrite(statement, semTable, analyzer.scoper); err != nil {
 		return nil, err
 	}
 	analyzer.hasRewritten = true
