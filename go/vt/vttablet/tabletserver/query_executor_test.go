@@ -734,10 +734,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	want := `table acl error: "u2" [] cannot run MessageStream on table "msg"`
-	if err == nil || err.Error() != want {
-		t.Errorf("qre.MessageStream(msg) error: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, `authorization error: user "u2" is not authorized to run MessageStream on table "msg"`)
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
@@ -877,10 +874,8 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	wanterr := "table acl error"
-	if !strings.Contains(err.Error(), wanterr) {
-		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
-	}
+
+	assert.EqualError(t, err, `authorization error: user "basic_username" is not authorized to run SelectImpossible on table "test_table"`)
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -944,10 +939,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	wanterr := "table acl error"
-	if !strings.Contains(err.Error(), wanterr) {
-		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
-	}
+	assert.EqualError(t, err, `authorization error: user "u2" is not authorized to run Select on table "test_table"`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
