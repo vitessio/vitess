@@ -1,4 +1,3 @@
-2021-05-28T08:33:24Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/884956283
 2021-05-28T08:33:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/884956273
 2021-05-28T08:33:24Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/884956259
 2021-05-28T08:33:24Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/884956253
@@ -9998,3 +9997,4 @@
 2021-09-13T17:26:20Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1230565124
 2021-09-13T17:26:20Z,Unit Test Self Hosted (mysql57),https://github.com/vitessio/vitess/actions/runs/1230565054
 2021-09-13T17:26:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1230565055
+2021-09-13T17:26:20Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1230565077
