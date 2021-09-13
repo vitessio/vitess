@@ -1,4 +1,3 @@
-2021-05-26T17:36:07Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/879428876
 2021-05-26T17:36:07Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/879428835
 2021-05-26T17:36:07Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/879428860
 2021-05-26T17:36:07Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/879428850
@@ -9995,6 +9994,7 @@
 2021-09-13T07:52:08Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1228644174
 2021-09-13T07:52:08Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1228644179
 2021-09-13T07:52:08Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1228644168
+2021-09-13T08:30:24Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1228763893
 2021-09-13T08:30:24Z,Cluster (resharding),https://github.com/vitessio/vitess/actions/runs/1228763848
 2021-09-13T08:30:24Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1228763864
 2021-09-13T08:30:24Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1228763887
