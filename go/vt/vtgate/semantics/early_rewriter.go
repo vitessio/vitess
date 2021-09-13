@@ -14,19 +14,20 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package semantics
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type earlyRewriter struct {
 	err      error
-	semTable *semantics.SemTable
+	semTable *SemTable
 }
 
-func starRewrite(statement sqlparser.SelectStatement, semTable *semantics.SemTable) error {
+func StarRewrite(statement sqlparser.SelectStatement, semTable *SemTable) error {
 	r := earlyRewriter{
 		semTable: semTable,
 	}
@@ -59,4 +60,46 @@ func (r *earlyRewriter) starRewrite(cursor *sqlparser.Cursor) bool {
 		node.SelectExprs = selExprs
 	}
 	return true
+}
+
+func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
+	unknownTbl := true
+	var colNames sqlparser.SelectExprs
+	starExpanded := true
+	for _, tbl := range tables {
+		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
+			continue
+		}
+		unknownTbl = false
+		if !tbl.Authoritative() {
+			starExpanded = false
+			break
+		}
+		tblName, err := tbl.Name()
+		if err != nil {
+			return false, nil, err
+		}
+
+		withAlias := len(tables) > 1
+		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
+		for _, col := range tbl.GetColumns() {
+			var colName *sqlparser.ColName
+			var alias sqlparser.ColIdent
+			if withQualifier {
+				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
+			} else {
+				colName = sqlparser.NewColName(col.Name)
+			}
+			if withAlias {
+				alias = sqlparser.NewColIdent(col.Name)
+			}
+			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
+		}
+	}
+
+	if unknownTbl {
+		// This will only happen for case when starExpr has qualifier.
+		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
+	}
+	return starExpanded, colNames, nil
 }

@@ -76,8 +76,7 @@ func TestSubqueryRewrite(t *testing.T) {
 			require.True(t, isSelectStatement, "analyzer expects a select statement")
 			semTable, err := semantics.Analyze(selectStatement, "", &semantics.FakeSI{}, semantics.NoRewrite)
 			require.NoError(t, err)
-			ctx := newPlanningContext(reservedVars, semTable, nil)
-			err = queryRewrite(ctx, selectStatement)
+			err = queryRewrite(semTable, reservedVars, selectStatement)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, sqlparser.String(selectStatement))
 		})
@@ -132,11 +131,11 @@ func TestHavingRewrite(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
-			ctx, sel := prepTest(t, tcase.input)
-			err := queryRewrite(ctx, sel)
+			semTable, reservedVars, sel := prepTest(t, tcase.input)
+			err := queryRewrite(semTable, reservedVars, sel)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.output, sqlparser.String(sel))
-			squeries, found := ctx.semTable.SubqueryMap[sel]
+			squeries, found := semTable.SubqueryMap[sel]
 			if len(tcase.sqs) > 0 {
 				assert.True(t, found, "no subquery found in the query")
 				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
@@ -148,7 +147,7 @@ func TestHavingRewrite(t *testing.T) {
 	}
 }
 
-func prepTest(t *testing.T, sql string) (planningContext, *sqlparser.Select) {
+func prepTest(t *testing.T, sql string) (*semantics.SemTable, *sqlparser.ReservedVars, *sqlparser.Select) {
 	ast, vars, err := sqlparser.Parse2(sql)
 	require.NoError(t, err)
 
@@ -159,5 +158,5 @@ func prepTest(t *testing.T, sql string) (planningContext, *sqlparser.Select) {
 	semTable, err := semantics.Analyze(sel, "", &semantics.FakeSI{}, semantics.NoRewrite)
 	require.NoError(t, err)
 
-	return newPlanningContext(reservedVars, semTable, nil), sel
+	return semTable, reservedVars, sel
 }

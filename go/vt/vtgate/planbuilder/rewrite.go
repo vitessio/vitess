@@ -17,9 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -30,52 +28,10 @@ type rewriter struct {
 	isInSubquery int
 }
 
-func expandTableColumns(tables []semantics.TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {
-	unknownTbl := true
-	var colNames sqlparser.SelectExprs
-	starExpanded := true
-	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
-			continue
-		}
-		unknownTbl = false
-		if !tbl.Authoritative() {
-			starExpanded = false
-			break
-		}
-		tblName, err := tbl.Name()
-		if err != nil {
-			return false, nil, err
-		}
-
-		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
-		for _, col := range tbl.GetColumns() {
-			var colName *sqlparser.ColName
-			var alias sqlparser.ColIdent
-			if withQualifier {
-				colName = sqlparser.NewColNameWithQualifier(col.Name, tblName)
-			} else {
-				colName = sqlparser.NewColName(col.Name)
-			}
-			if withAlias {
-				alias = sqlparser.NewColIdent(col.Name)
-			}
-			colNames = append(colNames, &sqlparser.AliasedExpr{Expr: colName, As: alias})
-		}
-	}
-
-	if unknownTbl {
-		// This will only happen for case when starExpr has qualifier.
-		return false, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadDb, "Unknown table '%s'", sqlparser.String(starExpr.TableName))
-	}
-	return starExpanded, colNames, nil
-}
-
-func queryRewrite(ctx planningContext, statement sqlparser.SelectStatement) error {
+func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
 	r := rewriter{
-		semTable:     ctx.semTable,
-		reservedVars: ctx.reservedVars,
+		semTable:     semTable,
+		reservedVars: reservedVars,
 	}
 	sqlparser.Rewrite(statement, r.rewriteDown, r.rewriteUp)
 	return nil
