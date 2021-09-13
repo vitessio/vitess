@@ -165,14 +165,14 @@ func TestSemTableDependenciesAfterExpandStar(t *testing.T) {
 			assert.Equal(t, tcase.expSQL, sqlparser.String(selectStatement))
 			if tcase.otherTbl != -1 {
 				assert.NotEqual(t,
-					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.RecursiveDeps(selectStatement.SelectExprs[tcase.otherTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.RecursiveDeps(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 			if tcase.sameTbl != -1 {
 				assert.Equal(t,
-					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
-					semTable.BaseTableDependencies(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
+					semTable.RecursiveDeps(selectStatement.SelectExprs[tcase.sameTbl].(*sqlparser.AliasedExpr).Expr),
+					semTable.RecursiveDeps(selectStatement.SelectExprs[tcase.expandedCol].(*sqlparser.AliasedExpr).Expr),
 				)
 			}
 		})

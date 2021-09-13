@@ -85,14 +85,14 @@ type (
 		// This is only a real error if we are unable to plan the query as a single route
 		ProjectionErr error
 
-		// ExprBaseTableDeps contains the dependencies from the expression to the actual tables
+		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
 		// this map will contain the accumulated dependencies for the column expression inside the derived table
-		ExprBaseTableDeps ExprDependencies
+		Recursive ExprDependencies
 
-		// ExprDeps keeps information about dependencies for expressions, no matter if they are
-		// against real tables or derived tables
-		ExprDeps ExprDependencies
+		// Direct keeps information about the closest dependency for an expression.
+		// It does not recurse inside derived tables and the like to find the original dependencies
+		Direct ExprDependencies
 
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
@@ -174,8 +174,8 @@ func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
 
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	st.ExprBaseTableDeps[to] = st.BaseTableDependencies(from)
-	st.ExprDeps[to] = st.Dependencies(from)
+	st.Recursive[to] = st.RecursiveDeps(from)
+	st.Direct[to] = st.DirectDeps(from)
 }
 
 // GetExprFor implements the TableInfo interface
@@ -300,7 +300,7 @@ func (v *VindexTable) IsInfSchema() bool {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -321,19 +321,19 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	return st.Tables[id.TableOffset()], nil
 }
 
-// BaseTableDependencies return the table dependencies of the expression.
-func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
-	return st.ExprBaseTableDeps.Dependencies(expr)
+// RecursiveDeps return the table dependencies of the expression.
+func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
+	return st.Recursive.Dependencies(expr)
 }
 
-// Dependencies return the table dependencies of the expression.
-func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	return st.ExprDeps.Dependencies(expr)
+// DirectDeps return the table dependencies of the expression.
+func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
+	return st.Direct.Dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.ExprDeps.Dependencies(colName)
+	ts := st.Direct.Dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -348,7 +348,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 	result := []sqlparser.Expr{expr}
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
-		table := st.Dependencies(expr)
+		table := st.DirectDeps(expr)
 		k := columnName{Table: table, ColumnName: expr.Name.String()}
 		result = append(result, st.ColumnEqualities[k]...)
 	}
@@ -358,7 +358,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.ExprDeps.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.Dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -371,7 +371,7 @@ func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols {
-		st.ExprBaseTableDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+		st.Recursive[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
 
