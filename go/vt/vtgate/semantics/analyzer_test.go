@@ -152,7 +152,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 	}
 }
 
-func TestOrderByBindingSingleTable(t *testing.T) {
+func TestOrderByBindingTable(t *testing.T) {
 	tcases := []struct {
 		sql  string
 		deps TableSet
@@ -177,16 +177,26 @@ func TestOrderByBindingSingleTable(t *testing.T) {
 	}, {
 		"select name, name from t1, t2 order by name",
 		T2,
+	}, {
+		"(select id from t1) union (select uid from t2) order by id",
+		T1 | T2,
+	}, {
+		"select id from t1 union (select uid from t2) order by 1",
+		T1, // TODO: this is wrong! we need to rewrite ORDER BY 1 to ORDER BY id in the rewriter
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				require.Nil(t, r, "panicked")
-			}()
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
-			sel, _ := stmt.(*sqlparser.Select)
-			order := sel.OrderBy[0].Expr
+
+			var order sqlparser.Expr
+			switch stmt := stmt.(type) {
+			case *sqlparser.Select:
+				order = stmt.OrderBy[0].Expr
+			case *sqlparser.Union:
+				order = stmt.OrderBy[0].Expr
+			default:
+				t.Fail()
+			}
 			d := semTable.BaseTableDependencies(order)
 			require.Equal(t, tc.deps, d, tc.sql)
 		})
@@ -225,8 +235,8 @@ func TestGroupByBinding(t *testing.T) {
 		"select t1.id from t1, t2 group by id",
 		T1,
 	}, {
-		"select id from t, t1 group by id", // TODO: is this the correct behaviour?
-		T1,
+		"select id from t, t1 group by id",
+		T2,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -282,11 +292,6 @@ func TestHavingBinding(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				require.Nil(t, r, "panicked")
-			}()
-
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
 			sel, _ := stmt.(*sqlparser.Select)
 			hvng := sel.Having.Expr
@@ -327,11 +332,6 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 		}
 		for _, query := range queries {
 			t.Run(query, func(t *testing.T) {
-				defer func() {
-					r := recover()
-					require.Nil(t, r, "panicked")
-				}()
-
 				parse, err := sqlparser.Parse(query)
 				require.NoError(t, err)
 				_, err = Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{
@@ -424,11 +424,6 @@ func TestSubqueryBinding(t *testing.T) {
 
 	for _, tc := range queries {
 		t.Run(tc.query, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				require.Nil(t, r, "panicked")
-			}()
-
 			ast, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 
