@@ -634,6 +634,17 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	if val > 0 {
 		return false, topologyRecovery, errors.New("Can't lock shard: SIGTERM received")
 	}
+
+	// check if we have received an ERS in progress, if we do, we should not continue with the recovery
+	val = atomic.LoadInt32(&ersInProgress)
+	if val > 0 {
+		AuditTopologyRecovery(topologyRecovery, "an ERS is already in progress, not issuing another")
+		return false, topologyRecovery, nil
+	}
+	// set the ers in progress
+	atomic.StoreInt32(&ersInProgress, 1)
+	defer atomic.StoreInt32(&ersInProgress, 0)
+
 	// add to the shard lock counter since ERS will lock the shard
 	atomic.AddInt32(&shardsLockCounter, -1)
 	defer atomic.AddInt32(&shardsLockCounter, -1)
