@@ -96,13 +96,17 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
 		for _, order := range node {
 			lit := keepIntLiteral(order.Expr)
-			s.specialExprScopes[lit] = s.currentScope()
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
 		}
 	case sqlparser.GroupBy:
 		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
 		for _, expr := range node {
 			lit := keepIntLiteral(expr)
-			s.specialExprScopes[lit] = s.currentScope()
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
 		}
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
