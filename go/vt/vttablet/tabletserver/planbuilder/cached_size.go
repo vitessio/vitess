@@ -17,6 +17,8 @@ limitations under the License.
 
 package planbuilder
 
+import hack "vitess.io/vitess/go/hack"
+
 type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
@@ -30,7 +32,7 @@ func (cached *Permission) CachedSize(alloc bool) int64 {
 		size += int64(24)
 	}
 	// field TableName string
-	size += int64(len(cached.TableName))
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	return size
 }
 func (cached *Plan) CachedSize(alloc bool) int64 {
@@ -39,13 +41,13 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(168)
+		size += int64(176)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)
 	// field Permissions []vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder.Permission
 	{
-		size += int64(cap(cached.Permissions)) * int64(24)
+		size += hack.RuntimeAllocSize(int64(cap(cached.Permissions)) * int64(24))
 		for _, elem := range cached.Permissions {
 			size += elem.CachedSize(false)
 		}
