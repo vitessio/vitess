@@ -127,7 +127,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{}, NoRewrite)
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
 			require.Error(t, err)
 		})
 	}
@@ -323,7 +323,7 @@ func TestBindingSingleAliasedTable(t *testing.T) {
 					Tables: map[string]*vindexes.Table{
 						"t": {Name: sqlparser.NewTableIdent("t")},
 					},
-				}, NoRewrite)
+				})
 				require.Error(t, err)
 			})
 		}
@@ -349,6 +349,47 @@ func TestUnion(t *testing.T) {
 	d2 := semTable.BaseTableDependencies(extract(sel2, 0))
 	assert.Equal(t, T1, d1)
 	assert.Equal(t, T2, d2)
+}
+
+func TestUnionColumns(t *testing.T) {
+	queries := []string{
+		"select 1,2 union select 1",
+		"(select 1,2 union select 3,4) union (select 5,6 union select 7)",
+	}
+
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
+
+			require.Error(t, err)
+		})
+	}
+}
+
+func fakeSchemaInfo() *FakeSI {
+	cols1 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("id"),
+		Type: querypb.Type_INT64,
+	}}
+	cols2 := []vindexes.Column{{
+		Name: sqlparser.NewColIdent("uid"),
+		Type: querypb.Type_INT64,
+	}, {
+		Name: sqlparser.NewColIdent("name"),
+		Type: querypb.Type_VARCHAR,
+	}}
+
+	si := &FakeSI{
+		Tables: map[string]*vindexes.Table{
+			"t":  {Name: sqlparser.NewTableIdent("t")},
+			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
+			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
+		},
+	}
+	return si
 }
 
 func TestUnionWithOrderBy(t *testing.T) {
@@ -444,7 +485,7 @@ func TestBindingMultiTable(t *testing.T) {
 						"tabl": {Name: sqlparser.NewTableIdent("tabl")},
 						"foo":  {Name: sqlparser.NewTableIdent("foo")},
 					},
-				}, NoRewrite)
+				})
 				require.Error(t, err)
 			})
 		}
@@ -472,7 +513,7 @@ func TestNotUniqueTableName(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{}, NoRewrite)
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "Not unique table/alias")
 		})
@@ -487,7 +528,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{}, NoRewrite)
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
@@ -587,7 +628,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
+			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 			require.NoError(t, err)
 
 			if test.err {
@@ -626,7 +667,7 @@ func TestUnknownPredicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si, NoRewrite)
+			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -654,7 +695,7 @@ func TestScoping(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			}, NoRewrite)
+			})
 			if query.errorMessage == "" {
 				require.NoError(t, err)
 			} else {
@@ -718,7 +759,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewTableIdent("t")},
 				},
-			}, NoRewrite)
+			})
 			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
 			} else {
@@ -760,7 +801,7 @@ func TestScopingWVindexTables(t *testing.T) {
 				VindexTables: map[string]vindexes.Vindex{
 					"user_index": hash,
 				},
-			}, NoRewrite)
+			})
 			if query.errorMessage != "" {
 				require.EqualError(t, err, query.errorMessage)
 			} else {
@@ -778,25 +819,7 @@ func parseAndAnalyze(t *testing.T, query, dbName string) (sqlparser.Statement, *
 	parse, err := sqlparser.Parse(query)
 	require.NoError(t, err)
 
-	cols1 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("id"),
-		Type: querypb.Type_INT64,
-	}}
-	cols2 := []vindexes.Column{{
-		Name: sqlparser.NewColIdent("uid"),
-		Type: querypb.Type_INT64,
-	}, {
-		Name: sqlparser.NewColIdent("name"),
-		Type: querypb.Type_VARCHAR,
-	}}
-
-	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, &FakeSI{
-		Tables: map[string]*vindexes.Table{
-			"t":  {Name: sqlparser.NewTableIdent("t")},
-			"t1": {Name: sqlparser.NewTableIdent("t1"), Columns: cols1, ColumnListAuthoritative: true},
-			"t2": {Name: sqlparser.NewTableIdent("t2"), Columns: cols2, ColumnListAuthoritative: true},
-		},
-	}, NoRewrite)
+	semTable, err := Analyze(parse.(sqlparser.SelectStatement), dbName, fakeSchemaInfo())
 	require.NoError(t, err)
 	return parse, semTable
 }

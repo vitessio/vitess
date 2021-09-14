@@ -58,6 +58,9 @@ service VTAdmin {
     rpc GetSchema(GetSchemaRequest) returns (Schema) {};
     // GetSchemas returns all schemas across the specified clusters.
     rpc GetSchemas(GetSchemasRequest) returns (GetSchemasResponse) {};
+    // GetShardReplicationPositions returns shard replication positions grouped
+    // by cluster.
+    rpc GetShardReplicationPositions(GetShardReplicationPositionsRequest) returns (GetShardReplicationPositionsResponse) {};
     // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
     rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
     // GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
@@ -72,6 +75,8 @@ service VTAdmin {
     rpc GetVSchema(GetVSchemaRequest) returns (VSchema) {};
     // GetVSchemas returns the VSchemas for all specified clusters.
     rpc GetVSchemas(GetVSchemasRequest) returns (GetVSchemasResponse) {};
+    // GetVtctlds returns the Vtctlds for all specified clusters.
+    rpc GetVtctlds(GetVtctldsRequest) returns (GetVtctldsResponse) {};
     // GetWorkflow returns a single Workflow for a given cluster, keyspace, and
     // workflow name.
     rpc GetWorkflow(GetWorkflowRequest) returns (Workflow) {};
@@ -92,6 +97,13 @@ message Cluster {
 message ClusterBackup {
     Cluster cluster = 1;
     mysqlctl.BackupInfo backup = 2;
+}
+
+message ClusterShardReplicationPosition {
+    Cluster cluster = 1;
+    string keyspace = 2;
+    string shard = 3;
+    vtctldata.ShardReplicationPositionsResponse position_info = 4;
 }
 
 message ClusterWorkflows {
@@ -278,6 +290,23 @@ message GetSchemasResponse {
     repeated Schema schemas = 1;
 }
 
+message GetShardReplicationPositionsRequest {
+    repeated string cluster_ids = 1;
+    // Keyspaces, if set, limits replication positions to just the specified
+    // keyspaces. Applies to all clusters in the request.
+    repeated string keyspaces = 2;
+    // KeyspaceShards, if set, limits replicatin positions to just the specified
+    // keyspace/shards. Applies to all clusters in the request.
+    //
+    // This field takes precedence over Keyspaces. If KeyspaceShards is set,
+    // Keyspaces is ignored.
+    repeated string keyspace_shards = 3;
+}
+
+message GetShardReplicationPositionsResponse {
+    repeated ClusterShardReplicationPosition replication_positions = 1;
+}
+
 message GetSrvVSchemaRequest {
     string cluster_id = 1;
     string cell = 2;
@@ -325,6 +354,14 @@ message GetVSchemasRequest {
 
 message GetVSchemasResponse {
     repeated VSchema v_schemas = 1;
+}
+
+message GetVtctldsRequest {
+    repeated string cluster_ids = 1;
+}
+
+message GetVtctldsResponse {
+    repeated Vtctld vtctlds = 1;
 }
 
 message GetWorkflowRequest {

@@ -176,25 +176,11 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 				return
 			}
 			for k, v := range obj {
-				if k == "NumGC" {
-					if err := sb.statsdClient.Gauge("NumGC", v.(float64), []string{}, sb.sampleRate); err != nil {
-						log.Errorf("Failed to export NumGC %v", v)
-					}
-				} else if k == "Frees" {
-					if err := sb.statsdClient.Gauge("Frees", v.(float64), []string{}, sb.sampleRate); err != nil {
-						log.Errorf("Failed to export Frees %v", v)
-					}
-				} else if k == "GCCPUFraction" {
-					if err := sb.statsdClient.Gauge("GCCPUFraction", v.(float64), []string{}, sb.sampleRate); err != nil {
-						log.Errorf("Failed to export GCCPUFraction %v", v)
-					}
-				} else if k == "PauseTotalNs" {
-					if err := sb.statsdClient.Gauge("PauseTotalNs", v.(float64), []string{}, sb.sampleRate); err != nil {
-						log.Errorf("Failed to export PauseTotalNs %v", v)
-					}
-				} else if k == "HeapAlloc" {
-					if err := sb.statsdClient.Gauge("HeapAlloc", v.(float64), []string{}, sb.sampleRate); err != nil {
-						log.Errorf("Failed to export HeapAlloc %v", v)
+				memstatsVal, ok := v.(float64)
+				if ok {
+					memstatsKey := "memstats." + k
+					if err := sb.statsdClient.Gauge(memstatsKey, memstatsVal, []string{}, sb.sampleRate); err != nil {
+						log.Errorf("Failed to export %v %v", k, v)
 					}
 				}
 			}
