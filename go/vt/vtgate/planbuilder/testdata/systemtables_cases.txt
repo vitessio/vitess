@@ -138,8 +138,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select * from information_schema.a where 1 != 1 union select * from information_schema.b where 1 != 1",
-    "Query": "select * from information_schema.a union select * from information_schema.b",
+    "FieldQuery": "(select * from information_schema.a where 1 != 1) union (select * from information_schema.b where 1 != 1)",
+    "Query": "(select * from information_schema.a) union (select * from information_schema.b)",
     "Table": "information_schema.a"
   }
 }
@@ -177,44 +177,6 @@ Gen4 plan same as above
             },
             "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
             "Query": "select * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"main\")]",
-            "Table": "information_schema.`tables`"
-          }
-        ]
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from information_schema.tables where table_schema = 'user' union select * from information_schema.tables where table_schema = 'main'",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectDBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
-            "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
-            "SysTableTableSchema": "[VARBINARY(\"user\")]",
-            "Table": "information_schema.`tables`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectDBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from information_schema.`tables` where 1 != 1",
-            "Query": "select distinct * from information_schema.`tables` where table_schema = :__vtschemaname",
             "SysTableTableSchema": "[VARBINARY(\"main\")]",
             "Table": "information_schema.`tables`"
           }

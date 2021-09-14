@@ -57,15 +57,8 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	return a
 }
 
-type rewriteFunc = func(statement sqlparser.SelectStatement, semTable *SemTable) error
-
-// NoRewrite is a helper implementation for tests
-var NoRewrite = func(statement sqlparser.SelectStatement, semTable *SemTable) error {
-	return nil
-}
-
 // Analyze analyzes the parsed query.
-func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation, rewrite rewriteFunc) (*SemTable, error) {
+func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInformation) (*SemTable, error) {
 	analyzer := newAnalyzer(currentDb, si)
 
 	// Analysis for initial scope
@@ -77,8 +70,8 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	// Rewriting operation (expand star)
-	if err = rewrite(statement, semTable); err != nil {
+	// Rewriting operation
+	if err = earlyRewrite(statement, semTable, analyzer.scoper); err != nil {
 		return nil, err
 	}
 	analyzer.hasRewritten = true
@@ -137,6 +130,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 
 		a.scoper.down(cursor)
 	} else { // after expand star
+		if err := checkUnionColumns(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
+
 		a.scoper.downPost(cursor)
 
 		if err := a.binder.down(cursor); err != nil {
@@ -150,6 +148,45 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	// to the current node, but that is not what we want if we have encountered an error.
 	// In order to abort the whole visitation, we have to return true here and then return false in the `analyzeUp` method
 	return true
+}
+
+func checkForStar(s sqlparser.SelectExprs) error {
+	for _, expr := range s {
+		_, isStar := expr.(*sqlparser.StarExpr)
+		if isStar {
+			return ProjError{
+				inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
+			}
+		}
+	}
+	return nil
+}
+
+func checkUnionColumns(cursor *sqlparser.Cursor) error {
+	union, isUnion := cursor.Node().(*sqlparser.Union)
+	if !isUnion {
+		return nil
+	}
+	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	err := checkForStar(firstProj)
+	if err != nil {
+		return err
+	}
+
+	count := len(firstProj)
+
+	for _, unionSelect := range union.UnionSelects {
+		proj := sqlparser.GetFirstSelect(unionSelect.Statement).SelectExprs
+		err := checkForStar(proj)
+		if err != nil {
+			return err
+		}
+		if len(proj) != count {
+			return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+		}
+	}
+
+	return nil
 }
 
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {

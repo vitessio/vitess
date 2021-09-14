@@ -18,7 +18,6 @@ package abstract
 
 import (
 	"encoding/json"
-	"strconv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -61,7 +60,7 @@ type (
 	}
 )
 
-// CreateQPFromSelect created the QueryProjection for the input *sqlparser.Select
+// CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
 func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
@@ -89,7 +88,7 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	}
 
 	for _, group := range sel.GroupBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(group, semTable)
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(group)
 		if err != nil {
 			return nil, err
 		}
@@ -99,20 +98,9 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
-	canPushDownSorting := true
-	for _, order := range sel.OrderBy {
-		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr, semTable)
-		if err != nil {
-			return nil, err
-		}
-		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
-			Inner: &sqlparser.Order{
-				Expr:      expr,
-				Direction: order.Direction,
-			},
-			WeightStrExpr: weightStrExpr,
-		})
-		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	err := qp.addOrderBy(sel.OrderBy, semTable)
+	if err != nil {
+		return nil, err
 	}
 
 	if qp.HasAggr || len(qp.GroupByExprs) > 0 {
@@ -130,9 +118,52 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 	if qp.Distinct && !qp.HasAggr {
 		qp.GroupByExprs = nil
 	}
-	qp.CanPushDownSorting = canPushDownSorting
 
 	return qp, nil
+}
+
+// CreateQPFromUnion creates the QueryProjection for the input *sqlparser.Union
+func CreateQPFromUnion(union *sqlparser.Union, semTable *semantics.SemTable) (*QueryProjection, error) {
+	qp := &QueryProjection{}
+
+	sel := sqlparser.GetFirstSelect(union)
+	for _, selExp := range sel.SelectExprs {
+		exp, ok := selExp.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil, semantics.Gen4NotSupportedF("%T in select list", selExp)
+		}
+		col := SelectExpr{
+			Col: exp,
+		}
+		qp.SelectExprs = append(qp.SelectExprs, col)
+	}
+
+	err := qp.addOrderBy(union.OrderBy, semTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return qp, nil
+}
+
+func (qp *QueryProjection) addOrderBy(orderBy sqlparser.OrderBy, semTable *semantics.SemTable) error {
+	canPushDownSorting := true
+	for _, order := range orderBy {
+		expr, weightStrExpr, err := qp.getSimplifiedExpr(order.Expr)
+		if err != nil {
+			return err
+		}
+		qp.OrderExprs = append(qp.OrderExprs, OrderBy{
+			Inner: &sqlparser.Order{
+				Expr:      expr,
+				Direction: order.Direction,
+			},
+			WeightStrExpr: weightStrExpr,
+		})
+		canPushDownSorting = canPushDownSorting && !sqlparser.ContainsAggregation(weightStrExpr)
+	}
+	qp.CanPushDownSorting = canPushDownSorting
+	return nil
 }
 
 func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
@@ -184,28 +215,7 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Exp
 
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
 // column offsets, and returns an expression that is simpler to evaluate
-func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
-	// Order by is the column offset to be used from the select expressions
-	// Eg - select id from music order by 1
-	literalExpr, isLiteral := e.(*sqlparser.Literal)
-	if isLiteral && literalExpr.Type == sqlparser.IntVal {
-		num, _ := strconv.Atoi(literalExpr.Val)
-		if num > len(qp.SelectExprs) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
-		}
-		aliasedExpr := qp.SelectExprs[num-1].Col
-		expr = aliasedExpr.Expr
-		if !aliasedExpr.As.IsEmpty() {
-			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
-			expr = &sqlparser.ColName{
-				Name: aliasedExpr.As,
-			}
-			semTable.CopyDependencies(e, expr)
-		}
-
-		return expr, aliasedExpr.Expr, nil
-	}
-
+func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
