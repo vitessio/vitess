@@ -34,7 +34,8 @@
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
 "ambiguous symbol reference: col1"
-Gen4 error: Column 'col1' is ambiguous
+Gen4 error: Column 'col1' in field list is ambiguous
+# TODO: this should be 'Column 'col1' in having clause is ambiguous'
 
 # non-ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
@@ -1578,6 +1579,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"

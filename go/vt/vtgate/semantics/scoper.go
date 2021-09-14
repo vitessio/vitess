@@ -19,6 +19,10 @@ package semantics
 import (
 	"reflect"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -29,6 +33,7 @@ type scoper struct {
 	wScope       map[*sqlparser.Select]*scope
 	sqlNodeScope map[scopeKey]*scope
 	scopes       []*scope
+	org          originable
 
 	// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 	specialExprScopes map[*sqlparser.Literal]*scope
@@ -57,8 +62,9 @@ func newScoper() *scoper {
 	}
 }
 
-func (s *scoper) down(cursor *sqlparser.Cursor) {
-	switch node := cursor.Node().(type) {
+func (s *scoper) down(cursor *sqlparser.Cursor) error {
+	node := cursor.Node()
+	switch node := node.(type) {
 	case *sqlparser.Select:
 		currScope := newScope(s.currentScope())
 		s.push(currScope)
@@ -86,14 +92,18 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			break
 		}
 
+		// adding a VTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
+		// the VTableInfo we are creating here should not be confused with derived tables' VTableInfo
 		wScope, exists := s.wScope[sel]
 		if !exists {
 			break
 		}
-
-		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node))
+		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables, s.org))
 	case sqlparser.OrderBy:
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		if err != nil {
+			return err
+		}
 		for _, order := range node {
 			lit := keepIntLiteral(order.Expr)
 			if lit != nil {
@@ -101,7 +111,10 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 			}
 		}
 	case sqlparser.GroupBy:
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		if err != nil {
+			return err
+		}
 		for _, expr := range node {
 			lit := keepIntLiteral(expr)
 			if lit != nil {
@@ -112,8 +125,9 @@ func (s *scoper) down(cursor *sqlparser.Cursor) {
 		if node.Type != sqlparser.HavingClause {
 			break
 		}
-		s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
+		return s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
 	}
+	return nil
 }
 
 func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
@@ -128,7 +142,8 @@ func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
-	switch node := cursor.Node().(type) {
+	node := cursor.Node()
+	switch node := node.(type) {
 	case *sqlparser.Select, sqlparser.OrderBy, sqlparser.GroupBy:
 		s.popScope()
 	case *sqlparser.Where:
@@ -207,7 +222,7 @@ func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) {
+func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error {
 	switch parent := cursor.Parent().(type) {
 	case *sqlparser.Select:
 		// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
@@ -221,16 +236,34 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) {
 		nScope.selectStmt = incomingScope.selectStmt
 
 		if s.rScope[parent] != incomingScope {
-			panic("BUG: scope counts did not match")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
 		}
 	case *sqlparser.Union:
 		nScope := newScope(nil)
-		nScope.selectStmt = sqlparser.GetFirstSelect(parent)
+		firstSelect := sqlparser.GetFirstSelect(parent.FirstStatement)
+		nScope.selectStmt = firstSelect
+		tableInfo := createVTableInfoForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
+		nScope.tables = append(nScope.tables, tableInfo)
+
+		for _, unionSelect := range parent.UnionSelects {
+			// TODO: this can probably be optimised
+			sel := sqlparser.GetFirstSelect(unionSelect.Statement)
+			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+			if len(tableInfo.cols) != len(thisTableInfo.cols) {
+				return engine.ErrWrongNumberOfColumnsInSelect
+			}
+			for i, col := range tableInfo.cols {
+				// at this stage, we don't store the actual dependencies, we only store the expressions.
+				// only later will we walk the expression tree and figure out the deps. so, we need to create a
+				// composite expression that contains all the expressions in the SELECTs that this UNION consists of
+				tableInfo.cols[i] = sqlparser.AndExpressions(col, thisTableInfo.cols[i])
+			}
+		}
+
 		s.push(nScope)
 		s.sqlNodeScope[k] = nScope
-	default:
-		return
 	}
+	return nil
 }
 
 func (s *scoper) currentScope() *scope {

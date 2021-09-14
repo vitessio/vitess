@@ -28,6 +28,7 @@ type tableCollector struct {
 	scoper    *scoper
 	si        SchemaInformation
 	currentDb string
+	org       originable
 }
 
 func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
@@ -48,7 +49,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
-			tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
+			tables := tc.scoper.wScope[sel]
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -61,7 +63,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		case *sqlparser.Union:
-			tableInfo := createVTableInfoForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs)
+			tables := tc.scoper.wScope[sel.FirstStatement.(*sqlparser.Select)]
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}

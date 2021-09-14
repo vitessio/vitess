@@ -162,6 +162,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -180,6 +181,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -198,6 +200,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's an alias.
 "select * from route1 as a"
@@ -216,6 +219,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules with primary targeting
 "select * from primary_redirect"
@@ -234,6 +238,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules bad table
 "select * from bad_table"
@@ -1986,21 +1991,7 @@ Gen4 error: symbol t.col not found
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id+col as foo from route1) as t where foo = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id + col as foo from `user` as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id + col as foo from `user` as route1 where id + col = 5) as t",
-    "Table": "`user`"
-  }
-}
+"symbol id not found"
 
 # push predicate on joined derived tables
 "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'"
@@ -3973,3 +3964,22 @@ Gen4 plan same as above
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+
+# select star from derived table on expandable and unsharded table
+"select u.* from (select * from unsharded) u"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.* from (select * from unsharded) u",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select u.* from (select * from unsharded where 1 != 1) as u where 1 != 1",
+    "Query": "select u.* from (select * from unsharded) as u",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above

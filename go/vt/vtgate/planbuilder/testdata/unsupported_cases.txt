@@ -79,10 +79,12 @@ Gen4 plan same as above
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
+"cannot use column offsets in group statement when using `*`"
 
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
@@ -404,6 +406,7 @@ Gen4 plan same as above
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "INTO is not supported on sharded keyspace"
+Gen4 plan same as above
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
@@ -436,6 +439,7 @@ Gen4 plan same as above
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+Gen4 plan same as above
 
 # table_schema OR predicate
 # It is unsupported because we do not route queries to multiple keyspaces right now
@@ -548,3 +552,24 @@ Gen4 error: unsupported: filtering on results of aggregates
   }
 }
 Gen4 error: unsupported: filtering on results of aggregates
+
+# subquery of information_schema with itself and star expression in outer select
+"select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
+"unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# This query will never work as the inner derived table is only selecting one of the column
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 error: unsupported: unable to split predicates to derived table: uu.user_id = uu.id
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# changed to project all the columns from the derived tables.
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above

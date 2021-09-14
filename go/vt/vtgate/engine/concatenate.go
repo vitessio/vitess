@@ -63,9 +63,10 @@ func formatTwoOptionsNicely(a, b string) string {
 	return a + "_" + b
 }
 
-var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+// ErrWrongNumberOfColumnsInSelect is an error
+var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, bindVars, wantfields)
 	if err != nil {
@@ -86,7 +87,7 @@ func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 		if len(rows) > 0 &&
 			len(r.Rows) > 0 &&
 			len(rows[0]) != len(r.Rows[0]) {
-			return nil, errWrongNumberOfColumnsInSelect
+			return nil, ErrWrongNumberOfColumnsInSelect
 		}
 
 		rows = append(rows, r.Rows...)
@@ -139,7 +140,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	return results, nil
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
@@ -235,7 +236,7 @@ func (c *Concatenate) description() PrimitiveDescription {
 
 func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
-		return errWrongNumberOfColumnsInSelect
+		return ErrWrongNumberOfColumnsInSelect
 	}
 	for i, field2 := range fields2 {
 		field1 := fields1[i]
