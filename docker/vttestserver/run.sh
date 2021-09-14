@@ -22,7 +22,7 @@
 if [[ -z $MYSQL_MAX_CONNECTIONS ]]; then
   MYSQL_MAX_CONNECTIONS=1000
 fi
-echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/default-fast.cnf
+echo "max_connections = $MYSQL_MAX_CONNECTIONS" >> /vt/config/mycnf/test-suite.cnf
 
 # Delete socket files before running mysqlctld if exists.
 # This is the primary reason for unhealthy state on restart.
