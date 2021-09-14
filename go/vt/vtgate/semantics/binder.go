@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strconv"
-
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -79,15 +77,6 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		}
 		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
 		b.subqueryRef[node] = sq
-	case *sqlparser.Order:
-		return b.analyzeOrderByGroupByExprForLiteral(node.Expr, "order clause")
-	case sqlparser.GroupBy:
-		for _, grpExpr := range node {
-			err := b.analyzeOrderByGroupByExprForLiteral(grpExpr, "group statement")
-			if err != nil {
-				return err
-			}
-		}
 	case *sqlparser.ColName:
 		deps, err := b.resolveColumn(node, b.scoper.currentScope())
 		if err != nil {
@@ -117,32 +106,6 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		b.recursive[node] = ts
 		b.direct[node] = ts
 	}
-	return nil
-}
-
-func (b *binder) analyzeOrderByGroupByExprForLiteral(input sqlparser.Expr, caller string) error {
-	l, ok := input.(*sqlparser.Literal)
-	if !ok {
-		return nil
-	}
-	if l.Type != sqlparser.IntVal {
-		return nil
-	}
-	currScope := b.scoper.currentScope()
-	num, err := strconv.Atoi(l.Val)
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", l.Val)
-	}
-	if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
-	}
-
-	expr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
-	if !ok {
-		return nil
-	}
-
-	b.recursive[input] = b.recursive.Dependencies(expr.Expr)
 	return nil
 }
 

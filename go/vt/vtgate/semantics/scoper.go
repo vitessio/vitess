@@ -34,6 +34,9 @@ type scoper struct {
 	sqlNodeScope map[scopeKey]*scope
 	scopes       []*scope
 	org          originable
+
+	// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
+	specialExprScopes map[*sqlparser.Literal]*scope
 }
 
 type scopeKey struct {
@@ -52,9 +55,10 @@ const (
 
 func newScoper() *scoper {
 	return &scoper{
-		rScope:       map[*sqlparser.Select]*scope{},
-		wScope:       map[*sqlparser.Select]*scope{},
-		sqlNodeScope: map[scopeKey]*scope{},
+		rScope:            map[*sqlparser.Select]*scope{},
+		wScope:            map[*sqlparser.Select]*scope{},
+		sqlNodeScope:      map[scopeKey]*scope{},
+		specialExprScopes: map[*sqlparser.Literal]*scope{},
 	}
 }
 
@@ -96,9 +100,27 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		}
 		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables, s.org))
 	case sqlparser.OrderBy:
-		return s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		if err != nil {
+			return err
+		}
+		for _, order := range node {
+			lit := keepIntLiteral(order.Expr)
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
+		}
 	case sqlparser.GroupBy:
-		return s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		if err != nil {
+			return err
+		}
+		for _, expr := range node {
+			lit := keepIntLiteral(expr)
+			if lit != nil {
+				s.specialExprScopes[lit] = s.currentScope()
+			}
+		}
 	case *sqlparser.Where:
 		if node.Type != sqlparser.HavingClause {
 			break
@@ -106,6 +128,17 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		return s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
 	}
 	return nil
+}
+
+func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
+	l, ok := e.(*sqlparser.Literal)
+	if !ok {
+		return nil
+	}
+	if l.Type != sqlparser.IntVal {
+		return nil
+	}
+	return l
 }
 
 func (s *scoper) up(cursor *sqlparser.Cursor) error {
