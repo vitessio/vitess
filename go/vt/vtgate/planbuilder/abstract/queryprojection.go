@@ -61,11 +61,6 @@ type (
 	}
 )
 
-var (
-	// ErrStarExprInCrossShard is an error that happens when we try to use a '*' in a cross shard query
-	ErrStarExprInCrossShard = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
-)
-
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	switch sel := s.Col.(type) {
@@ -85,6 +80,8 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	switch expr := s.Col.(type) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
+	case *sqlparser.StarExpr:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not an aliased expression: %T", expr)
 	}
