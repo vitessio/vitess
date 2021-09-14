@@ -901,7 +901,7 @@ func tryMerge(ctx planningContext, a, b queryTree, joinPredicates []sqlparser.Ex
 
 	sameKeyspace := aRoute.keyspace == bRoute.keyspace
 
-	if sameKeyspace {
+	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
 		if tree != nil || err != nil {
 			return tree, err
@@ -968,6 +968,21 @@ func tryMergeReferenceTable(aRoute *routeTree, bRoute *routeTree, merger mergeFu
 	r.routeOpCode = opCode
 	r.selected = selected
 	return r, nil
+}
+
+func isDualTable(route *routeTree) bool {
+	if len(route.tables) != 1 || route.tables.tableNames()[0] != "dual" {
+		return false
+	}
+	table := route.tables[0]
+	routeTable, ok := table.(*routeTable)
+	if !ok {
+		return false
+	}
+	if routeTable.qtable.Table.Qualifier.IsEmpty() {
+		return true
+	}
+	return false
 }
 
 func makeRoute(j queryTree) *routeTree {
