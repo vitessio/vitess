@@ -21,6 +21,7 @@ import (
 	"math"
 	"reflect"
 	"unsafe"
+	hack "vitess.io/vitess/go/hack"
 )
 
 type cachedObject interface {
@@ -71,7 +72,7 @@ func (cached *D) CachedSize(alloc bool) int64 {
 	}
 	// field field1 *vitess.io/vitess/go/tools/sizegen/integration.Bimpl
 	if cached.field1 != nil {
-		size += int64(8)
+		size += hack.RuntimeAllocSize(int64(8))
 	}
 	return size
 }
@@ -91,9 +92,9 @@ func (cached *Map1) CachedSize(alloc bool) int64 {
 		hmap := reflect.ValueOf(cached.field1)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += int64(numOldBuckets * 32)
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 32))
 		if len(cached.field1) > 0 || numBuckets > 1 {
-			size += int64(numBuckets * 32)
+			size += hack.RuntimeAllocSize(int64(numBuckets * 32))
 		}
 	}
 	return size
@@ -114,9 +115,9 @@ func (cached *Map2) CachedSize(alloc bool) int64 {
 		hmap := reflect.ValueOf(cached.field1)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += int64(numOldBuckets * 208)
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
 		if len(cached.field1) > 0 || numBuckets > 1 {
-			size += int64(numBuckets * 208)
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
 		}
 	}
 	return size
@@ -137,9 +138,9 @@ func (cached *Map3) CachedSize(alloc bool) int64 {
 		hmap := reflect.ValueOf(cached.field1)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += int64(numOldBuckets * 208)
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
 		if len(cached.field1) > 0 || numBuckets > 1 {
-			size += int64(numBuckets * 208)
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
 		}
 		for _, v := range cached.field1 {
 			if cc, ok := v.(cachedObject); ok {
@@ -169,7 +170,7 @@ func (cached *Slice1) CachedSize(alloc bool) int64 {
 	}
 	// field field1 []vitess.io/vitess/go/tools/sizegen/integration.A
 	{
-		size += int64(cap(cached.field1)) * int64(16)
+		size += hack.RuntimeAllocSize(int64(cap(cached.field1)) * int64(16))
 	}
 	return size
 }
@@ -183,7 +184,7 @@ func (cached *Slice2) CachedSize(alloc bool) int64 {
 	}
 	// field field1 []vitess.io/vitess/go/tools/sizegen/integration.B
 	{
-		size += int64(cap(cached.field1)) * int64(16)
+		size += hack.RuntimeAllocSize(int64(cap(cached.field1)) * int64(16))
 		for _, elem := range cached.field1 {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
@@ -202,10 +203,10 @@ func (cached *Slice3) CachedSize(alloc bool) int64 {
 	}
 	// field field1 []*vitess.io/vitess/go/tools/sizegen/integration.Bimpl
 	{
-		size += int64(cap(cached.field1)) * int64(8)
+		size += hack.RuntimeAllocSize(int64(cap(cached.field1)) * int64(8))
 		for _, elem := range cached.field1 {
 			if elem != nil {
-				size += int64(8)
+				size += hack.RuntimeAllocSize(int64(8))
 			}
 		}
 	}
@@ -220,6 +221,6 @@ func (cached *String1) CachedSize(alloc bool) int64 {
 		size += int64(24)
 	}
 	// field field1 string
-	size += int64(len(cached.field1))
+	size += hack.RuntimeAllocSize(int64(len(cached.field1)))
 	return size
 }
