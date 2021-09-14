@@ -128,9 +128,6 @@ func pushProjections(ctx planningContext, plan logicalPlan, selectExprs []abstra
 	for _, e := range selectExprs {
 		aliasExpr, err := e.GetAliasedExpr()
 		if err != nil {
-			if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-				return abstract.ErrStarExprInCrossShard
-			}
 			return err
 		}
 		if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
