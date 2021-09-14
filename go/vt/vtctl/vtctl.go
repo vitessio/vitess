@@ -821,11 +821,11 @@ func commandSetReadOnly(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
-	}
-	return wr.TabletManagerClient().SetReadOnly(ctx, ti.Tablet)
+	_, err = wr.VtctldServer().SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tabletAlias,
+		Writable:    false,
+	})
+	return err
 }
 
 func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -840,11 +840,11 @@ func commandSetReadWrite(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
-	}
-	return wr.TabletManagerClient().SetReadWrite(ctx, ti.Tablet)
+	_, err = wr.VtctldServer().SetWritable(ctx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: tabletAlias,
+		Writable:    true,
+	})
+	return err
 }
 
 func commandStartReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -859,11 +859,11 @@ func commandStartReplication(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
-	}
-	return wr.TabletManagerClient().StartReplication(ctx, ti.Tablet)
+
+	_, err = wr.VtctldServer().StartReplication(ctx, &vtctldatapb.StartReplicationRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandStopReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -878,11 +878,11 @@ func commandStopReplication(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return fmt.Errorf("failed reading tablet %v: %v", tabletAlias, err)
-	}
-	return wr.TabletManagerClient().StopReplication(ctx, ti.Tablet)
+
+	_, err = wr.VtctldServer().StopReplication(ctx, &vtctldatapb.StopReplicationRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandChangeTabletType(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
