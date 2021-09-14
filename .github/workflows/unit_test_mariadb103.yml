@@ -8,67 +8,33 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: self-hosted
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v1
-      with:
-        go-version: 1.17
+      - name: Check out code
+        uses: actions/checkout@v2
 
-    - name: Tune the OS
-      run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+      - name: Build Docker Image
+        run: docker build -f ./.github/docker/unit_test_mariadb103/Dockerfile -t unit_test_mariadb103:$GITHUB_SHA  .
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+      - name: Run test
+        timeout-minutes: 30
+        run: docker run --name "unit_test_mariadb103_$GITHUB_SHA" unit_test_mariadb103:$GITHUB_SHA /bin/bash -c 'make unit_test'
 
-    - name: Check out code
-      uses: actions/checkout@v2
+      - name: Print Volume Used
+        if: ${{ always() }}
+        run: |
+          docker inspect -f '{{ (index .Mounts 0).Name }}' unit_test_mariadb103_$GITHUB_SHA
 
-    - name: Get dependencies
-      run: |
-        export DEBIAN_FRONTEND="noninteractive"
-        sudo apt-get update
+      - name: Cleanup Docker Volume
+        run: |
+          docker rm -v unit_test_mariadb103_$GITHUB_SHA
 
-        # !mysql57
+      - name: Cleanup Docker Container
+        if: ${{ always() }}
+        run: |
+          docker rm -f unit_test_mariadb103_$GITHUB_SHA
 
-        # Uninstall any previously installed MySQL first
-        sudo systemctl stop apparmor
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
-        sudo apt-get -y autoremove
-        sudo apt-get -y autoclean
-        sudo deluser mysql
-        sudo rm -rf /var/lib/mysql
-        sudo rm -rf /etc/mysql
-
-        # mariadb103
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
-        sudo service mysql stop
-        sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld || echo "could not remove mysqld profile"
-
-        mkdir -p dist bin
-        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
-
-        go mod download
-
-    - name: Run make tools
-      run: |
-        make tools
-
-    - name: Run test
-      timeout-minutes: 30
-      run: |
-        eatmydata -- make unit_test
+      - name: Cleanup Docker Image
+        run: |
+          docker image rm unit_test_mariadb103:$GITHUB_SHA
