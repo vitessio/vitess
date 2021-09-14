@@ -50,6 +50,9 @@ func (d *derivedTree) clone() queryTree {
 
 func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *semantics.SemTable) (offsets []int, err error) {
 	var noQualifierNames []*sqlparser.ColName
+	if len(names) == 0 {
+		return
+	}
 	for _, name := range names {
 		i, err := d.findOutputColumn(name)
 		if err != nil {

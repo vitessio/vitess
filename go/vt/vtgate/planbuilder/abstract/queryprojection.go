@@ -18,7 +18,6 @@ package abstract
 
 import (
 	"encoding/json"
-	"strconv"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -260,34 +259,6 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 // getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
 // column offsets, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
-	// Order by is the column offset to be used from the select expressions
-	// Eg - select id from music order by 1
-	literalExpr, isLiteral := e.(*sqlparser.Literal)
-	if isLiteral && literalExpr.Type == sqlparser.IntVal {
-		num, _ := strconv.Atoi(literalExpr.Val)
-		if num > len(qp.SelectExprs) {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column offset does not exist")
-		}
-		selectExpr := qp.SelectExprs[num-1]
-		aliasedExpr, err := selectExpr.GetAliasedExpr()
-		if err != nil {
-			if _, isStar := selectExpr.Col.(*sqlparser.StarExpr); isStar {
-				return nil, nil, ErrStarExprInCrossShard
-			}
-			return nil, nil, err
-		}
-		expr = aliasedExpr.Expr
-		if !aliasedExpr.As.IsEmpty() {
-			// the column is aliased, so we'll add an expression ordering by the alias and not the underlying expression
-			expr = &sqlparser.ColName{
-				Name: aliasedExpr.As,
-			}
-			semTable.CopyDependencies(e, expr)
-		}
-
-		return expr, aliasedExpr.Expr, nil
-	}
-
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
