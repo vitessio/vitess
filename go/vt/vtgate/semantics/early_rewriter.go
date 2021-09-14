@@ -58,7 +58,7 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 				r.err = err
 				return false
 			}
-			if !starExpanded {
+			if !starExpanded || colNames == nil {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
@@ -103,10 +103,26 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		if !aliasedExpr.As.IsEmpty() {
 			cursor.Replace(sqlparser.NewColName(aliasedExpr.As.String()))
 		} else {
-			cursor.Replace(aliasedExpr.Expr)
+			expr := realCloneOfColNames(aliasedExpr.Expr)
+			cursor.Replace(expr)
 		}
 	}
 	return true
+}
+
+// realCloneOfColNames clones all the expressions including ColName.
+// Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
+func realCloneOfColNames(expr sqlparser.Expr) sqlparser.Expr {
+	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
+		switch exp := cursor.Node().(type) {
+		case *sqlparser.ColName:
+			newColName := *exp
+			newColName.Name = sqlparser.CloneColIdent(exp.Name)
+			newColName.Qualifier = sqlparser.CloneTableName(exp.Qualifier)
+			cursor.Replace(&newColName)
+		}
+		return true
+	}, nil).(sqlparser.Expr)
 }
 
 func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool, sqlparser.SelectExprs, error) {

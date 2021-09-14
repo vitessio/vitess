@@ -45,13 +45,15 @@ type analyzer struct {
 
 // newAnalyzer create the semantic analyzer
 func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
+	// TODO  dependencies between these components are a little tangled. We should try to clean up
 	s := newScoper()
 	a := &analyzer{
 		scoper: s,
 		tables: newTableCollector(s, si, dbName),
 		typer:  newTyper(),
 	}
-
+	s.org = a
+	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
 
 	return a
@@ -88,23 +90,23 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 
 func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 	return &SemTable{
-		ExprBaseTableDeps: a.binder.exprRecursiveDeps,
-		ExprDeps:          a.binder.exprDeps,
-		exprTypes:         a.typer.exprTypes,
-		Tables:            a.tables.Tables,
-		selectScope:       a.scoper.rScope,
-		ProjectionErr:     a.projErr,
-		Comments:          statement.GetComments(),
-		SubqueryMap:       a.binder.subqueryMap,
-		SubqueryRef:       a.binder.subqueryRef,
-		ColumnEqualities:  map[columnName][]sqlparser.Expr{},
+		Recursive:        a.binder.recursive,
+		Direct:           a.binder.direct,
+		exprTypes:        a.typer.exprTypes,
+		Tables:           a.tables.Tables,
+		selectScope:      a.scoper.rScope,
+		ProjectionErr:    a.projErr,
+		Comments:         statement.GetComments(),
+		SubqueryMap:      a.binder.subqueryMap,
+		SubqueryRef:      a.binder.subqueryRef,
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
 	}
 }
 
 func (a *analyzer) setError(err error) {
 	prErr, ok := err.(ProjError)
 	if ok {
-		a.projErr = prErr.inner
+		a.projErr = prErr.Inner
 		return
 	}
 
@@ -127,8 +129,10 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			a.setError(err)
 			return true
 		}
-
-		a.scoper.down(cursor)
+		if err := a.scoper.down(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
 	} else { // after expand star
 		if err := checkUnionColumns(cursor); err != nil {
 			a.setError(err)
@@ -155,7 +159,7 @@ func checkForStar(s sqlparser.SelectExprs) error {
 		_, isStar := expr.(*sqlparser.StarExpr)
 		if isStar {
 			return ProjError{
-				inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
+				Inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
 			}
 		}
 	}
@@ -247,26 +251,12 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.binder.exprRecursiveDeps.Dependencies(expr)
+	ts := a.binder.recursive.Dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return ts, nil
 	}
 	return ts, &qt
-}
-
-func (v *vTableInfo) checkForDuplicates() error {
-	for i, name := range v.columnNames {
-		for j, name2 := range v.columnNames {
-			if i == j {
-				continue
-			}
-			if name == name2 {
-				return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DupFieldName, "Duplicate column name '%s'", name)
-			}
-		}
-	}
-	return nil
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
@@ -317,29 +307,6 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func createVTableInfoForExpressions(expressions sqlparser.SelectExprs) *vTableInfo {
-	vTbl := &vTableInfo{}
-	for _, selectExpr := range expressions {
-		expr, ok := selectExpr.(*sqlparser.AliasedExpr)
-		if !ok {
-			continue
-		}
-		vTbl.cols = append(vTbl.cols, expr.Expr)
-		if expr.As.IsEmpty() {
-			switch expr := expr.Expr.(type) {
-			case *sqlparser.ColName:
-				// for projections, we strip out the qualifier and keep only the column name
-				vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-			default:
-				vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-			}
-		} else {
-			vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-		}
-	}
-	return vTbl
-}
-
 func (a *analyzer) shouldContinue() bool {
 	return a.err == nil
 }
@@ -362,9 +329,9 @@ func Gen4NotSupportedF(format string, args ...interface{}) error {
 // ProjError is used to mark an error as something that should only be returned
 // if the planner fails to merge everything down to a single route
 type ProjError struct {
-	inner error
+	Inner error
 }
 
 func (p ProjError) Error() string {
-	return p.inner.Error()
+	return p.Inner.Error()
 }

@@ -463,7 +463,7 @@ func (rp *routeTree) haveMatchingVindex(
 	newVindexFound := false
 	for _, v := range rp.vindexPreds {
 		// check that the
-		if !ctx.semTable.Dependencies(column).IsSolvedBy(v.tableID) {
+		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
 		cols := len(v.colVindex.Columns)

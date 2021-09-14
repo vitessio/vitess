@@ -253,7 +253,7 @@ func rewriteSubqueryDependenciesForJoin(otherTree queryTree, outerTree *joinTree
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check weather the column name belongs to the other side of the join tree
-			if ctx.semTable.Dependencies(node).IsSolvedBy(otherTree.tableID()) {
+			if ctx.semTable.DirectDeps(node).IsSolvedBy(otherTree.tableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := node.CompliantName()
 				cursor.Replace(sqlparser.NewArgument(bindVar))
@@ -307,7 +307,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	if !isCol {
 		return false
 	}
-	ts := semTable.BaseTableDependencies(expr)
+	ts := semTable.RecursiveDeps(expr)
 	tableInfo, err := semTable.TableInfoFor(ts)
 	if err != nil {
 		return false
@@ -331,7 +331,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	return false
 }
 
-func createSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
+func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err
@@ -343,6 +343,15 @@ func createSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error 
 		return true
 	}, nil)
 	return nil
+}
+
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr, ast *sqlparser.Select, i int) {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedExpr:
+		ast.SelectExprs[i] = removeKeyspaceFromColName(expr)
+	case *sqlparser.StarExpr:
+		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
+	}
 }
 
 func stripDownQuery(from, to sqlparser.SelectStatement) error {
@@ -360,6 +369,9 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
 		toNode.SelectExprs = node.SelectExprs
+		for i, expr := range toNode.SelectExprs {
+			removeKeyspaceFromSelectExpr(expr, toNode, i)
+		}
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
@@ -471,12 +483,16 @@ func pushJoinPredicate(ctx planningContext, exprs []sqlparser.Expr, tree queryTr
 	}
 }
 
-func breakPredicateInLHSandRHS(expr sqlparser.Expr, semTable *semantics.SemTable, lhs semantics.TableSet) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
+func breakPredicateInLHSandRHS(
+	expr sqlparser.Expr,
+	semTable *semantics.SemTable,
+	lhs semantics.TableSet,
+) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
 	predicate = sqlparser.CloneExpr(expr)
 	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			deps := semTable.BaseTableDependencies(node)
+			deps := semTable.RecursiveDeps(node)
 			if deps == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
@@ -782,7 +798,7 @@ func findColumnVindex(ctx planningContext, a *routeTree, exp sqlparser.Expr) vin
 		if !isCol {
 			continue
 		}
-		leftDep := ctx.semTable.BaseTableDependencies(expr)
+		leftDep := ctx.semTable.RecursiveDeps(expr)
 		_ = visitRelations(a.tables, func(rel relation) (bool, error) {
 			rb, isRoute := rel.(*routeTable)
 			if !isRoute {
@@ -1058,7 +1074,7 @@ func createRoutePlanForOuter(ctx planningContext, aRoute, bRoute *routeTree, new
 	tables := bRoute.tables
 	// we are doing an outer join where the outer part contains multiple tables - we have to turn the outer part into a join or two
 	for _, predicate := range bRoute.predicates {
-		deps := ctx.semTable.BaseTableDependencies(predicate)
+		deps := ctx.semTable.RecursiveDeps(predicate)
 		aTbl, bTbl, newTables := findTables(deps, tables)
 		tables = newTables
 		if aTbl != nil && bTbl != nil {
@@ -1115,7 +1131,7 @@ func gen4ValEqual(ctx planningContext, a, b sqlparser.Expr) bool {
 				return false
 			}
 
-			return ctx.semTable.Dependencies(a) == ctx.semTable.Dependencies(b)
+			return ctx.semTable.DirectDeps(a) == ctx.semTable.DirectDeps(b)
 		}
 	case sqlparser.Argument:
 		b, ok := b.(sqlparser.Argument)

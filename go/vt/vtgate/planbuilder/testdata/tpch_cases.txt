@@ -111,170 +111,11 @@ Gen4 error: unsupported: cross-shard correlated subquery
 
 # TPC-H query 4
 "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority"
-"unsupported: cross-shard query with aggregates"
-"gen4 does not yet support: *sqlparser.StarExpr in select list"
+"symbol o_orderkey not found in table or subquery"
 
 # TPC-H query 5
 "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by n_name order by revenue desc"
 "unsupported: cross-shard query with aggregates"
-# Gen4 output was commented out, using two joinVars introduces flakiness
-# {
-#   "QueryType": "SELECT",
-#   "Original": "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year group by n_name order by revenue desc",
-#   "Instructions": {
-#     "OperatorType": "Sort",
-#     "Variant": "Memory",
-#     "OrderBy": "1 DESC",
-#     "ResultColumns": 2,
-#     "Inputs": [
-#       {
-#         "OperatorType": "Aggregate",
-#         "Variant": "Ordered",
-#         "Aggregates": "sum(1) AS revenue",
-#         "GroupBy": "(0|2)",
-#         "Inputs": [
-#           {
-#             "OperatorType": "Join",
-#             "Variant": "Join",
-#             "JoinColumnIndexes": "-2,1,-3",
-#             "JoinVars": {
-#               "n_nationkey": 0
-#             },
-#             "TableName": "nation_region_orders_customer_lineitem_supplier",
-#             "Inputs": [
-#               {
-#                 "OperatorType": "Join",
-#                 "Variant": "Join",
-#                 "JoinColumnIndexes": "-2,-3,-4",
-#                 "JoinVars": {
-#                   "n_nationkey": 0,
-#                   "n_regionkey": 0
-#                 },
-#                 "TableName": "nation_region",
-#                 "Inputs": [
-#                   {
-#                     "OperatorType": "Route",
-#                     "Variant": "SelectScatter",
-#                     "Keyspace": {
-#                       "Name": "main",
-#                       "Sharded": true
-#                     },
-#                     "FieldQuery": "select n_regionkey, n_nationkey, n_name, weight_string(n_name) from nation where 1 != 1",
-#                     "OrderBy": "(2|3) ASC",
-#                     "Query": "select n_regionkey, n_nationkey, n_name, weight_string(n_name) from nation order by n_name asc",
-#                     "Table": "nation"
-#                   },
-#                   {
-#                     "OperatorType": "Route",
-#                     "Variant": "SelectEqualUnique",
-#                     "Keyspace": {
-#                       "Name": "main",
-#                       "Sharded": true
-#                     },
-#                     "FieldQuery": "select 1 from region where 1 != 1",
-#                     "Query": "select 1 from region where r_name = 'ASIA' and r_regionkey = :n_regionkey",
-#                     "Table": "region",
-#                     "Values": [
-#                       ":n_regionkey"
-#                     ],
-#                     "Vindex": "hash"
-#                   }
-#                 ]
-#               },
-#               {
-#                 "OperatorType": "Join",
-#                 "Variant": "Join",
-#                 "JoinColumnIndexes": "1",
-#                 "JoinVars": {
-#                   "c_nationkey": 1,
-#                   "o_orderkey": 0
-#                 },
-#                 "TableName": "orders_customer_lineitem_supplier",
-#                 "Inputs": [
-#                   {
-#                     "OperatorType": "Join",
-#                     "Variant": "Join",
-#                     "JoinVars": {
-#                       "o_custkey": 0,
-#                       "o_orderkey": 0
-#                     },
-#                     "TableName": "orders_customer",
-#                     "Inputs": [
-#                       {
-#                         "OperatorType": "Route",
-#                         "Variant": "SelectScatter",
-#                         "Keyspace": {
-#                           "Name": "main",
-#                           "Sharded": true
-#                         },
-#                         "FieldQuery": "select o_custkey, o_orderkey from orders where 1 != 1",
-#                         "Query": "select o_custkey, o_orderkey from orders where o_orderdate \u003e= date('1994-01-01') and o_orderdate \u003c date('1994-01-01') + interval '1' year",
-#                         "Table": "orders"
-#                       },
-#                       {
-#                         "OperatorType": "Route",
-#                         "Variant": "SelectEqualUnique",
-#                         "Keyspace": {
-#                           "Name": "main",
-#                           "Sharded": true
-#                         },
-#                         "FieldQuery": "select c_nationkey from customer where 1 != 1",
-#                         "Query": "select c_nationkey from customer where c_custkey = :o_custkey",
-#                         "Table": "customer",
-#                         "Values": [
-#                           ":o_custkey"
-#                         ],
-#                         "Vindex": "hash"
-#                       }
-#                     ]
-#                   },
-#                   {
-#                     "OperatorType": "Join",
-#                     "Variant": "Join",
-#                     "JoinColumnIndexes": "-3",
-#                     "JoinVars": {
-#                       "l_orderkey": 0,
-#                       "l_suppkey": 0
-#                     },
-#                     "TableName": "lineitem_supplier",
-#                     "Inputs": [
-#                       {
-#                         "OperatorType": "Route",
-#                         "Variant": "SelectScatter",
-#                         "Keyspace": {
-#                           "Name": "main",
-#                           "Sharded": true
-#                         },
-#                         "FieldQuery": "select l_suppkey, l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1",
-#                         "Query": "select l_suppkey, l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem",
-#                         "Table": "lineitem"
-#                       },
-#                       {
-#                         "OperatorType": "Route",
-#                         "Variant": "SelectEqualUnique",
-#                         "Keyspace": {
-#                           "Name": "main",
-#                           "Sharded": true
-#                         },
-#                         "FieldQuery": "select 1 from supplier where 1 != 1",
-#                         "Query": "select 1 from supplier where s_suppkey = :l_suppkey and :l_orderkey = :o_orderkey and s_nationkey = :c_nationkey and s_nationkey = :n_nationkey",
-#                         "Table": "supplier",
-#                         "Values": [
-#                           ":l_suppkey"
-#                         ],
-#                         "Vindex": "hash"
-#                       }
-#                     ]
-#                   }
-#                 ]
-#               }
-#             ]
-#           }
-#         ]
-#       }
-#     ]
-#   }
-# }
 
 # TPC-H query 6
 "select sum(l_extendedprice * l_discount) as revenue from lineitem where l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year and l_discount between 0.06 - 0.01 and 0.06 + 0.01 and l_quantity < 24"
@@ -657,12 +498,11 @@ Gen4 plan same as above
 # TPC-H query 16
 "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size"
 "unsupported: cross-shard query with aggregates"
-"gen4 does not yet support: group by on: *planbuilder.pulloutSubquery"
 
 # TPC-H query 17
 "select sum(l_extendedprice) / 7.0 as avg_yearly from lineitem, part where p_partkey = l_partkey and p_brand = 'Brand#23' and p_container = 'MED BOX' and l_quantity < ( select 0.2 * avg(l_quantity) from lineitem where l_partkey = p_partkey )"
-"unsupported: in scatter query: complex aggregate expression"
-Gen4 plan same as above
+"symbol p_partkey not found in table or subquery"
+Gen4 error: unsupported: cross-shard correlated subquery
 
 # TPC-H query 18
 "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate limit 100"
@@ -721,8 +561,8 @@ Gen4 plan same as above
 
 # TPC-H query 20
 "select s_name, s_address from supplier, nation where s_suppkey in ( select ps_suppkey from partsupp where ps_partkey in ( select p_partkey from part where p_name like 'forest%' ) and ps_availqty > ( select 0.5 * sum(l_quantity) from lineitem where l_partkey = ps_partkey and l_suppkey = ps_suppkey and l_shipdate >= date('1994-01-01') and l_shipdate < date('1994-01-01') + interval '1' year ) ) and s_nationkey = n_nationkey and n_name = 'CANADA' order by s_name"
-"unsupported: in scatter query: complex aggregate expression"
-Gen4 plan same as above
+"symbol ps_partkey not found in table or subquery"
+Gen4 error: unsupported: cross-shard correlated subquery
 
 # TPC-H query 21
 "select s_name, count(*) as numwait from supplier, lineitem l1, orders, nation where s_suppkey = l1.l_suppkey and o_orderkey = l1.l_orderkey and o_orderstatus = 'F' and l1.l_receiptdate > l1.l_commitdate and exists ( select * from lineitem l2 where l2.l_orderkey = l1.l_orderkey and l2.l_suppkey <> l1.l_suppkey ) and not exists ( select * from lineitem l3 where l3.l_orderkey = l1.l_orderkey and l3.l_suppkey <> l1.l_suppkey and l3.l_receiptdate > l3.l_commitdate ) and s_nationkey = n_nationkey and n_name = 'SAUDI ARABIA' group by s_name order by numwait desc, s_name limit 100"
@@ -731,5 +571,5 @@ Gen4 plan same as above
 
 # TPC-H query 22
 "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode"
-"unsupported: in scatter query: complex aggregate expression"
-"gen4 does not yet support: *sqlparser.StarExpr in select list"
+"symbol c_custkey not found in table or subquery"
+Gen4 error: unsupported: cross-shard correlated subquery
