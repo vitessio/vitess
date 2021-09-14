@@ -299,7 +299,7 @@ type ConnPoolConfig struct {
 type OltpConfig struct {
 	QueryTimeoutSeconds Seconds `json:"queryTimeoutSeconds,omitempty"`
 	TxTimeoutSeconds    Seconds `json:"txTimeoutSeconds,omitempty"`
-	MaxRows             int     `json:"maxRpws,omitempty"`
+	MaxRows             int     `json:"maxRows,omitempty"`
 	WarnRows            int     `json:"warnRows,omitempty"`
 }
 
