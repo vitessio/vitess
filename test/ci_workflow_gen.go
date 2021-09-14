@@ -30,12 +30,12 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestDatabases = "percona56, mysql80, mariadb102"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
-	unitTestSelfHostedDatabases   = "mysql57, mariadb"
+	unitTestSelfHostedDatabases   = "mysql57, mariadb103"
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
 )
@@ -57,11 +57,7 @@ var (
 		"23",
 		"24",
 		"26",
-		"vreplication_basic",
-		"vreplication_multicell",
-		"vreplication_cellalias",
 		"vstream_failover",
-		"vreplication_v2",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
 		"onlineddl_ghost",
@@ -102,7 +98,7 @@ var (
 	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = clusterList
+	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
@@ -184,7 +180,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 	for _, platform := range platforms {
 		directoryName := fmt.Sprintf("unit_test_%s", platform)
 		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Unit Test Self Hosted (%s)", platform),
+			Name:              fmt.Sprintf("Unit Test (%s)", platform),
 			ImageName:         fmt.Sprintf("unit_test_%s", platform),
 			Platform:          platform,
 			directoryName:     directoryName,
@@ -196,7 +192,7 @@ func generateSelfHostedUnitTestWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/unit_test_%s_self_hosted.yml", workflowConfigDir, platform)
+		filePath := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
 		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
@@ -210,7 +206,7 @@ func generateSelfHostedClusterWorkflows() error {
 	for _, cluster := range clusters {
 		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
 		test := &selfHostedTest{
-			Name:              fmt.Sprintf("Cluster Self Hosted (%s)", cluster),
+			Name:              fmt.Sprintf("Cluster (%s)", cluster),
 			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
 			Platform:          "mysql57",
 			directoryName:     directoryName,
@@ -245,7 +241,7 @@ func generateSelfHostedClusterWorkflows() error {
 		if err != nil {
 			return err
 		}
-		filePath := fmt.Sprintf("%s/cluster_endtoend_%s_self_hosted.yml", workflowConfigDir, cluster)
+		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
 		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
 		if err != nil {
 			log.Print(err)
