@@ -96,6 +96,30 @@ Valid output formats are "awk" and "json".`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandRefreshStateByShard,
 	}
+	// SetWritable makes a SetWritable gRPC call to a vtctld.
+	SetWritable = &cobra.Command{
+		Use:                   "SetWritable [--read-only] <alias>",
+		Short:                 "Sets the specified tablet as writable or read-only.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandSetWritable,
+	}
+	// StartReplication makes a StartReplication gRPC call to a vtctld.
+	StartReplication = &cobra.Command{
+		Use:                   "StartReplication <alias>",
+		Short:                 "Starts replication on the specified tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandStartReplication,
+	}
+	// StopReplication makes a StopReplication gRPC call to a vtctld.
+	StopReplication = &cobra.Command{
+		Use:                   "StopReplication <alias>",
+		Short:                 "Stops replication on the specified tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandStopReplication,
+	}
 )
 
 var changeTabletTypeOptions = struct {
@@ -314,6 +338,53 @@ func commandRefreshStateByShard(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var setWritableOptions = struct {
+	ReadOnly bool
+}{}
+
+func commandSetWritable(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.SetWritable(commandCtx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: alias,
+		Writable:    !setWritableOptions.ReadOnly,
+	})
+	return err
+}
+
+func commandStartReplication(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.StartReplication(commandCtx, &vtctldatapb.StartReplicationRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
+func commandStopReplication(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.StopReplication(commandCtx, &vtctldatapb.StopReplicationRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
@@ -335,4 +406,10 @@ func init() {
 
 	RefreshStateByShard.Flags().StringSliceVarP(&refreshStateByShardOptions.Cells, "cells", "c", nil, "If specified, only call RefreshState on tablets in the specified cells. If empty, all cells are considered.")
 	Root.AddCommand(RefreshStateByShard)
+
+	SetWritable.Flags().BoolVar(&setWritableOptions.ReadOnly, "read-only", false, "Set tablet as read-only (writable=false)")
+	Root.AddCommand(SetWritable)
+
+	Root.AddCommand(StartReplication)
+	Root.AddCommand(StopReplication)
 }
