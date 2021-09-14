@@ -45,7 +45,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 	}
 
 	if isRoute && rb.isSingleShard() {
-		err := createSingleShardRoutePlan(hp.sel, rb)
+		err := planSingleShardRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -81,27 +81,21 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		}
 
 		if canShortcut {
-			err := createSingleShardRoutePlan(hp.sel, rb)
+			err = planSingleShardRoutePlan(hp.sel, rb)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			for _, e := range hp.qp.SelectExprs {
-				aliasExpr, err := e.GetAliasedExpr()
-				if err != nil {
-					if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
-						return nil, abstract.ErrStarExprInCrossShard
-					}
-					return nil, err
-				}
-				if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
-					return nil, err
-				}
+			err = pushProjections(ctx, plan, hp.qp.SelectExprs)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
 
-	if needAggrOrHaving || !canShortcut {
+	// If we have done the shortcut that means we already planned order by
+	// and group by, thus we don't need to do it again.
+	if !canShortcut {
 		if len(hp.qp.OrderExprs) > 0 {
 			plan, err = hp.planOrderBy(ctx, hp.qp.OrderExprs, plan)
 			if err != nil {
@@ -110,7 +104,7 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 		}
 
 		if hp.qp.CanPushDownSorting && hp.vtgateGrouping {
-			plan, err = hp.planOrderByUsingGroupBy(ctx, plan)
+			plan, err = hp.planGroupByUsingOrderBy(ctx, plan)
 			if err != nil {
 				return nil, err
 			}
@@ -128,6 +122,22 @@ func (hp *horizonPlanning) planHorizon(ctx planningContext, plan logicalPlan) (l
 	}
 
 	return plan, nil
+}
+
+func pushProjections(ctx planningContext, plan logicalPlan, selectExprs []abstract.SelectExpr) error {
+	for _, e := range selectExprs {
+		aliasExpr, err := e.GetAliasedExpr()
+		if err != nil {
+			if _, isStar := e.Col.(*sqlparser.StarExpr); isStar {
+				return abstract.ErrStarExprInCrossShard
+			}
+			return err
+		}
+		if _, _, err := pushProjection(aliasExpr, plan, ctx.semTable, true, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
@@ -503,7 +513,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 	}
 }
 
-func (hp *horizonPlanning) planOrderByUsingGroupBy(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
+func (hp *horizonPlanning) planGroupByUsingOrderBy(ctx planningContext, plan logicalPlan) (logicalPlan, error) {
 	var orderExprs []abstract.OrderBy
 	for _, groupExpr := range hp.qp.GroupByExprs {
 		addExpr := true

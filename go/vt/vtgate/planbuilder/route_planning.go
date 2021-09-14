@@ -331,7 +331,7 @@ func exprHasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, e
 	return false
 }
 
-func createSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
+func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err
