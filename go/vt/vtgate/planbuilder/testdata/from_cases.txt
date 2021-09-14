@@ -1991,7 +1991,7 @@ Gen4 error: symbol t.col not found
     "Table": "`user`"
   }
 }
-"symbol id not found"
+Gen4 error: symbol id not found
 
 # push predicate on joined derived tables
 "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'"
@@ -3946,25 +3946,6 @@ Gen4 plan same as above
   }
 }
 
-# join two routes with SysTableTableName entries in LHS and RHS
-"select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b"
-{
-  "QueryType": "SELECT",
-  "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a join (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
-    "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a join (select * from information_schema.referential_constraints where table_name = :table_name) as b",
-    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
-    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
-  }
-}
-
 # select star from derived table on expandable and unsharded table
 "select u.* from (select * from unsharded) u"
 {
@@ -3983,3 +3964,99 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# filtering on a cross-shard derived table
+"select id from (select user.id, user.col from user join user_extra) as t where id=5"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select user.id, user.col from user join user_extra) as t where id=5",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col from `user` where `user`.id = 5",
+            "Table": "`user`",
+            "Values": [
+              5
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# expression on a cross-shard derived table
+"select id+1 from (select user.id, user.col from user join user_extra) as t"
+"unsupported: expression on results of a cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id+1 from (select user.id, user.col from user join user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      2
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2,-3",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, id + 1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col, id + 1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}

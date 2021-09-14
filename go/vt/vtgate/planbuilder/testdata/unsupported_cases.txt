@@ -24,18 +24,11 @@ Gen4 plan same as above
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
-
-# filtering on a cross-shard derived table
-"select id from (select user.id, user.col from user join user_extra) as t where id=5"
-"unsupported: filtering on results of cross-shard subquery"
-
-# expression on a cross-shard derived table
-"select id+1 from (select user.id, user.col from user join user_extra) as t"
-"unsupported: expression on results of a cross-shard subquery"
 
 # natural join
 "select * from user natural join user_extra"
@@ -84,7 +77,7 @@ Gen4 plan same as above
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
-"cannot use column offsets in group statement when using `*`"
+Gen4 error: cannot use column offsets in group statement when using `*`
 
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
@@ -119,10 +112,12 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
@@ -354,6 +349,7 @@ Gen4 plan same as above
 "unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
 Gen4 plan same as above
 
+# vindex func without where condition
 "select keyspace_id from user_index"
 "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
 
@@ -369,10 +365,6 @@ Gen4 plan same as above
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "can't do ORDER BY on top of ORDER BY"
-
-# ambiguous ORDER BY
-"select id from user order by id union all select id from music order by id desc"
-"Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
 
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
