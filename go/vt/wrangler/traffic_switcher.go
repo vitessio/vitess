@@ -900,16 +900,16 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		for _, table := range ts.tables {
 			if direction == workflow.DirectionForward {
 				log.Infof("Route direction forward")
-				toTarget := []string{ts.targetKeyspace + "." + table}
-				rules[table+"@"+tt] = toTarget
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = toTarget
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toTarget
+				toTarget := []string{"`" + ts.targetKeyspace + "`.`" + table + "`"}
+				rules["`"+table+"`@"+tt] = toTarget
+				rules["`"+ts.targetKeyspace+"`.`"+table+"`@"+tt] = toTarget
+				rules["`"+ts.sourceKeyspace+"`.`"+table+"`@"+tt] = toTarget
 			} else {
 				log.Infof("Route direction backwards")
-				toSource := []string{ts.sourceKeyspace + "." + table}
-				rules[table+"@"+tt] = toSource
-				rules[ts.targetKeyspace+"."+table+"@"+tt] = toSource
-				rules[ts.sourceKeyspace+"."+table+"@"+tt] = toSource
+				toSource := []string{"`" + ts.sourceKeyspace + "`.`" + table + "`"}
+				rules["`"+table+"`@"+tt] = toSource
+				rules["`"+ts.targetKeyspace+"`.`"+table+"`@"+tt] = toSource
+				rules["`"+ts.sourceKeyspace+"`.`"+table+"`@"+tt] = toSource
 			}
 		}
 	}

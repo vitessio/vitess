@@ -165,16 +165,16 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		for _, table := range tables {
-			toSource := []string{sourceKeyspace + "." + table}
-			rules[table] = toSource
-			rules[table+"@replica"] = toSource
-			rules[table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[targetKeyspace+"."+table+"@replica"] = toSource
-			rules[targetKeyspace+"."+table+"@rdonly"] = toSource
-			rules[targetKeyspace+"."+table] = toSource
-			rules[sourceKeyspace+"."+table+"@replica"] = toSource
-			rules[sourceKeyspace+"."+table+"@rdonly"] = toSource
+			toSource := []string{"`" + sourceKeyspace + "`.`" + table + "`"}
+			rules["`"+table+"`"] = toSource
+			rules["`"+table+"`@replica"] = toSource
+			rules["`"+table+"`@rdonly"] = toSource
+			rules["`"+targetKeyspace+"`.`"+table+"`"] = toSource
+			rules["`"+targetKeyspace+"`.`"+table+"`@replica"] = toSource
+			rules["`"+targetKeyspace+"`.`"+table+"`@rdonly"] = toSource
+			rules["`"+targetKeyspace+"`.`"+table+"`"] = toSource
+			rules["`"+sourceKeyspace+"`.`"+table+"`@replica"] = toSource
+			rules["`"+sourceKeyspace+"`.`"+table+"`@rdonly"] = toSource
 		}
 		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 			return err
