@@ -684,11 +684,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# subquery of information_schema with itself and star expression in outer select
-"select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
-"unsupported: '*' expression in cross-shard query"
-Gen4 plan same as above
-
 # query trying to query two different keyspaces at the same time
 "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'user' AND TABLE_SCHEMA = 'main'"
 {
