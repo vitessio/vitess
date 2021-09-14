@@ -1763,6 +1763,11 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// SetWritable is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) (*vtctldatapb.SetWritableResponse, error) {
+	panic("unimplemented!")
+}
+
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")
@@ -1888,6 +1893,16 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		ReplicationStatuses: results,
 		TabletMap:           tabletMap,
 	}, nil
+}
+
+// StartReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest) (*vtctldatapb.StartReplicationResponse, error) {
+	panic("unimplemented!")
+}
+
+// StopReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StopReplication(ctx context.Context, req *vtctldatapb.StopReplicationRequest) (*vtctldatapb.StopReplicationResponse, error) {
+	panic("unimplemented!")
 }
 
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.
