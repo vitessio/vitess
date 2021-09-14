@@ -298,7 +298,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 1 order by col asc",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # ORDER BY on scatter
 "select col from user order by col"

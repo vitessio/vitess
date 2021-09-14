@@ -84,7 +84,7 @@ Gen4 plan same as above
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
-Gen4 plan same as above
+"cannot use column offsets in group statement when using `*`"
 
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"

@@ -2288,7 +2288,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	}
 	if *dryRun {
 		if len(*dryRunResults) > 0 {
-			wr.Logger().Printf("Dry Run results for %s run at %s\nParameters: %s\n\n", time.RFC822, originalAction, strings.Join(args, " "))
+			wr.Logger().Printf("Dry Run results for %s run at %s\nParameters: %s\n\n", originalAction, time.Now().Format(time.RFC822), strings.Join(args, " "))
 			wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 			return nil
 		}
@@ -2502,7 +2502,7 @@ func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *dryRun {
-		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
 		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	}
 	return nil
@@ -2557,7 +2557,7 @@ func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
 		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	}
 	return nil
@@ -2592,7 +2592,7 @@ func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		return err
 	}
 	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.RFC822, strings.Join(args, " "))
+		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
 		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
 	} else {
 		wr.Logger().Infof("Migration Journal ID: %v", journalID)
