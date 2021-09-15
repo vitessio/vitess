@@ -76,22 +76,6 @@ func (vtorcReparent *VtOrcReparentFunctions) LockAction() string {
 	return "Orc Recovery"
 }
 
-// CheckIfFixed implements the ReparentFunctions interface
-func (vtorcReparent *VtOrcReparentFunctions) CheckIfFixed() bool {
-	// Check if someone else fixed the problem.
-	tablet, err := TabletRefresh(vtorcReparent.analysisEntry.AnalyzedInstanceKey)
-	if err == nil && tablet.Type != topodatapb.TabletType_PRIMARY {
-		// TODO(sougou); use a version that only refreshes the current shard.
-		RefreshTablets()
-		AuditTopologyRecovery(vtorcReparent.topologyRecovery, "another agent seems to have fixed the problem")
-		// TODO(sougou): see if we have to reset the cluster as healthy.
-		return true
-	}
-	AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("will handle DeadPrimary event on %+v", vtorcReparent.analysisEntry.ClusterDetails.ClusterName))
-	recoverDeadPrimaryCounter.Inc(1)
-	return false
-}
-
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
 // TODO : Discuss correct way
 func (vtorcReparent *VtOrcReparentFunctions) GetWaitReplicasTimeout() time.Duration {

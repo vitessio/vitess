@@ -38,7 +38,6 @@ type (
 	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
 	ReparentFunctions interface {
 		LockAction() string
-		CheckIfFixed() bool
 		GetWaitReplicasTimeout() time.Duration
 		GetWaitForRelayLogsTimeout() time.Duration
 		HandleRelayLogFailure(logutil.Logger, error) error
@@ -76,13 +75,6 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 // LockAction implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) LockAction() string {
 	return getLockAction(vtctlReparent.newPrimaryAlias)
-}
-
-// CheckIfFixed implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) CheckIfFixed() bool {
-	// For vtctl command, we know there is no other third party to fix this.
-	// If a user has called this command, then we should execute EmergencyReparentShard
-	return false
 }
 
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
