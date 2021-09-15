@@ -694,6 +694,14 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message SetWritableRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  bool writable = 2;
+}
+
+message SetWritableResponse {
+}
+
 message ShardReplicationPositionsRequest {
   string keyspace = 1;
   string shard = 2;
@@ -706,6 +714,20 @@ message ShardReplicationPositionsResponse {
   // TabletMap is the set of tablets whose replication statuses were queried,
   // keyed by tablet alias.
   map<string, topodata.Tablet> tablet_map = 2;
+}
+
+message StartReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StartReplicationResponse {
+}
+
+message StopReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StopReplicationResponse {
 }
 
 message TabletExternallyReparentedRequest {
