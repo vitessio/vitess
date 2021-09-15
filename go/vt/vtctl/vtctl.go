@@ -103,6 +103,7 @@ import (
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
@@ -934,11 +935,10 @@ func commandPing(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().Ping(ctx, tabletInfo.Tablet)
+	_, err = wr.VtctldServer().PingTablet(ctx, &vtctldatapb.PingTabletRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandRefreshState(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1066,15 +1066,16 @@ func commandSleep(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	if err != nil {
 		return err
 	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 	duration, err := time.ParseDuration(subFlags.Arg(1))
 	if err != nil {
 		return err
 	}
-	return wr.TabletManagerClient().Sleep(ctx, ti.Tablet, duration)
+
+	_, err = wr.VtctldServer().SleepTablet(ctx, &vtctldatapb.SleepTabletRequest{
+		TabletAlias: tabletAlias,
+		Duration:    protoutil.DurationToProto(duration),
+	})
+	return err
 }
 
 func commandExecuteFetchAsApp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
