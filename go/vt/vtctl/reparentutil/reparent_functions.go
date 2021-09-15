@@ -35,17 +35,19 @@ import (
 )
 
 type (
-	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
-	VtctlReparentFunctions struct {
+	// EmergencyReparentOptions provides optional parameters to
+	// EmergencyReparentShard operations. Options are passed by value, so it is safe
+	// for callers to mutate and reuse options structs for multiple calls.
+	EmergencyReparentOptions struct {
 		newPrimaryAlias     *topodatapb.TabletAlias
 		ignoreReplicas      sets.String
 		waitReplicasTimeout time.Duration
 	}
 )
 
-// NewVtctlReparentFunctions creates a new VtctlReparentFunctions which is used in ERS ans PRS
-func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration) *VtctlReparentFunctions {
-	return &VtctlReparentFunctions{
+// NewEmergencyReparentOptions creates a new EmergencyReparentOptions which is used in ERS ans PRS
+func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration) EmergencyReparentOptions {
+	return EmergencyReparentOptions{
 		newPrimaryAlias:     newPrimaryAlias,
 		ignoreReplicas:      ignoreReplicas,
 		waitReplicasTimeout: waitReplicasTimeout,
@@ -53,27 +55,27 @@ func NewVtctlReparentFunctions(newPrimaryAlias *topodatapb.TabletAlias, ignoreRe
 }
 
 // LockAction implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) LockAction() string {
-	return getLockAction(vtctlReparent.newPrimaryAlias)
+func (opts *EmergencyReparentOptions) LockAction() string {
+	return getLockAction(opts.newPrimaryAlias)
 }
 
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetWaitReplicasTimeout() time.Duration {
-	return vtctlReparent.waitReplicasTimeout
+func (opts *EmergencyReparentOptions) GetWaitReplicasTimeout() time.Duration {
+	return opts.waitReplicasTimeout
 }
 
 // GetWaitForRelayLogsTimeout implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
-	return vtctlReparent.waitReplicasTimeout
+func (opts *EmergencyReparentOptions) GetWaitForRelayLogsTimeout() time.Duration {
+	return opts.waitReplicasTimeout
 }
 
 // GetIgnoreReplicas implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetIgnoreReplicas() sets.String {
-	return vtctlReparent.ignoreReplicas
+func (opts *EmergencyReparentOptions) GetIgnoreReplicas() sets.String {
+	return opts.ignoreReplicas
 }
 
 // RestrictValidCandidates implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
+func (opts *EmergencyReparentOptions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
 	restrictedValidCandidates := make(map[string]mysql.Position)
 	for candidate, position := range validCandidates {
 		candidateInfo, ok := tabletMap[candidate]
@@ -90,7 +92,7 @@ func (vtctlReparent *VtctlReparentFunctions) RestrictValidCandidates(validCandid
 }
 
 // FindPrimaryCandidate implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidate(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
+func (opts *EmergencyReparentOptions) FindPrimaryCandidate(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error) {
 	// Elect the candidate with the most up-to-date position.
 	var winningPrimaryTabletAliasStr string
 	var winningPosition mysql.Position
@@ -104,8 +106,8 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidate(ctx context.Co
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs) and is at least as
 	// advanced as the winning position.
-	if vtctlReparent.newPrimaryAlias != nil {
-		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(vtctlReparent.newPrimaryAlias)
+	if opts.newPrimaryAlias != nil {
+		winningPrimaryTabletAliasStr = topoproto.TabletAliasString(opts.newPrimaryAlias)
 		pos, ok := validCandidates[winningPrimaryTabletAliasStr]
 		switch {
 		case !ok:
@@ -123,12 +125,12 @@ func (vtctlReparent *VtctlReparentFunctions) FindPrimaryCandidate(ctx context.Co
 }
 
 // PostTabletChangeHook implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PostTabletChangeHook(*topodatapb.Tablet) {
+func (opts *EmergencyReparentOptions) PostTabletChangeHook(*topodatapb.Tablet) {
 }
 
 // PromotedReplicaIsIdeal implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
-	if vtctlReparent.newPrimaryAlias != nil {
+func (opts *EmergencyReparentOptions) PromotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, validCandidates map[string]mysql.Position) bool {
+	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		return true
 	}
@@ -147,7 +149,7 @@ func (vtctlReparent *VtctlReparentFunctions) PromotedReplicaIsIdeal(newPrimary, 
 }
 
 // GetBetterCandidate implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
+func (opts *EmergencyReparentOptions) GetBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo) *topodatapb.Tablet {
 	if prevPrimary != nil {
 		// find one which is of the correct type and matches the cell of the previous primary
 		for _, candidate := range validCandidates {
@@ -165,10 +167,10 @@ func (vtctlReparent *VtctlReparentFunctions) GetBetterCandidate(newPrimary, prev
 }
 
 // CheckIfNeedToOverridePromotion implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error {
+func (opts *EmergencyReparentOptions) CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error {
 	return nil
 }
 
 // PostERSCompletionHook implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
+func (opts *EmergencyReparentOptions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
 }
