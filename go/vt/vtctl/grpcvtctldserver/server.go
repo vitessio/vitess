@@ -1522,6 +1522,11 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// PingTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (*vtctldatapb.PingTabletResponse, error) {
+	panic("unimplemented!")
+}
+
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PlannedReparentShard")
@@ -1923,6 +1928,11 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		ReplicationStatuses: results,
 		TabletMap:           tabletMap,
 	}, nil
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTabletRequest) (*vtctldatapb.SleepTabletResponse, error) {
+	panic("unimplemented!")
 }
 
 // StartReplication is part of the vtctldservicepb.VtctldServer interface.
