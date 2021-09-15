@@ -308,7 +308,7 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 	primary := shard.findShardPrimaryTablet()
 	var mysqlPrimaryHost string
 	var mysqlPrimaryPort int
-	// skipMaster is true when we manual failover or if there is a unreachalbe primary tablet
+	// skipPrimary is true when we manual failover or if there is a unreachalbe primary tablet
 	// in both case, there should be a reconciled primary tablet
 	if skipPrimary && primary != nil {
 		status := shard.sqlGroup.GetStatus(primary.instanceKey)
