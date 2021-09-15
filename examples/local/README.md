@@ -29,7 +29,7 @@ vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.comme
 vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
 
 # Clean-up
-vtctlclient DropSources customer.commerce2customer
+vtctlclient MoveTables Complete customer.commerce2customer
 
 # Prepare for resharding
 ./301_customer_sharded.sh
