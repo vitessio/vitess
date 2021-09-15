@@ -187,7 +187,6 @@ func (this InstancesByCountReplicas) Less(i, j int) bool {
 	return len(this[i].Replicas) < len(this[j].Replicas)
 }
 
-var recoverDeadPrimaryCounter = metrics.NewCounter()
 var recoverDeadPrimarySuccessCounter = metrics.NewCounter()
 var recoverDeadPrimaryFailureCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
@@ -199,7 +198,6 @@ var recoverDeadCoPrimaryFailureCounter = metrics.NewCounter()
 var countPendingRecoveriesGauge = metrics.NewGauge()
 
 func init() {
-	metrics.Register("recover.dead_primary.start", recoverDeadPrimaryCounter)
 	metrics.Register("recover.dead_primary.success", recoverDeadPrimarySuccessCounter)
 	metrics.Register("recover.dead_primary.fail", recoverDeadPrimaryFailureCounter)
 	metrics.Register("recover.dead_intermediate_primary.start", recoverDeadIntermediatePrimaryCounter)
@@ -646,7 +644,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	defer atomic.StoreInt32(&ersInProgress, 0)
 
 	// add to the shard lock counter since ERS will lock the shard
-	atomic.AddInt32(&shardsLockCounter, -1)
+	atomic.AddInt32(&shardsLockCounter, 1)
 	defer atomic.AddInt32(&shardsLockCounter, -1)
 
 	reparentFunctions := NewVtorcReparentFunctions(analysisEntry, candidateInstanceKey, skipProcesses, topologyRecovery)
