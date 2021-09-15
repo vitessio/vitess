@@ -103,13 +103,13 @@ func waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc 
 // Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient,
 	newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions,
 	waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
 	var replicaMutex sync.Mutex
 
-	replCtx, replCancel := context.WithTimeout(ctx, reparentFunctions.GetWaitReplicasTimeout())
+	replCtx, replCancel := context.WithTimeout(ctx, opts.GetWaitReplicasTimeout())
 	defer replCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
@@ -169,7 +169,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
 		replicaMutex.Unlock()
 		// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-		reparentFunctions.PostTabletChangeHook(ti.Tablet)
+		opts.PostTabletChangeHook(ti.Tablet)
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		// We do this only when we do not want to wait for all the replicas
@@ -184,7 +184,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		switch {
 		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
 			continue
-		case !reparentFunctions.GetIgnoreReplicas().Has(alias):
+		case !opts.GetIgnoreReplicas().Has(alias):
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)
@@ -302,18 +302,18 @@ func ChooseNewPrimary(
 
 // promotePrimaryCandidate promotes the primary candidate that we have, but it does not yet set to start accepting writes
 func promotePrimaryCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions, isIdeal bool) ([]*topodatapb.Tablet, error) {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, isIdeal bool) ([]*topodatapb.Tablet, error) {
 	// first step is change the type of the newPrimary tablet to PRIMARY
 	if err := changeTypeToPrimary(ctx, tmc, newPrimary); err != nil {
 		return nil, err
 	}
 
 	// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-	reparentFunctions.PostTabletChangeHook(newPrimary)
+	opts.PostTabletChangeHook(newPrimary)
 
 	// now we reparent all the other tablets to start replication from our new primary
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, reparentFunctions, !isIdeal)
+	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, !isIdeal)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +381,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 
 // replaceWithBetterCandidate promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
 func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions) error {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) error {
 	// Find the primary position of the previous primary
 	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
 	if err != nil {
@@ -401,10 +401,10 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	}
 
 	// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-	reparentFunctions.PostTabletChangeHook(newPrimary)
+	opts.PostTabletChangeHook(newPrimary)
 
 	// we now reparent the other tablets, but this time we do not need to wait for all of them
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, reparentFunctions, false)
+	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, false)
 	if err != nil {
 		return err
 	}
