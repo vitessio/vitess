@@ -42,10 +42,11 @@ func (jp *joinTree) tableID() semantics.TableSet {
 
 func (jp *joinTree) clone() queryTree {
 	result := &joinTree{
-		lhs:   jp.lhs.clone(),
-		rhs:   jp.rhs.clone(),
-		outer: jp.outer,
-		vars:  make(map[string]int, len(jp.vars)),
+		lhs:     jp.lhs.clone(),
+		rhs:     jp.rhs.clone(),
+		outer:   jp.outer,
+		columns: jp.columns,
+		vars:    make(map[string]int, len(jp.vars)),
 	}
 	for key, val := range jp.vars {
 		result.vars[key] = val
@@ -81,8 +82,9 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 
 	outputColumns := make([]int, len(toTheLeft))
 	var l, r int
+	originalColSize := len(jp.vars)
 	for i, isLeft := range toTheLeft {
-		outputColumns[i] = i
+		outputColumns[i] = i + originalColSize
 		if isLeft {
 			jp.columns = append(jp.columns, -lhsOffset[l]-1)
 			l++
