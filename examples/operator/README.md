@@ -35,7 +35,7 @@ vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.comme
 vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
 
 # Clean-up
-vtctlclient DropSources customer.commerce2customer
+vtctlclient MoveTables Complete customer.commerce2customer
 
 # Prepare for resharding
 vtctlclient ApplySchema -sql="$(cat create_commerce_seq.sql)" commerce
@@ -55,6 +55,7 @@ vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cus
 vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.cust2cust
 
 # Down shard 0
+vtctlclient Reshard Complete customer.cust2cust
 kubectl apply -f 306_down_shard_0.yaml
 
 # Down cluster
