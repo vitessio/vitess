@@ -638,7 +638,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 
 			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
+			if err := tm.RestoreData(ctx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */, *restoreFromBackupTs); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 		}()
