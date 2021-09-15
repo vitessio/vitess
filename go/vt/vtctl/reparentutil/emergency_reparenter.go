@@ -80,7 +80,8 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 // keyspace and shard.
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	// First step is to lock the shard for the given operation
-	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, opts.LockAction())
+	opts.lockAction = getLockAction(opts.newPrimaryAlias)
+	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +155,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 	// Now, we restrict the valid candidates list according to the ReparentFunctions implementations
-	validCandidates, err = opts.RestrictValidCandidates(validCandidates, tabletMap)
+	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
 	} else if len(validCandidates) == 0 {
@@ -177,7 +178,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	isIdeal := opts.PromotedReplicaIsIdeal(newPrimary, prevPrimary, tabletMap, validCandidates)
 
 	// we now promote our primary candidate and also reparent all the other tablets to start replicating from this candidate
-	validReplacementCandidates, err := promotePrimaryCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, opts.LockAction(), tabletMap, statusMap, opts, isIdeal)
+	validReplacementCandidates, err := promotePrimaryCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, opts.lockAction, tabletMap, statusMap, opts, isIdeal)
 	if err != nil {
 		return err
 	}
@@ -195,7 +196,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// if our better candidate is different from our previous candidate, then we replace our primary
 	if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
-		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, opts.LockAction(), tabletMap, statusMap, opts)
+		err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, opts.lockAction, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}
@@ -207,7 +208,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if errInPromotion != nil {
 		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
 		// we try and undo the promotion
-		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, opts.LockAction(), tabletMap, statusMap, opts)
+		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, opts.lockAction, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}

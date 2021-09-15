@@ -421,3 +421,20 @@ func getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
 
 	return action
 }
+
+// restrictValidCandidates implements the ReparentFunctions interface
+func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
+	restrictedValidCandidates := make(map[string]mysql.Position)
+	for candidate, position := range validCandidates {
+		candidateInfo, ok := tabletMap[candidate]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+		// We only allow PRIMARY and REPLICA type of tablets to be considered for replication
+		if candidateInfo.Type != topodatapb.TabletType_PRIMARY && candidateInfo.Type != topodatapb.TabletType_REPLICA {
+			continue
+		}
+		restrictedValidCandidates[candidate] = position
+	}
+	return restrictedValidCandidates, nil
+}
