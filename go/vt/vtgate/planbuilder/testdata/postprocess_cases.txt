@@ -1414,6 +1414,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
+    "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # routing rules: order by gets pushed for routes
 "select col from route1 where id = 1 order by col"

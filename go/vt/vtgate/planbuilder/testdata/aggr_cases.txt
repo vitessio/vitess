@@ -774,6 +774,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Table": "`user`"
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '*' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"

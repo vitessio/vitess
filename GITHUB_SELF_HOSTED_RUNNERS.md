@@ -24,7 +24,7 @@ access to Vitess.
    5. With a screen execute `./run.sh`
 8. Set up a cron job to remove docker volumes and images every week
    1. `crontab -e`
-   2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes`
+   2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes --all`
 
 ### Using a self-hosted runner to debug a flaky test
 You will need access to the self-hosted runner machine to be able to connect to it via SSH.

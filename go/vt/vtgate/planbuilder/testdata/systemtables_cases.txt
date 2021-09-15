@@ -941,3 +941,38 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# join two routes with SysTableTableName entries in LHS and RHS
+"select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b"
+{
+  "QueryType": "SELECT",
+  "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a join (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
+    "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a join (select * from information_schema.referential_constraints where table_name = :table_name) as b",
+    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
+    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a, (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
+    "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a, (select * from information_schema.referential_constraints where table_name = :table_name) as b",
+    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
+    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
+  }
+}
