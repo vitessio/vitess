@@ -103,7 +103,7 @@ func waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc 
 // Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
 func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient,
 	newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions,
+	statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions,
 	waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
@@ -302,7 +302,7 @@ func ChooseNewPrimary(
 
 // promotePrimaryCandidate promotes the primary candidate that we have, but it does not yet set to start accepting writes
 func promotePrimaryCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions, isIdeal bool) ([]*topodatapb.Tablet, error) {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions, isIdeal bool) ([]*topodatapb.Tablet, error) {
 	// first step is change the type of the newPrimary tablet to PRIMARY
 	if err := changeTypeToPrimary(ctx, tmc, newPrimary); err != nil {
 		return nil, err
@@ -381,7 +381,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 
 // replaceWithBetterCandidate promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
 func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) error {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions) error {
 	// Find the primary position of the previous primary
 	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
 	if err != nil {

@@ -78,7 +78,7 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 
 // ReparentShard performs the EmergencyReparentShard operation on the given
 // keyspace and shard.
-func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, reparentFunctions ReparentFunctions) (*events.Reparent, error) {
+func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, reparentFunctions *VtctlReparentFunctions) (*events.Reparent, error) {
 	// First step is to lock the shard for the given operation
 	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, reparentFunctions.LockAction())
 	if err != nil {
@@ -107,7 +107,7 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 }
 
 // reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
-func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, reparentFunctions ReparentFunctions) error {
+func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, reparentFunctions *VtctlReparentFunctions) error {
 	// log the starting of the operation and increment the counter
 	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
 	ersCounter.Add(1)
@@ -229,7 +229,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 }
 
 func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Server, ev *events.Reparent, keyspace, shard string, prevPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions ReparentFunctions) (*topodatapb.Tablet, error) {
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, reparentFunctions *VtctlReparentFunctions) (*topodatapb.Tablet, error) {
 	var primaryAlias *topodatapb.TabletAlias
 	var err error
 	if prevPrimary != nil {
