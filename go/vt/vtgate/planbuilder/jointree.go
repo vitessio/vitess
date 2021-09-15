@@ -45,7 +45,10 @@ func (jp *joinTree) clone() queryTree {
 		lhs:   jp.lhs.clone(),
 		rhs:   jp.rhs.clone(),
 		outer: jp.outer,
-		vars:  jp.vars,
+		vars:  make(map[string]int, len(jp.vars)),
+	}
+	for key, val := range jp.vars {
+		result.vars[key] = val
 	}
 	return result
 }
