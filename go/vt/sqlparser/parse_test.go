@@ -3495,7 +3495,7 @@ func BenchmarkParse3(b *testing.B) {
 	})
 }
 
-func TestValidCases(t *testing.T) {
+func TestValidUnionCases(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
 	require.NoError(t, err)
 	defer func() {
@@ -3506,6 +3506,19 @@ func TestValidCases(t *testing.T) {
 
 	testFile(t, "union_cases.txt", testOutputTempDir)
 }
+
+func TestValidSelectCases(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "select_cases.txt", testOutputTempDir)
+}
+
 type testCase struct {
 	file             string
 	lineno           int
