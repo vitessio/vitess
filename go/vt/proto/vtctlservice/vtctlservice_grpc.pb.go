@@ -230,6 +230,9 @@ type VtctldClient interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(ctx context.Context, in *vtctldata.InitShardPrimaryRequest, opts ...grpc.CallOption) (*vtctldata.InitShardPrimaryResponse, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs.
+	// This command can be blocked by other in-flight operations.
+	PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error)
 	// PlannedReparentShard reparents the shard to the new primary, or away from
 	// an old primary. Both the old and new primaries need to be reachable and
 	// running.
@@ -265,6 +268,11 @@ type VtctldClient interface {
 	// ShardReplicationPositions will return non-error, and include valid results
 	// for the reachable tablets.
 	ShardReplicationPositions(ctx context.Context, in *vtctldata.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationPositionsResponse, error)
+	// SleepTablet blocks the aciton queue on the specified tablet for the
+	// specified duration.
+	//
+	// This is typically used for testing.
+	SleepTablet(ctx context.Context, in *vtctldata.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldata.SleepTabletResponse, error)
 	// StartReplication starts replication on the specified tablet.
 	StartReplication(ctx context.Context, in *vtctldata.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldata.StartReplicationResponse, error)
 	// StopReplication stops replication on the specified tablet.
@@ -591,6 +599,15 @@ func (c *vtctldClient) InitShardPrimary(ctx context.Context, in *vtctldata.InitS
 	return out, nil
 }
 
+func (c *vtctldClient) PingTablet(ctx context.Context, in *vtctldata.PingTabletRequest, opts ...grpc.CallOption) (*vtctldata.PingTabletResponse, error) {
+	out := new(vtctldata.PingTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PingTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldata.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.PlannedReparentShardResponse, error) {
 	out := new(vtctldata.PlannedReparentShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/PlannedReparentShard", in, out, opts...)
@@ -666,6 +683,15 @@ func (c *vtctldClient) SetWritable(ctx context.Context, in *vtctldata.SetWritabl
 func (c *vtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldata.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	out := new(vtctldata.ShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ShardReplicationPositions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SleepTablet(ctx context.Context, in *vtctldata.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldata.SleepTabletResponse, error) {
+	out := new(vtctldata.SleepTabletResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SleepTablet", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -819,6 +845,9 @@ type VtctldServer interface {
 	// PlannedReparentShard or EmergencyReparentShard should be used in those
 	// cases instead.
 	InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error)
+	// PingTablet checks that the specified tablet is awake and responding to RPCs.
+	// This command can be blocked by other in-flight operations.
+	PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error)
 	// PlannedReparentShard reparents the shard to the new primary, or away from
 	// an old primary. Both the old and new primaries need to be reachable and
 	// running.
@@ -854,6 +883,11 @@ type VtctldServer interface {
 	// ShardReplicationPositions will return non-error, and include valid results
 	// for the reachable tablets.
 	ShardReplicationPositions(context.Context, *vtctldata.ShardReplicationPositionsRequest) (*vtctldata.ShardReplicationPositionsResponse, error)
+	// SleepTablet blocks the aciton queue on the specified tablet for the
+	// specified duration.
+	//
+	// This is typically used for testing.
+	SleepTablet(context.Context, *vtctldata.SleepTabletRequest) (*vtctldata.SleepTabletResponse, error)
 	// StartReplication starts replication on the specified tablet.
 	StartReplication(context.Context, *vtctldata.StartReplicationRequest) (*vtctldata.StartReplicationResponse, error)
 	// StopReplication stops replication on the specified tablet.
@@ -979,6 +1013,9 @@ func (UnimplementedVtctldServer) GetWorkflows(context.Context, *vtctldata.GetWor
 func (UnimplementedVtctldServer) InitShardPrimary(context.Context, *vtctldata.InitShardPrimaryRequest) (*vtctldata.InitShardPrimaryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method InitShardPrimary not implemented")
 }
+func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabletRequest) (*vtctldata.PingTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PingTablet not implemented")
+}
 func (UnimplementedVtctldServer) PlannedReparentShard(context.Context, *vtctldata.PlannedReparentShardRequest) (*vtctldata.PlannedReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedReparentShard not implemented")
 }
@@ -1005,6 +1042,9 @@ func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWrit
 }
 func (UnimplementedVtctldServer) ShardReplicationPositions(context.Context, *vtctldata.ShardReplicationPositionsRequest) (*vtctldata.ShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ShardReplicationPositions not implemented")
+}
+func (UnimplementedVtctldServer) SleepTablet(context.Context, *vtctldata.SleepTabletRequest) (*vtctldata.SleepTabletResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SleepTablet not implemented")
 }
 func (UnimplementedVtctldServer) StartReplication(context.Context, *vtctldata.StartReplicationRequest) (*vtctldata.StartReplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartReplication not implemented")
@@ -1628,6 +1668,24 @@ func _Vtctld_InitShardPrimary_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_PingTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.PingTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).PingTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/PingTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).PingTablet(ctx, req.(*vtctldata.PingTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.PlannedReparentShardRequest)
 	if err := dec(in); err != nil {
@@ -1786,6 +1844,24 @@ func _Vtctld_ShardReplicationPositions_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ShardReplicationPositions(ctx, req.(*vtctldata.ShardReplicationPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SleepTablet_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SleepTabletRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SleepTablet(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SleepTablet",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SleepTablet(ctx, req.(*vtctldata.SleepTabletRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2020,6 +2096,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_InitShardPrimary_Handler,
 		},
 		{
+			MethodName: "PingTablet",
+			Handler:    _Vtctld_PingTablet_Handler,
+		},
+		{
 			MethodName: "PlannedReparentShard",
 			Handler:    _Vtctld_PlannedReparentShard_Handler,
 		},
@@ -2054,6 +2134,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ShardReplicationPositions",
 			Handler:    _Vtctld_ShardReplicationPositions_Handler,
+		},
+		{
+			MethodName: "SleepTablet",
+			Handler:    _Vtctld_SleepTablet_Handler,
 		},
 		{
 			MethodName: "StartReplication",
