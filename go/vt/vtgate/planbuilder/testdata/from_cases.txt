@@ -642,7 +642,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-            "Query": "select e.col from user_extra as e",
+            "Query": "select e.col from user_extra as e where e.col = :user_col",
             "Table": "user_extra"
           },
           {
@@ -653,7 +653,7 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-            "Query": "select 1 from unsharded as m1 where m1.col = :e_col and :user_col = :e_col",
+            "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
             "Table": "unsharded"
           }
         ]
@@ -2605,21 +2605,22 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {
-              "user_id": 0
-            },
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "SelectEqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id",
+                "Table": "`user`",
+                "Values": [
+                  ":ua_id"
+                ],
+                "Vindex": "user_index"
               },
               {
                 "OperatorType": "Route",
@@ -2629,7 +2630,7 @@ Gen4 plan same as above
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where :user_id = :ua_id",
+                "Query": "select 1 from user_extra",
                 "Table": "user_extra"
               }
             ]
