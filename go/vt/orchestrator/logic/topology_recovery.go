@@ -668,6 +668,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		default:
 			log.Infof("ERP - %s", value)
 		}
+		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)
 
 	// TODO: fix recovery attempted
