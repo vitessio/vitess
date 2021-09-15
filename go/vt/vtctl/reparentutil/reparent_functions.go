@@ -40,7 +40,6 @@ type (
 		LockAction() string
 		GetWaitReplicasTimeout() time.Duration
 		GetWaitForRelayLogsTimeout() time.Duration
-		HandleRelayLogFailure(logutil.Logger, error) error
 		GetIgnoreReplicas() sets.String
 		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
 		FindPrimaryCandidate(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error)
@@ -85,13 +84,6 @@ func (vtctlReparent *VtctlReparentFunctions) GetWaitReplicasTimeout() time.Durat
 // GetWaitForRelayLogsTimeout implements the ReparentFunctions interface
 func (vtctlReparent *VtctlReparentFunctions) GetWaitForRelayLogsTimeout() time.Duration {
 	return vtctlReparent.waitReplicasTimeout
-}
-
-// HandleRelayLogFailure implements the ReparentFunctions interface
-func (vtctlReparent *VtctlReparentFunctions) HandleRelayLogFailure(logger logutil.Logger, err error) error {
-	// in case of failure in applying relay logs, vtctl should return the error
-	// and let the user decide weather they want to ignore the tablets that caused the error in question
-	return err
 }
 
 // GetIgnoreReplicas implements the ReparentFunctions interface

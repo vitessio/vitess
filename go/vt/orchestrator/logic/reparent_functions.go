@@ -88,15 +88,6 @@ func (vtorcReparent *VtOrcReparentFunctions) GetWaitForRelayLogsTimeout() time.D
 	return 1 * time.Second
 }
 
-// HandleRelayLogFailure implements the ReparentFunctions interface
-// TODO : Discuss correct way
-func (vtorcReparent *VtOrcReparentFunctions) HandleRelayLogFailure(logger logutil.Logger, err error) error {
-	// We do not want to throw an error from vtorc, since there could be replicas which are
-	// so far lagging that they may take days to apply all their relay logs
-	logger.Infof("failed to apply all relay logs - %v", err)
-	return nil
-}
-
 // GetIgnoreReplicas implements the ReparentFunctions interface
 func (vtorcReparent *VtOrcReparentFunctions) GetIgnoreReplicas() sets.String {
 	// vtorc does not ignore any replicas

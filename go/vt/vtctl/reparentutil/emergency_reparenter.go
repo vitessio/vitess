@@ -163,11 +163,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// Wait for all candidates to apply relay logs
 	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, reparentFunctions.GetWaitForRelayLogsTimeout()); err != nil {
-		// We handle the error from relay logs separately for each implementation of ReparentFunctions
-		err = reparentFunctions.HandleRelayLogFailure(erp.logger, err)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 
 	// find the primary candidate that we want to promote
