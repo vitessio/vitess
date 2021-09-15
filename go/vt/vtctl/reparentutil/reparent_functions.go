@@ -42,6 +42,8 @@ type (
 		newPrimaryAlias     *topodatapb.TabletAlias
 		ignoreReplicas      sets.String
 		waitReplicasTimeout time.Duration
+
+		lockAction string
 	}
 )
 
@@ -52,11 +54,6 @@ func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignore
 		ignoreReplicas:      ignoreReplicas,
 		waitReplicasTimeout: waitReplicasTimeout,
 	}
-}
-
-// LockAction implements the ReparentFunctions interface
-func (opts *EmergencyReparentOptions) LockAction() string {
-	return getLockAction(opts.newPrimaryAlias)
 }
 
 // GetWaitReplicasTimeout implements the ReparentFunctions interface
@@ -72,23 +69,6 @@ func (opts *EmergencyReparentOptions) GetWaitForRelayLogsTimeout() time.Duration
 // GetIgnoreReplicas implements the ReparentFunctions interface
 func (opts *EmergencyReparentOptions) GetIgnoreReplicas() sets.String {
 	return opts.ignoreReplicas
-}
-
-// RestrictValidCandidates implements the ReparentFunctions interface
-func (opts *EmergencyReparentOptions) RestrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
-	restrictedValidCandidates := make(map[string]mysql.Position)
-	for candidate, position := range validCandidates {
-		candidateInfo, ok := tabletMap[candidate]
-		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
-		}
-		// We only allow PRIMARY and REPLICA type of tablets to be considered for replication
-		if candidateInfo.Type != topodatapb.TabletType_PRIMARY && candidateInfo.Type != topodatapb.TabletType_REPLICA {
-			continue
-		}
-		restrictedValidCandidates[candidate] = position
-	}
-	return restrictedValidCandidates, nil
 }
 
 // FindPrimaryCandidate implements the ReparentFunctions interface
