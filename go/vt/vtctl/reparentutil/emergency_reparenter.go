@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	"vitess.io/vitess/go/stats"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -47,6 +49,11 @@ type EmergencyReparenter struct {
 	tmc    tmclient.TabletManagerClient
 	logger logutil.Logger
 }
+
+// counters for Emergency Reparent Shard
+var (
+	ersCounter = stats.NewGauge("ers_counter", "Number of time Emergency Reparent Shard has been run")
+)
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
 // perform EmergencyReparentShard operations using the given topo.Server,
@@ -101,10 +108,9 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 
 // reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
 func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, reparentFunctions ReparentFunctions) error {
-	// check whether ERS is required or it has been fixed via an external agent
-	if reparentFunctions.CheckIfFixed() {
-		return nil
-	}
+	// log the starting of the operation and increment the counter
+	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
+	ersCounter.Add(1)
 
 	// get the shard information from the topology server
 	shardInfo, err := erp.ts.GetShard(ctx, keyspace, shard)
