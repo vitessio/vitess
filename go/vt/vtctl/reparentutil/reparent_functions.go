@@ -35,31 +35,12 @@ import (
 )
 
 type (
-	// ReparentFunctions is an interface which has all the functions implementation required for re-parenting
-	ReparentFunctions interface {
-		LockAction() string
-		GetWaitReplicasTimeout() time.Duration
-		GetWaitForRelayLogsTimeout() time.Duration
-		GetIgnoreReplicas() sets.String
-		RestrictValidCandidates(map[string]mysql.Position, map[string]*topo.TabletInfo) (map[string]mysql.Position, error)
-		FindPrimaryCandidate(context.Context, logutil.Logger, tmclient.TabletManagerClient, map[string]mysql.Position, map[string]*topo.TabletInfo) (*topodatapb.Tablet, map[string]*topo.TabletInfo, error)
-		PromotedReplicaIsIdeal(*topodatapb.Tablet, *topodatapb.Tablet, map[string]*topo.TabletInfo, map[string]mysql.Position) bool
-		PostTabletChangeHook(*topodatapb.Tablet)
-		GetBetterCandidate(*topodatapb.Tablet, *topodatapb.Tablet, []*topodatapb.Tablet, map[string]*topo.TabletInfo) *topodatapb.Tablet
-		CheckIfNeedToOverridePromotion(newPrimary *topodatapb.Tablet) error
-		PostERSCompletionHook(context.Context, *events.Reparent, logutil.Logger, tmclient.TabletManagerClient)
-	}
-
 	// VtctlReparentFunctions is the Vtctl implementation for ReparentFunctions
 	VtctlReparentFunctions struct {
 		newPrimaryAlias     *topodatapb.TabletAlias
 		ignoreReplicas      sets.String
 		waitReplicasTimeout time.Duration
 	}
-)
-
-var (
-	_ ReparentFunctions = (*VtctlReparentFunctions)(nil)
 )
 
 // NewVtctlReparentFunctions creates a new VtctlReparentFunctions which is used in ERS ans PRS

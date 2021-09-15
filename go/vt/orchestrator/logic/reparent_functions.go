@@ -32,8 +32,6 @@ import (
 
 	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/kv"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -47,8 +45,6 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/topo"
 )
-
-var _ reparentutil.ReparentFunctions = (*VtOrcReparentFunctions)(nil)
 
 // VtOrcReparentFunctions is the VtOrc implementation for ReparentFunctions
 type VtOrcReparentFunctions struct {
