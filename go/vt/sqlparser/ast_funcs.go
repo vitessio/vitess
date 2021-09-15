@@ -19,6 +19,7 @@ package sqlparser
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -539,7 +540,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 //NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -566,6 +567,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, fro
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
+		Into: 			  into,
 		From:             from,
 		Where:            where,
 		GroupBy:          groupBy,
@@ -889,6 +891,7 @@ func (node *Union) GetComments() Comments {
 
 //Unionize returns a UNION, either creating one or adding SELECT to an existing one
 func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
+	fmt.Println("this is running")
 	union, isUnion := lhs.(*Union)
 	if isUnion {
 		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
@@ -900,6 +903,19 @@ func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit,
 
 	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
+
+func setOrderLimitAndLockToSelect(stmt SelectStatement, by OrderBy, limit *Limit, lock Lock) {
+	for _, order := range by {
+		(stmt).AddOrder(order)
+	}
+	(stmt).SetLimit(limit)
+	(stmt).SetLock(lock)
+}
+
+func anotherUnionize(lhs, rhs SelectStatement, isDistinct bool) *Union {
+		return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: isDistinct, Statement: rhs}}}
+}
+
 
 // ToString returns the string associated with the DDLAction Enum
 func (action DDLAction) ToString() string {

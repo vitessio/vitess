@@ -174,7 +174,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SQL_NO_CACHE SQL_CACHE SQL_CALC_FOUND_ROWS
 %left <str> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
-%token <empty> '(' ',' ')'
+%token <left> SUBQUERY_AS_EXPR
+%token <left> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
@@ -285,7 +286,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
 %type <statement> command
-%type <selStmt> simple_select select_statement base_select union_rhs
+%type <selStmt> query_expression_parens v1_query_expression query_expression_body select_statement base_select simple_select
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -513,29 +514,81 @@ load_statement:
   {
     $$ = &Load{}
   }
+ query_expression_parens:
+  	openb query_expression_parens closeb
+  	{
+  		$$ = &ParenSelect{Select: $2}
+  	}
+  	| openb v1_query_expression closeb
+    {
+     	$$ = &ParenSelect{Select: $2}
+    }
+
+v1_query_expression:
+	query_expression_body order_by_opt limit_opt lock_opt
+	{
+		setOrderLimitAndLockToSelect($1, $2, $3, $4)
+		$$ = $1
+	}
+	| query_expression_parens order_by_opt limit_opt lock_opt
+	{
+		setOrderLimitAndLockToSelect($1, $2, $3, $4)
+		$$ = $1
+	}
+	| SELECT comment_opt cache_opt NEXT num_val for_from table_name
+	{
+	    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
+	}
+
+query_expression_body:
+	base_select
+	{
+	   $$ = $1
+	}
+	| query_expression_body union_op base_select
+	{
+		$$ = anotherUnionize($1, $3, $2)
+	}
+	| query_expression_parens union_op base_select
+	{
+		$$ = anotherUnionize($1, $3, $2)
+	}
+	| query_expression_body union_op query_expression_parens
+	{
+		$$ = anotherUnionize($1, $3, $2)
+	}
+	| query_expression_parens union_op query_expression_parens
+	{
+		$$ = anotherUnionize($1, $3, $2)
+	}
 
 select_statement:
-  base_select order_by_opt limit_opt lock_opt into_option
-  {
-    sel := $1.(*Select)
-    sel.OrderBy = $2
-    sel.Limit = $3
-    sel.Lock = $4
-    sel.Into = $5
-    $$ = sel
-  }
-| openb select_statement closeb order_by_opt limit_opt lock_opt
-  {
-    $$ = &Union{FirstStatement: &ParenSelect{Select: $2}, OrderBy: $4, Limit:$5, Lock:$6}
-  }
-| select_statement union_op union_rhs order_by_opt limit_opt lock_opt
-  {
-    $$ = Unionize($1, $3, $2, $4, $5, $6)
-  }
-| SELECT comment_opt cache_opt NEXT num_val for_from table_name
-  {
-    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
-  }
+	v1_query_expression
+	{
+		$$ = $1
+	}
+	| query_expression_parens
+	{
+		$$ = $1
+	}
+//	| select_stmt_with_into
+//	{
+//		$$ = $1
+//	}
+//
+//select_stmt_with_into:
+//  openb select_stmt_with_into closeb
+//  {
+//	$$ = $2;
+//  }
+//| base_select order_by_opt limit_opt lock_opt into_option
+//{
+//	sel := $1.(*Select)
+//	sel.OrderBy = $2
+//	sel.Limit = $3
+//	sel.Lock = $4
+//	sel.Into = $5
+//}
 
 // simple_select is an unparenthesized select used for subquery.
 // Allowing parenthesis for subqueries leads to grammar ambiguity.
@@ -563,10 +616,6 @@ simple_select:
     sel.Lock = $4
     $$ = sel
   }
-| simple_select union_op union_rhs order_by_opt limit_opt lock_opt
-  {
-    $$ = Unionize($1, $3, $2, $4, $5, $6)
-  }
 
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
@@ -583,19 +632,9 @@ vstream_statement:
 // base_select is an unparenthesized SELECT with no order by clause or beyond.
 base_select:
 //  1         2            3              4                    5             6                7           8
-  SELECT comment_opt select_options select_expression_list from_opt where_expression_opt group_by_opt having_opt
+  SELECT comment_opt select_options select_expression_list into_option from_opt where_expression_opt group_by_opt having_opt
   {
-    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5/*from*/, NewWhere(WhereClause, $6), GroupBy($7), NewWhere(HavingClause, $8))
-  }
-
-union_rhs:
-  base_select
-  {
-    $$ = $1
-  }
-| openb select_statement closeb
-  {
-    $$ = &ParenSelect{Select: $2}
+    $$ = NewSelect(Comments($2), $4/*SelectExprs*/, $3/*options*/, $5, $6/*from*/, NewWhere(WhereClause, $7), GroupBy($8), NewWhere(HavingClause, $9))
   }
 
 
@@ -3257,7 +3296,7 @@ table_factor:
   }
 
 derived_table:
-  openb select_statement closeb
+  openb query_expression_body closeb
   {
     $$ = &DerivedTable{$2}
   }
@@ -3674,7 +3713,12 @@ col_tuple:
 subquery:
   openb simple_select closeb
   {
-    $$ = &Subquery{$2}
+  	$$ = &Subquery{$2}
+  }
+  | query_expression_parens %prec SUBQUERY_AS_EXPR
+  {
+  	sel := $1.(*ParenSelect)
+  	$$ = &Subquery{sel.Select}
   }
 
 expression_list:
@@ -4459,17 +4503,17 @@ into_option:
     $$ = nil
   }
 | INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
-  {
-    $$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
-  }
+{
+$$ = &SelectInto{Type:IntoOutfileS3, FileName:encodeSQLString($4), Charset:$5, FormatOption:$6, ExportOption:$7, Manifest:$8, Overwrite:$9}
+}
 | INTO DUMPFILE STRING
-  {
-    $$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
-  }
+{
+$$ = &SelectInto{Type:IntoDumpfile, FileName:encodeSQLString($3), Charset:"", FormatOption:"", ExportOption:"", Manifest:"", Overwrite:""}
+}
 | INTO OUTFILE STRING charset_opt export_options
-  {
-    $$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
-  }
+{
+$$ = &SelectInto{Type:IntoOutfile, FileName:encodeSQLString($3), Charset:$4, FormatOption:"", ExportOption:$5, Manifest:"", Overwrite:""}
+}
 
 format_opt:
   {
