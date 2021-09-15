@@ -9,6 +9,11 @@ kubectl apply -f operator.yaml
 
 # Bring up initial cluster and commerce keyspace
 kubectl apply -f 101_initial_cluster.yaml
+
+# Port-forward vtctld and vtgate and apply schema and vschema
+./pf.sh &
+alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
+alias vtctlclient="vtctlclient -server localhost:15999 -alsologtostderr"
 vtctlclient ApplySchema -sql="$(cat create_commerce_schema.sql)" commerce
 vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_initial.json)" commerce
 
@@ -20,15 +25,14 @@ mysql --table < ../common/select_commerce_data.sql
 kubectl apply -f 201_customer_tablets.yaml
 
 # Initiate move tables
-vtctlclient MoveTables -workflow=commerce2customer commerce customer '{"customer":{}, "corder":{}}'
+vtctlclient MoveTables -source commerce -tables 'customer,corder' Create customer.commerce2customer
 
 # Validate
 vtctlclient VDiff customer.commerce2customer
 
 # Cut-over
-vtctlclient SwitchReads -tablet_type=rdonly customer.commerce2customer
-vtctlclient SwitchReads -tablet_type=replica customer.commerce2customer
-vtctlclient SwitchWrites customer.commerce2customer
+vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer
+vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
 
 # Clean-up
 vtctlclient DropSources customer.commerce2customer
@@ -41,15 +45,14 @@ vtctlclient ApplyVSchema -vschema="$(cat vschema_customer_sharded.json)" custome
 kubectl apply -f 302_new_shards.yaml
 
 # Reshard
-vtctlclient Reshard customer.cust2cust '-' '-80,80-'
+vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.cust2cust
 
 # Validate
 vtctlclient VDiff customer.cust2cust
 
 # Cut-over
-vtctlclient SwitchReads -tablet_type=rdonly customer.cust2cust
-vtctlclient SwitchReads -tablet_type=replica customer.cust2cust
-vtctlclient SwitchWrites customer.cust2cust
+vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.cust2cust
 
 # Down shard 0
 kubectl apply -f 306_down_shard_0.yaml
