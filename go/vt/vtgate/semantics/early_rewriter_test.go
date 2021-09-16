@@ -160,6 +160,24 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}, {
 		sql:    "select *, id from t1 group by 2",
 		expErr: "cannot use column offsets in group statement when using `*`",
+	}, {
+		sql:    "select id from t1 group by 1.5",
+		expErr: "error parsing column number: 1.5",
+	}, {
+		sql:    "select id from t1 group by 0x01",
+		expErr: "error parsing column number: 0x01",
+	}, {
+		sql:    "select id from t1 group by 'hello'",
+		expErr: "error parsing column number: hello",
+	}, {
+		sql:    "select id from t1 order by 1.5",
+		expErr: "error parsing column number: 1.5",
+	}, {
+		sql:    "select id from t1 order by 0x01",
+		expErr: "error parsing column number: 0x01",
+	}, {
+		sql:    "select id from t1 order by 'hello'",
+		expErr: "error parsing column number: hello",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
