@@ -247,7 +247,7 @@ type (
 		OrderBy        OrderBy
 		Limit          *Limit
 		Lock           Lock
-		Into		   *SelectInto
+		Into           *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -1431,9 +1431,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
-func (Values) iInsertRows()       {}
+func (*Select) iInsertRows() {}
+func (*Union) iInsertRows()  {}
+func (Values) iInsertRows()  {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {

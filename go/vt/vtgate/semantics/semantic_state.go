@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,32 +37,21 @@ type (
 		Authoritative() bool
 		Name() (sqlparser.TableName, error)
 		GetExpr() *sqlparser.AliasedTableExpr
+		GetVindexTable() *vindexes.Table
 		GetColumns() []ColumnInfo
 		IsActualTable() bool
 
-		// RecursiveDepsFor returns a pointer to the table set for the table that this column belongs to, if it can be found
-		// if the column is not found, nil will be returned instead. If the column is a derived table column, this method
-		// will recursively find the dependencies of the expression inside the derived table
-		RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error)
+		Dependencies(colName string, org originable) (dependencies, error)
 
-		// DepsFor finds the table that a column depends on. No recursing is done on derived tables
-		DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error)
 		IsInfSchema() bool
 		GetExprFor(s string) (sqlparser.Expr, error)
+		GetTables(org originable) TableSet
 	}
 
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
 		Type querypb.Type
-	}
-
-	// RealTable contains the alias table expr and vindex table
-	RealTable struct {
-		dbName, tableName string
-		ASTNode           *sqlparser.AliasedTableExpr
-		Table             *vindexes.Table
-		isInfSchema       bool
 	}
 
 	// AliasedTable contains the alias table expr and vindex table
@@ -71,13 +62,12 @@ type (
 		isInfSchema bool
 	}
 
-	// vTableInfo is used to represent projected results, not real tables. It is used for
-	// ORDER BY, GROUP BY and HAVING that need to access result columns, and also for derived tables.
-	vTableInfo struct {
-		tableName   string
-		ASTNode     *sqlparser.AliasedTableExpr
-		columnNames []string
-		cols        []sqlparser.Expr
+	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
+	// we are keeping information about, and the latter represents the additional table information
+	// (usually a RealTable or an AliasedTable) of our vindex.
+	VindexTable struct {
+		Table  TableInfo
+		Vindex vindexes.Vindex
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -95,14 +85,14 @@ type (
 		// This is only a real error if we are unable to plan the query as a single route
 		ProjectionErr error
 
-		// ExprBaseTableDeps contains the dependencies from the expression to the actual tables
+		// Recursive contains the dependencies from the expression to the actual tables
 		// in the query (i.e. not including derived tables). If an expression is a column on a derived table,
 		// this map will contain the accumulated dependencies for the column expression inside the derived table
-		ExprBaseTableDeps ExprDependencies
+		Recursive ExprDependencies
 
-		// ExprDeps keeps information about dependencies for expressions, no matter if they are
-		// against real tables or derived tables
-		ExprDeps ExprDependencies
+		// Direct keeps information about the closest dependency for an expression.
+		// It does not recurse inside derived tables and the like to find the original dependencies
+		Direct ExprDependencies
 
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
@@ -138,20 +128,54 @@ type (
 	}
 )
 
-// CopyDependencies copies the dependencies from one expression into the other
-func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
-	st.ExprBaseTableDeps[to] = st.BaseTableDependencies(from)
-	st.ExprDeps[to] = st.Dependencies(from)
+var (
+	// ErrMultipleTables refers to an error happening when something should be used only for single tables
+	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+)
+
+// Dependencies implements the TableInfo interface
+func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
+	return v.Table.Dependencies(colName, org)
+}
+
+// Dependencies implements the TableInfo interface
+func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
+	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
+}
+
+func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
+	ts := org.tableSetFor(node)
+	for _, info := range columns {
+		if strings.EqualFold(info.Name, colName) {
+			return createCertain(ts, ts, &info.Type), nil
+		}
+	}
+
+	if authoritative {
+		return &nothing{}, nil
+	}
+	return createUncertain(ts, ts), nil
+}
+
+// GetTables implements the TableInfo interface
+func (v *VindexTable) GetTables(org originable) TableSet {
+	return v.Table.GetTables(org)
+}
+
+// GetTables implements the TableInfo interface
+func (a *AliasedTable) GetTables(org originable) TableSet {
+	return org.tableSetFor(a.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
-	for i, colName := range v.columnNames {
-		if colName == s {
-			return v.cols[i], nil
-		}
-	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
+	panic("implement me")
+}
+
+// CopyDependencies copies the dependencies from one expression into the other
+func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
+	st.Recursive[to] = st.RecursiveDeps(from)
+	st.Direct[to] = st.DirectDeps(from)
 }
 
 // GetExprFor implements the TableInfo interface
@@ -159,134 +183,9 @@ func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
-// GetExprFor implements the TableInfo interface
-func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (v *vTableInfo) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil, nil
-	}
-	var tsF TableSet
-	var qtF *querypb.Type
-	found := false
-	for i, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts, qt := org.depsForExpr(v.cols[i])
-			if !found {
-				tsF = ts
-				qtF = qt
-			} else if tsF != ts {
-				// the column does not resolve to the same TableSet. Therefore, it is an ambiguous column reference.
-				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqError, "Column '%s' is ambiguous", colName)
-			}
-			found = true
-		}
-	}
-	if found {
-		return &tsF, qtF, nil
-	}
-	return nil, nil, nil
-}
-
-// DepsFor implements the TableInfo interface
-func (v *vTableInfo) DepsFor(col *sqlparser.ColName, org originable, _ bool) (*TableSet, error) {
-	if v.ASTNode == nil {
-		return nil, nil
-	}
-	if !col.Qualifier.IsEmpty() && (v.ASTNode == nil || v.tableName != col.Qualifier.Name.String()) {
-		// if we have a table qualifier in the expression, we know that it is not referencing an aliased table
-		return nil, nil
-	}
-	for _, colName := range v.columnNames {
-		if col.Name.String() == colName {
-			ts := org.tableSetFor(v.ASTNode)
-			return &ts, nil
-		}
-	}
-	return nil, nil
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (a *AliasedTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return depsFor(col, org, single, a.ASTNode, a.GetColumns(), a.Authoritative())
-}
-
-// DepsFor implements the TableInfo interface
-func (a *AliasedTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	ts, _, err := a.RecursiveDepsFor(col, org, single)
-	return ts, err
-}
-
-// RecursiveDepsFor implements the TableInfo interface
-func (r *RealTable) RecursiveDepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, *querypb.Type, error) {
-	return depsFor(col, org, single, r.ASTNode, r.GetColumns(), r.Authoritative())
-}
-
-// DepsFor implements the TableInfo interface
-func (r *RealTable) DepsFor(col *sqlparser.ColName, org originable, single bool) (*TableSet, error) {
-	ts, _, err := r.RecursiveDepsFor(col, org, single)
-	return ts, err
-}
-
-// depsFor implements the TableInfo interface for RealTable and AliasedTable
-func depsFor(
-	col *sqlparser.ColName,
-	org originable,
-	single bool,
-	astNode *sqlparser.AliasedTableExpr,
-	cols []ColumnInfo,
-	authoritative bool,
-) (*TableSet, *querypb.Type, error) {
-	// if we know that we are the only table in the scope, there is no doubt - the column must belong to the table
-	if single {
-		ts := org.tableSetFor(astNode)
-
-		for _, info := range cols {
-			if col.Name.EqualString(info.Name) {
-				return &ts, &info.Type, nil
-			}
-		}
-
-		if authoritative {
-			// if we are authoritative and we can't find the column, we should fail
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", col.Name.String())
-		}
-
-		// it's probably the correct table, but we don't have enough info to be sure or figure out the type of the column
-		return &ts, nil, nil
-	}
-
-	for _, info := range cols {
-		if col.Name.EqualString(info.Name) {
-			ts := org.tableSetFor(astNode)
-			return &ts, &info.Type, nil
-		}
-	}
-	return nil, nil, nil
-}
-
-// IsInfSchema implements the TableInfo interface
-func (v *vTableInfo) IsInfSchema() bool {
-	return false
-}
-
 // IsInfSchema implements the TableInfo interface
 func (a *AliasedTable) IsInfSchema() bool {
 	return a.isInfSchema
-}
-
-// IsInfSchema implements the TableInfo interface
-func (r *RealTable) IsInfSchema() bool {
-	return r.isInfSchema
-}
-
-// IsActualTable implements the TableInfo interface
-func (v *vTableInfo) IsActualTable() bool {
-	return false
 }
 
 // IsActualTable implements the TableInfo interface
@@ -294,39 +193,12 @@ func (a *AliasedTable) IsActualTable() bool {
 	return true
 }
 
-// IsActualTable implements the TableInfo interface
-func (r *RealTable) IsActualTable() bool {
-	return true
-}
-
-var _ TableInfo = (*RealTable)(nil)
 var _ TableInfo = (*AliasedTable)(nil)
-var _ TableInfo = (*vTableInfo)(nil)
+var _ TableInfo = (*VindexTable)(nil)
 
-func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
-	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
-}
-
-func (v *vTableInfo) Authoritative() bool {
-	return true
-}
-
-func (v *vTableInfo) Name() (sqlparser.TableName, error) {
-	return v.ASTNode.TableName()
-}
-
-func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
-	return v.ASTNode
-}
-
-func (v *vTableInfo) GetColumns() []ColumnInfo {
-	cols := make([]ColumnInfo, 0, len(v.columnNames))
-	for _, col := range v.columnNames {
-		cols = append(cols, ColumnInfo{
-			Name: col,
-		})
-	}
-	return cols
+// GetVindexTable implements the TableInfo interface
+func (v *VindexTable) GetVindexTable() *vindexes.Table {
+	return v.Table.GetVindexTable()
 }
 
 func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
@@ -371,6 +243,11 @@ func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
+// GetVindexTable implements the TableInfo interface
+func (a *AliasedTable) GetVindexTable() *vindexes.Table {
+	return a.Table
+}
+
 // Name implements the TableInfo interface
 func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 	return a.ASTNode.TableName()
@@ -386,39 +263,44 @@ func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
 	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
-// GetColumns implements the TableInfo interface
-func (r *RealTable) GetColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(r.Table)
-}
-
-// GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
-	return r.ASTNode
-}
-
-// Name implements the TableInfo interface
-func (r *RealTable) Name() (sqlparser.TableName, error) {
-	return r.ASTNode.TableName()
+// Matches implements the TableInfo interface
+func (v *VindexTable) Matches(name sqlparser.TableName) bool {
+	return v.Table.Matches(name)
 }
 
 // Authoritative implements the TableInfo interface
-func (r *RealTable) Authoritative() bool {
-	return r.Table != nil && r.Table.ColumnListAuthoritative
+func (v *VindexTable) Authoritative() bool {
+	return true
 }
 
-// Matches implements the TableInfo interface
-func (r *RealTable) Matches(name sqlparser.TableName) bool {
-	if !name.Qualifier.IsEmpty() {
-		if r.dbName != name.Qualifier.String() {
-			return false
-		}
-	}
-	return r.tableName == name.Name.String()
+// Name implements the TableInfo interface
+func (v *VindexTable) Name() (sqlparser.TableName, error) {
+	return v.Table.Name()
+}
+
+// GetExpr implements the TableInfo interface
+func (v *VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
+	return v.Table.GetExpr()
+}
+
+// GetColumns implements the TableInfo interface
+func (v *VindexTable) GetColumns() []ColumnInfo {
+	return v.Table.GetColumns()
+}
+
+// IsActualTable implements the TableInfo interface
+func (v *VindexTable) IsActualTable() bool {
+	return true
+}
+
+// IsInfSchema implements the TableInfo interface
+func (v *VindexTable) IsInfSchema() bool {
+	return v.Table.IsInfSchema()
 }
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{ExprBaseTableDeps: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -434,24 +316,24 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 // TableInfoFor returns the table info for the table set. It should contains only single table.
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	if id.NumberOfTables() > 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+		return nil, ErrMultipleTables
 	}
 	return st.Tables[id.TableOffset()], nil
 }
 
-// BaseTableDependencies return the table dependencies of the expression.
-func (st *SemTable) BaseTableDependencies(expr sqlparser.Expr) TableSet {
-	return st.ExprBaseTableDeps.Dependencies(expr)
+// RecursiveDeps return the table dependencies of the expression.
+func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
+	return st.Recursive.Dependencies(expr)
 }
 
-// Dependencies return the table dependencies of the expression.
-func (st *SemTable) Dependencies(expr sqlparser.Expr) TableSet {
-	return st.ExprDeps.Dependencies(expr)
+// DirectDeps return the table dependencies of the expression.
+func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
+	return st.Direct.Dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.ExprDeps.Dependencies(colName)
+	ts := st.Direct.Dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -466,9 +348,9 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 	result := []sqlparser.Expr{expr}
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
-		table := st.Dependencies(expr)
-		key := columnName{Table: table, ColumnName: expr.Name.String()}
-		result = append(result, st.ColumnEqualities[key]...)
+		table := st.DirectDeps(expr)
+		k := columnName{Table: table, ColumnName: expr.Name.String()}
+		result = append(result, st.ColumnEqualities[k]...)
 	}
 	return result
 }
@@ -476,7 +358,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.ExprDeps.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.Dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -489,7 +371,7 @@ func (st *SemTable) GetSelectTables(node *sqlparser.Select) []TableInfo {
 func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.SelectExprs) {
 	tableSet := st.TableSetFor(tbl)
 	for _, col := range cols {
-		st.ExprBaseTableDeps[col.(*sqlparser.AliasedExpr).Expr] = tableSet
+		st.Recursive[col.(*sqlparser.AliasedExpr).Expr] = tableSet
 	}
 }
 
@@ -538,13 +420,19 @@ func newScope(parent *scope) *scope {
 }
 
 func (s *scope) addTable(info TableInfo) error {
-	for _, scopeTable := range s.tables {
-		scopeTableName, err := scopeTable.Name()
+	name, err := info.Name()
+	if err != nil {
+		return err
+	}
+	tblName := name.Name.String()
+	for _, table := range s.tables {
+		name, err := table.Name()
 		if err != nil {
 			return err
 		}
-		if info.Matches(scopeTableName) {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", scopeTableName.Name.String())
+
+		if tblName == name.Name.String() {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
 		}
 	}
 	s.tables = append(s.tables, info)

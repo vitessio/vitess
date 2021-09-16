@@ -755,7 +755,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'val' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'val as id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # group by a unique vindex where it should skip non-aliased expressions.
 "select *, id, 1+count(*) from user group by id"
@@ -774,6 +774,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     "Table": "`user`"
   }
 }
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '*' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # group by a unique vindex should revert to simple route, and having clause should find the correct symbols.
 "select id, count(*) c from user group by id having id=1 and c=10"
@@ -2203,9 +2204,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` order by col1 asc, col2 asc",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]

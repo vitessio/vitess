@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/tools/common"
 
 	"github.com/dave/jennifer/jen"
@@ -259,7 +260,7 @@ func (sizegen *sizegen) sizeImplForStruct(name *types.TypeName, st *types.Struct
 		b.Add(jen.If(jen.Id("cached").Op("==").Nil()).Block(jen.Return(jen.Lit(int64(0)))))
 		b.Add(jen.Id("size").Op(":=").Lit(int64(0)))
 		b.Add(jen.If(jen.Id("alloc")).Block(
-			jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(st)),
+			jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizegen.sizes.Sizeof(st))),
 		))
 		for _, s := range stmt {
 			b.Add(s)
@@ -294,7 +295,7 @@ func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) [
 	)
 
 	return []jen.Code{
-		jen.Id("size").Op("+=").Lit(sizeofHmap),
+		jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(sizeofHmap)),
 
 		jen.Id("hmap").Op(":=").Qual("reflect", "ValueOf").Call(fieldName),
 
@@ -308,11 +309,16 @@ func (sizegen *sizegen) sizeStmtForMap(fieldName *jen.Statement, m *types.Map) [
 			jen.Qual("unsafe", "Pointer").Call(
 				jen.Id("hmap").Dot("Pointer").Call().Op("+").Id("uintptr").Call(jen.Lit(10))))),
 
-		jen.Id("size").Op("+=").Id("int64").Call(jen.Id("numOldBuckets").Op("*").Lit(sizeOfBucket)),
+		jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numOldBuckets").Op("*").Lit(sizeOfBucket)))),
 
 		jen.If(jen.Id("len").Call(fieldName).Op(">").Lit(0).Op("||").Id("numBuckets").Op(">").Lit(1)).Block(
-			jen.Id("size").Op("+=").Id("int64").Call(
-				jen.Id("numBuckets").Op("*").Lit(sizeOfBucket))),
+			jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Id("numBuckets").Op("*").Lit(sizeOfBucket))))),
+	}
+}
+
+func mallocsize(sizeStmt *jen.Statement) func(*jen.Statement) {
+	return func(parent *jen.Statement) {
+		parent.Qual("vitess.io/vitess/go/hack", "RuntimeAllocSize").Call(sizeStmt)
 	}
 }
 
@@ -331,7 +337,7 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 			return nil, 0
 
 		case 1:
-			return jen.Id("size").Op("+=").Int64().Call(jen.Cap(fieldName)), 0
+			return jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))), 0
 
 		default:
 			stmt, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
@@ -339,9 +345,10 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 				b.Add(
 					jen.Id("size").
 						Op("+=").
-						Int64().Call(jen.Cap(fieldName)).
-						Op("*").
-						Lit(sizegen.sizes.Sizeof(elemT)))
+						Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
+							Op("*").
+							Lit(sizegen.sizes.Sizeof(elemT))),
+						))
 
 				if stmt != nil {
 					b.Add(jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(stmt))
@@ -391,7 +398,7 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 					log.Printf("WARNING: size of external type %s cannot be fully calculated", node)
 				}
 				return jen.If(fieldName.Clone().Op("!=").Nil()).Block(
-					jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node.Underlying())),
+					jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node.Underlying())))),
 				), 0
 			}
 			return nil, 0
@@ -422,11 +429,11 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 	case *types.Basic:
 		if !alloc {
 			if node.Info()&types.IsString != 0 {
-				return jen.Id("size").Op("+=").Int64().Call(jen.Len(fieldName)), 0
+				return jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Len(fieldName)))), 0
 			}
 			return nil, 0
 		}
-		return jen.Id("size").Op("+=").Lit(sizegen.sizes.Sizeof(node)), 0
+		return jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node)))), 0
 	default:
 		log.Printf("unhandled type: %T", node)
 		return nil, 0

@@ -31,7 +31,7 @@ var _ Operator = (*Join)(nil)
 
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(expr)
+	deps := semTable.RecursiveDeps(expr)
 	switch {
 	case deps.IsSolvedBy(j.LHS.TableID()):
 		return j.LHS.PushPredicate(expr, semTable)
@@ -55,13 +55,13 @@ func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	ts := j.TableID()
 	var result []sqlparser.Expr
 	for _, expr := range j.LHS.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
 	for _, expr := range j.RHS.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}

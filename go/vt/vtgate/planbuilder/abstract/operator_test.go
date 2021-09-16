@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -238,16 +240,103 @@ JoinPredicates:
 		1:2 - u.id = (select id from user_extra where id = u.id)
 	}
 }`,
+	}, {
+		input: "select id from user_index where id = :id",
+		output: `Vindex: {
+	Name: user_index
+	Value: id
+}`,
+	}, {
+		input: "select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id",
+		output: `Join: {
+	LHS: 	Vindex: {
+		Name: user_index
+		Value: 1
+	}
+	RHS: 	QueryGraph: {
+	Tables:
+		2:` + "`user`" + ` AS u
+	}
+	Predicate: ui.id = u.id
+}`,
+	}, {
+		input: "select u.id from (select id from user_index where id = 2) as u",
+		output: `Derived u: {
+	Query: select id from user_index where id = 2
+	Inner:	Vindex: {
+		Name: user_index
+		Value: 2
+	}
+}`,
+	}, {
+		input: "select 1 from a union select 2 from b",
+		output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:a
+		},
+		QueryGraph: {
+		Tables:
+			2:b
+		}
+	}
+}`,
+	}, {
+		input: "select 1 from a union select 2 from b union select 3 from c",
+		output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:a
+		},
+		QueryGraph: {
+		Tables:
+			2:b
+		},
+		QueryGraph: {
+		Tables:
+			4:c
+		}
+	}
+}`,
+	}, {
+		input: "select 1 from a union select 2 from b union select 3 from c union all select 4 from d",
+		output: `Concatenate {
+	Distinct {
+		Concatenate {
+			QueryGraph: {
+			Tables:
+				1:a
+			},
+			QueryGraph: {
+			Tables:
+				2:b
+			},
+			QueryGraph: {
+			Tables:
+				4:c
+			}
+		}
+	},
+	QueryGraph: {
+	Tables:
+		8:d
+	}
+}`,
 	}}
 
+	hash, _ := vindexes.NewHash("user_index", map[string]string{})
+	si := &semantics.FakeSI{VindexTables: map[string]vindexes.Vindex{"user_index": hash}}
 	for i, tc := range tcases {
 		sql := tc.input
 		t.Run(fmt.Sprintf("%d %s", i, sql), func(t *testing.T) {
 			tree, err := sqlparser.Parse(sql)
 			require.NoError(t, err)
-			semTable, err := semantics.Analyze(tree.(sqlparser.SelectStatement), "", &semantics.FakeSI{}, semantics.NoRewrite)
+			stmt := tree.(sqlparser.SelectStatement)
+			semTable, err := semantics.Analyze(stmt, "", si)
 			require.NoError(t, err)
-			optree, err := CreateOperatorFromSelect(tree.(*sqlparser.Select), semTable)
+			optree, err := CreateOperatorFromAST(stmt, semTable)
 			require.NoError(t, err)
 			assert.Equal(t, tc.output, testString(optree))
 			if t.Failed() {
@@ -281,8 +370,23 @@ func testString(op Operator) string {
 		}
 		outer := indent(testString(op.Outer))
 		return fmt.Sprintf("SubQuery: {\n\tSubQueries: %s\n\tOuter: %s\n}", inners, outer)
+	case *Vindex:
+		value := op.Value.Value.ToString()
+		if value == "" {
+			value = op.Value.Key
+		}
+		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
+	case *Distinct:
+		inner := indent(testString(op.Source))
+		return fmt.Sprintf("Distinct {\n%s\n}", inner)
+	case *Concatenate:
+		var inners []string
+		for _, source := range op.Sources {
+			inners = append(inners, indent(testString(source)))
+		}
+		return fmt.Sprintf("Concatenate {\n%s\n}", strings.Join(inners, ",\n"))
 	}
-	return "implement me"
+	return fmt.Sprintf("implement me: %T", op)
 }
 
 func indent(s string) string {

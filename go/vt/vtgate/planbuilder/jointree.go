@@ -59,7 +59,7 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	var lhs, rhs []*sqlparser.ColName
 	for _, col := range columns {
 		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-		if semTable.BaseTableDependencies(col).IsSolvedBy(jp.lhs.tableID()) {
+		if semTable.RecursiveDeps(col).IsSolvedBy(jp.lhs.tableID()) {
 			lhs = append(lhs, col)
 			toTheLeft = append(toTheLeft, true)
 		} else {
