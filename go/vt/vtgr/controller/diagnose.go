@@ -142,7 +142,9 @@ func (shard *GRShard) Diagnose(ctx context.Context) (DiagnoseType, error) {
 }
 
 func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) {
-	if shard.localDbPort != 0 {
+	// fast path only diagnose problem Vitess primary
+	// which does not needed if the shard is inactive
+	if shard.localDbPort != 0 && shard.isActive.Get() {
 		localView := shard.getLocalView()
 		if localView != nil {
 			fastDiagnose := shard.fastPathDiagnose(ctx, localView)
@@ -183,50 +185,60 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 		return DiagnoseTypeShardHasInactiveGroup, nil
 	}
 
-	// Secondly, we check if there is a primary tablet.
-	// If there is a group but we cannot find a primary tablet
-	// we should set it based on mysql group
-	hasWrongPrimary, err := shard.hasWrongPrimaryTablet(ctx)
-	if err != nil {
-		// errMissingGroup means we cannot find a mysql group for the shard
-		// we are in DiagnoseTypeShardHasNoGroup state
-		if err == errMissingGroup {
-			log.Warning("Missing mysql group")
-			return DiagnoseTypeShardHasNoGroup, nil
+	// We only check Vitess primary iff shard is active.
+	// Otherwise VTGR will only make sure there is a mysql group in the shard.
+	if shard.isActive.Get() {
+		// Secondly, we check if there is a primary tablet.
+		// If there is a group but we cannot find a primary tablet
+		// we should set it based on mysql group
+		hasWrongPrimary, err := shard.hasWrongPrimaryTablet(ctx)
+		if err != nil {
+			// errMissingGroup means we cannot find a mysql group for the shard
+			// we are in DiagnoseTypeShardHasNoGroup state
+			if err == errMissingGroup {
+				log.Warning("Missing mysql group")
+				return DiagnoseTypeShardHasNoGroup, nil
+			}
+			// errMissingPrimaryTablet means we cannot find a tablet based on mysql primary
+			// which means the tablet disconnected from topo server and we cannot find it
+			if err == errMissingPrimaryTablet {
+				return DiagnoseTypeUnreachablePrimary, nil
+			}
+			return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose shardNeedsInitialized")
 		}
-		// errMissingPrimaryTablet means we cannot find a tablet based on mysql primary
-		// which means the tablet disconnected from topo server and we cannot find it
-		if err == errMissingPrimaryTablet {
+		if hasWrongPrimary {
+			return DiagnoseTypeWrongPrimaryTablet, nil
+		}
+
+		// Thirdly, we check if primary tablet is reachable
+		isPrimaryReachable, err := shard.isPrimaryReachable(ctx)
+		if err != nil {
+			return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose isPrimaryReachable")
+		}
+		if !isPrimaryReachable {
 			return DiagnoseTypeUnreachablePrimary, nil
 		}
-		return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose shardNeedsInitialized")
-	}
-	if hasWrongPrimary {
-		return DiagnoseTypeWrongPrimaryTablet, nil
 	}
 
-	// Thirdly, we check if primary tablet is reachable
-	isPrimaryReachable, err := shard.isPrimaryReachable(ctx)
-	if err != nil {
-		return DiagnoseTypeError, vterrors.Wrap(err, "fail to diagnose isPrimaryReachable")
+	// At this point, the primary tablet should be consistent with mysql primary
+	// so the view from priamry tablet should be accurate
+	onlineMembers, isReadOnly := shard.getOnlineGroupInfo()
+	// If we found a writable shard in the inactive shard
+	// we should consider the shard as InsufficientGroupSize to set read only
+	if !isReadOnly && !shard.isActive.Get() {
+		return DiagnoseTypeInsufficientGroupSize, nil
 	}
-	if !isPrimaryReachable {
-		return DiagnoseTypeUnreachablePrimary, nil
-	}
-
 	// Then we check if we satisfy the minimum replica requirement
 	if shard.minNumReplicas > 0 {
-		// At this point, the primary tablet should be consistent with mysql primary
-		// so the view from priamry tablet should be accurate
-		onlineMembers, isReadOnly := shard.getOnlineGroupInfo()
-		if onlineMembers >= shard.minNumReplicas && isReadOnly {
+		if onlineMembers >= shard.minNumReplicas && isReadOnly && shard.isActive.Get() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
 		// If we disable readonly protection and still found we have a read only shard,
 		// we should return DiagnoseTypeReadOnlyShard so that VTGR can turn off read only
-		if shard.disableReadOnlyProtection && isReadOnly {
+		if shard.disableReadOnlyProtection && isReadOnly && shard.isActive.Get() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
+		// We don't check isActive here since if it is inactive, VTGR should already return InsufficientGroupSize
 		if !shard.disableReadOnlyProtection && onlineMembers < shard.minNumReplicas && !isReadOnly {
 			return DiagnoseTypeInsufficientGroupSize, nil
 		}
