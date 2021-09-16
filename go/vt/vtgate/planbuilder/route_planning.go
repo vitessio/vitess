@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"io"
 	"sort"
 
@@ -419,7 +418,7 @@ func pushJoinPredicate(ctx *planningContext, exprs []sqlparser.Expr, tree queryT
 		// vindexFunc cannot accept predicates from the other side of a join
 		return node, nil
 	default:
-		panic(fmt.Sprintf("BUG: unknown type %T", node))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type %T", node)
 	}
 }
 
