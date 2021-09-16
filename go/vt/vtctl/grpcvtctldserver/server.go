@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/mysqlctlproto"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -56,6 +57,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -2649,8 +2651,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 	return &resp, nil
 }
 
-// ValidateSchemaKeyspace will diff the schema from all the tablets in
-// the keyspace.
+// ValidateSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface
 func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldatapb.ValidateSchemaKeyspaceRequest) (*vtctldatapb.ValidateSchemaKeyspaceResponse, error) {
 	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
 	if err != nil {
@@ -2693,7 +2694,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		}
 	}
 
-	// then diffs all tablets in the other shards
+	// Diff tablets against the reference shard schema
 	for _, shard := range shards {
 		si, err := s.ts.GetShard(ctx, req.Keyspace, shard)
 		if err != nil {
@@ -2754,7 +2755,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
 }
 
-// ValidateSchemaShard will diff the schema from all the tablets in the shard.
+// ValidateSchemaShard is part of the vtctlservicepb.VtctldServer interface
 func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb.ValidateSchemaShardRequest) (*vtctldatapb.ValidateSchemaShardResponse, error) {
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
@@ -2826,7 +2827,7 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 	return &vtctldatapb.ValidateSchemaShardResponse{}, nil
 }
 
-// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+// ValidateVSchema is part of the vtctlservicepb.VtctldServer interface
 func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest) (*vtctldatapb.ValidateVSchemaResponse, error) {
 	vschm, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {
@@ -2837,9 +2838,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 		wg            sync.WaitGroup
 	)
 
-	wg.Add(len(req.Shards))
-
 	for _, shard := range req.Shards {
+		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
 			notFoundTables := []string{}
@@ -2851,7 +2851,7 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 
 			primaryTablet, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
 			if err != nil {
-				shardFailures.RecordError(vterrors.Wrapf(err, "GetTablet(%v) failed: %v", si.Shard.PrimaryAlias, err))
+				shardFailures.RecordError(vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias), err))
 				return
 			}
 
@@ -2878,6 +2878,32 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 		return nil, vterrors.Wrapf(shardFailures.Error(), "ValidateVSchema(%v, %v, %v, %v) failed: %v", req.Keyspace, req.Shards, req.ExcludeTables, req.IncludeViews, shardFailures.Error().Error())
 	}
 	return &vtctldatapb.ValidateVSchemaResponse{}, nil
+}
+
+// helper method to asynchronously diff a schema
+func (s *VtctldServer) diffSchema(ctx context.Context, masterSchema *tabletmanagerdatapb.SchemaDefinition, masterTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool) error {
+	var rec concurrency.AllErrorRecorder
+
+	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
+
+	req := &vtctldata.GetTabletRequest{
+		TabletAlias: alias,
+	}
+
+	getTabletResp, err := s.GetTablet(ctx, req)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetTablet(%v) failed: %v", alias, err)
+	}
+
+	replicaSchema, err := s.tmc.GetSchema(ctx, getTabletResp.GetTablet(), nil, excludeTables, includeViews)
+	if err != nil {
+		return vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", alias, excludeTables, includeViews, err)
+	}
+
+	log.Infof("Diffing schema for %v", topoproto.TabletAliasString(alias))
+	tmutils.DiffSchema(topoproto.TabletAliasString(masterTabletAlias), masterSchema, topoproto.TabletAliasString(alias), replicaSchema, &rec)
+
+	return rec.Error()
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
