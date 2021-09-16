@@ -56,7 +56,6 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -2669,7 +2668,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		}
 
 		if _, err := s.ValidateSchemaShard(ctx, validateSchemaShardReq); err != nil {
-			return nil, vterrors.Wrapf(err, "ValidateSchemaShard(%v) failed: %v", validateSchemaShardReq, err)
+			return nil, vterrors.Wrapf(err, "ValidateSchemaShard(%+v) failed: %v", validateSchemaShardReq, err)
 		}
 		return &vtctldatapb.ValidateSchemaKeyspaceResponse{}, nil
 	}
@@ -2713,13 +2712,13 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			referenceAlias = si.Shard.PrimaryAlias
 			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 
-			getTabletReq := &vtctldata.GetTabletRequest{
+			getTabletReq := &vtctldatapb.GetTabletRequest{
 				TabletAlias: referenceAlias,
 			}
 
 			getTabletResp, err := s.GetTablet(ctx, getTabletReq)
 			if err != nil {
-				return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", referenceAlias, err)
+				return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(referenceAlias), err)
 			}
 
 			referenceSchema, err = s.tmc.GetSchema(ctx, getTabletResp.GetTablet(), nil, req.ExcludeTables, req.IncludeViews)
@@ -2740,7 +2739,12 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 				continue
 			}
 			wg.Add(1)
-			go s.diffSchema(ctx, referenceSchema, referenceAlias, alias, req.ExcludeTables, req.IncludeViews, &wg, &rec)
+			go func(alias *topodatapb.TabletAlias) {
+				defer wg.Done()
+				if err := s.diffSchema(ctx, referenceSchema, referenceAlias, alias, req.ExcludeTables, req.IncludeViews); err != nil {
+					rec.RecordError(err)
+				}
+			}(alias)
 		}
 	}
 	wg.Wait()
@@ -2757,19 +2761,18 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 		return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err)
 	}
 
-	// get schema from the master, or error
 	if !si.HasPrimary() {
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no primary in shard %v/%v", req.Keyspace, req.Shard)
 	}
 	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias))
 
-	getTabletReq := &vtctldata.GetTabletRequest{
+	getTabletReq := &vtctldatapb.GetTabletRequest{
 		TabletAlias: si.Shard.PrimaryAlias,
 	}
 
 	getTabletResponse, err := s.GetTablet(ctx, getTabletReq)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", getTabletReq.TabletAlias, err)
+		return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(getTabletReq.TabletAlias), err)
 	}
 
 	masterSchema, err := s.tmc.GetSchema(ctx, getTabletResponse.Tablet, nil, req.ExcludeTables, req.IncludeViews)
@@ -2809,7 +2812,12 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 		}
 
 		wg.Add(1)
-		go s.diffSchema(ctx, masterSchema, si.Shard.PrimaryAlias, alias, req.ExcludeTables, req.IncludeViews, &wg, &rec)
+		go func(alias *topodatapb.TabletAlias) {
+			defer wg.Done()
+			if err := s.diffSchema(ctx, masterSchema, si.Shard.PrimaryAlias, alias, req.ExcludeTables, req.IncludeViews); err != nil {
+				rec.RecordError(err)
+			}
+		}(alias)
 	}
 	wg.Wait()
 	if rec.HasErrors() {
