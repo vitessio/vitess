@@ -751,6 +751,11 @@ func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// SetInto sets the into clause
+func (node *Select) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -818,6 +823,11 @@ func (node *ParenSelect) SetLock(lock Lock) {
 	node.Select.SetLock(lock)
 }
 
+// SetInto sets the into clause
+func (node *ParenSelect) SetInto(into *SelectInto) {
+	node.Select.SetInto(into)
+}
+
 // MakeDistinct implements the SelectStatement interface
 func (node *ParenSelect) MakeDistinct() {
 	node.Select.MakeDistinct()
@@ -869,6 +879,11 @@ func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// SetInto sets the into clause
+func (node *Union) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
 	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
@@ -904,17 +919,18 @@ func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit,
 	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
 }
 
-func setOrderLimitAndLockToSelect(stmt SelectStatement, by OrderBy, limit *Limit, lock Lock) {
+func setOrderAndLimitToSelect(stmt SelectStatement, by OrderBy, limit *Limit) {
 	for _, order := range by {
 		(stmt).AddOrder(order)
 	}
 	(stmt).SetLimit(limit)
-	(stmt).SetLock(lock)
 }
 
-func anotherUnionize(lhs, rhs SelectStatement, isDistinct bool) *Union {
-		return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: isDistinct, Statement: rhs}}}
+func setLockInSelect(stmt SelectStatement, lock Lock) {
+	stmt.SetLock(lock)
 }
+
+
 
 
 // ToString returns the string associated with the DDLAction Enum

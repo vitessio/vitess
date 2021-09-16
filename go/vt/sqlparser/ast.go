@@ -45,6 +45,7 @@ type (
 		AddOrder(*Order)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		SetInto(into *SelectInto)
 		MakeDistinct()
 		GetColumnCount() int
 		SetComments(comments Comments)
@@ -246,6 +247,7 @@ type (
 		OrderBy        OrderBy
 		Limit          *Limit
 		Lock           Lock
+		Into		   *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.
