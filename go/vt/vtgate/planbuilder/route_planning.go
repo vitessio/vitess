@@ -461,25 +461,27 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	node = node.clone().(*joinTree)
 
 	var rhsPreds []sqlparser.Expr
+	var lhsPreds []sqlparser.Expr
 	var lhsColumns []*sqlparser.ColName
 	var lhsVarsName []string
 
 	for _, expr := range exprs {
-		// we are pushing argument expression in a different way, if one side
-		// of the comparison is an argument (*sqlparser.Argument) coming from
-		// then we can push the expression to either left or right hand side
-		// (depending on who solves the expression). such expression do not
-		// need to be "outputed" and sent to the RHS of the join as we would
-		// usually do.
-		newNode, err := pushArgumentsOnJoin(ctx, expr, node)
-		if err != nil {
-			return nil, err
+		// We find the dependencies for the given expression and if they are solved entirely by one
+		// side of the join tree, then we push the predicate there and do not break it into parts.
+		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
+		// rows as early as possible making join cheaper on the vtgate level.
+		depsForExpr := ctx.semTable.RecursiveDeps(expr)
+		singleSideDeps := false
+		if depsForExpr.IsSolvedBy(node.lhs.tableID()) {
+			lhsPreds = append(lhsPreds, expr)
+			singleSideDeps = true
 		}
-		if newNode != nil {
-			// we are getting a new node from pushArgumentsOnJoin, meaning
-			// we do not need to break the predicate between LHS and RHS, thus we
-			// continue onto the following expression.
-			node = newNode
+		if depsForExpr.IsSolvedBy(node.rhs.tableID()) {
+			rhsPreds = append(rhsPreds, expr)
+			singleSideDeps = true
+		}
+
+		if singleSideDeps {
 			continue
 		}
 
@@ -501,66 +503,21 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 			node.vars[lhsVarsName[i]] = idx
 		}
 	}
+	lhsPlan, err := pushJoinPredicate(ctx, lhsPreds, node.lhs)
+	if err != nil {
+		return nil, err
+	}
 
 	rhsPlan, err := pushJoinPredicate(ctx, rhsPreds, node.rhs)
 	if err != nil {
 		return nil, err
 	}
 	return &joinTree{
-		lhs:   node.lhs,
+		lhs:   lhsPlan,
 		rhs:   rhsPlan,
 		outer: node.outer,
 		vars:  node.vars,
 	}, nil
-}
-
-func pushArgumentsOnJoin(ctx *planningContext, expr sqlparser.Expr, node *joinTree) (*joinTree, error) {
-	cmp, isCmp := expr.(*sqlparser.ComparisonExpr)
-	if !isCmp {
-		return nil, nil
-	}
-
-	solvedByLeft, solvedByRight := isComparisonExprSolvedByJoinTree(ctx, cmp, node)
-	if !solvedByLeft && !solvedByRight {
-		return nil, nil
-	}
-
-	var nodeToReplace queryTree
-	if solvedByLeft {
-		nodeToReplace = node.lhs
-	} else if solvedByRight {
-		nodeToReplace = node.rhs
-	}
-
-	newNode, err := pushJoinPredicate(ctx, []sqlparser.Expr{expr}, nodeToReplace)
-	if err != nil {
-		return nil, err
-	}
-
-	if solvedByLeft {
-		node.lhs = newNode
-	} else if solvedByRight {
-		node.rhs = newNode
-	}
-	return node, nil
-}
-
-func isComparisonExprSolvedByJoinTree(ctx *planningContext, cmp *sqlparser.ComparisonExpr, node *joinTree) (bool, bool) {
-	var argExpr sqlparser.Expr
-	_, isLeftArg := cmp.Left.(sqlparser.Argument)
-	_, isRightArg := cmp.Right.(sqlparser.Argument)
-	if isLeftArg {
-		argExpr = cmp.Right
-	} else if isRightArg {
-		argExpr = cmp.Left
-	} else {
-		return false, false
-	}
-
-	argDeps := ctx.semTable.RecursiveDeps(argExpr)
-	solvedByLeft := argDeps.IsSolvedBy(node.lhs.tableID())
-	solvedByRight := argDeps.IsSolvedBy(node.rhs.tableID())
-	return solvedByLeft, solvedByRight
 }
 
 func breakPredicateInLHSandRHS(
