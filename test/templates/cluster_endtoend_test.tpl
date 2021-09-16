@@ -37,7 +37,7 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
-        go get -d golang.org/x/tools/cmd/goimports
+        go install golang.org/x/tools/cmd/goimports@latest
 
         {{if .InstallXtraBackup}}
 
