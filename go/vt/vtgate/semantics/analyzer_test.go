@@ -45,6 +45,7 @@ func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
 func TestBindingSingleTablePositive(t *testing.T) {
 	queries := []string{
 		"select col from tabl",
+		"select uid from t2",
 		"select tabl.col from tabl",
 		"select d.tabl.col from tabl",
 		"select col from d.tabl",
@@ -52,6 +53,7 @@ func TestBindingSingleTablePositive(t *testing.T) {
 		"select d.tabl.col from d.tabl",
 		"select col+col from tabl",
 		"select max(col1+col2) from d.tabl",
+		"select max(id) from t1",
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
@@ -77,6 +79,7 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 		"select tabl.col from d.X as tabl",
 		"select col+col from tabl as X",
 		"select max(tabl.col1 + tabl.col2) from d.X as tabl",
+		"select max(t.id) from t1 as t",
 	}
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
@@ -378,21 +381,26 @@ func TestUnknownColumnMap2(t *testing.T) {
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
 		err:    true,
 	}}
-	query := "select col from a, b"
-	parse, _ := sqlparser.Parse(query)
-	expr := extract(parse.(*sqlparser.Select), 0)
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			si := &FakeSI{Tables: test.schema}
-			tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
-			if test.err {
-				require.True(t, err != nil || tbl.ProjectionErr != nil)
-			} else {
-				require.NoError(t, err)
-				require.NoError(t, tbl.ProjectionErr)
-				typ := tbl.TypeFor(expr)
-				assert.Equal(t, test.typ, typ)
+	queries := []string{"select col from a, b", "select col from a as user, b as extra"}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			parse, _ := sqlparser.Parse(query)
+			expr := extract(parse.(*sqlparser.Select), 0)
+
+			for _, test := range tests {
+				t.Run(test.name, func(t *testing.T) {
+					si := &FakeSI{Tables: test.schema}
+					tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
+					if test.err {
+						require.True(t, err != nil || tbl.ProjectionErr != nil)
+					} else {
+						require.NoError(t, err)
+						require.NoError(t, tbl.ProjectionErr)
+						typ := tbl.TypeFor(expr)
+						assert.Equal(t, test.typ, typ)
+					}
+				})
 			}
 		})
 	}
@@ -467,29 +475,23 @@ func TestScopeForSubqueries(t *testing.T) {
 		deps TableSet
 	}{
 		{
-			sql: `
-select t.col1, (
-	select t.col2 from z as t) 
-from x as t`,
+			sql: `select t.col1, (select t.col2 from z as t) from x as t`,
 			deps: T2,
 		}, {
-			sql: `
-select t.col1, (
-	select t.col2 from z) 
-from x as t`,
+			sql: `select t.col1, (select t.col2 from z) from x as t`,
 			deps: T1,
 		}, {
-			sql: `
-select t.col1, (
-	select (select z.col2 from y) from z) 
-from x as t`,
+			sql: `select t.col1, (select (select z.col2 from y) from z) from x as t`,
 			deps: T2,
 		}, {
-			sql: `
-select t.col1, (
-	select (select y.col2 from y) from z) 
-from x as t`,
+			sql: `select t.col1, (select (select y.col2 from y) from z) from x as t`,
 			deps: T3,
+		}, {
+			sql: `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
+			deps: T5,
+		}, {
+			sql: `select t.col1, (select id from t) from x as t`,
+			deps: T2,
 		},
 	}
 	for _, tc := range tcases {
@@ -508,7 +510,7 @@ from x as t`,
 	}
 }
 
-func TestSubqueryBinding(t *testing.T) {
+func TestSubqueryOrderByBinding(t *testing.T) {
 	queries := []struct {
 		query    string
 		expected TableSet
@@ -621,6 +623,9 @@ func TestGroupByBinding(t *testing.T) {
 	}, {
 		"select t1.id from t1, t2 group by id",
 		T1,
+	}, {
+		"select id from t, t1 group by id",
+		T2,
 	}, {
 		"select id from t, t1 group by id",
 		T2,
