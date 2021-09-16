@@ -7,10 +7,6 @@ FROM "${image}"
 
 USER root
 
-# install goimports
-RUN go get -d golang.org/x/tools/cmd/goimports
-RUN where goimports
-
 # Re-copy sources from working tree
 RUN rm -rf /vt/src/vitess.io/vitess/*
 COPY . /vt/src/vitess.io/vitess
@@ -38,6 +34,9 @@ ENV VTDATAROOT /vt/vtdataroot
 
 # create the vtdataroot directory
 RUN mkdir -p $VTDATAROOT
+
+# install goimports
+RUN go install golang.org/x/tools/cmd/goimports@latest
 
 # sleep for 50 minutes
 CMD sleep 3000
