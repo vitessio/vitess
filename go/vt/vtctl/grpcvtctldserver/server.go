@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -1702,17 +1703,144 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 
 // ReloadSchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest) (*vtctldatapb.ReloadSchemaResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchema")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "GetTablet(%v) failed: %v", req.TabletAlias, err)
+	}
+
+	err = s.tmc.ReloadSchema(ctx, ti.Tablet, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ReloadSchemaResponse{}, nil
 }
 
 // ReloadSchemaShard is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest) (*vtctldatapb.ReloadSchemaShardResponse, error) {
-	panic("unimplemented!")
+	logger, getEvents := eventStreamLogger()
+
+	var sema *sync2.Semaphore
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	s.reloadSchemaShard(ctx, req, sema, logger)
+
+	return &vtctldatapb.ReloadSchemaShardResponse{
+		Events: getEvents(),
+	}, nil
+}
+
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	tablets, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
+	switch {
+	case topo.IsErrType(err, topo.PartialResult):
+		// We got a partial result. Do what we can, but warn
+		// that some may be missed.
+		logger.Warningf("ReloadSchemaShard(%v/%v) got a partial tablet list. Some tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", req.Keyspace, req.Shard)
+		span.Annotate("is_partial_result", true)
+	case err == nil:
+		// Good case, keep going too.
+		span.Annotate("is_partial_result", false)
+	default:
+		// This is best-effort, so just log it and move on.
+		logger.Warningf("ReloadSchemaShard(%v/%v) failed to load tablet list, will not reload schema (use vtctl ReloadSchemaShard to try again): %v", req.Keyspace, req.Shard, err)
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, ti := range tablets {
+		if !req.IncludePrimary && ti.Type == topodatapb.TabletType_PRIMARY {
+			// We don't need to reload on the primary
+			// because we assume ExecuteFetchAsDba()
+			// already did that.
+			continue
+		}
+
+		wg.Add(1)
+		go func(tablet *topodatapb.Tablet) {
+			defer wg.Done()
+
+			if sema != nil {
+				sema.Acquire()
+				defer sema.Release()
+			}
+
+			pos := req.WaitPosition
+			// Primary is always up-to-date. So, don't wait for position.
+			if tablet.Type == topodatapb.TabletType_PRIMARY {
+				pos = ""
+			}
+
+			if err := s.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
+				logger.Warningf(
+					"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
+					topoproto.TabletAliasString(tablet.Alias), req.Keyspace, req.Shard, err,
+				)
+			}
+		}(ti.Tablet)
+	}
+	wg.Wait()
 }
 
 // ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "GetShardNames(%v) failed: %v", req.Keyspace, err)
+	}
+
+	var (
+		wg                sync.WaitGroup
+		sema              *sync2.Semaphore
+		logger, getEvents = eventStreamLogger()
+	)
+
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			s.reloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+				Keyspace:       req.Keyspace,
+				Shard:          shard,
+				IncludePrimary: req.IncludePrimary,
+				WaitPosition:   req.WaitPosition,
+			}, sema, logger)
+		}(shard)
+	}
+
+	wg.Wait()
+
+	return &vtctldatapb.ReloadSchemaKeyspaceResponse{
+		Events: getEvents(),
+	}, nil
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
