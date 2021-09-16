@@ -548,7 +548,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 		})
 	})
 
-	return s.tm.RestoreFromBackup(ctx, logger)
+	return s.tm.RestoreFromBackup(ctx, logger, request.GetBackupTimestamp())
 }
 
 // registration glue

@@ -154,13 +154,13 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		return err
 	}
 
-	// Check if we need should use the latest (default) or a specified backup timestamp for the restore
-	var startTime time.Time
+	startTime := logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
 
+	// Check if we need should use the latest (default) or a specified backup timestamp for the restore
 	if restoreFromBackupTs != "" {
 		startTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTs)
 		if err != nil {
-			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the timestamp specified for -restore_from_backup_ts of %s: %v", restoreFromBackupTs, err))
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTs))
 		}
 	}
 
@@ -171,7 +171,6 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
 		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		startTime = logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
 		log.Infof("Using base_keyspace %v to restore keyspace %v using a backup timestamp of %v", keyspace, tablet.Keyspace, startTime)
 	}
 
