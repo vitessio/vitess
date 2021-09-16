@@ -30,5 +30,8 @@ RUN mkdir -p $VTDATAROOT
 # make tools
 RUN make tools
 
-  # sleep for 50 minutes
+# install goimports
+RUN go get -d golang.org/x/tools/cmd/goimports
+
+# sleep for 50 minutes
 CMD sleep 3000
