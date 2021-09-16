@@ -57,10 +57,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 		node.Limit, node.Lock.ToString(), node.Into)
 }
 
-// Format formats the node.
-func (node *ParenSelect) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "(%v)", node.Select)
-}
+
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {

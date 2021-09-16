@@ -70,13 +70,6 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *ParenSelect) formatFast(buf *TrackedBuffer) {
-	buf.WriteByte('(')
-	node.Select.formatFast(buf)
-	buf.WriteByte(')')
-}
-
-// formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
 	node.FirstStatement.formatFast(buf)
 	for _, us := range node.UnionSelects {

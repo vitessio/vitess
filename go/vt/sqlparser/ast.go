@@ -505,11 +505,6 @@ type (
 	Load struct {
 	}
 
-	// ParenSelect is a parenthesized SELECT statement.
-	ParenSelect struct {
-		Select SelectStatement
-	}
-
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -620,7 +615,6 @@ func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
@@ -1389,11 +1383,6 @@ func (node *AlterDatabase) GetDatabaseName() string {
 	return node.DBName.String()
 }
 
-// ParenSelect can actually not be a top level statement,
-// but we have to allow it because it's a requirement
-// of SelectStatement.
-func (*ParenSelect) iStatement() {}
-
 type (
 
 	// ShowInternal will represent all the show statement types.
@@ -1445,7 +1434,6 @@ type InsertRows interface {
 func (*Select) iInsertRows()      {}
 func (*Union) iInsertRows()       {}
 func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {

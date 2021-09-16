@@ -554,12 +554,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *ParenTableExpr:
 		b, ok := inB.(*ParenTableExpr)
 		if !ok {
@@ -1966,17 +1960,6 @@ func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 	return true
 }
 
-// EqualsRefOfParenSelect does deep equals between the two objects.
-func EqualsRefOfParenSelect(a, b *ParenSelect) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsSelectStatement(a.Select, b.Select)
-}
-
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
 func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	if a == b {
@@ -2507,7 +2490,8 @@ func EqualsRefOfUnion(a, b *Union) bool {
 		EqualsSliceOfRefOfUnionSelect(a.UnionSelects, b.UnionSelects) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
-		a.Lock == b.Lock
+		a.Lock == b.Lock &&
+		EqualsRefOfSelectInto(a.Into, b.Into)
 }
 
 // EqualsRefOfUnionSelect does deep equals between the two objects.
@@ -3253,12 +3237,6 @@ func EqualsInsertRows(inA, inB InsertRows) bool {
 		return false
 	}
 	switch a := inA.(type) {
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Select:
 		b, ok := inB.(*Select)
 		if !ok {
@@ -3325,12 +3303,6 @@ func EqualsSelectStatement(inA, inB SelectStatement) bool {
 		return false
 	}
 	switch a := inA.(type) {
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Select:
 		b, ok := inB.(*Select)
 		if !ok {
@@ -3556,12 +3528,6 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {

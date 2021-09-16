@@ -102,17 +102,6 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 			}
 		}
 		return pb.processSelect(part, reservedVars, outer, "")
-	case *sqlparser.ParenSelect:
-		err := pb.processPart(part.Select, reservedVars, outer, true)
-		if err != nil {
-			return err
-		}
-		// TODO: This is probably not a great idea. If we ended up with something other than a route, we'll lose the parens
-		routeOp, ok := pb.plan.(*route)
-		if ok {
-			routeOp.Select = &sqlparser.ParenSelect{Select: routeOp.Select}
-		}
-		return nil
 	}
 	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
 }
