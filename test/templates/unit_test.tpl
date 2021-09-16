@@ -119,6 +119,7 @@ jobs:
         mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
+        go get -d golang.org/x/tools/cmd/goimports
 
     - name: Run make tools
       run: |
