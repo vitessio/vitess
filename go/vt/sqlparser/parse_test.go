@@ -3520,13 +3520,14 @@ func TestValidSelectCases(t *testing.T) {
 }
 
 type testCase struct {
-	file             string
-	lineno           int
-	input            string
-	output           string
-	errStr		 	 string
-	comments         string
+	file     string
+	lineno   int
+	input    string
+	output   string
+	errStr   string
+	comments string
 }
+
 func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
@@ -3549,7 +3550,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 						fail = true
 						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
 					}
-				}  else {
+				} else {
 					if err != nil {
 						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
 						fail = true
@@ -3588,7 +3589,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 
 		r := bufio.NewReader(fd)
 		lineno := 0
-		for  {
+		for {
 			input, lineno, _ := parsePartial(r, []string{"INPUT"}, lineno, name)
 			if input == "" && lineno == 0 {
 				break
@@ -3600,13 +3601,12 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				output = ""
 			}
 			testCaseIterator <- testCase{
-				file:             name,
-				lineno:           lineno,
-				input:            input,
-				comments:         comments,
-				output: 		  output,
-				errStr: 		  errStr,
-
+				file:     name,
+				lineno:   lineno,
+				input:    input,
+				comments: comments,
+				output:   output,
+				errStr:   errStr,
 			}
 			comments = ""
 		}
