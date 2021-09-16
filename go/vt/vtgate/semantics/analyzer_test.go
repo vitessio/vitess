@@ -760,6 +760,9 @@ func TestInvalidUnion(t *testing.T) {
 	}, {
 		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
 		err: "The used SELECT statements have a different number of columns",
+	}, {
+		sql: "(select 1,2 union select 3,4) union (select 5,6 union select 7)",
+		err: "The used SELECT statements have a different number of columns",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -769,24 +772,6 @@ func TestInvalidUnion(t *testing.T) {
 			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
 			require.Error(t, err)
 			require.Equal(t, tc.err, err.Error())
-		})
-	}
-}
-
-func TestUnionColumns(t *testing.T) {
-	queries := []string{
-		"select 1,2 union select 1",
-		"(select 1,2 union select 3,4) union (select 5,6 union select 7)",
-	}
-
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query)
-			require.NoError(t, err)
-
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
-
-			require.Error(t, err)
 		})
 	}
 }
@@ -992,6 +977,191 @@ func TestScopingWVindexTables(t *testing.T) {
 				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)))
 			}
 		})
+	}
+}
+
+func BenchmarkAnalyzeMultipleDifferentQueries(b *testing.B) {
+	queries := []string{
+		"select col from tabl",
+		"select t.col from t, s",
+		"select max(tabl.col1 + tabl.col2) from d.X as tabl",
+		"select max(X.col + S.col) from t as X, s as S",
+		"select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
+		"select t.col1, (select t.col2 from z as t) from x as t",
+		"select * from user u where exists (select * from user order by col)",
+		"select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
+		"select d.tabl.col from d.tabl order by col",
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
+		"select a.id from t, t1 as a group by id",
+		"select tabl.col as x from tabl having x = 1",
+		"select id from (select foo as id from (select x as foo from user) as c) as t",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeUnionQueries(b *testing.B) {
+	queries := []string{
+		"select id from t1 union select uid from t2",
+		"select col1 from tabl1 union (select col2 from tabl2)",
+		"select t1.id, t1.col1 from t1 union select t2.uid from t2",
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
+		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
+		"select a.id from t1 as a union (select uid from t2) order by 1",
+		"select id from t1 union select uid from t2 union (select name from t)",
+		"select id from t1 union (select uid from t2) order by 1",
+		"(select id from t1) union (select uid from t2) order by id",
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeSubQueries(b *testing.B) {
+	queries := []string{
+		"select * from user u where exists (select * from user order by col)",
+		"select * from user u where exists (select * from user order by user.col)",
+		"select * from user u where exists (select * from user order by u.col)",
+		"select * from dbName.user as u where exists (select * from dbName.user order by u.col)",
+		"select * from dbName.user where exists (select * from otherDb.user order by dbName.user.col)",
+		"select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
+		"select t.col1, (select t.col2 from z as t) from x as t",
+		"select t.col1, (select t.col2 from z) from x as t",
+		"select t.col1, (select (select z.col2 from y) from z) from x as t",
+		"select t.col1, (select (select y.col2 from y) from z) from x as t",
+		"select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t",
+		"select t.col1, (select id from t) from x as t",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
+	queries := []string{
+		"select id from (select x as id from user) as t",
+		"select id from (select foo as id from user) as t",
+		"select id from (select foo as id from (select x as foo from user) as c) as t",
+		"select t.id from (select foo as id from user) as t",
+		"select t.id2 from (select foo as id from user) as t",
+		"select id from (select 42 as id) as t",
+		"select t.id from (select 42 as id) as t",
+		"select ks.t.id from (select 42 as id) as t",
+		"select * from (select id, id from user) as t",
+		"select t.baz = 1 from (select id as baz from user) as t",
+		"select t.id from (select * from user, music) as t",
+		"select t.id from (select * from user, music) as t order by t.id",
+		"select t.id from (select * from user) as t join user as u on t.id = u.id",
+		"select t.col1 from t3 ua join (select t1.id, t1.col1 from t1 join t2) as t",
+		"select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
+		"select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeHavingQueries(b *testing.B) {
+	queries := []string{
+		"select col from tabl having col = 1",
+		"select col from tabl having tabl.col = 1",
+		"select col from tabl having d.tabl.col = 1",
+		"select tabl.col as x from tabl having x = 1",
+		"select tabl.col as x from tabl having col",
+		"select col from tabl having 1 = 1",
+		"select col as c from tabl having c = 1",
+		"select 1 as c from tabl having c = 1",
+		"select t1.id from t1, t2 having id = 1",
+		"select t.id from t, t1 having id = 1",
+		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
+		"select u2.a, u1.a from u1, u2 having u2.a = 2",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeGroupByQueries(b *testing.B) {
+	queries := []string{
+		"select col from tabl group by col",
+		"select col from tabl group by tabl.col",
+		"select col from tabl group by d.tabl.col",
+		"select tabl.col as x from tabl group by x",
+		"select tabl.col as x from tabl group by col",
+		"select d.tabl.col as x from tabl group by x",
+		"select d.tabl.col as x from tabl group by col",
+		"select col from tabl group by 1",
+		"select col as c from tabl group by c",
+		"select 1 as c from tabl group by c",
+		"select t1.id from t1, t2 group by id",
+		"select id from t, t1 group by id",
+		"select id from t, t1 group by id",
+		"select a.id from t as a, t1 group by id",
+		"select a.id from t, t1 as a group by id",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
+	}
+}
+
+func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
+	queries := []string{
+		"select col from tabl order by col",
+		"select tabl.col from d.tabl order by col",
+		"select d.tabl.col from d.tabl order by col",
+		"select col from tabl order by tabl.col",
+		"select col from tabl order by d.tabl.col",
+		"select col from tabl order by 1",
+		"select col as c from tabl order by c",
+		"select 1 as c from tabl order by c",
+		"select name, name from t1, t2 order by name",
+	}
+
+	for i := 0; i < b.N; i++ {
+		for _, query := range queries {
+			parse, err := sqlparser.Parse(query)
+			require.NoError(b, err)
+
+			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+		}
 	}
 }
 
