@@ -475,22 +475,22 @@ func TestScopeForSubqueries(t *testing.T) {
 		deps TableSet
 	}{
 		{
-			sql: `select t.col1, (select t.col2 from z as t) from x as t`,
+			sql:  `select t.col1, (select t.col2 from z as t) from x as t`,
 			deps: T2,
 		}, {
-			sql: `select t.col1, (select t.col2 from z) from x as t`,
+			sql:  `select t.col1, (select t.col2 from z) from x as t`,
 			deps: T1,
 		}, {
-			sql: `select t.col1, (select (select z.col2 from y) from z) from x as t`,
+			sql:  `select t.col1, (select (select z.col2 from y) from z) from x as t`,
 			deps: T2,
 		}, {
-			sql: `select t.col1, (select (select y.col2 from y) from z) from x as t`,
+			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
 			deps: T3,
 		}, {
-			sql: `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
+			sql:  `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
 			deps: T5,
 		}, {
-			sql: `select t.col1, (select id from t) from x as t`,
+			sql:  `select t.col1, (select id from t) from x as t`,
 			deps: T2,
 		},
 	}
@@ -523,6 +523,15 @@ func TestSubqueryOrderByBinding(t *testing.T) {
 	}, {
 		query:    "select * from user u where exists (select * from user order by u.col)",
 		expected: T1,
+	}, {
+		query:    "select * from dbName.user as u where exists (select * from dbName.user order by u.col)",
+		expected: T1,
+	}, {
+		query:    "select * from dbName.user where exists (select * from otherDb.user order by dbName.user.col)",
+		expected: T1,
+	}, {
+		query:    "select id from dbName.t1 where exists (select * from dbName.t2 order by dbName.t1.id)",
+		expected: T1,
 	}}
 
 	for _, tc := range queries {
@@ -549,6 +558,12 @@ func TestOrderByBindingTable(t *testing.T) {
 		"select col from tabl order by col",
 		T1,
 	}, {
+		"select tabl.col from d.tabl order by col",
+		T1,
+	}, {
+		"select d.tabl.col from d.tabl order by col",
+		T1,
+	}, {
 		"select col from tabl order by tabl.col",
 		T1,
 	}, {
@@ -571,6 +586,12 @@ func TestOrderByBindingTable(t *testing.T) {
 		T1 | T2,
 	}, {
 		"select id from t1 union (select uid from t2) order by 1",
+		T1 | T2,
+	}, {
+		"select id from t1 union select uid from t2 union (select name from t) order by 1",
+		T1 | T2 | T3,
+	}, {
+		"select a.id from t1 as a union (select uid from t2) order by 1",
 		T1 | T2,
 	}}
 	for _, tc := range tcases {
@@ -612,6 +633,12 @@ func TestGroupByBinding(t *testing.T) {
 		"select tabl.col as x from tabl group by col",
 		T1,
 	}, {
+		"select d.tabl.col as x from tabl group by x",
+		T1,
+	}, {
+		"select d.tabl.col as x from tabl group by col",
+		T1,
+	}, {
 		"select col from tabl group by 1",
 		T1,
 	}, {
@@ -628,6 +655,12 @@ func TestGroupByBinding(t *testing.T) {
 		T2,
 	}, {
 		"select id from t, t1 group by id",
+		T2,
+	}, {
+		"select a.id from t as a, t1 group by id",
+		T1,
+	}, {
+		"select a.id from t, t1 as a group by id",
 		T2,
 	}}
 	for _, tc := range tcases {
@@ -693,7 +726,7 @@ func TestHavingBinding(t *testing.T) {
 	}
 }
 
-func TestUnion(t *testing.T) {
+func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	query := "select col1 from tabl1 union select col2 from tabl2"
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
@@ -863,6 +896,11 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 			query:            "select 1 from user uu where exists (select 1 from user where exists (select 1 from (select 1 from t1) uu where uu.user_id = uu.id))",
 			rightExpectation: T1,
 			leftExpectation:  T1,
+		},
+		{
+			query:            "select 1 from user.user uu where exists (select 1 from user.user as uu where exists (select 1 from (select 1 from user.t1) uu where uu.user_id = uu.id))",
+			rightExpectation: T2,
+			leftExpectation:  T2,
 		},
 	}
 	for _, query := range queries {
