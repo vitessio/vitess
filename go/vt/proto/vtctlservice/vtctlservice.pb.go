@@ -51,7 +51,7 @@ var file_vtctlservice_proto_rawDesc = []byte{
 	0x61, 0x6e, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x26, 0x2e, 0x76, 0x74, 0x63,
 	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x45, 0x78, 0x65, 0x63, 0x75, 0x74, 0x65, 0x56, 0x74,
 	0x63, 0x74, 0x6c, 0x43, 0x6f, 0x6d, 0x6d, 0x61, 0x6e, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x22, 0x00, 0x30, 0x01, 0x32, 0xe0, 0x29, 0x0a, 0x06, 0x56, 0x74, 0x63, 0x74, 0x6c,
+	0x73, 0x65, 0x22, 0x00, 0x30, 0x01, 0x32, 0x80, 0x2c, 0x0a, 0x06, 0x56, 0x74, 0x63, 0x74, 0x6c,
 	0x64, 0x12, 0x4e, 0x0a, 0x0b, 0x41, 0x64, 0x64, 0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f,
 	0x12, 0x1d, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x41, 0x64, 0x64,
 	0x43, 0x65, 0x6c, 0x6c, 0x49, 0x6e, 0x66, 0x6f, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
@@ -269,6 +269,24 @@ var file_vtctlservice_proto_rawDesc = []byte{
 	0x65, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a,
 	0x26, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x66, 0x72,
 	0x65, 0x73, 0x68, 0x53, 0x74, 0x61, 0x74, 0x65, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x51, 0x0a, 0x0c, 0x52, 0x65, 0x6c,
+	0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x12, 0x1e, 0x2e, 0x76, 0x74, 0x63, 0x74,
+	0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65,
+	0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x1f, 0x2e, 0x76, 0x74, 0x63, 0x74,
+	0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65,
+	0x6d, 0x61, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x69, 0x0a, 0x14,
+	0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73,
+	0x70, 0x61, 0x63, 0x65, 0x12, 0x26, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61,
+	0x2e, 0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79,
+	0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x27, 0x2e, 0x76,
+	0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53,
+	0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x60, 0x0a, 0x11, 0x52, 0x65, 0x6c, 0x6f, 0x61,
+	0x64, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x53, 0x68, 0x61, 0x72, 0x64, 0x12, 0x23, 0x2e, 0x76,
+	0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x6c, 0x6f, 0x61, 0x64, 0x53,
+	0x63, 0x68, 0x65, 0x6d, 0x61, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x1a, 0x24, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65,
+	0x6c, 0x6f, 0x61, 0x64, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
 	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x00, 0x12, 0x63, 0x0a, 0x12, 0x52, 0x65, 0x6d,
 	0x6f, 0x76, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x43, 0x65, 0x6c, 0x6c, 0x12,
 	0x24, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x52, 0x65, 0x6d, 0x6f,
@@ -432,84 +450,90 @@ var file_vtctlservice_proto_goTypes = []interface{}{
 	(*vtctldata.RebuildVSchemaGraphRequest)(nil),         // 37: vtctldata.RebuildVSchemaGraphRequest
 	(*vtctldata.RefreshStateRequest)(nil),                // 38: vtctldata.RefreshStateRequest
 	(*vtctldata.RefreshStateByShardRequest)(nil),         // 39: vtctldata.RefreshStateByShardRequest
-	(*vtctldata.RemoveKeyspaceCellRequest)(nil),          // 40: vtctldata.RemoveKeyspaceCellRequest
-	(*vtctldata.RemoveShardCellRequest)(nil),             // 41: vtctldata.RemoveShardCellRequest
-	(*vtctldata.ReparentTabletRequest)(nil),              // 42: vtctldata.ReparentTabletRequest
-	(*vtctldata.RunHealthCheckRequest)(nil),              // 43: vtctldata.RunHealthCheckRequest
-	(*vtctldata.SetKeyspaceServedFromRequest)(nil),       // 44: vtctldata.SetKeyspaceServedFromRequest
-	(*vtctldata.SetKeyspaceShardingInfoRequest)(nil),     // 45: vtctldata.SetKeyspaceShardingInfoRequest
-	(*vtctldata.SetShardIsPrimaryServingRequest)(nil),    // 46: vtctldata.SetShardIsPrimaryServingRequest
-	(*vtctldata.SetShardTabletControlRequest)(nil),       // 47: vtctldata.SetShardTabletControlRequest
-	(*vtctldata.SetWritableRequest)(nil),                 // 48: vtctldata.SetWritableRequest
-	(*vtctldata.ShardReplicationPositionsRequest)(nil),   // 49: vtctldata.ShardReplicationPositionsRequest
-	(*vtctldata.SleepTabletRequest)(nil),                 // 50: vtctldata.SleepTabletRequest
-	(*vtctldata.StartReplicationRequest)(nil),            // 51: vtctldata.StartReplicationRequest
-	(*vtctldata.StopReplicationRequest)(nil),             // 52: vtctldata.StopReplicationRequest
-	(*vtctldata.TabletExternallyReparentedRequest)(nil),  // 53: vtctldata.TabletExternallyReparentedRequest
-	(*vtctldata.UpdateCellInfoRequest)(nil),              // 54: vtctldata.UpdateCellInfoRequest
-	(*vtctldata.UpdateCellsAliasRequest)(nil),            // 55: vtctldata.UpdateCellsAliasRequest
-	(*vtctldata.ValidateRequest)(nil),                    // 56: vtctldata.ValidateRequest
-	(*vtctldata.ValidateKeyspaceRequest)(nil),            // 57: vtctldata.ValidateKeyspaceRequest
-	(*vtctldata.ValidateShardRequest)(nil),               // 58: vtctldata.ValidateShardRequest
-	(*vtctldata.ExecuteVtctlCommandResponse)(nil),        // 59: vtctldata.ExecuteVtctlCommandResponse
-	(*vtctldata.AddCellInfoResponse)(nil),                // 60: vtctldata.AddCellInfoResponse
-	(*vtctldata.AddCellsAliasResponse)(nil),              // 61: vtctldata.AddCellsAliasResponse
-	(*vtctldata.ApplyRoutingRulesResponse)(nil),          // 62: vtctldata.ApplyRoutingRulesResponse
-	(*vtctldata.ApplyVSchemaResponse)(nil),               // 63: vtctldata.ApplyVSchemaResponse
-	(*vtctldata.ChangeTabletTypeResponse)(nil),           // 64: vtctldata.ChangeTabletTypeResponse
-	(*vtctldata.CreateKeyspaceResponse)(nil),             // 65: vtctldata.CreateKeyspaceResponse
-	(*vtctldata.CreateShardResponse)(nil),                // 66: vtctldata.CreateShardResponse
-	(*vtctldata.DeleteCellInfoResponse)(nil),             // 67: vtctldata.DeleteCellInfoResponse
-	(*vtctldata.DeleteCellsAliasResponse)(nil),           // 68: vtctldata.DeleteCellsAliasResponse
-	(*vtctldata.DeleteKeyspaceResponse)(nil),             // 69: vtctldata.DeleteKeyspaceResponse
-	(*vtctldata.DeleteShardsResponse)(nil),               // 70: vtctldata.DeleteShardsResponse
-	(*vtctldata.DeleteSrvVSchemaResponse)(nil),           // 71: vtctldata.DeleteSrvVSchemaResponse
-	(*vtctldata.DeleteTabletsResponse)(nil),              // 72: vtctldata.DeleteTabletsResponse
-	(*vtctldata.EmergencyReparentShardResponse)(nil),     // 73: vtctldata.EmergencyReparentShardResponse
-	(*vtctldata.FindAllShardsInKeyspaceResponse)(nil),    // 74: vtctldata.FindAllShardsInKeyspaceResponse
-	(*vtctldata.GetBackupsResponse)(nil),                 // 75: vtctldata.GetBackupsResponse
-	(*vtctldata.GetCellInfoResponse)(nil),                // 76: vtctldata.GetCellInfoResponse
-	(*vtctldata.GetCellInfoNamesResponse)(nil),           // 77: vtctldata.GetCellInfoNamesResponse
-	(*vtctldata.GetCellsAliasesResponse)(nil),            // 78: vtctldata.GetCellsAliasesResponse
-	(*vtctldata.GetKeyspaceResponse)(nil),                // 79: vtctldata.GetKeyspaceResponse
-	(*vtctldata.GetKeyspacesResponse)(nil),               // 80: vtctldata.GetKeyspacesResponse
-	(*vtctldata.GetRoutingRulesResponse)(nil),            // 81: vtctldata.GetRoutingRulesResponse
-	(*vtctldata.GetSchemaResponse)(nil),                  // 82: vtctldata.GetSchemaResponse
-	(*vtctldata.GetShardResponse)(nil),                   // 83: vtctldata.GetShardResponse
-	(*vtctldata.GetSrvKeyspaceNamesResponse)(nil),        // 84: vtctldata.GetSrvKeyspaceNamesResponse
-	(*vtctldata.GetSrvKeyspacesResponse)(nil),            // 85: vtctldata.GetSrvKeyspacesResponse
-	(*vtctldata.GetSrvVSchemaResponse)(nil),              // 86: vtctldata.GetSrvVSchemaResponse
-	(*vtctldata.GetSrvVSchemasResponse)(nil),             // 87: vtctldata.GetSrvVSchemasResponse
-	(*vtctldata.GetTabletResponse)(nil),                  // 88: vtctldata.GetTabletResponse
-	(*vtctldata.GetTabletsResponse)(nil),                 // 89: vtctldata.GetTabletsResponse
-	(*vtctldata.GetVSchemaResponse)(nil),                 // 90: vtctldata.GetVSchemaResponse
-	(*vtctldata.GetWorkflowsResponse)(nil),               // 91: vtctldata.GetWorkflowsResponse
-	(*vtctldata.InitShardPrimaryResponse)(nil),           // 92: vtctldata.InitShardPrimaryResponse
-	(*vtctldata.PingTabletResponse)(nil),                 // 93: vtctldata.PingTabletResponse
-	(*vtctldata.PlannedReparentShardResponse)(nil),       // 94: vtctldata.PlannedReparentShardResponse
-	(*vtctldata.RebuildKeyspaceGraphResponse)(nil),       // 95: vtctldata.RebuildKeyspaceGraphResponse
-	(*vtctldata.RebuildVSchemaGraphResponse)(nil),        // 96: vtctldata.RebuildVSchemaGraphResponse
-	(*vtctldata.RefreshStateResponse)(nil),               // 97: vtctldata.RefreshStateResponse
-	(*vtctldata.RefreshStateByShardResponse)(nil),        // 98: vtctldata.RefreshStateByShardResponse
-	(*vtctldata.RemoveKeyspaceCellResponse)(nil),         // 99: vtctldata.RemoveKeyspaceCellResponse
-	(*vtctldata.RemoveShardCellResponse)(nil),            // 100: vtctldata.RemoveShardCellResponse
-	(*vtctldata.ReparentTabletResponse)(nil),             // 101: vtctldata.ReparentTabletResponse
-	(*vtctldata.RunHealthCheckResponse)(nil),             // 102: vtctldata.RunHealthCheckResponse
-	(*vtctldata.SetKeyspaceServedFromResponse)(nil),      // 103: vtctldata.SetKeyspaceServedFromResponse
-	(*vtctldata.SetKeyspaceShardingInfoResponse)(nil),    // 104: vtctldata.SetKeyspaceShardingInfoResponse
-	(*vtctldata.SetShardIsPrimaryServingResponse)(nil),   // 105: vtctldata.SetShardIsPrimaryServingResponse
-	(*vtctldata.SetShardTabletControlResponse)(nil),      // 106: vtctldata.SetShardTabletControlResponse
-	(*vtctldata.SetWritableResponse)(nil),                // 107: vtctldata.SetWritableResponse
-	(*vtctldata.ShardReplicationPositionsResponse)(nil),  // 108: vtctldata.ShardReplicationPositionsResponse
-	(*vtctldata.SleepTabletResponse)(nil),                // 109: vtctldata.SleepTabletResponse
-	(*vtctldata.StartReplicationResponse)(nil),           // 110: vtctldata.StartReplicationResponse
-	(*vtctldata.StopReplicationResponse)(nil),            // 111: vtctldata.StopReplicationResponse
-	(*vtctldata.TabletExternallyReparentedResponse)(nil), // 112: vtctldata.TabletExternallyReparentedResponse
-	(*vtctldata.UpdateCellInfoResponse)(nil),             // 113: vtctldata.UpdateCellInfoResponse
-	(*vtctldata.UpdateCellsAliasResponse)(nil),           // 114: vtctldata.UpdateCellsAliasResponse
-	(*vtctldata.ValidateResponse)(nil),                   // 115: vtctldata.ValidateResponse
-	(*vtctldata.ValidateKeyspaceResponse)(nil),           // 116: vtctldata.ValidateKeyspaceResponse
-	(*vtctldata.ValidateShardResponse)(nil),              // 117: vtctldata.ValidateShardResponse
+	(*vtctldata.ReloadSchemaRequest)(nil),                // 40: vtctldata.ReloadSchemaRequest
+	(*vtctldata.ReloadSchemaKeyspaceRequest)(nil),        // 41: vtctldata.ReloadSchemaKeyspaceRequest
+	(*vtctldata.ReloadSchemaShardRequest)(nil),           // 42: vtctldata.ReloadSchemaShardRequest
+	(*vtctldata.RemoveKeyspaceCellRequest)(nil),          // 43: vtctldata.RemoveKeyspaceCellRequest
+	(*vtctldata.RemoveShardCellRequest)(nil),             // 44: vtctldata.RemoveShardCellRequest
+	(*vtctldata.ReparentTabletRequest)(nil),              // 45: vtctldata.ReparentTabletRequest
+	(*vtctldata.RunHealthCheckRequest)(nil),              // 46: vtctldata.RunHealthCheckRequest
+	(*vtctldata.SetKeyspaceServedFromRequest)(nil),       // 47: vtctldata.SetKeyspaceServedFromRequest
+	(*vtctldata.SetKeyspaceShardingInfoRequest)(nil),     // 48: vtctldata.SetKeyspaceShardingInfoRequest
+	(*vtctldata.SetShardIsPrimaryServingRequest)(nil),    // 49: vtctldata.SetShardIsPrimaryServingRequest
+	(*vtctldata.SetShardTabletControlRequest)(nil),       // 50: vtctldata.SetShardTabletControlRequest
+	(*vtctldata.SetWritableRequest)(nil),                 // 51: vtctldata.SetWritableRequest
+	(*vtctldata.ShardReplicationPositionsRequest)(nil),   // 52: vtctldata.ShardReplicationPositionsRequest
+	(*vtctldata.SleepTabletRequest)(nil),                 // 53: vtctldata.SleepTabletRequest
+	(*vtctldata.StartReplicationRequest)(nil),            // 54: vtctldata.StartReplicationRequest
+	(*vtctldata.StopReplicationRequest)(nil),             // 55: vtctldata.StopReplicationRequest
+	(*vtctldata.TabletExternallyReparentedRequest)(nil),  // 56: vtctldata.TabletExternallyReparentedRequest
+	(*vtctldata.UpdateCellInfoRequest)(nil),              // 57: vtctldata.UpdateCellInfoRequest
+	(*vtctldata.UpdateCellsAliasRequest)(nil),            // 58: vtctldata.UpdateCellsAliasRequest
+	(*vtctldata.ValidateRequest)(nil),                    // 59: vtctldata.ValidateRequest
+	(*vtctldata.ValidateKeyspaceRequest)(nil),            // 60: vtctldata.ValidateKeyspaceRequest
+	(*vtctldata.ValidateShardRequest)(nil),               // 61: vtctldata.ValidateShardRequest
+	(*vtctldata.ExecuteVtctlCommandResponse)(nil),        // 62: vtctldata.ExecuteVtctlCommandResponse
+	(*vtctldata.AddCellInfoResponse)(nil),                // 63: vtctldata.AddCellInfoResponse
+	(*vtctldata.AddCellsAliasResponse)(nil),              // 64: vtctldata.AddCellsAliasResponse
+	(*vtctldata.ApplyRoutingRulesResponse)(nil),          // 65: vtctldata.ApplyRoutingRulesResponse
+	(*vtctldata.ApplyVSchemaResponse)(nil),               // 66: vtctldata.ApplyVSchemaResponse
+	(*vtctldata.ChangeTabletTypeResponse)(nil),           // 67: vtctldata.ChangeTabletTypeResponse
+	(*vtctldata.CreateKeyspaceResponse)(nil),             // 68: vtctldata.CreateKeyspaceResponse
+	(*vtctldata.CreateShardResponse)(nil),                // 69: vtctldata.CreateShardResponse
+	(*vtctldata.DeleteCellInfoResponse)(nil),             // 70: vtctldata.DeleteCellInfoResponse
+	(*vtctldata.DeleteCellsAliasResponse)(nil),           // 71: vtctldata.DeleteCellsAliasResponse
+	(*vtctldata.DeleteKeyspaceResponse)(nil),             // 72: vtctldata.DeleteKeyspaceResponse
+	(*vtctldata.DeleteShardsResponse)(nil),               // 73: vtctldata.DeleteShardsResponse
+	(*vtctldata.DeleteSrvVSchemaResponse)(nil),           // 74: vtctldata.DeleteSrvVSchemaResponse
+	(*vtctldata.DeleteTabletsResponse)(nil),              // 75: vtctldata.DeleteTabletsResponse
+	(*vtctldata.EmergencyReparentShardResponse)(nil),     // 76: vtctldata.EmergencyReparentShardResponse
+	(*vtctldata.FindAllShardsInKeyspaceResponse)(nil),    // 77: vtctldata.FindAllShardsInKeyspaceResponse
+	(*vtctldata.GetBackupsResponse)(nil),                 // 78: vtctldata.GetBackupsResponse
+	(*vtctldata.GetCellInfoResponse)(nil),                // 79: vtctldata.GetCellInfoResponse
+	(*vtctldata.GetCellInfoNamesResponse)(nil),           // 80: vtctldata.GetCellInfoNamesResponse
+	(*vtctldata.GetCellsAliasesResponse)(nil),            // 81: vtctldata.GetCellsAliasesResponse
+	(*vtctldata.GetKeyspaceResponse)(nil),                // 82: vtctldata.GetKeyspaceResponse
+	(*vtctldata.GetKeyspacesResponse)(nil),               // 83: vtctldata.GetKeyspacesResponse
+	(*vtctldata.GetRoutingRulesResponse)(nil),            // 84: vtctldata.GetRoutingRulesResponse
+	(*vtctldata.GetSchemaResponse)(nil),                  // 85: vtctldata.GetSchemaResponse
+	(*vtctldata.GetShardResponse)(nil),                   // 86: vtctldata.GetShardResponse
+	(*vtctldata.GetSrvKeyspaceNamesResponse)(nil),        // 87: vtctldata.GetSrvKeyspaceNamesResponse
+	(*vtctldata.GetSrvKeyspacesResponse)(nil),            // 88: vtctldata.GetSrvKeyspacesResponse
+	(*vtctldata.GetSrvVSchemaResponse)(nil),              // 89: vtctldata.GetSrvVSchemaResponse
+	(*vtctldata.GetSrvVSchemasResponse)(nil),             // 90: vtctldata.GetSrvVSchemasResponse
+	(*vtctldata.GetTabletResponse)(nil),                  // 91: vtctldata.GetTabletResponse
+	(*vtctldata.GetTabletsResponse)(nil),                 // 92: vtctldata.GetTabletsResponse
+	(*vtctldata.GetVSchemaResponse)(nil),                 // 93: vtctldata.GetVSchemaResponse
+	(*vtctldata.GetWorkflowsResponse)(nil),               // 94: vtctldata.GetWorkflowsResponse
+	(*vtctldata.InitShardPrimaryResponse)(nil),           // 95: vtctldata.InitShardPrimaryResponse
+	(*vtctldata.PingTabletResponse)(nil),                 // 96: vtctldata.PingTabletResponse
+	(*vtctldata.PlannedReparentShardResponse)(nil),       // 97: vtctldata.PlannedReparentShardResponse
+	(*vtctldata.RebuildKeyspaceGraphResponse)(nil),       // 98: vtctldata.RebuildKeyspaceGraphResponse
+	(*vtctldata.RebuildVSchemaGraphResponse)(nil),        // 99: vtctldata.RebuildVSchemaGraphResponse
+	(*vtctldata.RefreshStateResponse)(nil),               // 100: vtctldata.RefreshStateResponse
+	(*vtctldata.RefreshStateByShardResponse)(nil),        // 101: vtctldata.RefreshStateByShardResponse
+	(*vtctldata.ReloadSchemaResponse)(nil),               // 102: vtctldata.ReloadSchemaResponse
+	(*vtctldata.ReloadSchemaKeyspaceResponse)(nil),       // 103: vtctldata.ReloadSchemaKeyspaceResponse
+	(*vtctldata.ReloadSchemaShardResponse)(nil),          // 104: vtctldata.ReloadSchemaShardResponse
+	(*vtctldata.RemoveKeyspaceCellResponse)(nil),         // 105: vtctldata.RemoveKeyspaceCellResponse
+	(*vtctldata.RemoveShardCellResponse)(nil),            // 106: vtctldata.RemoveShardCellResponse
+	(*vtctldata.ReparentTabletResponse)(nil),             // 107: vtctldata.ReparentTabletResponse
+	(*vtctldata.RunHealthCheckResponse)(nil),             // 108: vtctldata.RunHealthCheckResponse
+	(*vtctldata.SetKeyspaceServedFromResponse)(nil),      // 109: vtctldata.SetKeyspaceServedFromResponse
+	(*vtctldata.SetKeyspaceShardingInfoResponse)(nil),    // 110: vtctldata.SetKeyspaceShardingInfoResponse
+	(*vtctldata.SetShardIsPrimaryServingResponse)(nil),   // 111: vtctldata.SetShardIsPrimaryServingResponse
+	(*vtctldata.SetShardTabletControlResponse)(nil),      // 112: vtctldata.SetShardTabletControlResponse
+	(*vtctldata.SetWritableResponse)(nil),                // 113: vtctldata.SetWritableResponse
+	(*vtctldata.ShardReplicationPositionsResponse)(nil),  // 114: vtctldata.ShardReplicationPositionsResponse
+	(*vtctldata.SleepTabletResponse)(nil),                // 115: vtctldata.SleepTabletResponse
+	(*vtctldata.StartReplicationResponse)(nil),           // 116: vtctldata.StartReplicationResponse
+	(*vtctldata.StopReplicationResponse)(nil),            // 117: vtctldata.StopReplicationResponse
+	(*vtctldata.TabletExternallyReparentedResponse)(nil), // 118: vtctldata.TabletExternallyReparentedResponse
+	(*vtctldata.UpdateCellInfoResponse)(nil),             // 119: vtctldata.UpdateCellInfoResponse
+	(*vtctldata.UpdateCellsAliasResponse)(nil),           // 120: vtctldata.UpdateCellsAliasResponse
+	(*vtctldata.ValidateResponse)(nil),                   // 121: vtctldata.ValidateResponse
+	(*vtctldata.ValidateKeyspaceResponse)(nil),           // 122: vtctldata.ValidateKeyspaceResponse
+	(*vtctldata.ValidateShardResponse)(nil),              // 123: vtctldata.ValidateShardResponse
 }
 var file_vtctlservice_proto_depIdxs = []int32{
 	0,   // 0: vtctlservice.Vtctl.ExecuteVtctlCommand:input_type -> vtctldata.ExecuteVtctlCommandRequest
@@ -552,86 +576,92 @@ var file_vtctlservice_proto_depIdxs = []int32{
 	37,  // 37: vtctlservice.Vtctld.RebuildVSchemaGraph:input_type -> vtctldata.RebuildVSchemaGraphRequest
 	38,  // 38: vtctlservice.Vtctld.RefreshState:input_type -> vtctldata.RefreshStateRequest
 	39,  // 39: vtctlservice.Vtctld.RefreshStateByShard:input_type -> vtctldata.RefreshStateByShardRequest
-	40,  // 40: vtctlservice.Vtctld.RemoveKeyspaceCell:input_type -> vtctldata.RemoveKeyspaceCellRequest
-	41,  // 41: vtctlservice.Vtctld.RemoveShardCell:input_type -> vtctldata.RemoveShardCellRequest
-	42,  // 42: vtctlservice.Vtctld.ReparentTablet:input_type -> vtctldata.ReparentTabletRequest
-	43,  // 43: vtctlservice.Vtctld.RunHealthCheck:input_type -> vtctldata.RunHealthCheckRequest
-	44,  // 44: vtctlservice.Vtctld.SetKeyspaceServedFrom:input_type -> vtctldata.SetKeyspaceServedFromRequest
-	45,  // 45: vtctlservice.Vtctld.SetKeyspaceShardingInfo:input_type -> vtctldata.SetKeyspaceShardingInfoRequest
-	46,  // 46: vtctlservice.Vtctld.SetShardIsPrimaryServing:input_type -> vtctldata.SetShardIsPrimaryServingRequest
-	47,  // 47: vtctlservice.Vtctld.SetShardTabletControl:input_type -> vtctldata.SetShardTabletControlRequest
-	48,  // 48: vtctlservice.Vtctld.SetWritable:input_type -> vtctldata.SetWritableRequest
-	49,  // 49: vtctlservice.Vtctld.ShardReplicationPositions:input_type -> vtctldata.ShardReplicationPositionsRequest
-	50,  // 50: vtctlservice.Vtctld.SleepTablet:input_type -> vtctldata.SleepTabletRequest
-	51,  // 51: vtctlservice.Vtctld.StartReplication:input_type -> vtctldata.StartReplicationRequest
-	52,  // 52: vtctlservice.Vtctld.StopReplication:input_type -> vtctldata.StopReplicationRequest
-	53,  // 53: vtctlservice.Vtctld.TabletExternallyReparented:input_type -> vtctldata.TabletExternallyReparentedRequest
-	54,  // 54: vtctlservice.Vtctld.UpdateCellInfo:input_type -> vtctldata.UpdateCellInfoRequest
-	55,  // 55: vtctlservice.Vtctld.UpdateCellsAlias:input_type -> vtctldata.UpdateCellsAliasRequest
-	56,  // 56: vtctlservice.Vtctld.Validate:input_type -> vtctldata.ValidateRequest
-	57,  // 57: vtctlservice.Vtctld.ValidateKeyspace:input_type -> vtctldata.ValidateKeyspaceRequest
-	58,  // 58: vtctlservice.Vtctld.ValidateShard:input_type -> vtctldata.ValidateShardRequest
-	59,  // 59: vtctlservice.Vtctl.ExecuteVtctlCommand:output_type -> vtctldata.ExecuteVtctlCommandResponse
-	60,  // 60: vtctlservice.Vtctld.AddCellInfo:output_type -> vtctldata.AddCellInfoResponse
-	61,  // 61: vtctlservice.Vtctld.AddCellsAlias:output_type -> vtctldata.AddCellsAliasResponse
-	62,  // 62: vtctlservice.Vtctld.ApplyRoutingRules:output_type -> vtctldata.ApplyRoutingRulesResponse
-	63,  // 63: vtctlservice.Vtctld.ApplyVSchema:output_type -> vtctldata.ApplyVSchemaResponse
-	64,  // 64: vtctlservice.Vtctld.ChangeTabletType:output_type -> vtctldata.ChangeTabletTypeResponse
-	65,  // 65: vtctlservice.Vtctld.CreateKeyspace:output_type -> vtctldata.CreateKeyspaceResponse
-	66,  // 66: vtctlservice.Vtctld.CreateShard:output_type -> vtctldata.CreateShardResponse
-	67,  // 67: vtctlservice.Vtctld.DeleteCellInfo:output_type -> vtctldata.DeleteCellInfoResponse
-	68,  // 68: vtctlservice.Vtctld.DeleteCellsAlias:output_type -> vtctldata.DeleteCellsAliasResponse
-	69,  // 69: vtctlservice.Vtctld.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
-	70,  // 70: vtctlservice.Vtctld.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
-	71,  // 71: vtctlservice.Vtctld.DeleteSrvVSchema:output_type -> vtctldata.DeleteSrvVSchemaResponse
-	72,  // 72: vtctlservice.Vtctld.DeleteTablets:output_type -> vtctldata.DeleteTabletsResponse
-	73,  // 73: vtctlservice.Vtctld.EmergencyReparentShard:output_type -> vtctldata.EmergencyReparentShardResponse
-	74,  // 74: vtctlservice.Vtctld.FindAllShardsInKeyspace:output_type -> vtctldata.FindAllShardsInKeyspaceResponse
-	75,  // 75: vtctlservice.Vtctld.GetBackups:output_type -> vtctldata.GetBackupsResponse
-	76,  // 76: vtctlservice.Vtctld.GetCellInfo:output_type -> vtctldata.GetCellInfoResponse
-	77,  // 77: vtctlservice.Vtctld.GetCellInfoNames:output_type -> vtctldata.GetCellInfoNamesResponse
-	78,  // 78: vtctlservice.Vtctld.GetCellsAliases:output_type -> vtctldata.GetCellsAliasesResponse
-	79,  // 79: vtctlservice.Vtctld.GetKeyspace:output_type -> vtctldata.GetKeyspaceResponse
-	80,  // 80: vtctlservice.Vtctld.GetKeyspaces:output_type -> vtctldata.GetKeyspacesResponse
-	81,  // 81: vtctlservice.Vtctld.GetRoutingRules:output_type -> vtctldata.GetRoutingRulesResponse
-	82,  // 82: vtctlservice.Vtctld.GetSchema:output_type -> vtctldata.GetSchemaResponse
-	83,  // 83: vtctlservice.Vtctld.GetShard:output_type -> vtctldata.GetShardResponse
-	84,  // 84: vtctlservice.Vtctld.GetSrvKeyspaceNames:output_type -> vtctldata.GetSrvKeyspaceNamesResponse
-	85,  // 85: vtctlservice.Vtctld.GetSrvKeyspaces:output_type -> vtctldata.GetSrvKeyspacesResponse
-	86,  // 86: vtctlservice.Vtctld.GetSrvVSchema:output_type -> vtctldata.GetSrvVSchemaResponse
-	87,  // 87: vtctlservice.Vtctld.GetSrvVSchemas:output_type -> vtctldata.GetSrvVSchemasResponse
-	88,  // 88: vtctlservice.Vtctld.GetTablet:output_type -> vtctldata.GetTabletResponse
-	89,  // 89: vtctlservice.Vtctld.GetTablets:output_type -> vtctldata.GetTabletsResponse
-	90,  // 90: vtctlservice.Vtctld.GetVSchema:output_type -> vtctldata.GetVSchemaResponse
-	91,  // 91: vtctlservice.Vtctld.GetWorkflows:output_type -> vtctldata.GetWorkflowsResponse
-	92,  // 92: vtctlservice.Vtctld.InitShardPrimary:output_type -> vtctldata.InitShardPrimaryResponse
-	93,  // 93: vtctlservice.Vtctld.PingTablet:output_type -> vtctldata.PingTabletResponse
-	94,  // 94: vtctlservice.Vtctld.PlannedReparentShard:output_type -> vtctldata.PlannedReparentShardResponse
-	95,  // 95: vtctlservice.Vtctld.RebuildKeyspaceGraph:output_type -> vtctldata.RebuildKeyspaceGraphResponse
-	96,  // 96: vtctlservice.Vtctld.RebuildVSchemaGraph:output_type -> vtctldata.RebuildVSchemaGraphResponse
-	97,  // 97: vtctlservice.Vtctld.RefreshState:output_type -> vtctldata.RefreshStateResponse
-	98,  // 98: vtctlservice.Vtctld.RefreshStateByShard:output_type -> vtctldata.RefreshStateByShardResponse
-	99,  // 99: vtctlservice.Vtctld.RemoveKeyspaceCell:output_type -> vtctldata.RemoveKeyspaceCellResponse
-	100, // 100: vtctlservice.Vtctld.RemoveShardCell:output_type -> vtctldata.RemoveShardCellResponse
-	101, // 101: vtctlservice.Vtctld.ReparentTablet:output_type -> vtctldata.ReparentTabletResponse
-	102, // 102: vtctlservice.Vtctld.RunHealthCheck:output_type -> vtctldata.RunHealthCheckResponse
-	103, // 103: vtctlservice.Vtctld.SetKeyspaceServedFrom:output_type -> vtctldata.SetKeyspaceServedFromResponse
-	104, // 104: vtctlservice.Vtctld.SetKeyspaceShardingInfo:output_type -> vtctldata.SetKeyspaceShardingInfoResponse
-	105, // 105: vtctlservice.Vtctld.SetShardIsPrimaryServing:output_type -> vtctldata.SetShardIsPrimaryServingResponse
-	106, // 106: vtctlservice.Vtctld.SetShardTabletControl:output_type -> vtctldata.SetShardTabletControlResponse
-	107, // 107: vtctlservice.Vtctld.SetWritable:output_type -> vtctldata.SetWritableResponse
-	108, // 108: vtctlservice.Vtctld.ShardReplicationPositions:output_type -> vtctldata.ShardReplicationPositionsResponse
-	109, // 109: vtctlservice.Vtctld.SleepTablet:output_type -> vtctldata.SleepTabletResponse
-	110, // 110: vtctlservice.Vtctld.StartReplication:output_type -> vtctldata.StartReplicationResponse
-	111, // 111: vtctlservice.Vtctld.StopReplication:output_type -> vtctldata.StopReplicationResponse
-	112, // 112: vtctlservice.Vtctld.TabletExternallyReparented:output_type -> vtctldata.TabletExternallyReparentedResponse
-	113, // 113: vtctlservice.Vtctld.UpdateCellInfo:output_type -> vtctldata.UpdateCellInfoResponse
-	114, // 114: vtctlservice.Vtctld.UpdateCellsAlias:output_type -> vtctldata.UpdateCellsAliasResponse
-	115, // 115: vtctlservice.Vtctld.Validate:output_type -> vtctldata.ValidateResponse
-	116, // 116: vtctlservice.Vtctld.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
-	117, // 117: vtctlservice.Vtctld.ValidateShard:output_type -> vtctldata.ValidateShardResponse
-	59,  // [59:118] is the sub-list for method output_type
-	0,   // [0:59] is the sub-list for method input_type
+	40,  // 40: vtctlservice.Vtctld.ReloadSchema:input_type -> vtctldata.ReloadSchemaRequest
+	41,  // 41: vtctlservice.Vtctld.ReloadSchemaKeyspace:input_type -> vtctldata.ReloadSchemaKeyspaceRequest
+	42,  // 42: vtctlservice.Vtctld.ReloadSchemaShard:input_type -> vtctldata.ReloadSchemaShardRequest
+	43,  // 43: vtctlservice.Vtctld.RemoveKeyspaceCell:input_type -> vtctldata.RemoveKeyspaceCellRequest
+	44,  // 44: vtctlservice.Vtctld.RemoveShardCell:input_type -> vtctldata.RemoveShardCellRequest
+	45,  // 45: vtctlservice.Vtctld.ReparentTablet:input_type -> vtctldata.ReparentTabletRequest
+	46,  // 46: vtctlservice.Vtctld.RunHealthCheck:input_type -> vtctldata.RunHealthCheckRequest
+	47,  // 47: vtctlservice.Vtctld.SetKeyspaceServedFrom:input_type -> vtctldata.SetKeyspaceServedFromRequest
+	48,  // 48: vtctlservice.Vtctld.SetKeyspaceShardingInfo:input_type -> vtctldata.SetKeyspaceShardingInfoRequest
+	49,  // 49: vtctlservice.Vtctld.SetShardIsPrimaryServing:input_type -> vtctldata.SetShardIsPrimaryServingRequest
+	50,  // 50: vtctlservice.Vtctld.SetShardTabletControl:input_type -> vtctldata.SetShardTabletControlRequest
+	51,  // 51: vtctlservice.Vtctld.SetWritable:input_type -> vtctldata.SetWritableRequest
+	52,  // 52: vtctlservice.Vtctld.ShardReplicationPositions:input_type -> vtctldata.ShardReplicationPositionsRequest
+	53,  // 53: vtctlservice.Vtctld.SleepTablet:input_type -> vtctldata.SleepTabletRequest
+	54,  // 54: vtctlservice.Vtctld.StartReplication:input_type -> vtctldata.StartReplicationRequest
+	55,  // 55: vtctlservice.Vtctld.StopReplication:input_type -> vtctldata.StopReplicationRequest
+	56,  // 56: vtctlservice.Vtctld.TabletExternallyReparented:input_type -> vtctldata.TabletExternallyReparentedRequest
+	57,  // 57: vtctlservice.Vtctld.UpdateCellInfo:input_type -> vtctldata.UpdateCellInfoRequest
+	58,  // 58: vtctlservice.Vtctld.UpdateCellsAlias:input_type -> vtctldata.UpdateCellsAliasRequest
+	59,  // 59: vtctlservice.Vtctld.Validate:input_type -> vtctldata.ValidateRequest
+	60,  // 60: vtctlservice.Vtctld.ValidateKeyspace:input_type -> vtctldata.ValidateKeyspaceRequest
+	61,  // 61: vtctlservice.Vtctld.ValidateShard:input_type -> vtctldata.ValidateShardRequest
+	62,  // 62: vtctlservice.Vtctl.ExecuteVtctlCommand:output_type -> vtctldata.ExecuteVtctlCommandResponse
+	63,  // 63: vtctlservice.Vtctld.AddCellInfo:output_type -> vtctldata.AddCellInfoResponse
+	64,  // 64: vtctlservice.Vtctld.AddCellsAlias:output_type -> vtctldata.AddCellsAliasResponse
+	65,  // 65: vtctlservice.Vtctld.ApplyRoutingRules:output_type -> vtctldata.ApplyRoutingRulesResponse
+	66,  // 66: vtctlservice.Vtctld.ApplyVSchema:output_type -> vtctldata.ApplyVSchemaResponse
+	67,  // 67: vtctlservice.Vtctld.ChangeTabletType:output_type -> vtctldata.ChangeTabletTypeResponse
+	68,  // 68: vtctlservice.Vtctld.CreateKeyspace:output_type -> vtctldata.CreateKeyspaceResponse
+	69,  // 69: vtctlservice.Vtctld.CreateShard:output_type -> vtctldata.CreateShardResponse
+	70,  // 70: vtctlservice.Vtctld.DeleteCellInfo:output_type -> vtctldata.DeleteCellInfoResponse
+	71,  // 71: vtctlservice.Vtctld.DeleteCellsAlias:output_type -> vtctldata.DeleteCellsAliasResponse
+	72,  // 72: vtctlservice.Vtctld.DeleteKeyspace:output_type -> vtctldata.DeleteKeyspaceResponse
+	73,  // 73: vtctlservice.Vtctld.DeleteShards:output_type -> vtctldata.DeleteShardsResponse
+	74,  // 74: vtctlservice.Vtctld.DeleteSrvVSchema:output_type -> vtctldata.DeleteSrvVSchemaResponse
+	75,  // 75: vtctlservice.Vtctld.DeleteTablets:output_type -> vtctldata.DeleteTabletsResponse
+	76,  // 76: vtctlservice.Vtctld.EmergencyReparentShard:output_type -> vtctldata.EmergencyReparentShardResponse
+	77,  // 77: vtctlservice.Vtctld.FindAllShardsInKeyspace:output_type -> vtctldata.FindAllShardsInKeyspaceResponse
+	78,  // 78: vtctlservice.Vtctld.GetBackups:output_type -> vtctldata.GetBackupsResponse
+	79,  // 79: vtctlservice.Vtctld.GetCellInfo:output_type -> vtctldata.GetCellInfoResponse
+	80,  // 80: vtctlservice.Vtctld.GetCellInfoNames:output_type -> vtctldata.GetCellInfoNamesResponse
+	81,  // 81: vtctlservice.Vtctld.GetCellsAliases:output_type -> vtctldata.GetCellsAliasesResponse
+	82,  // 82: vtctlservice.Vtctld.GetKeyspace:output_type -> vtctldata.GetKeyspaceResponse
+	83,  // 83: vtctlservice.Vtctld.GetKeyspaces:output_type -> vtctldata.GetKeyspacesResponse
+	84,  // 84: vtctlservice.Vtctld.GetRoutingRules:output_type -> vtctldata.GetRoutingRulesResponse
+	85,  // 85: vtctlservice.Vtctld.GetSchema:output_type -> vtctldata.GetSchemaResponse
+	86,  // 86: vtctlservice.Vtctld.GetShard:output_type -> vtctldata.GetShardResponse
+	87,  // 87: vtctlservice.Vtctld.GetSrvKeyspaceNames:output_type -> vtctldata.GetSrvKeyspaceNamesResponse
+	88,  // 88: vtctlservice.Vtctld.GetSrvKeyspaces:output_type -> vtctldata.GetSrvKeyspacesResponse
+	89,  // 89: vtctlservice.Vtctld.GetSrvVSchema:output_type -> vtctldata.GetSrvVSchemaResponse
+	90,  // 90: vtctlservice.Vtctld.GetSrvVSchemas:output_type -> vtctldata.GetSrvVSchemasResponse
+	91,  // 91: vtctlservice.Vtctld.GetTablet:output_type -> vtctldata.GetTabletResponse
+	92,  // 92: vtctlservice.Vtctld.GetTablets:output_type -> vtctldata.GetTabletsResponse
+	93,  // 93: vtctlservice.Vtctld.GetVSchema:output_type -> vtctldata.GetVSchemaResponse
+	94,  // 94: vtctlservice.Vtctld.GetWorkflows:output_type -> vtctldata.GetWorkflowsResponse
+	95,  // 95: vtctlservice.Vtctld.InitShardPrimary:output_type -> vtctldata.InitShardPrimaryResponse
+	96,  // 96: vtctlservice.Vtctld.PingTablet:output_type -> vtctldata.PingTabletResponse
+	97,  // 97: vtctlservice.Vtctld.PlannedReparentShard:output_type -> vtctldata.PlannedReparentShardResponse
+	98,  // 98: vtctlservice.Vtctld.RebuildKeyspaceGraph:output_type -> vtctldata.RebuildKeyspaceGraphResponse
+	99,  // 99: vtctlservice.Vtctld.RebuildVSchemaGraph:output_type -> vtctldata.RebuildVSchemaGraphResponse
+	100, // 100: vtctlservice.Vtctld.RefreshState:output_type -> vtctldata.RefreshStateResponse
+	101, // 101: vtctlservice.Vtctld.RefreshStateByShard:output_type -> vtctldata.RefreshStateByShardResponse
+	102, // 102: vtctlservice.Vtctld.ReloadSchema:output_type -> vtctldata.ReloadSchemaResponse
+	103, // 103: vtctlservice.Vtctld.ReloadSchemaKeyspace:output_type -> vtctldata.ReloadSchemaKeyspaceResponse
+	104, // 104: vtctlservice.Vtctld.ReloadSchemaShard:output_type -> vtctldata.ReloadSchemaShardResponse
+	105, // 105: vtctlservice.Vtctld.RemoveKeyspaceCell:output_type -> vtctldata.RemoveKeyspaceCellResponse
+	106, // 106: vtctlservice.Vtctld.RemoveShardCell:output_type -> vtctldata.RemoveShardCellResponse
+	107, // 107: vtctlservice.Vtctld.ReparentTablet:output_type -> vtctldata.ReparentTabletResponse
+	108, // 108: vtctlservice.Vtctld.RunHealthCheck:output_type -> vtctldata.RunHealthCheckResponse
+	109, // 109: vtctlservice.Vtctld.SetKeyspaceServedFrom:output_type -> vtctldata.SetKeyspaceServedFromResponse
+	110, // 110: vtctlservice.Vtctld.SetKeyspaceShardingInfo:output_type -> vtctldata.SetKeyspaceShardingInfoResponse
+	111, // 111: vtctlservice.Vtctld.SetShardIsPrimaryServing:output_type -> vtctldata.SetShardIsPrimaryServingResponse
+	112, // 112: vtctlservice.Vtctld.SetShardTabletControl:output_type -> vtctldata.SetShardTabletControlResponse
+	113, // 113: vtctlservice.Vtctld.SetWritable:output_type -> vtctldata.SetWritableResponse
+	114, // 114: vtctlservice.Vtctld.ShardReplicationPositions:output_type -> vtctldata.ShardReplicationPositionsResponse
+	115, // 115: vtctlservice.Vtctld.SleepTablet:output_type -> vtctldata.SleepTabletResponse
+	116, // 116: vtctlservice.Vtctld.StartReplication:output_type -> vtctldata.StartReplicationResponse
+	117, // 117: vtctlservice.Vtctld.StopReplication:output_type -> vtctldata.StopReplicationResponse
+	118, // 118: vtctlservice.Vtctld.TabletExternallyReparented:output_type -> vtctldata.TabletExternallyReparentedResponse
+	119, // 119: vtctlservice.Vtctld.UpdateCellInfo:output_type -> vtctldata.UpdateCellInfoResponse
+	120, // 120: vtctlservice.Vtctld.UpdateCellsAlias:output_type -> vtctldata.UpdateCellsAliasResponse
+	121, // 121: vtctlservice.Vtctld.Validate:output_type -> vtctldata.ValidateResponse
+	122, // 122: vtctlservice.Vtctld.ValidateKeyspace:output_type -> vtctldata.ValidateKeyspaceResponse
+	123, // 123: vtctlservice.Vtctld.ValidateShard:output_type -> vtctldata.ValidateShardResponse
+	62,  // [62:124] is the sub-list for method output_type
+	0,   // [0:62] is the sub-list for method input_type
 	0,   // [0:0] is the sub-list for extension type_name
 	0,   // [0:0] is the sub-list for extension extendee
 	0,   // [0:0] is the sub-list for field type_name

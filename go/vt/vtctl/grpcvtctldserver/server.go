@@ -1700,6 +1700,21 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	}, nil
 }
 
+// ReloadSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest) (*vtctldatapb.ReloadSchemaResponse, error) {
+	panic("unimplemented!")
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	panic("unimplemented!")
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	panic("unimplemented!")
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveKeyspaceCell")
