@@ -3538,7 +3538,6 @@ func testFile(t *testing.T, filename, tempDir string) {
 		fail := false
 		expected := strings.Builder{}
 		for tcase := range iterateExecFile(filename) {
-			fmt.Println(tcase)
 			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.comments), func(t *testing.T) {
 				if tcase.output == "" && tcase.errStr == "" {
 					tcase.output = tcase.input
