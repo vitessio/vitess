@@ -21,7 +21,6 @@ import (
 	"math"
 	"reflect"
 	"unsafe"
-
 	hack "vitess.io/vitess/go/hack"
 )
 
