@@ -1,11 +1,3 @@
-2021-06-03T06:31:47Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/901818189
-2021-06-03T06:31:47Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/901818194
-2021-06-03T06:31:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/901818208
-2021-06-03T06:35:04Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/901826916
-2021-06-03T06:50:23Z,local_example,https://github.com/vitessio/vitess/actions/runs/901865137
-2021-06-03T06:52:19Z,local_example,https://github.com/vitessio/vitess/actions/runs/901870039
-2021-06-03T06:53:43Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/901873414
-2021-06-03T06:53:43Z,local_example,https://github.com/vitessio/vitess/actions/runs/901873394
 2021-06-03T06:55:01Z,cluster_endtoend,https://github.com/vitessio/vitess/actions/runs/901877120
 2021-06-03T06:55:01Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/901877122
 2021-06-03T08:10:53Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/902091619
@@ -9969,6 +9961,7 @@
 2021-09-16T15:33:35Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1242211618
 2021-09-16T15:33:35Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/1242211624
 2021-09-16T15:33:35Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1242211557
+2021-09-16T15:33:35Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1242211608
 2021-09-16T15:33:35Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1242211615
 2021-09-16T15:33:35Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1242211638
 2021-09-16T15:33:35Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1242211617
@@ -9990,11 +9983,18 @@
 2021-09-16T15:33:35Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1242211648
 2021-09-16T15:33:35Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1242211619
 2021-09-16T15:33:35Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1242211626
+2021-09-16T15:33:35Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1242211586
+2021-09-16T15:33:35Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1242211614
 2021-09-16T15:33:35Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1242211607
+2021-09-16T15:33:35Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1242211604
+2021-09-16T15:33:35Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1242211620
 2021-09-16T15:33:35Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1242211599
+2021-09-16T15:33:35Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1242211609
+2021-09-16T15:33:35Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1242211569
 2021-09-16T15:33:35Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1242211605
 2021-09-16T15:33:35Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1242211576
 2021-09-16T15:33:35Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1242211621
 2021-09-16T15:33:35Z,local_example,https://github.com/vitessio/vitess/actions/runs/1242211578
 2021-09-16T15:33:35Z,local_example,https://github.com/vitessio/vitess/actions/runs/1242211633
 2021-09-16T15:33:35Z,region_example,https://github.com/vitessio/vitess/actions/runs/1242211568
+2021-09-16T15:33:35Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1242211559
