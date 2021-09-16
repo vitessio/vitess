@@ -808,46 +808,6 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
-// AddOrder adds an order by element
-func (node *ParenSelect) AddOrder(order *Order) {
-	node.Select.AddOrder(order)
-}
-
-// SetLimit sets the limit clause
-func (node *ParenSelect) SetLimit(limit *Limit) {
-	node.Select.SetLimit(limit)
-}
-
-// SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock Lock) {
-	node.Select.SetLock(lock)
-}
-
-// SetInto sets the into clause
-func (node *ParenSelect) SetInto(into *SelectInto) {
-	node.Select.SetInto(into)
-}
-
-// MakeDistinct implements the SelectStatement interface
-func (node *ParenSelect) MakeDistinct() {
-	node.Select.MakeDistinct()
-}
-
-// GetColumnCount implements the SelectStatement interface
-func (node *ParenSelect) GetColumnCount() int {
-	return node.Select.GetColumnCount()
-}
-
-// SetComments implements the SelectStatement interface
-func (node *ParenSelect) SetComments(comments Comments) {
-	node.Select.SetComments(comments)
-}
-
-// GetComments implements the SelectStatement interface
-func (node *ParenSelect) GetComments() Comments {
-	return node.Select.GetComments()
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
