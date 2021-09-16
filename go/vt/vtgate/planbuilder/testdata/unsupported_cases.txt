@@ -24,18 +24,11 @@ Gen4 plan same as above
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
-
-# filtering on a cross-shard derived table
-"select id from (select user.id, user.col from user join user_extra) as t where id=5"
-"unsupported: filtering on results of cross-shard subquery"
-
-# expression on a cross-shard derived table
-"select id+1 from (select user.id, user.col from user join user_extra) as t"
-"unsupported: expression on results of a cross-shard subquery"
 
 # natural join
 "select * from user natural join user_extra"
@@ -79,10 +72,12 @@ Gen4 plan same as above
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # Group by column number, used with non-aliased expression (duplicated code)
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
+Gen4 error: cannot use column offsets in group statement when using `*`
 
 # Filtering on scatter aggregates
 "select count(*) a from user having a >10"
@@ -117,10 +112,12 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'col + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # Aggregate detection (group_concat)
 "select group_concat(user.a) from user join user_extra"
@@ -330,27 +327,35 @@ Gen4 plan same as above
 
 "select keyspace_id from user_index where id = 1 and id = 2"
 "unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where func(id)"
 "unsupported: where clause for vindex function must be of the form id = <val> (not a comparison)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where id > 1"
 "unsupported: where clause for vindex function must be of the form id = <val> (not equality)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where 1 = id"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not a column)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where keyspace_id = 1"
 "unsupported: where clause for vindex function must be of the form id = <val> (lhs is not id)"
+Gen4 plan same as above
 
 "select keyspace_id from user_index where id = id+1"
 "unsupported: where clause for vindex function must be of the form id = <val> (rhs is not a value)"
+Gen4 plan same as above
 
+# vindex func without where condition
 "select keyspace_id from user_index"
 "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+Gen4 plan same as above
 
 # delete with multi-table targets
 "delete music,user from music inner join user where music.id = user.id"
@@ -360,12 +365,6 @@ Gen4 plan same as above
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
 "can't do ORDER BY on top of ORDER BY"
-Gen4 plan same as above
-
-# ambiguous ORDER BY
-"select id from user order by id union all select id from music order by id desc"
-"Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
-Gen4 plan same as above
 
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
@@ -385,7 +384,6 @@ Gen4 plan same as above
 # union with SQL_CALC_FOUND_ROWS 
 "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1"
 "SQL_CALC_FOUND_ROWS not supported with union"
-Gen4 plan same as above
 
 # set with DEFAULT - vitess aware
 "set workload = default"
@@ -400,6 +398,7 @@ Gen4 plan same as above
 # Multi shard query using into outfile s3
 "select * from user into outfile s3 'out_file_name'"
 "INTO is not supported on sharded keyspace"
+Gen4 plan same as above
 
 # create view with Cannot auto-resolve for cross-shard joins
 "create view user.view_a as select col from user join user_extra"
@@ -432,6 +431,7 @@ Gen4 plan same as above
 # create view with incompatible keyspaces
 "create view main.view_a as select * from user.user_extra"
 "Select query does not belong to the same keyspace as the view statement"
+Gen4 plan same as above
 
 # table_schema OR predicate
 # It is unsupported because we do not route queries to multiple keyspaces right now
@@ -544,3 +544,24 @@ Gen4 error: unsupported: filtering on results of aggregates
   }
 }
 Gen4 error: unsupported: filtering on results of aggregates
+
+# subquery of information_schema with itself and star expression in outer select
+"select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
+"unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# This query will never work as the inner derived table is only selecting one of the column
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 error: unsupported: unable to split predicates to derived table: uu.user_id = uu.id
+
+# outer and inner subquery route reference the same "uu.id" name
+# but they refer to different things. The first reference is to the outermost query,
+# and the second reference is to the innermost 'from' subquery.
+# changed to project all the columns from the derived tables.
+"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
+"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above

@@ -350,6 +350,14 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")
 	}
 
+	// join sysTableNames
+	for tableName, expr := range rRoute.eroute.SysTableTableName {
+		_, ok := lRoute.eroute.SysTableTableName[tableName]
+		if !ok {
+			lRoute.eroute.SysTableTableName[tableName] = expr
+		}
+	}
+
 	// Since the routes have merged, set st.singleRoute to point at
 	// the merged route.
 	pb.st.singleRoute = lRoute

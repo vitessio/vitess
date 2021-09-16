@@ -71,7 +71,14 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
-	node.FirstStatement.formatFast(buf)
+	if _, isSel := node.FirstStatement.(*Select); isSel {
+		buf.WriteByte('(')
+		node.FirstStatement.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
+		node.FirstStatement.formatFast(buf)
+	}
+
 	for _, us := range node.UnionSelects {
 		us.formatFast(buf)
 	}
@@ -82,15 +89,19 @@ func (node *Union) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(" ")
 	if node.Distinct {
-		buf.WriteByte(' ')
 		buf.WriteString(UnionStr)
-		buf.WriteByte(' ')
-		node.Statement.formatFast(buf)
 	} else {
-		buf.WriteByte(' ')
 		buf.WriteString(UnionAllStr)
-		buf.WriteByte(' ')
+	}
+	buf.WriteString(" ")
+
+	if _, isSel := node.Statement.(*Select); isSel {
+		buf.WriteByte('(')
+		node.Statement.formatFast(buf)
+		buf.WriteByte(')')
+	} else {
 		node.Statement.formatFast(buf)
 	}
 }

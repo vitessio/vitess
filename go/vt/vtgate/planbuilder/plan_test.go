@@ -195,7 +195,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -826,7 +826,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		return
 	}
 
-	_, _ = semantics.Analyze(sel, database, s, starRewrite)
+	_, _ = semantics.Analyze(sel, database, s)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {
