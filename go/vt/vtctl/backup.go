@@ -56,8 +56,8 @@ func init() {
 	addCommand("Tablets", command{
 		"RestoreFromBackup",
 		commandRestoreFromBackup,
-		"<tablet alias>",
-		"Stops mysqld and restores the data from the latest backup."})
+		"[-backup_timestamp=yyyy-mm-dd.HHmmss] <tablet alias>",
+		"Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time."})
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -237,6 +237,7 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	backupTimestamp := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -252,7 +253,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet)
+	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, *backupTimestamp)
 	if err != nil {
 		return err
 	}

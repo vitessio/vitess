@@ -351,7 +351,7 @@ func (client *FakeTabletManagerClient) Backup(ctx context.Context, tablet *topod
 }
 
 // RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet) (logutil.EventStream, error) {
+func (client *FakeTabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTimestamp string) (logutil.EventStream, error) {
 	return &eofEventStream{}, nil
 }
 

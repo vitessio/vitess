@@ -151,7 +151,7 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 }
 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup.
-func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger) error {
+func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTimestamp string) error {
 	if err := tm.lock(ctx); err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.L
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run restore
-	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, "" /*restoreFromBackupTs */)
+	err = tm.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */, backupTimestamp)
 
 	// re-run health check to be sure to capture any replication delay
 	tm.QueryServiceControl.BroadcastHealth()
