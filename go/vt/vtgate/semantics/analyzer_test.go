@@ -747,6 +747,32 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
+func TestInvalidUnion(t *testing.T) {
+	tcases := []struct {
+		sql string
+		err string
+	}{{
+		sql: "select t1.id, t1.col1 from t1 union select t2.uid from t2",
+		err: "The used SELECT statements have a different number of columns",
+	}, {
+		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
+		err: "The used SELECT statements have a different number of columns",
+	}, {
+		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
+		err: "The used SELECT statements have a different number of columns",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			parse, err := sqlparser.Parse(tc.sql)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
+			require.Error(t, err)
+			require.Equal(t, tc.err, err.Error())
+		})
+	}
+}
+
 func TestUnionColumns(t *testing.T) {
 	queries := []string{
 		"select 1,2 union select 1",
