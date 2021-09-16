@@ -679,7 +679,12 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				vreplTable, onlineDDL.Table,
 				swapTable, vreplTable,
 			)
-			if _, err = e.execQuery(ctx, parsed.Query); err != nil {
+			conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			if _, err = conn.ExecuteFetch(parsed.Query, 0, false); err != nil {
 				return err
 			}
 		}
