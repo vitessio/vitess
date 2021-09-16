@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -1747,55 +1748,12 @@ func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 	span.Annotate("include_primary", req.IncludePrimary)
 	span.Annotate("wait_position", req.WaitPosition)
 
-	tablets, err := s.ts.GetTabletMapForShard(ctx, req.Keyspace, req.Shard)
-	switch {
-	case topo.IsErrType(err, topo.PartialResult):
-		// We got a partial result. Do what we can, but warn
-		// that some may be missed.
-		logger.Warningf("ReloadSchemaShard(%v/%v) got a partial tablet list. Some tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", req.Keyspace, req.Shard)
-		span.Annotate("is_partial_result", true)
-	case err == nil:
-		// Good case, keep going too.
-		span.Annotate("is_partial_result", false)
-	default:
-		// This is best-effort, so just log it and move on.
-		logger.Warningf("ReloadSchemaShard(%v/%v) failed to load tablet list, will not reload schema (use vtctl ReloadSchemaShard to try again): %v", req.Keyspace, req.Shard, err)
+	isPartial, ok := schematools.ReloadShard(ctx, s.ts, s.tmc, logger, req.Keyspace, req.Shard, req.WaitPosition, sema, req.IncludePrimary)
+	if !ok {
 		return
 	}
 
-	var wg sync.WaitGroup
-	for _, ti := range tablets {
-		if !req.IncludePrimary && ti.Type == topodatapb.TabletType_PRIMARY {
-			// We don't need to reload on the primary
-			// because we assume ExecuteFetchAsDba()
-			// already did that.
-			continue
-		}
-
-		wg.Add(1)
-		go func(tablet *topodatapb.Tablet) {
-			defer wg.Done()
-
-			if sema != nil {
-				sema.Acquire()
-				defer sema.Release()
-			}
-
-			pos := req.WaitPosition
-			// Primary is always up-to-date. So, don't wait for position.
-			if tablet.Type == topodatapb.TabletType_PRIMARY {
-				pos = ""
-			}
-
-			if err := s.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
-				logger.Warningf(
-					"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
-					topoproto.TabletAliasString(tablet.Alias), req.Keyspace, req.Shard, err,
-				)
-			}
-		}(ti.Tablet)
-	}
-	wg.Wait()
+	span.Annotate("is_partial_result", isPartial)
 }
 
 // ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface.
