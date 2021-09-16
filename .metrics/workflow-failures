@@ -1,8 +1,3 @@
-2021-06-01T14:25:42Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/896363403
-2021-06-01T14:25:42Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/896363384
-2021-06-01T14:25:42Z,endtoend,https://github.com/vitessio/vitess/actions/runs/896363421
-2021-06-01T14:25:42Z,unit_race,https://github.com/vitessio/vitess/actions/runs/896363404
-2021-06-01T15:38:26Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/896601658
 2021-06-01T15:38:26Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/896601710
 2021-06-01T15:38:26Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/896601661
 2021-06-01T15:38:26Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/896601697
@@ -9994,7 +9989,12 @@
 2021-09-16T07:23:47Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1240625916
 2021-09-16T07:23:47Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1240625904
 2021-09-16T07:23:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1240625893
+2021-09-16T08:19:28Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1240788181
 2021-09-16T08:19:28Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/1240788139
+2021-09-16T08:19:28Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1240788158
 2021-09-16T08:19:28Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1240788174
 2021-09-16T08:19:28Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1240788141
+2021-09-16T08:19:28Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1240788151
+2021-09-16T08:19:28Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1240788194
+2021-09-16T08:19:28Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1240788159
 2021-09-16T08:19:29Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1240788204
