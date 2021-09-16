@@ -475,10 +475,14 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			if err := file.Save(fullPath); err != nil {
-				log.Fatalf("filed to save file to '%s': %v", fullPath, err)
+			content, err := getFileInGoimportFormat(file)
+			if err != nil {
+				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
 			}
-			log.Printf("saved '%s'", fullPath)
+			err = ioutil.WriteFile(fullPath, content, 0664)
+			if err != nil {
+				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
+			}
 		}
 	}
 }
@@ -495,39 +499,13 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		tempFile, err := ioutil.TempFile("/tmp", "*.go")
+		genFile, err := getFileInGoimportFormat(file)
 		if err != nil {
-			errors = append(errors, fmt.Errorf("could not create a file: %w", err))
+			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
 		}
 
-		var buf bytes.Buffer
-		if err := file.Render(&buf); err != nil {
-			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
-			continue
-		}
-
-		_, err = tempFile.Write(buf.Bytes())
-		if err != nil {
-			errors = append(errors, fmt.Errorf("could not render with file: %w", err))
-			continue
-		}
-
-		cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", tempFile.Name())
-		cmd.Stderr = os.Stderr
-		err = cmd.Run()
-		if err != nil {
-			errors = append(errors, fmt.Errorf("goimport execution error: %w", err))
-			continue
-		}
-
-		newFileContent, err := ioutil.ReadFile(tempFile.Name())
-		if err != nil {
-			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", tempFile.Name(), err))
-			continue
-		}
-
-		if !bytes.Equal(existing, newFileContent) {
+		if !bytes.Equal(existing, genFile) {
 			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
 			continue
 		}
@@ -586,4 +564,24 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 	}
 
 	return sizegen.finalize(), nil
+}
+
+func getFileInGoimportFormat(file *jen.File) ([]byte, error) {
+	tempFile, err := ioutil.TempFile("/tmp", "*.go")
+	if err != nil {
+		return nil, err
+	}
+
+	err = file.Save(tempFile.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", tempFile.Name())
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+	if err != nil {
+		return nil, err
+	}
+	return ioutil.ReadFile(tempFile.Name())
 }
