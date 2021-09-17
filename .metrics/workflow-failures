@@ -1,9 +1,3 @@
-2021-06-03T18:42:29Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/903845265
-2021-06-03T18:42:29Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/903845275
-2021-06-03T18:42:29Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/903845285
-2021-06-03T18:42:29Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/903845263
-2021-06-03T18:42:29Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/903845268
-2021-06-03T18:42:29Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/903845299
 2021-06-03T18:42:29Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/903845283
 2021-06-03T18:42:29Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/903845295
 2021-06-03T18:42:29Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/903845282
@@ -9994,7 +9988,13 @@
 2021-09-17T00:30:04Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1243689196
 2021-09-17T00:30:04Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1243689164
 2021-09-17T00:30:04Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1243689173
+2021-09-17T01:51:34Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1243852102
 2021-09-17T01:51:34Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1243852115
 2021-09-17T01:51:34Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1243852082
 2021-09-17T01:51:34Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1243852099
 2021-09-17T01:51:34Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1243852058
+2021-09-17T01:51:34Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1243852128
+2021-09-17T01:51:34Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1243852097
+2021-09-17T02:08:37Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/1243889317
+2021-09-17T02:08:37Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1243889335
+2021-09-17T02:08:37Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1243889306
