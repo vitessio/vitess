@@ -22,8 +22,10 @@ object to pool these DBConnections.
 package dbconnpool
 
 import (
+	"bytes"
 	"errors"
 	"net"
+	"sort"
 	"sync"
 	"time"
 
@@ -56,14 +58,7 @@ type ConnectionPool struct {
 	resolutionFrequency time.Duration
 
 	// info is set at Open() time
-	info      dbconfigs.Connector
-	addresses []net.IP
-
-	ticker      *time.Ticker
-	stop        chan struct{}
-	wg          sync.WaitGroup
-	hostIsNotIP bool
-
+	info dbconfigs.Connector
 	name string
 }
 
@@ -95,41 +90,57 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 	return p
 }
 
-func (cp *ConnectionPool) refreshdns() {
-	cp.mu.Lock()
-	host := cp.info.Host()
-	cp.mu.Unlock()
-
+func lookup(host string) []net.IP {
 	addrs, err := net.LookupHost(host)
 	if err != nil {
-		log.Errorf("Error refreshing connection dns name: (%v)", err)
-		return
+		log.Errorf("Error looking up dns name [%v]: (%v)\n", host, err)
+		return nil
 	}
 	naddr := make([]net.IP, len(addrs))
 	for i, a := range addrs {
 		naddr[i] = net.ParseIP(a)
 	}
-	cp.mu.Lock()
-	cp.addresses = naddr
-	cp.mu.Unlock()
+	sort.Slice(naddr, func(i, j int) bool {
+		return bytes.Compare(naddr[i], naddr[j]) < 0
+	})
+	return naddr
 }
 
-func (cp *ConnectionPool) validAddress(addr net.IP) bool {
-	cp.mu.Lock()
-	defer cp.mu.Unlock()
-
-	// If we have no valid addresses we always return true
-	if len(cp.addresses) == 0 {
-		return true
+// DNSTracker is a closure that persists state for
+//  tracking changes in the DNS resolution of a target dns name
+func DNSTracker(host string) func() bool {
+	dnsName := host
+	var addrs []net.IP
+	if dnsName == "" {
+		addrs = nil
+	} else {
+		addrs = lookup(dnsName)
 	}
 
-	// Check each address to see if the current RemoteAddr is in the set
-	for _, a := range cp.addresses {
-		if addr.Equal(a) {
+	return func() bool {
+		if dnsName == "" {
+			return false
+		}
+		newaddrs := lookup(dnsName)
+		if !addrEqual(addrs, newaddrs) {
+			log.Infof("Connection DNS has changed; old: [%v]  new: [%v]\n", addrs, newaddrs)
+			addrs = newaddrs
 			return true
 		}
+		return false
 	}
-	return false
+}
+
+func addrEqual(a, b []net.IP) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if !net.IP.Equal(v, b[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // Open must be called before starting to use the pool.
@@ -140,30 +151,18 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
+// TODO: fix comment
 func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
+	var f pools.RefreshCheck
+	if net.ParseIP(info.Host()) == nil {
+		f = DNSTracker(info.Host())
+	} else {
+		f = nil
+	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
-	// Check if we need to resolve a hostname (The Host is not just an IP  address).
-	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
-		cp.hostIsNotIP = true
-		cp.ticker = time.NewTicker(cp.resolutionFrequency)
-		cp.stop = make(chan struct{})
-		cp.wg.Add(1)
-		go func() {
-			defer cp.wg.Done()
-			for {
-				select {
-				case <-cp.ticker.C:
-					cp.refreshdns()
-				case <-cp.stop:
-					return
-				}
-			}
-
-		}()
-	}
+	cp.connections = pools.NewResourcePool(cp.connect, f, cp.resolutionFrequency, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -190,14 +189,7 @@ func (cp *ConnectionPool) Close() {
 	p.Close()
 	cp.mu.Lock()
 	cp.connections = nil
-	cp.addresses = nil
-	cp.hostIsNotIP = false
-	if cp.ticker != nil {
-		cp.ticker.Stop()
-		close(cp.stop)
-	}
 	cp.mu.Unlock()
-	cp.wg.Wait()
 }
 
 // Get returns a connection.
@@ -212,16 +204,6 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 		return nil, err
 	}
 
-	// Check that the RemoteAddr is still a valid Address
-	if cp.resolutionFrequency > 0 &&
-		cp.hostIsNotIP &&
-		!cp.validAddress(net.ParseIP(r.(*PooledDBConnection).RemoteAddr().String())) {
-		err := r.(*PooledDBConnection).Reconnect(ctx)
-		if err != nil {
-			p.Put(r)
-			return nil, err
-		}
-	}
 	return r.(*PooledDBConnection), nil
 }
 
