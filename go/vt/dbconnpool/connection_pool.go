@@ -22,19 +22,18 @@ object to pool these DBConnections.
 package dbconnpool
 
 import (
-	"bytes"
 	"errors"
 	"net"
-	"sort"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/netutil"
 
 	"context"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -90,57 +89,6 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 	return p
 }
 
-func lookup(host string) []net.IP {
-	addrs, err := net.LookupHost(host)
-	if err != nil {
-		log.Errorf("Error looking up dns name [%v]: (%v)\n", host, err)
-		return nil
-	}
-	naddr := make([]net.IP, len(addrs))
-	for i, a := range addrs {
-		naddr[i] = net.ParseIP(a)
-	}
-	sort.Slice(naddr, func(i, j int) bool {
-		return bytes.Compare(naddr[i], naddr[j]) < 0
-	})
-	return naddr
-}
-
-// DNSTracker is a closure that persists state for
-//  tracking changes in the DNS resolution of a target dns name
-func DNSTracker(host string) func() bool {
-	dnsName := host
-	var addrs []net.IP
-	if dnsName != "" {
-		addrs = lookup(dnsName)
-	}
-
-	return func() bool {
-		if dnsName == "" {
-			return false
-		}
-		newaddrs := lookup(dnsName)
-		if !addrEqual(addrs, newaddrs) {
-			log.Infof("Connection DNS has changed; old: [%v]  new: [%v]\n", addrs, newaddrs)
-			addrs = newaddrs
-			return true
-		}
-		return false
-	}
-}
-
-func addrEqual(a, b []net.IP) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if !net.IP.Equal(v, b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // Open must be called before starting to use the pool.
 //
 // For instance:
@@ -149,18 +97,17 @@ func addrEqual(a, b []net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
-// TODO: fix comment
 func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
-	var f pools.RefreshCheck
+	var refreshCheck pools.RefreshCheck
 	if net.ParseIP(info.Host()) == nil {
-		f = DNSTracker(info.Host())
+		refreshCheck = netutil.DNSTracker(info.Host())
 	} else {
-		f = nil
+		refreshCheck = nil
 	}
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, f, cp.resolutionFrequency, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil, refreshCheck, cp.resolutionFrequency)
 }
 
 // connect is used by the resource pool to create a new Resource.

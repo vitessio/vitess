@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"context"
 
 	"vitess.io/vitess/go/sync2"
@@ -52,7 +54,7 @@ type Factory func(context.Context) (Resource, error)
 
 // RefreshCheck is a function used to determine if a resource pool should be
 // refreshed (i.e. closed and reopened)
-type RefreshCheck func() bool
+type RefreshCheck func() (bool, error)
 
 // Resource defines the interface that every resource must provide.
 // Thread synchronization between Close() and IsClosed()
@@ -80,11 +82,11 @@ type ResourcePool struct {
 	idleTimer *timer.Timer
 	logWait   func(time.Time)
 
-	refreshCheck     RefreshCheck
-	refreshFrequency time.Duration
-	refreshStop      chan struct{}
-	refreshTicker    *time.Ticker
-	refreshWg        sync.WaitGroup
+	refreshCheck    RefreshCheck
+	refreshInterval time.Duration
+	refreshStop     chan struct{}
+	refreshTicker   *time.Ticker
+	refreshWg       sync.WaitGroup
 }
 
 type resourceWrapper struct {
@@ -103,8 +105,9 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-// TODO: document refreshCheck and refreshFrequency
-func NewResourcePool(factory Factory, refreshCheck RefreshCheck, refreshFrequency time.Duration, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
+// refreshCheck is a function we consult at refreshInterval
+// intervals to determine if the pool should be drained and reopened
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time), refreshCheck RefreshCheck, refreshInterval time.Duration) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -154,8 +157,8 @@ func NewResourcePool(factory Factory, refreshCheck RefreshCheck, refreshFrequenc
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
 
-	if refreshCheck != nil && refreshFrequency > 0 {
-		rp.refreshFrequency = refreshFrequency
+	if refreshCheck != nil && refreshInterval > 0 {
+		rp.refreshInterval = refreshInterval
 		rp.refreshCheck = refreshCheck
 		rp.startRefreshTicker()
 	}
@@ -164,7 +167,7 @@ func NewResourcePool(factory Factory, refreshCheck RefreshCheck, refreshFrequenc
 }
 
 func (rp *ResourcePool) startRefreshTicker() {
-	rp.refreshTicker = time.NewTicker(rp.refreshFrequency)
+	rp.refreshTicker = time.NewTicker(rp.refreshInterval)
 	rp.refreshStop = make(chan struct{})
 	rp.refreshWg.Add(1)
 	go func() {
@@ -172,7 +175,11 @@ func (rp *ResourcePool) startRefreshTicker() {
 		for {
 			select {
 			case <-rp.refreshTicker.C:
-				if rp.refreshCheck() {
+				val, err := rp.refreshCheck()
+				if err != nil {
+					log.Info(err)
+				}
+				if val {
 					go rp.reopen()
 					return
 				}
