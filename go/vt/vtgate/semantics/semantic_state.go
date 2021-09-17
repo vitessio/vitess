@@ -17,8 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,14 +61,6 @@ type (
 	ColumnInfo struct {
 		Name string
 		Type querypb.Type
-	}
-
-	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
-	// we are keeping information about, and the latter represents the additional table information
-	// (usually a RealTable or an AliasedTable) of our vindex.
-	VindexTable struct {
-		Table  TableInfo
-		Vindex vindexes.Vindex
 	}
 
 	// TableSet is how a set of tables is expressed.
@@ -119,13 +109,6 @@ type (
 		OpCode   engine.PulloutOpcode
 	}
 
-	scope struct {
-		parent     *scope
-		selectStmt *sqlparser.Select
-		tables     []TableInfo
-		isUnion    bool
-	}
-
 	// SchemaInformation is used tp provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
@@ -137,108 +120,10 @@ var (
 	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 )
 
-// Dependencies implements the TableInfo interface
-func (v *VindexTable) dependencies(colName string, org originable) (dependencies, error) {
-	return v.Table.dependencies(colName, org)
-}
-
-func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
-	ts := org.tableSetFor(node)
-	for _, info := range columns {
-		if strings.EqualFold(info.Name, colName) {
-			return createCertain(ts, ts, &info.Type), nil
-		}
-	}
-
-	if authoritative {
-		return &nothing{}, nil
-	}
-	return createUncertain(ts, ts), nil
-}
-
-// GetTables implements the TableInfo interface
-func (v *VindexTable) getTableSet(org originable) TableSet {
-	return v.Table.getTableSet(org)
-}
-
-// GetExprFor implements the TableInfo interface
-func (v *VindexTable) getExprFor(_ string) (sqlparser.Expr, error) {
-	panic("implement me")
-}
-
 // CopyDependencies copies the dependencies from one expression into the other
 func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Recursive[to] = st.RecursiveDeps(from)
 	st.Direct[to] = st.DirectDeps(from)
-}
-
-var _ TableInfo = (*VindexTable)(nil)
-
-// GetVindexTable implements the TableInfo interface
-func (v *VindexTable) GetVindexTable() *vindexes.Table {
-	return v.Table.GetVindexTable()
-}
-
-func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
-	if tbl == nil {
-		return nil
-	}
-	nameMap := map[string]interface{}{}
-	cols := make([]ColumnInfo, 0, len(tbl.Columns))
-	for _, col := range tbl.Columns {
-		cols = append(cols, ColumnInfo{
-			Name: col.Name.String(),
-			Type: col.Type,
-		})
-		nameMap[col.Name.String()] = nil
-	}
-	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
-	if tbl.ColumnListAuthoritative {
-		return cols
-	}
-	for _, vindex := range tbl.ColumnVindexes {
-		for _, column := range vindex.Columns {
-			name := column.String()
-			if _, exists := nameMap[name]; exists {
-				continue
-			}
-			cols = append(cols, ColumnInfo{
-				Name: name,
-			})
-			nameMap[name] = nil
-		}
-	}
-	return cols
-}
-
-// Matches implements the TableInfo interface
-func (v *VindexTable) matches(name sqlparser.TableName) bool {
-	return v.Table.matches(name)
-}
-
-// Authoritative implements the TableInfo interface
-func (v *VindexTable) authoritative() bool {
-	return true
-}
-
-// Name implements the TableInfo interface
-func (v *VindexTable) Name() (sqlparser.TableName, error) {
-	return v.Table.Name()
-}
-
-// GetExpr implements the TableInfo interface
-func (v *VindexTable) getExpr() *sqlparser.AliasedTableExpr {
-	return v.Table.getExpr()
-}
-
-// GetColumns implements the TableInfo interface
-func (v *VindexTable) getColumns() []ColumnInfo {
-	return v.Table.getColumns()
-}
-
-// IsInfSchema implements the TableInfo interface
-func (v *VindexTable) IsInfSchema() bool {
-	return v.Table.IsInfSchema()
 }
 
 // NewSemTable creates a new empty SemTable
@@ -356,30 +241,6 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 
 	d[expr] = deps
 	return deps
-}
-
-func newScope(parent *scope) *scope {
-	return &scope{parent: parent}
-}
-
-func (s *scope) addTable(info TableInfo) error {
-	name, err := info.Name()
-	if err != nil {
-		return err
-	}
-	tblName := name.Name.String()
-	for _, table := range s.tables {
-		name, err := table.Name()
-		if err != nil {
-			return err
-		}
-
-		if tblName == name.Name.String() {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
-		}
-	}
-	s.tables = append(s.tables, info)
-	return nil
 }
 
 // IsOverlapping returns true if at least one table exists in both sets
