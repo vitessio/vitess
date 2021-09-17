@@ -98,10 +98,10 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		scope := b.scoper.currentScope()
 		ts := TableSet(0)
 		for _, table := range scope.tables {
-			if !table.IsActualTable() {
-				continue
+			expr := table.getExpr()
+			if expr != nil {
+				ts |= b.tc.tableSetFor(expr)
 			}
-			ts |= b.tc.tableSetFor(table.GetExpr())
 		}
 		b.recursive[node] = ts
 		b.direct[node] = ts
@@ -117,8 +117,8 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps
 			err = makeAmbiguousError(colName, err)
 			return dependency{}, err
 		}
-		if !thisDeps.Empty() {
-			deps, err = thisDeps.Get()
+		if !thisDeps.empty() {
+			deps, err = thisDeps.get()
 			err = makeAmbiguousError(colName, err)
 			return deps, err
 		}
@@ -130,14 +130,14 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
-		if !expr.Qualifier.IsEmpty() && !table.Matches(expr.Qualifier) {
+		if !expr.Qualifier.IsEmpty() && !table.matches(expr.Qualifier) {
 			continue
 		}
-		thisDeps, err := table.Dependencies(expr.Name.String(), b.org)
+		thisDeps, err := table.dependencies(expr.Name.String(), b.org)
 		if err != nil {
 			return nil, err
 		}
-		deps, err = thisDeps.Merge(deps)
+		deps, err = thisDeps.merge(deps)
 		if err != nil {
 			return nil, err
 		}

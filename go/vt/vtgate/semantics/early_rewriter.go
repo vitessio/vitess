@@ -131,11 +131,11 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
 	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
+		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
 			continue
 		}
 		unknownTbl = false
-		if !tbl.Authoritative() {
+		if !tbl.authoritative() {
 			starExpanded = false
 			break
 		}
@@ -145,8 +145,8 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 		}
 
 		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
-		for _, col := range tbl.GetColumns() {
+		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
+		for _, col := range tbl.getColumns() {
 			var colName *sqlparser.ColName
 			var alias sqlparser.ColIdent
 			if withQualifier {

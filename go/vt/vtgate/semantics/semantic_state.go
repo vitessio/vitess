@@ -33,19 +33,30 @@ import (
 type (
 	// TableInfo contains information about tables
 	TableInfo interface {
-		Matches(name sqlparser.TableName) bool
-		Authoritative() bool
+		// Name returns the table name
 		Name() (sqlparser.TableName, error)
-		GetExpr() *sqlparser.AliasedTableExpr
+
+		// GetVindexTable returns the vschema version of this TableInfo
 		GetVindexTable() *vindexes.Table
-		GetColumns() []ColumnInfo
-		IsActualTable() bool
 
-		Dependencies(colName string, org originable) (dependencies, error)
-
+		// IsInfSchema returns true if this table is information_schema
 		IsInfSchema() bool
-		GetExprFor(s string) (sqlparser.Expr, error)
-		GetTables(org originable) TableSet
+
+		// matches returns true if the provided table name matches this TableInfo
+		matches(name sqlparser.TableName) bool
+
+		// authoritative is true if we have exhaustive column information
+		authoritative() bool
+
+		// getExpr returns the AST struct behind this table
+		getExpr() *sqlparser.AliasedTableExpr
+
+		// getColumns returns the known column information for this table
+		getColumns() []ColumnInfo
+
+		dependencies(colName string, org originable) (dependencies, error)
+		getExprFor(s string) (sqlparser.Expr, error)
+		getTableSet(org originable) TableSet
 	}
 
 	// ColumnInfo contains information about columns
@@ -135,13 +146,13 @@ var (
 )
 
 // Dependencies implements the TableInfo interface
-func (v *VindexTable) Dependencies(colName string, org originable) (dependencies, error) {
-	return v.Table.Dependencies(colName, org)
+func (v *VindexTable) dependencies(colName string, org originable) (dependencies, error) {
+	return v.Table.dependencies(colName, org)
 }
 
 // Dependencies implements the TableInfo interface
-func (a *AliasedTable) Dependencies(colName string, org originable) (dependencies, error) {
-	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.GetColumns(), a.Authoritative())
+func (a *AliasedTable) dependencies(colName string, org originable) (dependencies, error) {
+	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.getColumns(), a.authoritative())
 }
 
 func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
@@ -159,17 +170,17 @@ func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser
 }
 
 // GetTables implements the TableInfo interface
-func (v *VindexTable) GetTables(org originable) TableSet {
-	return v.Table.GetTables(org)
+func (v *VindexTable) getTableSet(org originable) TableSet {
+	return v.Table.getTableSet(org)
 }
 
 // GetTables implements the TableInfo interface
-func (a *AliasedTable) GetTables(org originable) TableSet {
+func (a *AliasedTable) getTableSet(org originable) TableSet {
 	return org.tableSetFor(a.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *VindexTable) GetExprFor(_ string) (sqlparser.Expr, error) {
+func (v *VindexTable) getExprFor(_ string) (sqlparser.Expr, error) {
 	panic("implement me")
 }
 
@@ -180,18 +191,13 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 }
 
 // GetExprFor implements the TableInfo interface
-func (a *AliasedTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (a *AliasedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
 // IsInfSchema implements the TableInfo interface
 func (a *AliasedTable) IsInfSchema() bool {
 	return a.isInfSchema
-}
-
-// IsActualTable implements the TableInfo interface
-func (a *AliasedTable) IsActualTable() bool {
-	return true
 }
 
 var _ TableInfo = (*AliasedTable)(nil)
@@ -235,12 +241,12 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 }
 
 // GetColumns implements the TableInfo interface
-func (a *AliasedTable) GetColumns() []ColumnInfo {
+func (a *AliasedTable) getColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(a.Table)
 }
 
 // GetExpr implements the TableInfo interface
-func (a *AliasedTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (a *AliasedTable) getExpr() *sqlparser.AliasedTableExpr {
 	return a.ASTNode
 }
 
@@ -255,22 +261,22 @@ func (a *AliasedTable) Name() (sqlparser.TableName, error) {
 }
 
 // Authoritative implements the TableInfo interface
-func (a *AliasedTable) Authoritative() bool {
+func (a *AliasedTable) authoritative() bool {
 	return a.Table != nil && a.Table.ColumnListAuthoritative
 }
 
 // Matches implements the TableInfo interface
-func (a *AliasedTable) Matches(name sqlparser.TableName) bool {
+func (a *AliasedTable) matches(name sqlparser.TableName) bool {
 	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
 // Matches implements the TableInfo interface
-func (v *VindexTable) Matches(name sqlparser.TableName) bool {
-	return v.Table.Matches(name)
+func (v *VindexTable) matches(name sqlparser.TableName) bool {
+	return v.Table.matches(name)
 }
 
 // Authoritative implements the TableInfo interface
-func (v *VindexTable) Authoritative() bool {
+func (v *VindexTable) authoritative() bool {
 	return true
 }
 
@@ -280,18 +286,13 @@ func (v *VindexTable) Name() (sqlparser.TableName, error) {
 }
 
 // GetExpr implements the TableInfo interface
-func (v *VindexTable) GetExpr() *sqlparser.AliasedTableExpr {
-	return v.Table.GetExpr()
+func (v *VindexTable) getExpr() *sqlparser.AliasedTableExpr {
+	return v.Table.getExpr()
 }
 
 // GetColumns implements the TableInfo interface
-func (v *VindexTable) GetColumns() []ColumnInfo {
-	return v.Table.GetColumns()
-}
-
-// IsActualTable implements the TableInfo interface
-func (v *VindexTable) IsActualTable() bool {
-	return true
+func (v *VindexTable) getColumns() []ColumnInfo {
+	return v.Table.getColumns()
 }
 
 // IsInfSchema implements the TableInfo interface
@@ -307,7 +308,7 @@ func NewSemTable() *SemTable {
 // TableSetFor returns the bitmask for this particular table
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getExpr() {
 			return 1 << idx
 		}
 	}
@@ -495,7 +496,7 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
-			exp, err := vt.GetExprFor(node.Name.String())
+			exp, err := vt.getExprFor(node.Name.String())
 			if err != nil {
 				return false
 			}

@@ -52,7 +52,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables |= table.GetTables(org)
+				vTbl.tables |= table.getTableSet(org)
 			}
 		}
 	}
@@ -60,7 +60,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 }
 
 // Dependencies implements the TableInfo interface
-func (dt *derivedTable) Dependencies(colName string, org originable) (dependencies, error) {
+func (dt *derivedTable) dependencies(colName string, org originable) (dependencies, error) {
 	for i, name := range dt.columnNames {
 		if name != colName {
 			continue
@@ -89,16 +89,11 @@ func (dt *derivedTable) IsInfSchema() bool {
 	return false
 }
 
-// IsActualTable implements the TableInfo interface
-func (dt *derivedTable) IsActualTable() bool {
-	return false
-}
-
-func (dt *derivedTable) Matches(name sqlparser.TableName) bool {
+func (dt *derivedTable) matches(name sqlparser.TableName) bool {
 	return dt.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
-func (dt *derivedTable) Authoritative() bool {
+func (dt *derivedTable) authoritative() bool {
 	return true
 }
 
@@ -106,7 +101,7 @@ func (dt *derivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *derivedTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (dt *derivedTable) getExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 
@@ -115,7 +110,7 @@ func (dt *derivedTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (dt *derivedTable) GetColumns() []ColumnInfo {
+func (dt *derivedTable) getColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(dt.columnNames))
 	for _, col := range dt.columnNames {
 		cols = append(cols, ColumnInfo{
@@ -130,12 +125,12 @@ func (dt *derivedTable) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (dt *derivedTable) GetTables(_ originable) TableSet {
+func (dt *derivedTable) getTableSet(_ originable) TableSet {
 	return dt.tables
 }
 
 // GetExprFor implements the TableInfo interface
-func (dt *derivedTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (dt *derivedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range dt.columnNames {
 		if colName == s {
 			return dt.cols[i], nil
