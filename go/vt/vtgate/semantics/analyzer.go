@@ -302,6 +302,21 @@ func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 				return err
 			}
 		}
+	case *sqlparser.Union:
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			switch node := node.(type) {
+			case *sqlparser.ColName:
+				if !node.Qualifier.IsEmpty() {
+					return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table '%s' from one of the SELECTs cannot be used in global ORDER clause", node.Qualifier.Name)
+				}
+			case *sqlparser.Subquery:
+				return false, nil
+			}
+			return true, nil
+		}, node.OrderBy)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
