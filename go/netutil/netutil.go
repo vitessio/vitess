@@ -18,6 +18,7 @@ limitations under the License.
 package netutil
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"net"
@@ -188,4 +189,61 @@ func ResolveIPv4Addrs(addr string) ([]string, error) {
 		return nil, fmt.Errorf("no IPv4addr for name %v", host)
 	}
 	return result, nil
+}
+
+func dnsLookup(host string) ([]net.IP, error) {
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		return nil, fmt.Errorf("Error looking up dns name [%v]: (%v)", host, err)
+	}
+	naddr := make([]net.IP, len(addrs))
+	for i, a := range addrs {
+		naddr[i] = net.ParseIP(a)
+	}
+	sort.Slice(naddr, func(i, j int) bool {
+		return bytes.Compare(naddr[i], naddr[j]) < 0
+	})
+	return naddr, nil
+}
+
+// DNSTracker is a closure that persists state for
+//  tracking changes in the DNS resolution of a target dns name
+//  returns true if the DNS name resolution has changed
+//  If there is a lookup problem, we pretend nothing has changed
+func DNSTracker(host string) func() (bool, error) {
+	dnsName := host
+	var addrs []net.IP
+	if dnsName != "" {
+		addrs, _ = dnsLookup(dnsName)
+	}
+
+	return func() (bool, error) {
+		if dnsName == "" {
+			return false, nil
+		}
+		newaddrs, err := dnsLookup(dnsName)
+		if err != nil {
+			return false, err
+		}
+		if len(newaddrs) == 0 { // Should not happen, but just in case
+			return false, fmt.Errorf("Connection DNS for %s reporting as empty, ignoring", dnsName)
+		}
+		if !addrEqual(addrs, newaddrs) {
+			addrs = newaddrs
+			return true, fmt.Errorf("Connection DNS for %s has changed; old: [%v]  new: [%v]", dnsName, addrs, newaddrs)
+		}
+		return false, nil
+	}
+}
+
+func addrEqual(a, b []net.IP) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for idx, v := range a {
+		if !net.IP.Equal(v, b[idx]) {
+			return false
+		}
+	}
+	return true
 }

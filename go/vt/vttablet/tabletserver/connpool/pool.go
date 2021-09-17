@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/netutil"
+
 	"context"
 
 	"vitess.io/vitess/go/pools"
@@ -114,12 +116,12 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 
 	var refreshCheck pools.RefreshCheck
 	if net.ParseIP(appParams.Host()) == nil {
-		refreshCheck = dbconnpool.DNSTracker(appParams.Host())
+		refreshCheck = netutil.DNSTracker(appParams.Host())
 	} else {
 		refreshCheck = nil
 	}
 
-	cp.connections = pools.NewResourcePool(f, refreshCheck, *mysqlctl.PoolDynamicHostnameResolution, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
