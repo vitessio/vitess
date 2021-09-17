@@ -50,6 +50,10 @@ var (
 // Factory is a function that can be used to create a resource.
 type Factory func(context.Context) (Resource, error)
 
+// RefreshCheck is a function used to determine if a resource pool should be
+// refreshed (i.e. closed and reopened)
+type RefreshCheck func() bool
+
 // Resource defines the interface that every resource must provide.
 // Thread synchronization between Close() and IsClosed()
 // is the responsibility of the caller.
@@ -75,6 +79,12 @@ type ResourcePool struct {
 	factory   Factory
 	idleTimer *timer.Timer
 	logWait   func(time.Time)
+
+	refreshCheck     RefreshCheck
+	refreshFrequency time.Duration
+	refreshStop      chan struct{}
+	refreshTicker    *time.Ticker
+	refreshWg        sync.WaitGroup
 }
 
 type resourceWrapper struct {
@@ -93,7 +103,8 @@ type resourceWrapper struct {
 // An idleTimeout of 0 means that there is no timeout.
 // A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
-func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
+// TODO: document refreshCheck and refreshFrequency
+func NewResourcePool(factory Factory, refreshCheck RefreshCheck, refreshFrequency time.Duration, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int, logWait func(time.Time)) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
 		panic(errors.New("invalid/out of range capacity"))
 	}
@@ -142,7 +153,34 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		rp.idleTimer = timer.NewTimer(idleTimeout / 10)
 		rp.idleTimer.Start(rp.closeIdleResources)
 	}
+
+	if refreshCheck != nil && refreshFrequency > 0 {
+		rp.refreshFrequency = refreshFrequency
+		rp.refreshCheck = refreshCheck
+		rp.startRefreshTicker()
+	}
+
 	return rp
+}
+
+func (rp *ResourcePool) startRefreshTicker() {
+	rp.refreshTicker = time.NewTicker(rp.refreshFrequency)
+	rp.refreshStop = make(chan struct{})
+	rp.refreshWg.Add(1)
+	go func() {
+		defer rp.refreshWg.Done()
+		for {
+			select {
+			case <-rp.refreshTicker.C:
+				if rp.refreshCheck() {
+					go rp.reopen()
+					return
+				}
+			case <-rp.refreshStop:
+				return
+			}
+		}
+	}()
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -152,6 +190,11 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 func (rp *ResourcePool) Close() {
 	if rp.idleTimer != nil {
 		rp.idleTimer.Stop()
+	}
+	if rp.refreshTicker != nil {
+		rp.refreshTicker.Stop()
+		close(rp.refreshStop)
+		rp.refreshWg.Wait()
 	}
 	_ = rp.SetCapacity(0)
 }
@@ -185,6 +228,19 @@ func (rp *ResourcePool) closeIdleResources() {
 			}
 		}()
 
+	}
+}
+
+// reopen drains and reopens the connection pool
+func (rp *ResourcePool) reopen() {
+	capacity := int(rp.capacity.Get())
+	rp.Close()
+	_ = rp.SetCapacity(capacity)
+	if rp.idleTimer != nil {
+		rp.idleTimer.Start(rp.closeIdleResources)
+	}
+	if rp.refreshCheck != nil {
+		rp.startRefreshTicker()
 	}
 }
 
@@ -290,13 +346,13 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
-	// Atomically swap new capacity with old, but only
-	// if old capacity is non-zero.
+	// Atomically swap new capacity with old
 	var oldcap int
 	for {
 		oldcap = int(rp.capacity.Get())
-		if oldcap == 0 {
-			return ErrClosed
+		if oldcap == 0 && capacity > 0 {
+			// Closed this before, re-open the channel
+			rp.resources = make(chan resourceWrapper, cap(rp.resources))
 		}
 		if oldcap == capacity {
 			return nil

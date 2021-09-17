@@ -44,7 +44,7 @@ type RPCPool struct {
 // will not be called).
 func NewRPCPool(size int, waitTimeout time.Duration, logWait func(time.Time)) *RPCPool {
 	return &RPCPool{
-		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, size, logWait),
+		rp:          NewResourcePool(rpcResourceFactory, nil, 0, size, size, 0, size, logWait),
 		waitTimeout: waitTimeout,
 	}
 }
