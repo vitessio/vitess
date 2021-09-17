@@ -111,6 +111,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
+
 	var refreshCheck pools.RefreshCheck
 	if net.ParseIP(appParams.Host()) == nil {
 		refreshCheck = dbconnpool.DNSTracker(appParams.Host())
