@@ -103,7 +103,7 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		if !aliasedExpr.As.IsEmpty() {
 			cursor.Replace(sqlparser.NewColName(aliasedExpr.As.String()))
 		} else {
-			expr := realCloneOfColNames(aliasedExpr.Expr)
+			expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
 			cursor.Replace(expr)
 		}
 	}
@@ -112,13 +112,14 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
-func realCloneOfColNames(expr sqlparser.Expr) sqlparser.Expr {
+func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		switch exp := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			newColName := *exp
-			newColName.Name = sqlparser.CloneColIdent(exp.Name)
-			newColName.Qualifier = sqlparser.CloneTableName(exp.Qualifier)
+			if union {
+				newColName.Qualifier = sqlparser.TableName{}
+			}
 			cursor.Replace(&newColName)
 		}
 		return true

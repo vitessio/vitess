@@ -590,14 +590,19 @@ func TestOrderByBindingTable(t *testing.T) {
 	}, {
 		"select id from t1 union select uid from t2 union (select name from t) order by 1",
 		T1 | T2 | T3,
+	}, {
+		"select a.id from t1 as a union (select uid from t2) order by 1",
+		T1 | T2,
+	}, {
+		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
+		T1 | T2,
+	}, {
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
+		T1 | T2,
+	}, {
+		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
+		T1 | T2,
 	}}
-	// , {
-	// 	"select t1.id, a.id from t1, t as a union (select b.uid, c.id from t2 as b, t c) order by a.id",
-	// 	T2 | T4,
-	// }, {
-	// 	"select t1.id as `a.id`, t1.id as `a.id` from t1, t as a union (select b.uid, c.id from t2 as b, t c) order by a.id",
-	// 	T2 | T4,
-	// }}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
@@ -751,6 +756,13 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	assert.Equal(t, T2, d2)
 }
 
+func TestUnionOrderByRewrite(t *testing.T) {
+	query := "select tabl1.id from tabl1 union select 1 order by 1"
+
+	stmt, _ := parseAndAnalyze(t, query, "")
+	assert.Equal(t, "(select tabl1.id from tabl1) union (select 1 from dual) order by id asc", sqlparser.String(stmt))
+}
+
 func TestInvalidUnion(t *testing.T) {
 	tcases := []struct {
 		sql string
@@ -770,6 +782,9 @@ func TestInvalidUnion(t *testing.T) {
 	}, {
 		sql: "select id from a union select 3 order by a.id",
 		err: "Table 'a' from one of the SELECTs cannot be used in global ORDER clause",
+	}, {
+		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
+		err: "Column 'id' in field list is ambiguous",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
