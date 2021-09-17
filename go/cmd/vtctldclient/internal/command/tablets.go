@@ -117,8 +117,21 @@ Valid output formats are "awk" and "json".`,
 	}
 	// SleepTablet makes a SleepTablet gRPC call to a vtctld.
 	SleepTablet = &cobra.Command{
-		Use:                   "SleepTablet <alias> <duration>",
-		Short:                 "Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.",
+		Use:   "SleepTablet <alias> <duration>",
+		Short: "Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.",
+		Long: `SleepTablet <alias> <duration>
+
+Blocks the action queue on the specified tablet for the specified duration.
+This command is typically only used for testing.
+		
+The duration is the amount of time that the action queue should be blocked.
+The value is a string that contains a possibly signed sequence of decimal numbers,
+each with optional fraction and a unit suffix, such as “300ms” or “1h45m”.
+See the definition of the Go language’s ParseDuration[1] function for more details.
+Note that, in the SleepTablet implementation, the value should be positively-signed.
+
+[1]: https://pkg.go.dev/time#ParseDuration
+`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSleepTablet,
