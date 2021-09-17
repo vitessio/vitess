@@ -33554,6 +33554,192 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a RebuildKeyspaceGraphRequest. */
+    interface IRebuildKeyspaceGraphRequest {
+
+        /** RebuildKeyspaceGraphRequest keyspace */
+        keyspace?: (string|null);
+
+        /** RebuildKeyspaceGraphRequest cells */
+        cells?: (string[]|null);
+
+        /** RebuildKeyspaceGraphRequest allow_partial */
+        allow_partial?: (boolean|null);
+    }
+
+    /** Represents a RebuildKeyspaceGraphRequest. */
+    class RebuildKeyspaceGraphRequest implements IRebuildKeyspaceGraphRequest {
+
+        /**
+         * Constructs a new RebuildKeyspaceGraphRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRebuildKeyspaceGraphRequest);
+
+        /** RebuildKeyspaceGraphRequest keyspace. */
+        public keyspace: string;
+
+        /** RebuildKeyspaceGraphRequest cells. */
+        public cells: string[];
+
+        /** RebuildKeyspaceGraphRequest allow_partial. */
+        public allow_partial: boolean;
+
+        /**
+         * Creates a new RebuildKeyspaceGraphRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildKeyspaceGraphRequest instance
+         */
+        public static create(properties?: vtctldata.IRebuildKeyspaceGraphRequest): vtctldata.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphRequest message. Does not implicitly {@link vtctldata.RebuildKeyspaceGraphRequest.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRebuildKeyspaceGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphRequest message, length delimited. Does not implicitly {@link vtctldata.RebuildKeyspaceGraphRequest.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRebuildKeyspaceGraphRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildKeyspaceGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildKeyspaceGraphRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Verifies a RebuildKeyspaceGraphRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildKeyspaceGraphRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildKeyspaceGraphRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RebuildKeyspaceGraphRequest;
+
+        /**
+         * Creates a plain object from a RebuildKeyspaceGraphRequest message. Also converts values to other types if specified.
+         * @param message RebuildKeyspaceGraphRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RebuildKeyspaceGraphRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildKeyspaceGraphRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a RebuildKeyspaceGraphResponse. */
+    interface IRebuildKeyspaceGraphResponse {
+    }
+
+    /** Represents a RebuildKeyspaceGraphResponse. */
+    class RebuildKeyspaceGraphResponse implements IRebuildKeyspaceGraphResponse {
+
+        /**
+         * Constructs a new RebuildKeyspaceGraphResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IRebuildKeyspaceGraphResponse);
+
+        /**
+         * Creates a new RebuildKeyspaceGraphResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns RebuildKeyspaceGraphResponse instance
+         */
+        public static create(properties?: vtctldata.IRebuildKeyspaceGraphResponse): vtctldata.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphResponse message. Does not implicitly {@link vtctldata.RebuildKeyspaceGraphResponse.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IRebuildKeyspaceGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified RebuildKeyspaceGraphResponse message, length delimited. Does not implicitly {@link vtctldata.RebuildKeyspaceGraphResponse.verify|verify} messages.
+         * @param message RebuildKeyspaceGraphResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IRebuildKeyspaceGraphResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns RebuildKeyspaceGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Decodes a RebuildKeyspaceGraphResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns RebuildKeyspaceGraphResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Verifies a RebuildKeyspaceGraphResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a RebuildKeyspaceGraphResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns RebuildKeyspaceGraphResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.RebuildKeyspaceGraphResponse;
+
+        /**
+         * Creates a plain object from a RebuildKeyspaceGraphResponse message. Also converts values to other types if specified.
+         * @param message RebuildKeyspaceGraphResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.RebuildKeyspaceGraphResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this RebuildKeyspaceGraphResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RebuildVSchemaGraphRequest. */
     interface IRebuildVSchemaGraphRequest {
 
@@ -34671,6 +34857,414 @@ export namespace vtctldata {
 
         /**
          * Converts this ReparentTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetShardIsPrimaryServingRequest. */
+    interface ISetShardIsPrimaryServingRequest {
+
+        /** SetShardIsPrimaryServingRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetShardIsPrimaryServingRequest shard */
+        shard?: (string|null);
+
+        /** SetShardIsPrimaryServingRequest is_serving */
+        is_serving?: (boolean|null);
+    }
+
+    /** Represents a SetShardIsPrimaryServingRequest. */
+    class SetShardIsPrimaryServingRequest implements ISetShardIsPrimaryServingRequest {
+
+        /**
+         * Constructs a new SetShardIsPrimaryServingRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetShardIsPrimaryServingRequest);
+
+        /** SetShardIsPrimaryServingRequest keyspace. */
+        public keyspace: string;
+
+        /** SetShardIsPrimaryServingRequest shard. */
+        public shard: string;
+
+        /** SetShardIsPrimaryServingRequest is_serving. */
+        public is_serving: boolean;
+
+        /**
+         * Creates a new SetShardIsPrimaryServingRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetShardIsPrimaryServingRequest instance
+         */
+        public static create(properties?: vtctldata.ISetShardIsPrimaryServingRequest): vtctldata.SetShardIsPrimaryServingRequest;
+
+        /**
+         * Encodes the specified SetShardIsPrimaryServingRequest message. Does not implicitly {@link vtctldata.SetShardIsPrimaryServingRequest.verify|verify} messages.
+         * @param message SetShardIsPrimaryServingRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetShardIsPrimaryServingRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetShardIsPrimaryServingRequest message, length delimited. Does not implicitly {@link vtctldata.SetShardIsPrimaryServingRequest.verify|verify} messages.
+         * @param message SetShardIsPrimaryServingRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetShardIsPrimaryServingRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetShardIsPrimaryServingRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetShardIsPrimaryServingRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetShardIsPrimaryServingRequest;
+
+        /**
+         * Decodes a SetShardIsPrimaryServingRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetShardIsPrimaryServingRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetShardIsPrimaryServingRequest;
+
+        /**
+         * Verifies a SetShardIsPrimaryServingRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetShardIsPrimaryServingRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetShardIsPrimaryServingRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetShardIsPrimaryServingRequest;
+
+        /**
+         * Creates a plain object from a SetShardIsPrimaryServingRequest message. Also converts values to other types if specified.
+         * @param message SetShardIsPrimaryServingRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetShardIsPrimaryServingRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetShardIsPrimaryServingRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetShardIsPrimaryServingResponse. */
+    interface ISetShardIsPrimaryServingResponse {
+
+        /** SetShardIsPrimaryServingResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SetShardIsPrimaryServingResponse. */
+    class SetShardIsPrimaryServingResponse implements ISetShardIsPrimaryServingResponse {
+
+        /**
+         * Constructs a new SetShardIsPrimaryServingResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetShardIsPrimaryServingResponse);
+
+        /** SetShardIsPrimaryServingResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SetShardIsPrimaryServingResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetShardIsPrimaryServingResponse instance
+         */
+        public static create(properties?: vtctldata.ISetShardIsPrimaryServingResponse): vtctldata.SetShardIsPrimaryServingResponse;
+
+        /**
+         * Encodes the specified SetShardIsPrimaryServingResponse message. Does not implicitly {@link vtctldata.SetShardIsPrimaryServingResponse.verify|verify} messages.
+         * @param message SetShardIsPrimaryServingResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetShardIsPrimaryServingResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetShardIsPrimaryServingResponse message, length delimited. Does not implicitly {@link vtctldata.SetShardIsPrimaryServingResponse.verify|verify} messages.
+         * @param message SetShardIsPrimaryServingResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetShardIsPrimaryServingResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetShardIsPrimaryServingResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetShardIsPrimaryServingResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetShardIsPrimaryServingResponse;
+
+        /**
+         * Decodes a SetShardIsPrimaryServingResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetShardIsPrimaryServingResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetShardIsPrimaryServingResponse;
+
+        /**
+         * Verifies a SetShardIsPrimaryServingResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetShardIsPrimaryServingResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetShardIsPrimaryServingResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetShardIsPrimaryServingResponse;
+
+        /**
+         * Creates a plain object from a SetShardIsPrimaryServingResponse message. Also converts values to other types if specified.
+         * @param message SetShardIsPrimaryServingResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetShardIsPrimaryServingResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetShardIsPrimaryServingResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetShardTabletControlRequest. */
+    interface ISetShardTabletControlRequest {
+
+        /** SetShardTabletControlRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetShardTabletControlRequest shard */
+        shard?: (string|null);
+
+        /** SetShardTabletControlRequest tablet_type */
+        tablet_type?: (topodata.TabletType|null);
+
+        /** SetShardTabletControlRequest cells */
+        cells?: (string[]|null);
+
+        /** SetShardTabletControlRequest denied_tables */
+        denied_tables?: (string[]|null);
+
+        /** SetShardTabletControlRequest disable_query_service */
+        disable_query_service?: (boolean|null);
+
+        /** SetShardTabletControlRequest remove */
+        remove?: (boolean|null);
+    }
+
+    /** Represents a SetShardTabletControlRequest. */
+    class SetShardTabletControlRequest implements ISetShardTabletControlRequest {
+
+        /**
+         * Constructs a new SetShardTabletControlRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetShardTabletControlRequest);
+
+        /** SetShardTabletControlRequest keyspace. */
+        public keyspace: string;
+
+        /** SetShardTabletControlRequest shard. */
+        public shard: string;
+
+        /** SetShardTabletControlRequest tablet_type. */
+        public tablet_type: topodata.TabletType;
+
+        /** SetShardTabletControlRequest cells. */
+        public cells: string[];
+
+        /** SetShardTabletControlRequest denied_tables. */
+        public denied_tables: string[];
+
+        /** SetShardTabletControlRequest disable_query_service. */
+        public disable_query_service: boolean;
+
+        /** SetShardTabletControlRequest remove. */
+        public remove: boolean;
+
+        /**
+         * Creates a new SetShardTabletControlRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetShardTabletControlRequest instance
+         */
+        public static create(properties?: vtctldata.ISetShardTabletControlRequest): vtctldata.SetShardTabletControlRequest;
+
+        /**
+         * Encodes the specified SetShardTabletControlRequest message. Does not implicitly {@link vtctldata.SetShardTabletControlRequest.verify|verify} messages.
+         * @param message SetShardTabletControlRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetShardTabletControlRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetShardTabletControlRequest message, length delimited. Does not implicitly {@link vtctldata.SetShardTabletControlRequest.verify|verify} messages.
+         * @param message SetShardTabletControlRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetShardTabletControlRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetShardTabletControlRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetShardTabletControlRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetShardTabletControlRequest;
+
+        /**
+         * Decodes a SetShardTabletControlRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetShardTabletControlRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetShardTabletControlRequest;
+
+        /**
+         * Verifies a SetShardTabletControlRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetShardTabletControlRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetShardTabletControlRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetShardTabletControlRequest;
+
+        /**
+         * Creates a plain object from a SetShardTabletControlRequest message. Also converts values to other types if specified.
+         * @param message SetShardTabletControlRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetShardTabletControlRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetShardTabletControlRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetShardTabletControlResponse. */
+    interface ISetShardTabletControlResponse {
+
+        /** SetShardTabletControlResponse shard */
+        shard?: (topodata.IShard|null);
+    }
+
+    /** Represents a SetShardTabletControlResponse. */
+    class SetShardTabletControlResponse implements ISetShardTabletControlResponse {
+
+        /**
+         * Constructs a new SetShardTabletControlResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetShardTabletControlResponse);
+
+        /** SetShardTabletControlResponse shard. */
+        public shard?: (topodata.IShard|null);
+
+        /**
+         * Creates a new SetShardTabletControlResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetShardTabletControlResponse instance
+         */
+        public static create(properties?: vtctldata.ISetShardTabletControlResponse): vtctldata.SetShardTabletControlResponse;
+
+        /**
+         * Encodes the specified SetShardTabletControlResponse message. Does not implicitly {@link vtctldata.SetShardTabletControlResponse.verify|verify} messages.
+         * @param message SetShardTabletControlResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetShardTabletControlResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetShardTabletControlResponse message, length delimited. Does not implicitly {@link vtctldata.SetShardTabletControlResponse.verify|verify} messages.
+         * @param message SetShardTabletControlResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetShardTabletControlResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetShardTabletControlResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetShardTabletControlResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetShardTabletControlResponse;
+
+        /**
+         * Decodes a SetShardTabletControlResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetShardTabletControlResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetShardTabletControlResponse;
+
+        /**
+         * Verifies a SetShardTabletControlResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetShardTabletControlResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetShardTabletControlResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetShardTabletControlResponse;
+
+        /**
+         * Creates a plain object from a SetShardTabletControlResponse message. Also converts values to other types if specified.
+         * @param message SetShardTabletControlResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetShardTabletControlResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetShardTabletControlResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
