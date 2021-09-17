@@ -150,7 +150,8 @@ func (tm *TabletManager) Backup(ctx context.Context, concurrency int, logger log
 	return returnErr
 }
 
-// RestoreFromBackup deletes all local data and then restores the data from the latest backup.
+// RestoreFromBackup deletes all local data and then restores the data from the latest backup [at
+// or before the backupTimestamp value if specified]
 func (tm *TabletManager) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTimestamp string) error {
 	if err := tm.lock(ctx); err != nil {
 		return err

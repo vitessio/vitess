@@ -156,7 +156,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 
 	startTime := logutil.ProtoToTime(keyspaceInfo.SnapshotTime)
 
-	// Check if we need should use the latest (default) or a specified backup timestamp for the restore
+	// Check if we should use the latest (default) or a specified backup timestamp for the restore
 	if restoreFromBackupTs != "" {
 		startTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTs)
 		if err != nil {
