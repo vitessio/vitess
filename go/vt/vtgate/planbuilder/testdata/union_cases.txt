@@ -1315,5 +1315,5 @@ Gen4 error: The used SELECT statements have a different number of columns
 
 # union with invalid order by clause with table qualifier
 "select id from user union select 3 order by user.id"
-"[BUG] unreachable *planbuilder.concatenate.ordering"
+"can't do ORDER BY on top of UNION"
 Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER clause
