@@ -130,27 +130,39 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
-	vTbl := &vTableInfo{}
+	cols, colNames, ts := selectExprsToInfos(expressions, tables, org)
+	return &vTableInfo{
+		columnNames: colNames,
+		cols:        cols,
+		tables:      ts,
+	}
+}
+
+func selectExprsToInfos(
+	expressions sqlparser.SelectExprs,
+	tables []TableInfo,
+	org originable,
+) (cols []sqlparser.Expr, colNames []string, ts TableSet) {
 	for _, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
-			vTbl.cols = append(vTbl.cols, expr.Expr)
+			cols = append(cols, expr.Expr)
 			if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:
 					// for projections, we strip out the qualifier and keep only the column name
-					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+					colNames = append(colNames, expr.Name.String())
 				default:
-					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+					colNames = append(colNames, sqlparser.String(expr))
 				}
 			} else {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+				colNames = append(colNames, expr.As.String())
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables |= table.GetTables(org)
+				ts |= table.GetTables(org)
 			}
 		}
 	}
-	return vTbl
+	return
 }
