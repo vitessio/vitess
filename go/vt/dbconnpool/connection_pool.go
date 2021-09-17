@@ -111,9 +111,7 @@ func lookup(host string) []net.IP {
 func DNSTracker(host string) func() bool {
 	dnsName := host
 	var addrs []net.IP
-	if dnsName == "" {
-		addrs = nil
-	} else {
+	if dnsName != "" {
 		addrs = lookup(dnsName)
 	}
 
