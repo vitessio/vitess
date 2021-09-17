@@ -105,7 +105,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			return err
 		}
 		for _, order := range node {
-			lit := keepLiteral(order.Expr)
+			lit := keepIntLiteral(order.Expr)
 			if lit != nil {
 				s.specialExprScopes[lit] = s.currentScope()
 			}
@@ -116,7 +116,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			return err
 		}
 		for _, expr := range node {
-			lit := keepLiteral(expr)
+			lit := keepIntLiteral(expr)
 			if lit != nil {
 				s.specialExprScopes[lit] = s.currentScope()
 			}
@@ -130,9 +130,12 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func keepLiteral(e sqlparser.Expr) *sqlparser.Literal {
+func keepIntLiteral(e sqlparser.Expr) *sqlparser.Literal {
 	l, ok := e.(*sqlparser.Literal)
 	if !ok {
+		return nil
+	}
+	if l.Type != sqlparser.IntVal {
 		return nil
 	}
 	return l
