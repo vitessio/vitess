@@ -43,6 +43,7 @@ type (
 		iSelectStatement()
 		iInsertRows()
 		AddOrder(*Order)
+		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
