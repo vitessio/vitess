@@ -167,7 +167,7 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		numberOfTables: 4,
 		// }, {
 		// TODO: move to subquery
-		// make sure that we don't let sub-query Dependencies leak out by mistake
+		// make sure that we don't let sub-query dependencies leak out by mistake
 		// query: "select t.col + (select 42 from s) from t",
 		// deps:  T1,
 		// }, {

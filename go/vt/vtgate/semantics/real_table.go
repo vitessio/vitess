@@ -34,17 +34,17 @@ type RealTable struct {
 var _ TableInfo = (*RealTable)(nil)
 
 // Dependencies implements the TableInfo interface
-func (r *RealTable) Dependencies(colName string, org originable) (dependencies, error) {
-	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.GetColumns(), r.Authoritative())
+func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
+	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.getColumns(), r.authoritative())
 }
 
 // GetTables implements the TableInfo interface
-func (r *RealTable) GetTables(org originable) TableSet {
+func (r *RealTable) getTableSet(org originable) TableSet {
 	return org.tableSetFor(r.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
-func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (r *RealTable) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
@@ -53,18 +53,13 @@ func (r *RealTable) IsInfSchema() bool {
 	return r.isInfSchema
 }
 
-// IsActualTable implements the TableInfo interface
-func (r *RealTable) IsActualTable() bool {
-	return true
-}
-
 // GetColumns implements the TableInfo interface
-func (r *RealTable) GetColumns() []ColumnInfo {
+func (r *RealTable) getColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(r.Table)
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) getExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
@@ -79,11 +74,11 @@ func (r *RealTable) Name() (sqlparser.TableName, error) {
 }
 
 // Authoritative implements the TableInfo interface
-func (r *RealTable) Authoritative() bool {
+func (r *RealTable) authoritative() bool {
 	return r.Table != nil && r.Table.ColumnListAuthoritative
 }
 
 // Matches implements the TableInfo interface
-func (r *RealTable) Matches(name sqlparser.TableName) bool {
+func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
 }
