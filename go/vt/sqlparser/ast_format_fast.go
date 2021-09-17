@@ -71,7 +71,7 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
-	if _, isSel := node.FirstStatement.(*Select); isSel {
+	if requiresParen(node.FirstStatement) {
 		buf.WriteByte('(')
 		node.FirstStatement.formatFast(buf)
 		buf.WriteByte(')')
@@ -97,7 +97,7 @@ func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" ")
 
-	if _, isSel := node.Statement.(*Select); isSel {
+	if requiresParen(node.Statement) {
 		buf.WriteByte('(')
 		node.Statement.formatFast(buf)
 		buf.WriteByte(')')

@@ -19,7 +19,6 @@ package sqlparser
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -746,6 +745,11 @@ func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Select) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -834,6 +838,11 @@ func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Union) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -869,26 +878,20 @@ func (node *Union) GetComments() Comments {
 	return node.FirstStatement.GetComments()
 }
 
-//Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
-	fmt.Println("this is running")
-	union, isUnion := lhs.(*Union)
-	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
-		union.OrderBy = by
-		union.Limit = limit
-		union.Lock = lock
-		return union
+func requiresParen(stmt SelectStatement) bool {
+	switch node:= stmt.(type) {
+	case *Union:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+	case *Select:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return false
 }
 
-func setOrderAndLimitToSelect(stmt SelectStatement, by OrderBy, limit *Limit) {
-	for _, order := range by {
-		(stmt).AddOrder(order)
-	}
-	(stmt).SetLimit(limit)
+func setOrderAndLimitToSelect(stmt SelectStatement, orderBy OrderBy, limit *Limit) {
+	stmt.SetOrderBy(orderBy)
+	stmt.SetLimit(limit)
 }
 
 func setLockInSelect(stmt SelectStatement, lock Lock) {

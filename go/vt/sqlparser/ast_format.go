@@ -59,7 +59,7 @@ func (node *Select) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	if _, isSel := node.FirstStatement.(*Select); isSel {
+	if requiresParen(node.FirstStatement) {
 		buf.astPrintf(node, "(%v)", node.FirstStatement)
 	} else {
 		buf.astPrintf(node, "%v", node.FirstStatement)
@@ -81,7 +81,7 @@ func (node *UnionSelect) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" ")
 
-	if _, isSel := node.Statement.(*Select); isSel {
+	if requiresParen(node.Statement) {
 		buf.astPrintf(node, "(%v)", node.Statement)
 	} else {
 		buf.astPrintf(node, "%v", node.Statement)
