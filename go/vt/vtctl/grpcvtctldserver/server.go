@@ -1608,6 +1608,11 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	return resp, err
 }
 
+// RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildKeyspaceGraph(ctx context.Context, req *vtctldatapb.RebuildKeyspaceGraphRequest) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
+	panic("unimplemented!")
+}
+
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RebuildVSchemaGraph")
@@ -1781,6 +1786,16 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		Shard:    tablet.Shard,
 		Primary:  shard.PrimaryAlias,
 	}, nil
+}
+
+// SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
+	panic("unimplemented!")
+}
+
+// SetShardTabletControl is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldatapb.SetShardTabletControlRequest) (*vtctldatapb.SetShardTabletControlResponse, error) {
+	panic("unimplemented!")
 }
 
 // SetWritable is part of the vtctldservicepb.VtctldServer interface.
