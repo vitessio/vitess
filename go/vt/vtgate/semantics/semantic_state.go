@@ -65,14 +65,6 @@ type (
 		Type querypb.Type
 	}
 
-	// AliasedTable contains the alias table expr and vindex table
-	AliasedTable struct {
-		tableName   string
-		ASTNode     *sqlparser.AliasedTableExpr
-		Table       *vindexes.Table
-		isInfSchema bool
-	}
-
 	// VindexTable contains a vindexes.Vindex and a TableInfo. The former represents the vindex
 	// we are keeping information about, and the latter represents the additional table information
 	// (usually a RealTable or an AliasedTable) of our vindex.
@@ -150,11 +142,6 @@ func (v *VindexTable) dependencies(colName string, org originable) (dependencies
 	return v.Table.dependencies(colName, org)
 }
 
-// Dependencies implements the TableInfo interface
-func (a *AliasedTable) dependencies(colName string, org originable) (dependencies, error) {
-	return depsForAliasedAndRealTables(colName, org, a.ASTNode, a.getColumns(), a.authoritative())
-}
-
 func depsForAliasedAndRealTables(colName string, org originable, node *sqlparser.AliasedTableExpr, columns []ColumnInfo, authoritative bool) (dependencies, error) {
 	ts := org.tableSetFor(node)
 	for _, info := range columns {
@@ -174,11 +161,6 @@ func (v *VindexTable) getTableSet(org originable) TableSet {
 	return v.Table.getTableSet(org)
 }
 
-// GetTables implements the TableInfo interface
-func (a *AliasedTable) getTableSet(org originable) TableSet {
-	return org.tableSetFor(a.ASTNode)
-}
-
 // GetExprFor implements the TableInfo interface
 func (v *VindexTable) getExprFor(_ string) (sqlparser.Expr, error) {
 	panic("implement me")
@@ -190,17 +172,6 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 	st.Direct[to] = st.DirectDeps(from)
 }
 
-// GetExprFor implements the TableInfo interface
-func (a *AliasedTable) getExprFor(s string) (sqlparser.Expr, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
-}
-
-// IsInfSchema implements the TableInfo interface
-func (a *AliasedTable) IsInfSchema() bool {
-	return a.isInfSchema
-}
-
-var _ TableInfo = (*AliasedTable)(nil)
 var _ TableInfo = (*VindexTable)(nil)
 
 // GetVindexTable implements the TableInfo interface
@@ -238,36 +209,6 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 		}
 	}
 	return cols
-}
-
-// GetColumns implements the TableInfo interface
-func (a *AliasedTable) getColumns() []ColumnInfo {
-	return vindexTableToColumnInfo(a.Table)
-}
-
-// GetExpr implements the TableInfo interface
-func (a *AliasedTable) getExpr() *sqlparser.AliasedTableExpr {
-	return a.ASTNode
-}
-
-// GetVindexTable implements the TableInfo interface
-func (a *AliasedTable) GetVindexTable() *vindexes.Table {
-	return a.Table
-}
-
-// Name implements the TableInfo interface
-func (a *AliasedTable) Name() (sqlparser.TableName, error) {
-	return a.ASTNode.TableName()
-}
-
-// Authoritative implements the TableInfo interface
-func (a *AliasedTable) authoritative() bool {
-	return a.Table != nil && a.Table.ColumnListAuthoritative
-}
-
-// Matches implements the TableInfo interface
-func (a *AliasedTable) matches(name sqlparser.TableName) bool {
-	return a.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
 // Matches implements the TableInfo interface

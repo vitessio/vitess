@@ -139,26 +139,21 @@ func (tc *tableCollector) createTable(
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = tc.currentDb
+	table := &RealTable{
+		tableName:   alias.As.String(),
+		ASTNode:     alias,
+		Table:       tbl,
+		isInfSchema: isInfSchema,
 	}
-	var table TableInfo
+
 	if alias.As.IsEmpty() {
-		table = &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = tc.currentDb
 		}
-	} else {
-		table = &AliasedTable{
-			tableName:   alias.As.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
-		}
+
+		table.dbName = dbName
+		table.tableName = t.Name.String()
 	}
 
 	if vindex != nil {
