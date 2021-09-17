@@ -110,58 +110,27 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
-	if colName.Qualifier.IsEmpty() {
-		deps, err = b.resolveUnQualifiedColumn(current, colName)
-	} else {
-		deps, err = b.resolveQualifiedColumn(current, colName)
-	}
-
-	if err != nil {
-		if err == ambigousErr {
-			err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(colName))
-		}
-		return dependency{}, err
-	}
-	return deps, nil
-}
-
-// resolveQualifiedColumn handles column expressions where the table is explicitly stated
-func (b *binder) resolveQualifiedColumn(current *scope, expr *sqlparser.ColName) (dependency, error) {
-	// search up the scope stack until we find a match
+	var thisDeps dependencies
 	for current != nil {
-		deps, err := b.resolveColumnInScope(current, expr, func(table TableInfo) bool {
-			return !table.Matches(expr.Qualifier)
-		})
+		thisDeps, err = b.resolveColumnInScope(current, colName)
 		if err != nil {
+			err = makeAmbiguousError(colName, err)
 			return dependency{}, err
 		}
-		if !deps.Empty() {
-			return deps.Get()
+		if !thisDeps.Empty() {
+			deps, err = thisDeps.Get()
+			err = makeAmbiguousError(colName, err)
+			return deps, err
 		}
 		current = current.parent
 	}
-	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
+	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(colName))
 }
 
-// resolveUnQualifiedColumn handles column that do not specify which table they belong to
-func (b *binder) resolveUnQualifiedColumn(current *scope, expr *sqlparser.ColName) (dependency, error) {
-	for current != nil {
-		deps, err := b.resolveColumnInScope(current, expr, nil)
-		if err != nil {
-			return dependency{}, err
-		}
-		if !deps.Empty() {
-			return deps.Get()
-		}
-		current = current.parent
-	}
-	return dependency{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "symbol %s not found", sqlparser.String(expr))
-}
-
-func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, skipTable func(table TableInfo) bool) (dependencies, error) {
+func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	for _, table := range current.tables {
-		if skipTable != nil && skipTable(table) {
+		if !expr.Qualifier.IsEmpty() && !table.Matches(expr.Qualifier) {
 			continue
 		}
 		thisDeps, err := table.Dependencies(expr.Name.String(), b.org)
@@ -180,4 +149,11 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, s
 		}
 	}
 	return deps, nil
+}
+
+func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
+	if err == ambigousErr {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(colName))
+	}
+	return err
 }
