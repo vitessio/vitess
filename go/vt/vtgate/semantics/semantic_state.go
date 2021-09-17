@@ -120,6 +120,7 @@ type (
 		parent     *scope
 		selectStmt *sqlparser.Select
 		tables     []TableInfo
+		isUnion    bool
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
