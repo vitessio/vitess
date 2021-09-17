@@ -130,7 +130,7 @@ func (dt *derivedTable) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (dt *derivedTable) GetTables(org originable) TableSet {
+func (dt *derivedTable) GetTables(_ originable) TableSet {
 	return dt.tables
 }
 
