@@ -151,6 +151,8 @@ func TestBackupRestore(t *testing.T) {
 	assert.True(t, sourceTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, sourceTablet.FakeMysqlDaemon.Running)
 
+	backupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
+
 	// create a destination tablet, set it up so we can do restores
 	destTablet := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, db)
 	destTablet.FakeMysqlDaemon.ReadOnly = true
@@ -223,8 +225,9 @@ func TestBackupRestore(t *testing.T) {
 
 	primary.FakeMysqlDaemon.SetReplicationPositionPos = primary.FakeMysqlDaemon.CurrentPrimaryPosition
 
-	// restore primary from backup
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, "" /* restoreFromBackupTs */), "RestoreData failed")
+	// restore primary from latest backup
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, "" /* restoreFromBackupTs */),
+		"RestoreData failed")
 	// tablet was created as PRIMARY, so it's baseTabletType is PRIMARY
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
@@ -238,8 +241,13 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW TABLES FROM `vt_test_keyspace`": {Rows: [][]sqltypes.Value{{sqltypes.NewVarBinary("a")}}},
 	}
 
-	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, "" /* restoreFromBackupTs */), "RestoreData failed")
-	// Tablet type should not change
+	// Test with invalid timestamp
+	require.Error(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, "no.good" /* restoreFromBackupTs */),
+		"RestoreData with invalid backup timestamp did not fail as expected")
+
+	// Test restore with the backup timestamp
+	require.NoError(t, primary.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, backupTimestamp),
+		"RestoreData with backup timestamp failed")
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, primary.Tablet.Type)
 	assert.False(t, primary.FakeMysqlDaemon.Replicating)
 	assert.True(t, primary.FakeMysqlDaemon.Running)

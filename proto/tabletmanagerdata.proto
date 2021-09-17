@@ -457,6 +457,7 @@ message BackupResponse {
 }
 
 message RestoreFromBackupRequest {
+  string backup_timestamp = 1;
 }
 
 message RestoreFromBackupResponse {
