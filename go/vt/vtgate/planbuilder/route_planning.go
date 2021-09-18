@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"io"
 	"sort"
 
@@ -405,82 +404,119 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 }
 
 func pushJoinPredicate(ctx *planningContext, exprs []sqlparser.Expr, tree queryTree) (queryTree, error) {
+	if len(exprs) == 0 {
+		return tree, nil
+	}
 	switch node := tree.(type) {
 	case *routeTree:
-		plan := node.clone().(*routeTree)
-		err := plan.addPredicate(ctx, exprs...)
-		if err != nil {
-			return nil, err
-		}
-		return plan, nil
-
+		return pushJoinPredicateOnRoute(ctx, exprs, node)
 	case *joinTree:
-		node = node.clone().(*joinTree)
-
-		// we break up the predicates so that colnames from the LHS are replaced by arguments
-		var rhsPreds []sqlparser.Expr
-		var lhsColumns []*sqlparser.ColName
-		var lhsVarsName []string
-		lhsSolves := node.lhs.tableID()
-		for _, expr := range exprs {
-			bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, ctx.semTable, lhsSolves)
-			if err != nil {
-				return nil, err
-			}
-			lhsColumns = append(lhsColumns, cols...)
-			lhsVarsName = append(lhsVarsName, bvName...)
-			rhsPreds = append(rhsPreds, predicate)
-		}
-		if lhsColumns != nil && lhsVarsName != nil {
-			idxs, err := node.pushOutputColumns(lhsColumns, ctx.semTable)
-			if err != nil {
-				return nil, err
-			}
-			for i, idx := range idxs {
-				node.vars[lhsVarsName[i]] = idx
-			}
-		}
-
-		rhsPlan, err := pushJoinPredicate(ctx, rhsPreds, node.rhs)
-		if err != nil {
-			return nil, err
-		}
-
-		return &joinTree{
-			lhs:   node.lhs,
-			rhs:   rhsPlan,
-			outer: node.outer,
-			vars:  node.vars,
-		}, nil
+		return pushJoinPredicateOnJoin(ctx, exprs, node)
 	case *derivedTree:
-		plan := node.clone().(*derivedTree)
-
-		newExpressions := make([]sqlparser.Expr, 0, len(exprs))
-		for _, expr := range exprs {
-			tblInfo, err := ctx.semTable.TableInfoForExpr(expr)
-			if err != nil {
-				return nil, err
-			}
-			rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
-			if err != nil {
-				return nil, err
-			}
-			newExpressions = append(newExpressions, rewritten)
-		}
-
-		newInner, err := pushJoinPredicate(ctx, newExpressions, plan.inner)
-		if err != nil {
-			return nil, err
-		}
-
-		plan.inner = newInner
-		return plan, nil
+		return pushJoinPredicateOnDerived(ctx, exprs, node)
 	case *vindexTree:
 		// vindexFunc cannot accept predicates from the other side of a join
 		return node, nil
 	default:
-		panic(fmt.Sprintf("BUG: unknown type %T", node))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unknown type %T", node)
 	}
+}
+
+func pushJoinPredicateOnRoute(ctx *planningContext, exprs []sqlparser.Expr, node *routeTree) (queryTree, error) {
+	plan := node.clone().(*routeTree)
+	err := plan.addPredicate(ctx, exprs...)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+func pushJoinPredicateOnDerived(ctx *planningContext, exprs []sqlparser.Expr, node *derivedTree) (queryTree, error) {
+	plan := node.clone().(*derivedTree)
+
+	newExpressions := make([]sqlparser.Expr, 0, len(exprs))
+	for _, expr := range exprs {
+		tblInfo, err := ctx.semTable.TableInfoForExpr(expr)
+		if err != nil {
+			return nil, err
+		}
+		rewritten, err := semantics.RewriteDerivedExpression(expr, tblInfo)
+		if err != nil {
+			return nil, err
+		}
+		newExpressions = append(newExpressions, rewritten)
+	}
+
+	newInner, err := pushJoinPredicate(ctx, newExpressions, plan.inner)
+	if err != nil {
+		return nil, err
+	}
+
+	plan.inner = newInner
+	return plan, nil
+}
+
+func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node *joinTree) (queryTree, error) {
+	node = node.clone().(*joinTree)
+
+	var rhsPreds []sqlparser.Expr
+	var lhsPreds []sqlparser.Expr
+	var lhsColumns []*sqlparser.ColName
+	var lhsVarsName []string
+
+	for _, expr := range exprs {
+		// We find the dependencies for the given expression and if they are solved entirely by one
+		// side of the join tree, then we push the predicate there and do not break it into parts.
+		// In case a predicate has no dependencies, then it is pushed to both sides so that we can filter
+		// rows as early as possible making join cheaper on the vtgate level.
+		depsForExpr := ctx.semTable.RecursiveDeps(expr)
+		singleSideDeps := false
+		if depsForExpr.IsSolvedBy(node.lhs.tableID()) {
+			lhsPreds = append(lhsPreds, expr)
+			singleSideDeps = true
+		}
+		if depsForExpr.IsSolvedBy(node.rhs.tableID()) {
+			rhsPreds = append(rhsPreds, expr)
+			singleSideDeps = true
+		}
+
+		if singleSideDeps {
+			continue
+		}
+
+		bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
+		if err != nil {
+			return nil, err
+		}
+		lhsColumns = append(lhsColumns, cols...)
+		lhsVarsName = append(lhsVarsName, bvName...)
+		rhsPreds = append(rhsPreds, predicate)
+	}
+
+	if lhsColumns != nil && lhsVarsName != nil {
+		idxs, err := node.pushOutputColumns(lhsColumns, ctx.semTable)
+		if err != nil {
+			return nil, err
+		}
+		for i, idx := range idxs {
+			node.vars[lhsVarsName[i]] = idx
+		}
+	}
+	lhsPlan, err := pushJoinPredicate(ctx, lhsPreds, node.lhs)
+	if err != nil {
+		return nil, err
+	}
+
+	rhsPlan, err := pushJoinPredicate(ctx, rhsPreds, node.rhs)
+	if err != nil {
+		return nil, err
+	}
+	return &joinTree{
+		lhs:   lhsPlan,
+		rhs:   rhsPlan,
+		outer: node.outer,
+		vars:  node.vars,
+	}, nil
 }
 
 func breakPredicateInLHSandRHS(
