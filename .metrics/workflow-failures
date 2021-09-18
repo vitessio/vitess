@@ -1,5 +1,3 @@
-2021-06-07T10:10:06Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/914376327
-2021-06-07T10:16:42Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/914394288
 2021-06-07T10:16:42Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/914394308
 2021-06-07T10:16:42Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/914394309
 2021-06-07T10:16:42Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/914394283
@@ -9998,3 +9996,5 @@
 2021-09-18T11:01:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1248415146
 2021-09-18T11:01:55Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1248415160
 2021-09-18T11:01:55Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1248415089
+2021-09-18T11:13:22Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1248436718
+2021-09-18T11:13:22Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1248436730
