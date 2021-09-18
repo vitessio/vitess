@@ -1,4 +1,3 @@
-2021-06-07T10:16:42Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/914394317
 2021-06-07T10:16:42Z,local_example,https://github.com/vitessio/vitess/actions/runs/914394286
 2021-06-07T10:16:42Z,local_example,https://github.com/vitessio/vitess/actions/runs/914394290
 2021-06-07T10:16:42Z,region_example,https://github.com/vitessio/vitess/actions/runs/914394291
@@ -9990,6 +9989,7 @@
 2021-09-18T11:01:55Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1248415143
 2021-09-18T11:01:55Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1248415124
 2021-09-18T11:01:55Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1248415146
+2021-09-18T11:01:55Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1248415104
 2021-09-18T11:01:55Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1248415160
 2021-09-18T11:01:55Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1248415089
 2021-09-18T11:13:22Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1248436718
