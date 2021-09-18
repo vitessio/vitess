@@ -218,6 +218,23 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema, true)
 }
 
+func TestRubyOnRailsQueries(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "rails_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
 func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "oltp_schema_test.json"),
