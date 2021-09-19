@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/render"
@@ -2386,7 +2388,7 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	promotionRule, err := inst.ParseCandidatePromotionRule(params["promotionRule"])
+	promotionRule, err := reparentutil.ParseCandidatePromotionRule(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return

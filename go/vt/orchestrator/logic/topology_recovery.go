@@ -497,7 +497,7 @@ func SuggestReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, de
 	keepSearchingHint := ""
 	if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, promotedReplica); !satisfied {
 		keepSearchingHint = fmt.Sprintf("Will keep searching; %s", reason)
-	} else if promotedReplica.PromotionRule == inst.PreferNotPromoteRule {
+	} else if promotedReplica.PromotionRule == reparentutil.PreferNotPromoteRule {
 		keepSearchingHint = fmt.Sprintf("Will keep searching because we have promoted a server with prefer_not rule: %+v", promotedReplica.Key)
 	}
 	if keepSearchingHint != "" {

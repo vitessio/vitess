@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
@@ -1609,7 +1611,7 @@ func isValidAsCandidatePrimaryInBinlogServerTopology(replica *Instance) bool {
 }
 
 func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
-	if replica.PromotionRule == MustNotPromoteRule {
+	if replica.PromotionRule == reparentutil.MustNotPromoteRule {
 		log.Debugf("instance %+v is banned because of promotion rule", replica.Key)
 		return true
 	}

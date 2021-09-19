@@ -19,6 +19,8 @@ package inst
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/orchestrator/db"
 )
 
@@ -26,12 +28,12 @@ import (
 type CandidateDatabaseInstance struct {
 	Hostname            string
 	Port                int
-	PromotionRule       CandidatePromotionRule
+	PromotionRule       reparentutil.CandidatePromotionRule
 	LastSuggestedString string
 	PromotionRuleExpiry string // generated when retrieved from database for consistency reasons
 }
 
-func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule CandidatePromotionRule) *CandidateDatabaseInstance {
+func NewCandidateDatabaseInstance(instanceKey *InstanceKey, promotionRule reparentutil.CandidatePromotionRule) *CandidateDatabaseInstance {
 	return &CandidateDatabaseInstance{
 		Hostname:      instanceKey.Hostname,
 		Port:          instanceKey.Port,

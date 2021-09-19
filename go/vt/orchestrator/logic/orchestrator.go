@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
@@ -414,7 +416,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	inst.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
+	reparentutil.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
