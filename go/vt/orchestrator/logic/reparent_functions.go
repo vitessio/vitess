@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -249,8 +251,8 @@ func (vtorcReparent *VtOrcReparentFunctions) PromotedReplicaIsIdeal(newPrimary, 
 	}
 	if newPrimaryInst.DataCenter == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstanceDataCenter &&
 		newPrimaryInst.PhysicalEnvironment == vtorcReparent.topologyRecovery.AnalysisEntry.AnalyzedInstancePhysicalEnvironment {
-		if newPrimaryInst.PromotionRule == inst.MustPromoteRule || newPrimaryInst.PromotionRule == inst.PreferPromoteRule ||
-			(vtorcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != inst.MustNotPromoteRule) {
+		if newPrimaryInst.PromotionRule == reparentutil.MustPromoteRule || newPrimaryInst.PromotionRule == reparentutil.PreferPromoteRule ||
+			(vtorcReparent.hasBestPromotionRule && newPrimaryInst.PromotionRule != reparentutil.MustNotPromoteRule) {
 			AuditTopologyRecovery(vtorcReparent.topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: found %+v to be ideal candidate; will optimize recovery", newPrimaryInst.Key))
 			return true
 		}
@@ -290,11 +292,11 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	var preferredCandidates []*topodatapb.Tablet
 	var neutralReplicas []*topodatapb.Tablet
 	for _, candidate := range validCandidates {
-		promotionRule := inst.PromotionRule(candidate)
-		if promotionRule == inst.MustPromoteRule || promotionRule == inst.PreferPromoteRule {
+		promotionRule := reparentutil.PromotionRule(candidate)
+		if promotionRule == reparentutil.MustPromoteRule || promotionRule == reparentutil.PreferPromoteRule {
 			preferredCandidates = append(preferredCandidates, candidate)
 		}
-		if promotionRule == inst.NeutralPromoteRule {
+		if promotionRule == reparentutil.NeutralPromoteRule {
 			neutralReplicas = append(neutralReplicas, candidate)
 		}
 	}
@@ -378,7 +380,7 @@ func getReplacementForPromotedReplica(topologyRecovery *TopologyRecovery, newPri
 	keepSearchingHint := ""
 	if satisfied, reason := PrimaryFailoverGeographicConstraintSatisfied(&topologyRecovery.AnalysisEntry, getInstanceFromTablet(newPrimary)); !satisfied {
 		keepSearchingHint = fmt.Sprintf("Will keep searching; %s", reason)
-	} else if inst.PromotionRule(newPrimary) == inst.PreferNotPromoteRule {
+	} else if reparentutil.PromotionRule(newPrimary) == reparentutil.PreferNotPromoteRule {
 		keepSearchingHint = fmt.Sprintf("Will keep searching because we have promoted a server with prefer_not rule: %+v", newPrimary.Alias)
 	}
 	if keepSearchingHint != "" {

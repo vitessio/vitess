@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package inst
+package reparentutil
 
 import (
 	"fmt"

@@ -19,6 +19,7 @@ package inst
 import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
@@ -93,7 +94,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            m.GetString("hostname"),
 			Port:                m.GetInt("port"),
-			PromotionRule:       CandidatePromotionRule(m.GetString("promotion_rule")),
+			PromotionRule:       reparentutil.CandidatePromotionRule(m.GetString("promotion_rule")),
 			LastSuggestedString: m.GetString("last_suggested"),
 			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),
 		}

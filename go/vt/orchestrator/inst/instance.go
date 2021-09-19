@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 )
@@ -110,7 +112,7 @@ type Instance struct {
 	// be picked up from daabase_candidate_instance's value when
 	// reading an instance from the db.
 	IsCandidate          bool
-	PromotionRule        CandidatePromotionRule
+	PromotionRule        reparentutil.CandidatePromotionRule
 	IsDowntimed          bool
 	DowntimeReason       string
 	DowntimeOwner        string
