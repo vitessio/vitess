@@ -39,6 +39,10 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
+	if err := checkUnsupportedConstructs(hp.sel); err != nil {
+		return nil, err
+	}
+
 	rb, isRoute := plan.(*route)
 	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
@@ -58,10 +62,6 @@ func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (
 	}
 
 	hp.qp = qp
-
-	if err := checkUnsupportedConstructs(hp.sel); err != nil {
-		return nil, err
-	}
 
 	needAggrOrHaving := hp.qp.NeedsAggregation() || hp.sel.Having != nil
 	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0

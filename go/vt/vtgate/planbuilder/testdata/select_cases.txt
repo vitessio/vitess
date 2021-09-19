@@ -1612,7 +1612,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
 
 # sql_calc_found_rows with limit
 "select sql_calc_found_rows * from music limit 100"
