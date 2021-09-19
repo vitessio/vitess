@@ -509,18 +509,6 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
-{
-  "QueryType": "DDL",
-  "Original": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
-  "Instructions": {
-    "OperatorType": "DDL",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "create view view_a as select sql_calc_found_rows * from music where user_id = 1"
-  }
-}
 
 # DDL
 "create index a on user(id)"
