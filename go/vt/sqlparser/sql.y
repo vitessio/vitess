@@ -517,20 +517,20 @@ load_statement:
   {
     $$ = &Load{}
   }
- query_expression_parens:
-  	openb query_expression_parens closeb
-  	{
-  		$$ = $2
-  	}
-  	| openb query_expression closeb
-    {
-     	$$ = $2
-    }
-    | openb query_expression locking_clause closeb
-    {
-    	setLockInSelect($2, $3)
-    	$$ = $2
-    }
+query_expression_parens:
+  openb query_expression_parens closeb
+  {
+  	$$ = $2
+  }
+| openb query_expression closeb
+  {
+     $$ = $2
+  }
+| openb query_expression locking_clause closeb
+  {
+    setLockInSelect($2, $3)
+    $$ = $2
+  }
 
 // TODO; (Manan, Ritwiz) : Use this in create, insert statements
 //query_expression_or_parens:
@@ -549,66 +549,66 @@ load_statement:
 //	}
 
 query_expression:
-	query_expression_body order_by_opt limit_opt
-	{
-		 setOrderAndLimitToSelect($1, $2, $3)
+ query_expression_body order_by_opt limit_opt
+  {
+		setOrderAndLimitToSelect($1, $2, $3)
 		$$ = $1
-	}
-	| query_expression_parens limit_clause
-	{
-			 setOrderAndLimitToSelect($1, nil, $2)
-		$$ = $1
-	}
-| query_expression_parens order_by_clause limit_opt
-{
-		 setOrderAndLimitToSelect($1, $2, $3)
+  }
+| query_expression_parens limit_clause
+  {
+	setOrderAndLimitToSelect($1, nil, $2)
 	$$ = $1
-}
-	| SELECT comment_opt cache_opt NEXT num_val for_from table_name
-	{
-	    $$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
-	}
+  }
+| query_expression_parens order_by_clause limit_opt
+  {
+	setOrderAndLimitToSelect($1, $2, $3)
+	$$ = $1
+  }
+| SELECT comment_opt cache_opt NEXT num_val for_from table_name
+  {
+	$$ = NewSelect(Comments($2), SelectExprs{&Nextval{Expr: $5}}, []string{$3}/*options*/, nil, TableExprs{&AliasedTableExpr{Expr: $7}}, nil/*where*/, nil/*groupBy*/, nil/*having*/)
+  }
 
 query_expression_body:
-	query_primary
-	{
-	   $$ = $1
-	}
+ query_primary
+  {
+	$$ = $1
+  }
 | query_expression_body union_op query_primary
-	{
-		$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
-}
+  {
+ 	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+  }
 | query_expression_parens union_op query_primary
-{
+  {
 	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
-}
+  }
 | query_expression_body union_op query_expression_parens
-{
-		$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
-	}
-	| query_expression_parens union_op query_expression_parens
-	{
-		$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
-	}
+  {
+  	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+  }
+| query_expression_parens union_op query_expression_parens
+  {
+	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+  }
 
 select_statement:
-	query_expression
-	{
-		$$ = $1
-	}
-	| query_expression locking_clause
-	{
-		setLockInSelect($1, $2)
-		$$ = $1
-	}
-	| query_expression_parens
-	{
-		$$ = $1
-	}
-	| select_stmt_with_into
-	{
-		$$ = $1
-	}
+query_expression
+  {
+	$$ = $1
+  }
+| query_expression locking_clause
+  {
+	setLockInSelect($1, $2)
+	$$ = $1
+  }
+| query_expression_parens
+  {
+	$$ = $1
+  }
+| select_stmt_with_into
+  {
+	$$ = $1
+  }
 
 select_stmt_with_into:
   openb select_stmt_with_into closeb
@@ -616,27 +616,27 @@ select_stmt_with_into:
 	$$ = $2;
   }
 | query_expression into_clause
-{
+  {
 	$1.SetInto($2)
 	$$ = $1
-}
+  }
 | query_expression into_clause locking_clause
-{
+  {
 	$1.SetInto($2)
 	$1.SetLock($3)
 	$$ = $1
-}
+  }
 | query_expression locking_clause into_clause
-{
+  {
 	$1.SetInto($3)
 	$1.SetLock($2)
 	$$ = $1
-}
+  }
 | query_expression_parens into_clause
-{
-	$1.SetInto($2)
+  {
+ 	$1.SetInto($2)
 	$$ = $1
-}
+  }
 
 stream_statement:
   STREAM comment_opt select_expression FROM table_name
