@@ -19,11 +19,11 @@ package wrangler
 import (
 	"errors"
 	"fmt"
-	"net"
 	"sync"
 
 	"context"
 
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -176,16 +176,6 @@ func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, p
 	}
 }
 
-func normalizeIP(ip string) string {
-	// Normalize loopback to avoid spurious validation errors.
-	if parsedIP := net.ParseIP(ip); parsedIP != nil && parsedIP.IsLoopback() {
-		// Note that this also maps IPv6 localhost to IPv4 localhost
-		// as GetReplicas() will return only IPv4 addresses.
-		return "127.0.0.1"
-	}
-	return ip
-}
-
 func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- error) {
 	if shardInfo.PrimaryAlias == nil {
 		results <- fmt.Errorf("no primary in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
@@ -217,15 +207,15 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
-		tabletIPMap[normalizeIP(ip)] = tablet.Tablet
+		tabletIPMap[netutil.NormalizeIP(ip)] = tablet.Tablet
 	}
 
 	// See if every replica is in the replication graph.
 	for _, replicaAddr := range replicaList {
-		if tabletIPMap[normalizeIP(replicaAddr)] == nil {
+		if tabletIPMap[netutil.NormalizeIP(replicaAddr)] == nil {
 			results <- fmt.Errorf("replica %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", replicaAddr, shardInfo.Keyspace(), shardInfo.ShardName())
 		}
-		replicaIPMap[normalizeIP(replicaAddr)] = true
+		replicaIPMap[netutil.NormalizeIP(replicaAddr)] = true
 	}
 
 	// See if every entry in the replication graph is connected to the primary.
@@ -239,7 +229,7 @@ func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.Sha
 			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
 			continue
 		}
-		if !replicaIPMap[normalizeIP(ip)] {
+		if !replicaIPMap[netutil.NormalizeIP(ip)] {
 			results <- fmt.Errorf("replica %v not replicating: %v replica list: %q", topoproto.TabletAliasString(tablet.Alias), ip, replicaList)
 		}
 	}
