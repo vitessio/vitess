@@ -73,3 +73,14 @@ func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.
 	}
 	return result
 }
+
+// CheckValid implements the Operator interface
+func (s *SubQuery) CheckValid() error {
+	for _, inner := range s.Inner {
+		err := inner.Inner.CheckValid()
+		if err != nil {
+			return err
+		}
+	}
+	return s.Outer.CheckValid()
+}

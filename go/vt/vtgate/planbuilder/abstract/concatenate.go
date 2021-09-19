@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -48,10 +50,21 @@ func (c *Concatenate) TableID() semantics.TableSet {
 
 // PushPredicate implements the Operator interface
 func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	panic("implement me")
+	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 }
 
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
+}
+
+// CheckValid implements the Operator interface
+func (c *Concatenate) CheckValid() error {
+	for _, source := range c.Sources {
+		err := source.CheckValid()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
