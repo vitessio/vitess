@@ -68,3 +68,13 @@ func (j *Join) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
 	}
 	return result
 }
+
+// CheckValid implements the Operator interface
+func (j *Join) CheckValid() error {
+	err := j.LHS.CheckValid()
+	if err != nil {
+		return err
+	}
+
+	return j.RHS.CheckValid()
+}
