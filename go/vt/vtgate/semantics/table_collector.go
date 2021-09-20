@@ -63,8 +63,9 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		case *sqlparser.Union:
-			tables := tc.scoper.wScope[sel.FirstStatement.(*sqlparser.Select)]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
+			firstSelect := sqlparser.GetFirstSelect(sel)
+			tables := tc.scoper.wScope[firstSelect]
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -125,7 +126,7 @@ func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getExpr() {
 			return TableSet(1 << i)
 		}
 	}
@@ -139,26 +140,21 @@ func (tc *tableCollector) createTable(
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = tc.currentDb
+	table := &RealTable{
+		tableName:   alias.As.String(),
+		ASTNode:     alias,
+		Table:       tbl,
+		isInfSchema: isInfSchema,
 	}
-	var table TableInfo
+
 	if alias.As.IsEmpty() {
-		table = &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = tc.currentDb
 		}
-	} else {
-		table = &AliasedTable{
-			tableName:   alias.As.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
-		}
+
+		table.dbName = dbName
+		table.tableName = t.Name.String()
 	}
 
 	if vindex != nil {

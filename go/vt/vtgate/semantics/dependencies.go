@@ -23,10 +23,12 @@ import (
 )
 
 type (
+	// these types are used to go over dependencies provided by multiple
+	// tables and figure out bindings and/or errors by merging dependencies together
 	dependencies interface {
-		Empty() bool
-		Get() (dependency, error)
-		Merge(dependencies) (dependencies, error)
+		empty() bool
+		get() (dependency, error)
+		merge(dependencies) (dependencies, error)
 	}
 	dependency struct {
 		direct    TableSet
@@ -68,18 +70,18 @@ var _ dependencies = (*nothing)(nil)
 var _ dependencies = (*certain)(nil)
 var _ dependencies = (*uncertain)(nil)
 
-func (u *uncertain) Empty() bool {
+func (u *uncertain) empty() bool {
 	return false
 }
 
-func (u *uncertain) Get() (dependency, error) {
+func (u *uncertain) get() (dependency, error) {
 	if u.fail {
 		return dependency{}, ambigousErr
 	}
 	return u.dependency, nil
 }
 
-func (u *uncertain) Merge(d dependencies) (dependencies, error) {
+func (u *uncertain) merge(d dependencies) (dependencies, error) {
 	switch d := d.(type) {
 	case *nothing:
 		return u, nil
@@ -95,15 +97,15 @@ func (u *uncertain) Merge(d dependencies) (dependencies, error) {
 	return nil, ambigousErr
 }
 
-func (c *certain) Empty() bool {
+func (c *certain) empty() bool {
 	return false
 }
 
-func (c *certain) Get() (dependency, error) {
+func (c *certain) get() (dependency, error) {
 	return c.dependency, nil
 }
 
-func (c *certain) Merge(d dependencies) (dependencies, error) {
+func (c *certain) merge(d dependencies) (dependencies, error) {
 	switch d := d.(type) {
 	case *nothing, *uncertain:
 		return c, nil
@@ -116,14 +118,14 @@ func (c *certain) Merge(d dependencies) (dependencies, error) {
 	return nil, ambigousErr
 }
 
-func (n *nothing) Empty() bool {
+func (n *nothing) empty() bool {
 	return true
 }
 
-func (n *nothing) Get() (dependency, error) {
+func (n *nothing) get() (dependency, error) {
 	return dependency{}, nil
 }
 
-func (n *nothing) Merge(d dependencies) (dependencies, error) {
+func (n *nothing) merge(d dependencies) (dependencies, error) {
 	return d, nil
 }

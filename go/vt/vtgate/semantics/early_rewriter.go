@@ -103,7 +103,7 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		if !aliasedExpr.As.IsEmpty() {
 			cursor.Replace(sqlparser.NewColName(aliasedExpr.As.String()))
 		} else {
-			expr := realCloneOfColNames(aliasedExpr.Expr)
+			expr := realCloneOfColNames(aliasedExpr.Expr, currScope.isUnion)
 			cursor.Replace(expr)
 		}
 	}
@@ -112,13 +112,14 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
-func realCloneOfColNames(expr sqlparser.Expr) sqlparser.Expr {
+func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
 		switch exp := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			newColName := *exp
-			newColName.Name = sqlparser.CloneColIdent(exp.Name)
-			newColName.Qualifier = sqlparser.CloneTableName(exp.Qualifier)
+			if union {
+				newColName.Qualifier = sqlparser.TableName{}
+			}
 			cursor.Replace(&newColName)
 		}
 		return true
@@ -130,11 +131,11 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 	var colNames sqlparser.SelectExprs
 	starExpanded := true
 	for _, tbl := range tables {
-		if !starExpr.TableName.IsEmpty() && !tbl.Matches(starExpr.TableName) {
+		if !starExpr.TableName.IsEmpty() && !tbl.matches(starExpr.TableName) {
 			continue
 		}
 		unknownTbl = false
-		if !tbl.Authoritative() {
+		if !tbl.authoritative() {
 			starExpanded = false
 			break
 		}
@@ -144,8 +145,8 @@ func expandTableColumns(tables []TableInfo, starExpr *sqlparser.StarExpr) (bool,
 		}
 
 		withAlias := len(tables) > 1
-		withQualifier := withAlias || !tbl.GetExpr().As.IsEmpty()
-		for _, col := range tbl.GetColumns() {
+		withQualifier := withAlias || !tbl.getExpr().As.IsEmpty()
+		for _, col := range tbl.getColumns() {
 			var colName *sqlparser.ColName
 			var alias sqlparser.ColIdent
 			if withQualifier {

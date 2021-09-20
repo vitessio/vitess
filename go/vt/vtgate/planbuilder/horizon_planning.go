@@ -160,7 +160,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	return nil
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool) (int, bool, error) {
+// pushProjection pushes a projection to the plan.
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *route:
 		value, err := makePlanValue(expr.Expr)
@@ -253,6 +254,8 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return i, true, nil
 	case *limit:
+		return pushProjection(expr, node.input, semTable, inner, reuseCol)
+	case *distinct:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
