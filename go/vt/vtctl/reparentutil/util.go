@@ -99,12 +99,9 @@ func waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc 
 	return nil
 }
 
-// reparentReplicasAndPopulateJournal reparents all the replicas provided and populates the reparent journal on the primary.
+// reparentReplicas reparents all the replicas provided and populates the reparent journal on the primary.
 // Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
-func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient,
-	newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo,
-	statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions,
-	waitForAllReplicas bool) ([]*topodatapb.Tablet, error) {
+func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, waitForAllReplicas bool, populateReparentJournal bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
 	var replicaMutex sync.Mutex
@@ -136,8 +133,11 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 		if err != nil {
 			return err
 		}
-		logger.Infof("populating reparent journal on new primary %v", alias)
-		return tmc.PopulateReparentJournal(replCtx, tablet, now, lockAction, newPrimaryTablet.Alias, position)
+		if populateReparentJournal {
+			logger.Infof("populating reparent journal on new primary %v", alias)
+			return tmc.PopulateReparentJournal(replCtx, tablet, now, lockAction, newPrimaryTablet.Alias, position)
+		}
+		return nil
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
@@ -192,7 +192,7 @@ func reparentReplicasAndPopulateJournal(ctx context.Context, ev *events.Reparent
 	}
 
 	// Spin up a background goroutine to wait until all replica goroutines
-	// finished. Polling this way allows us to have reparentReplicasAndPopulateJournal return
+	// finished. Polling this way allows us to have reparentReplicas return
 	// success as soon as (a) the primary successfully populates its reparent
 	// journal and (b) at least one replica successfully begins replicating.
 	//
@@ -313,7 +313,7 @@ func promotePrimaryCandidate(ctx context.Context, tmc tmclient.TabletManagerClie
 
 	// now we reparent all the other tablets to start replication from our new primary
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	replicasStartedReplication, err := reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, !isIdeal)
+	replicasStartedReplication, err := reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, !isIdeal, true)
 	if err != nil {
 		return nil, err
 	}
@@ -394,21 +394,6 @@ func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerC
 	if err != nil {
 		return err
 	}
-
-	// Now change the type of the new primary tablet to PRIMARY
-	if err := changeTypeToPrimary(ctx, tmc, newPrimary); err != nil {
-		return err
-	}
-
-	// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-	opts.PostTabletChangeHook(newPrimary)
-
-	// we now reparent the other tablets, but this time we do not need to wait for all of them
-	_, err = reparentReplicasAndPopulateJournal(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, false)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -525,7 +510,7 @@ func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandida
 	}
 	// do not have a preferred candidate in the same cell
 
-	if opts.allowCrossCellPromotion {
+	if !opts.preventCrossCellPromotion {
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, false)
 		if candidate != nil {
 			return candidate
@@ -545,7 +530,7 @@ func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandida
 		return candidate
 	}
 
-	if opts.allowCrossCellPromotion {
+	if !opts.preventCrossCellPromotion {
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, false)
 		if candidate != nil {
 			return candidate
@@ -568,6 +553,27 @@ func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topo
 			continue
 		}
 		return candidate
+	}
+	return nil
+}
+
+// promoteIntermediatePrimary promotes the primary candidate that we have, but it does not yet set to start accepting writes
+func promoteIntermediatePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
+	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
+	// now we reparent all the other tablets to start replication from our new primary
+	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
+	replicasStartedReplication, err := reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, true, false)
+	if err != nil {
+		return nil, err
+	}
+
+	replicasStartedReplication = append(replicasStartedReplication, newPrimary)
+	return replicasStartedReplication, nil
+}
+
+func checkIfNeedToOverridePromotion(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
+	if opts.preventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
+		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constrains - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
 	return nil
 }
