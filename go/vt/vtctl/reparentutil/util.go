@@ -440,13 +440,13 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 }
 
 // findPrimaryCandidate implements the ReparentFunctions interface
-func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, error) {
+func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	var validTablets []*topodatapb.Tablet
 	var tabletPositions []mysql.Position
 	for tabletAlias, position := range validCandidates {
 		tablet, isFound := tabletMap[tabletAlias]
 		if !isFound {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
 		}
 		validTablets = append(validTablets, tablet.Tablet)
 		tabletPositions = append(tabletPositions, position)
@@ -460,7 +460,7 @@ func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet,
 	// sort
 	err := sortTabletsForERS(validTablets, tabletPositions, idealCell)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	winningPrimaryTablet := validTablets[0]
@@ -473,16 +473,101 @@ func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet,
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
 		if !ok {
-			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
 		if pos.AtLeast(winningPosition) {
 			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 			if !isFound {
-				return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
+				return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 			}
 			winningPrimaryTablet = requestedPrimaryInfo.Tablet
 		}
 	}
 
-	return winningPrimaryTablet, nil
+	return winningPrimaryTablet, validTablets, nil
+}
+
+func promotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) bool {
+	if opts.newPrimaryAlias != nil {
+		// explicit request to promote a specific tablet
+		return topoproto.TabletAliasEqual(opts.newPrimaryAlias, newPrimary.Alias)
+	}
+	return getBetterCandidate(newPrimary, prevPrimary, validCandidates, opts) == newPrimary
+}
+
+func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) *topodatapb.Tablet {
+	var preferredCandidates []*topodatapb.Tablet
+	var neutralReplicas []*topodatapb.Tablet
+	for _, candidate := range validCandidates {
+		promotionRule := PromotionRule(candidate)
+		if promotionRule == MustPromoteRule || promotionRule == PreferPromoteRule {
+			preferredCandidates = append(preferredCandidates, candidate)
+		}
+		if promotionRule == NeutralPromoteRule {
+			neutralReplicas = append(neutralReplicas, candidate)
+		}
+	}
+
+	// So we've already promoted a replica.
+	// However, can we improve on our choice? Are there any replicas marked with "is_candidate"?
+	// Maybe we actually promoted such a replica. Does that mean we should keep it?
+	// Maybe we promoted a "neutral", and some "prefer" server is available.
+	// Maybe we promoted a "prefer_not"
+	// Maybe we promoted a server in a different DC than the primary
+	// There's many options. We may wish to replace the server we promoted with a better one.
+	candidate := findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, true)
+	if candidate != nil {
+		return candidate
+	}
+	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, true)
+	if candidate != nil {
+		return candidate
+	}
+	// do not have a preferred candidate in the same cell
+
+	if opts.allowCrossCellPromotion {
+		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, false)
+		if candidate != nil {
+			return candidate
+		}
+		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, false)
+		if candidate != nil {
+			return candidate
+		}
+	}
+
+	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, true)
+	if candidate != nil {
+		return candidate
+	}
+	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, false, true)
+	if candidate != nil {
+		return candidate
+	}
+
+	if opts.allowCrossCellPromotion {
+		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, false)
+		if candidate != nil {
+			return candidate
+		}
+		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, false, false)
+		if candidate != nil {
+			return candidate
+		}
+	}
+
+	return newPrimary
+}
+
+func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topodatapb.Tablet, possibleCandidates []*topodatapb.Tablet, checkEqualPrimary bool, checkSameCell bool) *topodatapb.Tablet {
+	for _, candidate := range possibleCandidates {
+		if checkEqualPrimary && !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
+			continue
+		}
+		if checkSameCell && prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
+			continue
+		}
+		return candidate
+	}
+	return nil
 }
