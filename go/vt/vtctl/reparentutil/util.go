@@ -573,7 +573,10 @@ func promoteIntermediatePrimary(ctx context.Context, tmc tmclient.TabletManagerC
 
 func checkIfNeedToOverridePromotion(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
 	if opts.preventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
-		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constrains - %s", topoproto.TabletAliasString(newPrimary.Alias))
+		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
+	}
+	if PromotionRule(newPrimary) == MustNotPromoteRule {
+		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy promotion rule constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
 	return nil
 }
