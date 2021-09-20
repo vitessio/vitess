@@ -1336,7 +1336,7 @@ Gen4 error: symbol t.col not found
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select * from music where 1 != 1) union select * from `user` where 1 != 1",
+    "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
     "Values": [
@@ -1359,7 +1359,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1) union select * from `user` where 1 != 1",
+    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
     "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
     "Values": [
@@ -1382,7 +1382,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select * from ((select col1, col2 from unsharded where 1 != 1) union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
     "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
     "Table": "unsharded"
   }
@@ -1397,7 +1397,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select a.col1, a.col2 from ((select col1, col2 from unsharded where 1 != 1) union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+    "FieldQuery": "select a.col1, a.col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
     "Query": "select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
     "Table": "unsharded"
   }
@@ -1432,7 +1432,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union select id from unsharded_auto where 1 != 1",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1",
     "Query": "select id from unsharded union select id from unsharded_auto order by id asc limit 5",
     "Table": "unsharded"
   }
@@ -1451,7 +1451,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
     "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "Table": "unsharded"
   }
@@ -1466,7 +1466,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union all select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "FieldQuery": "select id from unsharded where 1 != 1 union all select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
     "Query": "select id from unsharded union all select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "Table": "unsharded"
   }
@@ -1484,7 +1484,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union select id from unsharded_auto where 1 != 1 union (select id from unsharded_auto where 1 != 1) union select `name` from unsharded where 1 != 1",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1",
     "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded",
     "Table": "unsharded"
   }

@@ -10,7 +10,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select id from `user` where 1 != 1) union all select id from music where 1 != 1",
+    "FieldQuery": "select id from `user` where 1 != 1 union all select id from music where 1 != 1",
     "Query": "select id from `user` union all select id from music",
     "Table": "`user`"
   }
@@ -68,7 +68,7 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "(select id from `user` where 1 != 1) union select id from music where 1 != 1",
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
         "Query": "select id from `user` union select id from music",
         "Table": "`user`"
       }
@@ -182,7 +182,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select col1, col2 from `user` where 1 != 1) union all select col1, col2 from user_extra where 1 != 1",
+    "FieldQuery": "select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1",
     "Query": "select col1, col2 from `user` union all select col1, col2 from user_extra",
     "Table": "`user`"
   }
@@ -201,7 +201,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from ((select * from `user` where 1 != 1) union all select * from user_extra where 1 != 1) as t where 1 != 1",
+    "FieldQuery": "select * from (select * from `user` where 1 != 1 union all select * from user_extra where 1 != 1) as t where 1 != 1",
     "Query": "select * from (select * from `user` union all select * from user_extra) as t",
     "Table": "`user`"
   }
@@ -220,7 +220,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select col1, col2 from ((select col1, col2 from `user` where 1 != 1) union all select col1, col2 from user_extra where 1 != 1) as t where 1 != 1",
+    "FieldQuery": "select col1, col2 from (select col1, col2 from `user` where 1 != 1 union all select col1, col2 from user_extra where 1 != 1) as t where 1 != 1",
     "Query": "select col1, col2 from (select col1, col2 from `user` union all select col1, col2 from user_extra) as t",
     "Table": "`user`"
   }
@@ -293,7 +293,7 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "(select id from `user` where 1 != 1) union select id from `user` where 1 != 1",
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
         "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
         "Table": "`user`",
         "Values": [
@@ -470,7 +470,7 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "(select id from `user` where 1 != 1) union select id from music where 1 != 1",
+            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
             "Query": "select id from `user` union select id from music",
             "Table": "`user`"
           },
@@ -914,7 +914,7 @@ Gen4 plan same as above
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "(select 1 from dual where 1 != 1) union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1",
+            "FieldQuery": "select 1 from dual where 1 != 1 union select null from dual where 1 != 1 union select 1.0 from dual where 1 != 1 union select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1",
             "Query": "select 1 from dual union select null from dual union select 1.0 from dual union select '1' from dual union select 2 from dual",
             "Table": "dual"
           },
@@ -950,7 +950,7 @@ Gen4 plan same as above
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "(select 1 from dual where 1 != 1) union all select null from dual where 1 != 1 union all select 1.0 from dual where 1 != 1 union all select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1",
+            "FieldQuery": "select 1 from dual where 1 != 1 union all select null from dual where 1 != 1 union all select 1.0 from dual where 1 != 1 union all select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1",
             "Query": "select 1 from dual union all select null from dual union all select 1.0 from dual union all select '1' from dual union select 2 from dual",
             "Table": "dual"
           },
@@ -1386,8 +1386,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "(select id from `user` where 1 != 1) union all (select id + 1 from `user` where 1 != 1) union (select user_id from user_extra where 1 != 1)",
-            "Query": "(select id from `user`) union all (select id + 1 from `user`) union (select user_id from user_extra)",
+            "FieldQuery": "select id from `user` where 1 != 1 union all select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1",
+            "Query": "select id from `user` union all select id + 1 from `user` union select user_id from user_extra",
             "Table": "`user`"
           }
         ]
