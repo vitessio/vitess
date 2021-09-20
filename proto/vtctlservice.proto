@@ -72,6 +72,8 @@ service Vtctld {
   // shard must be empty (have no tablets) or DeleteShards returns an error for
   // that shard.
   rpc DeleteShards(vtctldata.DeleteShardsRequest) returns (vtctldata.DeleteShardsResponse) {};
+  // DeleteSrvVSchema deletes the SrvVSchema object in the specified cell.
+  rpc DeleteSrvVSchema(vtctldata.DeleteSrvVSchemaRequest) returns (vtctldata.DeleteSrvVSchemaResponse) {};
   // DeleteTablets deletes one or more tablets from the topology.
   rpc DeleteTablets(vtctldata.DeleteTabletsRequest) returns (vtctldata.DeleteTabletsResponse) {};
   // EmergencyReparentShard reparents the shard to the new primary. It assumes
@@ -101,6 +103,9 @@ service Vtctld {
   rpc GetSchema(vtctldata.GetSchemaRequest) returns (vtctldata.GetSchemaResponse) {};
   // GetShard returns information about a shard in the topology.
   rpc GetShard(vtctldata.GetShardRequest) returns (vtctldata.GetShardResponse) {};
+  // GetSrvKeyspaceNames returns a mapping of cell name to the keyspaces served
+  // in that cell.
+  rpc GetSrvKeyspaceNames(vtctldata.GetSrvKeyspaceNamesRequest) returns (vtctldata.GetSrvKeyspaceNamesResponse) {};
   // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
   // cells.
   rpc GetSrvKeyspaces (vtctldata.GetSrvKeyspacesRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
@@ -151,12 +156,18 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
+  rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet
   // in a shard. This RPC makes a best-effort to return partial results. For
   // example, if one tablet in the shard graph is unreachable, then
   // ShardReplicationPositions will return non-error, and include valid results
   // for the reachable tablets.
   rpc ShardReplicationPositions(vtctldata.ShardReplicationPositionsRequest) returns (vtctldata.ShardReplicationPositionsResponse) {};
+  // StartReplication starts replication on the specified tablet.
+  rpc StartReplication(vtctldata.StartReplicationRequest) returns (vtctldata.StartReplicationResponse) {};
+  // StopReplication stops replication on the specified tablet.
+  rpc StopReplication(vtctldata.StopReplicationRequest) returns (vtctldata.StopReplicationResponse) {};
   // TabletExternallyReparented changes metadata in the topology server to
   // acknowledge a shard primary change performed by an external tool (e.g.
   // orchestrator).

@@ -45,6 +45,9 @@ type VTAdminClient interface {
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(ctx context.Context, in *GetSchemasRequest, opts ...grpc.CallOption) (*GetSchemasResponse, error)
+	// GetShardReplicationPositions returns shard replication positions grouped
+	// by cluster.
+	GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error)
 	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
@@ -59,6 +62,8 @@ type VTAdminClient interface {
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
 	// GetVSchemas returns the VSchemas for all specified clusters.
 	GetVSchemas(ctx context.Context, in *GetVSchemasRequest, opts ...grpc.CallOption) (*GetVSchemasResponse, error)
+	// GetVtctlds returns the Vtctlds for all specified clusters.
+	GetVtctlds(ctx context.Context, in *GetVtctldsRequest, opts ...grpc.CallOption) (*GetVtctldsResponse, error)
 	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
 	// workflow name.
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
@@ -166,6 +171,15 @@ func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, o
 	return out, nil
 }
 
+func (c *vTAdminClient) GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error) {
+	out := new(GetShardReplicationPositionsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetShardReplicationPositions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error) {
 	out := new(SrvVSchema)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSrvVSchema", in, out, opts...)
@@ -214,6 +228,15 @@ func (c *vTAdminClient) GetVSchema(ctx context.Context, in *GetVSchemaRequest, o
 func (c *vTAdminClient) GetVSchemas(ctx context.Context, in *GetVSchemasRequest, opts ...grpc.CallOption) (*GetVSchemasResponse, error) {
 	out := new(GetVSchemasResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetVtctlds(ctx context.Context, in *GetVtctldsRequest, opts ...grpc.CallOption) (*GetVtctldsResponse, error) {
+	out := new(GetVtctldsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVtctlds", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -277,6 +300,9 @@ type VTAdminServer interface {
 	GetSchema(context.Context, *GetSchemaRequest) (*Schema, error)
 	// GetSchemas returns all schemas across the specified clusters.
 	GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error)
+	// GetShardReplicationPositions returns shard replication positions grouped
+	// by cluster.
+	GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error)
 	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters and cells.
@@ -291,6 +317,8 @@ type VTAdminServer interface {
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
 	// GetVSchemas returns the VSchemas for all specified clusters.
 	GetVSchemas(context.Context, *GetVSchemasRequest) (*GetVSchemasResponse, error)
+	// GetVtctlds returns the Vtctlds for all specified clusters.
+	GetVtctlds(context.Context, *GetVtctldsRequest) (*GetVtctldsResponse, error)
 	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
 	// workflow name.
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
@@ -335,6 +363,9 @@ func (UnimplementedVTAdminServer) GetSchema(context.Context, *GetSchemaRequest) 
 func (UnimplementedVTAdminServer) GetSchemas(context.Context, *GetSchemasRequest) (*GetSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchemas not implemented")
 }
+func (UnimplementedVTAdminServer) GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplicationPositions not implemented")
+}
 func (UnimplementedVTAdminServer) GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
 }
@@ -352,6 +383,9 @@ func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest
 }
 func (UnimplementedVTAdminServer) GetVSchemas(context.Context, *GetVSchemasRequest) (*GetVSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) GetVtctlds(context.Context, *GetVtctldsRequest) (*GetVtctldsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVtctlds not implemented")
 }
 func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflow not implemented")
@@ -555,6 +589,24 @@ func _VTAdmin_GetSchemas_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetShardReplicationPositionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetShardReplicationPositions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetShardReplicationPositions",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetShardReplicationPositions(ctx, req.(*GetShardReplicationPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetSrvVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetSrvVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -663,6 +715,24 @@ func _VTAdmin_GetVSchemas_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetVtctlds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVtctldsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetVtctlds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetVtctlds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetVtctlds(ctx, req.(*GetVtctldsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetWorkflowRequest)
 	if err := dec(in); err != nil {
@@ -765,6 +835,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetSchemas_Handler,
 		},
 		{
+			MethodName: "GetShardReplicationPositions",
+			Handler:    _VTAdmin_GetShardReplicationPositions_Handler,
+		},
+		{
 			MethodName: "GetSrvVSchema",
 			Handler:    _VTAdmin_GetSrvVSchema_Handler,
 		},
@@ -787,6 +861,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVSchemas",
 			Handler:    _VTAdmin_GetVSchemas_Handler,
+		},
+		{
+			MethodName: "GetVtctlds",
+			Handler:    _VTAdmin_GetVtctlds_Handler,
 		},
 		{
 			MethodName: "GetWorkflow",

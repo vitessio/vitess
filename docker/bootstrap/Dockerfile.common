@@ -1,4 +1,4 @@
-FROM golang:1.16-buster
+FROM golang:1.17-buster
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

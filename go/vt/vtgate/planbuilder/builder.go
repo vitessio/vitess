@@ -82,6 +82,10 @@ const (
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
 )
 
+var (
+	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback}
+)
+
 type truncater interface {
 	SetTruncateColumnCount(int)
 }
@@ -120,19 +124,19 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func getConfiguredPlanner(vschema ContextVSchema) (selectPlanner, error) {
+func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (selectPlanner, error) {
 	switch vschema.Planner() {
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner, nil
 	case Gen4WithFallback:
 		fp := &fallbackPlanner{
 			primary:  gen4Planner,
-			fallback: buildSelectPlan,
+			fallback: v3planner,
 		}
 		return fp.plan, nil
 	default:
 		// default is v3 plan
-		return buildSelectPlan, nil
+		return v3planner, nil
 	}
 }
 
@@ -148,7 +152,7 @@ type selectPlanner func(query string) func(sqlparser.Statement, *sqlparser.Reser
 func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, enableOnlineDDL, enableDirectDDL bool) (engine.Primitive, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		configuredPlanner, err := getConfiguredPlanner(vschema)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildSelectPlan)
 		if err != nil {
 			return nil, err
 		}
@@ -160,7 +164,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case *sqlparser.Delete:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
 	case *sqlparser.Union:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildUnionPlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner(query))
 	case sqlparser.DDLStatement:
 		return buildGeneralDDLPlan(query, stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterMigration:

@@ -1,3 +1,6 @@
+//go:build gofuzz
+// +build gofuzz
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -35,7 +38,6 @@ limitations under the License.
 	continuously by OSS-fuzz. Needless to say, more
 	APIs can be added with ease.
 */
-// +build gofuzz
 
 package engine
 

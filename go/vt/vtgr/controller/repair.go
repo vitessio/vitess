@@ -397,12 +397,7 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	})
 	var candidate *grInstance
 	candidate, err = shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, func(c context.Context, instance *grInstance) bool {
-		for _, unreachable := range shard.shardStatusCollector.status.Unreachables {
-			if unreachable == instance.alias {
-				return false
-			}
-		}
-		return true
+		return !shard.shardStatusCollector.isUnreachable(instance)
 	})
 	if err != nil {
 		log.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)

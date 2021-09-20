@@ -64,7 +64,12 @@ func (node *ParenSelect) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v", node.FirstStatement)
+	if _, isSel := node.FirstStatement.(*Select); isSel {
+		buf.astPrintf(node, "(%v)", node.FirstStatement)
+	} else {
+		buf.astPrintf(node, "%v", node.FirstStatement)
+	}
+
 	for _, us := range node.UnionSelects {
 		buf.astPrintf(node, "%v", us)
 	}
@@ -73,10 +78,18 @@ func (node *Union) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *UnionSelect) Format(buf *TrackedBuffer) {
+	buf.WriteString(" ")
 	if node.Distinct {
-		buf.astPrintf(node, " %s %v", UnionStr, node.Statement)
+		buf.WriteString(UnionStr)
 	} else {
-		buf.astPrintf(node, " %s %v", UnionAllStr, node.Statement)
+		buf.WriteString(UnionAllStr)
+	}
+	buf.WriteString(" ")
+
+	if _, isSel := node.Statement.(*Select); isSel {
+		buf.astPrintf(node, "(%v)", node.Statement)
+	} else {
+		buf.astPrintf(node, "%v", node.Statement)
 	}
 }
 
@@ -987,7 +1000,10 @@ func (node *ParenTableExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node JoinCondition) Format(buf *TrackedBuffer) {
+func (node *JoinCondition) Format(buf *TrackedBuffer) {
+	if node == nil {
+		return
+	}
 	if node.On != nil {
 		buf.astPrintf(node, " on %v", node.On)
 	}

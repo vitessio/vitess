@@ -51,7 +51,7 @@ func TestSubqueryExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.Execute(nil, bv, true)
+	r, err := sq.TryExecute(&noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestSubqueryExecute(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.Execute(nil, bv, true)
+	_, err = sq.TryExecute(&noopVCursor{}, bv, true)
 	require.EqualError(t, err, `err`)
 }
 
@@ -100,7 +100,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := wrapStreamExecute(sq, nil, bv, true)
+	r, err := wrapStreamExecute(sq, &noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestSubqueryStreamExecute(t *testing.T) {
 	sq.Input = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = wrapStreamExecute(sq, nil, bv, true)
+	_, err = wrapStreamExecute(sq, &noopVCursor{}, bv, true)
 	require.EqualError(t, err, `err`)
 }
 

@@ -93,7 +93,7 @@ func (v *nvindex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Dest
 func TestVindexFuncMap(t *testing.T) {
 	// Unique Vindex returning 0 rows.
 	vf := testVindexFunc(&uvindex{})
-	got, err := vf.Execute(nil, nil, false)
+	got, err := vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning 1 row.
 	vf = testVindexFunc(&uvindex{matchid: true})
-	got, err = vf.Execute(nil, nil, false)
+	got, err = vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// Unique Vindex returning keyrange.
 	vf = testVindexFunc(&uvindex{matchkr: true})
-	got, err = vf.Execute(nil, nil, false)
+	got, err = vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning 0 rows.
 	vf = testVindexFunc(&nvindex{})
-	got, err = vf.Execute(nil, nil, false)
+	got, err = vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning 2 rows.
 	vf = testVindexFunc(&nvindex{matchid: true})
-	got, err = vf.Execute(nil, nil, false)
+	got, err = vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestVindexFuncMap(t *testing.T) {
 
 	// NonUnique Vindex returning keyrange
 	vf = testVindexFunc(&nvindex{matchkr: true})
-	got, err = vf.Execute(nil, nil, false)
+	got, err = vf.TryExecute(nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestVindexFuncStreamExecute(t *testing.T) {
 		}},
 	}}
 	i := 0
-	err := vf.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := vf.TryStreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
 		if !reflect.DeepEqual(qr, want[i]) {
 			t.Errorf("callback(%d):\n%v, want\n%v", i, qr, want[i])
 		}
@@ -240,7 +240,7 @@ func TestFieldOrder(t *testing.T) {
 	vf := testVindexFunc(&nvindex{matchid: true})
 	vf.Fields = sqltypes.MakeTestFields("keyspace_id|id|keyspace_id", "varbinary|varbinary|varbinary")
 	vf.Cols = []int{1, 0, 1}
-	got, err := vf.Execute(nil, nil, true)
+	got, err := vf.TryExecute(nil, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}

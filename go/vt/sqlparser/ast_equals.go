@@ -428,12 +428,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return a == b
-	case JoinCondition:
-		b, ok := inB.(JoinCondition)
+	case *JoinCondition:
+		b, ok := inB.(*JoinCondition)
 		if !ok {
 			return false
 		}
-		return EqualsJoinCondition(a, b)
+		return EqualsRefOfJoinCondition(a, b)
 	case *JoinTableExpr:
 		b, ok := inB.(*JoinTableExpr)
 		if !ok {
@@ -1749,8 +1749,14 @@ func EqualsRefOfIsExpr(a, b *IsExpr) bool {
 		a.Right == b.Right
 }
 
-// EqualsJoinCondition does deep equals between the two objects.
-func EqualsJoinCondition(a, b JoinCondition) bool {
+// EqualsRefOfJoinCondition does deep equals between the two objects.
+func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	return EqualsExpr(a.On, b.On) &&
 		EqualsColumns(a.Using, b.Using)
 }
@@ -1766,7 +1772,7 @@ func EqualsRefOfJoinTableExpr(a, b *JoinTableExpr) bool {
 	return EqualsTableExpr(a.LeftExpr, b.LeftExpr) &&
 		a.Join == b.Join &&
 		EqualsTableExpr(a.RightExpr, b.RightExpr) &&
-		EqualsJoinCondition(a.Condition, b.Condition)
+		EqualsRefOfJoinCondition(a.Condition, b.Condition)
 }
 
 // EqualsRefOfKeyState does deep equals between the two objects.
@@ -3919,18 +3925,6 @@ func EqualsSliceOfRefOfIndexOption(a, b []*IndexOption) bool {
 		}
 	}
 	return true
-}
-
-// EqualsRefOfJoinCondition does deep equals between the two objects.
-func EqualsRefOfJoinCondition(a, b *JoinCondition) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsExpr(a.On, b.On) &&
-		EqualsColumns(a.Using, b.Using)
 }
 
 // EqualsTableAndLockTypes does deep equals between the two objects.

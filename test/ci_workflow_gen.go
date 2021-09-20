@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"strings"
 	"text/template"
 )
@@ -29,9 +30,14 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql57, mysql80, mariadb102, mariadb103"
+	unitTestDatabases = "percona56, mysql80, mariadb102"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
+
+	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
+	unitTestSelfHostedDatabases   = "mysql57, mariadb103"
+	dockerFileTemplate            = "templates/dockerfile.tpl"
+	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
 )
 
 var (
@@ -51,11 +57,7 @@ var (
 		"23",
 		"24",
 		"26",
-		"vreplication_basic",
-		"vreplication_multicell",
-		"vreplication_cellalias",
 		"vstream_failover",
-		"vreplication_v2",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
 		"onlineddl_ghost",
@@ -87,14 +89,21 @@ var (
 		"resharding_bytes",
 		"mysql80",
 	}
+
+	clusterSelfHostedList = []string{
+		"vreplication_basic",
+		"vreplication_multicell",
+		"vreplication_cellalias",
+		"vreplication_v2",
+	}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
-	clustersRequiringXtraBackup = clusterList
+	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
 	}
-	clustersRequiringUbuntu20 = []string{
+	clustersRequiringMySQL80 = []string{
 		"mysql80",
 	}
 )
@@ -107,6 +116,11 @@ type clusterTest struct {
 	Name, Shard                  string
 	MakeTools, InstallXtraBackup bool
 	Ubuntu20                     bool
+}
+
+type selfHostedTest struct {
+	Name, Platform, Dockerfile, Shard, ImageName, directoryName string
+	MakeTools, InstallXtraBackup                                bool
 }
 
 func mergeBlankLines(buf *bytes.Buffer) string {
@@ -131,6 +145,16 @@ func mergeBlankLines(buf *bytes.Buffer) string {
 func main() {
 	generateUnitTestWorkflows()
 	generateClusterWorkflows()
+
+	// tests that will use self-hosted runners
+	err := generateSelfHostedUnitTestWorkflows()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = generateSelfHostedClusterWorkflows()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func canonnizeList(list []string) []string {
@@ -149,6 +173,81 @@ func parseList(csvList string) []string {
 		list = append(list, strings.TrimSpace(item))
 	}
 	return list
+}
+
+func generateSelfHostedUnitTestWorkflows() error {
+	platforms := parseList(unitTestSelfHostedDatabases)
+	for _, platform := range platforms {
+		directoryName := fmt.Sprintf("unit_test_%s", platform)
+		test := &selfHostedTest{
+			Name:              fmt.Sprintf("Unit Test (%s)", platform),
+			ImageName:         fmt.Sprintf("unit_test_%s", platform),
+			Platform:          platform,
+			directoryName:     directoryName,
+			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
+			MakeTools:         true,
+			InstallXtraBackup: false,
+		}
+		err := setupTestDockerFile(test)
+		if err != nil {
+			return err
+		}
+		filePath := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
+		err = writeFileFromTemplate(unitTestSelfHostedTemplate, filePath, test)
+		if err != nil {
+			log.Print(err)
+		}
+	}
+	return nil
+}
+
+func generateSelfHostedClusterWorkflows() error {
+	clusters := canonnizeList(clusterSelfHostedList)
+	for _, cluster := range clusters {
+		directoryName := fmt.Sprintf("cluster_test_%s", cluster)
+		test := &selfHostedTest{
+			Name:              fmt.Sprintf("Cluster (%s)", cluster),
+			ImageName:         fmt.Sprintf("cluster_test_%s", cluster),
+			Platform:          "mysql57",
+			directoryName:     directoryName,
+			Dockerfile:        fmt.Sprintf("./.github/docker/%s/Dockerfile", directoryName),
+			Shard:             cluster,
+			MakeTools:         false,
+			InstallXtraBackup: false,
+		}
+		makeToolClusters := canonnizeList(clustersRequiringMakeTools)
+		for _, makeToolCluster := range makeToolClusters {
+			if makeToolCluster == cluster {
+				test.MakeTools = true
+				break
+			}
+		}
+		xtraBackupClusters := canonnizeList(clustersRequiringXtraBackup)
+		for _, xtraBackupCluster := range xtraBackupClusters {
+			if xtraBackupCluster == cluster {
+				test.InstallXtraBackup = true
+				break
+			}
+		}
+		mysql80Clusters := canonnizeList(clustersRequiringMySQL80)
+		for _, mysql80Cluster := range mysql80Clusters {
+			if mysql80Cluster == cluster {
+				test.Platform = "mysql80"
+				break
+			}
+		}
+
+		err := setupTestDockerFile(test)
+		if err != nil {
+			return err
+		}
+		filePath := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
+		err = writeFileFromTemplate(clusterTestSelfHostedTemplate, filePath, test)
+		if err != nil {
+			log.Print(err)
+		}
+	}
+	return nil
 }
 
 func generateClusterWorkflows() {
@@ -172,7 +271,7 @@ func generateClusterWorkflows() {
 				break
 			}
 		}
-		ubuntu20Clusters := canonnizeList(clustersRequiringUbuntu20)
+		ubuntu20Clusters := canonnizeList(clustersRequiringMySQL80)
 		for _, ubuntu20Cluster := range ubuntu20Clusters {
 			if ubuntu20Cluster == cluster {
 				test.Ubuntu20 = true
@@ -181,7 +280,10 @@ func generateClusterWorkflows() {
 		}
 
 		path := fmt.Sprintf("%s/cluster_endtoend_%s.yml", workflowConfigDir, cluster)
-		generateWorkflowFile(clusterTestTemplate, path, test)
+		err := writeFileFromTemplate(clusterTestTemplate, path, test)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 }
 
@@ -193,31 +295,54 @@ func generateUnitTestWorkflows() {
 			Platform: platform,
 		}
 		path := fmt.Sprintf("%s/unit_test_%s.yml", workflowConfigDir, platform)
-		generateWorkflowFile(unitTestTemplate, path, test)
+		err := writeFileFromTemplate(unitTestTemplate, path, test)
+		if err != nil {
+			log.Print(err)
+		}
 	}
 }
 
-func generateWorkflowFile(templateFile, path string, test interface{}) {
+func setupTestDockerFile(test *selfHostedTest) error {
+	// remove the directory
+	relDirectoryName := fmt.Sprintf("../.github/docker/%s", test.directoryName)
+	err := os.RemoveAll(relDirectoryName)
+	if err != nil {
+		return err
+	}
+	// create the directory
+	err = os.MkdirAll(relDirectoryName, 0755)
+	if err != nil {
+		return err
+	}
+
+	// generate the docker file
+	dockerFilePath := path.Join(relDirectoryName, "Dockerfile")
+	err = writeFileFromTemplate(dockerFileTemplate, dockerFilePath, test)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeFileFromTemplate(templateFile, path string, test interface{}) error {
 	tpl, err := template.ParseFiles(templateFile)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		return
+		return fmt.Errorf("Error: %s\n", err)
 	}
 
 	buf := &bytes.Buffer{}
 	err = tpl.Execute(buf, test)
 	if err != nil {
-		fmt.Printf("Error: %s\n", err)
-		return
+		return fmt.Errorf("Error: %s\n", err)
 	}
 
 	f, err := os.Create(path)
 	if err != nil {
-		log.Println("Error creating file: ", err)
-		return
+		return fmt.Errorf("Error creating file: %s\n", err)
 	}
 	f.WriteString("# DO NOT MODIFY: THIS FILE IS GENERATED USING \"make generate_ci_workflows\"\n\n")
 	f.WriteString(mergeBlankLines(buf))
 	fmt.Printf("Generated %s\n", path)
-
+	return nil
 }

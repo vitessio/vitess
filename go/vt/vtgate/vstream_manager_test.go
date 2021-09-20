@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/vt/topo"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -221,8 +223,9 @@ func TestVStreamChunks(t *testing.T) {
 
 	rowEncountered := false
 	doneCounting := false
-	rowCount := 0
-	ddlCount := 0
+	var rowCount, ddlCount sync2.AtomicInt32
+	rowCount.Set(0)
+	ddlCount.Set(0)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -242,7 +245,7 @@ func TestVStreamChunks(t *testing.T) {
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
 			rowEncountered = true
-			rowCount++
+			rowCount.Add(1)
 		case binlogdatapb.VEventType_COMMIT:
 			if !rowEncountered {
 				t.Errorf("Unexpected event, COMMIT after non-rows: %v", events[0])
@@ -254,22 +257,18 @@ func TestVStreamChunks(t *testing.T) {
 				t.Errorf("Unexpected event, DDL during ROW events: %v", events[0])
 				return fmt.Errorf("unexpected event: %v", events[0])
 			}
-			ddlCount++
+			ddlCount.Add(1)
 		default:
 			t.Errorf("Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
-		if rowCount == 100 && ddlCount == 100 {
+		if rowCount.Get() == int32(100) && ddlCount.Get() == int32(100) {
 			cancel()
 		}
 		return nil
 	})
-	if rowCount != 100 {
-		t.Errorf("rowCount: %d, want 100", rowCount)
-	}
-	if ddlCount != 100 {
-		t.Errorf("ddlCount: %d, want 100", ddlCount)
-	}
+	assert.Equal(t, int32(100), rowCount.Get())
+	assert.Equal(t, int32(100), ddlCount.Get())
 }
 
 func TestVStreamMulti(t *testing.T) {
@@ -356,7 +355,8 @@ func TestVStreamRetry(t *testing.T) {
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-	count := 0
+	var count sync2.AtomicInt32
+	count.Set(0)
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -365,7 +365,7 @@ func TestVStreamRetry(t *testing.T) {
 		}},
 	}
 	err := vsm.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, nil, &vtgatepb.VStreamFlags{}, func(events []*binlogdatapb.VEvent) error {
-		count++
+		count.Add(1)
 		return nil
 	})
 	wantErr := "final error"
@@ -373,7 +373,7 @@ func TestVStreamRetry(t *testing.T) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 	}
 	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
-	assert.Equal(t, 2, count)
+	assert.Equal(t, int32(2), count.Get())
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {

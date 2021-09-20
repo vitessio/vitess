@@ -1714,7 +1714,7 @@ type (
 		LeftExpr  TableExpr
 		Join      JoinType
 		RightExpr TableExpr
-		Condition JoinCondition
+		Condition *JoinCondition
 	}
 
 	// JoinType represents the type of Join for JoinTableExpr

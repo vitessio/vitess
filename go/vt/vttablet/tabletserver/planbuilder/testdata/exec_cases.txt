@@ -13,8 +13,8 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
-  "FullQuery": "select * from a union select * from b limit :#maxLimit"
+  "FieldQuery": "(select * from a where 1 != 1) union (select * from b where 1 != 1)",
+  "FullQuery": "(select * from a) union (select * from b) limit :#maxLimit"
 }
 
 # union with limit
@@ -32,8 +32,8 @@
       "Role": 0
     }
   ],
-  "FieldQuery": "select * from a where 1 != 1 union select * from b where 1 != 1",
-  "FullQuery": "select * from a union select * from b limit 10"
+  "FieldQuery": "(select * from a where 1 != 1) union (select * from b where 1 != 1)",
+  "FullQuery": "(select * from a) union (select * from b) limit 10"
 }
 
 # with no where clause

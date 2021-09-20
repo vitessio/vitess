@@ -576,9 +576,9 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("ChangePrimaryTo: Cannot change master on: %+v because replication threads are not stopped", *instanceKey)
+		return instance, fmt.Errorf("ChangePrimaryTo: Cannot change primary on: %+v because replication threads are not stopped", *instanceKey)
 	}
-	log.Debugf("ChangePrimaryTo: will attempt changing master on %+v to %+v, %+v", *instanceKey, *primaryKey, *primaryBinlogCoordinates)
+	log.Debugf("ChangePrimaryTo: will attempt changing primary on %+v to %+v, %+v", *instanceKey, *primaryKey, *primaryBinlogCoordinates)
 	changeToPrimaryKey := primaryKey
 	if !skipUnresolve {
 		unresolvedPrimaryKey, nameUnresolved, err := UnresolveHostname(primaryKey)
@@ -678,7 +678,7 @@ func ChangePrimaryTo(instanceKey *InstanceKey, primaryKey *InstanceKey, primaryB
 
 	ResetInstanceRelaylogCoordinatesHistory(instanceKey)
 
-	log.Infof("ChangePrimaryTo: Changed master on %+v to: %+v, %+v. GTID: %+v", *instanceKey, primaryKey, primaryBinlogCoordinates, changedViaGTID)
+	log.Infof("ChangePrimaryTo: Changed primary on %+v to: %+v, %+v. GTID: %+v", *instanceKey, primaryKey, primaryBinlogCoordinates, changedViaGTID)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err
@@ -754,18 +754,18 @@ func ResetPrimary(instanceKey *InstanceKey) (*Instance, error) {
 	}
 
 	if instance.ReplicationThreadsExist() && !instance.ReplicationThreadsStopped() {
-		return instance, fmt.Errorf("Cannot reset master on: %+v because replication threads are not stopped", instanceKey)
+		return instance, fmt.Errorf("Cannot reset primary on: %+v because replication threads are not stopped", instanceKey)
 	}
 
 	if *config.RuntimeCLIFlags.Noop {
-		return instance, fmt.Errorf("noop: aborting reset-master operation on %+v; signalling error but nothing went wrong.", *instanceKey)
+		return instance, fmt.Errorf("noop: aborting reset-primary operation on %+v; signalling error but nothing went wrong.", *instanceKey)
 	}
 
 	_, err = ExecInstance(instanceKey, `reset master`)
 	if err != nil {
 		return instance, log.Errore(err)
 	}
-	log.Infof("Reset master %+v", instanceKey)
+	log.Infof("Reset primary %+v", instanceKey)
 
 	instance, err = ReadTopologyInstance(instanceKey)
 	return instance, err

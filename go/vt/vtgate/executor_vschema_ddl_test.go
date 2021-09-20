@@ -297,12 +297,12 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	stmt := "alter vschema add table test_table"
 	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, "test_table"), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table"}, vschemaTables...), executor)
 
 	stmt = "alter vschema add table test_table2"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
-	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
+	_ = waitForVschemaTables(t, ks, append([]string{"test_table", "test_table2"}, vschemaTables...), executor)
 
 	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})

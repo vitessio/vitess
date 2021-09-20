@@ -63,10 +63,11 @@ func formatTwoOptionsNicely(a, b string) string {
 	return a + "_" + b
 }
 
-var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+// ErrWrongNumberOfColumnsInSelect is an error
+var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
-// Execute performs a non-streaming exec.
-func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute performs a non-streaming exec.
+func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := c.execSources(vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func (c *Concatenate) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		if len(rows) > 0 &&
 			len(r.Rows) > 0 &&
 			len(rows[0]) != len(r.Rows[0]) {
-			return nil, errWrongNumberOfColumnsInSelect
+			return nil, ErrWrongNumberOfColumnsInSelect
 		}
 
 		rows = append(rows, r.Rows...)
@@ -124,7 +125,7 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
 		g.Go(func() error {
-			result, err := currSource.Execute(vcursor, bindVars, wantfields)
+			result, err := vcursor.ExecutePrimitive(currSource, bindVars, wantfields)
 			if err != nil {
 				return err
 			}
@@ -139,8 +140,8 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	return results, nil
 }
 
-// StreamExecute performs a streaming exec.
-func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+// TryStreamExecute performs a streaming exec.
+func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var seenFields []*querypb.Field
 	var fieldset sync.WaitGroup
 	var cbMu sync.Mutex
@@ -154,7 +155,7 @@ func (c *Concatenate) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		currIndex, currSource := i, source
 
 		g.Go(func() error {
-			err := currSource.StreamExecute(vcursor, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
 				if currIndex == 0 && !fieldsSent {
 					defer fieldset.Done()
@@ -235,7 +236,7 @@ func (c *Concatenate) description() PrimitiveDescription {
 
 func compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
-		return errWrongNumberOfColumnsInSelect
+		return ErrWrongNumberOfColumnsInSelect
 	}
 	for i, field2 := range fields2 {
 		field1 := fields1[i]

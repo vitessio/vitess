@@ -82,6 +82,7 @@ type DBConfigs struct {
 	SslCaPath                  string        `json:"sslCaPath,omitempty"`
 	SslCert                    string        `json:"sslCert,omitempty"`
 	SslKey                     string        `json:"sslKey,omitempty"`
+	TLSMinVersion              string        `json:"tlsMinVersion,omitempty"`
 	ServerName                 string        `json:"serverName,omitempty"`
 	ConnectTimeoutMilliseconds int           `json:"connectTimeoutMilliseconds,omitempty"`
 	DBName                     string        `json:"dbName,omitempty"`
@@ -134,6 +135,7 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&GlobalDBConfigs.SslCert, "db_ssl_cert", "", "connection ssl certificate")
 	flag.StringVar(&GlobalDBConfigs.SslKey, "db_ssl_key", "", "connection ssl key")
+	flag.StringVar(&GlobalDBConfigs.TLSMinVersion, "db_tls_min_version", "", "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
 	flag.StringVar(&GlobalDBConfigs.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
 	flag.IntVar(&GlobalDBConfigs.ConnectTimeoutMilliseconds, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
 }
@@ -372,6 +374,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.SslCaPath = dbcfgs.SslCaPath
 			cp.SslCert = dbcfgs.SslCert
 			cp.SslKey = dbcfgs.SslKey
+			cp.TLSMinVersion = dbcfgs.TLSMinVersion
 			cp.ServerName = dbcfgs.ServerName
 		}
 	}

@@ -195,7 +195,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, true)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -216,6 +216,104 @@ func TestOne(t *testing.T) {
 	}
 
 	testFile(t, "onecase.txt", "", vschema, true)
+}
+
+func TestRubyOnRailsQueries(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "rails_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
+func TestOLTP(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "oltp_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "oltp_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
+func TestTPCC(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "tpcc_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "tpcc_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
+func TestTPCH(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "tpch_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
+func BenchmarkOLTP(b *testing.B) {
+	benchmarkWorkload(b, "oltp")
+}
+
+func BenchmarkTPCC(b *testing.B) {
+	benchmarkWorkload(b, "tpcc")
+}
+
+func BenchmarkTPCH(b *testing.B) {
+	benchmarkWorkload(b, "tpch")
+}
+
+func benchmarkWorkload(b *testing.B, name string) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(b, name+"_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	var testCases []testCase
+	for tc := range iterateExecFile(name + "_cases.txt") {
+		testCases = append(testCases, tc)
+	}
+	b.ResetTimer()
+	for _, version := range plannerVersions {
+		b.Run(version.String(), func(b *testing.B) {
+			benchmarkPlanner(b, version, testCases, vschemaWrapper)
+		})
+	}
 }
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
@@ -745,7 +843,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 		return
 	}
 
-	_, _ = semantics.Analyze(sel, database, s, starRewrite)
+	_, _ = semantics.Analyze(sel, database, s)
 }
 
 func BenchmarkSelectVsDML(b *testing.B) {

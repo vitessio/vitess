@@ -12,6 +12,7 @@
     "Query": "create view a as select * from `user`"
   }
 }
+Gen4 plan same as above
 
 # create view with qualifier in select as well
 "create view user.a as select* from user.user"
@@ -27,6 +28,7 @@
     "Query": "create view a as select * from `user`"
   }
 }
+Gen4 plan same as above
 
 # create view with No column referenced
 "create view user.view_a as select 1 from user"
@@ -58,6 +60,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select `user`.* from `user`"
   }
 }
+Gen4 plan same as above
 
 # create view with unqualified '*' expression for simple route
 "create view user.view_a as select * from user"
@@ -73,6 +76,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from `user`"
   }
 }
+Gen4 plan same as above
 
 # create view with fully qualified '*' expression for simple route
 "create view user.view_a as select user.user.* from user.user"
@@ -88,6 +92,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select `user`.* from `user`"
   }
 }
+Gen4 plan same as above
 
 # create view with select * from authoritative table
 "create view user.view_a as select * from authoritative"
@@ -184,6 +189,8 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from authoritative join `user` on authoritative.user_id = `user`.id"
   }
 }
+Gen4 plan same as above
+
 # create view with select authoritative.* with intermixing still expands
 "create view user.view_a as select user.id, a.*, user.col1 from authoritative a join user on a.user_id=user.id"
 {
@@ -358,6 +365,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from `user` where id = 0x04"
   }
 }
+Gen4 plan same as above
 
 # create view with limit works if it can be dropped
 "create view user.view_a as select * from user where name ='abc' AND (id = 4) limit 5"
@@ -466,7 +474,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
+    "Query": "create view view_a as (select * from music where user_id = 1) union (select * from `user` where id = 1)"
   }
 }
 Gen4 plan same as above
@@ -560,6 +568,7 @@ Gen4 plan same as above
     "Query": "alter view user_extra as select * from `user`"
   }
 }
+Gen4 plan same as above
 
 # Alter View with unknown view
 "alter view unknown as select* from user"

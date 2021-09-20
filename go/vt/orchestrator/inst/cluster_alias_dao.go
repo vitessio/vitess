@@ -125,7 +125,7 @@ func UpdateClusterAliases() error {
 				    left join database_instance_downtime using (hostname, port)
 				  where
 				    suggested_cluster_alias!=''
-						/* exclude newly demoted, downtimed masters */
+						/* exclude newly demoted, downtimed primaries */
 						and ifnull(
 								database_instance_downtime.downtime_active = 1
 								and database_instance_downtime.end_timestamp > now()
@@ -134,7 +134,7 @@ func UpdateClusterAliases() error {
 					order by
 						ifnull(last_checked <= last_seen, 0) asc,
 						read_only desc,
-						num_slave_hosts asc
+						num_replica_hosts asc
 			`, DowntimeLostInRecoveryMessage)
 		return log.Errore(err)
 	}

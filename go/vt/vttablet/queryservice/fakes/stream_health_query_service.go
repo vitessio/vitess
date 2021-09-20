@@ -72,7 +72,7 @@ func (q *StreamHealthQueryService) Execute(ctx context.Context, target *querypb.
 // the healthcheck module.
 func (q *StreamHealthQueryService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	for shr := range q.healthResponses {
-		callback(shr)
+		callback(shr) // nolint:errcheck
 	}
 	return nil
 }

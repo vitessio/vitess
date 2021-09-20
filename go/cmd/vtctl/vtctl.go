@@ -85,7 +85,7 @@ func main() {
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
-		syslogger.Info(startMsg)
+		syslogger.Info(startMsg) // nolint:errcheck
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}

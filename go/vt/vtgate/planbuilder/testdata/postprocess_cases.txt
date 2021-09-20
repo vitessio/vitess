@@ -15,11 +15,28 @@
     "Table": "`user`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 from user having col2 = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+    "Query": "select `user`.col1 from `user` where col2 = 2",
+    "Table": "`user`"
+  }
+}
 
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
 "ambiguous symbol reference: col1"
+Gen4 error: Column 'col1' in field list is ambiguous
 
+# TODO: this should be 'Column 'col1' in having clause is ambiguous'
 # non-ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
 {
@@ -51,6 +68,40 @@
         },
         "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
         "Query": "select user_extra.col1 from user_extra having user_extra.col1 = 2",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col1 from `user` where 1 != 1",
+        "Query": "select `user`.col1 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col1 from user_extra where 1 != 1",
+        "Query": "select user_extra.col1 from user_extra where user_extra.col1 = 2",
         "Table": "user_extra"
       }
     ]
@@ -93,6 +144,40 @@
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1,-2,1",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.col1 as a, `user`.col2 from `user` where `user`.col1 = 1 and `user`.col1 = `user`.col2 and 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col3 from user_extra where 1 != 1",
+        "Query": "select user_extra.col3 from user_extra where user_extra.col3 = 1 and 1 = 1",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # HAVING uses subquery
 "select id from user having id in (select col from user)"
@@ -123,6 +208,42 @@
         },
         "FieldQuery": "select id from `user` where 1 != 1",
         "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user having id in (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -177,7 +298,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 1 order by col asc",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # ORDER BY on scatter
 "select col from user order by col"
@@ -1090,10 +1229,62 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "u_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+        "Query": "select u.col, u.id from `user` as u where u.col in (select * from `user` where `user`.id = u.id order by col asc)",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "Query": "select e.id from user_extra as e where e.col = :u_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Order by, verify outer symtab is searched according to its own context.
 "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)"
 "symbol u.col not found in subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.id from `user` as u where 1 != 1",
+    "Query": "select u.id from `user` as u where u.id in (select col2 from `user` where `user`.id = u.id order by u.col asc)",
+    "Table": "`user`"
+  }
+}
 
 # Order by, qualified '*' expression, name mismatched.
 "select user.* from user where id = 5 order by e.col"
@@ -1216,6 +1407,25 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from `user` as u join (select user_id from user_extra where 1 != 1) as eu on u.id = eu.user_id where 1 != 1",
     "Query": "select * from `user` as u join (select user_id from user_extra where user_id = 5) as eu on u.id = eu.user_id where u.id = 5 order by eu.user_id asc",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
+    "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
     "Table": "`user`, user_extra",
     "Values": [
       5
@@ -1388,6 +1598,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
@@ -1713,9 +1924,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+        "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
         "Table": "`user`"
       }
     ]
@@ -1778,9 +1989,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
             "Table": "`user`"
           }
         ]

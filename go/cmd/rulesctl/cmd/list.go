@@ -40,11 +40,13 @@ func List() *cobra.Command {
 				out = rules
 			}
 		} else {
-			out = rules.Find(listOptName)
-			if listOptNamesOnly && out != nil {
+			rule := rules.Find(listOptName)
+			if listOptNamesOnly && rule != nil {
 				out = listOptName
 			} else if listOptNamesOnly {
 				out = ""
+			} else {
+				out = rule
 			}
 		}
 

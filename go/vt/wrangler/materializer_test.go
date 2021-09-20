@@ -1162,6 +1162,117 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 		t.Errorf("same keyspace: got:\n%v, want\n%v", got, want)
 	}
 }
+func TestCreateCustomizedVindex(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "ks",
+		TargetKeyspace: "ks",
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	specs := &vschemapb.Keyspace{
+		Vindexes: map[string]*vschemapb.Vindex{
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":     "ks.lkp",
+					"from":      "c1",
+					"to":        "col2",
+					"data_type": "bigint(20)",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "v",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+	// Dummy sourceSchema
+	sourceSchema := "CREATE TABLE `t1` (\n" +
+		"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+		"  `col2` int(11) DEFAULT NULL,\n" +
+		"  PRIMARY KEY (`id`)\n" +
+		") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1"
+
+	vschema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}},
+			},
+		},
+	}
+	want := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "ks.lkp",
+					"from":       "c1",
+					"to":         "col2",
+					"data_type":  "bigint(20)",
+					"write_only": "true",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}, {
+					Name:   "v",
+					Column: "col2",
+				}},
+			},
+			"lkp": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Fields: []*querypb.Field{{
+				Name: "col1",
+				Type: querypb.Type_INT64,
+			}, {
+				Name: "col2",
+				Type: querypb.Type_INT64,
+			}},
+			Schema: sourceSchema,
+		}},
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	_, got, _, err := env.wr.prepareCreateLookup(context.Background(), ms.SourceKeyspace, specs, false)
+	require.NoError(t, err)
+	if !proto.Equal(got, want) {
+		t.Errorf("customize create lookup error same: got:\n%v, want\n%v", got, want)
+	}
+}
 
 func TestStopAfterCopyFlag(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{

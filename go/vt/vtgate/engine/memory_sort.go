@@ -65,13 +65,13 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // Execute satisfies the Primitive interface.
-func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := ms.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ms.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // StreamExecute satisfies the Primitive interface.
-func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		comparers: extractSlices(ms.OrderBy),
 		reverse:   true,
 	}
-	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = vcursor.StreamExecutePrimitive(ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err

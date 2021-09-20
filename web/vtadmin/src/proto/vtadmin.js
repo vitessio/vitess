@@ -381,6 +381,39 @@ $root.vtadmin = (function() {
          */
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#getShardReplicationPositions}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetShardReplicationPositionsCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetShardReplicationPositionsResponse} [response] GetShardReplicationPositionsResponse
+         */
+
+        /**
+         * Calls GetShardReplicationPositions.
+         * @function getShardReplicationPositions
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} request GetShardReplicationPositionsRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetShardReplicationPositionsCallback} callback Node-style callback called with the error, if any, and GetShardReplicationPositionsResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getShardReplicationPositions = function getShardReplicationPositions(request, callback) {
+            return this.rpcCall(getShardReplicationPositions, $root.vtadmin.GetShardReplicationPositionsRequest, $root.vtadmin.GetShardReplicationPositionsResponse, request, callback);
+        }, "name", { value: "GetShardReplicationPositions" });
+
+        /**
+         * Calls GetShardReplicationPositions.
+         * @function getShardReplicationPositions
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} request GetShardReplicationPositionsRequest message or plain object
+         * @returns {Promise<vtadmin.GetShardReplicationPositionsResponse>} Promise
+         * @variation 2
+         */
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
          * @memberof vtadmin.VTAdmin
          * @typedef GetSrvVSchemaCallback
@@ -575,6 +608,39 @@ $root.vtadmin = (function() {
          * @instance
          * @param {vtadmin.IGetVSchemasRequest} request GetVSchemasRequest message or plain object
          * @returns {Promise<vtadmin.GetVSchemasResponse>} Promise
+         * @variation 2
+         */
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getVtctlds}.
+         * @memberof vtadmin.VTAdmin
+         * @typedef GetVtctldsCallback
+         * @type {function}
+         * @param {Error|null} error Error, if any
+         * @param {vtadmin.GetVtctldsResponse} [response] GetVtctldsResponse
+         */
+
+        /**
+         * Calls GetVtctlds.
+         * @function getVtctlds
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVtctldsRequest} request GetVtctldsRequest message or plain object
+         * @param {vtadmin.VTAdmin.GetVtctldsCallback} callback Node-style callback called with the error, if any, and GetVtctldsResponse
+         * @returns {undefined}
+         * @variation 1
+         */
+        Object.defineProperty(VTAdmin.prototype.getVtctlds = function getVtctlds(request, callback) {
+            return this.rpcCall(getVtctlds, $root.vtadmin.GetVtctldsRequest, $root.vtadmin.GetVtctldsResponse, request, callback);
+        }, "name", { value: "GetVtctlds" });
+
+        /**
+         * Calls GetVtctlds.
+         * @function getVtctlds
+         * @memberof vtadmin.VTAdmin
+         * @instance
+         * @param {vtadmin.IGetVtctldsRequest} request GetVtctldsRequest message or plain object
+         * @returns {Promise<vtadmin.GetVtctldsResponse>} Promise
          * @variation 2
          */
 
@@ -1108,6 +1174,270 @@ $root.vtadmin = (function() {
         };
 
         return ClusterBackup;
+    })();
+
+    vtadmin.ClusterShardReplicationPosition = (function() {
+
+        /**
+         * Properties of a ClusterShardReplicationPosition.
+         * @memberof vtadmin
+         * @interface IClusterShardReplicationPosition
+         * @property {vtadmin.ICluster|null} [cluster] ClusterShardReplicationPosition cluster
+         * @property {string|null} [keyspace] ClusterShardReplicationPosition keyspace
+         * @property {string|null} [shard] ClusterShardReplicationPosition shard
+         * @property {vtctldata.IShardReplicationPositionsResponse|null} [position_info] ClusterShardReplicationPosition position_info
+         */
+
+        /**
+         * Constructs a new ClusterShardReplicationPosition.
+         * @memberof vtadmin
+         * @classdesc Represents a ClusterShardReplicationPosition.
+         * @implements IClusterShardReplicationPosition
+         * @constructor
+         * @param {vtadmin.IClusterShardReplicationPosition=} [properties] Properties to set
+         */
+        function ClusterShardReplicationPosition(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * ClusterShardReplicationPosition cluster.
+         * @member {vtadmin.ICluster|null|undefined} cluster
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.cluster = null;
+
+        /**
+         * ClusterShardReplicationPosition keyspace.
+         * @member {string} keyspace
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.keyspace = "";
+
+        /**
+         * ClusterShardReplicationPosition shard.
+         * @member {string} shard
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.shard = "";
+
+        /**
+         * ClusterShardReplicationPosition position_info.
+         * @member {vtctldata.IShardReplicationPositionsResponse|null|undefined} position_info
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         */
+        ClusterShardReplicationPosition.prototype.position_info = null;
+
+        /**
+         * Creates a new ClusterShardReplicationPosition instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition=} [properties] Properties to set
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition instance
+         */
+        ClusterShardReplicationPosition.create = function create(properties) {
+            return new ClusterShardReplicationPosition(properties);
+        };
+
+        /**
+         * Encodes the specified ClusterShardReplicationPosition message. Does not implicitly {@link vtadmin.ClusterShardReplicationPosition.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition} message ClusterShardReplicationPosition message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterShardReplicationPosition.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster != null && Object.hasOwnProperty.call(message, "cluster"))
+                $root.vtadmin.Cluster.encode(message.cluster, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.keyspace != null && Object.hasOwnProperty.call(message, "keyspace"))
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspace);
+            if (message.shard != null && Object.hasOwnProperty.call(message, "shard"))
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.shard);
+            if (message.position_info != null && Object.hasOwnProperty.call(message, "position_info"))
+                $root.vtctldata.ShardReplicationPositionsResponse.encode(message.position_info, writer.uint32(/* id 4, wireType 2 =*/34).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified ClusterShardReplicationPosition message, length delimited. Does not implicitly {@link vtadmin.ClusterShardReplicationPosition.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.IClusterShardReplicationPosition} message ClusterShardReplicationPosition message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        ClusterShardReplicationPosition.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a ClusterShardReplicationPosition message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterShardReplicationPosition.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.ClusterShardReplicationPosition();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.keyspace = reader.string();
+                    break;
+                case 3:
+                    message.shard = reader.string();
+                    break;
+                case 4:
+                    message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a ClusterShardReplicationPosition message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        ClusterShardReplicationPosition.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a ClusterShardReplicationPosition message.
+         * @function verify
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        ClusterShardReplicationPosition.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster != null && message.hasOwnProperty("cluster")) {
+                var error = $root.vtadmin.Cluster.verify(message.cluster);
+                if (error)
+                    return "cluster." + error;
+            }
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                if (!$util.isString(message.keyspace))
+                    return "keyspace: string expected";
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                if (!$util.isString(message.shard))
+                    return "shard: string expected";
+            if (message.position_info != null && message.hasOwnProperty("position_info")) {
+                var error = $root.vtctldata.ShardReplicationPositionsResponse.verify(message.position_info);
+                if (error)
+                    return "position_info." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a ClusterShardReplicationPosition message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.ClusterShardReplicationPosition} ClusterShardReplicationPosition
+         */
+        ClusterShardReplicationPosition.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.ClusterShardReplicationPosition)
+                return object;
+            var message = new $root.vtadmin.ClusterShardReplicationPosition();
+            if (object.cluster != null) {
+                if (typeof object.cluster !== "object")
+                    throw TypeError(".vtadmin.ClusterShardReplicationPosition.cluster: object expected");
+                message.cluster = $root.vtadmin.Cluster.fromObject(object.cluster);
+            }
+            if (object.keyspace != null)
+                message.keyspace = String(object.keyspace);
+            if (object.shard != null)
+                message.shard = String(object.shard);
+            if (object.position_info != null) {
+                if (typeof object.position_info !== "object")
+                    throw TypeError(".vtadmin.ClusterShardReplicationPosition.position_info: object expected");
+                message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.fromObject(object.position_info);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a ClusterShardReplicationPosition message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @static
+         * @param {vtadmin.ClusterShardReplicationPosition} message ClusterShardReplicationPosition
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        ClusterShardReplicationPosition.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.cluster = null;
+                object.keyspace = "";
+                object.shard = "";
+                object.position_info = null;
+            }
+            if (message.cluster != null && message.hasOwnProperty("cluster"))
+                object.cluster = $root.vtadmin.Cluster.toObject(message.cluster, options);
+            if (message.keyspace != null && message.hasOwnProperty("keyspace"))
+                object.keyspace = message.keyspace;
+            if (message.shard != null && message.hasOwnProperty("shard"))
+                object.shard = message.shard;
+            if (message.position_info != null && message.hasOwnProperty("position_info"))
+                object.position_info = $root.vtctldata.ShardReplicationPositionsResponse.toObject(message.position_info, options);
+            return object;
+        };
+
+        /**
+         * Converts this ClusterShardReplicationPosition to JSON.
+         * @function toJSON
+         * @memberof vtadmin.ClusterShardReplicationPosition
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        ClusterShardReplicationPosition.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return ClusterShardReplicationPosition;
     })();
 
     vtadmin.ClusterWorkflows = (function() {
@@ -7578,6 +7908,494 @@ $root.vtadmin = (function() {
         return GetSchemasResponse;
     })();
 
+    vtadmin.GetShardReplicationPositionsRequest = (function() {
+
+        /**
+         * Properties of a GetShardReplicationPositionsRequest.
+         * @memberof vtadmin
+         * @interface IGetShardReplicationPositionsRequest
+         * @property {Array.<string>|null} [cluster_ids] GetShardReplicationPositionsRequest cluster_ids
+         * @property {Array.<string>|null} [keyspaces] GetShardReplicationPositionsRequest keyspaces
+         * @property {Array.<string>|null} [keyspace_shards] GetShardReplicationPositionsRequest keyspace_shards
+         */
+
+        /**
+         * Constructs a new GetShardReplicationPositionsRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetShardReplicationPositionsRequest.
+         * @implements IGetShardReplicationPositionsRequest
+         * @constructor
+         * @param {vtadmin.IGetShardReplicationPositionsRequest=} [properties] Properties to set
+         */
+        function GetShardReplicationPositionsRequest(properties) {
+            this.cluster_ids = [];
+            this.keyspaces = [];
+            this.keyspace_shards = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardReplicationPositionsRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * GetShardReplicationPositionsRequest keyspaces.
+         * @member {Array.<string>} keyspaces
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.keyspaces = $util.emptyArray;
+
+        /**
+         * GetShardReplicationPositionsRequest keyspace_shards.
+         * @member {Array.<string>} keyspace_shards
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         */
+        GetShardReplicationPositionsRequest.prototype.keyspace_shards = $util.emptyArray;
+
+        /**
+         * Creates a new GetShardReplicationPositionsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest instance
+         */
+        GetShardReplicationPositionsRequest.create = function create(properties) {
+            return new GetShardReplicationPositionsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsRequest message. Does not implicitly {@link vtadmin.GetShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            if (message.keyspaces != null && message.keyspaces.length)
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.keyspaces[i]);
+            if (message.keyspace_shards != null && message.keyspace_shards.length)
+                for (var i = 0; i < message.keyspace_shards.length; ++i)
+                    writer.uint32(/* id 3, wireType 2 =*/26).string(message.keyspace_shards[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsRequest message, length delimited. Does not implicitly {@link vtadmin.GetShardReplicationPositionsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                case 2:
+                    if (!(message.keyspaces && message.keyspaces.length))
+                        message.keyspaces = [];
+                    message.keyspaces.push(reader.string());
+                    break;
+                case 3:
+                    if (!(message.keyspace_shards && message.keyspace_shards.length))
+                        message.keyspace_shards = [];
+                    message.keyspace_shards.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardReplicationPositionsRequest message.
+         * @function verify
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardReplicationPositionsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            if (message.keyspaces != null && message.hasOwnProperty("keyspaces")) {
+                if (!Array.isArray(message.keyspaces))
+                    return "keyspaces: array expected";
+                for (var i = 0; i < message.keyspaces.length; ++i)
+                    if (!$util.isString(message.keyspaces[i]))
+                        return "keyspaces: string[] expected";
+            }
+            if (message.keyspace_shards != null && message.hasOwnProperty("keyspace_shards")) {
+                if (!Array.isArray(message.keyspace_shards))
+                    return "keyspace_shards: array expected";
+                for (var i = 0; i < message.keyspace_shards.length; ++i)
+                    if (!$util.isString(message.keyspace_shards[i]))
+                        return "keyspace_shards: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetShardReplicationPositionsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetShardReplicationPositionsRequest} GetShardReplicationPositionsRequest
+         */
+        GetShardReplicationPositionsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetShardReplicationPositionsRequest)
+                return object;
+            var message = new $root.vtadmin.GetShardReplicationPositionsRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            if (object.keyspaces) {
+                if (!Array.isArray(object.keyspaces))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.keyspaces: array expected");
+                message.keyspaces = [];
+                for (var i = 0; i < object.keyspaces.length; ++i)
+                    message.keyspaces[i] = String(object.keyspaces[i]);
+            }
+            if (object.keyspace_shards) {
+                if (!Array.isArray(object.keyspace_shards))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsRequest.keyspace_shards: array expected");
+                message.keyspace_shards = [];
+                for (var i = 0; i < object.keyspace_shards.length; ++i)
+                    message.keyspace_shards[i] = String(object.keyspace_shards[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardReplicationPositionsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @static
+         * @param {vtadmin.GetShardReplicationPositionsRequest} message GetShardReplicationPositionsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardReplicationPositionsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults) {
+                object.cluster_ids = [];
+                object.keyspaces = [];
+                object.keyspace_shards = [];
+            }
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            if (message.keyspaces && message.keyspaces.length) {
+                object.keyspaces = [];
+                for (var j = 0; j < message.keyspaces.length; ++j)
+                    object.keyspaces[j] = message.keyspaces[j];
+            }
+            if (message.keyspace_shards && message.keyspace_shards.length) {
+                object.keyspace_shards = [];
+                for (var j = 0; j < message.keyspace_shards.length; ++j)
+                    object.keyspace_shards[j] = message.keyspace_shards[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetShardReplicationPositionsRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetShardReplicationPositionsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardReplicationPositionsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardReplicationPositionsRequest;
+    })();
+
+    vtadmin.GetShardReplicationPositionsResponse = (function() {
+
+        /**
+         * Properties of a GetShardReplicationPositionsResponse.
+         * @memberof vtadmin
+         * @interface IGetShardReplicationPositionsResponse
+         * @property {Array.<vtadmin.IClusterShardReplicationPosition>|null} [replication_positions] GetShardReplicationPositionsResponse replication_positions
+         */
+
+        /**
+         * Constructs a new GetShardReplicationPositionsResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetShardReplicationPositionsResponse.
+         * @implements IGetShardReplicationPositionsResponse
+         * @constructor
+         * @param {vtadmin.IGetShardReplicationPositionsResponse=} [properties] Properties to set
+         */
+        function GetShardReplicationPositionsResponse(properties) {
+            this.replication_positions = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetShardReplicationPositionsResponse replication_positions.
+         * @member {Array.<vtadmin.IClusterShardReplicationPosition>} replication_positions
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @instance
+         */
+        GetShardReplicationPositionsResponse.prototype.replication_positions = $util.emptyArray;
+
+        /**
+         * Creates a new GetShardReplicationPositionsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse instance
+         */
+        GetShardReplicationPositionsResponse.create = function create(properties) {
+            return new GetShardReplicationPositionsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsResponse message. Does not implicitly {@link vtadmin.GetShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.replication_positions != null && message.replication_positions.length)
+                for (var i = 0; i < message.replication_positions.length; ++i)
+                    $root.vtadmin.ClusterShardReplicationPosition.encode(message.replication_positions[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetShardReplicationPositionsResponse message, length delimited. Does not implicitly {@link vtadmin.GetShardReplicationPositionsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.IGetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetShardReplicationPositionsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetShardReplicationPositionsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.replication_positions && message.replication_positions.length))
+                        message.replication_positions = [];
+                    message.replication_positions.push($root.vtadmin.ClusterShardReplicationPosition.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetShardReplicationPositionsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetShardReplicationPositionsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetShardReplicationPositionsResponse message.
+         * @function verify
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetShardReplicationPositionsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.replication_positions != null && message.hasOwnProperty("replication_positions")) {
+                if (!Array.isArray(message.replication_positions))
+                    return "replication_positions: array expected";
+                for (var i = 0; i < message.replication_positions.length; ++i) {
+                    var error = $root.vtadmin.ClusterShardReplicationPosition.verify(message.replication_positions[i]);
+                    if (error)
+                        return "replication_positions." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetShardReplicationPositionsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetShardReplicationPositionsResponse} GetShardReplicationPositionsResponse
+         */
+        GetShardReplicationPositionsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetShardReplicationPositionsResponse)
+                return object;
+            var message = new $root.vtadmin.GetShardReplicationPositionsResponse();
+            if (object.replication_positions) {
+                if (!Array.isArray(object.replication_positions))
+                    throw TypeError(".vtadmin.GetShardReplicationPositionsResponse.replication_positions: array expected");
+                message.replication_positions = [];
+                for (var i = 0; i < object.replication_positions.length; ++i) {
+                    if (typeof object.replication_positions[i] !== "object")
+                        throw TypeError(".vtadmin.GetShardReplicationPositionsResponse.replication_positions: object expected");
+                    message.replication_positions[i] = $root.vtadmin.ClusterShardReplicationPosition.fromObject(object.replication_positions[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetShardReplicationPositionsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @static
+         * @param {vtadmin.GetShardReplicationPositionsResponse} message GetShardReplicationPositionsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetShardReplicationPositionsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.replication_positions = [];
+            if (message.replication_positions && message.replication_positions.length) {
+                object.replication_positions = [];
+                for (var j = 0; j < message.replication_positions.length; ++j)
+                    object.replication_positions[j] = $root.vtadmin.ClusterShardReplicationPosition.toObject(message.replication_positions[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetShardReplicationPositionsResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetShardReplicationPositionsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetShardReplicationPositionsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetShardReplicationPositionsResponse;
+    })();
+
     vtadmin.GetSrvVSchemaRequest = (function() {
 
         /**
@@ -9704,6 +10522,417 @@ $root.vtadmin = (function() {
         };
 
         return GetVSchemasResponse;
+    })();
+
+    vtadmin.GetVtctldsRequest = (function() {
+
+        /**
+         * Properties of a GetVtctldsRequest.
+         * @memberof vtadmin
+         * @interface IGetVtctldsRequest
+         * @property {Array.<string>|null} [cluster_ids] GetVtctldsRequest cluster_ids
+         */
+
+        /**
+         * Constructs a new GetVtctldsRequest.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVtctldsRequest.
+         * @implements IGetVtctldsRequest
+         * @constructor
+         * @param {vtadmin.IGetVtctldsRequest=} [properties] Properties to set
+         */
+        function GetVtctldsRequest(properties) {
+            this.cluster_ids = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVtctldsRequest cluster_ids.
+         * @member {Array.<string>} cluster_ids
+         * @memberof vtadmin.GetVtctldsRequest
+         * @instance
+         */
+        GetVtctldsRequest.prototype.cluster_ids = $util.emptyArray;
+
+        /**
+         * Creates a new GetVtctldsRequest instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest=} [properties] Properties to set
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest instance
+         */
+        GetVtctldsRequest.create = function create(properties) {
+            return new GetVtctldsRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetVtctldsRequest message. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest} message GetVtctldsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cluster_ids != null && message.cluster_ids.length)
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cluster_ids[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVtctldsRequest message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.IGetVtctldsRequest} message GetVtctldsRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cluster_ids && message.cluster_ids.length))
+                        message.cluster_ids = [];
+                    message.cluster_ids.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVtctldsRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVtctldsRequest message.
+         * @function verify
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVtctldsRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cluster_ids != null && message.hasOwnProperty("cluster_ids")) {
+                if (!Array.isArray(message.cluster_ids))
+                    return "cluster_ids: array expected";
+                for (var i = 0; i < message.cluster_ids.length; ++i)
+                    if (!$util.isString(message.cluster_ids[i]))
+                        return "cluster_ids: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVtctldsRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVtctldsRequest} GetVtctldsRequest
+         */
+        GetVtctldsRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVtctldsRequest)
+                return object;
+            var message = new $root.vtadmin.GetVtctldsRequest();
+            if (object.cluster_ids) {
+                if (!Array.isArray(object.cluster_ids))
+                    throw TypeError(".vtadmin.GetVtctldsRequest.cluster_ids: array expected");
+                message.cluster_ids = [];
+                for (var i = 0; i < object.cluster_ids.length; ++i)
+                    message.cluster_ids[i] = String(object.cluster_ids[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVtctldsRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVtctldsRequest
+         * @static
+         * @param {vtadmin.GetVtctldsRequest} message GetVtctldsRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVtctldsRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cluster_ids = [];
+            if (message.cluster_ids && message.cluster_ids.length) {
+                object.cluster_ids = [];
+                for (var j = 0; j < message.cluster_ids.length; ++j)
+                    object.cluster_ids[j] = message.cluster_ids[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVtctldsRequest to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVtctldsRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVtctldsRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVtctldsRequest;
+    })();
+
+    vtadmin.GetVtctldsResponse = (function() {
+
+        /**
+         * Properties of a GetVtctldsResponse.
+         * @memberof vtadmin
+         * @interface IGetVtctldsResponse
+         * @property {Array.<vtadmin.IVtctld>|null} [vtctlds] GetVtctldsResponse vtctlds
+         */
+
+        /**
+         * Constructs a new GetVtctldsResponse.
+         * @memberof vtadmin
+         * @classdesc Represents a GetVtctldsResponse.
+         * @implements IGetVtctldsResponse
+         * @constructor
+         * @param {vtadmin.IGetVtctldsResponse=} [properties] Properties to set
+         */
+        function GetVtctldsResponse(properties) {
+            this.vtctlds = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetVtctldsResponse vtctlds.
+         * @member {Array.<vtadmin.IVtctld>} vtctlds
+         * @memberof vtadmin.GetVtctldsResponse
+         * @instance
+         */
+        GetVtctldsResponse.prototype.vtctlds = $util.emptyArray;
+
+        /**
+         * Creates a new GetVtctldsResponse instance using the specified properties.
+         * @function create
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse=} [properties] Properties to set
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse instance
+         */
+        GetVtctldsResponse.create = function create(properties) {
+            return new GetVtctldsResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetVtctldsResponse message. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse} message GetVtctldsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.vtctlds != null && message.vtctlds.length)
+                for (var i = 0; i < message.vtctlds.length; ++i)
+                    $root.vtadmin.Vtctld.encode(message.vtctlds[i], writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetVtctldsResponse message, length delimited. Does not implicitly {@link vtadmin.GetVtctldsResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.IGetVtctldsResponse} message GetVtctldsResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetVtctldsResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtadmin.GetVtctldsResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.vtctlds && message.vtctlds.length))
+                        message.vtctlds = [];
+                    message.vtctlds.push($root.vtadmin.Vtctld.decode(reader, reader.uint32()));
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetVtctldsResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetVtctldsResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetVtctldsResponse message.
+         * @function verify
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetVtctldsResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.vtctlds != null && message.hasOwnProperty("vtctlds")) {
+                if (!Array.isArray(message.vtctlds))
+                    return "vtctlds: array expected";
+                for (var i = 0; i < message.vtctlds.length; ++i) {
+                    var error = $root.vtadmin.Vtctld.verify(message.vtctlds[i]);
+                    if (error)
+                        return "vtctlds." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetVtctldsResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtadmin.GetVtctldsResponse} GetVtctldsResponse
+         */
+        GetVtctldsResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtadmin.GetVtctldsResponse)
+                return object;
+            var message = new $root.vtadmin.GetVtctldsResponse();
+            if (object.vtctlds) {
+                if (!Array.isArray(object.vtctlds))
+                    throw TypeError(".vtadmin.GetVtctldsResponse.vtctlds: array expected");
+                message.vtctlds = [];
+                for (var i = 0; i < object.vtctlds.length; ++i) {
+                    if (typeof object.vtctlds[i] !== "object")
+                        throw TypeError(".vtadmin.GetVtctldsResponse.vtctlds: object expected");
+                    message.vtctlds[i] = $root.vtadmin.Vtctld.fromObject(object.vtctlds[i]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetVtctldsResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtadmin.GetVtctldsResponse
+         * @static
+         * @param {vtadmin.GetVtctldsResponse} message GetVtctldsResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetVtctldsResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.vtctlds = [];
+            if (message.vtctlds && message.vtctlds.length) {
+                object.vtctlds = [];
+                for (var j = 0; j < message.vtctlds.length; ++j)
+                    object.vtctlds[j] = $root.vtadmin.Vtctld.toObject(message.vtctlds[j], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetVtctldsResponse to JSON.
+         * @function toJSON
+         * @memberof vtadmin.GetVtctldsResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetVtctldsResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetVtctldsResponse;
     })();
 
     vtadmin.GetWorkflowRequest = (function() {
@@ -55296,7 +56525,6 @@ $root.vtrpc = (function() {
      * @property {number} NOT_FOUND=5 NOT_FOUND value
      * @property {number} ALREADY_EXISTS=6 ALREADY_EXISTS value
      * @property {number} PERMISSION_DENIED=7 PERMISSION_DENIED value
-     * @property {number} UNAUTHENTICATED=16 UNAUTHENTICATED value
      * @property {number} RESOURCE_EXHAUSTED=8 RESOURCE_EXHAUSTED value
      * @property {number} FAILED_PRECONDITION=9 FAILED_PRECONDITION value
      * @property {number} ABORTED=10 ABORTED value
@@ -55305,6 +56533,8 @@ $root.vtrpc = (function() {
      * @property {number} INTERNAL=13 INTERNAL value
      * @property {number} UNAVAILABLE=14 UNAVAILABLE value
      * @property {number} DATA_LOSS=15 DATA_LOSS value
+     * @property {number} UNAUTHENTICATED=16 UNAUTHENTICATED value
+     * @property {number} CLUSTER_EVENT=17 CLUSTER_EVENT value
      */
     vtrpc.Code = (function() {
         var valuesById = {}, values = Object.create(valuesById);
@@ -55316,7 +56546,6 @@ $root.vtrpc = (function() {
         values[valuesById[5] = "NOT_FOUND"] = 5;
         values[valuesById[6] = "ALREADY_EXISTS"] = 6;
         values[valuesById[7] = "PERMISSION_DENIED"] = 7;
-        values[valuesById[16] = "UNAUTHENTICATED"] = 16;
         values[valuesById[8] = "RESOURCE_EXHAUSTED"] = 8;
         values[valuesById[9] = "FAILED_PRECONDITION"] = 9;
         values[valuesById[10] = "ABORTED"] = 10;
@@ -55325,6 +56554,8 @@ $root.vtrpc = (function() {
         values[valuesById[13] = "INTERNAL"] = 13;
         values[valuesById[14] = "UNAVAILABLE"] = 14;
         values[valuesById[15] = "DATA_LOSS"] = 15;
+        values[valuesById[16] = "UNAUTHENTICATED"] = 16;
+        values[valuesById[17] = "CLUSTER_EVENT"] = 17;
         return values;
     })();
 
@@ -55487,7 +56718,6 @@ $root.vtrpc = (function() {
                 case 5:
                 case 6:
                 case 7:
-                case 16:
                 case 8:
                 case 9:
                 case 10:
@@ -55496,6 +56726,8 @@ $root.vtrpc = (function() {
                 case 13:
                 case 14:
                 case 15:
+                case 16:
+                case 17:
                     break;
                 }
             return null;
@@ -55548,10 +56780,6 @@ $root.vtrpc = (function() {
             case 7:
                 message.code = 7;
                 break;
-            case "UNAUTHENTICATED":
-            case 16:
-                message.code = 16;
-                break;
             case "RESOURCE_EXHAUSTED":
             case 8:
                 message.code = 8;
@@ -55583,6 +56811,14 @@ $root.vtrpc = (function() {
             case "DATA_LOSS":
             case 15:
                 message.code = 15;
+                break;
+            case "UNAUTHENTICATED":
+            case 16:
+                message.code = 16;
+                break;
+            case "CLUSTER_EVENT":
+            case 17:
+                message.code = 17;
                 break;
             }
             return message;
@@ -56300,216 +57536,6 @@ $root.replicationdata = (function() {
         values[valuesById[0] = "IOANDSQLTHREAD"] = 0;
         values[valuesById[1] = "IOTHREADONLY"] = 1;
         return values;
-    })();
-
-    replicationdata.PrimaryStatus = (function() {
-
-        /**
-         * Properties of a PrimaryStatus.
-         * @memberof replicationdata
-         * @interface IPrimaryStatus
-         * @property {string|null} [position] PrimaryStatus position
-         * @property {string|null} [file_position] PrimaryStatus file_position
-         */
-
-        /**
-         * Constructs a new PrimaryStatus.
-         * @memberof replicationdata
-         * @classdesc Represents a PrimaryStatus.
-         * @implements IPrimaryStatus
-         * @constructor
-         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
-         */
-        function PrimaryStatus(properties) {
-            if (properties)
-                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
-                    if (properties[keys[i]] != null)
-                        this[keys[i]] = properties[keys[i]];
-        }
-
-        /**
-         * PrimaryStatus position.
-         * @member {string} position
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         */
-        PrimaryStatus.prototype.position = "";
-
-        /**
-         * PrimaryStatus file_position.
-         * @member {string} file_position
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         */
-        PrimaryStatus.prototype.file_position = "";
-
-        /**
-         * Creates a new PrimaryStatus instance using the specified properties.
-         * @function create
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus=} [properties] Properties to set
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus instance
-         */
-        PrimaryStatus.create = function create(properties) {
-            return new PrimaryStatus(properties);
-        };
-
-        /**
-         * Encodes the specified PrimaryStatus message. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @function encode
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        PrimaryStatus.encode = function encode(message, writer) {
-            if (!writer)
-                writer = $Writer.create();
-            if (message.position != null && Object.hasOwnProperty.call(message, "position"))
-                writer.uint32(/* id 1, wireType 2 =*/10).string(message.position);
-            if (message.file_position != null && Object.hasOwnProperty.call(message, "file_position"))
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.file_position);
-            return writer;
-        };
-
-        /**
-         * Encodes the specified PrimaryStatus message, length delimited. Does not implicitly {@link replicationdata.PrimaryStatus.verify|verify} messages.
-         * @function encodeDelimited
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.IPrimaryStatus} message PrimaryStatus message or plain object to encode
-         * @param {$protobuf.Writer} [writer] Writer to encode to
-         * @returns {$protobuf.Writer} Writer
-         */
-        PrimaryStatus.encodeDelimited = function encodeDelimited(message, writer) {
-            return this.encode(message, writer).ldelim();
-        };
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer.
-         * @function decode
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @param {number} [length] Message length if known beforehand
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        PrimaryStatus.decode = function decode(reader, length) {
-            if (!(reader instanceof $Reader))
-                reader = $Reader.create(reader);
-            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.replicationdata.PrimaryStatus();
-            while (reader.pos < end) {
-                var tag = reader.uint32();
-                switch (tag >>> 3) {
-                case 1:
-                    message.position = reader.string();
-                    break;
-                case 2:
-                    message.file_position = reader.string();
-                    break;
-                default:
-                    reader.skipType(tag & 7);
-                    break;
-                }
-            }
-            return message;
-        };
-
-        /**
-         * Decodes a PrimaryStatus message from the specified reader or buffer, length delimited.
-         * @function decodeDelimited
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        PrimaryStatus.decodeDelimited = function decodeDelimited(reader) {
-            if (!(reader instanceof $Reader))
-                reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
-        };
-
-        /**
-         * Verifies a PrimaryStatus message.
-         * @function verify
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {Object.<string,*>} message Plain object to verify
-         * @returns {string|null} `null` if valid, otherwise the reason why it is not
-         */
-        PrimaryStatus.verify = function verify(message) {
-            if (typeof message !== "object" || message === null)
-                return "object expected";
-            if (message.position != null && message.hasOwnProperty("position"))
-                if (!$util.isString(message.position))
-                    return "position: string expected";
-            if (message.file_position != null && message.hasOwnProperty("file_position"))
-                if (!$util.isString(message.file_position))
-                    return "file_position: string expected";
-            return null;
-        };
-
-        /**
-         * Creates a PrimaryStatus message from a plain object. Also converts values to their respective internal types.
-         * @function fromObject
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {Object.<string,*>} object Plain object
-         * @returns {replicationdata.PrimaryStatus} PrimaryStatus
-         */
-        PrimaryStatus.fromObject = function fromObject(object) {
-            if (object instanceof $root.replicationdata.PrimaryStatus)
-                return object;
-            var message = new $root.replicationdata.PrimaryStatus();
-            if (object.position != null)
-                message.position = String(object.position);
-            if (object.file_position != null)
-                message.file_position = String(object.file_position);
-            return message;
-        };
-
-        /**
-         * Creates a plain object from a PrimaryStatus message. Also converts values to other types if specified.
-         * @function toObject
-         * @memberof replicationdata.PrimaryStatus
-         * @static
-         * @param {replicationdata.PrimaryStatus} message PrimaryStatus
-         * @param {$protobuf.IConversionOptions} [options] Conversion options
-         * @returns {Object.<string,*>} Plain object
-         */
-        PrimaryStatus.toObject = function toObject(message, options) {
-            if (!options)
-                options = {};
-            var object = {};
-            if (options.defaults) {
-                object.position = "";
-                object.file_position = "";
-            }
-            if (message.position != null && message.hasOwnProperty("position"))
-                object.position = message.position;
-            if (message.file_position != null && message.hasOwnProperty("file_position"))
-                object.file_position = message.file_position;
-            return object;
-        };
-
-        /**
-         * Converts this PrimaryStatus to JSON.
-         * @function toJSON
-         * @memberof replicationdata.PrimaryStatus
-         * @instance
-         * @returns {Object.<string,*>} JSON object
-         */
-        PrimaryStatus.prototype.toJSON = function toJSON() {
-            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
-        };
-
-        return PrimaryStatus;
     })();
 
     replicationdata.PrimaryStatus = (function() {
@@ -67980,6 +69006,353 @@ $root.vtctldata = (function() {
         return DeleteShardsResponse;
     })();
 
+    vtctldata.DeleteSrvVSchemaRequest = (function() {
+
+        /**
+         * Properties of a DeleteSrvVSchemaRequest.
+         * @memberof vtctldata
+         * @interface IDeleteSrvVSchemaRequest
+         * @property {string|null} [cell] DeleteSrvVSchemaRequest cell
+         */
+
+        /**
+         * Constructs a new DeleteSrvVSchemaRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteSrvVSchemaRequest.
+         * @implements IDeleteSrvVSchemaRequest
+         * @constructor
+         * @param {vtctldata.IDeleteSrvVSchemaRequest=} [properties] Properties to set
+         */
+        function DeleteSrvVSchemaRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * DeleteSrvVSchemaRequest cell.
+         * @member {string} cell
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @instance
+         */
+        DeleteSrvVSchemaRequest.prototype.cell = "";
+
+        /**
+         * Creates a new DeleteSrvVSchemaRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest=} [properties] Properties to set
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest instance
+         */
+        DeleteSrvVSchemaRequest.create = function create(properties) {
+            return new DeleteSrvVSchemaRequest(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cell != null && Object.hasOwnProperty.call(message, "cell"))
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.cell);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.cell = reader.string();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteSrvVSchemaRequest message.
+         * @function verify
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteSrvVSchemaRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                if (!$util.isString(message.cell))
+                    return "cell: string expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteSrvVSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteSrvVSchemaRequest} DeleteSrvVSchemaRequest
+         */
+        DeleteSrvVSchemaRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteSrvVSchemaRequest)
+                return object;
+            var message = new $root.vtctldata.DeleteSrvVSchemaRequest();
+            if (object.cell != null)
+                message.cell = String(object.cell);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @static
+         * @param {vtctldata.DeleteSrvVSchemaRequest} message DeleteSrvVSchemaRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteSrvVSchemaRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.cell = "";
+            if (message.cell != null && message.hasOwnProperty("cell"))
+                object.cell = message.cell;
+            return object;
+        };
+
+        /**
+         * Converts this DeleteSrvVSchemaRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteSrvVSchemaRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteSrvVSchemaRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteSrvVSchemaRequest;
+    })();
+
+    vtctldata.DeleteSrvVSchemaResponse = (function() {
+
+        /**
+         * Properties of a DeleteSrvVSchemaResponse.
+         * @memberof vtctldata
+         * @interface IDeleteSrvVSchemaResponse
+         */
+
+        /**
+         * Constructs a new DeleteSrvVSchemaResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a DeleteSrvVSchemaResponse.
+         * @implements IDeleteSrvVSchemaResponse
+         * @constructor
+         * @param {vtctldata.IDeleteSrvVSchemaResponse=} [properties] Properties to set
+         */
+        function DeleteSrvVSchemaResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new DeleteSrvVSchemaResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse=} [properties] Properties to set
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse instance
+         */
+        DeleteSrvVSchemaResponse.create = function create(properties) {
+            return new DeleteSrvVSchemaResponse(properties);
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified DeleteSrvVSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.DeleteSrvVSchemaResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.IDeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        DeleteSrvVSchemaResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.DeleteSrvVSchemaResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a DeleteSrvVSchemaResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        DeleteSrvVSchemaResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a DeleteSrvVSchemaResponse message.
+         * @function verify
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        DeleteSrvVSchemaResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a DeleteSrvVSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.DeleteSrvVSchemaResponse} DeleteSrvVSchemaResponse
+         */
+        DeleteSrvVSchemaResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.DeleteSrvVSchemaResponse)
+                return object;
+            return new $root.vtctldata.DeleteSrvVSchemaResponse();
+        };
+
+        /**
+         * Creates a plain object from a DeleteSrvVSchemaResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @static
+         * @param {vtctldata.DeleteSrvVSchemaResponse} message DeleteSrvVSchemaResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        DeleteSrvVSchemaResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this DeleteSrvVSchemaResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.DeleteSrvVSchemaResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        DeleteSrvVSchemaResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return DeleteSrvVSchemaResponse;
+    })();
+
     vtctldata.DeleteTabletsRequest = (function() {
 
         /**
@@ -73019,6 +74392,641 @@ $root.vtctldata = (function() {
         };
 
         return GetShardResponse;
+    })();
+
+    vtctldata.GetSrvKeyspaceNamesRequest = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspaceNamesRequest.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspaceNamesRequest
+         * @property {Array.<string>|null} [cells] GetSrvKeyspaceNamesRequest cells
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspaceNamesRequest.
+         * @implements IGetSrvKeyspaceNamesRequest
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest=} [properties] Properties to set
+         */
+        function GetSrvKeyspaceNamesRequest(properties) {
+            this.cells = [];
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspaceNamesRequest cells.
+         * @member {Array.<string>} cells
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @instance
+         */
+        GetSrvKeyspaceNamesRequest.prototype.cells = $util.emptyArray;
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest instance
+         */
+        GetSrvKeyspaceNamesRequest.create = function create(properties) {
+            return new GetSrvKeyspaceNamesRequest(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.cells != null && message.cells.length)
+                for (var i = 0; i < message.cells.length; ++i)
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.cells[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesRequest message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (!(message.cells && message.cells.length))
+                        message.cells = [];
+                    message.cells.push(reader.string());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesRequest message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspaceNamesRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.cells != null && message.hasOwnProperty("cells")) {
+                if (!Array.isArray(message.cells))
+                    return "cells: array expected";
+                for (var i = 0; i < message.cells.length; ++i)
+                    if (!$util.isString(message.cells[i]))
+                        return "cells: string[] expected";
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspaceNamesRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspaceNamesRequest} GetSrvKeyspaceNamesRequest
+         */
+        GetSrvKeyspaceNamesRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesRequest)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspaceNamesRequest();
+            if (object.cells) {
+                if (!Array.isArray(object.cells))
+                    throw TypeError(".vtctldata.GetSrvKeyspaceNamesRequest.cells: array expected");
+                message.cells = [];
+                for (var i = 0; i < object.cells.length; ++i)
+                    message.cells[i] = String(object.cells[i]);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @static
+         * @param {vtctldata.GetSrvKeyspaceNamesRequest} message GetSrvKeyspaceNamesRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspaceNamesRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.arrays || options.defaults)
+                object.cells = [];
+            if (message.cells && message.cells.length) {
+                object.cells = [];
+                for (var j = 0; j < message.cells.length; ++j)
+                    object.cells[j] = message.cells[j];
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspaceNamesRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspaceNamesRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return GetSrvKeyspaceNamesRequest;
+    })();
+
+    vtctldata.GetSrvKeyspaceNamesResponse = (function() {
+
+        /**
+         * Properties of a GetSrvKeyspaceNamesResponse.
+         * @memberof vtctldata
+         * @interface IGetSrvKeyspaceNamesResponse
+         * @property {Object.<string,vtctldata.GetSrvKeyspaceNamesResponse.INameList>|null} [names] GetSrvKeyspaceNamesResponse names
+         */
+
+        /**
+         * Constructs a new GetSrvKeyspaceNamesResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a GetSrvKeyspaceNamesResponse.
+         * @implements IGetSrvKeyspaceNamesResponse
+         * @constructor
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse=} [properties] Properties to set
+         */
+        function GetSrvKeyspaceNamesResponse(properties) {
+            this.names = {};
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * GetSrvKeyspaceNamesResponse names.
+         * @member {Object.<string,vtctldata.GetSrvKeyspaceNamesResponse.INameList>} names
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @instance
+         */
+        GetSrvKeyspaceNamesResponse.prototype.names = $util.emptyObject;
+
+        /**
+         * Creates a new GetSrvKeyspaceNamesResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse=} [properties] Properties to set
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse instance
+         */
+        GetSrvKeyspaceNamesResponse.create = function create(properties) {
+            return new GetSrvKeyspaceNamesResponse(properties);
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.names != null && Object.hasOwnProperty.call(message, "names"))
+                for (var keys = Object.keys(message.names), i = 0; i < keys.length; ++i) {
+                    writer.uint32(/* id 1, wireType 2 =*/10).fork().uint32(/* id 1, wireType 2 =*/10).string(keys[i]);
+                    $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.encode(message.names[keys[i]], writer.uint32(/* id 2, wireType 2 =*/18).fork()).ldelim().ldelim();
+                }
+            return writer;
+        };
+
+        /**
+         * Encodes the specified GetSrvKeyspaceNamesResponse message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.IGetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        GetSrvKeyspaceNamesResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse(), key, value;
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    if (message.names === $util.emptyObject)
+                        message.names = {};
+                    var end2 = reader.uint32() + reader.pos;
+                    key = "";
+                    value = null;
+                    while (reader.pos < end2) {
+                        var tag2 = reader.uint32();
+                        switch (tag2 >>> 3) {
+                        case 1:
+                            key = reader.string();
+                            break;
+                        case 2:
+                            value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.uint32());
+                            break;
+                        default:
+                            reader.skipType(tag2 & 7);
+                            break;
+                        }
+                    }
+                    message.names[key] = value;
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a GetSrvKeyspaceNamesResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        GetSrvKeyspaceNamesResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a GetSrvKeyspaceNamesResponse message.
+         * @function verify
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        GetSrvKeyspaceNamesResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.names != null && message.hasOwnProperty("names")) {
+                if (!$util.isObject(message.names))
+                    return "names: object expected";
+                var key = Object.keys(message.names);
+                for (var i = 0; i < key.length; ++i) {
+                    var error = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify(message.names[key[i]]);
+                    if (error)
+                        return "names." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a GetSrvKeyspaceNamesResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.GetSrvKeyspaceNamesResponse} GetSrvKeyspaceNamesResponse
+         */
+        GetSrvKeyspaceNamesResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesResponse)
+                return object;
+            var message = new $root.vtctldata.GetSrvKeyspaceNamesResponse();
+            if (object.names) {
+                if (typeof object.names !== "object")
+                    throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.names: object expected");
+                message.names = {};
+                for (var keys = Object.keys(object.names), i = 0; i < keys.length; ++i) {
+                    if (typeof object.names[keys[i]] !== "object")
+                        throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.names: object expected");
+                    message.names[keys[i]] = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.fromObject(object.names[keys[i]]);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a GetSrvKeyspaceNamesResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @static
+         * @param {vtctldata.GetSrvKeyspaceNamesResponse} message GetSrvKeyspaceNamesResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        GetSrvKeyspaceNamesResponse.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.objects || options.defaults)
+                object.names = {};
+            var keys2;
+            if (message.names && (keys2 = Object.keys(message.names)).length) {
+                object.names = {};
+                for (var j = 0; j < keys2.length; ++j)
+                    object.names[keys2[j]] = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.toObject(message.names[keys2[j]], options);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this GetSrvKeyspaceNamesResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        GetSrvKeyspaceNamesResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        GetSrvKeyspaceNamesResponse.NameList = (function() {
+
+            /**
+             * Properties of a NameList.
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+             * @interface INameList
+             * @property {Array.<string>|null} [names] NameList names
+             */
+
+            /**
+             * Constructs a new NameList.
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse
+             * @classdesc Represents a NameList.
+             * @implements INameList
+             * @constructor
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList=} [properties] Properties to set
+             */
+            function NameList(properties) {
+                this.names = [];
+                if (properties)
+                    for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null)
+                            this[keys[i]] = properties[keys[i]];
+            }
+
+            /**
+             * NameList names.
+             * @member {Array.<string>} names
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @instance
+             */
+            NameList.prototype.names = $util.emptyArray;
+
+            /**
+             * Creates a new NameList instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList=} [properties] Properties to set
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList instance
+             */
+            NameList.create = function create(properties) {
+                return new NameList(properties);
+            };
+
+            /**
+             * Encodes the specified NameList message. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList} message NameList message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NameList.encode = function encode(message, writer) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (message.names != null && message.names.length)
+                    for (var i = 0; i < message.names.length; ++i)
+                        writer.uint32(/* id 1, wireType 2 =*/10).string(message.names[i]);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified NameList message, length delimited. Does not implicitly {@link vtctldata.GetSrvKeyspaceNamesResponse.NameList.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.INameList} message NameList message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            NameList.encodeDelimited = function encodeDelimited(message, writer) {
+                return this.encode(message, writer).ldelim();
+            };
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NameList.decode = function decode(reader, length) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList();
+                while (reader.pos < end) {
+                    var tag = reader.uint32();
+                    switch (tag >>> 3) {
+                    case 1:
+                        if (!(message.names && message.names.length))
+                            message.names = [];
+                        message.names.push(reader.string());
+                        break;
+                    default:
+                        reader.skipType(tag & 7);
+                        break;
+                    }
+                }
+                return message;
+            };
+
+            /**
+             * Decodes a NameList message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            NameList.decodeDelimited = function decodeDelimited(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a NameList message.
+             * @function verify
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            NameList.verify = function verify(message) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (message.names != null && message.hasOwnProperty("names")) {
+                    if (!Array.isArray(message.names))
+                        return "names: array expected";
+                    for (var i = 0; i < message.names.length; ++i)
+                        if (!$util.isString(message.names[i]))
+                            return "names: string[] expected";
+                }
+                return null;
+            };
+
+            /**
+             * Creates a NameList message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.GetSrvKeyspaceNamesResponse.NameList} NameList
+             */
+            NameList.fromObject = function fromObject(object) {
+                if (object instanceof $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList)
+                    return object;
+                var message = new $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList();
+                if (object.names) {
+                    if (!Array.isArray(object.names))
+                        throw TypeError(".vtctldata.GetSrvKeyspaceNamesResponse.NameList.names: array expected");
+                    message.names = [];
+                    for (var i = 0; i < object.names.length; ++i)
+                        message.names[i] = String(object.names[i]);
+                }
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a NameList message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @static
+             * @param {vtctldata.GetSrvKeyspaceNamesResponse.NameList} message NameList
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            NameList.toObject = function toObject(message, options) {
+                if (!options)
+                    options = {};
+                var object = {};
+                if (options.arrays || options.defaults)
+                    object.names = [];
+                if (message.names && message.names.length) {
+                    object.names = [];
+                    for (var j = 0; j < message.names.length; ++j)
+                        object.names[j] = message.names[j];
+                }
+                return object;
+            };
+
+            /**
+             * Converts this NameList to JSON.
+             * @function toJSON
+             * @memberof vtctldata.GetSrvKeyspaceNamesResponse.NameList
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            NameList.prototype.toJSON = function toJSON() {
+                return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            return NameList;
+        })();
+
+        return GetSrvKeyspaceNamesResponse;
     })();
 
     vtctldata.GetSrvKeyspacesRequest = (function() {
@@ -79487,6 +81495,381 @@ $root.vtctldata = (function() {
         return ReparentTabletResponse;
     })();
 
+    vtctldata.SetWritableRequest = (function() {
+
+        /**
+         * Properties of a SetWritableRequest.
+         * @memberof vtctldata
+         * @interface ISetWritableRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] SetWritableRequest tablet_alias
+         * @property {boolean|null} [writable] SetWritableRequest writable
+         */
+
+        /**
+         * Constructs a new SetWritableRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a SetWritableRequest.
+         * @implements ISetWritableRequest
+         * @constructor
+         * @param {vtctldata.ISetWritableRequest=} [properties] Properties to set
+         */
+        function SetWritableRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SetWritableRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         */
+        SetWritableRequest.prototype.tablet_alias = null;
+
+        /**
+         * SetWritableRequest writable.
+         * @member {boolean} writable
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         */
+        SetWritableRequest.prototype.writable = false;
+
+        /**
+         * Creates a new SetWritableRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest=} [properties] Properties to set
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest instance
+         */
+        SetWritableRequest.create = function create(properties) {
+            return new SetWritableRequest(properties);
+        };
+
+        /**
+         * Encodes the specified SetWritableRequest message. Does not implicitly {@link vtctldata.SetWritableRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest} message SetWritableRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.writable != null && Object.hasOwnProperty.call(message, "writable"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.writable);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetWritableRequest message, length delimited. Does not implicitly {@link vtctldata.SetWritableRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest} message SetWritableRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetWritableRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.writable = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetWritableRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetWritableRequest message.
+         * @function verify
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetWritableRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.writable != null && message.hasOwnProperty("writable"))
+                if (typeof message.writable !== "boolean")
+                    return "writable: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetWritableRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         */
+        SetWritableRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetWritableRequest)
+                return object;
+            var message = new $root.vtctldata.SetWritableRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.SetWritableRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            if (object.writable != null)
+                message.writable = Boolean(object.writable);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SetWritableRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.SetWritableRequest} message SetWritableRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetWritableRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.tablet_alias = null;
+                object.writable = false;
+            }
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            if (message.writable != null && message.hasOwnProperty("writable"))
+                object.writable = message.writable;
+            return object;
+        };
+
+        /**
+         * Converts this SetWritableRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetWritableRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SetWritableRequest;
+    })();
+
+    vtctldata.SetWritableResponse = (function() {
+
+        /**
+         * Properties of a SetWritableResponse.
+         * @memberof vtctldata
+         * @interface ISetWritableResponse
+         */
+
+        /**
+         * Constructs a new SetWritableResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a SetWritableResponse.
+         * @implements ISetWritableResponse
+         * @constructor
+         * @param {vtctldata.ISetWritableResponse=} [properties] Properties to set
+         */
+        function SetWritableResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new SetWritableResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse=} [properties] Properties to set
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse instance
+         */
+        SetWritableResponse.create = function create(properties) {
+            return new SetWritableResponse(properties);
+        };
+
+        /**
+         * Encodes the specified SetWritableResponse message. Does not implicitly {@link vtctldata.SetWritableResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse} message SetWritableResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetWritableResponse message, length delimited. Does not implicitly {@link vtctldata.SetWritableResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse} message SetWritableResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetWritableResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetWritableResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetWritableResponse message.
+         * @function verify
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetWritableResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetWritableResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         */
+        SetWritableResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetWritableResponse)
+                return object;
+            return new $root.vtctldata.SetWritableResponse();
+        };
+
+        /**
+         * Creates a plain object from a SetWritableResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.SetWritableResponse} message SetWritableResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetWritableResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this SetWritableResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetWritableResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetWritableResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SetWritableResponse;
+    })();
+
     vtctldata.ShardReplicationPositionsRequest = (function() {
 
         /**
@@ -79988,6 +82371,710 @@ $root.vtctldata = (function() {
         };
 
         return ShardReplicationPositionsResponse;
+    })();
+
+    vtctldata.StartReplicationRequest = (function() {
+
+        /**
+         * Properties of a StartReplicationRequest.
+         * @memberof vtctldata
+         * @interface IStartReplicationRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] StartReplicationRequest tablet_alias
+         */
+
+        /**
+         * Constructs a new StartReplicationRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a StartReplicationRequest.
+         * @implements IStartReplicationRequest
+         * @constructor
+         * @param {vtctldata.IStartReplicationRequest=} [properties] Properties to set
+         */
+        function StartReplicationRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StartReplicationRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.StartReplicationRequest
+         * @instance
+         */
+        StartReplicationRequest.prototype.tablet_alias = null;
+
+        /**
+         * Creates a new StartReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest=} [properties] Properties to set
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest instance
+         */
+        StartReplicationRequest.create = function create(properties) {
+            return new StartReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StartReplicationRequest message. Does not implicitly {@link vtctldata.StartReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest} message StartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.StartReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest} message StartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartReplicationRequest message.
+         * @function verify
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartReplicationRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         */
+        StartReplicationRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StartReplicationRequest)
+                return object;
+            var message = new $root.vtctldata.StartReplicationRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.StartReplicationRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StartReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.StartReplicationRequest} message StartReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartReplicationRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.tablet_alias = null;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            return object;
+        };
+
+        /**
+         * Converts this StartReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StartReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartReplicationRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StartReplicationRequest;
+    })();
+
+    vtctldata.StartReplicationResponse = (function() {
+
+        /**
+         * Properties of a StartReplicationResponse.
+         * @memberof vtctldata
+         * @interface IStartReplicationResponse
+         */
+
+        /**
+         * Constructs a new StartReplicationResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a StartReplicationResponse.
+         * @implements IStartReplicationResponse
+         * @constructor
+         * @param {vtctldata.IStartReplicationResponse=} [properties] Properties to set
+         */
+        function StartReplicationResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new StartReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse=} [properties] Properties to set
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse instance
+         */
+        StartReplicationResponse.create = function create(properties) {
+            return new StartReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StartReplicationResponse message. Does not implicitly {@link vtctldata.StartReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse} message StartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.StartReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse} message StartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartReplicationResponse message.
+         * @function verify
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartReplicationResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a StartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         */
+        StartReplicationResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StartReplicationResponse)
+                return object;
+            return new $root.vtctldata.StartReplicationResponse();
+        };
+
+        /**
+         * Creates a plain object from a StartReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.StartReplicationResponse} message StartReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartReplicationResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this StartReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StartReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartReplicationResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StartReplicationResponse;
+    })();
+
+    vtctldata.StopReplicationRequest = (function() {
+
+        /**
+         * Properties of a StopReplicationRequest.
+         * @memberof vtctldata
+         * @interface IStopReplicationRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] StopReplicationRequest tablet_alias
+         */
+
+        /**
+         * Constructs a new StopReplicationRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a StopReplicationRequest.
+         * @implements IStopReplicationRequest
+         * @constructor
+         * @param {vtctldata.IStopReplicationRequest=} [properties] Properties to set
+         */
+        function StopReplicationRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StopReplicationRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.StopReplicationRequest
+         * @instance
+         */
+        StopReplicationRequest.prototype.tablet_alias = null;
+
+        /**
+         * Creates a new StopReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest=} [properties] Properties to set
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest instance
+         */
+        StopReplicationRequest.create = function create(properties) {
+            return new StopReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StopReplicationRequest message. Does not implicitly {@link vtctldata.StopReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest} message StopReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.StopReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest} message StopReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopReplicationRequest message.
+         * @function verify
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopReplicationRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StopReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         */
+        StopReplicationRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StopReplicationRequest)
+                return object;
+            var message = new $root.vtctldata.StopReplicationRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.StopReplicationRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StopReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.StopReplicationRequest} message StopReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopReplicationRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.tablet_alias = null;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            return object;
+        };
+
+        /**
+         * Converts this StopReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StopReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopReplicationRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StopReplicationRequest;
+    })();
+
+    vtctldata.StopReplicationResponse = (function() {
+
+        /**
+         * Properties of a StopReplicationResponse.
+         * @memberof vtctldata
+         * @interface IStopReplicationResponse
+         */
+
+        /**
+         * Constructs a new StopReplicationResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a StopReplicationResponse.
+         * @implements IStopReplicationResponse
+         * @constructor
+         * @param {vtctldata.IStopReplicationResponse=} [properties] Properties to set
+         */
+        function StopReplicationResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new StopReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse=} [properties] Properties to set
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse instance
+         */
+        StopReplicationResponse.create = function create(properties) {
+            return new StopReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StopReplicationResponse message. Does not implicitly {@link vtctldata.StopReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse} message StopReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.StopReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse} message StopReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopReplicationResponse message.
+         * @function verify
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopReplicationResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a StopReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         */
+        StopReplicationResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StopReplicationResponse)
+                return object;
+            return new $root.vtctldata.StopReplicationResponse();
+        };
+
+        /**
+         * Creates a plain object from a StopReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.StopReplicationResponse} message StopReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopReplicationResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this StopReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StopReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopReplicationResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StopReplicationResponse;
     })();
 
     vtctldata.TabletExternallyReparentedRequest = (function() {

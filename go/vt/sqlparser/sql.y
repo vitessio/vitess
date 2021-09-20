@@ -63,7 +63,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   strs          []string
   vindexParam   VindexParam
   colIdent      ColIdent
-  joinCondition JoinCondition
+  joinCondition *JoinCondition
   collateAndCharset CollateAndCharset
   columnType    ColumnType
 }
@@ -3488,21 +3488,21 @@ join_table:
 
 join_condition:
   ON expression
-  { $$ = JoinCondition{On: $2} }
+  { $$ = &JoinCondition{On: $2} }
 | USING '(' column_list ')'
-  { $$ = JoinCondition{Using: $3} }
+  { $$ = &JoinCondition{Using: $3} }
 
 join_condition_opt:
 %prec JOIN
-  { $$ = JoinCondition{} }
+  { $$ = &JoinCondition{} }
 | join_condition
   { $$ = $1 }
 
 on_expression_opt:
 %prec JOIN
-  { $$ = JoinCondition{} }
+  { $$ = &JoinCondition{} }
 | ON expression
-  { $$ = JoinCondition{On: $2} }
+  { $$ = &JoinCondition{On: $2} }
 
 as_opt:
   { $$ = struct{}{} }
