@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
@@ -268,14 +269,21 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 
-// - create a shard with primary and replica1 only
-//- run InitShardPrimary
-//- insert some data
-// - take a backup on primary
-// - insert more data on the primary
-//- bring up tablet_replica2 after the fact, let it restore the backup
-//- check all data is right (before+after backup data)
-//- list the backup, remove it
+//  1. create a shard with primary and replica1 only
+//  2. run InitShardPrimary
+//  3. insert some data
+//  4. take a backup on primary and save the timestamp
+//  5. bring up tablet_replica2 after the fact, let it restore the (latest/second) backup
+//  6. check all data is right (before+after backup data)
+//  7. insert more data on the primary
+//  8. take another backup
+//  9. verify that we now have 2 backups
+// 10. do a PRS to make the original primary a replica so that we can do a restore there
+// 11. Delete+teardown the new primary so that we can restore the first backup on the original
+//     primary to confirm we don't have the data from #7
+// 12. restore first backup on the original primary tablet using the first backup timstamp
+// 13. verify that don't have the data added after the first backup
+// 14. remove the backups
 func primaryBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
@@ -288,6 +296,9 @@ func primaryBackup(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
 	require.Nil(t, err)
 
+	// We'll restore this on the primary later to test timestamp based backups
+	firstBackupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
+
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	assert.Contains(t, backups[0], primary.Alias)
 
@@ -298,11 +309,44 @@ func primaryBackup(t *testing.T) {
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
 
+	// Verify that we have all the new data -- we should have 2 records now...
+	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
-	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
+	require.Nil(t, err)
+
+	backups = localCluster.VerifyBackupCount(t, shardKsName, 2)
+	assert.Contains(t, backups[1], primary.Alias)
+
+	// Perform PRS to demote the primary tablet (primary) so that we can do a restore there and verify we don't have the
+	// data from after the older/first backup
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
+		"-keyspace_shard", shardKsName,
+		"-new_primary", replica2.Alias)
+	require.Nil(t, err)
+
+	// Delete the current primary tablet (replica2) so that the original primary tablet (primary) can be restored from the
+	// older/first backup w/o it replicating the subsequent insert done after the first backup was taken
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_primary=true", replica2.Alias)
+	require.Nil(t, err)
 	err = replica2.VttabletProcess.TearDown()
+	require.Nil(t, err)
+
+	// Restore the older/first backup -- using the timestamp we saved -- on the original primary tablet (primary)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "-backup_timestamp", firstBackupTimestamp, primary.Alias)
+	require.Nil(t, err)
+
+	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
+	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+	require.Nil(t, err)
+
+	// Verify that we don't have the record created after the older/first backup
+	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 1)
+	cluster.VerifyLocalMetadata(t, primary, keyspaceName, shardName, cell)
+
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	require.Nil(t, err)
 
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
