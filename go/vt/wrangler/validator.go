@@ -17,289 +17,79 @@ limitations under the License.
 package wrangler
 
 import (
-	"errors"
-	"fmt"
-	"sync"
-
 	"context"
+	"errors"
 
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/logutil"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-// As with all distributed systems, things can skew. These functions
-// explore data in topology server and attempt to square that with reality.
-//
-// Given the node counts are usually large, this work should be done
-// with as much parallelism as is viable.
-//
-// This may eventually move into a separate package.
-
-// waitForResults will wait for all the errors to come back.
-// There is no timeout, as individual calls will use the context and timeout
-// and fail at the end anyway.
-func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan error) error {
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-
-	var finalErr error
-	for err := range results {
-		finalErr = errors.New("some validation errors - see log")
-		wr.Logger().Error(err)
-	}
-	return finalErr
-}
-
-// Validate all tablets in all discoverable cells, even if they are
-// not in the replication graph.
-func (wr *Wrangler) validateAllTablets(ctx context.Context, wg *sync.WaitGroup, results chan<- error) {
-	cellSet := make(map[string]bool, 16)
-
-	keyspaces, err := wr.ts.GetKeyspaces(ctx)
-	if err != nil {
-		results <- fmt.Errorf("TopologyServer.GetKeyspaces failed: %v", err)
-		return
-	}
-	for _, keyspace := range keyspaces {
-		shards, err := wr.ts.GetShardNames(ctx, keyspace)
-		if err != nil {
-			results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
-			return
+// consumeValidationResults consumes results from Validate(Keyspace|Shard)? methods.
+// If there are any results (synonymous with "validation failure") then the
+// overall method returns a generic error instructing the user to look in the
+// vtctld logs, and each validation failure is logged at the error level.
+func consumeValidationResults(logger logutil.Logger, results []string) (err error) {
+	for _, result := range results {
+		if err == nil {
+			err = errors.New("some validation errors - see log")
 		}
 
-		for _, shard := range shards {
-			aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-			if err != nil {
-				results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
-				return
-			}
-			for _, alias := range aliases {
-				cellSet[alias.Cell] = true
-			}
-		}
+		logger.Error(errors.New(result))
 	}
 
-	for cell := range cellSet {
-		aliases, err := wr.ts.GetTabletsByCell(ctx, cell)
-		if err != nil {
-			results <- fmt.Errorf("TopologyServer.GetTabletsByCell(%v) failed: %v", cell, err)
-			continue
-		}
-
-		for _, alias := range aliases {
-			wg.Add(1)
-			go func(alias *topodatapb.TabletAlias) {
-				defer wg.Done()
-				if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-					results <- fmt.Errorf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
-				} else {
-					wr.Logger().Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
-				}
-			}(alias)
-		}
-	}
-}
-
-func (wr *Wrangler) validateKeyspace(ctx context.Context, keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
-	// Validate replication graph by traversing each shard.
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		results <- fmt.Errorf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err)
-		return
-	}
-	for _, shard := range shards {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			wr.validateShard(ctx, keyspace, shard, pingTablets, wg, results)
-		}(shard)
-	}
-}
-
-func (wr *Wrangler) validateShard(ctx context.Context, keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- error) {
-	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		results <- fmt.Errorf("TopologyServer.GetShard(%v, %v) failed: %v", keyspace, shard, err)
-		return
-	}
-
-	aliases, err := wr.ts.FindAllTabletAliasesInShard(ctx, keyspace, shard)
-	if err != nil {
-		results <- fmt.Errorf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", keyspace, shard, err)
-		return
-	}
-
-	tabletMap, _ := wr.ts.GetTabletMap(ctx, aliases)
-
-	var primaryAlias *topodatapb.TabletAlias
-	for _, alias := range aliases {
-		tabletInfo, ok := tabletMap[topoproto.TabletAliasString(alias)]
-		if !ok {
-			results <- fmt.Errorf("tablet %v not found in map", topoproto.TabletAliasString(alias))
-			continue
-		}
-		if tabletInfo.Type == topodatapb.TabletType_PRIMARY {
-			if primaryAlias != nil {
-				results <- fmt.Errorf("shard %v/%v already has primary %v but found other primary %v", keyspace, shard, topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(alias))
-			} else {
-				primaryAlias = alias
-			}
-		}
-	}
-
-	if primaryAlias == nil {
-		results <- fmt.Errorf("no primary for shard %v/%v", keyspace, shard)
-	} else if !topoproto.TabletAliasEqual(shardInfo.PrimaryAlias, primaryAlias) {
-		results <- fmt.Errorf("primary mismatch for shard %v/%v: found %v, expected %v", keyspace, shard, topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(shardInfo.PrimaryAlias))
-	}
-
-	for _, alias := range aliases {
-		wg.Add(1)
-		go func(alias *topodatapb.TabletAlias) {
-			defer wg.Done()
-			if err := topo.Validate(ctx, wr.ts, alias); err != nil {
-				results <- fmt.Errorf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
-			} else {
-				wr.Logger().Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
-			}
-		}(alias)
-	}
-
-	if pingTablets {
-		wr.validateReplication(ctx, shardInfo, tabletMap, results)
-		wr.pingTablets(ctx, tabletMap, wg, results)
-	}
-}
-
-func (wr *Wrangler) validateReplication(ctx context.Context, shardInfo *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- error) {
-	if shardInfo.PrimaryAlias == nil {
-		results <- fmt.Errorf("no primary in shard record %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
-		return
-	}
-
-	shardInfoPrimaryAliasStr := topoproto.TabletAliasString(shardInfo.PrimaryAlias)
-	primaryTabletInfo, ok := tabletMap[shardInfoPrimaryAliasStr]
-	if !ok {
-		results <- fmt.Errorf("primary %v not in tablet map", shardInfoPrimaryAliasStr)
-		return
-	}
-
-	replicaList, err := wr.tmc.GetReplicas(ctx, primaryTabletInfo.Tablet)
-	if err != nil {
-		results <- fmt.Errorf("GetReplicas(%v) failed: %v", primaryTabletInfo, err)
-		return
-	}
-	if len(replicaList) == 0 {
-		results <- fmt.Errorf("no replicas of tablet %v found", shardInfoPrimaryAliasStr)
-		return
-	}
-
-	tabletIPMap := make(map[string]*topodatapb.Tablet)
-	replicaIPMap := make(map[string]bool)
-	for _, tablet := range tabletMap {
-		ip, err := topoproto.MySQLIP(tablet.Tablet)
-		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
-			continue
-		}
-		tabletIPMap[netutil.NormalizeIP(ip)] = tablet.Tablet
-	}
-
-	// See if every replica is in the replication graph.
-	for _, replicaAddr := range replicaList {
-		if tabletIPMap[netutil.NormalizeIP(replicaAddr)] == nil {
-			results <- fmt.Errorf("replica %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", replicaAddr, shardInfo.Keyspace(), shardInfo.ShardName())
-		}
-		replicaIPMap[netutil.NormalizeIP(replicaAddr)] = true
-	}
-
-	// See if every entry in the replication graph is connected to the primary.
-	for _, tablet := range tabletMap {
-		if !tablet.IsReplicaType() {
-			continue
-		}
-
-		ip, err := topoproto.MySQLIP(tablet.Tablet)
-		if err != nil {
-			results <- fmt.Errorf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
-			continue
-		}
-		if !replicaIPMap[netutil.NormalizeIP(ip)] {
-			results <- fmt.Errorf("replica %v not replicating: %v replica list: %q", topoproto.TabletAliasString(tablet.Alias), ip, replicaList)
-		}
-	}
-}
-
-func (wr *Wrangler) pingTablets(ctx context.Context, tabletMap map[string]*topo.TabletInfo, wg *sync.WaitGroup, results chan<- error) {
-	for tabletAlias, tabletInfo := range tabletMap {
-		wg.Add(1)
-		go func(tabletAlias string, tabletInfo *topo.TabletInfo) {
-			defer wg.Done()
-
-			if err := wr.tmc.Ping(ctx, tabletInfo.Tablet); err != nil {
-				//lint:ignore ST1005 function name
-				results <- fmt.Errorf("Ping(%v) failed: %v tablet hostname: %v", tabletAlias, err, tabletInfo.Hostname)
-			}
-		}(tabletAlias, tabletInfo)
-	}
+	return err
 }
 
 // Validate a whole TopologyServer tree
 func (wr *Wrangler) Validate(ctx context.Context, pingTablets bool) error {
-	// Results from various actions feed here.
-	results := make(chan error, 16)
-	wg := &sync.WaitGroup{}
-
-	// Validate all tablets in all cells, even if they are not discoverable
-	// by the replication graph.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		wr.validateAllTablets(ctx, wg, results)
-	}()
-
-	// Validate replication graph by traversing each keyspace and then each shard.
-	keyspaces, err := wr.ts.GetKeyspaces(ctx)
+	resp, err := wr.VtctldServer().Validate(ctx, &vtctldatapb.ValidateRequest{
+		PingTablets: pingTablets,
+	})
 	if err != nil {
-		results <- fmt.Errorf("GetKeyspaces failed: %v", err)
-	} else {
-		for _, keyspace := range keyspaces {
-			wg.Add(1)
-			go func(keyspace string) {
-				defer wg.Done()
-				wr.validateKeyspace(ctx, keyspace, pingTablets, wg, results)
-			}(keyspace)
+		return err
+	}
+
+	aggrResults := resp.Results
+	for _, keyspaceResults := range resp.ResultsByKeyspace {
+		aggrResults = append(aggrResults, keyspaceResults.Results...)
+		for _, shardResults := range keyspaceResults.ResultsByShard {
+			aggrResults = append(aggrResults, shardResults.Results...)
 		}
 	}
-	return wr.waitForResults(wg, results)
+
+	return consumeValidationResults(wr.Logger(), aggrResults)
 }
 
 // ValidateKeyspace will validate a bunch of information in a keyspace
 // is correct.
 func (wr *Wrangler) ValidateKeyspace(ctx context.Context, keyspace string, pingTablets bool) error {
-	wg := &sync.WaitGroup{}
-	results := make(chan error, 16)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		wr.validateKeyspace(ctx, keyspace, pingTablets, wg, results)
-	}()
-	return wr.waitForResults(wg, results)
+	resp, err := wr.VtctldServer().ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+		Keyspace:    keyspace,
+		PingTablets: pingTablets,
+	})
+	if err != nil {
+		return err
+	}
+
+	aggrResults := resp.Results
+	for _, shardResults := range resp.ResultsByShard {
+		aggrResults = append(aggrResults, shardResults.Results...)
+	}
+
+	return consumeValidationResults(wr.Logger(), aggrResults)
 }
 
 // ValidateShard will validate a bunch of information in a shard is correct.
 func (wr *Wrangler) ValidateShard(ctx context.Context, keyspace, shard string, pingTablets bool) error {
-	wg := &sync.WaitGroup{}
-	results := make(chan error, 16)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		wr.validateShard(ctx, keyspace, shard, pingTablets, wg, results)
-	}()
-	return wr.waitForResults(wg, results)
+	resp, err := wr.VtctldServer().ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+		Keyspace:    keyspace,
+		Shard:       shard,
+		PingTablets: pingTablets,
+	})
+	if err != nil {
+		return err
+	}
+
+	return consumeValidationResults(wr.Logger(), resp.Results)
 }
