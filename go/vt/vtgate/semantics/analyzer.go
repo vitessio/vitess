@@ -266,28 +266,19 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 
 func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
+	case *sqlparser.Select:
+		if node.Into == nil {
+			return nil
+		}
+		if _, isRootNode := cursor.Parent().(*sqlparser.RootNode); !isRootNode {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+		}
 	case *sqlparser.JoinTableExpr:
 		if node.Condition != nil && node.Condition.Using != nil {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: join with USING(column_list) clause for complex queries")
 		}
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
 			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
-		}
-	case *sqlparser.Subquery:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return Gen4NotSupportedF("%T in subquery", node.Select)
-		}
-		if sel.Into != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
-		}
-	case *sqlparser.DerivedTable:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return nil
-		}
-		if sel.Into != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 	case *sqlparser.FuncExpr:
 		if sqlparser.IsLockingFunc(node) {
