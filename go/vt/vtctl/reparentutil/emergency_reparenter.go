@@ -169,13 +169,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the primary candidate that we want to promote
 	var newPrimary *topodatapb.Tablet
-	newPrimary, err = findPrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
+	var validCandidateTablets []*topodatapb.Tablet
+	newPrimary, validCandidateTablets, err = findPrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	isIdeal := opts.PromotedReplicaIsIdeal(newPrimary, prevPrimary, tabletMap, validCandidates)
+	isIdeal := promotedReplicaIsIdeal(newPrimary, prevPrimary, validCandidateTablets, opts)
 
 	// we now promote our primary candidate and also reparent all the other tablets to start replicating from this candidate
 	validReplacementCandidates, err := promotePrimaryCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, opts.lockAction, tabletMap, statusMap, opts, isIdeal)
