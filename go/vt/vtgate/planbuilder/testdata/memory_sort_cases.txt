@@ -250,9 +250,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
+            "FieldQuery": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1)",
             "OrderBy": "(2|3) ASC",
-            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc",
+            "Query": "select textcol1 as t, count(*) as k, textcol1, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1) order by textcol1 asc",
             "Table": "`user`"
           }
         ]

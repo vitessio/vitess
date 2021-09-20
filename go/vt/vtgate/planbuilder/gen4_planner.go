@@ -98,17 +98,17 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema, starRewrite)
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = queryRewrite(ctx, selStmt)
-	if err != nil {
-		return nil, err
-	}
-
 	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
@@ -154,8 +154,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) planningContext {
-	ctx := planningContext{
+func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
+	ctx := &planningContext{
 		reservedVars: reservedVars,
 		semTable:     semTable,
 		vschema:      vschema,
@@ -194,7 +194,7 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	return nil
 }
 
-func planHorizon(ctx planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
 	switch node := in.(type) {
 	case *sqlparser.Select:
 		hp := horizonPlanning{
@@ -218,7 +218,7 @@ func planHorizon(ctx planningContext, plan logicalPlan, in sqlparser.SelectState
 			return nil, ctx.semTable.ProjectionErr
 		}
 		if isRoute && rb.isSingleShard() {
-			err = createSingleShardRoutePlan(node, rb)
+			err = planSingleShardRoutePlan(node, rb)
 		} else {
 			plan, err = planOrderByOnUnion(ctx, plan, node)
 		}
@@ -235,7 +235,7 @@ func planHorizon(ctx planningContext, plan logicalPlan, in sqlparser.SelectState
 
 }
 
-func planOrderByOnUnion(ctx planningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
+func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
 	qp, err := abstract.CreateQPFromUnion(union, ctx.semTable)
 	if err != nil {
 		return nil, err
