@@ -2127,10 +2127,10 @@ func TestInvalid(t *testing.T) {
 		err:   "syntax error",
 	}, {
 		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
-		err: "syntax error at position 36 near 'into'",
+		err:   "syntax error at position 36 near 'into'",
 	}, {
 		input: "select a from x order by y union select a from c",
-		err: "syntax error",
+		err:   "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2482,7 +2482,7 @@ func TestSelectInto(t *testing.T) {
 	}, {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
-	},  {
+	}, {
 		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
@@ -3305,7 +3305,7 @@ var (
 	}, {
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
-	},  {
+	}, {
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
 	}, {

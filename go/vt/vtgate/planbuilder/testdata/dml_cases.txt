@@ -79,7 +79,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "update unsharded set col = ((select id from unsharded) union (select id from unsharded))"
+    "Query": "update unsharded set col = (select id from unsharded union select id from unsharded)"
   }
 }
 Gen4 plan same as above
@@ -1225,7 +1225,7 @@ Gen4 plan same as above
     },
     "TargetTabletType": "PRIMARY",
     "MultiShardAutocommit": false,
-    "Query": "insert into unsharded (select 1 from dual) union (select 1 from dual)",
+    "Query": "insert into unsharded select 1 from dual union select 1 from dual",
     "TableName": "unsharded"
   }
 }

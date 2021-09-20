@@ -364,7 +364,29 @@ Gen4 plan same as above
 
 # order by inside and outside parenthesis select
 "(select 1 from user order by 1 desc) order by 1 asc limit 2"
-"can't do ORDER BY on top of ORDER BY"
+{
+  "QueryType": "SELECT",
+  "Original": "(select 1 from user order by 1 desc) order by 1 asc limit 2",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select 1, weight_string(1) from `user` order by 1 asc limit :__upper_limit",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"

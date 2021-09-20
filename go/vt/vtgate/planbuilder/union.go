@@ -45,12 +45,12 @@ func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, C
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *sqlparser.ReservedVars, outer *symtab) error {
-	if err := pb.processPart(union.FirstStatement, reservedVars, outer, false); err != nil {
+	if err := pb.processPart(union.FirstStatement, reservedVars, outer); err != nil {
 		return err
 	}
 	for _, us := range union.UnionSelects {
 		rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-		if err := rpb.processPart(us.Statement, reservedVars, outer, false); err != nil {
+		if err := rpb.processPart(us.Statement, reservedVars, outer); err != nil {
 			return err
 		}
 		err := unionRouteMerge(pb.plan, rpb.plan, us)
@@ -89,7 +89,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *s
 	return pb.pushLimit(union.Limit)
 }
 
-func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, outer *symtab, hasParens bool) error {
+func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, outer *symtab) error {
 	switch part := part.(type) {
 	case *sqlparser.Union:
 		return pb.processUnion(part, reservedVars, outer)
@@ -97,33 +97,9 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 		if part.SQLCalcFoundRows {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
 		}
-		if !hasParens {
-			err := checkOrderByAndLimit(part)
-			if err != nil {
-				return err
-			}
-		}
 		return pb.processSelect(part, reservedVars, outer, "")
 	}
 	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
-}
-
-func checkOrderByAndLimit(part *sqlparser.Select) error {
-	if part.OrderBy != nil {
-		return &mysql.SQLError{
-			Num:     mysql.ERWrongUsage,
-			State:   "21000",
-			Message: "Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query",
-		}
-	}
-	if part.Limit != nil {
-		return &mysql.SQLError{
-			Num:     mysql.ERWrongUsage,
-			State:   "21000",
-			Message: "Incorrect usage of UNION and LIMIT - add parens to disambiguate your query",
-		}
-	}
-	return nil
 }
 
 // TODO (systay) we never use this as an actual error. we should rethink the return type
