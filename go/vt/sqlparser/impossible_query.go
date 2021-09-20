@@ -38,7 +38,7 @@ func FormatImpossibleQuery(buf *TrackedBuffer, node SQLNode) {
 			node.GroupBy.Format(buf)
 		}
 	case *Union:
-		if _, isSel := node.FirstStatement.(*Select); isSel {
+		if requiresParen(node.FirstStatement) {
 			buf.astPrintf(node, "(%v)", node.FirstStatement)
 		} else {
 			buf.astPrintf(node, "%v", node.FirstStatement)

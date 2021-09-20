@@ -1444,3 +1444,19 @@ func GetFirstSelect(selStmt SelectStatement) *Select {
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
+
+// GetAllSelects gets all the select statement s
+func GetAllSelects(selStmt SelectStatement) []*Select {
+	switch node := selStmt.(type) {
+	case *Select:
+		return []*Select{node}
+	case *Union:
+		var res []*Select
+		res = append(res, GetAllSelects(node.FirstStatement)...)
+		for _, unionSelect := range node.UnionSelects {
+			res = append(res, GetAllSelects(unionSelect.Statement)...)
+		}
+		return res
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}

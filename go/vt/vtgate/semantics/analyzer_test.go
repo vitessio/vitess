@@ -598,10 +598,10 @@ func TestOrderByBindingTable(t *testing.T) {
 		T1 | T2,
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
-		T1 | T2,
+		T1 | T2 | T4,
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
-		T1 | T2,
+		T1 | T2 | T4,
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
