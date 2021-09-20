@@ -101,7 +101,7 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 			source: qt,
 		}, nil
 	default:
-		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
 }
 

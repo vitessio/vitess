@@ -663,7 +663,7 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	}
 	_, ok := expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, 0, false, semantics.Gen4NotSupportedF("group by/order by non-column expression")
+		return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
 	}
 	qt := semTable.TypeFor(expr)
 	wsNeeded := true
@@ -980,14 +980,9 @@ func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) er
 func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
 	switch node := plan.(type) {
 	case *route:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on unexpected select statement: %T", node.Select)
-		}
+		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
 		return nil
-	case *join:
-		return semantics.Gen4NotSupportedF("having on join")
 	case *pulloutSubquery:
 		return pushHaving(expr, node.underlying, semTable)
 	case *simpleProjection:

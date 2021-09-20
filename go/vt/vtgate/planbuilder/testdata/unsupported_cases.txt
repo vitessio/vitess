@@ -137,10 +137,12 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
 # Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
+Gen4 plan same as above
 
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
+Gen4 plan same as above
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
