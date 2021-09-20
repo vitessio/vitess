@@ -39,10 +39,10 @@ type (
 	// EmergencyReparentShard operations. Options are passed by value, so it is safe
 	// for callers to mutate and reuse options structs for multiple calls.
 	EmergencyReparentOptions struct {
-		newPrimaryAlias         *topodatapb.TabletAlias
-		ignoreReplicas          sets.String
-		waitReplicasTimeout     time.Duration
-		allowCrossCellPromotion bool
+		newPrimaryAlias           *topodatapb.TabletAlias
+		ignoreReplicas            sets.String
+		waitReplicasTimeout       time.Duration
+		preventCrossCellPromotion bool
 
 		lockAction string
 	}
