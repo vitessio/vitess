@@ -49,12 +49,12 @@ func (c *Concatenate) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (c *Concatenate) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (c *Concatenate) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
 	panic("implement me")
 }
 
