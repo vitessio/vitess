@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -42,7 +44,7 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 		return nil
 	}
 
-	return semantics.Gen4NotSupportedF("still not sure what to do with this predicate")
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface

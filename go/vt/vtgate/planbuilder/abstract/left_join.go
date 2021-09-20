@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -36,7 +38,7 @@ func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTa
 		return oj.Left.PushPredicate(expr, semTable)
 	}
 
-	return semantics.Gen4NotSupportedF("cannot push predicates to the RHS of an outer join")
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface
