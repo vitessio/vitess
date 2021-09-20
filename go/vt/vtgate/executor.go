@@ -19,6 +19,8 @@ package vtgate
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -151,9 +154,15 @@ func NewExecutor(
 		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", func() int64 {
 			return int64(e.plans.Len())
 		})
-		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.UsedCapacity)
-		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.MaxCapacity)
-		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", func() int64 {
+			return e.plans.UsedCapacity()
+		})
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", func() int64 {
+			return e.plans.MaxCapacity()
+		})
+		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", func() int64 {
+			return e.plans.Evictions()
+		})
 		http.Handle(pathQueryPlans, e)
 		http.Handle(pathScatterStats, e)
 		http.Handle(pathVSchema, e)
@@ -1110,7 +1119,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		}
 	}
 
-	err = plan.Instructions.StreamExecute(vc, bindVars, true, callbackGen)
+	err = vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, callbackGen)
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
@@ -1229,7 +1238,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		logStats.BindVariables = bindVars
 	}
 
-	planKey := vcursor.planPrefixKey() + ":" + query
+	planHash := sha256.New()
+	planHash.Write([]byte(vcursor.planPrefixKey()))
+	planHash.Write([]byte{':'})
+	planHash.Write(hack.StringBytes(query))
+	planKey := hex.EncodeToString(planHash.Sum(nil))
+
 	if plan, ok := e.plans.Get(planKey); ok {
 		return plan.(*engine.Plan), nil
 	}
@@ -1247,6 +1261,15 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
+	planHash := sha256.Sum256([]byte(planKey))
+	planHex := hex.EncodeToString(planHash[:])
+	if plan, ok := e.plans.Get(planHex); ok {
+		return plan.(*engine.Plan), true
+	}
+	return nil, false
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1518,7 +1541,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		send:       callback,
 		rss:        rss,
 	}
-	vs.stream(ctx)
+	_ = vs.stream(ctx)
 	return nil
 }
 

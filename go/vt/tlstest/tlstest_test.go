@@ -104,7 +104,7 @@ func testClientServer(t *testing.T, combineCerts bool) {
 		defer wg.Done()
 		clientConn, clientErr := tls.DialWithDialer(dialer, "tcp", addr, clientConfig)
 		if clientErr == nil {
-			clientConn.Write([]byte{42})
+			_, _ = clientConn.Write([]byte{42})
 			clientConn.Close()
 		}
 	}()

@@ -17,9 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -85,7 +87,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// order by clauses.
 	if !isRoute {
 		if hasAggregates {
-			return errors.New("unsupported: cross-shard query with aggregates")
+			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
 		}
 		pb.plan = newDistinct(pb.plan)
 		return nil

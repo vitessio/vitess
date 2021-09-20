@@ -75,7 +75,7 @@ For example:
 // Flags
 var (
 	flavor           = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
-	bootstrapVersion = flag.String("bootstrap-version", "2", "the version identifier to use for the docker images")
+	bootstrapVersion = flag.String("bootstrap-version", "3", "the version identifier to use for the docker images")
 	runCount         = flag.Int("runs", 1, "run each test this many times")
 	retryMax         = flag.Int("retry", 3, "max number of retries, to detect flaky tests")
 	logPass          = flag.Bool("log-pass", false, "log test output even if it passes")
@@ -168,6 +168,9 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
+			if *keepData {
+				testCmd = append(testCmd, "-keep-data")
+			}
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
 			testCmd = append(testCmd, t.Args...)

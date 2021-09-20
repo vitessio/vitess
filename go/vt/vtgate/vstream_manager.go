@@ -60,8 +60,10 @@ type vstream struct {
 	journaler map[int64]*journalEvent
 
 	// err can only be set once.
-	once sync.Once
-	err  error
+	// errMu protects err by ensuring its value is read or written by only one goroutine at a time.
+	once  sync.Once
+	err   error
+	errMu sync.Mutex
 
 	// Other input parameters
 	tabletType topodatapb.TabletType
@@ -238,7 +240,7 @@ func (vs *vstream) stream(ctx context.Context) error {
 	}
 	vs.wg.Wait()
 
-	return vs.err
+	return vs.getError()
 }
 
 func (vs *vstream) sendEvents(ctx context.Context) {
@@ -260,7 +262,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 	send := func(evs []*binlogdatapb.VEvent) error {
 		if err := vs.send(evs); err != nil {
 			vs.once.Do(func() {
-				vs.err = err
+				vs.setError(err)
 			})
 			return err
 		}
@@ -270,13 +272,13 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			vs.once.Do(func() {
-				vs.err = fmt.Errorf("context canceled")
+				vs.setError(fmt.Errorf("context canceled"))
 			})
 			return
 		case evs := <-vs.eventCh:
 			if err := send(evs); err != nil {
 				vs.once.Do(func() {
-					vs.err = err
+					vs.setError(err)
 				})
 				return
 			}
@@ -290,7 +292,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			}}
 			if err := send(evs); err != nil {
 				vs.once.Do(func() {
-					vs.err = err
+					vs.setError(err)
 				})
 				return
 			}
@@ -309,7 +311,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		if err != nil {
 			log.Errorf("Error in vstream for %+v: %s", sgtid, err)
 			vs.once.Do(func() {
-				vs.err = err
+				vs.setError(err)
 				vs.cancel()
 			})
 		}
@@ -451,7 +453,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		errCh := make(chan error, 1)
 		go func() {
-			tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var err error
 				if ctx.Err() != nil {
 					err = fmt.Errorf("context has ended")
@@ -592,8 +594,8 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 
 	// Send all chunks while holding the lock.
 	for _, events := range eventss {
-		if vs.err != nil {
-			return vs.err
+		if err := vs.getError(); err != nil {
+			return err
 		}
 		// convert all gtids to vgtids. This should be done here while holding the lock.
 		for j, event := range events {
@@ -636,6 +638,18 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 		vs.eventCh <- events
 	}
 	return nil
+}
+
+func (vs *vstream) getError() error {
+	vs.errMu.Lock()
+	defer vs.errMu.Unlock()
+	return vs.err
+}
+
+func (vs *vstream) setError(err error) {
+	vs.errMu.Lock()
+	defer vs.errMu.Unlock()
+	vs.err = err
 }
 
 // getJournalEvent returns a journalEvent. The caller has to wait on its done channel.

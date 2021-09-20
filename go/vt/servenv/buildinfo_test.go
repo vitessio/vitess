@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,58 +33,17 @@ func TestVersionString(t *testing.T) {
 		buildTimePretty: "time is now",
 		buildGitRev:     "d54b87c",
 		buildGitBranch:  "gitBranch",
-		goVersion:       "1.16",
+		goVersion:       "1.17",
 		goOS:            "amiga",
 		goArch:          "amd64",
 		version:         "v1.2.3-SNAPSHOT",
 	}
 
-	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (Git revision d54b87c branch 'gitBranch') built on time is now by user@host using 1.16 amiga/amd64", v.String())
+	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (Git revision d54b87c branch 'gitBranch') built on time is now by user@host using 1.17 amiga/amd64", v.String())
 
 	v.jenkinsBuildNumber = 422
 
-	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (Jenkins build 422) (Git revision d54b87c branch 'gitBranch') built on time is now by user@host using 1.16 amiga/amd64", v.String())
+	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (Jenkins build 422) (Git revision d54b87c branch 'gitBranch') built on time is now by user@host using 1.17 amiga/amd64", v.String())
 
 	assert.Equal(t, "5.7.9-vitess-v1.2.3-SNAPSHOT", v.MySQLVersion())
-	newVersion := "test!"
-	MySQLServerVersion = &newVersion
-	assert.Equal(t, newVersion, v.MySQLVersion())
-}
-
-func TestConvertMySQLVersion(t *testing.T) {
-	testcases := []struct {
-		version        string
-		commentVersion string
-		error          string
-	}{{
-		version:        "5.7.9",
-		commentVersion: "50709",
-	}, {
-		version:        "0008.08.9",
-		commentVersion: "80809",
-	}, {
-		version:        "5.7.9, Vitess - 10.0.1",
-		commentVersion: "50709",
-	}, {
-		version:        "8.1 Vitess - 10.0.1",
-		commentVersion: "80100",
-	}, {
-		version: "Vitess - 10.0.1",
-		error:   "MySQL version not correctly setup - Vitess - 10.0.1.",
-	}, {
-		version:        "5.7.9.22",
-		commentVersion: "50709",
-	}}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.version, func(t *testing.T) {
-			output, err := convertMySQLVersionToCommentVersion(tcase.version)
-			if tcase.error != "" {
-				require.EqualError(t, err, tcase.error)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tcase.commentVersion, output)
-			}
-		})
-	}
 }

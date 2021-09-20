@@ -217,10 +217,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
 		case *route:
-			query, ok := node.Select.(*sqlparser.Select)
-			if !ok {
-				return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %T", node.Select)
-			}
+			query := sqlparser.GetFirstSelect(node.Select)
 			query.Comments = sel.Comments
 			query.Lock = sel.Lock
 			if sel.Into != nil {

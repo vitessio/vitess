@@ -156,8 +156,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
 	case IsolationLevel:
 		return a.rewriteIsolationLevel(parent, node, replacer)
-	case JoinCondition:
-		return a.rewriteJoinCondition(parent, node, replacer)
+	case *JoinCondition:
+		return a.rewriteRefOfJoinCondition(parent, node, replacer)
 	case *JoinTableExpr:
 		return a.rewriteRefOfJoinTableExpr(parent, node, replacer)
 	case *KeyState:
@@ -2293,7 +2293,10 @@ func (a *application) rewriteRefOfIsExpr(parent SQLNode, node *IsExpr, replacer 
 	}
 	return true
 }
-func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2303,12 +2306,12 @@ func (a *application) rewriteJoinCondition(parent SQLNode, node JoinCondition, r
 		}
 	}
 	if !a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'On' on 'JoinCondition'")
+		parent.(*JoinCondition).On = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Using' on 'JoinCondition'")
+		parent.(*JoinCondition).Using = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -2344,8 +2347,8 @@ func (a *application) rewriteRefOfJoinTableExpr(parent SQLNode, node *JoinTableE
 	}) {
 		return false
 	}
-	if !a.rewriteJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
-		parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
+	if !a.rewriteRefOfJoinCondition(node, node.Condition, func(newNode, parent SQLNode) {
+		parent.(*JoinTableExpr).Condition = newNode.(*JoinCondition)
 	}) {
 		return false
 	}
@@ -5428,38 +5431,6 @@ func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, repla
 			a.cur.parent = parent
 			a.cur.node = node
 		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfJoinCondition(parent SQLNode, node *JoinCondition, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.On, func(newNode, parent SQLNode) {
-		parent.(*JoinCondition).On = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteColumns(node, node.Using, func(newNode, parent SQLNode) {
-		parent.(*JoinCondition).Using = newNode.(Columns)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

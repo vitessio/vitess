@@ -157,8 +157,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfIsExpr(in)
 	case IsolationLevel:
 		return in
-	case JoinCondition:
-		return CloneJoinCondition(in)
+	case *JoinCondition:
+		return CloneRefOfJoinCondition(in)
 	case *JoinTableExpr:
 		return CloneRefOfJoinTableExpr(in)
 	case *KeyState:
@@ -993,9 +993,15 @@ func CloneRefOfIsExpr(n *IsExpr) *IsExpr {
 	return &out
 }
 
-// CloneJoinCondition creates a deep clone of the input.
-func CloneJoinCondition(n JoinCondition) JoinCondition {
-	return *CloneRefOfJoinCondition(&n)
+// CloneRefOfJoinCondition creates a deep clone of the input.
+func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.On = CloneExpr(n.On)
+	out.Using = CloneColumns(n.Using)
+	return &out
 }
 
 // CloneRefOfJoinTableExpr creates a deep clone of the input.
@@ -1006,7 +1012,7 @@ func CloneRefOfJoinTableExpr(n *JoinTableExpr) *JoinTableExpr {
 	out := *n
 	out.LeftExpr = CloneTableExpr(n.LeftExpr)
 	out.RightExpr = CloneTableExpr(n.RightExpr)
-	out.Condition = CloneJoinCondition(n.Condition)
+	out.Condition = CloneRefOfJoinCondition(n.Condition)
 	return &out
 }
 
@@ -2371,17 +2377,6 @@ func CloneSliceOfRefOfIndexOption(n []*IndexOption) []*IndexOption {
 		res = append(res, CloneRefOfIndexOption(x))
 	}
 	return res
-}
-
-// CloneRefOfJoinCondition creates a deep clone of the input.
-func CloneRefOfJoinCondition(n *JoinCondition) *JoinCondition {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.On = CloneExpr(n.On)
-	out.Using = CloneColumns(n.Using)
-	return &out
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.

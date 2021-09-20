@@ -141,7 +141,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 		}
 		// The defer acts as a failsafe. If commit was successful,
 		// the rollback will be a no-op.
-		defer e.txConn.Rollback(ctx, safeSession)
+		defer e.txConn.Rollback(ctx, safeSession) // nolint:errcheck
 	}
 
 	// The SetAutocommitable flag should be same as mustCommit.
@@ -175,7 +175,7 @@ type currFunc func(*LogStats, *SafeSession) (sqlparser.StatementType, *sqltypes.
 func (e *Executor) executePlan(ctx context.Context, plan *engine.Plan, vcursor *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) currFunc {
 	return func(logStats *LogStats, safeSession *SafeSession) (sqlparser.StatementType, *sqltypes.Result, error) {
 		// 4: Execute!
-		qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+		qr, err := vcursor.ExecutePrimitive(plan.Instructions, bindVars, true)
 
 		// 5: Log and add statistics
 		logStats.Keyspace = plan.Instructions.GetKeyspaceName()

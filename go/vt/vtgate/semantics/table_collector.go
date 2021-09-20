@@ -28,6 +28,7 @@ type tableCollector struct {
 	scoper    *scoper
 	si        SchemaInformation
 	currentDb string
+	org       originable
 }
 
 func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
@@ -46,39 +47,57 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
-		sel, isSelect := t.Select.(*sqlparser.Select)
-		if !isSelect {
+		switch sel := t.Select.(type) {
+		case *sqlparser.Select:
+			tables := tc.scoper.wScope[sel]
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
+			if err := tableInfo.checkForDuplicates(); err != nil {
+				return err
+			}
+
+			tableInfo.ASTNode = node
+			tableInfo.tableName = node.As.String()
+
+			tc.Tables = append(tc.Tables, tableInfo)
+			scope := tc.scoper.currentScope()
+			return scope.addTable(tableInfo)
+
+		case *sqlparser.Union:
+			firstSelect := sqlparser.GetFirstSelect(sel)
+			tables := tc.scoper.wScope[firstSelect]
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
+			if err := tableInfo.checkForDuplicates(); err != nil {
+				return err
+			}
+			tableInfo.ASTNode = node
+			tableInfo.tableName = node.As.String()
+
+			tc.Tables = append(tc.Tables, tableInfo)
+			scope := tc.scoper.currentScope()
+			return scope.addTable(tableInfo)
+
+		default:
 			return Gen4NotSupportedF("union in derived table")
 		}
 
-		tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
-		if err := tableInfo.checkForDuplicates(); err != nil {
-			return err
-		}
-
-		tableInfo.ASTNode = node
-		tableInfo.tableName = node.As.String()
-
-		tc.Tables = append(tc.Tables, tableInfo)
-		scope := tc.scoper.currentScope()
-		return scope.addTable(tableInfo)
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
+		var vindex vindexes.Vindex
 		var isInfSchema bool
 		if sqlparser.SystemSchema(t.Qualifier.String()) {
 			isInfSchema = true
 		} else {
-			table, vdx, _, _, _, err := tc.si.FindTableOrVindex(t)
+			var err error
+			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
 			if err != nil {
 				return err
 			}
-			tbl = table
-			if tbl == nil && vdx != nil {
-				return Gen4NotSupportedF("vindex in FROM")
+			if tbl == nil && vindex != nil {
+				tbl = newVindexTable(t.Name)
 			}
 		}
 		scope := tc.scoper.currentScope()
-		tableInfo := tc.createTable(t, node, tbl, isInfSchema)
+		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
 
 		tc.Tables = append(tc.Tables, tableInfo)
 		return scope.addTable(tableInfo)
@@ -86,35 +105,63 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
+func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
+	vindexCols := []vindexes.Column{
+		{Name: sqlparser.NewColIdent("id")},
+		{Name: sqlparser.NewColIdent("keyspace_id")},
+		{Name: sqlparser.NewColIdent("range_start")},
+		{Name: sqlparser.NewColIdent("range_end")},
+		{Name: sqlparser.NewColIdent("hex_keyspace_id")},
+		{Name: sqlparser.NewColIdent("shard")},
+	}
+
+	return &vindexes.Table{
+		Name:                    t,
+		Columns:                 vindexCols,
+		ColumnListAuthoritative: true,
+	}
+}
+
 // tabletSetFor implements the originable interface, and that is why it lives on the analyser struct.
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getExpr() {
 			return TableSet(1 << i)
 		}
 	}
 	panic("unknown table")
 }
 
-func (tc *tableCollector) createTable(t sqlparser.TableName, alias *sqlparser.AliasedTableExpr, tbl *vindexes.Table, isInfSchema bool) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = tc.currentDb
-	}
-	if alias.As.IsEmpty() {
-		return &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
-		}
-	}
-	return &AliasedTable{
+func (tc *tableCollector) createTable(
+	t sqlparser.TableName,
+	alias *sqlparser.AliasedTableExpr,
+	tbl *vindexes.Table,
+	isInfSchema bool,
+	vindex vindexes.Vindex,
+) TableInfo {
+	table := &RealTable{
 		tableName:   alias.As.String(),
 		ASTNode:     alias,
 		Table:       tbl,
 		isInfSchema: isInfSchema,
 	}
+
+	if alias.As.IsEmpty() {
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = tc.currentDb
+		}
+
+		table.dbName = dbName
+		table.tableName = t.Name.String()
+	}
+
+	if vindex != nil {
+		return &VindexTable{
+			Table:  table,
+			Vindex: vindex,
+		}
+	}
+	return table
 }

@@ -46,7 +46,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	if dbName != "" {
 		// This execute might fail if db does not exist.
 		// Error is ignored because given query might create this database.
-		conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
+		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
 	// run the query
@@ -83,7 +83,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, query []byt
 	if dbName != "" {
 		// This execute might fail if db does not exist.
 		// Error is ignored because given query might create this database.
-		conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
+		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(dbName), 1, false)
 	}
 
 	// run the query

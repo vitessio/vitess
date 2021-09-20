@@ -235,7 +235,9 @@ func TestFile(t *testing.T) {
 
 	// Send the rotate signal which should reopen the original file path
 	// for new logs to go to
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR2)
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+		t.Logf("failed to send streamlog rotate signal: %v", err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	logger.Send(&logMessage{"test 4"})

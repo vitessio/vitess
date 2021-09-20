@@ -296,7 +296,7 @@ func TabletUndoDemotePrimary(instanceKey inst.InstanceKey) error {
 
 func tabletDemotePrimary(instanceKey inst.InstanceKey, forward bool) error {
 	if instanceKey.Hostname == "" {
-		return errors.New("Can't demote/undo master: instance is unspecified")
+		return errors.New("can't demote/undo primary: instance is unspecified")
 	}
 	tablet, err := inst.ReadTablet(instanceKey)
 	if err != nil {
@@ -327,7 +327,7 @@ func ShardPrimary(instanceKey *inst.InstanceKey) (primaryKey *inst.InstanceKey, 
 		return nil, err
 	}
 	if !si.HasPrimary() {
-		return nil, fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+		return nil, fmt.Errorf("no primary tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
 	}
 	tCtx, tCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 	defer tCancel()

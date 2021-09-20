@@ -10,9 +10,9 @@ jobs:
 
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.16
+        go-version: 1.17
 
     - name: Tune the OS
       run: |
@@ -119,6 +119,7 @@ jobs:
         mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
 
         go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make tools
       run: |

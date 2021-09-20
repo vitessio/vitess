@@ -42,7 +42,7 @@ func TestExec(t *testing.T) {
 	defer conn.Close()
 	_, err = conn.ExecuteFetch("create database t", 10000, true)
 	require.NoError(t, err)
-	defer conn.ExecuteFetch("drop database t", 10000, true)
+	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
 
 	testcases := []struct {
 		name    string
@@ -207,7 +207,7 @@ func TestExecIgnore(t *testing.T) {
 	defer conn.Close()
 	_, err = conn.ExecuteFetch("create database t", 10000, true)
 	require.NoError(t, err)
-	defer conn.ExecuteFetch("drop database t", 10000, true)
+	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
 
 	withdb := connParams
 	withdb.DbName = "t"
@@ -225,7 +225,7 @@ func TestExecIgnore(t *testing.T) {
 	assert.Error(t, err)
 
 	_, _ = execconn.ExecuteFetch("create table a(id int, primary key(id))", 10000, false)
-	defer execconn.ExecuteFetch("drop table a", 10000, false)
+	defer execconn.ExecuteFetch("drop table a", 10000, false) // nolint:errcheck
 	_, _ = execconn.ExecuteFetch("insert into a values(1)", 10000, false)
 	qr, err = wd.ExecIgnore(ctx, "select * from a", execconn.ExecuteFetch)
 	require.NoError(t, err)

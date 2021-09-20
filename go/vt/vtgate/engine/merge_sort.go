@@ -18,11 +18,10 @@ package engine
 
 import (
 	"container/heap"
+	"context"
 	"io"
 
 	"vitess.io/vitess/go/mysql"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -66,7 +65,7 @@ func (ms *MergeSort) GetKeyspaceName() string { return "" }
 func (ms *MergeSort) GetTableName() string { return "" }
 
 // Execute is not supported.
-func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MergeSort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Execute is not reachable")
 }
 
@@ -76,7 +75,7 @@ func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bin
 }
 
 // StreamExecute performs a streaming exec.
-func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MergeSort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 	gotFields := wantfields

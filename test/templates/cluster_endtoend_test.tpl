@@ -11,9 +11,9 @@ jobs:
 
     steps:
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
-        go-version: 1.16
+        go-version: 1.17
 
     - name: Tune the OS
       run: |

@@ -52,7 +52,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 	}
 	// The following operations are best effort.
 	if newPrimaryTablet.Type != topodatapb.TabletType_PRIMARY {
-		log.Errorf("Unexpected: tablet type did not change to master: %v", newPrimaryTablet.Type)
+		log.Errorf("Unexpected: tablet type did not change to primary: %v", newPrimaryTablet.Type)
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
@@ -66,11 +66,11 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 		lastTerm := si.GetPrimaryTermStartTime()
 		newTerm := logutil.ProtoToTime(newPrimaryTablet.PrimaryTermStartTime)
 		if !newTerm.After(lastTerm) {
-			log.Errorf("Possible clock skew. New master start time is before previous one: %v vs %v", newTerm, lastTerm)
+			log.Errorf("Possible clock skew. New primary start time is before previous one: %v vs %v", newTerm, lastTerm)
 		}
 
 		aliasStr := topoproto.TabletAliasString(newPrimaryTablet.Alias)
-		log.Infof("Updating shard record: master_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
+		log.Infof("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, newTerm)
 		si.PrimaryAlias = newPrimaryTablet.Alias
 		si.PrimaryTermStartTime = newPrimaryTablet.PrimaryTermStartTime
 		return nil
@@ -90,7 +90,7 @@ func SwitchPrimary(newPrimaryKey, oldPrimaryKey InstanceKey) error {
 // ChangeTabletType designates the tablet that owns an instance as the primary.
 func ChangeTabletType(instanceKey InstanceKey, tabletType topodatapb.TabletType) (*topodatapb.Tablet, error) {
 	if instanceKey.Hostname == "" {
-		return nil, errors.New("can't set tablet to master: instance is unspecified")
+		return nil, errors.New("can't set tablet to primary: instance is unspecified")
 	}
 	tablet, err := ReadTablet(instanceKey)
 	if err != nil {
@@ -146,7 +146,7 @@ func SaveTablet(tablet *topodatapb.Tablet) error {
 	_, err = db.ExecOrchestrator(`
 		replace
 			into vitess_tablet (
-				hostname, port, cell, keyspace, shard, tablet_type, master_timestamp, info
+				hostname, port, cell, keyspace, shard, tablet_type, primary_timestamp, info
 			) values (
 				?, ?, ?, ?, ?, ?, ?, ?
 			)

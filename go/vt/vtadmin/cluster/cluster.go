@@ -1125,6 +1125,79 @@ func (c *Cluster) getTabletsToQueryForSchemas(ctx context.Context, keyspace stri
 	return []*vtadminpb.Tablet{randomServingTablet}, nil
 }
 
+// GetShardReplicationPositions returns a ClusterShardReplicationPosition object
+// for each keyspace/shard in the cluster.
+func (c *Cluster) GetShardReplicationPositions(ctx context.Context, req *vtadminpb.GetShardReplicationPositionsRequest) ([]*vtadminpb.ClusterShardReplicationPosition, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetShardReplicationPositions")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	shardsByKeyspace, err := c.getShardSets(ctx, req.Keyspaces, req.KeyspaceShards)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		positions    []*vtadminpb.ClusterShardReplicationPosition
+		clusterProto = c.ToProto()
+	)
+
+	for ks, shardSet := range shardsByKeyspace {
+		for _, shard := range shardSet.List() {
+			wg.Add(1)
+
+			go func(keyspace, shard string) {
+				defer wg.Done()
+
+				span, ctx := trace.NewSpan(ctx, "Cluster.getShardReplicationPositionsForShard")
+				defer span.Finish()
+
+				AnnotateSpan(c, span)
+				span.Annotate("keyspace", keyspace)
+				span.Annotate("shard", shard)
+
+				if err := c.topoReadPool.Acquire(ctx); err != nil {
+					rec.RecordError(fmt.Errorf("ShardReplicationPositions(%s/%s) failed to acquire topoReadPool: %w", keyspace, shard, err))
+					return
+				}
+
+				resp, err := c.Vtctld.ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{
+					Keyspace: keyspace,
+					Shard:    shard,
+				})
+				c.topoReadPool.Release()
+
+				if err != nil {
+					rec.RecordError(fmt.Errorf("ShardReplicationPositions(%s/%s): %w", keyspace, shard, err))
+					return
+				}
+
+				m.Lock()
+				defer m.Unlock()
+
+				positions = append(positions, &vtadminpb.ClusterShardReplicationPosition{
+					Cluster:      clusterProto,
+					Keyspace:     keyspace,
+					Shard:        shard,
+					PositionInfo: resp,
+				})
+			}(ks, shard)
+		}
+	}
+
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+
+	return positions, nil
+}
+
 // GetSrvVSchema returns the SrvVSchema for a given cell in the cluster.
 func (c *Cluster) GetSrvVSchema(ctx context.Context, cell string) (*vtadminpb.SrvVSchema, error) {
 	span, ctx := trace.NewSpan(ctx, "Cluster.GetVSchema")
@@ -1222,6 +1295,24 @@ func (c *Cluster) GetVSchema(ctx context.Context, keyspace string) (*vtadminpb.V
 		Name:    keyspace,
 		VSchema: vschema.VSchema,
 	}, nil
+}
+
+// GetVtctlds returns a list of all Vtctlds in the cluster.
+func (c *Cluster) GetVtctlds(ctx context.Context) ([]*vtadminpb.Vtctld, error) {
+	vtctlds, err := c.Discovery.DiscoverVtctlds(ctx, []string{})
+	if err != nil {
+		return nil, fmt.Errorf("DiscoverVtctlds(cluster = %s): %w", c.ID, err)
+	}
+
+	// This overwrites any Cluster field populated by a particular discovery
+	// implementation.
+	cpb := c.ToProto()
+
+	for _, v := range vtctlds {
+		v.Cluster = cpb
+	}
+
+	return vtctlds, nil
 }
 
 // GetWorkflowOptions is the set of filtering options for GetWorkflow requests.

@@ -204,7 +204,7 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	}, packagePatterns...)
 
 	if err != nil || common.PkgFailed(loaded) {
-		log.Fatal("error loading packaged")
+		log.Fatal("error loading package")
 		return nil, err
 	}
 

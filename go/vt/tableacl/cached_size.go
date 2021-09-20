@@ -17,6 +17,8 @@ limitations under the License.
 
 package tableacl
 
+import hack "vitess.io/vitess/go/hack"
+
 type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
@@ -34,6 +36,6 @@ func (cached *ACLResult) CachedSize(alloc bool) int64 {
 		size += cc.CachedSize(true)
 	}
 	// field GroupName string
-	size += int64(len(cached.GroupName))
+	size += hack.RuntimeAllocSize(int64(len(cached.GroupName)))
 	return size
 }

@@ -68,6 +68,11 @@ func (f *fakeTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace stri
 	return ks, nil
 }
 
+func (f *fakeTopoServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	ks, err := f.GetSrvKeyspace(ctx, cell, keyspace)
+	callback(ks, err)
+}
+
 // WatchSrvVSchema starts watching the SrvVSchema object for
 // the provided cell.  It will call the callback when
 // a new value or an error occurs.
