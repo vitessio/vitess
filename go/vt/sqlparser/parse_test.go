@@ -2128,6 +2128,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
 		err: "syntax error at position 36 near 'into'",
+	}, {
+		input: "select a from x order by y union select a from c",
+		err: "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {
