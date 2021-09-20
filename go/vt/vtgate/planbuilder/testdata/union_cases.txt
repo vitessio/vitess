@@ -1303,10 +1303,12 @@ Gen4 plan same as above
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "syntax error at position 34 near 'union'"
+Gen4 plan same as above
 
 # ambiguous ORDER BY
 "select id from user order by id union all select id from music order by id desc"
 "syntax error at position 38 near 'union'"
+Gen4 plan same as above
 
 # different number of columns
 "select id, 42 from user where id = 1 union all select id from user where id = 5"
