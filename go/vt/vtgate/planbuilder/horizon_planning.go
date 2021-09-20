@@ -515,7 +515,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		}
 		return colAdded || colAddedRecursively, nil
 	default:
-		return false, semantics.Gen4NotSupportedF("group by on: %T", plan)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
 }
 
