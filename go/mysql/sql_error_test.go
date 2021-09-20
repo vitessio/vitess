@@ -36,6 +36,9 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 		{"grpc: received message larger than max (99282 vs. 1234): trailer", ERNetPacketTooLarge},
 		{"grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
 		{"header: grpc: received message larger than max (1234 vs. 1234)", ERNetPacketTooLarge},
+		{"grpc: trying to send message larger than max (18015277 vs. 16777216)", ERNetPacketTooLarge},
+		{"grpc: trying to send message larger than max (18015277 vs. 16777216): trailer", ERNetPacketTooLarge},
+		{"header: grpc: trying to send message larger than max (18015277 vs. 16777216)", ERNetPacketTooLarge},
 		// This should be explicitly handled by returning ERNetPacketTooLarge from the execturo directly
 		// and therefore shouldn't need to be teased out of another error.
 		{"in-memory row count exceeded allowed limit of 13", ERTooManyUserConnections},
