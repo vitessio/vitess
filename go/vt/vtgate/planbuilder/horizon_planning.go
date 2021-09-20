@@ -378,7 +378,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
-		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable)
+		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable, false)
 		if err != nil {
 			return nil, err
 		}
@@ -478,11 +478,17 @@ func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, group
 	return false
 }
 
-func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable) (bool, error) {
+func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable, wsAdded bool) (bool, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
 		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
+		// If a weight_string function is added to the select list,
+		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
+		// as the weight_string function might not be functionally dependent on the group by.
+		if wsAdded {
+			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
+		}
 		return false, nil
 	case *joinGen4:
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
@@ -500,7 +506,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
 			}
 		}
-		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
+		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable, wsOffset != -1)
 		if err != nil {
 			return false, err
 		}

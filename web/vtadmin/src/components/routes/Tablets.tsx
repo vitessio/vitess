@@ -143,7 +143,7 @@ export const formatRows = (
             type: formatDisplayType(t),
             _raw: t,
             _keyspaceShard: `${t.tablet?.keyspace}/${t.tablet?.shard}`,
-            // Include the unformatted type so (string) filtering by "master" works
+            // Include the unformatted type so (string) filtering by "primary" works
             // even if "primary" is what we display, and what we use for key:value searches.
             _rawType: formatType(t),
             // Always sort primary tablets first, then sort alphabetically by type, etc.
