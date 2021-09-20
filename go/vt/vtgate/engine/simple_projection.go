@@ -108,7 +108,7 @@ func (sc *SimpleProjection) buildFields(inner *sqltypes.Result) []*querypb.Field
 	return fields
 }
 
-func (sc *SimpleProjection) description() PrimitiveDescription {
+func (sc *SimpleProjection) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Columns": sc.Cols,
 	}

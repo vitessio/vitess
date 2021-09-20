@@ -117,7 +117,7 @@ func (s SQLCalcFoundRows) Inputs() []Primitive {
 	return []Primitive{s.LimitPrimitive, s.CountPrimitive}
 }
 
-func (s SQLCalcFoundRows) description() PrimitiveDescription {
+func (s SQLCalcFoundRows) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SQL_CALC_FOUND_ROWS",
 	}

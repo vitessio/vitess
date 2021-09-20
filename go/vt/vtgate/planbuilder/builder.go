@@ -52,6 +52,7 @@ type ContextVSchema interface {
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
+	SetPlannerVersion(pv PlannerVersion)
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
@@ -80,10 +81,12 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
+	// Gen4Slow executes queries on both Gen4 and V3 to compare their results.
+	Gen4Slow = querypb.ExecuteOptions_Gen4Slow
 )
 
 var (
-	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback}
+	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4Slow}
 )
 
 type truncater interface {
@@ -126,6 +129,8 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 
 func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (selectPlanner, error) {
 	switch vschema.Planner() {
+	case Gen4Slow:
+		return gen4SlowPlanner, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner, nil
 	case Gen4WithFallback:

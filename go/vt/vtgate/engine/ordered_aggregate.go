@@ -504,7 +504,7 @@ func groupByParamsToString(i interface{}) string {
 	return i.(*GroupByParams).String()
 }
 
-func (oa *OrderedAggregate) description() PrimitiveDescription {
+func (oa *OrderedAggregate) Description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.GroupByKeys, groupByParamsToString)
 	other := map[string]interface{}{
