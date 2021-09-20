@@ -214,7 +214,7 @@ func convertToMysqlError(err error) error {
 	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
 }
 
-var isGRPCOverflowRE = regexp.MustCompile(`.*grpc: received message larger than max \(\d+ vs. \d+\)`)
+var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
 func demuxResourceExhaustedErrors(msg string) int {
 	switch {
