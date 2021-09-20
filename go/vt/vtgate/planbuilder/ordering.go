@@ -49,9 +49,11 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.Ord
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
 		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
-	}
-	if orderBy == nil {
-		return input, nil
+	case *concatenate:
+		if len(orderBy) == 0 {
+			return input, nil
+		}
+		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
 	}
 	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
 }

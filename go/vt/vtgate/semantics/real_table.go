@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -34,17 +36,27 @@ type RealTable struct {
 var _ TableInfo = (*RealTable)(nil)
 
 // Dependencies implements the TableInfo interface
-func (r *RealTable) Dependencies(colName string, org originable) (dependencies, error) {
-	return depsForAliasedAndRealTables(colName, org, r.ASTNode, r.GetColumns(), r.Authoritative())
+func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
+	ts := org.tableSetFor(r.ASTNode)
+	for _, info := range r.getColumns() {
+		if strings.EqualFold(info.Name, colName) {
+			return createCertain(ts, ts, &info.Type), nil
+		}
+	}
+
+	if r.authoritative() {
+		return &nothing{}, nil
+	}
+	return createUncertain(ts, ts), nil
 }
 
 // GetTables implements the TableInfo interface
-func (r *RealTable) GetTables(org originable) TableSet {
+func (r *RealTable) getTableSet(org originable) TableSet {
 	return org.tableSetFor(r.ASTNode)
 }
 
 // GetExprFor implements the TableInfo interface
-func (r *RealTable) GetExprFor(s string) (sqlparser.Expr, error) {
+func (r *RealTable) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown column '%s' in 'field list'", s)
 }
 
@@ -53,18 +65,13 @@ func (r *RealTable) IsInfSchema() bool {
 	return r.isInfSchema
 }
 
-// IsActualTable implements the TableInfo interface
-func (r *RealTable) IsActualTable() bool {
-	return true
-}
-
 // GetColumns implements the TableInfo interface
-func (r *RealTable) GetColumns() []ColumnInfo {
+func (r *RealTable) getColumns() []ColumnInfo {
 	return vindexTableToColumnInfo(r.Table)
 }
 
 // GetExpr implements the TableInfo interface
-func (r *RealTable) GetExpr() *sqlparser.AliasedTableExpr {
+func (r *RealTable) getExpr() *sqlparser.AliasedTableExpr {
 	return r.ASTNode
 }
 
@@ -79,11 +86,43 @@ func (r *RealTable) Name() (sqlparser.TableName, error) {
 }
 
 // Authoritative implements the TableInfo interface
-func (r *RealTable) Authoritative() bool {
+func (r *RealTable) authoritative() bool {
 	return r.Table != nil && r.Table.ColumnListAuthoritative
 }
 
 // Matches implements the TableInfo interface
-func (r *RealTable) Matches(name sqlparser.TableName) bool {
+func (r *RealTable) matches(name sqlparser.TableName) bool {
 	return (name.Qualifier.IsEmpty() || name.Qualifier.String() == r.dbName) && r.tableName == name.Name.String()
+}
+
+func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
+	if tbl == nil {
+		return nil
+	}
+	nameMap := map[string]interface{}{}
+	cols := make([]ColumnInfo, 0, len(tbl.Columns))
+	for _, col := range tbl.Columns {
+		cols = append(cols, ColumnInfo{
+			Name: col.Name.String(),
+			Type: col.Type,
+		})
+		nameMap[col.Name.String()] = nil
+	}
+	// If table is authoritative, we do not need ColumnVindexes to help in resolving the unqualified columns.
+	if tbl.ColumnListAuthoritative {
+		return cols
+	}
+	for _, vindex := range tbl.ColumnVindexes {
+		for _, column := range vindex.Columns {
+			name := column.String()
+			if _, exists := nameMap[name]; exists {
+				continue
+			}
+			cols = append(cols, ColumnInfo{
+				Name: name,
+			})
+			nameMap[name] = nil
+		}
+	}
+	return cols
 }
