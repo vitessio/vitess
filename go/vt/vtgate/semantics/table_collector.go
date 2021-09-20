@@ -63,8 +63,9 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		case *sqlparser.Union:
-			tables := tc.scoper.wScope[sel.FirstStatement.(*sqlparser.Select)]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
+			firstSelect := sqlparser.GetFirstSelect(sel)
+			tables := tc.scoper.wScope[firstSelect]
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
