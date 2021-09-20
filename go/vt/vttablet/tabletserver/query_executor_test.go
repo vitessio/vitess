@@ -1405,13 +1405,13 @@ func getQueryExecutorSupportedQueries() map[string]*sqltypes.Result {
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
 		},
-		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1)": {
+		"select 0 as x from dual where 1 != 1 union select 1 as y from dual where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
 			Rows: [][]sqltypes.Value{},
 		},
-		"(select 0 as x from dual where 1 != 1) union (select 1 as y from dual where 1 != 1) limit 10001": {
+		"select 0 as x from dual where 1 != 1 union select 1 as y from dual where 1 != 1 limit 10001": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
