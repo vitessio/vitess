@@ -226,6 +226,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRevertMigration(in, f)
 	case *Rollback:
 		return VisitRefOfRollback(in, f)
+	case RootNode:
+		return VisitRootNode(in, f)
 	case *SRollback:
 		return VisitRefOfSRollback(in, f)
 	case *Savepoint:
@@ -1644,6 +1646,15 @@ func VisitRefOfRollback(in *Rollback, f Visit) error {
 	}
 	return nil
 }
+func VisitRootNode(in RootNode, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.SQLNode, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfSRollback(in *SRollback, f Visit) error {
 	if in == nil {
 		return nil
@@ -2764,6 +2775,18 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRootNode(in *RootNode, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.SQLNode, f); err != nil {
 		return err
 	}
 	return nil

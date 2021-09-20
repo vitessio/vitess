@@ -227,6 +227,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfRevertMigration(in)
 	case *Rollback:
 		return CloneRefOfRollback(in)
+	case RootNode:
+		return CloneRootNode(in)
 	case *SRollback:
 		return CloneRefOfSRollback(in)
 	case *Savepoint:
@@ -1320,6 +1322,11 @@ func CloneRefOfRollback(n *Rollback) *Rollback {
 	return &out
 }
 
+// CloneRootNode creates a deep clone of the input.
+func CloneRootNode(n RootNode) RootNode {
+	return *CloneRefOfRootNode(&n)
+}
+
 // CloneRefOfSRollback creates a deep clone of the input.
 func CloneRefOfSRollback(n *SRollback) *SRollback {
 	if n == nil {
@@ -2361,6 +2368,16 @@ func CloneSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 		res = append(res, CloneRefOfRenameTablePair(x))
 	}
 	return res
+}
+
+// CloneRefOfRootNode creates a deep clone of the input.
+func CloneRefOfRootNode(n *RootNode) *RootNode {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.SQLNode = CloneSQLNode(n.SQLNode)
+	return &out
 }
 
 // CloneRefOfBool creates a deep clone of the input.
