@@ -169,7 +169,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the primary candidate that we want to promote
 	var newPrimary *topodatapb.Tablet
-	newPrimary, tabletMap, err = opts.FindPrimaryCandidate(ctx, erp.logger, erp.tmc, validCandidates, tabletMap)
+	newPrimary, err = findPrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}

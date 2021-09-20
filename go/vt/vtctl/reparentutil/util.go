@@ -438,3 +438,51 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	}
 	return restrictedValidCandidates, nil
 }
+
+// findPrimaryCandidate implements the ReparentFunctions interface
+func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, error) {
+	var validTablets []*topodatapb.Tablet
+	var tabletPositions []mysql.Position
+	for tabletAlias, position := range validCandidates {
+		tablet, isFound := tabletMap[tabletAlias]
+		if !isFound {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
+		}
+		validTablets = append(validTablets, tablet.Tablet)
+		tabletPositions = append(tabletPositions, position)
+	}
+
+	idealCell := ""
+	if prevPrimary != nil {
+		idealCell = prevPrimary.Alias.Cell
+	}
+
+	// sort
+	err := sortTabletsForERS(validTablets, tabletPositions, idealCell)
+	if err != nil {
+		return nil, err
+	}
+
+	winningPrimaryTablet := validTablets[0]
+	winningPosition := tabletPositions[0]
+
+	// If we were requested to elect a particular primary, verify it's a valid
+	// candidate (non-zero position, no errant GTIDs) and is at least as
+	// advanced as the winning position.
+	if opts.newPrimaryAlias != nil {
+		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
+		pos, ok := validCandidates[requestedPrimaryAlias]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
+		}
+		if pos.AtLeast(winningPosition) {
+			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
+			if !isFound {
+				return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
+			}
+			winningPrimaryTablet = requestedPrimaryInfo.Tablet
+		}
+	}
+
+	return winningPrimaryTablet, nil
+}
