@@ -81495,6 +81495,381 @@ $root.vtctldata = (function() {
         return ReparentTabletResponse;
     })();
 
+    vtctldata.SetWritableRequest = (function() {
+
+        /**
+         * Properties of a SetWritableRequest.
+         * @memberof vtctldata
+         * @interface ISetWritableRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] SetWritableRequest tablet_alias
+         * @property {boolean|null} [writable] SetWritableRequest writable
+         */
+
+        /**
+         * Constructs a new SetWritableRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a SetWritableRequest.
+         * @implements ISetWritableRequest
+         * @constructor
+         * @param {vtctldata.ISetWritableRequest=} [properties] Properties to set
+         */
+        function SetWritableRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * SetWritableRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         */
+        SetWritableRequest.prototype.tablet_alias = null;
+
+        /**
+         * SetWritableRequest writable.
+         * @member {boolean} writable
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         */
+        SetWritableRequest.prototype.writable = false;
+
+        /**
+         * Creates a new SetWritableRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest=} [properties] Properties to set
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest instance
+         */
+        SetWritableRequest.create = function create(properties) {
+            return new SetWritableRequest(properties);
+        };
+
+        /**
+         * Encodes the specified SetWritableRequest message. Does not implicitly {@link vtctldata.SetWritableRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest} message SetWritableRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            if (message.writable != null && Object.hasOwnProperty.call(message, "writable"))
+                writer.uint32(/* id 2, wireType 0 =*/16).bool(message.writable);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetWritableRequest message, length delimited. Does not implicitly {@link vtctldata.SetWritableRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.ISetWritableRequest} message SetWritableRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetWritableRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                case 2:
+                    message.writable = reader.bool();
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetWritableRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetWritableRequest message.
+         * @function verify
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetWritableRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            if (message.writable != null && message.hasOwnProperty("writable"))
+                if (typeof message.writable !== "boolean")
+                    return "writable: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetWritableRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetWritableRequest} SetWritableRequest
+         */
+        SetWritableRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetWritableRequest)
+                return object;
+            var message = new $root.vtctldata.SetWritableRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.SetWritableRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            if (object.writable != null)
+                message.writable = Boolean(object.writable);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a SetWritableRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetWritableRequest
+         * @static
+         * @param {vtctldata.SetWritableRequest} message SetWritableRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetWritableRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults) {
+                object.tablet_alias = null;
+                object.writable = false;
+            }
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            if (message.writable != null && message.hasOwnProperty("writable"))
+                object.writable = message.writable;
+            return object;
+        };
+
+        /**
+         * Converts this SetWritableRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetWritableRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetWritableRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SetWritableRequest;
+    })();
+
+    vtctldata.SetWritableResponse = (function() {
+
+        /**
+         * Properties of a SetWritableResponse.
+         * @memberof vtctldata
+         * @interface ISetWritableResponse
+         */
+
+        /**
+         * Constructs a new SetWritableResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a SetWritableResponse.
+         * @implements ISetWritableResponse
+         * @constructor
+         * @param {vtctldata.ISetWritableResponse=} [properties] Properties to set
+         */
+        function SetWritableResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new SetWritableResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse=} [properties] Properties to set
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse instance
+         */
+        SetWritableResponse.create = function create(properties) {
+            return new SetWritableResponse(properties);
+        };
+
+        /**
+         * Encodes the specified SetWritableResponse message. Does not implicitly {@link vtctldata.SetWritableResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse} message SetWritableResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified SetWritableResponse message, length delimited. Does not implicitly {@link vtctldata.SetWritableResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.ISetWritableResponse} message SetWritableResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        SetWritableResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a SetWritableResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.SetWritableResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a SetWritableResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        SetWritableResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a SetWritableResponse message.
+         * @function verify
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        SetWritableResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a SetWritableResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.SetWritableResponse} SetWritableResponse
+         */
+        SetWritableResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.SetWritableResponse)
+                return object;
+            return new $root.vtctldata.SetWritableResponse();
+        };
+
+        /**
+         * Creates a plain object from a SetWritableResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.SetWritableResponse
+         * @static
+         * @param {vtctldata.SetWritableResponse} message SetWritableResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        SetWritableResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this SetWritableResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.SetWritableResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        SetWritableResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return SetWritableResponse;
+    })();
+
     vtctldata.ShardReplicationPositionsRequest = (function() {
 
         /**
@@ -81996,6 +82371,710 @@ $root.vtctldata = (function() {
         };
 
         return ShardReplicationPositionsResponse;
+    })();
+
+    vtctldata.StartReplicationRequest = (function() {
+
+        /**
+         * Properties of a StartReplicationRequest.
+         * @memberof vtctldata
+         * @interface IStartReplicationRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] StartReplicationRequest tablet_alias
+         */
+
+        /**
+         * Constructs a new StartReplicationRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a StartReplicationRequest.
+         * @implements IStartReplicationRequest
+         * @constructor
+         * @param {vtctldata.IStartReplicationRequest=} [properties] Properties to set
+         */
+        function StartReplicationRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StartReplicationRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.StartReplicationRequest
+         * @instance
+         */
+        StartReplicationRequest.prototype.tablet_alias = null;
+
+        /**
+         * Creates a new StartReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest=} [properties] Properties to set
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest instance
+         */
+        StartReplicationRequest.create = function create(properties) {
+            return new StartReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StartReplicationRequest message. Does not implicitly {@link vtctldata.StartReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest} message StartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.StartReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.IStartReplicationRequest} message StartReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StartReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartReplicationRequest message.
+         * @function verify
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartReplicationRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StartReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StartReplicationRequest} StartReplicationRequest
+         */
+        StartReplicationRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StartReplicationRequest)
+                return object;
+            var message = new $root.vtctldata.StartReplicationRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.StartReplicationRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StartReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StartReplicationRequest
+         * @static
+         * @param {vtctldata.StartReplicationRequest} message StartReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartReplicationRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.tablet_alias = null;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            return object;
+        };
+
+        /**
+         * Converts this StartReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StartReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartReplicationRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StartReplicationRequest;
+    })();
+
+    vtctldata.StartReplicationResponse = (function() {
+
+        /**
+         * Properties of a StartReplicationResponse.
+         * @memberof vtctldata
+         * @interface IStartReplicationResponse
+         */
+
+        /**
+         * Constructs a new StartReplicationResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a StartReplicationResponse.
+         * @implements IStartReplicationResponse
+         * @constructor
+         * @param {vtctldata.IStartReplicationResponse=} [properties] Properties to set
+         */
+        function StartReplicationResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new StartReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse=} [properties] Properties to set
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse instance
+         */
+        StartReplicationResponse.create = function create(properties) {
+            return new StartReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StartReplicationResponse message. Does not implicitly {@link vtctldata.StartReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse} message StartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StartReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.StartReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.IStartReplicationResponse} message StartReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StartReplicationResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StartReplicationResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StartReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StartReplicationResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StartReplicationResponse message.
+         * @function verify
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StartReplicationResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a StartReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StartReplicationResponse} StartReplicationResponse
+         */
+        StartReplicationResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StartReplicationResponse)
+                return object;
+            return new $root.vtctldata.StartReplicationResponse();
+        };
+
+        /**
+         * Creates a plain object from a StartReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StartReplicationResponse
+         * @static
+         * @param {vtctldata.StartReplicationResponse} message StartReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StartReplicationResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this StartReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StartReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StartReplicationResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StartReplicationResponse;
+    })();
+
+    vtctldata.StopReplicationRequest = (function() {
+
+        /**
+         * Properties of a StopReplicationRequest.
+         * @memberof vtctldata
+         * @interface IStopReplicationRequest
+         * @property {topodata.ITabletAlias|null} [tablet_alias] StopReplicationRequest tablet_alias
+         */
+
+        /**
+         * Constructs a new StopReplicationRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a StopReplicationRequest.
+         * @implements IStopReplicationRequest
+         * @constructor
+         * @param {vtctldata.IStopReplicationRequest=} [properties] Properties to set
+         */
+        function StopReplicationRequest(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * StopReplicationRequest tablet_alias.
+         * @member {topodata.ITabletAlias|null|undefined} tablet_alias
+         * @memberof vtctldata.StopReplicationRequest
+         * @instance
+         */
+        StopReplicationRequest.prototype.tablet_alias = null;
+
+        /**
+         * Creates a new StopReplicationRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest=} [properties] Properties to set
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest instance
+         */
+        StopReplicationRequest.create = function create(properties) {
+            return new StopReplicationRequest(properties);
+        };
+
+        /**
+         * Encodes the specified StopReplicationRequest message. Does not implicitly {@link vtctldata.StopReplicationRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest} message StopReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationRequest.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            if (message.tablet_alias != null && Object.hasOwnProperty.call(message, "tablet_alias"))
+                $root.topodata.TabletAlias.encode(message.tablet_alias, writer.uint32(/* id 1, wireType 2 =*/10).fork()).ldelim();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopReplicationRequest message, length delimited. Does not implicitly {@link vtctldata.StopReplicationRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.IStopReplicationRequest} message StopReplicationRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationRequest.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationRequest.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationRequest();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                case 1:
+                    message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32());
+                    break;
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StopReplicationRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationRequest.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopReplicationRequest message.
+         * @function verify
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopReplicationRequest.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias")) {
+                var error = $root.topodata.TabletAlias.verify(message.tablet_alias);
+                if (error)
+                    return "tablet_alias." + error;
+            }
+            return null;
+        };
+
+        /**
+         * Creates a StopReplicationRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StopReplicationRequest} StopReplicationRequest
+         */
+        StopReplicationRequest.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StopReplicationRequest)
+                return object;
+            var message = new $root.vtctldata.StopReplicationRequest();
+            if (object.tablet_alias != null) {
+                if (typeof object.tablet_alias !== "object")
+                    throw TypeError(".vtctldata.StopReplicationRequest.tablet_alias: object expected");
+                message.tablet_alias = $root.topodata.TabletAlias.fromObject(object.tablet_alias);
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a StopReplicationRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StopReplicationRequest
+         * @static
+         * @param {vtctldata.StopReplicationRequest} message StopReplicationRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopReplicationRequest.toObject = function toObject(message, options) {
+            if (!options)
+                options = {};
+            var object = {};
+            if (options.defaults)
+                object.tablet_alias = null;
+            if (message.tablet_alias != null && message.hasOwnProperty("tablet_alias"))
+                object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options);
+            return object;
+        };
+
+        /**
+         * Converts this StopReplicationRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StopReplicationRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopReplicationRequest.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StopReplicationRequest;
+    })();
+
+    vtctldata.StopReplicationResponse = (function() {
+
+        /**
+         * Properties of a StopReplicationResponse.
+         * @memberof vtctldata
+         * @interface IStopReplicationResponse
+         */
+
+        /**
+         * Constructs a new StopReplicationResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a StopReplicationResponse.
+         * @implements IStopReplicationResponse
+         * @constructor
+         * @param {vtctldata.IStopReplicationResponse=} [properties] Properties to set
+         */
+        function StopReplicationResponse(properties) {
+            if (properties)
+                for (var keys = Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null)
+                        this[keys[i]] = properties[keys[i]];
+        }
+
+        /**
+         * Creates a new StopReplicationResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse=} [properties] Properties to set
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse instance
+         */
+        StopReplicationResponse.create = function create(properties) {
+            return new StopReplicationResponse(properties);
+        };
+
+        /**
+         * Encodes the specified StopReplicationResponse message. Does not implicitly {@link vtctldata.StopReplicationResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse} message StopReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationResponse.encode = function encode(message, writer) {
+            if (!writer)
+                writer = $Writer.create();
+            return writer;
+        };
+
+        /**
+         * Encodes the specified StopReplicationResponse message, length delimited. Does not implicitly {@link vtctldata.StopReplicationResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.IStopReplicationResponse} message StopReplicationResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        StopReplicationResponse.encodeDelimited = function encodeDelimited(message, writer) {
+            return this.encode(message, writer).ldelim();
+        };
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationResponse.decode = function decode(reader, length) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            var end = length === undefined ? reader.len : reader.pos + length, message = new $root.vtctldata.StopReplicationResponse();
+            while (reader.pos < end) {
+                var tag = reader.uint32();
+                switch (tag >>> 3) {
+                default:
+                    reader.skipType(tag & 7);
+                    break;
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Decodes a StopReplicationResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        StopReplicationResponse.decodeDelimited = function decodeDelimited(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a StopReplicationResponse message.
+         * @function verify
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        StopReplicationResponse.verify = function verify(message) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            return null;
+        };
+
+        /**
+         * Creates a StopReplicationResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.StopReplicationResponse} StopReplicationResponse
+         */
+        StopReplicationResponse.fromObject = function fromObject(object) {
+            if (object instanceof $root.vtctldata.StopReplicationResponse)
+                return object;
+            return new $root.vtctldata.StopReplicationResponse();
+        };
+
+        /**
+         * Creates a plain object from a StopReplicationResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.StopReplicationResponse
+         * @static
+         * @param {vtctldata.StopReplicationResponse} message StopReplicationResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        StopReplicationResponse.toObject = function toObject() {
+            return {};
+        };
+
+        /**
+         * Converts this StopReplicationResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.StopReplicationResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        StopReplicationResponse.prototype.toJSON = function toJSON() {
+            return this.constructor.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        return StopReplicationResponse;
     })();
 
     vtctldata.TabletExternallyReparentedRequest = (function() {

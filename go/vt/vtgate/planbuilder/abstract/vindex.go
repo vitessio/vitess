@@ -57,7 +57,7 @@ const vindexUnsupported = "unsupported: where clause for vindex function must be
 // PushPredicate implements the Operator interface
 func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
-		deps := semTable.BaseTableDependencies(e)
+		deps := semTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
 		}

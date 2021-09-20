@@ -751,11 +751,29 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
 
+	if qre.tsv.config.AnnotateQueries {
+		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
+		if username == "" {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+		}
+		var buf strings.Builder
+		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
+		buf.Grow(8 + len(username) + len(tabletTypeStr))
+		buf.WriteString("/* ")
+		buf.WriteString(username)
+		buf.WriteString("@")
+		buf.WriteString(tabletTypeStr)
+		buf.WriteString(" */ ")
+		buf.WriteString(qre.marginComments.Leading)
+		qre.marginComments.Leading = buf.String()
+	}
+
 	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
 		return query, query, nil
 	}
 
 	var buf strings.Builder
+	buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
 	buf.WriteString(qre.marginComments.Leading)
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)

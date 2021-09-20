@@ -326,6 +326,101 @@ func TestQueryExecutorPlans(t *testing.T) {
 	}
 }
 
+func TestQueryExecutorQueryAnnotation(t *testing.T) {
+	type dbResponse struct {
+		query  string
+		result *sqltypes.Result
+	}
+
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	fieldResult := sqltypes.MakeTestResult(fields)
+	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
+
+	testcases := []struct {
+		// input is the input query.
+		input string
+		// passThrough specifies if planbuilder.PassthroughDML must be set.
+		passThrough bool
+		// dbResponses specifes the list of queries and responses to add to the fake db.
+		dbResponses []dbResponse
+		// resultWant is the result we want.
+		resultWant *sqltypes.Result
+		// planWant is the PlanType we want to see built.
+		planWant string
+		// logWant is the log of queries we expect to be executed.
+		logWant string
+		// If empty, then we should expect the same as logWant.
+		inTxWant string
+	}{{
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}, {
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}, {
+			query:  "/* u1@PRIMARY */ select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "select * from t where 1 != 1; /* u1@PRIMARY */ select * from t limit 10001",
+		// Because the fields would have been cached before, the field query will
+		// not get re-executed.
+		inTxWant: "/* u1@PRIMARY */ select * from t limit 10001",
+	}}
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			for _, dbr := range tcase.dbResponses {
+				db.AddQuery(dbr.query, dbr.result)
+			}
+			callerID := &querypb.VTGateCallerID{
+				Username: "u1",
+			}
+			ctx := callerid.NewContext(context.Background(), nil, callerID)
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			tsv.config.DB.DBName = "ks"
+			tsv.config.AnnotateQueries = true
+			defer tsv.StopService()
+
+			tsv.SetPassthroughDMLs(tcase.passThrough)
+
+			// Test outside a transaction.
+			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
+			got, err := qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
+			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
+
+			// Wait for the existing query to be processed by the cache
+			tsv.QueryPlanCacheWait()
+
+			// Test inside a transaction.
+			target := tsv.sm.Target()
+			txid, alias, err := tsv.Begin(ctx, target, nil)
+			require.NoError(t, err)
+			require.NotNil(t, alias, "alias should not be nil")
+			assert.Equal(t, tsv.alias, alias, "Wrong alias returned by Begin")
+			defer tsv.Commit(ctx, target, txid)
+
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			got, err = qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
+			want := tcase.logWant
+			if tcase.inTxWant != "" {
+				want = tcase.inTxWant
+			}
+			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
+		})
+	}
+}
+
 // TestQueryExecutorSelectImpossible is separate because it's a special case
 // because the "in transaction" case is a no-op.
 func TestQueryExecutorSelectImpossible(t *testing.T) {

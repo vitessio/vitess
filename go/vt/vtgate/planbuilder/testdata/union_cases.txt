@@ -206,6 +206,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # union operations in derived table, without star expression (FROM)¡
 "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
@@ -1299,11 +1300,116 @@ Gen4 plan same as above
   }
 }
 
+# Union in derived table with first SELECT being an UNION
+"select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectScatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id from `user` where 1 != 1",
+                        "Query": "select id from `user`",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectScatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id + 1 from `user` where 1 != 1",
+                        "Query": "select id + 1 from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id from user_extra where 1 != 1",
+                "Query": "select user_id from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "(select id from `user` where 1 != 1) union all (select id + 1 from `user` where 1 != 1) union (select user_id from user_extra where 1 != 1)",
+            "Query": "(select id from `user`) union all (select id + 1 from `user`) union (select user_id from user_extra)",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+
+# ambiguous ORDER BY
+"select id from user order by id union all select id from music order by id desc"
+"Incorrect usage of UNION and ORDER BY - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
 
 # different number of columns
 "select id, 42 from user where id = 1 union all select id from user where id = 5"
 "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000) during query: (select id, 42 from `user` where id = 1) union all (select id from `user` where id = 5)"
 Gen4 error: The used SELECT statements have a different number of columns
+
+# union with invalid order by clause with table qualifier
+"select id from user union select 3 order by user.id"
+"can't do ORDER BY on top of UNION"
+Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER clause

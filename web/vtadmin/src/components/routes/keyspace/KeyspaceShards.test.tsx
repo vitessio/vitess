@@ -64,7 +64,7 @@ describe('KeyspaceShards', () => {
                                 },
                                 keyspace: 'keyspace1',
                                 shard: '-80',
-                                type: topodata.TabletType.MASTER,
+                                type: topodata.TabletType.PRIMARY,
                             },
                         }),
                         pb.Tablet.create({
@@ -77,7 +77,7 @@ describe('KeyspaceShards', () => {
                                 },
                                 keyspace: 'keyspace2',
                                 shard: '-',
-                                type: topodata.TabletType.MASTER,
+                                type: topodata.TabletType.PRIMARY,
                             },
                         }),
                         pb.Tablet.create({
@@ -91,7 +91,7 @@ describe('KeyspaceShards', () => {
                                 hostname: 'tablet-zone1-300-80-00',
                                 keyspace: 'keyspace1',
                                 shard: '80-',
-                                type: topodata.TabletType.MASTER,
+                                type: topodata.TabletType.PRIMARY,
                             },
                         }),
                     ],

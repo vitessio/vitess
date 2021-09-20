@@ -162,6 +162,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name matches, and there's an alias.
 "select * from second_user.user as a"
@@ -180,6 +181,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's no alias.
 "select * from route1"
@@ -198,6 +200,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules where table name does not match, and there's an alias.
 "select * from route1 as a"
@@ -216,6 +219,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules with primary targeting
 "select * from primary_redirect"
@@ -234,6 +238,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # routing rules bad table
 "select * from bad_table"
@@ -637,7 +642,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-            "Query": "select e.col from user_extra as e",
+            "Query": "select e.col from user_extra as e where e.col = :user_col",
             "Table": "user_extra"
           },
           {
@@ -648,7 +653,7 @@ Gen4 plan same as above
               "Sharded": false
             },
             "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-            "Query": "select 1 from unsharded as m1 where m1.col = :e_col and :user_col = :e_col",
+            "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
             "Table": "unsharded"
           }
         ]
@@ -1986,21 +1991,7 @@ Gen4 error: symbol t.col not found
     "Table": "`user`"
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from (select id+col as foo from route1) as t where foo = 5",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from (select id + col as foo from `user` as route1 where 1 != 1) as t where 1 != 1",
-    "Query": "select id from (select id + col as foo from `user` as route1 where id + col = 5) as t",
-    "Table": "`user`"
-  }
-}
+Gen4 error: symbol id not found
 
 # push predicate on joined derived tables
 "select t.id from (select id, textcol1 as baz from route1) as t join (select id, textcol1+textcol1 as baz from user) as s ON t.id = s.id WHERE t.baz = '3' AND s.baz = '3'"
@@ -2614,21 +2605,22 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "JoinVars": {
-              "user_id": 0
-            },
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "SelectEqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id",
+                "Table": "`user`",
+                "Values": [
+                  ":ua_id"
+                ],
+                "Vindex": "user_index"
               },
               {
                 "OperatorType": "Route",
@@ -2638,7 +2630,7 @@ Gen4 plan same as above
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra where :user_id = :ua_id",
+                "Query": "select 1 from user_extra",
                 "Table": "user_extra"
               }
             ]
@@ -3955,21 +3947,117 @@ Gen4 plan same as above
   }
 }
 
-# join two routes with SysTableTableName entries in LHS and RHS
-"select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b"
+# select star from derived table on expandable and unsharded table
+"select u.* from (select * from unsharded) u"
 {
   "QueryType": "SELECT",
-  "Original": "select a.table_name from (select * from information_schema.key_column_usage a where a.table_name = 'users') a join (select * from information_schema.referential_constraints where table_name = 'users') b",
+  "Original": "select u.* from (select * from unsharded) u",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectDBA",
+    "Variant": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select a.table_name from (select * from information_schema.key_column_usage as a where 1 != 1) as a join (select * from information_schema.referential_constraints where 1 != 1) as b where 1 != 1",
-    "Query": "select a.table_name from (select * from information_schema.key_column_usage as a where a.table_name = :a_table_name) as a join (select * from information_schema.referential_constraints where table_name = :table_name) as b",
-    "SysTableTableName": "[a_table_name:VARBINARY(\"users\"), table_name:VARBINARY(\"users\")]",
-    "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
+    "FieldQuery": "select u.* from (select * from unsharded where 1 != 1) as u where 1 != 1",
+    "Query": "select u.* from (select * from unsharded) as u",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+
+# filtering on a cross-shard derived table
+"select id from (select user.id, user.col from user join user_extra) as t where id=5"
+"unsupported: filtering on results of cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select user.id, user.col from user join user_extra) as t where id=5",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col from `user` where `user`.id = 5",
+            "Table": "`user`",
+            "Values": [
+              5
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# expression on a cross-shard derived table
+"select id+1 from (select user.id, user.col from user join user_extra) as t"
+"unsupported: expression on results of a cross-shard subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select id+1 from (select user.id, user.col from user join user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      2
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2,-3",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, id + 1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col, id + 1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
   }
 }

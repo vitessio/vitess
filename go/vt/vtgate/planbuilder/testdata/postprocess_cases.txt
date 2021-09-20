@@ -34,8 +34,9 @@
 # ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having col1 = 2"
 "ambiguous symbol reference: col1"
-Gen4 error: Column 'col1' is ambiguous
+Gen4 error: Column 'col1' in field list is ambiguous
 
+# TODO: this should be 'Column 'col1' in having clause is ambiguous'
 # non-ambiguous symbol reference
 "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2"
 {
@@ -297,7 +298,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where id = 1 order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select col from `user` where 1 != 1",
+    "Query": "select col from `user` where id = 1 order by col asc",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # ORDER BY on scatter
 "select col from user order by col"
@@ -1395,6 +1414,25 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from user u join (select user_id from user_extra where user_id = 5) eu on u.id = eu.user_id where u.id = 5 order by eu.user_id",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from `user` as u, (select user_id from user_extra where 1 != 1) as eu where 1 != 1",
+    "Query": "select * from `user` as u, (select user_id from user_extra where user_id = 5) as eu where u.id = 5 and u.id = eu.user_id order by eu.user_id asc",
+    "Table": "`user`, user_extra",
+    "Values": [
+      5
+    ],
+    "Vindex": "user_index"
+  }
+}
 
 # routing rules: order by gets pushed for routes
 "select col from route1 where id = 1 order by col"
@@ -1560,6 +1598,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # scatter limit after pullout subquery
 "select col from user where col in (select col1 from user) limit 1"
@@ -1885,9 +1924,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+        "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
         "Table": "`user`"
       }
     ]
@@ -1950,9 +1989,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by num, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by num order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by num, weight_string(num) order by num asc",
             "Table": "`user`"
           }
         ]

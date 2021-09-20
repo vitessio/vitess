@@ -1,0 +1,8 @@
+rules:
+  - resource: "*"
+    actions:
+    - "get"
+    - "create"
+    - "delete"
+    subjects: ["*"]
+    clusters: ["*"]
