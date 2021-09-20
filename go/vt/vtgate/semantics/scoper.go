@@ -26,25 +26,34 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-// scoper is responsible for figuring out the scoping for the query,
-// and keeps the current scope when walking the tree
-type scoper struct {
-	rScope       map[*sqlparser.Select]*scope
-	wScope       map[*sqlparser.Select]*scope
-	sqlNodeScope map[scopeKey]*scope
-	scopes       []*scope
-	org          originable
+type (
+	// scoper is responsible for figuring out the scoping for the query,
+	// and keeps the current scope when walking the tree
+	scoper struct {
+		rScope       map[*sqlparser.Select]*scope
+		wScope       map[*sqlparser.Select]*scope
+		sqlNodeScope map[scopeKey]*scope
+		scopes       []*scope
+		org          originable
 
-	// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
-	specialExprScopes map[*sqlparser.Literal]*scope
-}
+		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
+		specialExprScopes map[*sqlparser.Literal]*scope
+	}
 
-type scopeKey struct {
-	typ  keyType
-	node sqlparser.SQLNode
-}
+	scopeKey struct {
+		typ  keyType
+		node sqlparser.SQLNode
+	}
 
-type keyType int8
+	keyType int8
+
+	scope struct {
+		parent     *scope
+		selectStmt *sqlparser.Select
+		tables     []TableInfo
+		isUnion    bool
+	}
+)
 
 const (
 	_ keyType = iota
@@ -240,6 +249,7 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error 
 		}
 	case *sqlparser.Union:
 		nScope := newScope(nil)
+		nScope.isUnion = true
 		firstSelect := sqlparser.GetFirstSelect(parent.FirstStatement)
 		nScope.selectStmt = firstSelect
 		tableInfo := createVTableInfoForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
@@ -281,4 +291,28 @@ func (s *scoper) push(sc *scope) {
 func (s *scoper) popScope() {
 	l := len(s.scopes) - 1
 	s.scopes = s.scopes[:l]
+}
+
+func newScope(parent *scope) *scope {
+	return &scope{parent: parent}
+}
+
+func (s *scope) addTable(info TableInfo) error {
+	name, err := info.Name()
+	if err != nil {
+		return err
+	}
+	tblName := name.Name.String()
+	for _, table := range s.tables {
+		name, err := table.Name()
+		if err != nil {
+			return err
+		}
+
+		if tblName == name.Name.String() {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
+		}
+	}
+	s.tables = append(s.tables, info)
+	return nil
 }
