@@ -130,8 +130,8 @@ func (p *Projection) Inputs() []Primitive {
 	return []Primitive{p.Input}
 }
 
-// description implements the Primitive interface
-func (p *Projection) description() PrimitiveDescription {
+// Description implements the Primitive interface
+func (p *Projection) Description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
 		exprs = append(exprs, e.String())

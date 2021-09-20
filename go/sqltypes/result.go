@@ -17,6 +17,8 @@ limitations under the License.
 package sqltypes
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"reflect"
 
 	"google.golang.org/protobuf/proto"
@@ -181,6 +183,46 @@ func ResultsEqual(r1, r2 []Result) bool {
 		}
 	}
 	return true
+}
+
+// ResultsEqualUnordered compares two unordered arrays of Result.
+func ResultsEqualUnordered(r1, r2 []Result) bool {
+	if len(r1) != len(r2) {
+		return false
+	}
+
+	allRows := map[string]int{}
+	countRows := 0
+	for _, r := range r1 {
+		for _, row := range r.Rows {
+			newHash := hashCodeForRow(row)
+			allRows[newHash] += 1
+		}
+		countRows += int(r.RowsAffected)
+	}
+	for _, r := range r2 {
+		for _, row := range r.Rows {
+			newHash := hashCodeForRow(row)
+			allRows[newHash] -= 1
+		}
+		countRows -= int(r.RowsAffected)
+	}
+	if countRows != 0 {
+		return false
+	}
+	for _, i := range allRows {
+		if i != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func hashCodeForRow(val []Value) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%v", val)))
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // MakeRowTrusted converts a *querypb.Row to []Value based on the types

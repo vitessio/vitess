@@ -452,6 +452,12 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 func (vw *vschemaWrapper) Planner() PlannerVersion {
 	return vw.version
 }
+
+// SetPlannerVersion implements the ContextVSchema interface
+func (vw *vschemaWrapper) SetPlannerVersion(v PlannerVersion) {
+	vw.version = v
+}
+
 func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
 	return nil
 }
