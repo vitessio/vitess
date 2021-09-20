@@ -131,68 +131,64 @@ var (
 		output: "select 1 from t",
 	}, {
 		input:  "select /* union */ 1 from t union select 1 from t",
-		output: "(select /* union */ 1 from t) union (select 1 from t)",
 	}, {
 		input:  "select /* double union */ 1 from t union select 1 from t union select 1 from t",
-		output: "(select /* double union */ 1 from t) union (select 1 from t) union (select 1 from t)",
 	}, {
 		input:  "select /* union all */ 1 from t union all select 1 from t",
-		output: "(select /* union all */ 1 from t) union all (select 1 from t)",
 	}, {
 		input:  "select /* union distinct */ 1 from t union distinct select 1 from t",
-		output: "(select /* union distinct */ 1 from t) union (select 1 from t)",
+		output: "select /* union distinct */ 1 from t union select 1 from t",
 	}, {
 		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
-		output: "(select /* union parenthesized select */ 1 from t order by a asc) union (select 1 from t)",
+		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
 	}, {
 		input:  "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
-		output: "(select /* union parenthesized select 2 */ 1 from t) union (select 1 from t)",
+		output: "select /* union parenthesized select 2 */ 1 from t union select 1 from t",
 	}, {
 		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
-		output: "(select /* union order by */ 1 from t) union (select 1 from t) order by a asc",
+		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
 	}, {
 		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
-		output: "(select /* union order by limit lock */ 1 from t) union (select 1 from t) order by a asc limit 1 for update",
-	}, {
-		input:  "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
-		output: "(select /* union with limit on lhs */ 1 from t limit 1) union (select 1 from t)",
+		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
 	}, {
 		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 	}, {
 		input:  "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
-		output: "select a from ((select 1 as a from tbl1) union (select 2 from tbl2)) as t",
+		output: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
 	}, {
 		input:  "select * from t1 join (select * from t2 union select * from t3) as t",
-		output: "select * from t1 join ((select * from t2) union (select * from t3)) as t",
 	}, {
 		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
 		input: "select * from t1 join t2 on a = b join t3",
 	}, {
 		input:  "select * from t1 where col in (select 1 from dual union select 2 from dual)",
-		output: "select * from t1 where col in ((select 1 from dual) union (select 2 from dual))",
+		output: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input:  "select * from t1 where exists (select a from t2 union select b from t3)",
-		output: "select * from t1 where exists ((select a from t2) union (select b from t3))",
 	}, {
 		input:  "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
-		output: "(select 1 from dual) union (select 2 from dual) union all (select 3 from dual) union (select 4 from dual) union all (select 5 from dual)",
+		output: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
 	}, {
 		input: "(select 1 from dual) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
 		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
 		input: "(select 1 from dual)",
+		output: "select 1 from dual",
 	}, {
 		input: "((select 1 from dual))",
+		output: "select 1 from dual",
 	}, {
 		input: "select 1 from (select 1 from dual) as t",
 	}, {
 		input:  "select 1 from (select 1 from dual union select 2 from dual) as t",
-		output: "select 1 from ((select 1 from dual) union (select 2 from dual)) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input:  "select 1 from ((select 1 from dual) union select 2 from dual) as t",
-		output: "select 1 from ((select 1 from dual) union (select 2 from dual)) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -499,7 +495,7 @@ var (
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
 		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
-		output: "select count(distinct 1) from ((select 1 from dual) union all (select 1 from dual)) as a",
+		output: "select count(distinct 1) from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
@@ -749,10 +745,13 @@ var (
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
 		input: "insert /* no cols & paren select */ into a (select * from t)",
+		output: "insert /* no cols & paren select */ into a select * from t",
 	}, {
 		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
+		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
 	}, {
 		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		output: "insert /* cols & union with paren select */ into a(b, c) select d, e from f union select g from h",
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
@@ -1936,7 +1935,7 @@ var (
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
-		output: "select distinct a.* from ((select 1 from dual) union all (select 1 from dual)) as a",
+		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select `weird function name`() from t",
 	}, {
@@ -2114,6 +2113,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "query was empty",
+	}, {
+		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+		err: "syntax error at position 60 near 'union'",
 	}}
 
 	for _, tcase := range invalidSQL {

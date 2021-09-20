@@ -356,11 +356,11 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <order> order
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt limit_clause
-%type <selectInto> into_option into_clause
+%type <selectInto> into_clause
 %type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
-%type <lock> lock_opt locking_clause
+%type <lock> locking_clause
 %type <columns> ins_column_list column_list column_list_opt index_list
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
@@ -551,17 +551,19 @@ query_expression_parens:
 query_expression:
  query_expression_body order_by_opt limit_opt
   {
-		setOrderAndLimitToSelect($1, $2, $3)
+		$1.SetOrderBy($2)
+		$1.SetLimit($3)
 		$$ = $1
   }
 | query_expression_parens limit_clause
   {
-	setOrderAndLimitToSelect($1, nil, $2)
+	$1.SetLimit($2)
 	$$ = $1
   }
 | query_expression_parens order_by_clause limit_opt
   {
-	setOrderAndLimitToSelect($1, $2, $3)
+	$1.SetOrderBy($2)
+	$1.SetLimit($3)
 	$$ = $1
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
@@ -4524,15 +4526,6 @@ CURRENT_USER
     $$ = string($1)
   }
 
-lock_opt:
-  {
-    $$ = NoLock
-  }
-| locking_clause
-{
-	$$ = $1
-}
-
 locking_clause:
 FOR UPDATE
   {
@@ -4543,14 +4536,6 @@ FOR UPDATE
     $$ = ShareModeLock
   }
 
-into_option:
-  {
-    $$ = nil
-  }
- | into_clause
- {
- 	$$ = $1
- }
 into_clause:
 INTO OUTFILE S3 STRING charset_opt format_opt export_options manifest_opt overwrite_opt
 {

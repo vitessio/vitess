@@ -879,7 +879,7 @@ func (node *Union) GetComments() Comments {
 }
 
 func requiresParen(stmt SelectStatement) bool {
-	switch node:= stmt.(type) {
+	switch node := stmt.(type) {
 	case *Union:
 		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	case *Select:
@@ -887,11 +887,6 @@ func requiresParen(stmt SelectStatement) bool {
 	}
 
 	return false
-}
-
-func setOrderAndLimitToSelect(stmt SelectStatement, orderBy OrderBy, limit *Limit) {
-	stmt.SetOrderBy(orderBy)
-	stmt.SetLimit(limit)
 }
 
 func setLockInSelect(stmt SelectStatement, lock Lock) {
