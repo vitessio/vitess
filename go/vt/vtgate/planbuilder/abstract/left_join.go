@@ -38,7 +38,7 @@ func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTa
 		return oj.Left.PushPredicate(expr, semTable)
 	}
 
-	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Cannot push predicate: %s", sqlparser.String(expr))
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface
