@@ -380,7 +380,7 @@ INPUT
 select concat(f1, 2) a from t1 union select 'x' a from t1;
 END
 OUTPUT
-(select concat(f1, 2) as a from t1) union (select 'x' as a from t1)
+select concat(f1, 2) as a from t1 union select 'x' as a from t1
 END
 INPUT
 select t2.* as 'with_alias' from t2;
@@ -506,7 +506,7 @@ INPUT
 select 'a' union select concat('a', -4);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -4) from dual)
+select 'a' from dual union select concat('a', -4) from dual
 END
 INPUT
 select t1.* as 'with_alias', a as 'x' from t1;
@@ -1742,7 +1742,7 @@ INPUT
 select 1 as a from t1 union all select 1 from dual limit 1;
 END
 OUTPUT
-(select 1 as a from t1) union all (select 1 from dual) limit 1
+select 1 as a from t1 union all select 1 from dual limit 1
 END
 INPUT
 select from t1 where a > _latin1 'B' collate latin1_bin;
@@ -2312,7 +2312,7 @@ INPUT
 select group_concat('x') UNION ALL select 1;
 END
 OUTPUT
-(select group_concat('x') from dual) union all (select 1 from dual)
+select group_concat('x') from dual union all select 1 from dual
 END
 INPUT
 select sql_big_result trim(t),count(t) from t1 group by t order by t limit 10;
@@ -3338,7 +3338,7 @@ INPUT
 select "xyz" as name union select "abc" as name order by name desc;
 END
 OUTPUT
-(select 'xyz' as `name` from dual) union (select 'abc' as `name` from dual) order by `name` desc
+select 'xyz' as `name` from dual union select 'abc' as `name` from dual order by `name` desc
 END
 INPUT
 select from t1 where text1 like 'teststring_%';
@@ -3668,7 +3668,7 @@ INPUT
 select 'a' union select concat('a', -0.0);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -0.0) from dual)
+select 'a' from dual union select concat('a', -0.0) from dual
 END
 INPUT
 select 9223372036854775808+1;
@@ -4046,7 +4046,7 @@ INPUT
 select 1 as a union all select 1 union all select 2 union select 1 union all select 2;
 END
 OUTPUT
-(select 1 as a from dual) union all (select 1 from dual) union all (select 2 from dual) union (select 1 from dual) union all (select 2 from dual)
+select 1 as a from dual union all select 1 from dual union all select 2 from dual union select 1 from dual union all select 2 from dual
 END
 INPUT
 select mod(5, cast(-2 as unsigned)), mod(5, 18446744073709551614), mod(5, -2);
@@ -4688,7 +4688,7 @@ INPUT
 select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) group by a.text, b.id, b.betreff union select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) group by a.text, b.id, b.betreff order by match(b.betreff) against ('+abc' in boolean mode) desc;
 END
 OUTPUT
-(select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) group by a.`text`, b.id, b.betreff) union (select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) group by a.`text`, b.id, b.betreff) order by match(b.betreff) against ('+abc' in boolean mode) desc
+select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) group by a.`text`, b.id, b.betreff union select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) group by a.`text`, b.id, b.betreff order by match(b.betreff) against ('+abc' in boolean mode) desc
 END
 INPUT
 select count(s1) from t1 group by s1 having count(1+1)=2;
@@ -5420,7 +5420,7 @@ INPUT
 select s1 from t1 where s1 in (select version from information_schema.tables) union select version from information_schema.tables;
 END
 OUTPUT
-(select s1 from t1 where s1 in (select version from information_schema.`tables`)) union (select version from information_schema.`tables`)
+select s1 from t1 where s1 in (select version from information_schema.`tables`) union select version from information_schema.`tables`
 END
 INPUT
 select from t1 where a='a';
@@ -5606,7 +5606,7 @@ INPUT
 select 'a' union select concat('a', -'3');
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -'3') from dual)
+select 'a' from dual union select concat('a', -'3') from dual
 END
 INPUT
 select st_crosses(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
@@ -5810,7 +5810,7 @@ INPUT
 select 'a' union select concat('a', -concat('3',4));
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -concat('3', 4)) from dual)
+select 'a' from dual union select concat('a', -concat('3', 4)) from dual
 END
 INPUT
 select t1.*,t2.* from t1 natural join t2;
@@ -5990,7 +5990,7 @@ INPUT
 select 1 union select 1;
 END
 OUTPUT
-(select 1 from dual) union (select 1 from dual)
+select 1 from dual union select 1 from dual
 END
 INPUT
 select distinct n1,s from t1;
@@ -6620,7 +6620,7 @@ INPUT
 select 'a' union select concat('a', 4 - 5);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', 4 - 5) from dual)
+select 'a' from dual union select concat('a', 4 - 5) from dual
 END
 INPUT
 select var_samp(o) as 'null', var_pop(o) as 'null' from bug22555;
@@ -6920,7 +6920,7 @@ INPUT
 select t1.id from t1 union select t2.id from t2;
 END
 OUTPUT
-(select t1.id from t1) union (select t2.id from t2)
+select t1.id from t1 union select t2.id from t2
 END
 INPUT
 select unix_timestamp('1968-01-20 01:00:00');
@@ -9320,7 +9320,7 @@ INPUT
 select ST_AsText(a) from (select f2 as a from t1 union select f3 from t1) t;
 END
 OUTPUT
-select ST_AsText(a) from ((select f2 as a from t1) union (select f3 from t1)) as t
+select ST_AsText(a) from (select f2 as a from t1 union select f3 from t1) as t
 END
 INPUT
 select host,db,user,table_name from mysql.tables_priv where user = 'mysqltest_1' order by host,db,user,table_name;
@@ -11690,7 +11690,7 @@ INPUT
 select repeat(_utf8mb4'+',3) as h union select NULL;
 END
 OUTPUT
-(select repeat(_utf8mb4 '+', 3) as h from dual) union (select null from dual)
+select repeat(_utf8mb4 '+', 3) as h from dual union select null from dual
 END
 INPUT
 select insert('hello', -4294967295, -4294967295, 'hi');
@@ -12386,7 +12386,7 @@ INPUT
 select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) union select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) order by match(betreff) against ('+abc' in boolean mode) desc;
 END
 OUTPUT
-(select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode)) union (select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode)) order by match(betreff) against ('+abc' in boolean mode) desc
+select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) union select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) order by match(betreff) against ('+abc' in boolean mode) desc
 END
 INPUT
 select @a;
@@ -12602,7 +12602,7 @@ INPUT
 select @arg00 FROM t1 where a=1 union distinct select 1 FROM t1 where a=1;
 END
 OUTPUT
-(select @arg00 from t1 where a = 1) union (select 1 from t1 where a = 1)
+select @arg00 from t1 where a = 1 union select 1 from t1 where a = 1
 END
 INPUT
 select @@max_sort_length;
@@ -13268,7 +13268,7 @@ INPUT
 select 'a' union select concat('a', -0.0000);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -0.0000) from dual)
+select 'a' from dual union select concat('a', -0.0000) from dual
 END
 INPUT
 select locate('lo','hello',-4294967296);
@@ -14726,7 +14726,7 @@ INPUT
 select 'a' union select concat('a', -(4 + 1));
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -(4 + 1)) from dual)
+select 'a' from dual union select concat('a', -(4 + 1)) from dual
 END
 INPUT
 select otto from (select 1 as otto) as t1;
@@ -17192,7 +17192,7 @@ INPUT
 select 'a' union select concat('a', -4.5);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -4.5) from dual)
+select 'a' from dual union select concat('a', -4.5) from dual
 END
 INPUT
 select date,format,TIME(str_to_date(date, format)) as time from t1;
@@ -18518,7 +18518,7 @@ INPUT
 select min(`col002`) from t1 union select `col002` from t1;
 END
 OUTPUT
-(select min(col002) from t1) union (select col002 from t1)
+select min(col002) from t1 union select col002 from t1
 END
 INPUT
 select from t1,t1 as t2 where t1.x=t2.y;
@@ -18716,7 +18716,7 @@ INPUT
 select f1,'' from t1 union select f1,'' from t1;
 END
 OUTPUT
-(select f1, '' from t1) union (select f1, '' from t1)
+select f1, '' from t1 union select f1, '' from t1
 END
 INPUT
 select ST_astext(g) from t1 where ST_Intersects(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g);
@@ -19124,7 +19124,7 @@ INPUT
 select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) union select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) order by match(b.betreff) against ('+abc' in boolean mode) desc;
 END
 OUTPUT
-(select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode)) union (select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode)) order by match(b.betreff) against ('+abc' in boolean mode) desc
+select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) union select a.`text`, b.id, b.betreff from t2 as a join t3 as b on a.id = b.forum join t1 as c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) order by match(b.betreff) against ('+abc' in boolean mode) desc
 END
 INPUT
 select sql_big_result trim(v),count(c) from t1 group by v order by v limit 10;
@@ -19970,7 +19970,7 @@ INPUT
 select concat((select x from (select 'a' as x) as t1 ), (select y from (select 'b' as y) as t2 )) from (select 1 union select 2 ) as t3;
 END
 OUTPUT
-select concat((select x from (select 'a' as x from dual) as t1), (select y from (select 'b' as y from dual) as t2)) from ((select 1 from dual) union (select 2 from dual)) as t3
+select concat((select x from (select 'a' as x from dual) as t1), (select y from (select 'b' as y from dual) as t2)) from (select 1 from dual union select 2 from dual) as t3
 END
 INPUT
 select max(a3) from t1 where a2 is null and a2 = 2;
@@ -20840,7 +20840,7 @@ INPUT
 select repeat(_utf8'+',3) as h union select NULL;
 END
 OUTPUT
-(select repeat(_utf8 '+', 3) as h from dual) union (select null from dual)
+select repeat(_utf8 '+', 3) as h from dual union select null from dual
 END
 INPUT
 select fld1,fld3 FROM t2 where fld1 like "25050%";
@@ -21110,7 +21110,7 @@ INPUT
 select f1 from t1 union select f1 from t1;
 END
 OUTPUT
-(select f1 from t1) union (select f1 from t1)
+select f1 from t1 union select f1 from t1
 END
 INPUT
 select concat(':',trim(leading from ' left '),':',trim(trailing from ' right '),':');
@@ -21614,7 +21614,7 @@ INPUT
 select 'a' union select concat('a', -0);
 END
 OUTPUT
-(select 'a' from dual) union (select concat('a', -0) from dual)
+select 'a' from dual union select concat('a', -0) from dual
 END
 INPUT
 select null sounds like null;
