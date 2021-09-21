@@ -1002,35 +1002,6 @@ func TestScopingWVindexTables(t *testing.T) {
 	}
 }
 
-func TestInvalidSelectInto(t *testing.T) {
-	queries := []struct {
-		query        string
-		errorMessage string
-	}{
-		{
-			query:        "select id from user into outfile 'out_file_name' union all select id from music",
-			errorMessage: "Incorrect usage/placement of 'INTO'",
-		}, {
-			query:        "select id from (select id from user into outfile s3 'inner_outfile') as t2",
-			errorMessage: "Incorrect usage/placement of 'INTO'",
-		}, {
-			query:        "select id from (select id from user into outfile s3 'inner_outfile' union select 1) as t2",
-			errorMessage: "Incorrect usage/placement of 'INTO'",
-		},
-	}
-	for _, query := range queries {
-		t.Run(query.query, func(t *testing.T) {
-			parse, err := sqlparser.Parse(query.query)
-			require.NoError(t, err)
-
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
-			if query.errorMessage != "" {
-				require.EqualError(t, err, query.errorMessage)
-			}
-		})
-	}
-}
-
 func BenchmarkAnalyzeMultipleDifferentQueries(b *testing.B) {
 	queries := []string{
 		"select col from tabl",
