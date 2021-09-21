@@ -474,7 +474,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as (select * from music where user_id = 1) union (select * from `user` where id = 1)"
+    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
   }
 }
 Gen4 plan same as above

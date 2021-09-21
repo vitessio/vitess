@@ -4595,6 +4595,96 @@ func TestGetVSchema(t *testing.T) {
 	})
 }
 
+func TestPingTablet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}, nil)
+
+	tests := []struct {
+		name      string
+		tmc       testutil.TabletManagerClient
+		req       *vtctldatapb.PingTabletRequest
+		expected  *vtctldatapb.PingTabletResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tmc: testutil.TabletManagerClient{
+				PingResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			req: &vtctldatapb.PingTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: &vtctldatapb.PingTabletResponse{},
+		},
+		{
+			name: "tablet not found",
+			tmc: testutil.TabletManagerClient{
+				PingResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			req: &vtctldatapb.PingTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  404,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "ping rpc error",
+			tmc: testutil.TabletManagerClient{
+				PingResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+			},
+			req: &vtctldatapb.PingTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			resp, err := vtctld.PingTablet(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
 func TestPlannedReparentShard(t *testing.T) {
 	t.Parallel()
 
