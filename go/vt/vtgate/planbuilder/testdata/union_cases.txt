@@ -561,36 +561,20 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from music where 1 != 1",
-            "Query": "select distinct 1 from music",
+            "FieldQuery": "select 1 from music where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select 1 from music union select id from `user`",
             "Table": "music"
           },
           {
-            "OperatorType": "Concatenate",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectScatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select id from `user` where 1 != 1",
-                "Query": "select distinct id from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectUnsharded",
-                "Keyspace": {
-                  "Name": "main",
-                  "Sharded": false
-                },
-                "FieldQuery": "select `name` from unsharded where 1 != 1",
-                "Query": "select distinct `name` from unsharded",
-                "Table": "unsharded"
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select `name` from unsharded where 1 != 1",
+            "Query": "select distinct `name` from unsharded",
+            "Table": "unsharded"
           }
         ]
       }
@@ -673,41 +657,20 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from music where 1 != 1",
-            "Query": "select distinct 1 from music",
+            "FieldQuery": "select 1 from music where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select 1 from music union select id from `user`",
             "Table": "music"
           },
           {
-            "OperatorType": "Distinct",
-            "Inputs": [
-              {
-                "OperatorType": "Concatenate",
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "SelectScatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select id from `user` where 1 != 1",
-                    "Query": "select distinct id from `user`",
-                    "Table": "`user`"
-                  },
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "SelectUnsharded",
-                    "Keyspace": {
-                      "Name": "main",
-                      "Sharded": false
-                    },
-                    "FieldQuery": "select `name` from unsharded where 1 != 1",
-                    "Query": "select distinct `name` from unsharded",
-                    "Table": "unsharded"
-                  }
-                ]
-              }
-            ]
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select `name` from unsharded where 1 != 1",
+            "Query": "select distinct `name` from unsharded",
+            "Table": "unsharded"
           }
         ]
       }
