@@ -495,3 +495,30 @@ func (client *gRPCVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctld
 
 	return client.c.UpdateCellsAlias(ctx, in, opts...)
 }
+
+// Validate is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.Validate(ctx, in, opts...)
+}
+
+// ValidateKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateKeyspace(ctx, in, opts...)
+}
+
+// ValidateShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ValidateShard(ctx, in, opts...)
+}

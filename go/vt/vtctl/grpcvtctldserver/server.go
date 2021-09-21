@@ -2265,6 +2265,21 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 	}, nil
 }
 
+// Validate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
+	panic("unimplemented!")
+}
+
+// ValidateKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	panic("unimplemented!")
+}
+
+// ValidateShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
+	panic("unimplemented!")
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
