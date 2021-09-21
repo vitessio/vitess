@@ -97,6 +97,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance.VtGateExtraArgs = []string{
 		"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
 		"-keyspaces_to_watch", "ks1",
+		"-planner_version", "Gen4Slow",
 	}
 
 	// Start vtgate
