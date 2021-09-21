@@ -29,22 +29,36 @@ func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.Reserved
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
 		defer schema.SetPlannerVersion(Gen4Slow)
 
-		schema.SetPlannerVersion(V3)
-		v3Primitive, v3Err := createInstructionFor(query, statement, sqlparser.NewReservedVars("", make(map[string]struct{})), schema, false, false)
-
 		schema.SetPlannerVersion(Gen4)
-		gen4Primitive, gen4Err := createInstructionFor(query, statement, sqlparser.NewReservedVars("", make(map[string]struct{})), schema, false, false)
-		if v3Err != nil && gen4Err != nil {
-			return nil, gen4Err
+		gen4Primitive, gen4Err := createInstructionFor(query, statement, vars, schema, false, false)
+
+		// We insert data only once using the gen4 planner to avoid duplicated rows.
+		if _, isInsert := statement.(*sqlparser.Insert); isInsert {
+			return gen4Primitive, gen4Err
 		}
-		if v3Err == nil && gen4Err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Gen4 failed while v3 did not: %s", gen4Err.Error())
-		}
-		if v3Err != nil && gen4Err == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 failed while Gen4 did not: %s", v3Err.Error())
+
+		schema.SetPlannerVersion(V3)
+		v3Primitive, v3Err := createInstructionFor(query, statement, vars, schema, false, false)
+
+		err := treatV3AndGen4Errors(v3Err, gen4Err)
+		if err != nil {
+			return nil, err
 		}
 		return &comparer{v3: v3Primitive, gen4: gen4Primitive}, nil
 	}
+}
+
+func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
+	if v3Err != nil && gen4Err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 and Gen4 failed: v3: %s | Gen4: %s", v3Err.Error(), gen4Err.Error())
+	}
+	if v3Err == nil && gen4Err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Gen4 failed while v3 did not: %s", gen4Err.Error())
+	}
+	if v3Err != nil && gen4Err == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 failed while Gen4 did not: %s", v3Err.Error())
+	}
+	return nil
 }
 
 type comparer struct {
@@ -72,16 +86,11 @@ func (c *comparer) NeedsTransaction() bool {
 }
 
 func (c *comparer) TryExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
 	gen4Result, gen4Err := c.gen4.TryExecute(vcursor, bindVars, wantfields)
-	if v3Err != nil && gen4Err != nil {
-		return nil, gen4Err
-	}
-	if v3Err == nil && gen4Err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Gen4 failed while v3 did not: %s", gen4Err.Error())
-	}
-	if v3Err != nil && gen4Err == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 failed while Gen4 did not: %s", v3Err.Error())
+	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
+	err := treatV3AndGen4Errors(v3Err, gen4Err)
+	if err != nil {
+		return nil, err
 	}
 	match := sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	if !match {
