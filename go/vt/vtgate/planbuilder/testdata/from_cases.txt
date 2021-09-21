@@ -2301,7 +2301,8 @@ Gen4 plan same as above
       {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          1
+          1,
+          0
         ],
         "Inputs": [
           {

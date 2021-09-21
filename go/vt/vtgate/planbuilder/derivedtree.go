@@ -59,7 +59,7 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *se
 		if err != nil {
 			return nil, err
 		}
-		if i == -1 {
+		if i > -1 {
 			d.columnsOffset = append(d.columnsOffset, i)
 			continue
 		}
