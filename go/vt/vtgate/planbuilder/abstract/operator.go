@@ -178,6 +178,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	// To plan this query, we can do concatenate on S1, S2, S3, and S4, and then distinct, and lastly we concatenate S5
 
 	for _, rhsStatement := range node.UnionSelects {
+		isNodeDistinct := rhsStatement.Distinct
 		opRHS, err := CreateOperatorFromAST(rhsStatement.Statement, semTable)
 		if err != nil {
 			return nil, err
@@ -186,11 +187,31 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 		case *Distinct:
 
 		case *Concatenate:
-
+			switch opLHS := opLHS.(type) {
+			case *Distinct:
+				if isNodeDistinct {
+					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Sources...)
+					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.SelectStmts...)
+					return opLHS, nil
+				}
+				opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
+				opRHS.SelectStmts = append([]*sqlparser.Select{nil}, opRHS.SelectStmts...)
+				return opRHS, nil
+			case *Concatenate:
+				opLHS.Sources = append(opLHS.Sources, opRHS.Sources...)
+				opLHS.SelectStmts = append(opLHS.SelectStmts, opRHS.SelectStmts...)
+				return createDistinctIfRequired(rhsStatement, opLHS)
+			default:
+				// lhs is a select
+				// rhs is a concat
+				opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
+				opRHS.SelectStmts = append([]*sqlparser.Select{getSelect(node.FirstStatement)}, opRHS.SelectStmts...)
+				return createDistinctIfRequired(rhsStatement, opRHS)
+			}
 		default:
 			switch opLHS := opLHS.(type) {
 			case *Distinct:
-				if rhsStatement.Distinct {
+				if isNodeDistinct {
 					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS)
 					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, getSelect(rhsStatement.Statement))
 					return opLHS, nil
