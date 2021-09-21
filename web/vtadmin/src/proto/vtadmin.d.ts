@@ -33158,6 +33158,180 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a PingTabletRequest. */
+    interface IPingTabletRequest {
+
+        /** PingTabletRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a PingTabletRequest. */
+    class PingTabletRequest implements IPingTabletRequest {
+
+        /**
+         * Constructs a new PingTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IPingTabletRequest);
+
+        /** PingTabletRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new PingTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PingTabletRequest instance
+         */
+        public static create(properties?: vtctldata.IPingTabletRequest): vtctldata.PingTabletRequest;
+
+        /**
+         * Encodes the specified PingTabletRequest message. Does not implicitly {@link vtctldata.PingTabletRequest.verify|verify} messages.
+         * @param message PingTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IPingTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PingTabletRequest message, length delimited. Does not implicitly {@link vtctldata.PingTabletRequest.verify|verify} messages.
+         * @param message PingTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IPingTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PingTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PingTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.PingTabletRequest;
+
+        /**
+         * Decodes a PingTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PingTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.PingTabletRequest;
+
+        /**
+         * Verifies a PingTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PingTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PingTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.PingTabletRequest;
+
+        /**
+         * Creates a plain object from a PingTabletRequest message. Also converts values to other types if specified.
+         * @param message PingTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.PingTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PingTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a PingTabletResponse. */
+    interface IPingTabletResponse {
+    }
+
+    /** Represents a PingTabletResponse. */
+    class PingTabletResponse implements IPingTabletResponse {
+
+        /**
+         * Constructs a new PingTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IPingTabletResponse);
+
+        /**
+         * Creates a new PingTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns PingTabletResponse instance
+         */
+        public static create(properties?: vtctldata.IPingTabletResponse): vtctldata.PingTabletResponse;
+
+        /**
+         * Encodes the specified PingTabletResponse message. Does not implicitly {@link vtctldata.PingTabletResponse.verify|verify} messages.
+         * @param message PingTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IPingTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified PingTabletResponse message, length delimited. Does not implicitly {@link vtctldata.PingTabletResponse.verify|verify} messages.
+         * @param message PingTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IPingTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a PingTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns PingTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.PingTabletResponse;
+
+        /**
+         * Decodes a PingTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns PingTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.PingTabletResponse;
+
+        /**
+         * Verifies a PingTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a PingTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns PingTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.PingTabletResponse;
+
+        /**
+         * Creates a plain object from a PingTabletResponse message. Also converts values to other types if specified.
+         * @param message PingTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.PingTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this PingTabletResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a PlannedReparentShardRequest. */
     interface IPlannedReparentShardRequest {
 
@@ -34869,6 +35043,186 @@ export namespace vtctldata {
 
         /**
          * Converts this ShardReplicationPositionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SleepTabletRequest. */
+    interface ISleepTabletRequest {
+
+        /** SleepTabletRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** SleepTabletRequest duration */
+        duration?: (vttime.IDuration|null);
+    }
+
+    /** Represents a SleepTabletRequest. */
+    class SleepTabletRequest implements ISleepTabletRequest {
+
+        /**
+         * Constructs a new SleepTabletRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISleepTabletRequest);
+
+        /** SleepTabletRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** SleepTabletRequest duration. */
+        public duration?: (vttime.IDuration|null);
+
+        /**
+         * Creates a new SleepTabletRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SleepTabletRequest instance
+         */
+        public static create(properties?: vtctldata.ISleepTabletRequest): vtctldata.SleepTabletRequest;
+
+        /**
+         * Encodes the specified SleepTabletRequest message. Does not implicitly {@link vtctldata.SleepTabletRequest.verify|verify} messages.
+         * @param message SleepTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISleepTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SleepTabletRequest message, length delimited. Does not implicitly {@link vtctldata.SleepTabletRequest.verify|verify} messages.
+         * @param message SleepTabletRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISleepTabletRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SleepTabletRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SleepTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SleepTabletRequest;
+
+        /**
+         * Decodes a SleepTabletRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SleepTabletRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SleepTabletRequest;
+
+        /**
+         * Verifies a SleepTabletRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SleepTabletRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SleepTabletRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SleepTabletRequest;
+
+        /**
+         * Creates a plain object from a SleepTabletRequest message. Also converts values to other types if specified.
+         * @param message SleepTabletRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SleepTabletRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SleepTabletRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SleepTabletResponse. */
+    interface ISleepTabletResponse {
+    }
+
+    /** Represents a SleepTabletResponse. */
+    class SleepTabletResponse implements ISleepTabletResponse {
+
+        /**
+         * Constructs a new SleepTabletResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISleepTabletResponse);
+
+        /**
+         * Creates a new SleepTabletResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SleepTabletResponse instance
+         */
+        public static create(properties?: vtctldata.ISleepTabletResponse): vtctldata.SleepTabletResponse;
+
+        /**
+         * Encodes the specified SleepTabletResponse message. Does not implicitly {@link vtctldata.SleepTabletResponse.verify|verify} messages.
+         * @param message SleepTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISleepTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SleepTabletResponse message, length delimited. Does not implicitly {@link vtctldata.SleepTabletResponse.verify|verify} messages.
+         * @param message SleepTabletResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISleepTabletResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SleepTabletResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SleepTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SleepTabletResponse;
+
+        /**
+         * Decodes a SleepTabletResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SleepTabletResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SleepTabletResponse;
+
+        /**
+         * Verifies a SleepTabletResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SleepTabletResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SleepTabletResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SleepTabletResponse;
+
+        /**
+         * Creates a plain object from a SleepTabletResponse message. Also converts values to other types if specified.
+         * @param message SleepTabletResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SleepTabletResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SleepTabletResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
