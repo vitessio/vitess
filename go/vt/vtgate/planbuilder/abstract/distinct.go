@@ -23,7 +23,7 @@ import (
 
 // Distinct eliminates duplicate rows.
 type Distinct struct {
-	Source Operator
+	Source *Concatenate
 }
 
 var _ Operator = (*Distinct)(nil)

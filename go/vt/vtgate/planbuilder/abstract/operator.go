@@ -168,66 +168,60 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
-	op, err := CreateOperatorFromAST(node.FirstStatement, semTable)
+	opLHS, err := CreateOperatorFromAST(node.FirstStatement, semTable)
 	if err != nil {
 		return nil, err
-	}
-	sources := []Operator{op}
-	sel := getSelect(node.FirstStatement)
-	selectStmts := []*sqlparser.Select{sel}
-
-	var addToSource func(op Operator, sel *sqlparser.Select)
-
-	switch op := op.(type) {
-	case *Distinct:
-		switch src := op.Source.(type) {
-		case *Concatenate:
-			addToSource = func(op Operator, sel *sqlparser.Select) {
-				src.Sources = append(src.Sources, op)
-				src.SelectStmts = append(src.SelectStmts, sel)
-			}
-		}
 	}
 
 	// we only need a single DISTINCT, so we'll go over the UNION to find the last DISTINCT, and that is the one we will keep.
 	// Example: S1 UNION S2 UNION ALL S3 UNION S4 UNION ALL S5
 	// To plan this query, we can do concatenate on S1, S2, S3, and S4, and then distinct, and lastly we concatenate S5
 
-	distinctAt := lastDistinctAt(node)
-
-	for i, unionSelect := range node.UnionSelects {
-		op, err = CreateOperatorFromAST(unionSelect.Statement, semTable)
+	for _, rhsStatement := range node.UnionSelects {
+		opRHS, err := CreateOperatorFromAST(rhsStatement.Statement, semTable)
 		if err != nil {
 			return nil, err
 		}
+		switch opRHS := opRHS.(type) {
+		case *Distinct:
 
-		sel = getSelect(unionSelect.Statement)
-		if addToSource != nil && i <= distinctAt {
-			// if we can, let's add it to the input instead of building up a new UNION
-			addToSource(op, sel)
-		} else {
-			sources = append(sources, op)
-			selectStmts = append(selectStmts, sel)
+		case *Concatenate:
 
-			if i == distinctAt {
-				sources = []Operator{&Distinct{Source: &Concatenate{Sources: sources, SelectStmts: selectStmts}}}
-				selectStmts = []*sqlparser.Select{nil}
+		default:
+			switch opLHS := opLHS.(type) {
+			case *Distinct:
+				if rhsStatement.Distinct {
+					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS)
+					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, getSelect(rhsStatement.Statement))
+					return opLHS, nil
+				}
+				return &Concatenate{
+					SelectStmts: []*sqlparser.Select{nil, getSelect(rhsStatement.Statement)},
+					Sources:     []Operator{opLHS, opRHS},
+				}, nil
+
+			case *Concatenate:
+				opLHS.Sources = append(opLHS.Sources, opRHS)
+				opLHS.SelectStmts = append(opLHS.SelectStmts, getSelect(rhsStatement.Statement))
+				return createDistinctIfRequired(rhsStatement, opLHS)
+			default:
+				concatOp := &Concatenate{
+					Sources:     []Operator{opLHS, opRHS},
+					SelectStmts: []*sqlparser.Select{getSelect(node.FirstStatement), getSelect(rhsStatement.Statement)},
+				}
+				return createDistinctIfRequired(rhsStatement, concatOp)
 			}
 		}
+
 	}
-	return createConcatenateIfRequired(sources, selectStmts), nil
+	return nil, nil
 }
 
-// lastDistinctAt finds the last DISTINCT in a list of queries UNIONed together
-func lastDistinctAt(node *sqlparser.Union) int {
-	distinctAt := -1
-	for i := len(node.UnionSelects) - 1; i >= 0; i-- {
-		if node.UnionSelects[i].Distinct {
-			distinctAt = i
-			break
-		}
+func createDistinctIfRequired(union *sqlparser.UnionSelect, input *Concatenate) (Operator, error) {
+	if !union.Distinct {
+		return input, nil
 	}
-	return distinctAt
+	return &Distinct{Source: input}, nil
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query

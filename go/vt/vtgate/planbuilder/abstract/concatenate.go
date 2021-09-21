@@ -31,14 +31,6 @@ type Concatenate struct {
 
 var _ Operator = (*Concatenate)(nil)
 
-// createConcatenateIfRequired creates a Concatenate operator on top of the sources if it is required
-func createConcatenateIfRequired(sources []Operator, selStmts []*sqlparser.Select) Operator {
-	if len(sources) == 1 {
-		return sources[0]
-	}
-	return &Concatenate{Sources: sources, SelectStmts: selStmts}
-}
-
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {
 	var tableSet semantics.TableSet
