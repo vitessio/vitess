@@ -822,6 +822,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 
 	callerID = &querypb.VTGateCallerID{
 		Username: "u2",
+		Groups:   []string{"non-admin"},
 	}
 	qre.ctx = callerid.NewContext(context.Background(), nil, callerID)
 	// Should fail because u2 does not have permission.
@@ -829,7 +830,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	assert.EqualError(t, err, `MessageStream command denied to user 'u2' for table 'msg' (ACL check error)`)
+	assert.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
@@ -1009,6 +1010,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	username := "u2"
 	callerID := &querypb.VTGateCallerID{
 		Username: username,
+		Groups:   []string{"eng", "beta"},
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
@@ -1034,7 +1036,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	assert.EqualError(t, err, `Select command denied to user 'u2' for table 'test_table' (ACL check error)`)
+	assert.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
