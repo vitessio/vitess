@@ -185,7 +185,37 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 		}
 		switch opRHS := opRHS.(type) {
 		case *Distinct:
-
+			switch opLHS := opLHS.(type) {
+			case *Distinct:
+				if isNodeDistinct {
+					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Source.Sources...)
+					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.Source.SelectStmts...)
+					return opLHS, nil
+				}
+				return &Concatenate{
+					SelectStmts: []*sqlparser.Select{nil, nil},
+					Sources:     []Operator{opLHS, opRHS},
+				}, nil
+			case *Concatenate:
+				if isNodeDistinct {
+					opRHS.Source.Sources = append(opLHS.Sources, opRHS.Source.Sources...)
+					opRHS.Source.SelectStmts = append(opLHS.SelectStmts, opRHS.Source.SelectStmts...)
+					return opRHS, nil
+				}
+				opLHS.Sources = append(opLHS.Sources, opRHS)
+				opLHS.SelectStmts = append(opLHS.SelectStmts, nil)
+				return opLHS, nil
+			default:
+				if isNodeDistinct {
+					opRHS.Source.Sources = append([]Operator{opLHS}, opRHS.Source.Sources...)
+					opRHS.Source.SelectStmts = append([]*sqlparser.Select{getSelect(node.FirstStatement)}, opRHS.Source.SelectStmts...)
+					return opRHS, nil
+				}
+				return &Concatenate{
+					SelectStmts: []*sqlparser.Select{getSelect(node.FirstStatement), nil},
+					Sources:     []Operator{opLHS, opRHS},
+				}, nil
+			}
 		case *Concatenate:
 			switch opLHS := opLHS.(type) {
 			case *Distinct:
