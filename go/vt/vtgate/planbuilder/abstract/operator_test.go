@@ -32,299 +32,403 @@ import (
 )
 
 func TestOperator(t *testing.T) {
-	type tcase struct {
+	tcases := []struct {
 		input, output string
-	}
-	tcases := []tcase{{
-		input: "select * from t",
-		output: `QueryGraph: {
-Tables:
-	1:t
-}`,
-	}, {
-		input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
-		output: `QueryGraph: {
-Tables:
-	1:t
-	2:y
-	4:z
-JoinPredicates:
-	1:2 - t.c = y.c
-	1:2:4 - t.a = z.a or t.a = y.a
-ForAll: 1 < 2
-}`,
-	}, {
-		input: "select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101",
-		output: `QueryGraph: {
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-	}, {
-		input: "select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id",
-		output: `QueryGraph: {
-Tables:
-	1:t where t.` + "`name`" + ` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
-JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
-}`,
-	}, {
-		input: "select 1 from t where '1' = 1 and 12 = '12'",
-		output: `QueryGraph: {
-Tables:
-	1:t
-ForAll: '1' = 1 and 12 = '12'
-}`,
-	}, {
-		input: "select 1 from t left join s on t.id = s.id",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		1:t
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from t join s on t.id = s.id and t.name = s.name",
-		output: `QueryGraph: {
-Tables:
-	1:t
-	2:s
-JoinPredicates:
-	1:2 - t.id = s.id and t.` + "`name`" + ` = s.` + "`name`" + `
-}`,
-	}, {
-		input: "select 1 from t left join s on t.id = s.id where t.name = 'Mister'",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		1:t where t.` + "`name`" + ` = 'Mister'
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from t right join s on t.id = s.id",
-		output: `OuterJoin: {
-	Inner: 	QueryGraph: {
-	Tables:
-		2:s
-	}
-	Outer: 	QueryGraph: {
-	Tables:
-		1:t
-	}
-	Predicate: t.id = s.id
-}`,
-	}, {
-		input: "select 1 from (a left join b on a.id = b.id) join (c left join d on c.id = d.id) on a.id = c.id",
-		output: `Join: {
-	LHS: 	OuterJoin: {
-		Inner: 	QueryGraph: {
-		Tables:
-			1:a
-		}
-		Outer: 	QueryGraph: {
-		Tables:
-			2:b
-		}
-		Predicate: a.id = b.id
-	}
-	RHS: 	OuterJoin: {
-		Inner: 	QueryGraph: {
-		Tables:
-			4:c
-		}
-		Outer: 	QueryGraph: {
-		Tables:
-			8:d
-		}
-		Predicate: c.id = d.id
-	}
-	Predicate: a.id = c.id
-}`,
-	}, {
-		input: "select 1 from (select 42 as id from tbl) as t",
-		output: `Derived t: {
-	Query: select 42 as id from tbl
-	Inner:	QueryGraph: {
-	Tables:
-		1:tbl
-	}
-}`,
-	}, {
-		input: "select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo",
-		output: `Join: {
-	LHS: 	Derived t: {
-		Query: select id from tbl limit 10
-		Inner:	QueryGraph: {
-		Tables:
-			1:tbl
-		}
-	}
-	RHS: 	Derived s: {
-		Query: select foo, count(*) from usr group by foo
-		Inner:	QueryGraph: {
-		Tables:
-			4:usr
-		}
-	}
-	Predicate: t.id = s.foo
-}`,
-	}, {
-		input: "select (select 1) from t where exists (select 1) and id in (select 1)",
-		output: `SubQuery: {
-	SubQueries: [	
-	{
-		Type: PulloutValue
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			2:dual
-		}
-	} 	
-	{
-		Type: PulloutExists
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			4:dual
-		}
-	} 	
-	{
-		Type: PulloutIn
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			8:dual
-		}
-	}]
-	Outer: 	QueryGraph: {
-	Tables:
-		1:t where id in (select 1 from dual)
-	ForAll: exists (select 1 from dual)
-	}
-}`,
-	}, {
-		input: "select u.id from user u where u.id = (select id from user_extra where id = u.id)",
-		output: `SubQuery: {
-	SubQueries: [	
-	{
-		Type: PulloutValue
-		ArgName: 
-		Query: 	QueryGraph: {
-		Tables:
-			2:user_extra
-		JoinPredicates:
-			1:2 - id = u.id
-		}
-	}]
-	Outer: 	QueryGraph: {
-	Tables:
-		1:` + "`user`" + ` AS u
-	JoinPredicates:
-		1:2 - u.id = (select id from user_extra where id = u.id)
-	}
-}`,
-	}, {
-		input: "select id from user_index where id = :id",
-		output: `Vindex: {
-	Name: user_index
-	Value: id
-}`,
-	}, {
-		input: "select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id",
-		output: `Join: {
-	LHS: 	Vindex: {
-		Name: user_index
-		Value: 1
-	}
-	RHS: 	QueryGraph: {
-	Tables:
-		2:` + "`user`" + ` AS u
-	}
-	Predicate: ui.id = u.id
-}`,
-	}, {
-		input: "select u.id from (select id from user_index where id = 2) as u",
-		output: `Derived u: {
-	Query: select id from user_index where id = 2
-	Inner:	Vindex: {
-		Name: user_index
-		Value: 2
-	}
-}`,
-	}, {
-		input: "select 1 from a union select 2 from b",
-		output: `Distinct {
+	}{
+		//{
+		//	input:  "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+		//	output: ``,
+		//},
+		{
+			input: "select id from unsharded union select id from unsharded_auto",
+			output: `Distinct {
 	Concatenate {
 		QueryGraph: {
 		Tables:
-			1:a
+			1:unsharded
 		},
 		QueryGraph: {
 		Tables:
-			2:b
+			2:unsharded_auto
 		}
 	}
 }`,
-	}, {
-		input: "select 1 from a union select 2 from b union select 3 from c",
-		output: `Distinct {
+		}, {
+			input: "select id from unsharded union all select id from unsharded_auto",
+			output: `Concatenate {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	}
+}`,
+		}, {
+			input: "(select id from unsharded union all select id from unsharded_auto) union select id from x",
+			output: `Distinct {
 	Concatenate {
 		QueryGraph: {
 		Tables:
-			1:a
+			1:unsharded
 		},
 		QueryGraph: {
 		Tables:
-			2:b
+			2:unsharded_auto
 		},
 		QueryGraph: {
 		Tables:
-			4:c
+			4:x
 		}
 	}
 }`,
-	}, {
-		input: "select 1 from a union select 2 from b union select 3 from c union all select 4 from d",
-		output: `Concatenate {
+		}, {
+			input: "(select id from unsharded union all select id from unsharded_auto) union all select id from x",
+			output: `Concatenate {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	}
+}`,
+		}, {
+			input: "(select id from unsharded union select id from unsharded_auto) union select id from x",
+			output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:unsharded
+		},
+		QueryGraph: {
+		Tables:
+			2:unsharded_auto
+		},
+		QueryGraph: {
+		Tables:
+			4:x
+		}
+	}
+}`,
+		}, {
+			input: "(select id from unsharded union select id from unsharded_auto) union all select id from x",
+			output: `Concatenate {
 	Distinct {
 		Concatenate {
 			QueryGraph: {
 			Tables:
-				1:a
+				1:unsharded
 			},
 			QueryGraph: {
 			Tables:
-				2:b
-			},
-			QueryGraph: {
-			Tables:
-				4:c
+				2:unsharded_auto
 			}
 		}
 	},
 	QueryGraph: {
 	Tables:
-		8:d
+		4:x
 	}
 }`,
-	}}
+		},
+		//		{
+		//			input: "select * from t",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t
+		//}`,
+		//		}, {
+		//			input: "select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t
+		//	2:y
+		//	4:z
+		//JoinPredicates:
+		//	1:2 - t.c = y.c
+		//	1:2:4 - t.a = z.a or t.a = y.a
+		//ForAll: 1 < 2
+		//}`,
+		//		}, {
+		//			input: "select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t where t.` + "`name`" + ` = 'foo'
+		//	2:y where y.col = 42
+		//	4:z where z.baz = 101
+		//JoinPredicates:
+		//	1:2 - t.id = y.t_id
+		//	1:4 - t.id = z.t_id
+		//}`,
+		//		}, {
+		//			input: "select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t where t.` + "`name`" + ` = 'foo'
+		//	2:y where y.col = 42
+		//	4:z where z.baz = 101
+		//JoinPredicates:
+		//	1:2 - t.id = y.t_id
+		//	1:4 - t.id = z.t_id
+		//}`,
+		//		}, {
+		//			input: "select 1 from t where '1' = 1 and 12 = '12'",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t
+		//ForAll: '1' = 1 and 12 = '12'
+		//}`,
+		//		}, {
+		//			input: "select 1 from t left join s on t.id = s.id",
+		//			output: `OuterJoin: {
+		//	Inner: 	QueryGraph: {
+		//	Tables:
+		//		1:t
+		//	}
+		//	Outer: 	QueryGraph: {
+		//	Tables:
+		//		2:s
+		//	}
+		//	Predicate: t.id = s.id
+		//}`,
+		//		}, {
+		//			input: "select 1 from t join s on t.id = s.id and t.name = s.name",
+		//			output: `QueryGraph: {
+		//Tables:
+		//	1:t
+		//	2:s
+		//JoinPredicates:
+		//	1:2 - t.id = s.id and t.` + "`name`" + ` = s.` + "`name`" + `
+		//}`,
+		//		}, {
+		//			input: "select 1 from t left join s on t.id = s.id where t.name = 'Mister'",
+		//			output: `OuterJoin: {
+		//	Inner: 	QueryGraph: {
+		//	Tables:
+		//		1:t where t.` + "`name`" + ` = 'Mister'
+		//	}
+		//	Outer: 	QueryGraph: {
+		//	Tables:
+		//		2:s
+		//	}
+		//	Predicate: t.id = s.id
+		//}`,
+		//		}, {
+		//			input: "select 1 from t right join s on t.id = s.id",
+		//			output: `OuterJoin: {
+		//	Inner: 	QueryGraph: {
+		//	Tables:
+		//		2:s
+		//	}
+		//	Outer: 	QueryGraph: {
+		//	Tables:
+		//		1:t
+		//	}
+		//	Predicate: t.id = s.id
+		//}`,
+		//		}, {
+		//			input: "select 1 from (a left join b on a.id = b.id) join (c left join d on c.id = d.id) on a.id = c.id",
+		//			output: `Join: {
+		//	LHS: 	OuterJoin: {
+		//		Inner: 	QueryGraph: {
+		//		Tables:
+		//			1:a
+		//		}
+		//		Outer: 	QueryGraph: {
+		//		Tables:
+		//			2:b
+		//		}
+		//		Predicate: a.id = b.id
+		//	}
+		//	RHS: 	OuterJoin: {
+		//		Inner: 	QueryGraph: {
+		//		Tables:
+		//			4:c
+		//		}
+		//		Outer: 	QueryGraph: {
+		//		Tables:
+		//			8:d
+		//		}
+		//		Predicate: c.id = d.id
+		//	}
+		//	Predicate: a.id = c.id
+		//}`,
+		//		}, {
+		//			input: "select 1 from (select 42 as id from tbl) as t",
+		//			output: `Derived t: {
+		//	Query: select 42 as id from tbl
+		//	Inner:	QueryGraph: {
+		//	Tables:
+		//		1:tbl
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo",
+		//			output: `Join: {
+		//	LHS: 	Derived t: {
+		//		Query: select id from tbl limit 10
+		//		Inner:	QueryGraph: {
+		//		Tables:
+		//			1:tbl
+		//		}
+		//	}
+		//	RHS: 	Derived s: {
+		//		Query: select foo, count(*) from usr group by foo
+		//		Inner:	QueryGraph: {
+		//		Tables:
+		//			4:usr
+		//		}
+		//	}
+		//	Predicate: t.id = s.foo
+		//}`,
+		//		}, {
+		//			input: "select (select 1) from t where exists (select 1) and id in (select 1)",
+		//			output: `SubQuery: {
+		//	SubQueries: [
+		//	{
+		//		Type: PulloutValue
+		//		ArgName:
+		//		Query: 	QueryGraph: {
+		//		Tables:
+		//			2:dual
+		//		}
+		//	}
+		//	{
+		//		Type: PulloutExists
+		//		ArgName:
+		//		Query: 	QueryGraph: {
+		//		Tables:
+		//			4:dual
+		//		}
+		//	}
+		//	{
+		//		Type: PulloutIn
+		//		ArgName:
+		//		Query: 	QueryGraph: {
+		//		Tables:
+		//			8:dual
+		//		}
+		//	}]
+		//	Outer: 	QueryGraph: {
+		//	Tables:
+		//		1:t where id in (select 1 from dual)
+		//	ForAll: exists (select 1 from dual)
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select u.id from user u where u.id = (select id from user_extra where id = u.id)",
+		//			output: `SubQuery: {
+		//	SubQueries: [
+		//	{
+		//		Type: PulloutValue
+		//		ArgName:
+		//		Query: 	QueryGraph: {
+		//		Tables:
+		//			2:user_extra
+		//		JoinPredicates:
+		//			1:2 - id = u.id
+		//		}
+		//	}]
+		//	Outer: 	QueryGraph: {
+		//	Tables:
+		//		1:` + "`user`" + ` AS u
+		//	JoinPredicates:
+		//		1:2 - u.id = (select id from user_extra where id = u.id)
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select id from user_index where id = :id",
+		//			output: `Vindex: {
+		//	Name: user_index
+		//	Value: id
+		//}`,
+		//		}, {
+		//			input: "select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id",
+		//			output: `Join: {
+		//	LHS: 	Vindex: {
+		//		Name: user_index
+		//		Value: 1
+		//	}
+		//	RHS: 	QueryGraph: {
+		//	Tables:
+		//		2:` + "`user`" + ` AS u
+		//	}
+		//	Predicate: ui.id = u.id
+		//}`,
+		//		}, {
+		//			input: "select u.id from (select id from user_index where id = 2) as u",
+		//			output: `Derived u: {
+		//	Query: select id from user_index where id = 2
+		//	Inner:	Vindex: {
+		//		Name: user_index
+		//		Value: 2
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select 1 from a union select 2 from b",
+		//			output: `Distinct {
+		//	Concatenate {
+		//		QueryGraph: {
+		//		Tables:
+		//			1:a
+		//		},
+		//		QueryGraph: {
+		//		Tables:
+		//			2:b
+		//		}
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select 1 from a union select 2 from b union select 3 from c",
+		//			output: `Distinct {
+		//	Concatenate {
+		//		QueryGraph: {
+		//		Tables:
+		//			1:a
+		//		},
+		//		QueryGraph: {
+		//		Tables:
+		//			2:b
+		//		},
+		//		QueryGraph: {
+		//		Tables:
+		//			4:c
+		//		}
+		//	}
+		//}`,
+		//		}, {
+		//			input: "select 1 from a union select 2 from b union select 3 from c union all select 4 from d",
+		//			output: `Concatenate {
+		//	Distinct {
+		//		Concatenate {
+		//			QueryGraph: {
+		//			Tables:
+		//				1:a
+		//			},
+		//			QueryGraph: {
+		//			Tables:
+		//				2:b
+		//			},
+		//			QueryGraph: {
+		//			Tables:
+		//				4:c
+		//			}
+		//		}
+		//	},
+		//	QueryGraph: {
+		//	Tables:
+		//		8:d
+		//	}
+		//}`,
+		//		}
+	}
 
 	hash, _ := vindexes.NewHash("user_index", map[string]string{})
 	si := &semantics.FakeSI{VindexTables: map[string]vindexes.Vindex{"user_index": hash}}
