@@ -250,14 +250,14 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error 
 	case *sqlparser.Union:
 		nScope := newScope(nil)
 		nScope.isUnion = true
-		firstSelect := sqlparser.GetFirstSelect(parent.FirstStatement)
-		nScope.selectStmt = firstSelect
-		tableInfo := createVTableInfoForExpressions(firstSelect.SelectExprs, nil /*needed for star expressions*/, s.org)
-		nScope.tables = append(nScope.tables, tableInfo)
+		var tableInfo *vTableInfo
 
-		for _, unionSelect := range parent.UnionSelects {
-			// TODO: this can probably be optimised
-			sel := sqlparser.GetFirstSelect(unionSelect.Statement)
+		for i, sel := range sqlparser.GetAllSelects(parent) {
+			if i == 0 {
+				nScope.selectStmt = sel
+				tableInfo = createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
+				nScope.tables = append(nScope.tables, tableInfo)
+			}
 			thisTableInfo := createVTableInfoForExpressions(sel.SelectExprs, nil /*needed for star expressions*/, s.org)
 			if len(tableInfo.cols) != len(thisTableInfo.cols) {
 				return engine.ErrWrongNumberOfColumnsInSelect
