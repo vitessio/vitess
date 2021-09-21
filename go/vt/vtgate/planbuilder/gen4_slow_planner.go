@@ -33,8 +33,9 @@ func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.Reserved
 		schema.SetPlannerVersion(Gen4)
 		gen4Primitive, gen4Err := createInstructionFor(query, gen4Stmt, vars, schema, false, false)
 
-		// We insert data only once using the gen4 planner to avoid duplicated rows.
-		if _, isInsert := statement.(*sqlparser.Insert); isInsert {
+		// We insert/delete data only once using the gen4 planner to avoid duplicated rows.
+		switch statement.(type) {
+		case *sqlparser.Insert, *sqlparser.Delete:
 			return gen4Primitive, gen4Err
 		}
 
@@ -102,7 +103,24 @@ func (c *comparer) TryExecute(vcursor engine.VCursor, bindVars map[string]*query
 }
 
 func (c *comparer) TryStreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return c.gen4.TryStreamExecute(vcursor, bindVars, wantfields, callback)
+	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
+	v3Err := c.v3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+		v3Result.AppendResult(result)
+		return nil
+	})
+	gen4Error := c.gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+		gen4Result.AppendResult(result)
+		return nil
+	})
+	err := treatV3AndGen4Errors(v3Err, gen4Error)
+	if err != nil {
+		return err
+	}
+	match := sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+	if !match {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
+	}
+	return callback(gen4Result)
 }
 
 func (c *comparer) Inputs() []engine.Primitive {
