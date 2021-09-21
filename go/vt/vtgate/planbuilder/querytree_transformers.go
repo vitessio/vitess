@@ -133,7 +133,9 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
-			eSimpleProj:       &engine.SimpleProjection{},
+			eSimpleProj: &engine.SimpleProjection{
+				Cols: n.columnsOffset,
+			},
 		}, nil
 	}
 	innerSelect := rb.Select
