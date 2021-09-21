@@ -207,4 +207,13 @@ service Vtctld {
   // parameters. Empty values are ignored. If the alias does not exist, the
   // CellsAlias will be created.
   rpc UpdateCellsAlias(vtctldata.UpdateCellsAliasRequest) returns (vtctldata.UpdateCellsAliasResponse) {};
+  // Validate validates that all nodes from the global replication graph are
+  // reachable, and that all tablets in discoverable cells are consistent.
+  rpc Validate(vtctldata.ValidateRequest) returns (vtctldata.ValidateResponse) {};
+  // ValidateKeyspace validates that all nodes reachable from the specified
+  // keyspace are consistent.
+  rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateShard validates that all nodes reachable from the specified shard
+  // are consistent.
+  rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
 }
