@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"vitess.io/vitess/go/mysql"
@@ -57,9 +59,16 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
+	ctx := context.Background()
+	// Set the caller on the context if the user is provided.
+	// This user that will be sent down to vttablet calls.
+	if user != nil && *user != "" {
+		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(*user))
+	}
+
 	return &Tracker{
-		ctx:          context.Background(),
+		ctx:          ctx,
 		ch:           ch,
 		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
 		tracked:      map[keyspaceStr]*updateController{},
