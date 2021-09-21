@@ -1,5 +1,3 @@
-2021-06-10T13:57:48Z,local_example,https://github.com/vitessio/vitess/actions/runs/925357577
-2021-06-10T13:57:48Z,region_example,https://github.com/vitessio/vitess/actions/runs/925357570
 2021-06-10T13:57:49Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/925357644
 2021-06-10T14:00:33Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/925366374
 2021-06-10T14:35:17Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/925478999
@@ -9997,4 +9995,6 @@
 2021-09-21T06:28:06Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1256473086
 2021-09-21T06:28:06Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1256473095
 2021-09-21T06:28:06Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1256473091
+2021-09-21T06:35:27Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1256489798
+2021-09-21T06:35:27Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1256489773
 2021-09-21T06:35:27Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1256489761
