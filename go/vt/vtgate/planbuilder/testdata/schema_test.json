@@ -81,15 +81,6 @@
         },
         "cfc": {
           "type": "cfc"
-        },
-        "user_col_clu": {
-          "type": "consistent_lookup_unique",
-          "params": {
-            "table": "user_col_idx",
-            "from": "col_clu",
-            "to": "keyspace_id"
-          },
-          "owner": "user"
         }
       },
       "tables": {
@@ -106,10 +97,6 @@
             {
               "column": "Costly",
               "name": "costly_map"
-            },
-            {
-              "column": "col_clu",
-              "name": "user_col_clu"
             }
           ],
           "auto_increment": {
@@ -162,10 +149,6 @@
             {
               "column": "user_id",
               "name": "user_index"
-            },
-            {
-              "column": "user_col_clu",
-              "name": "user_col_clu"
             }
           ],
           "auto_increment": {
