@@ -78,7 +78,7 @@ func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
 
 // LoadKeyspace loads the keyspace schema.
 func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	res, err := conn.Execute(context.Background(), target, mysql.FetchTables, nil, 0, 0, nil)
+	res, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -93,7 +93,7 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
 	log.Info("Starting schema tracking")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {
 		for {
