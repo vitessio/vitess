@@ -89,6 +89,8 @@ func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 	c.addFunc(funcName,
 		//func (n Bytes) Clone() Bytes {
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
+			// if n == nil { return nil }
+			ifNilReturnNil("n"),
 			//	res := make(Bytes, len(n))
 			jen.Id("res").Op(":=").Id("make").Call(jen.Id(typeString), jen.Lit(0), jen.Id("len").Call(jen.Id("n"))),
 			c.copySliceElement(slice.Elem(), spi),

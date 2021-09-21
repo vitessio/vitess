@@ -29,16 +29,17 @@ func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.Reserved
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
 		defer schema.SetPlannerVersion(Gen4Slow)
 
-		schema.SetPlannerVersion(Gen4)
-		gen4Primitive, gen4Err := createInstructionFor(query, statement, vars, schema, false, false)
+		v3Stmt := sqlparser.CloneStatement(statement)
+		schema.SetPlannerVersion(V3)
+		v3Primitive, v3Err := createInstructionFor(query, v3Stmt, vars, schema, false, false)
 
+		gen4Stmt := sqlparser.CloneStatement(statement)
+		schema.SetPlannerVersion(Gen4)
+		gen4Primitive, gen4Err := createInstructionFor(query, gen4Stmt, vars, schema, false, false)
 		// We insert data only once using the gen4 planner to avoid duplicated rows.
 		if _, isInsert := statement.(*sqlparser.Insert); isInsert {
 			return gen4Primitive, gen4Err
 		}
-
-		schema.SetPlannerVersion(V3)
-		v3Primitive, v3Err := createInstructionFor(query, statement, vars, schema, false, false)
 
 		err := treatV3AndGen4Errors(v3Err, gen4Err)
 		if err != nil {
@@ -86,8 +87,8 @@ func (c *comparer) NeedsTransaction() bool {
 }
 
 func (c *comparer) TryExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	gen4Result, gen4Err := c.gen4.TryExecute(vcursor, bindVars, wantfields)
 	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
+	gen4Result, gen4Err := c.gen4.TryExecute(vcursor, bindVars, wantfields)
 	err := treatV3AndGen4Errors(v3Err, gen4Err)
 	if err != nil {
 		return nil, err
