@@ -785,6 +785,13 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	}
 	defer tm.unlock()
 
+	// If Orchestrator is configured then also tell it we're promoting a tablet so it needs to be in maintenance mode
+	if tm.orc != nil {
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to PromoteReplica"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}
+
 	pos, err := tm.MysqlDaemon.Promote(tm.hookExtraEnv())
 	if err != nil {
 		return "", err
