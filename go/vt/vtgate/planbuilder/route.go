@@ -334,11 +334,8 @@ func (rb *route) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := rb.resultColumns[colNumber]
-	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
-		return weightcolNumber, nil
-	}
 	s, ok := rb.Select.(*sqlparser.Select)
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "4unexpected AST struct for query")
@@ -348,15 +345,27 @@ func (rb *route) SupplyWeightString(colNumber int) (weightcolNumber int, err err
 	if !ok {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "5unexpected AST struct for query %T", s.SelectExprs[colNumber])
 	}
-	expr := &sqlparser.AliasedExpr{
-		Expr: &sqlparser.FuncExpr{
-			Name: sqlparser.NewColIdent("weight_string"),
-			Exprs: []sqlparser.SelectExpr{
-				&sqlparser.AliasedExpr{
-					Expr: aliasExpr.Expr,
-				},
+	weightStringExpr := &sqlparser.FuncExpr{
+		Name: sqlparser.NewColIdent("weight_string"),
+		Exprs: []sqlparser.SelectExpr{
+			&sqlparser.AliasedExpr{
+				Expr: aliasExpr.Expr,
 			},
 		},
+	}
+	expr := &sqlparser.AliasedExpr{
+		Expr: weightStringExpr,
+	}
+	if alsoAddToGroupBy {
+		sel, isSelect := rb.Select.(*sqlparser.Select)
+		if !isSelect {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
+		}
+		sel.GroupBy = append(sel.GroupBy, weightStringExpr)
+	}
+
+	if weightcolNumber, ok := rb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
 	}
 	// It's ok to pass nil for pb and logicalPlan because PushSelect doesn't use them.
 	// TODO: we are ignoring a potential error here. need to clean this up
