@@ -90,7 +90,7 @@ func (s *sqlCalcFoundRows) SupplyCol(col *sqlparser.ColName) (*resultColumn, int
 }
 
 //SupplyWeightString implements the logicalPlan interface
-func (s *sqlCalcFoundRows) SupplyWeightString(int) (weightcolNumber int, err error) {
+func (s *sqlCalcFoundRows) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	return 0, UnsupportedSupplyWeightString{Type: "sqlCalcFoundRows"}
 }
 

@@ -1898,9 +1898,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+        "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2, weight_string(num)",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+        "Query": "select count(id), num, weight_string(num) from `user` group by 2, weight_string(num) order by num asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1956,9 +1956,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2",
+            "FieldQuery": "select count(id), num, weight_string(num) from `user` where 1 != 1 group by 2, weight_string(num)",
             "OrderBy": "(1|2) ASC",
-            "Query": "select count(id), num, weight_string(num) from `user` group by 2 order by num asc",
+            "Query": "select count(id), num, weight_string(num) from `user` group by 2, weight_string(num) order by num asc",
             "ResultColumns": 2,
             "Table": "`user`"
           }
