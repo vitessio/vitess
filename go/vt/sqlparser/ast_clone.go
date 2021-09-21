@@ -199,8 +199,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
-	case *ParenSelect:
-		return CloneRefOfParenSelect(in)
 	case *ParenTableExpr:
 		return CloneRefOfParenTableExpr(in)
 	case *PartitionDefinition:
@@ -1186,16 +1184,6 @@ func CloneRefOfOtherRead(n *OtherRead) *OtherRead {
 	return &out
 }
 
-// CloneRefOfParenSelect creates a deep clone of the input.
-func CloneRefOfParenSelect(n *ParenSelect) *ParenSelect {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Select = CloneSelectStatement(n.Select)
-	return &out
-}
-
 // CloneRefOfParenTableExpr creates a deep clone of the input.
 func CloneRefOfParenTableExpr(n *ParenTableExpr) *ParenTableExpr {
 	if n == nil {
@@ -1637,6 +1625,7 @@ func CloneRefOfUnion(n *Union) *Union {
 	out.UnionSelects = CloneSliceOfRefOfUnionSelect(n.UnionSelects)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
+	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
 }
 
@@ -2046,8 +2035,6 @@ func CloneInsertRows(in InsertRows) InsertRows {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return CloneRefOfParenSelect(in)
 	case *Select:
 		return CloneRefOfSelect(in)
 	case *Union:
@@ -2084,8 +2071,6 @@ func CloneSelectStatement(in SelectStatement) SelectStatement {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return CloneRefOfParenSelect(in)
 	case *Select:
 		return CloneRefOfSelect(in)
 	case *Union:
@@ -2182,8 +2167,6 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherAdmin(in)
 	case *OtherRead:
 		return CloneRefOfOtherRead(in)
-	case *ParenSelect:
-		return CloneRefOfParenSelect(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

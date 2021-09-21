@@ -368,10 +368,6 @@ Gen4 plan same as above
 "unsupported: multi-shard or vindex write statement"
 Gen4 plan same as above
 
-# order by inside and outside parenthesis select
-"(select 1 from user order by 1 desc) order by 1 asc limit 2"
-"can't do ORDER BY on top of ORDER BY"
-
 # select get_lock with non-dual table
 "select get_lock('xyz', 10) from user"
 "get_lock('xyz', 10) allowed only with dual"

@@ -198,8 +198,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
 	case *PartitionDefinition:
@@ -1462,18 +1460,6 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfParenSelect(in *ParenSelect, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -2097,6 +2083,9 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
@@ -2557,8 +2546,6 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
 	case *Union:
@@ -2591,8 +2578,6 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
 	case *Union:
@@ -2683,8 +2668,6 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:

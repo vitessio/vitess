@@ -133,7 +133,7 @@ func CanNormalize(stmt Statement) bool {
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
 	switch stmt.(type) {
-	case *Select, *Union, *ParenSelect,
+	case *Select, *Union,
 		*Insert, *Update, *Delete, *Stream:
 		return true
 	}

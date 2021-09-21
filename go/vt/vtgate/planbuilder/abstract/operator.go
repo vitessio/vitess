@@ -151,8 +151,6 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 	switch s := s.(type) {
 	case *sqlparser.Select:
 		return s
-	case *sqlparser.ParenSelect:
-		return getSelect(s.Select)
 	default:
 		return nil
 	}
@@ -165,8 +163,6 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 		return createOperatorFromSelect(node, semTable)
 	case *sqlparser.Union:
 		return createOperatorFromUnion(node, semTable)
-	case *sqlparser.ParenSelect:
-		return CreateOperatorFromAST(node.Select, semTable)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 }

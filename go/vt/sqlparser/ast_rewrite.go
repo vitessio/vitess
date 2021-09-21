@@ -198,8 +198,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
-	case *ParenSelect:
-		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *ParenTableExpr:
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *PartitionDefinition:
@@ -2843,33 +2841,6 @@ func (a *application) rewriteRefOfOtherRead(parent SQLNode, node *OtherRead, rep
 	}
 	return true
 }
-func (a *application) rewriteRefOfParenSelect(parent SQLNode, node *ParenSelect, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteSelectStatement(node, node.Select, func(newNode, parent SQLNode) {
-		parent.(*ParenSelect).Select = newNode.(SelectStatement)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfParenTableExpr(parent SQLNode, node *ParenTableExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4237,6 +4208,11 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
+		parent.(*Union).Into = newNode.(*SelectInto)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -4981,8 +4957,6 @@ func (a *application) rewriteInsertRows(parent SQLNode, node InsertRows, replace
 		return true
 	}
 	switch node := node.(type) {
-	case *ParenSelect:
-		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Select:
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
@@ -5015,8 +4989,6 @@ func (a *application) rewriteSelectStatement(parent SQLNode, node SelectStatemen
 		return true
 	}
 	switch node := node.(type) {
-	case *ParenSelect:
-		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Select:
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Union:
@@ -5107,8 +5079,6 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfOtherAdmin(parent, node, replacer)
 	case *OtherRead:
 		return a.rewriteRefOfOtherRead(parent, node, replacer)
-	case *ParenSelect:
-		return a.rewriteRefOfParenSelect(parent, node, replacer)
 	case *Release:
 		return a.rewriteRefOfRelease(parent, node, replacer)
 	case *RenameTable:
