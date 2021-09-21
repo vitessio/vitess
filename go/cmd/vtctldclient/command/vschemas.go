@@ -46,7 +46,7 @@ var (
 	}
 	// ValidateVSchema makes a ValidateVSchema call to a vtctld.
 	ValidateVSchema = &cobra.Command{
-		Use:   "ValidateVSchema <keyspace> [-shards=<shards>] [-exclude-tables=<tables>] [-include-views]",
+		Use:   "ValidateVSchema [-shards=<shards>] [-exclude-tables=<tables>] [-include-views] <keyspace>",
 		Args:  cobra.ExactArgs(1),
 		RunE:  commandValidateVSchema,
 		Short: "Validates that the supplied shards reference tablet has the same schema as the keyspaces vschema",
@@ -149,15 +149,18 @@ func commandGetVSchema(cmd *cobra.Command, args []string) error {
 }
 
 var validateVSchemaOptions = struct {
-	Keyspace      string
 	Shards        []string
 	ExcludeTables []string
 	IncludeViews  bool
 }{}
 
 func commandValidateVSchema(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+
+	cli.FinishedParsing(cmd)
+
 	_, err := client.ValidateVSchema(commandCtx, &vtctldatapb.ValidateVSchemaRequest{
-		Keyspace:      validateVSchemaOptions.Keyspace,
+		Keyspace:      keyspace,
 		ExcludeTables: validateVSchemaOptions.ExcludeTables,
 		IncludeViews:  validateVSchemaOptions.IncludeViews,
 		Shards:        validateVSchemaOptions.Shards,
@@ -169,6 +172,7 @@ func commandValidateVSchema(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
+
 func init() {
 	// ApplyVSchema
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
@@ -182,9 +186,8 @@ func init() {
 	// GetVSchema
 	Root.AddCommand(GetVSchema)
 	// ValidateVSchema
-	ValidateVSchema.Flags().StringVar(&validateVSchemaOptions.Keyspace, "keyspace", "", "Keyspace")
-	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.Shards, "shards", []string{}, "runs validateVSchema on these specific shards")
-	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.ExcludeTables, "exclude-tables", []string{}, "If specified, excludes these tables from the VSchema validation")
+	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.Shards, "shards", nil, "Validate the vschema on the following shards.")
+	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.ExcludeTables, "exclude-tables", nil, "If specified, excludes these tables from the VSchema validation.")
 	ValidateVSchema.Flags().BoolVar(&validateVSchemaOptions.IncludeViews, "include-views", false, "If set, include views in the vschema validation.")
 	Root.AddCommand(ValidateVSchema)
 }
