@@ -137,6 +137,128 @@ func TestOperator(t *testing.T) {
 		4:x
 	}
 }`,
+		}, {
+			input: "select id from t union all (select id from x union all select id from y)",
+			output: `Concatenate {
+	QueryGraph: {
+	Tables:
+		1:t
+	},
+	QueryGraph: {
+	Tables:
+		2:x
+	},
+	QueryGraph: {
+	Tables:
+		4:y
+	}
+}`,
+		}, {
+			input: "select id from t union (select id from x union all select id from y)",
+			output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:t
+		},
+		QueryGraph: {
+		Tables:
+			2:x
+		},
+		QueryGraph: {
+		Tables:
+			4:y
+		}
+	}
+}`,
+		}, {
+			input: "(select id from t union all select id from u) union (select id from x union all select id from y)",
+			output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:t
+		},
+		QueryGraph: {
+		Tables:
+			2:u
+		},
+		QueryGraph: {
+		Tables:
+			4:x
+		},
+		QueryGraph: {
+		Tables:
+			8:y
+		}
+	}
+}`,
+		}, {
+			input: "(select id from t union all select id from u) union all (select id from x union all select id from y)",
+			output: `Concatenate {
+	QueryGraph: {
+	Tables:
+		1:t
+	},
+	QueryGraph: {
+	Tables:
+		2:u
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	},
+	QueryGraph: {
+	Tables:
+		8:y
+	}
+}`,
+		}, {
+			input: "(select id from t union select id from u) union all (select id from x union all select id from y)",
+			output: `Concatenate {
+	Distinct {
+		Concatenate {
+			QueryGraph: {
+			Tables:
+				1:t
+			},
+			QueryGraph: {
+			Tables:
+				2:u
+			}
+		}
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	},
+	QueryGraph: {
+	Tables:
+		8:y
+	}
+}`,
+		}, {
+			input: "(select id from t union select id from u) union (select id from x union all select id from y)",
+			output: `Distinct {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:t
+		},
+		QueryGraph: {
+		Tables:
+			2:u
+		},
+		QueryGraph: {
+		Tables:
+			4:x
+		},
+		QueryGraph: {
+		Tables:
+			8:y
+		}
+	}
+}`,
 		},
 		//		{
 		//			input: "select * from t",
