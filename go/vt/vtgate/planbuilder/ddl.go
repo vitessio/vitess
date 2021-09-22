@@ -207,8 +207,8 @@ func buildAlterView(vschema ContextVSchema, ddl *sqlparser.AlterView, reservedVa
 	if err != nil {
 		return nil, nil, err
 	}
-	routePlan, isRoute := selectPlan.(*engine.Route)
-	if !isRoute {
+	routePlan := tryToGetRoutePlan(selectPlan)
+	if routePlan == nil {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
@@ -243,8 +243,8 @@ func buildCreateView(vschema ContextVSchema, ddl *sqlparser.CreateView, reserved
 	if err != nil {
 		return nil, nil, err
 	}
-	routePlan, isRoute := selectPlan.(*engine.Route)
-	if !isRoute {
+	routePlan := tryToGetRoutePlan(selectPlan)
+	if routePlan == nil {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
 	}
 	if keyspace.Name != routePlan.GetKeyspaceName() {
@@ -361,4 +361,18 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 		}
 	}
 	return destination, keyspace, nil
+}
+
+func tryToGetRoutePlan(selectPlan engine.Primitive) *engine.Route {
+	routePlan, isRoute := selectPlan.(*engine.Route)
+	if !isRoute {
+		comparer, isComparer := selectPlan.(engine.Gen4Comparer)
+		if isComparer {
+			routePlan, isRoute = comparer.GetGen4Primitive().(*engine.Route)
+		}
+		if !isComparer || !isRoute {
+			return nil
+		}
+	}
+	return routePlan
 }
