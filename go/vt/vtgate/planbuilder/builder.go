@@ -81,12 +81,12 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
-	// Gen4Slow executes queries on both Gen4 and V3 to compare their results.
-	Gen4Slow = querypb.ExecuteOptions_Gen4Slow
+	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
+	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
 )
 
 var (
-	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4Slow}
+	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
 )
 
 type truncater interface {
@@ -129,8 +129,8 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 
 func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (selectPlanner, error) {
 	switch vschema.Planner() {
-	case Gen4Slow:
-		return gen4SlowPlanner, nil
+	case Gen4CompareV3:
+		return gen4CompareV3Planner, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner, nil
 	case Gen4WithFallback:

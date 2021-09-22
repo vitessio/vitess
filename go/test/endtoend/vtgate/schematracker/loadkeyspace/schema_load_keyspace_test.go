@@ -73,7 +73,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-planner_version", "Gen4Slow"}
+	clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-planner_version", "Gen4CompareV3"}
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
 

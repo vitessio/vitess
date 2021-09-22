@@ -125,7 +125,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-lock_heartbeat_time", "2s", "-planner_version", "Gen4CompareV3"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {
