@@ -22,36 +22,20 @@ import (
 )
 
 func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
-	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
+	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema ContextVSchema) (engine.Primitive, error) {
 		// we will be switching the planner version to Gen4 and V3 in order to
 		// create instructions using them, thus we make sure to switch back to
 		// the Gen4CompareV3 planner before exiting this method.
-		defer schema.SetPlannerVersion(Gen4CompareV3)
-
-		primitive := &engine.Gen4CompareV3{}
-		onlyGen4 := false
+		defer ctxVSchema.SetPlannerVersion(Gen4CompareV3)
 
 		// preliminary checks on the given statement
-		switch s := statement.(type) {
-		case *sqlparser.Insert:
-			// we want to insert data only once into the database,
-			// for this reason, we will only use Gen4's instructions.
-			onlyGen4 = true
-		case *sqlparser.Select:
-			primitive.HasOrderBy = len(s.OrderBy) > 0
-			for _, expr := range s.SelectExprs {
-				// we are not executing the plan a second time if the query is a select next val,
-				// since the first execution might increment the `next` value, results will almost
-				// always be different between v3 and Gen4.
-				if _, nextVal := expr.(*sqlparser.Nextval); nextVal {
-					onlyGen4 = true
-					break
-				}
-			}
+		onlyGen4, hasOrderBy, err := preliminaryChecks(statement)
+		if err != nil {
+			return nil, err
 		}
 
 		// plan statement using Gen4
-		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, schema, query, Gen4)
+		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, Gen4)
 
 		// if onlyGen4 is set to true or Gen4's instruction contain a lock primitive,
 		// we use only Gen4's primitive and exit early without using V3's.
@@ -63,24 +47,61 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		}
 
 		// get V3's plan
-		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, schema, query, V3)
+		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, V3)
 
 		// check potential errors from Gen4 and V3
-		err := engine.CompareV3AndGen4Errors(v3Err, gen4Err)
+		err = engine.CompareV3AndGen4Errors(v3Err, gen4Err)
 		if err != nil {
 			return nil, err
 		}
 
-		primitive.Gen4 = gen4Primitive
-		primitive.V3 = v3Primitive
-		return primitive, nil
+		return &engine.Gen4CompareV3{
+			V3:         v3Primitive,
+			Gen4:       gen4Primitive,
+			HasOrderBy: hasOrderBy,
+		}, nil
 	}
 }
 
-func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema, query string, version PlannerVersion) (engine.Primitive, error) {
-	schema.SetPlannerVersion(version)
+func preliminaryChecks(statement sqlparser.Statement) (bool, bool, error) {
+	var onlyGen4, hasOrderBy bool
+	switch s := statement.(type) {
+	case *sqlparser.Union:
+		hasOrderBy = len(s.OrderBy) > 0
+
+		// walk through the union and search for select statements that have
+		// a next val select expression, in which case we need to only use
+		// the Gen4 planner instead of using both Gen4 and V3 to avoid unintended
+		// double-incrementation of sequence.
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if _, isNextVal := node.(*sqlparser.Nextval); isNextVal {
+				onlyGen4 = true
+				return false, nil
+			}
+			return true, nil
+		}, s)
+		if err != nil {
+			return false, false, err
+		}
+	case *sqlparser.Select:
+		hasOrderBy = len(s.OrderBy) > 0
+		for _, expr := range s.SelectExprs {
+			// we are not executing the plan a second time if the query is a select next val,
+			// since the first execution might increment the `next` value, results will almost
+			// always be different between v3 and Gen4.
+			if _, nextVal := expr.(*sqlparser.Nextval); nextVal {
+				onlyGen4 = true
+				break
+			}
+		}
+	}
+	return onlyGen4, hasOrderBy, nil
+}
+
+func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, ctxVSchema ContextVSchema, query string, version PlannerVersion) (engine.Primitive, error) {
+	ctxVSchema.SetPlannerVersion(version)
 	stmt := sqlparser.CloneStatement(statement)
-	return createInstructionFor(query, stmt, vars, schema, false, false)
+	return createInstructionFor(query, stmt, vars, ctxVSchema, false, false)
 }
 
 // hasLockPrimitive recursively walks through the given primitive and its children
