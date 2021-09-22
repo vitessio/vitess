@@ -368,10 +368,7 @@ func tryToGetRoutePlan(selectPlan engine.Primitive) *engine.Route {
 	if !isRoute {
 		comparer, isComparer := selectPlan.(engine.Gen4Comparer)
 		if isComparer {
-			routePlan, isRoute = comparer.GetGen4Primitive().(*engine.Route)
-		}
-		if !isComparer || !isRoute {
-			return nil
+			return tryToGetRoutePlan(comparer.GetGen4Primitive())
 		}
 	}
 	return routePlan
