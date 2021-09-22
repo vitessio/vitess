@@ -45,6 +45,9 @@ type (
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
 		// on the outside of it (a parent Select expression, any other table not used by Operator, etc).
 		UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr
+
+		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
+		CheckValid() error
 	}
 )
 
@@ -79,7 +82,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select}, nil
 		default:
-			return nil, semantics.Gen4NotSupportedF("%T", tbl)
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 		}
 	case *sqlparser.JoinTableExpr:
 		switch tableExpr.Join {
@@ -119,12 +122,12 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			return op, nil
 		default:
-			return nil, semantics.Gen4NotSupportedF("%s joins", tableExpr.Join.ToString())
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
 	case *sqlparser.ParenTableExpr:
 		return crossJoin(tableExpr.Exprs, semTable)
 	default:
-		return nil, semantics.Gen4NotSupportedF("%T table type", tableExpr)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T table type", tableExpr)
 	}
 }
 
