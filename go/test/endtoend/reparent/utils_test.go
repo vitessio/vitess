@@ -272,6 +272,11 @@ func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tablet
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
 
+func ersWithVtctl() (string, error) {
+	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
+	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
+}
+
 func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")

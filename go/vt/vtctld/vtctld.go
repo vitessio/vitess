@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	rice "github.com/GeertJohan/go.rice"
 
 	"context"
@@ -39,6 +41,7 @@ import (
 
 var (
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
+	durability          = flag.String("durability", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 
 	_ = flag.String("web_dir", "", "NOT USED, here for backward compatibility")
 	_ = flag.String("web_dir2", "", "NOT USED, here for backward compatibility")
@@ -49,7 +52,13 @@ const (
 )
 
 // InitVtctld initializes all the vtctld functionality.
-func InitVtctld(ts *topo.Server) {
+func InitVtctld(ts *topo.Server) error {
+	err := reparentutil.SetDurabilityPolicy(*durability, nil)
+	if err != nil {
+		log.Errorf("error in setting durability policy: %v", err)
+		return err
+	}
+
 	actionRepo := NewActionRepository(ts)
 
 	// keyspace actions
@@ -185,4 +194,6 @@ func InitVtctld(ts *topo.Server) {
 
 	// Setup reverse proxy for all vttablets through /vttablet/.
 	initVTTabletRedirection(ts)
+
+	return nil
 }
