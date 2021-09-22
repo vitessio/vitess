@@ -18,11 +18,14 @@ package command
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -80,6 +83,14 @@ Valid output formats are "awk" and "json".`,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetTablets,
 	}
+	// PingTablet makes a PingTablet gRPC call to a vtctld.
+	PingTablet = &cobra.Command{
+		Use:                   "PingTablet <alias>",
+		Short:                 "Checks that the specified tablet is awake and responding to RPCs. This command can be blocked by other in-flight operations.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandPingTablet,
+	}
 	// RefreshState makes a RefreshState gRPC call to a vtctld.
 	RefreshState = &cobra.Command{
 		Use:                   "RefreshState <alias>",
@@ -95,6 +106,51 @@ Valid output formats are "awk" and "json".`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandRefreshStateByShard,
+	}
+	// SetWritable makes a SetWritable gRPC call to a vtctld.
+	SetWritable = &cobra.Command{
+		Use:                   "SetWritable <alias> <true/false>",
+		Short:                 "Sets the specified tablet as writable or read-only.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSetWritable,
+	}
+	// SleepTablet makes a SleepTablet gRPC call to a vtctld.
+	SleepTablet = &cobra.Command{
+		Use:   "SleepTablet <alias> <duration>",
+		Short: "Blocks the action queue on the specified tablet for the specified amount of time. This is typically used for testing.",
+		Long: `SleepTablet <alias> <duration>
+
+Blocks the action queue on the specified tablet for the specified duration.
+This command is typically only used for testing.
+		
+The duration is the amount of time that the action queue should be blocked.
+The value is a string that contains a possibly signed sequence of decimal numbers,
+each with optional fraction and a unit suffix, such as “300ms” or “1h45m”.
+See the definition of the Go language’s ParseDuration[1] function for more details.
+Note that, in the SleepTablet implementation, the value should be positively-signed.
+
+[1]: https://pkg.go.dev/time#ParseDuration
+`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSleepTablet,
+	}
+	// StartReplication makes a StartReplication gRPC call to a vtctld.
+	StartReplication = &cobra.Command{
+		Use:                   "StartReplication <alias>",
+		Short:                 "Starts replication on the specified tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandStartReplication,
+	}
+	// StopReplication makes a StopReplication gRPC call to a vtctld.
+	StopReplication = &cobra.Command{
+		Use:                   "StopReplication <alias>",
+		Short:                 "Stops replication on the specified tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandStopReplication,
 	}
 )
 
@@ -260,6 +316,20 @@ func commandGetTablets(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandPingTablet(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.PingTablet(commandCtx, &vtctldatapb.PingTabletRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
 func commandRefreshState(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -314,6 +384,74 @@ func commandRefreshStateByShard(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandSetWritable(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	isWritable, err := strconv.ParseBool(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.SetWritable(commandCtx, &vtctldatapb.SetWritableRequest{
+		TabletAlias: alias,
+		Writable:    isWritable,
+	})
+	return err
+}
+
+func commandSleepTablet(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	duration, err := time.ParseDuration(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.SleepTablet(commandCtx, &vtctldatapb.SleepTabletRequest{
+		TabletAlias: alias,
+		Duration:    protoutil.DurationToProto(duration),
+	})
+	return err
+}
+
+func commandStartReplication(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.StartReplication(commandCtx, &vtctldatapb.StartReplicationRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
+func commandStopReplication(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.StopReplication(commandCtx, &vtctldatapb.StopReplicationRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
 func init() {
 	ChangeTabletType.Flags().BoolVarP(&changeTabletTypeOptions.DryRun, "dry-run", "d", false, "Shows the proposed change without actually executing it")
 	Root.AddCommand(ChangeTabletType)
@@ -331,8 +469,14 @@ func init() {
 	GetTablets.Flags().BoolVar(&getTabletsOptions.Strict, "strict", false, "Require all cells to return successful tablet data. Without --strict, tablet listings may be partial.")
 	Root.AddCommand(GetTablets)
 
+	Root.AddCommand(PingTablet)
 	Root.AddCommand(RefreshState)
 
 	RefreshStateByShard.Flags().StringSliceVarP(&refreshStateByShardOptions.Cells, "cells", "c", nil, "If specified, only call RefreshState on tablets in the specified cells. If empty, all cells are considered.")
 	Root.AddCommand(RefreshStateByShard)
+
+	Root.AddCommand(SetWritable)
+	Root.AddCommand(SleepTablet)
+	Root.AddCommand(StartReplication)
+	Root.AddCommand(StopReplication)
 }

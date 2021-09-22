@@ -81,6 +81,7 @@ const (
 	ShardResource    Resource = "Shard"
 	TabletResource   Resource = "Tablet"
 	VTGateResource   Resource = "VTGate"
+	VtctldResource   Resource = "Vtctld"
 
 	/* vschema resources */
 

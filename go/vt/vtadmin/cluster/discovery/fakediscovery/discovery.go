@@ -94,6 +94,12 @@ func (d *Fake) SetGatesError(shouldErr bool) {
 	d.gates.shouldErr = shouldErr
 }
 
+// SetVtctldsError instructs whether the fake should return an error on vtctld
+// discovery functions.
+func (d *Fake) SetVtctldsError(shouldErr bool) {
+	d.vtctlds.shouldErr = shouldErr
+}
+
 var _ discovery.Discovery = (*Fake)(nil)
 
 // DiscoverVTGates is part of the discovery.Discovery interface.

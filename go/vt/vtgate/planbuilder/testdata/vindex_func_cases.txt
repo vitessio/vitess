@@ -589,4 +589,4 @@ Gen4 plan same as above
 
 "select none from user_index where id = :id"
 "symbol `none` not found in table or subquery"
-"Unknown column 'none' in 'field list'"
+Gen4 error: symbol `none` not found

@@ -444,7 +444,11 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		}
 
 		if qre.tsv.qe.strictTableACL {
-			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
+			groupStr := ""
+			if len(callerID.Groups) > 0 {
+				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
+			}
+			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
 			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
@@ -751,11 +755,29 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s", err)
 	}
 
+	if qre.tsv.config.AnnotateQueries {
+		username := callerid.GetPrincipal(callerid.EffectiveCallerIDFromContext(qre.ctx))
+		if username == "" {
+			username = callerid.GetUsername(callerid.ImmediateCallerIDFromContext(qre.ctx))
+		}
+		var buf strings.Builder
+		tabletTypeStr := qre.tsv.sm.target.TabletType.String()
+		buf.Grow(8 + len(username) + len(tabletTypeStr))
+		buf.WriteString("/* ")
+		buf.WriteString(username)
+		buf.WriteString("@")
+		buf.WriteString(tabletTypeStr)
+		buf.WriteString(" */ ")
+		buf.WriteString(qre.marginComments.Leading)
+		qre.marginComments.Leading = buf.String()
+	}
+
 	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
 		return query, query, nil
 	}
 
 	var buf strings.Builder
+	buf.Grow(len(qre.marginComments.Leading) + len(query) + len(qre.marginComments.Trailing))
 	buf.WriteString(qre.marginComments.Leading)
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)

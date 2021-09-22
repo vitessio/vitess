@@ -206,6 +206,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # union operations in derived table, without star expression (FROM)¡
 "select col1,col2 from (select col1, col2 from user union all select col1, col2 from user_extra) as t"
@@ -354,42 +355,6 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from information_schema.a union select * from unsharded",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectDBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select distinct * from information_schema.a",
-            "Table": "information_schema.a"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from unsharded where 1 != 1",
-            "Query": "select distinct * from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    ]
-  }
-}
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -422,42 +387,6 @@ Gen4 plan same as above
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
             "Query": "select * from information_schema.a",
-            "Table": "information_schema.a"
-          }
-        ]
-      }
-    ]
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "select * from unsharded union select * from information_schema.a",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from unsharded where 1 != 1",
-            "Query": "select distinct * from unsharded",
-            "Table": "unsharded"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectDBA",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from information_schema.a where 1 != 1",
-            "Query": "select distinct * from information_schema.a",
             "Table": "information_schema.a"
           }
         ]
@@ -832,50 +761,6 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select * from music where id = 1 union select * from user where id = 1",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from music where 1 != 1",
-            "Query": "select distinct * from music where id = 1",
-            "Table": "music",
-            "Values": [
-              1
-            ],
-            "Vindex": "music_user_map"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select distinct * from `user` where id = 1",
-            "Table": "`user`",
-            "Values": [
-              1
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      }
-    ]
-  }
-}
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
@@ -1042,6 +927,42 @@ Gen4 plan same as above
             },
             "FieldQuery": "select 2.0 from `user` where 1 != 1",
             "Query": "select 2.0 from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 union select null union select 1.0 union select '1' union select 2 union select 2.0 from user",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectReference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1 union all select null from dual where 1 != 1 union all select 1.0 from dual where 1 != 1 union all select '1' from dual where 1 != 1 union select 2 from dual where 1 != 1",
+            "Query": "select 1 from dual union all select null from dual union all select 1.0 from dual union all select '1' from dual union select 2 from dual",
+            "Table": "dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 2.0 from `user` where 1 != 1",
+            "Query": "select distinct 2.0 from `user`",
             "Table": "`user`"
           }
         ]
@@ -1379,10 +1300,118 @@ Gen4 plan same as above
   }
 }
 
+# Union in derived table with first SELECT being an UNION
+"select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectScatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id from `user` where 1 != 1",
+                        "Query": "select id from `user`",
+                        "Table": "`user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectScatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id + 1 from `user` where 1 != 1",
+                        "Query": "select id + 1 from `user`",
+                        "Table": "`user`"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id from user_extra where 1 != 1",
+                "Query": "select user_id from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from ((select id from user union select id+1 from user) union select user_id from user_extra) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union all select id + 1 from `user` where 1 != 1 union select user_id from user_extra where 1 != 1",
+            "Query": "select id from `user` union all select id + 1 from `user` union select user_id from user_extra",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
-"Incorrect usage of UNION and LIMIT - add parens to disambiguate your query (errno 1221) (sqlstate 21000)"
+"syntax error at position 34 near 'union'"
+Gen4 plan same as above
+
+# ambiguous ORDER BY
+"select id from user order by id union all select id from music order by id desc"
+"syntax error at position 38 near 'union'"
+Gen4 plan same as above
 
 # different number of columns
 "select id, 42 from user where id = 1 union all select id from user where id = 5"
 "The used SELECT statements have a different number of columns (errno 1222) (sqlstate 21000) during query: select id, 42 from `user` where id = 1 union all select id from `user` where id = 5"
+Gen4 error: The used SELECT statements have a different number of columns
+
+# union with invalid order by clause with table qualifier
+"select id from user union select 3 order by user.id"
+"can't do ORDER BY on top of UNION"
+Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER clause

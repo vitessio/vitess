@@ -12,6 +12,7 @@ The following is the full list, alphabetically ordered.
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
+* Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
@@ -27,19 +28,19 @@ The following is the full list, alphabetically ordered.
 sougou, deepthi, demmer, rafael, dweitzman, tirsen, askdba, enisoc
 
 ### Builds
-dkhenry, shlomi-noach, ajm188, vmg
+dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100
 
 ### Resharding
 sougou, rafael, tirsen, dweitzman, systay, rohit-nayak-ps, deepthi
 
 ### Parser
-sougou, dweitzman, systay, harshit-gangal, vmg
+sougou, dweitzman, systay, harshit-gangal, vmg, GuptaManan100
 
 ### Performance
 vmg
 
 ### Cluster Management
-deepthi, rafael, enisoc, shlomi-noach, ajm188
+deepthi, rafael, enisoc, shlomi-noach, ajm188, GuptaManan100
 
 ### Java
 mpawliszyn, pH14, harshit-gangal

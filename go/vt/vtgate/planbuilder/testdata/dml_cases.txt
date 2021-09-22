@@ -2276,31 +2276,7 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-{
-  "QueryType": "UPDATE",
-  "Original": "update user set name = _binary 'abc' where id = 1",
-  "Instructions": {
-    "OperatorType": "Update",
-    "Variant": "Equal",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "TargetTabletType": "PRIMARY",
-    "ChangedVindexValues": [
-      "name_user_map:3"
-    ],
-    "KsidVindex": "user_index",
-    "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, `Name`, Costly, `name` = _binary 'abc' from `user` where id = 1 for update",
-    "Query": "update `user` set `name` = _binary 'abc' where id = 1",
-    "Table": "user",
-    "Values": [
-      1
-    ],
-    "Vindex": "user_index"
-  }
-}
+Gen4 plan same as above
 
 # delete with binary value
 "delete from user where name = _binary 'abc'"

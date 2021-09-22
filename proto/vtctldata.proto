@@ -580,6 +580,13 @@ message InitShardPrimaryResponse {
   repeated logutil.Event events = 1;
 }
 
+message PingTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message PingTabletResponse {
+}
+
 message PlannedReparentShardRequest {
   // Keyspace is the name of the keyspace to perform the Planned Reparent in.
   string keyspace = 1;
@@ -694,6 +701,14 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message SetWritableRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  bool writable = 2;
+}
+
+message SetWritableResponse {
+}
+
 message ShardReplicationPositionsRequest {
   string keyspace = 1;
   string shard = 2;
@@ -706,6 +721,28 @@ message ShardReplicationPositionsResponse {
   // TabletMap is the set of tablets whose replication statuses were queried,
   // keyed by tablet alias.
   map<string, topodata.Tablet> tablet_map = 2;
+}
+
+message SleepTabletRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  vttime.Duration duration = 2;
+}
+
+message SleepTabletResponse {
+}
+
+message StartReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StartReplicationResponse {
+}
+
+message StopReplicationRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message StopReplicationResponse {
 }
 
 message TabletExternallyReparentedRequest {

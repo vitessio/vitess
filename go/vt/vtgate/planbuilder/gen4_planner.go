@@ -82,18 +82,22 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
-	semTable, err := semantics.Analyze(selStmt, ksName, vschema, starRewrite)
+	semTable, err := semantics.Analyze(selStmt, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
 		return nil, err
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	err = queryRewrite(ctx, selStmt)
+	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
-
-	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+	err = opTree.CheckValid()
 	if err != nil {
 		return nil, err
 	}
@@ -108,15 +112,13 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	sel, isSel := selStmt.(*sqlparser.Select)
-	// We do not need to call planHorizon for union queries.
-	// We would have already executed this for the select statements while transforming to logical plans.
-	if isSel {
-		plan, err = planHorizon(ctx, plan, sel)
-		if err != nil {
-			return nil, err
-		}
+	plan, err = planHorizon(ctx, plan, selStmt)
+	if err != nil {
+		return nil, err
+	}
 
+	sel, isSel := selStmt.(*sqlparser.Select)
+	if isSel {
 		if err := setMiscFunc(plan, sel); err != nil {
 			return nil, err
 		}
@@ -140,8 +142,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	return plan, nil
 }
 
-func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) planningContext {
-	ctx := planningContext{
+func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
+	ctx := &planningContext{
 		reservedVars: reservedVars,
 		semTable:     semTable,
 		vschema:      vschema,
@@ -180,25 +182,60 @@ func checkUnsupportedConstructs(sel *sqlparser.Select) error {
 	return nil
 }
 
-func planHorizon(ctx planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
-	sel, isSel := in.(*sqlparser.Select)
-	if isSel {
+func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
+	switch node := in.(type) {
+	case *sqlparser.Select:
 		hp := horizonPlanning{
-			sel: sel,
+			sel: node,
 		}
 
-		replaceSubQuery(ctx.sqToReplace, sel)
+		replaceSubQuery(ctx.sqToReplace, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {
 			return nil, err
 		}
-		plan, err = planLimit(sel.Limit, plan)
+		plan, err = planLimit(node.Limit, plan)
+		if err != nil {
+			return nil, err
+		}
+	case *sqlparser.Union:
+		var err error
+		rb, isRoute := plan.(*route)
+		if !isRoute && ctx.semTable.ProjectionErr != nil {
+			return nil, ctx.semTable.ProjectionErr
+		}
+		if isRoute && rb.isSingleShard() {
+			err = planSingleShardRoutePlan(node, rb)
+		} else {
+			plan, err = planOrderByOnUnion(ctx, plan, node)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		plan, err = planLimit(node.Limit, plan)
 		if err != nil {
 			return nil, err
 		}
 	}
-
 	return plan, nil
 
+}
+
+func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser.Union) (logicalPlan, error) {
+	qp, err := abstract.CreateQPFromUnion(union, ctx.semTable)
+	if err != nil {
+		return nil, err
+	}
+	hp := horizonPlanning{
+		qp: qp,
+	}
+	if len(qp.OrderExprs) > 0 {
+		plan, err = hp.planOrderBy(ctx, qp.OrderExprs, plan)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return plan, nil
 }

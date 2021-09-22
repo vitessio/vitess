@@ -22,8 +22,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -615,6 +617,128 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 
 			assert.NoError(t, err)
 			testutil.AssertPlannedReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestSleepTablet(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("zone1")
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}, nil)
+
+	tests := []struct {
+		name      string
+		tmc       testutil.TabletManagerClient
+		req       *vtctldatapb.SleepTabletRequest
+		expected  *vtctldatapb.SleepTabletResponse
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			tmc: testutil.TabletManagerClient{
+				SleepResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			req: &vtctldatapb.SleepTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Duration: protoutil.DurationToProto(time.Millisecond),
+			},
+			expected: &vtctldatapb.SleepTabletResponse{},
+		},
+		{
+			name: "default sleep duration", // this is the slowest test case, and takes 30 seconds. comment this out to go faster.
+			tmc: testutil.TabletManagerClient{
+				SleepResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			req: &vtctldatapb.SleepTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			expected: &vtctldatapb.SleepTabletResponse{},
+		},
+		{
+			name: "tablet not found",
+			tmc: testutil.TabletManagerClient{
+				SleepResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+			},
+			req: &vtctldatapb.SleepTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  404,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "sleep rpc error",
+			tmc: testutil.TabletManagerClient{
+				SleepResults: map[string]error{
+					"zone1-0000000100": assert.AnError,
+				},
+			},
+			req: &vtctldatapb.SleepTabletRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Duration: protoutil.DurationToProto(time.Millisecond),
+			},
+			shouldErr: true,
+		},
+	}
+
+	expectedDur := func(t *testing.T, in *vttime.Duration, defaultDur time.Duration) time.Duration {
+		dur, ok, err := protoutil.DurationFromProto(in)
+		require.NoError(t, err)
+
+		if !ok {
+			return defaultDur
+		}
+
+		return dur
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			start := time.Now()
+			resp, err := vtctld.SleepTablet(ctx, tt.req)
+			sleepDur := time.Since(start)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, resp)
+			dur := expectedDur(t, tt.req.Duration, *topo.RemoteOperationTimeout)
+			assert.LessOrEqual(t, dur, sleepDur, "sleep should have taken at least %v; took %v", dur, sleepDur)
 		})
 	}
 }

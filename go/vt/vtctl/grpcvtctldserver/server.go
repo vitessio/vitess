@@ -1517,6 +1517,26 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// PingTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (*vtctldatapb.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Ping(ctx, tablet.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.PingTabletResponse{}, nil
+}
+
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PlannedReparentShard")
@@ -1758,6 +1778,41 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// SetWritable is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWritableRequest) (*vtctldatapb.SetWritableResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetWritable")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "SetWritable.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+	span.Annotate("writable", req.Writable)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("SetWritable: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	var f func(context.Context, *topodatapb.Tablet) error
+	switch req.Writable {
+	case true:
+		f = s.tmc.SetReadWrite
+	case false:
+		f = s.tmc.SetReadOnly
+	}
+
+	if err := f(ctx, tablet.Tablet); err != nil {
+		log.Errorf("SetWritable: failed to set writable=%v on %v: %v", req.Writable, alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.SetWritableResponse{}, nil
+}
+
 // ShardReplicationPositions is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctldatapb.ShardReplicationPositionsRequest) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ShardReplicationPositions")
@@ -1883,6 +1938,87 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		ReplicationStatuses: results,
 		TabletMap:           tabletMap,
 	}, nil
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTabletRequest) (*vtctldatapb.SleepTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SleepTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	dur, ok, err := protoutil.DurationFromProto(req.Duration)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		dur = *topo.RemoteOperationTimeout
+	}
+
+	span.Annotate("sleep_duration", dur.String())
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Sleep(ctx, tablet.Tablet, dur)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SleepTabletResponse{}, nil
+}
+
+// StartReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.StartReplicationRequest) (*vtctldatapb.StartReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.StartReplication")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "StartReplication.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("StartReplication: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	if err := s.tmc.StartReplication(ctx, tablet.Tablet); err != nil {
+		log.Errorf("StartReplication: failed to start replication on %v: %v", alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.StartReplicationResponse{}, nil
+}
+
+// StopReplication is part of the vtctldservicepb.VtctldServer interface.
+func (s *VtctldServer) StopReplication(ctx context.Context, req *vtctldatapb.StopReplicationRequest) (*vtctldatapb.StopReplicationResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.StopReplication")
+	defer span.Finish()
+
+	if req.TabletAlias == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "StopReplication.TabletAlias is required")
+	}
+
+	alias := topoproto.TabletAliasString(req.TabletAlias)
+	span.Annotate("tablet_alias", alias)
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		log.Errorf("StopReplication: failed to read tablet record for %v: %v", alias, err)
+		return nil, err
+	}
+
+	if err := s.tmc.StopReplication(ctx, tablet.Tablet); err != nil {
+		log.Errorf("StopReplication: failed to stop replication on %v: %v", alias, err)
+		return nil, err
+	}
+
+	return &vtctldatapb.StopReplicationResponse{}, nil
 }
 
 // TabletExternallyReparented is part of the vtctldservicepb.VtctldServer interface.

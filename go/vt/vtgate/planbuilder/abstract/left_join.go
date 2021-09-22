@@ -17,7 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -31,12 +33,12 @@ var _ Operator = (*LeftJoin)(nil)
 
 // PushPredicate implements the Operator interface
 func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(expr)
+	deps := semTable.RecursiveDeps(expr)
 	if deps.IsSolvedBy(oj.Left.TableID()) {
 		return oj.Left.PushPredicate(expr, semTable)
 	}
 
-	return semantics.Gen4NotSupportedF("cannot push predicates to the RHS of an outer join")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface
@@ -49,16 +51,25 @@ func (oj *LeftJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser
 	ts := oj.TableID()
 	var result []sqlparser.Expr
 	for _, expr := range oj.Left.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
 	for _, expr := range oj.Right.UnsolvedPredicates(semTable) {
-		deps := semTable.Dependencies(expr)
+		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
 	return result
+}
+
+// CheckValid implements the Operator interface
+func (oj *LeftJoin) CheckValid() error {
+	err := oj.Left.CheckValid()
+	if err != nil {
+		return err
+	}
+	return oj.Right.CheckValid()
 }
