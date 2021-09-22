@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -28,27 +29,37 @@ import (
 func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
 		defer schema.SetPlannerVersion(Gen4CompareV3)
+		primitive := &gen4CompareV3{}
 
-		gen4Stmt := sqlparser.CloneStatement(statement)
-		schema.SetPlannerVersion(Gen4)
-		gen4Primitive, gen4Err := createInstructionFor(query, gen4Stmt, vars, schema, false, false)
+		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, schema, query, Gen4)
 
-		// We insert/delete data only once using the gen4 planner to avoid duplicated rows.
-		switch statement.(type) {
-		case *sqlparser.Insert, *sqlparser.Delete:
+		// we insert data only once using the gen4 planner to avoid duplicated rows in tables.
+		switch s := statement.(type) {
+		case *sqlparser.Insert:
 			return gen4Primitive, gen4Err
+		case *sqlparser.Select:
+			primitive.hasOrderBy = len(s.OrderBy) > 0
 		}
 
-		v3Stmt := sqlparser.CloneStatement(statement)
-		schema.SetPlannerVersion(V3)
-		v3Primitive, v3Err := createInstructionFor(query, v3Stmt, vars, schema, false, false)
+		// get V3's plan
+		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, schema, query, V3)
 
+		// check errors
 		err := treatV3AndGen4Errors(v3Err, gen4Err)
 		if err != nil {
 			return nil, err
 		}
-		return &gen4CompareV3{v3: v3Primitive, gen4: gen4Primitive}, nil
+
+		primitive.gen4 = gen4Primitive
+		primitive.v3 = v3Primitive
+		return primitive, nil
 	}
+}
+
+func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema, query string, version PlannerVersion) (engine.Primitive, error) {
+	schema.SetPlannerVersion(version)
+	stmt := sqlparser.CloneStatement(statement)
+	return createInstructionFor(query, stmt, vars, schema, false, false)
 }
 
 func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
@@ -68,7 +79,8 @@ func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
 }
 
 type gen4CompareV3 struct {
-	v3, gen4 engine.Primitive
+	v3, gen4   engine.Primitive
+	hasOrderBy bool
 }
 
 var _ engine.Primitive = (*gen4CompareV3)(nil)
@@ -102,6 +114,8 @@ func (c *gen4CompareV3) TryExecute(vcursor engine.VCursor, bindVars map[string]*
 	}
 	match := sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	if !match {
+		log.Infof("V3 got: %s", v3Result.Rows)
+		log.Infof("Gen4 got: %s", gen4Result.Rows)
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
 	}
 	return gen4Result, nil
