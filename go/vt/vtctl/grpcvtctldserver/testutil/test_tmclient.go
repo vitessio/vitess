@@ -491,14 +491,6 @@ func (fake *TabletManagerClient) SetMaster(ctx context.Context, tablet *topodata
 	return assert.AnError
 }
 
-// StartReplication is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) StartReplication(ctx context.Context, tablet *topodatapb.Tablet) error {
-	if tablet == nil {
-		return assert.AnError
-	}
-	return nil
-}
-
 // SetReplicationSource is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool) error {
 	if fake.SetMasterResults == nil {
