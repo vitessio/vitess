@@ -24,55 +24,62 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// Gen4CompareV3 is a Primitive used to compare V3 and Gen4's plans.
 type Gen4CompareV3 struct {
-	V3, Gen4              Primitive
-	HasOrderBy, IsNextVal bool
+	V3, Gen4   Primitive
+	HasOrderBy bool
 }
 
 var _ Primitive = (*Gen4CompareV3)(nil)
 var _ Gen4Comparer = (*Gen4CompareV3)(nil)
 
+// GetGen4Primitive implements the Gen4Comparer interface
 func (c *Gen4CompareV3) GetGen4Primitive() Primitive {
 	return c.Gen4
 }
 
+// RouteType implements the Primitive interface
 func (c *Gen4CompareV3) RouteType() string {
 	return c.Gen4.RouteType()
 }
 
+// GetKeyspaceName implements the Primitive interface
 func (c *Gen4CompareV3) GetKeyspaceName() string {
 	return c.Gen4.GetKeyspaceName()
 }
 
+// GetTableName implements the Primitive interface
 func (c *Gen4CompareV3) GetTableName() string {
 	return c.Gen4.GetTableName()
 }
 
+// GetFields implements the Primitive interface
 func (c *Gen4CompareV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return c.Gen4.GetFields(vcursor, bindVars)
 }
 
+// NeedsTransaction implements the Primitive interface
 func (c *Gen4CompareV3) NeedsTransaction() bool {
 	return c.Gen4.NeedsTransaction()
 }
 
+// TryExecute implements the Primitive interface
 func (c *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	gen4Result, gen4Err := c.Gen4.TryExecute(vcursor, bindVars, wantfields)
-
-	// we are not executing the plan a second time if the query is a select next val,
-	// since the first execution incremented the `next` value, results will always
-	// mismatch between v3 and Gen4.
-	if c.IsNextVal {
-		return gen4Result, gen4Err
-	}
-
 	v3Result, v3Err := c.V3.TryExecute(vcursor, bindVars, wantfields)
 	err := CompareV3AndGen4Errors(v3Err, gen4Err)
 	if err != nil {
 		return nil, err
 	}
-	match := sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+
+	var match bool
+	if c.HasOrderBy {
+		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+	} else {
+		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+	}
 	if !match {
+		log.Infof("%T mismatch", c)
 		log.Infof("V3 got: %s", v3Result.Rows)
 		log.Infof("Gen4 got: %s", gen4Result.Rows)
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
@@ -80,42 +87,45 @@ func (c *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 	return gen4Result, nil
 }
 
+// TryStreamExecute implements the Primitive interface
 func (c *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
+
 	gen4Error := c.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		gen4Result.AppendResult(result)
 		return nil
 	})
-
-	// we are not executing the plan a second time if the query is a select next val,
-	// since the first execution incremented the `next` value, results will always
-	// mismatch between v3 and Gen4.
-	if c.IsNextVal {
-		if gen4Error != nil {
-			return gen4Error
-		}
-		return callback(gen4Result)
-	}
-
 	v3Err := c.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		v3Result.AppendResult(result)
 		return nil
 	})
+
 	err := CompareV3AndGen4Errors(v3Err, gen4Error)
 	if err != nil {
 		return err
 	}
-	match := sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+
+	var match bool
+	if c.HasOrderBy {
+		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+	} else {
+		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
+	}
 	if !match {
+		log.Infof("%T mismatch", c)
+		log.Infof("V3 got: %s", v3Result.Rows)
+		log.Infof("Gen4 got: %s", gen4Result.Rows)
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
 	}
 	return callback(gen4Result)
 }
 
+// Inputs implements the Primitive interface
 func (c *Gen4CompareV3) Inputs() []Primitive {
 	return c.Gen4.Inputs()
 }
 
+// Description implements the Primitive interface
 func (c *Gen4CompareV3) Description() PrimitiveDescription {
 	return c.Gen4.Description()
 }

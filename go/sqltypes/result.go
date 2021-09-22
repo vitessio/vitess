@@ -191,21 +191,20 @@ func ResultsEqualUnordered(r1, r2 []Result) bool {
 		return false
 	}
 
+	// allRows is a hash map that contains a row hashed as a key and
+	// the number of occurrence as the value. we use this map to ensure
+	// equality between the two result sets. when analyzing r1, we
+	// increment each key's value by one for each row's occurrence, and
+	// then we decrement it by one each time we see the same key in r2.
+	// if one of the key's value is not equal to zero, then r1 and r2 do
+	// not match.
 	allRows := map[string]int{}
 	countRows := 0
 	for _, r := range r1 {
-		for _, row := range r.Rows {
-			newHash := hashCodeForRow(row)
-			allRows[newHash] += 1
-		}
-		countRows += int(r.RowsAffected)
+		saveRowsAnalysis(r, allRows, &countRows, true)
 	}
 	for _, r := range r2 {
-		for _, row := range r.Rows {
-			newHash := hashCodeForRow(row)
-			allRows[newHash] -= 1
-		}
-		countRows -= int(r.RowsAffected)
+		saveRowsAnalysis(r, allRows, &countRows, false)
 	}
 	if countRows != 0 {
 		return false
@@ -216,6 +215,22 @@ func ResultsEqualUnordered(r1, r2 []Result) bool {
 		}
 	}
 	return true
+}
+
+func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, increment bool) {
+	for _, row := range r.Rows {
+		newHash := hashCodeForRow(row)
+		if increment {
+			allRows[newHash] += 1
+		} else {
+			allRows[newHash] -= 1
+		}
+	}
+	if increment {
+		*totalRows += int(r.RowsAffected)
+	} else {
+		*totalRows -= int(r.RowsAffected)
+	}
 }
 
 func hashCodeForRow(val []Value) string {
