@@ -224,6 +224,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfRevertMigration(parent, node, replacer)
 	case *Rollback:
 		return a.rewriteRefOfRollback(parent, node, replacer)
+	case RootNode:
+		return a.rewriteRootNode(parent, node, replacer)
 	case *SRollback:
 		return a.rewriteRefOfSRollback(parent, node, replacer)
 	case *Savepoint:
@@ -3215,6 +3217,30 @@ func (a *application) rewriteRefOfRollback(parent SQLNode, node *Rollback, repla
 	}
 	return true
 }
+func (a *application) rewriteRootNode(parent SQLNode, node RootNode, replacer replacerFunc) bool {
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
+		panic("[BUG] tried to replace 'SQLNode' on 'RootNode'")
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfSRollback(parent SQLNode, node *SRollback, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -5275,6 +5301,33 @@ func (a *application) rewriteRefOfColIdent(parent SQLNode, node *ColIdent, repla
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfRootNode(parent SQLNode, node *RootNode, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteSQLNode(node, node.SQLNode, func(newNode, parent SQLNode) {
+		parent.(*RootNode).SQLNode = newNode.(SQLNode)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

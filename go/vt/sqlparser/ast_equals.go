@@ -632,6 +632,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfRollback(a, b)
+	case RootNode:
+		b, ok := inB.(RootNode)
+		if !ok {
+			return false
+		}
+		return EqualsRootNode(a, b)
 	case *SRollback:
 		b, ok := inB.(*SRollback)
 		if !ok {
@@ -2108,6 +2114,11 @@ func EqualsRefOfRollback(a, b *Rollback) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRootNode does deep equals between the two objects.
+func EqualsRootNode(a, b RootNode) bool {
+	return EqualsSQLNode(a.SQLNode, b.SQLNode)
 }
 
 // EqualsRefOfSRollback does deep equals between the two objects.
@@ -3861,6 +3872,17 @@ func EqualsSliceOfRefOfRenameTablePair(a, b []*RenameTablePair) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfRootNode does deep equals between the two objects.
+func EqualsRefOfRootNode(a, b *RootNode) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSQLNode(a.SQLNode, b.SQLNode)
 }
 
 // EqualsRefOfBool does deep equals between the two objects.
