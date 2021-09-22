@@ -125,7 +125,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 	}{
 		{
 			name:                   "success",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000102": nil,
@@ -241,7 +241,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			vtctlReparentFunctions: NewEmergencyReparentOptions(&topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  101,
-			}, nil, 0),
+			}, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000101": nil,
@@ -351,7 +351,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "success with existing primary",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				DemoteMasterResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
@@ -464,7 +464,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "shard not found",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc:                    &testutil.TabletManagerClient{},
 			unlockTopo:             true, // we shouldn't try to lock the nonexistent shard
 			shards:                 nil,
@@ -476,7 +476,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "cannot stop replication",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -535,7 +535,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "lost topo lock",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -594,7 +594,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "cannot get reparent candidates",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -665,7 +665,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name:                   "zero valid reparent candidates",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc:                    &testutil.TabletManagerClient{},
 			shards: []*vtctldatapb.Shard{
 				{
@@ -682,7 +682,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		{
 			name: "error waiting for relay logs to apply",
 			// one replica is going to take a minute to apply relay logs
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, time.Millisecond*50),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, time.Millisecond*50, false),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -774,7 +774,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			vtctlReparentFunctions: NewEmergencyReparentOptions(&topodatapb.TabletAlias{
 				Cell: "zone1",
 				Uid:  200,
-			}, nil, 0),
+			}, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				StopReplicationAndGetStatusResults: map[string]struct {
 					Status     *replicationdatapb.Status
@@ -861,7 +861,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			vtctlReparentFunctions: NewEmergencyReparentOptions(&topodatapb.TabletAlias{ // we're requesting a tablet that's behind in replication
 				Cell: "zone1",
 				Uid:  102,
-			}, nil, 0),
+			}, nil, 0, false),
 			keyspace: "testkeyspace",
 			shard:    "-",
 			ts:       memorytopo.NewServer("zone1"),
@@ -946,14 +946,10 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		},
 		{
 			name: "cannot promote new primary",
-			vtctlReparentFunctions: NewEmergencyReparentOptions( // We're explicitly requesting a primary-elect in this test case
-				// because we don't care about the correctness of the selection
-				// code (it's covered by other test cases), and it simplifies
-				// the error mocking.
-				&topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  102,
-				}, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(&topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			}, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PromoteReplicaResults: map[string]struct {
 					Result string
@@ -1130,7 +1126,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 	}{
 		{
 			name:                   "success",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, sets.NewString("zone1-0000000404"), 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, sets.NewString("zone1-0000000404"), 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1211,7 +1207,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 		},
 		{
 			name:                   "MasterPosition error",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				MasterPositionResults: map[string]struct {
 					Position string
@@ -1253,7 +1249,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 		},
 		{
 			name:                   "cannot repopulate reparent journal on new primary",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
@@ -1297,7 +1293,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 		},
 		{
 			name:                   "all replicas failing to SetMaster does fail the promotion",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1355,7 +1351,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 		},
 		{
 			name:                   "all replicas slow to SetMaster does fail the promotion",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, time.Millisecond*10),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, time.Millisecond*10, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -1417,7 +1413,7 @@ func TestEmergencyReparenter_promotePrimaryCandidate(t *testing.T) {
 		},
 		{
 			name:                   "one replica failing to SetMaster does not fail the promotion",
-			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0),
+			vtctlReparentFunctions: NewEmergencyReparentOptions(nil, nil, 0, false),
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
