@@ -2162,6 +2162,34 @@ Gen4 plan same as above
 "syntax error: count(distinct *)"
 Gen4 plan same as above
 
+# if derived table scatter and ordering, then V3 doesn't allow outer constructs to be pushed down.
+"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "ResultColumns": 2,
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+
 # optimize group by when using distinct with no aggregation
 "select distinct col1, col2 from user group by col1, col2"
 {
@@ -2696,6 +2724,55 @@ Gen4 plan same as above
         "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by a, weight_string(char_length(texcol1))",
         "OrderBy": "(0|2) ASC",
         "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by a, weight_string(char_length(texcol1)) order by a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# order by inside and outside parenthesis select
+"(select id from user order by 1 desc) order by 1 asc limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select id, weight_string(id) from `user` order by 1 asc limit :__upper_limit",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+        "ResultColumns": 1,
         "Table": "`user`"
       }
     ]

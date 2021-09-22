@@ -94,6 +94,7 @@ var (
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
+	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -204,7 +205,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	var si SchemaInfo = nil
 	var st *vtschema.Tracker
 	if *enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe())
+		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}

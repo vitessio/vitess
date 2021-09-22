@@ -1416,20 +1416,6 @@ func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *ParenSelect) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(16)
-	}
-	// field Select vitess.io/vitess/go/vt/sqlparser.SelectStatement
-	if cc, ok := cached.Select.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	return size
-}
 func (cached *ParenTableExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2168,7 +2154,7 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field FirstStatement vitess.io/vitess/go/vt/sqlparser.SelectStatement
 	if cc, ok := cached.FirstStatement.(cachedObject); ok {
@@ -2190,6 +2176,8 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	}
 	// field Limit *vitess.io/vitess/go/vt/sqlparser.Limit
 	size += cached.Limit.CachedSize(true)
+	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto
+	size += cached.Into.CachedSize(true)
 	return size
 }
 func (cached *UnionSelect) CachedSize(alloc bool) int64 {

@@ -101,7 +101,7 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 			source: qt,
 		}, nil
 	default:
-		return nil, semantics.Gen4NotSupportedF("optimizeQuery")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
 }
 
@@ -387,16 +387,6 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 			}
 		}
 		toNode.OrderBy = node.OrderBy
-	case *sqlparser.ParenSelect:
-		toNode, ok := to.(*sqlparser.ParenSelect)
-		if !ok {
-			// we might have lost the parenthesis, so let's check if we can work with the child
-			return stripDownQuery(node.Select, to)
-		}
-		err = stripDownQuery(node.Select, toNode.Select)
-		if err != nil {
-			return err
-		}
 	default:
 		panic("this should not happen - we have covered all implementations of SelectStatement")
 	}

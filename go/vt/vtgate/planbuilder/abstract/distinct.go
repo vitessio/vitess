@@ -42,3 +42,8 @@ func (d *Distinct) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTab
 func (d *Distinct) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Source.UnsolvedPredicates(semTable)
 }
+
+// CheckValid implements the Operator interface
+func (d *Distinct) CheckValid() error {
+	return d.Source.CheckValid()
+}
