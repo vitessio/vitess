@@ -179,6 +179,10 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 
 	for _, rhsStatement := range node.UnionSelects {
 		isNodeDistinct := rhsStatement.Distinct
+		_, isRHSUnion := rhsStatement.Statement.(*sqlparser.Union)
+		if isRHSUnion {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
+		}
 		opRHS, err := CreateOperatorFromAST(rhsStatement.Statement, semTable)
 		if err != nil {
 			return nil, err

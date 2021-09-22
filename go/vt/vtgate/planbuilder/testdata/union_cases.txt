@@ -545,42 +545,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select 1 from music union (select id from user union all select name from unsharded)",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from music where 1 != 1 union select id from `user` where 1 != 1",
-            "Query": "select 1 from music union select id from `user`",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select `name` from unsharded where 1 != 1",
-            "Query": "select distinct `name` from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 error: nesting of unions at the right-hand side is not yet supported
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
@@ -641,42 +606,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select 1 from music union (select id from user union select name from unsharded)",
-  "Instructions": {
-    "OperatorType": "Distinct",
-    "Inputs": [
-      {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from music where 1 != 1 union select id from `user` where 1 != 1",
-            "Query": "select 1 from music union select id from `user`",
-            "Table": "music"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select `name` from unsharded where 1 != 1",
-            "Query": "select distinct `name` from unsharded",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 error: nesting of unions at the right-hand side is not yet supported
 
 # union with the same target shard because of vindex
 "select * from music where id = 1 union select * from user where id = 1"
