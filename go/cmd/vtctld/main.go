@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctld"
@@ -40,7 +41,10 @@ func main() {
 	defer ts.Close()
 
 	// Init the vtctld core
-	vtctld.InitVtctld(ts)
+	err := vtctld.InitVtctld(ts)
+	if err != nil {
+		exit.Return(1)
+	}
 
 	// Register http debug/health
 	vtctld.RegisterDebugHealthHandler(ts)

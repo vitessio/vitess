@@ -26,6 +26,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/cmd"
 
 	"context"
@@ -45,6 +47,7 @@ import (
 var (
 	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
+	durability   = flag.String("durability", "none", "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 )
 
 func init() {
@@ -90,6 +93,12 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
+	err := reparentutil.SetDurabilityPolicy(*durability, nil)
+	if err != nil {
+		log.Errorf("error in setting durability policy: %v", err)
+		exit.Return(1)
+	}
+
 	closer := trace.StartTracing("vtctl")
 	defer trace.LogErrorsWhenClosing(closer)
 
@@ -104,7 +113,7 @@ func main() {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
 
-	err := vtctl.RunCommand(ctx, wr, args)
+	err = vtctl.RunCommand(ctx, wr, args)
 	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:

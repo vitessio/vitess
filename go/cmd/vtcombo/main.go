@@ -217,7 +217,10 @@ func main() {
 	vtg := vtgate.Init(context.Background(), resilientServer, tpb.Cells[0], tabletTypesToWait)
 
 	// vtctld configuration and init
-	vtctld.InitVtctld(ts)
+	err = vtctld.InitVtctld(ts)
+	if err != nil {
+		exit.Return(1)
+	}
 
 	servenv.OnRun(func() {
 		addStatusParts(vtg)

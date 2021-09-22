@@ -42,6 +42,13 @@ func TestTrivialERS(t *testing.T) {
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
 	}
+	// We should do the same for vtctl binary
+	for i := 1; i <= 4; i++ {
+		out, err := ersWithVtctl()
+		log.Infof("ERS-vtctl loop %d.  EmergencyReparentShard Output: %v", i, out)
+		require.NoError(t, err)
+		time.Sleep(5 * time.Second)
+	}
 }
 
 func TestReparentIgnoreReplicas(t *testing.T) {
