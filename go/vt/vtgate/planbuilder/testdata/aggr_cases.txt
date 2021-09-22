@@ -229,9 +229,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b)",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b)",
             "OrderBy": "(2|4) ASC, (1|5) ASC, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
             "ResultColumns": 5,
             "Table": "`user`"
           }
@@ -1718,9 +1718,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
         "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by 1 asc, 2 asc, 3 asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1747,9 +1747,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
         "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3 order by a asc, b asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1776,9 +1776,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, 4",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
         "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1829,9 +1829,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 3, 2, 1, 4",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
         "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1882,9 +1882,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by 3, 2, 1",
+        "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b)",
         "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-        "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
+        "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b) order by 1 desc, 3 desc, b asc",
         "ResultColumns": 4,
         "Table": "`user`"
       }
