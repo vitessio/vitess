@@ -28,9 +28,9 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 
 		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, schema, query, Gen4)
 
-		// we insert data only once using the gen4 planner to avoid duplicated rows in tables.
 		switch s := statement.(type) {
 		case *sqlparser.Insert:
+			// we insert data only once using the gen4 planner to avoid duplicated rows in tables.
 			return gen4Primitive, gen4Err
 		case *sqlparser.Select:
 			primitive.HasOrderBy = len(s.OrderBy) > 0
@@ -40,6 +40,13 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 					break
 				}
 			}
+		}
+
+		// since lock primitives can imply creation and deletion of new locks,
+		// we execute them only once using Gen4 to avoid the duplicated locks
+		// and double releases.
+		if hasLockPrimitive(gen4Primitive) {
+			return gen4Primitive, gen4Err
 		}
 
 		// get V3's plan
@@ -61,4 +68,20 @@ func planWithPlannerVersion(statement sqlparser.Statement, vars *sqlparser.Reser
 	schema.SetPlannerVersion(version)
 	stmt := sqlparser.CloneStatement(statement)
 	return createInstructionFor(query, stmt, vars, schema, false, false)
+}
+
+// hasLockPrimitive recursively walks through the given primitive and its children
+// to see if there are any engine.Lock primitive.
+func hasLockPrimitive(primitive engine.Primitive) bool {
+	switch primitive.(type) {
+	case *engine.Lock:
+		return true
+	default:
+		for _, p := range primitive.Inputs() {
+			if hasLockPrimitive(p) {
+				return true
+			}
+		}
+	}
+	return false
 }
