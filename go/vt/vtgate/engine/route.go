@@ -130,6 +130,9 @@ type OrderbyParams struct {
 	// It is set to -1 if such a column is not added to the query
 	WeightStringCol int
 	Desc            bool
+
+	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
+	FromGroupBy bool
 }
 
 func (obp OrderbyParams) String() string {

@@ -73,7 +73,7 @@ func (j *joinV4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber 
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (j *joinV4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (j *joinV4) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 
