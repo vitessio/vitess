@@ -106,7 +106,7 @@ func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.L
 	var replicasStartedReplication []*topodatapb.Tablet
 	var replicaMutex sync.Mutex
 
-	replCtx, replCancel := context.WithTimeout(ctx, opts.GetWaitReplicasTimeout())
+	replCtx, replCancel := context.WithTimeout(ctx, opts.waitReplicasTimeout)
 	defer replCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
@@ -168,8 +168,6 @@ func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.L
 		replicaMutex.Lock()
 		replicasStartedReplication = append(replicasStartedReplication, ti.Tablet)
 		replicaMutex.Unlock()
-		// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-		opts.PostTabletChangeHook(ti.Tablet)
 
 		// Signal that at least one goroutine succeeded to SetReplicationSource.
 		// We do this only when we do not want to wait for all the replicas
@@ -184,7 +182,7 @@ func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.L
 		switch {
 		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
 			continue
-		case !opts.GetIgnoreReplicas().Has(alias):
+		case !opts.ignoreReplicas.Has(alias):
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)
@@ -307,9 +305,6 @@ func promotePrimaryCandidate(ctx context.Context, tmc tmclient.TabletManagerClie
 	if err := changeTypeToPrimary(ctx, tmc, newPrimary); err != nil {
 		return nil, err
 	}
-
-	// We call PostTabletChangeHook every time there is an update to a tablet's replication or type
-	opts.PostTabletChangeHook(newPrimary)
 
 	// now we reparent all the other tablets to start replication from our new primary
 	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
