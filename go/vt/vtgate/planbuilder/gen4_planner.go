@@ -97,6 +97,10 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+	err = opTree.CheckValid()
+	if err != nil {
+		return nil, err
+	}
 
 	tree, err := optimizeQuery(ctx, opTree)
 	if err != nil {

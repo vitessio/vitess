@@ -1612,7 +1612,6 @@ Gen4 plan same as above
     "Vindex": "user_index"
   }
 }
-Gen4 plan same as above
 
 # sql_calc_found_rows with limit
 "select sql_calc_found_rows * from music limit 100"
@@ -1822,8 +1821,13 @@ Gen4 plan same as above
 "syntax error at position 55 near 'union'"
 Gen4 plan same as above
 
-# Into outfile s3 in sub-query is incorrect
+# Into outfile s3 in derived table is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
+"syntax error at position 41 near 'into'"
+Gen4 plan same as above
+
+# Into outfile s3 in derived table with union incorrect
+"select id from (select id from user into outfile s3 'inner_outfile' union select 1) as t2"
 "syntax error at position 41 near 'into'"
 Gen4 plan same as above
 
