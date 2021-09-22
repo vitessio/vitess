@@ -243,10 +243,6 @@ And finally, click on `Publish release`.
 * Schedule and publish Tweet on Vitess account.
 * Run following script to once the `base` Docker image is live. 
 
-```
-https://github.com/vitessio/vitess/blob/master/helm/release.sh
-```
-
 * Deploy and release Java packages by following the `Java Packages Deploy & Release` section below. 
 
 ### Java Packages Deploy & Release
