@@ -444,7 +444,11 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		}
 
 		if qre.tsv.qe.strictTableACL {
-			errStr := fmt.Sprintf("table acl error: %q %v cannot run %v on table %q", callerID.Username, callerID.Groups, qre.plan.PlanID, tableName)
+			groupStr := ""
+			if len(callerID.Groups) > 0 {
+				groupStr = fmt.Sprintf(", in groups [%s],", strings.Join(callerID.Groups, ", "))
+			}
+			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, groupStr, tableName)
 			qre.tsv.Stats().TableaclDenied.Add(statsKey, 1)
 			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)

@@ -822,6 +822,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 
 	callerID = &querypb.VTGateCallerID{
 		Username: "u2",
+		Groups:   []string{"non-admin"},
 	}
 	qre.ctx = callerid.NewContext(context.Background(), nil, callerID)
 	// Should fail because u2 does not have permission.
@@ -829,10 +830,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	want := `table acl error: "u2" [] cannot run MessageStream on table "msg"`
-	if err == nil || err.Error() != want {
-		t.Errorf("qre.MessageStream(msg) error: %v, want %s", err, want)
-	}
+	assert.EqualError(t, err, `MessageStream command denied to user 'u2', in groups [non-admin], for table 'msg' (ACL check error)`)
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
@@ -972,10 +970,8 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	wanterr := "table acl error"
-	if !strings.Contains(err.Error(), wanterr) {
-		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
-	}
+
+	assert.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -1014,6 +1010,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	username := "u2"
 	callerID := &querypb.VTGateCallerID{
 		Username: username,
+		Groups:   []string{"eng", "beta"},
 	}
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
@@ -1039,10 +1036,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_PERMISSION_DENIED)
 	}
-	wanterr := "table acl error"
-	if !strings.Contains(err.Error(), wanterr) {
-		t.Fatalf("qre.Execute: %v, want %s", err, wanterr)
-	}
+	assert.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
