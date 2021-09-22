@@ -1,50 +1,40 @@
 name: unit_race
 on: [push, pull_request]
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'unit_race')
+  cancel-in-progress: true
+
 jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: ubuntu-18.04
+    runs-on: self-hosted
     steps:
-
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.17
-
-    - name: Tune the OS
-      run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
 
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Get dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ curl git wget eatmydata
-        sudo service mysql stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+    - name: Build Docker Image
+      run: docker build -f ./.github/docker/unit_test_race/Dockerfile -t unit_test_race:$GITHUB_SHA  .
 
-        mkdir -p dist bin
-        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
-        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
-
-        go mod download
-        go install golang.org/x/tools/cmd/goimports@latest
-
-    - name: Run make tools
-      run: |
-        make tools
-
-    - name: unit_race
+    - name: Run test
       timeout-minutes: 30
+      run: docker run --name "unit_test_race_$GITHUB_SHA" unit_test_race:$GITHUB_SHA /bin/bash -c 'make unit_test_race'
+
+    - name: Print Volume Used
+      if: ${{ always() }}
       run: |
-        eatmydata -- make unit_test_race
+        docker inspect -f '{{ (index .Mounts 0).Name }}' unit_test_race_$GITHUB_SHA
+
+    - name: Cleanup Docker Volume
+      run: |
+        docker rm -v unit_test_race_$GITHUB_SHA
+
+    - name: Cleanup Docker Container
+      if: ${{ always() }}
+      run: |
+        docker rm -f unit_test_race_$GITHUB_SHA
+
+    - name: Cleanup Docker Image
+      run: |
+        docker image rm unit_test_race:$GITHUB_SHA
