@@ -741,6 +741,18 @@ func TestRenameFieldsOnOLAP(t *testing.T) {
 	assert.Equal(t, `[[VARBINARY("OLAP")]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
+func TestSimpleOrderBy(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer exec(t, conn, `delete from t1`)
+	exec(t, conn, "insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5)")
+	assertMatches(t, conn, `SELECT id2 FROM t1 ORDER BY id2 ASC`, `[[INT64(5)] [INT64(6)] [INT64(7)] [INT64(8)] [INT64(9)] [INT64(10)]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
