@@ -163,7 +163,7 @@ func TestAddOrder(t *testing.T) {
 	dst.(*Union).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
-	require.Equal(t, "(select * from t) union (select * from s) order by foo asc", buf.String())
+	require.Equal(t, "select * from t union select * from s order by foo asc", buf.String())
 }
 
 func TestSetLimit(t *testing.T) {
@@ -181,7 +181,7 @@ func TestSetLimit(t *testing.T) {
 	dst.(*Union).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
-	require.Equal(t, "(select * from t) union (select * from s) limit 4", buf.String())
+	require.Equal(t, "select * from t union select * from s limit 4", buf.String())
 }
 
 func TestDDL(t *testing.T) {

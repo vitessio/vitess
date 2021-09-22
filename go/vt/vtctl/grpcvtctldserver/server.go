@@ -1522,6 +1522,26 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	return nil
 }
 
+// PingTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) PingTablet(ctx context.Context, req *vtctldatapb.PingTabletRequest) (*vtctldatapb.PingTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.PingTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Ping(ctx, tablet.Tablet)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.PingTabletResponse{}, nil
+}
+
 // PlannedReparentShard is part of the vtctldservicepb.VtctldServer interface.
 func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatapb.PlannedReparentShardRequest) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.PlannedReparentShard")
@@ -1923,6 +1943,35 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		ReplicationStatuses: results,
 		TabletMap:           tabletMap,
 	}, nil
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SleepTablet(ctx context.Context, req *vtctldatapb.SleepTabletRequest) (*vtctldatapb.SleepTabletResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SleepTablet")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	dur, ok, err := protoutil.DurationFromProto(req.Duration)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		dur = *topo.RemoteOperationTimeout
+	}
+
+	span.Annotate("sleep_duration", dur.String())
+
+	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.tmc.Sleep(ctx, tablet.Tablet, dur)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SleepTabletResponse{}, nil
 }
 
 // StartReplication is part of the vtctldservicepb.VtctldServer interface.

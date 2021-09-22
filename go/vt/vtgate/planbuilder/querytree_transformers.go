@@ -200,13 +200,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 			Distinct:  false,
 			Statement: rroute.Select,
 		}
-		switch n := lroute.Select.(type) {
-		case *sqlparser.Union:
-			n.UnionSelects = append(n.UnionSelects, elem)
-		default:
-			lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
-		}
-
+		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
 		return lroute
 	}
 	return nil

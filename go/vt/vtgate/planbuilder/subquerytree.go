@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -52,5 +54,5 @@ func (s *subqueryTree) clone() queryTree {
 }
 
 func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error) {
-	return nil, semantics.Gen4NotSupportedF("pushing output columns on subquery tree")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push output columns on subquery")
 }

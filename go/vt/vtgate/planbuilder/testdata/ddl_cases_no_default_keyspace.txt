@@ -474,7 +474,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "Query": "create view view_a as (select * from music where user_id = 1) union (select * from `user` where id = 1)"
+    "Query": "create view view_a as select * from music where user_id = 1 union select * from `user` where id = 1"
   }
 }
 Gen4 plan same as above
@@ -507,18 +507,6 @@ Gen4 plan same as above
       "Sharded": true
     },
     "Query": "create view view_a as select * from music where user_id = 1"
-  }
-}
-{
-  "QueryType": "DDL",
-  "Original": "create view user.view_a as select sql_calc_found_rows * from music where user_id = 1",
-  "Instructions": {
-    "OperatorType": "DDL",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "Query": "create view view_a as select sql_calc_found_rows * from music where user_id = 1"
   }
 }
 
