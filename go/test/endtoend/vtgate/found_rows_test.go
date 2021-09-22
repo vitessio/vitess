@@ -36,6 +36,8 @@ func TestFoundRows(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	t.Skipf("This test uses `SQL_CALC_FOUND_ROWS`, which is currently unsupported by Gen4. Remove this once it is supported.")
+
 	exec(t, conn, "delete from t2")
 	defer exec(t, conn, "delete from t2")
 

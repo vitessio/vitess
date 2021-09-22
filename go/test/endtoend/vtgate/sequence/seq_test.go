@@ -232,6 +232,8 @@ func TestSeq(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	t.Skipf("This test uses `next val`, which is currently unsupported by Gen4. Remove this once it is supported.")
+
 	//Initialize seq table
 	exec(t, conn, "insert into sequence_test_seq(id, next_id, cache) values(0,1,10)")
 
