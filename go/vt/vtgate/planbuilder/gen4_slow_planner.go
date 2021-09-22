@@ -53,7 +53,10 @@ func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.Reserved
 
 func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
 	if v3Err != nil && gen4Err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 and Gen4 failed: v3: %s | Gen4: %s", v3Err.Error(), gen4Err.Error())
+		if v3Err.Error() == gen4Err.Error() {
+			return gen4Err
+		}
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 and Gen4 failed with different errors: v3: %s | Gen4: %s", v3Err.Error(), gen4Err.Error())
 	}
 	if v3Err == nil && gen4Err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Gen4 failed while v3 did not: %s", gen4Err.Error())
