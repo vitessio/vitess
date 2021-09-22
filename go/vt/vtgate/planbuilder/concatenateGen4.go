@@ -72,7 +72,7 @@ func (c *concatenateGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, c
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (c *concatenateGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (c *concatenateGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 

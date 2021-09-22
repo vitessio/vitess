@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/sqltypes"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -314,12 +315,7 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, gbk := range oa.eaggr.GroupByKeys {
 		rc := oa.resultColumns[gbk.KeyCol]
 		if sqltypes.IsText(rc.column.typ) {
-			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.GroupByKeys[i].WeightStringCol = weightcolNumber
-				oa.eaggr.GroupByKeys[i].KeyCol = weightcolNumber
-				continue
-			}
-			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol)
+			weightcolNumber, err := oa.input.SupplyWeightString(gbk.KeyCol, gbk.FromGroupBy)
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {
