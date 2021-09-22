@@ -23,11 +23,11 @@ import (
 	"go/types"
 	"io/ioutil"
 	"log"
-	"os"
-	"os/exec"
 	"path"
 	"sort"
 	"strings"
+
+	"vitess.io/vitess/go/tools/goimports"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/tools/common"
@@ -475,7 +475,7 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			content, err := getFileInGoimportFormat(file)
+			content, err := goimports.FormatJenFile(file)
 			if err != nil {
 				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
 			}
@@ -499,7 +499,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		genFile, err := getFileInGoimportFormat(file)
+		genFile, err := goimports.FormatJenFile(file)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
@@ -564,24 +564,4 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 	}
 
 	return sizegen.finalize(), nil
-}
-
-func getFileInGoimportFormat(file *jen.File) ([]byte, error) {
-	tempFile, err := ioutil.TempFile("/tmp", "*.go")
-	if err != nil {
-		return nil, err
-	}
-
-	err = file.Save(tempFile.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", tempFile.Name())
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-	if err != nil {
-		return nil, err
-	}
-	return ioutil.ReadFile(tempFile.Name())
 }
