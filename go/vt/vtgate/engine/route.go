@@ -131,6 +131,9 @@ type OrderbyParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
+
+	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
+	FromGroupBy bool
 }
 
 func (obp OrderbyParams) String() string {

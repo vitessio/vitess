@@ -334,11 +334,7 @@ func (oa *orderedAggregate) Wireup(plan logicalPlan, jt *jointab) error {
 	for i, colNumber := range oa.eaggr.Keys {
 		rc := oa.resultColumns[colNumber]
 		if sqltypes.IsText(rc.column.typ) {
-			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
-				oa.eaggr.Keys[i] = weightcolNumber
-				continue
-			}
-			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			weightcolNumber, err := oa.input.SupplyWeightString(colNumber, oa.eaggr.FromGroupBy[i])
 			if err != nil {
 				_, isUnsupportedErr := err.(UnsupportedSupplyWeightString)
 				if isUnsupportedErr {

@@ -22,9 +22,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a order by a asc",
+            "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
             "ResultColumns": 4,
             "Table": "`user`"
           }
@@ -57,9 +57,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
             "ResultColumns": 3,
             "Table": "`user`"
           }
@@ -92,9 +92,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a order by a asc",
+            "Query": "select a, b, count(*) as k, weight_string(b), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
             "ResultColumns": 5,
             "Table": "`user`"
           }
@@ -131,9 +131,9 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+                "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
                 "OrderBy": "0 ASC",
-                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by a asc",
+                "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by a asc",
                 "ResultColumns": 3,
                 "Table": "`user`"
               }
@@ -168,9 +168,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, b, count(*) as k, weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "0 ASC",
-            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a order by 1 asc",
+            "Query": "select a, b, count(*) as k, weight_string(a) from `user` group by a, weight_string(a) order by 1 asc",
             "ResultColumns": 4,
             "Table": "`user`"
           }
@@ -204,9 +204,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1",
+            "FieldQuery": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` where 1 != 1 group by textcol1, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1)",
             "OrderBy": "0 ASC, 0 ASC",
-            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1 order by textcol1 asc, textcol1 asc",
+            "Query": "select textcol1 as t, count(*) as k, weight_string(textcol1) from `user` group by textcol1, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1) order by textcol1 asc, textcol1 asc",
             "ResultColumns": 3,
             "Table": "`user`"
           }

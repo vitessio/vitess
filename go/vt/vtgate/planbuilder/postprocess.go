@@ -54,7 +54,16 @@ func (pb *primitiveBuilder) pushOrderBy(orderBy sqlparser.OrderBy) error {
 	if err := pb.st.ResolveSymbols(orderBy); err != nil {
 		return err
 	}
-	plan, err := planOrdering(pb, pb.plan, orderBy)
+
+	var v3OrderBylist v3OrderBy
+
+	if orderBy != nil {
+		v3OrderBylist = make(v3OrderBy, 0, len(orderBy))
+		for _, order := range orderBy {
+			v3OrderBylist = append(v3OrderBylist, &v3Order{Order: order})
+		}
+	}
+	plan, err := planOrdering(pb, pb.plan, v3OrderBylist)
 	if err != nil {
 		return err
 	}
