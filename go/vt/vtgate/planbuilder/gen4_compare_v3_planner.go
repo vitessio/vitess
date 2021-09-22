@@ -39,6 +39,12 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 			return gen4Primitive, gen4Err
 		case *sqlparser.Select:
 			primitive.hasOrderBy = len(s.OrderBy) > 0
+			for _, expr := range s.SelectExprs {
+				if _, nextVal := expr.(*sqlparser.Nextval); nextVal {
+					primitive.isNextVal = true
+					break
+				}
+			}
 		}
 
 		// get V3's plan
@@ -79,8 +85,8 @@ func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
 }
 
 type gen4CompareV3 struct {
-	v3, gen4   engine.Primitive
-	hasOrderBy bool
+	v3, gen4              engine.Primitive
+	hasOrderBy, isNextVal bool
 }
 
 var _ engine.Primitive = (*gen4CompareV3)(nil)
@@ -106,8 +112,16 @@ func (c *gen4CompareV3) NeedsTransaction() bool {
 }
 
 func (c *gen4CompareV3) TryExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
 	gen4Result, gen4Err := c.gen4.TryExecute(vcursor, bindVars, wantfields)
+
+	// we are not executing the plan a second time if the query is a select next val,
+	// since the first execution incremented the `next` value, results will always
+	// mismatch between v3 and Gen4.
+	if c.isNextVal {
+		return gen4Result, gen4Err
+	}
+
+	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
 	err := treatV3AndGen4Errors(v3Err, gen4Err)
 	if err != nil {
 		return nil, err
@@ -123,12 +137,23 @@ func (c *gen4CompareV3) TryExecute(vcursor engine.VCursor, bindVars map[string]*
 
 func (c *gen4CompareV3) TryStreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
-	v3Err := c.v3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
-		v3Result.AppendResult(result)
-		return nil
-	})
 	gen4Error := c.gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		gen4Result.AppendResult(result)
+		return nil
+	})
+
+	// we are not executing the plan a second time if the query is a select next val,
+	// since the first execution incremented the `next` value, results will always
+	// mismatch between v3 and Gen4.
+	if c.isNextVal {
+		if gen4Error != nil {
+			return gen4Error
+		}
+		return callback(gen4Result)
+	}
+
+	v3Err := c.v3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+		v3Result.AppendResult(result)
 		return nil
 	})
 	err := treatV3AndGen4Errors(v3Err, gen4Error)
