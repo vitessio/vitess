@@ -607,7 +607,9 @@ func CloneComments(n Comments) Comments {
 		return nil
 	}
 	res := make(Comments, 0, len(n))
-	copy(res, n)
+	for _, x := range n {
+		res = append(res, x)
+	}
 	return res
 }
 
