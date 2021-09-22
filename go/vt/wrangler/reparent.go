@@ -150,7 +150,7 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 		ctx,
 		keyspace,
 		shard,
-		reparentutil.NewEmergencyReparentOptions(primaryElectTabletAlias, ignoredTablets, waitReplicasTimeout))
+		reparentutil.NewEmergencyReparentOptions(primaryElectTabletAlias, ignoredTablets, waitReplicasTimeout, false))
 
 	return err
 }

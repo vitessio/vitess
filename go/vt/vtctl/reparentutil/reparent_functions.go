@@ -49,11 +49,12 @@ type (
 )
 
 // NewEmergencyReparentOptions creates a new EmergencyReparentOptions which is used in ERS ans PRS
-func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration) EmergencyReparentOptions {
+func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, preventCrossCellPromotion bool) EmergencyReparentOptions {
 	return EmergencyReparentOptions{
-		newPrimaryAlias:     newPrimaryAlias,
-		ignoreReplicas:      ignoreReplicas,
-		waitReplicasTimeout: waitReplicasTimeout,
+		newPrimaryAlias:           newPrimaryAlias,
+		ignoreReplicas:            ignoreReplicas,
+		waitReplicasTimeout:       waitReplicasTimeout,
+		preventCrossCellPromotion: preventCrossCellPromotion,
 	}
 }
 

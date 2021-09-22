@@ -656,7 +656,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	defer atomic.AddInt32(&shardsLockCounter, -1)
 
 	// TODO: Fix durations
-	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, 1*time.Second)
+	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, 1*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
 	_, err = reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
