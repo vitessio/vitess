@@ -325,6 +325,15 @@ func (client *gRPCVtctldClient) InitShardPrimary(ctx context.Context, in *vtctld
 	return client.c.InitShardPrimary(ctx, in, opts...)
 }
 
+// PingTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) PingTablet(ctx context.Context, in *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.PingTablet(ctx, in, opts...)
+}
+
 // PlannedReparentShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	if client.c == nil {
@@ -388,6 +397,15 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	return client.c.ReparentTablet(ctx, in, opts...)
 }
 
+// SetWritable is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetWritable(ctx context.Context, in *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetWritable(ctx, in, opts...)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	if client.c == nil {
@@ -395,6 +413,33 @@ func (client *gRPCVtctldClient) ShardReplicationPositions(ctx context.Context, i
 	}
 
 	return client.c.ShardReplicationPositions(ctx, in, opts...)
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.SleepTabletResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SleepTablet(ctx, in, opts...)
+}
+
+// StartReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) StartReplication(ctx context.Context, in *vtctldatapb.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StartReplicationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.StartReplication(ctx, in, opts...)
+}
+
+// StopReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) StopReplication(ctx context.Context, in *vtctldatapb.StopReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StopReplicationResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.StopReplication(ctx, in, opts...)
 }
 
 // TabletExternallyReparented is part of the vtctlservicepb.VtctldClient interface.

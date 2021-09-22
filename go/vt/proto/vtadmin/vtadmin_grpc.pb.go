@@ -62,6 +62,8 @@ type VTAdminClient interface {
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
 	// GetVSchemas returns the VSchemas for all specified clusters.
 	GetVSchemas(ctx context.Context, in *GetVSchemasRequest, opts ...grpc.CallOption) (*GetVSchemasResponse, error)
+	// GetVtctlds returns the Vtctlds for all specified clusters.
+	GetVtctlds(ctx context.Context, in *GetVtctldsRequest, opts ...grpc.CallOption) (*GetVtctldsResponse, error)
 	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
 	// workflow name.
 	GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error)
@@ -232,6 +234,15 @@ func (c *vTAdminClient) GetVSchemas(ctx context.Context, in *GetVSchemasRequest,
 	return out, nil
 }
 
+func (c *vTAdminClient) GetVtctlds(ctx context.Context, in *GetVtctldsRequest, opts ...grpc.CallOption) (*GetVtctldsResponse, error) {
+	out := new(GetVtctldsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVtctlds", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetWorkflow(ctx context.Context, in *GetWorkflowRequest, opts ...grpc.CallOption) (*Workflow, error) {
 	out := new(Workflow)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetWorkflow", in, out, opts...)
@@ -306,6 +317,8 @@ type VTAdminServer interface {
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
 	// GetVSchemas returns the VSchemas for all specified clusters.
 	GetVSchemas(context.Context, *GetVSchemasRequest) (*GetVSchemasResponse, error)
+	// GetVtctlds returns the Vtctlds for all specified clusters.
+	GetVtctlds(context.Context, *GetVtctldsRequest) (*GetVtctldsResponse, error)
 	// GetWorkflow returns a single Workflow for a given cluster, keyspace, and
 	// workflow name.
 	GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error)
@@ -370,6 +383,9 @@ func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest
 }
 func (UnimplementedVTAdminServer) GetVSchemas(context.Context, *GetVSchemasRequest) (*GetVSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) GetVtctlds(context.Context, *GetVtctldsRequest) (*GetVtctldsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVtctlds not implemented")
 }
 func (UnimplementedVTAdminServer) GetWorkflow(context.Context, *GetWorkflowRequest) (*Workflow, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetWorkflow not implemented")
@@ -699,6 +715,24 @@ func _VTAdmin_GetVSchemas_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetVtctlds_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVtctldsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetVtctlds(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetVtctlds",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetVtctlds(ctx, req.(*GetVtctldsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetWorkflow_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetWorkflowRequest)
 	if err := dec(in); err != nil {
@@ -827,6 +861,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVSchemas",
 			Handler:    _VTAdmin_GetVSchemas_Handler,
+		},
+		{
+			MethodName: "GetVtctlds",
+			Handler:    _VTAdmin_GetVtctlds_Handler,
 		},
 		{
 			MethodName: "GetWorkflow",

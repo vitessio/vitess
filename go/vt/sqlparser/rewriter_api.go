@@ -35,7 +35,7 @@ package sqlparser
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
 //
 func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
-	parent := &struct{ SQLNode }{node}
+	parent := &RootNode{node}
 
 	// this is the root-replacer, used when the user replaces the root of the ast
 	replacer := func(newNode SQLNode, _ SQLNode) {
@@ -50,6 +50,11 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	a.rewriteSQLNode(parent, node, replacer)
 
 	return parent.SQLNode
+}
+
+// RootNode is the root node of the AST. It is the first element of the tree.
+type RootNode struct {
+	SQLNode
 }
 
 // An ApplyFunc is invoked by Rewrite for each node n, even if n is nil,

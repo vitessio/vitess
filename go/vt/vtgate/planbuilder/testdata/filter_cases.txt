@@ -2123,22 +2123,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# outer and inner subquery route reference the same "uu.id" name
-# but they refer to different things. The first reference is to the outermost query,
-# and the second reference is to the innermost 'from' subquery.
-# This query will never work as the inner derived table is only selecting one of the column
-"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
-"unsupported: cross-shard correlated subquery"
-Gen4 error: symbol uu.user_id not found
-
-# outer and inner subquery route reference the same "uu.id" name
-# but they refer to different things. The first reference is to the outermost query,
-# and the second reference is to the innermost 'from' subquery.
-# changed to project all the columns from the derived tables.
-"select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select col, id, user_id from user_extra where user_id = 5) uu where uu.user_id = uu.id))"
-"unsupported: cross-shard correlated subquery"
-Gen4 plan same as above
-
 # Select with equals null
 "select id from music where id = null"
 {

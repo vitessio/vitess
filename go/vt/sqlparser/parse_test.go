@@ -22,12 +22,15 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -142,7 +145,8 @@ var (
 		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
 		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
 	}, {
-		input: "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
+		input:  "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
+		output: "select /* union parenthesized select 2 */ 1 from t union select 1 from t",
 	}, {
 		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
 		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
@@ -150,37 +154,44 @@ var (
 		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
 		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
 	}, {
-		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
-	}, {
 		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 	}, {
-		input: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
+		input:  "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
+		output: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
 	}, {
 		input: "select * from t1 join (select * from t2 union select * from t3) as t",
 	}, {
 		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
 		input: "select * from t1 join t2 on a = b join t3",
 	}, {
-		input: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+		input:  "select * from t1 where col in (select 1 from dual union select 2 from dual)",
+		output: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
 		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
-		input: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+		input:  "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
+		output: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
 	}, {
-		input: "(select 1 from dual) order by 1 asc limit 2",
+		input:  "(select 1 from dual) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
-		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+		input:  "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
-		input: "(select 1 from dual)",
+		input:  "(select 1 from dual)",
+		output: "select 1 from dual",
 	}, {
-		input: "((select 1 from dual))",
+		input:  "((select 1 from dual))",
+		output: "select 1 from dual",
 	}, {
 		input: "select 1 from (select 1 from dual) as t",
 	}, {
-		input: "select 1 from (select 1 from dual union select 2 from dual) as t",
+		input:  "select 1 from (select 1 from dual union select 2 from dual) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
-		input: "select 1 from ((select 1 from dual) union select 2 from dual) as t",
+		input:  "select 1 from ((select 1 from dual) union select 2 from dual) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -615,6 +626,9 @@ var (
 		input:  "select /* simple order by */ 1 from t order by a",
 		output: "select /* simple order by */ 1 from t order by a asc",
 	}, {
+		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
+		output: "select * from t where id = (select a from t1 union select b from t2 order by a asc limit 1)",
+	}, {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
@@ -736,11 +750,14 @@ var (
 		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
-		input: "insert /* no cols & paren select */ into a (select * from t)",
+		input:  "insert /* no cols & paren select */ into a (select * from t)",
+		output: "insert /* no cols & paren select */ into a select * from t",
 	}, {
-		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
+		input:  "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
+		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
 	}, {
-		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		input:  "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		output: "insert /* cols & union with paren select */ into a(b, c) select d, e from f union select g from h",
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
@@ -2102,6 +2119,18 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "query was empty",
+	}, {
+		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+		err:   "syntax error at position 60 near 'union'",
+	}, {
+		input: "(select * from t limit 100 into outfile s3 'out_file_name') union (select * from t2)",
+		err:   "syntax error",
+	}, {
+		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+		err:   "syntax error at position 36 near 'into'",
+	}, {
+		input: "select a from x order by y union select a from c",
+		err:   "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2454,11 +2483,6 @@ func TestSelectInto(t *testing.T) {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
 		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
-		// Invalid queries but these are parsed and errors caught in planbuilder
-		input: "select * from t limit 100 into outfile s3 'out_file_name' union select * from t2",
-	}, {
-		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
-	}, {
 		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
@@ -2467,16 +2491,15 @@ func TestSelectInto(t *testing.T) {
 	}}
 
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("input: %s, err: %v", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		assert.Equal(t, tcase.output, out)
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			require.NoError(t, err)
+			out := String(tree)
+			assert.Equal(t, tcase.output, out)
+		})
 	}
 
 	invalidSQL := []struct {
@@ -3283,9 +3306,6 @@ var (
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
 	}, {
-		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
-		output: "syntax error at position 76 near 'order'",
-	}, {
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
 	}, {
@@ -3480,4 +3500,180 @@ func BenchmarkParse3(b *testing.B) {
 	b.Run("escaped", func(b *testing.B) {
 		largeQueryBenchmark(b, true)
 	})
+}
+
+func TestValidUnionCases(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "union_cases.txt", testOutputTempDir)
+}
+
+func TestValidSelectCases(t *testing.T) {
+	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "select_cases.txt", testOutputTempDir)
+}
+
+type testCase struct {
+	file     string
+	lineno   int
+	input    string
+	output   string
+	errStr   string
+	comments string
+}
+
+func escapeNewLines(in string) string {
+	return strings.ReplaceAll(in, "\n", "\\n")
+}
+
+func testFile(t *testing.T, filename, tempDir string) {
+	t.Run(filename, func(t *testing.T) {
+		fail := false
+		expected := strings.Builder{}
+		for tcase := range iterateExecFile(filename) {
+			t.Run(fmt.Sprintf("%d : %s", tcase.lineno, tcase.comments), func(t *testing.T) {
+				if tcase.output == "" && tcase.errStr == "" {
+					tcase.output = tcase.input
+				}
+				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
+				tree, err := Parse(tcase.input)
+				if tcase.errStr != "" {
+					errPresent := ""
+					if err != nil {
+						errPresent = err.Error()
+					}
+					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
+					if err == nil || tcase.errStr != err.Error() {
+						fail = true
+						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
+					}
+				} else {
+					if err != nil {
+						expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+						fail = true
+						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+					} else {
+						out := String(tree)
+						expected.WriteString(fmt.Sprintf("OUTPUT\n%s\nEND\n", escapeNewLines(out)))
+						if tcase.output != out {
+							fail = true
+							t.Errorf("Parsing failed. \nExpected/Got:\n%s\n%s", tcase.output, out)
+						}
+					}
+				}
+			})
+		}
+
+		if fail && tempDir != "" {
+			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
+			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
+		}
+	})
+}
+
+func iterateExecFile(name string) (testCaseIterator chan testCase) {
+	name = locateFile(name)
+	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
+	if err != nil {
+		panic(fmt.Sprintf("Could not open file %s", name))
+	}
+
+	testCaseIterator = make(chan testCase)
+	var comments string
+	go func() {
+		defer close(testCaseIterator)
+
+		r := bufio.NewReader(fd)
+		lineno := 0
+		var output string
+		var returnTypeNumber int
+		var input string
+		for {
+			input, lineno, _ = parsePartial(r, []string{"INPUT"}, lineno, name)
+			if input == "" && lineno == 0 {
+				break
+			}
+			output, lineno, returnTypeNumber = parsePartial(r, []string{"OUTPUT", "ERROR"}, lineno, name)
+			var errStr string
+			if returnTypeNumber == 1 {
+				errStr = output
+				output = ""
+			}
+			testCaseIterator <- testCase{
+				file:     name,
+				lineno:   lineno,
+				input:    input,
+				comments: comments,
+				output:   output,
+				errStr:   errStr,
+			}
+			comments = ""
+		}
+	}()
+	return testCaseIterator
+}
+
+func parsePartial(r *bufio.Reader, readType []string, lineno int, fileName string) (string, int, int) {
+	returnTypeNumber := -1
+	for {
+		binput, err := r.ReadBytes('\n')
+		if err != nil {
+			if err != io.EOF {
+				panic(fmt.Errorf("error reading file %s: line %d: %s", fileName, lineno, err.Error()))
+			}
+			return "", 0, 0
+		}
+		lineno++
+		input := string(binput)
+		input = strings.TrimSpace(input)
+		if input == "" || input == "\n" {
+			continue
+		}
+		for i, str := range readType {
+			if input == str {
+				returnTypeNumber = i
+				break
+			}
+		}
+		if returnTypeNumber != -1 {
+			break
+		}
+		panic(fmt.Errorf("error reading file %s: line %d: %s - Expected keyword", fileName, lineno, err.Error()))
+	}
+	input := ""
+	for {
+		l, err := r.ReadBytes('\n')
+		lineno++
+		if err != nil {
+			panic(fmt.Sprintf("error reading file %s line# %d: %s", fileName, lineno, err.Error()))
+		}
+		str := strings.TrimSpace(string(l))
+		if str == "END" {
+			break
+		}
+		if input == "" {
+			input += str
+		} else {
+			input += str + "\n"
+		}
+	}
+	return input, lineno, returnTypeNumber
+}
+
+func locateFile(name string) string {
+	return "testdata/" + name
 }

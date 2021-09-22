@@ -106,7 +106,7 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 }
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
-	deps := semTable.BaseTableDependencies(predicate)
+	deps := semTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
@@ -157,4 +157,9 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 		}
 	}
 	return result
+}
+
+// CheckValid implements the Operator interface
+func (qg *QueryGraph) CheckValid() error {
+	return nil
 }

@@ -163,7 +163,7 @@ outer:
 
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
-func (rp *routeTree) addPredicate(ctx planningContext, predicates ...sqlparser.Expr) error {
+func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {
 	if rp.canImprove() {
 		newVindexFound, err := rp.searchForNewVindexes(ctx, predicates)
 		if err != nil {
@@ -187,7 +187,7 @@ func (rp *routeTree) canImprove() bool {
 	return rp.routeOpCode != engine.SelectNone
 }
 
-func (rp *routeTree) searchForNewVindexes(ctx planningContext, predicates []sqlparser.Expr) (bool, error) {
+func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sqlparser.Expr) (bool, error) {
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
@@ -265,7 +265,7 @@ func (rp *routeTree) isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	return false
 }
 
-func (rp *routeTree) planEqualOp(ctx planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -285,7 +285,7 @@ func (rp *routeTree) planEqualOp(ctx planningContext, node *sqlparser.Comparison
 	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, equalOrEqualUnique, justTheVindex), err
 }
 
-func (rp *routeTree) planSimpleInOp(ctx planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
+func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	vdValue := node.Right
 	value, err := rp.makePlanValue(ctx, vdValue)
 	if err != nil || value == nil {
@@ -302,7 +302,7 @@ func (rp *routeTree) planSimpleInOp(ctx planningContext, node *sqlparser.Compari
 	return rp.haveMatchingVindex(ctx, node, vdValue, left, *value, opcode, justTheVindex), err
 }
 
-func (rp *routeTree) planCompositeInOp(ctx planningContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
+func (rp *routeTree) planCompositeInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left sqlparser.ValTuple) (bool, error) {
 	right, rightIsValTuple := node.Right.(sqlparser.ValTuple)
 	if !rightIsValTuple {
 		return false, nil
@@ -310,7 +310,7 @@ func (rp *routeTree) planCompositeInOp(ctx planningContext, node *sqlparser.Comp
 	return rp.planCompositeInOpRecursive(ctx, node, left, right, nil)
 }
 
-func (rp *routeTree) planCompositeInOpRecursive(ctx planningContext, node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
+func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlparser.ComparisonExpr, left, right sqlparser.ValTuple, coordinates []int) (bool, error) {
 	foundVindex := false
 	cindex := len(coordinates)
 	coordinates = append(coordinates, 0)
@@ -355,7 +355,7 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx planningContext, node *sqlpa
 	return foundVindex, nil
 }
 
-func (rp *routeTree) planInOp(ctx planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planInOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
 	switch left := node.Left.(type) {
 	case *sqlparser.ColName:
 		return rp.planSimpleInOp(ctx, node, left)
@@ -365,7 +365,7 @@ func (rp *routeTree) planInOp(ctx planningContext, node *sqlparser.ComparisonExp
 	return false, nil
 }
 
-func (rp *routeTree) planLikeOp(ctx planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return false, nil
@@ -390,7 +390,7 @@ func (rp *routeTree) planLikeOp(ctx planningContext, node *sqlparser.ComparisonE
 	return rp.haveMatchingVindex(ctx, node, vdValue, column, *val, selectEqual, vdx), err
 }
 
-func (rp *routeTree) planIsExpr(ctx planningContext, node *sqlparser.IsExpr) (bool, error) {
+func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (bool, error) {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if node.Right != sqlparser.IsNullOp {
 		return false, nil
@@ -413,7 +413,7 @@ func (rp *routeTree) planIsExpr(ctx planningContext, node *sqlparser.IsExpr) (bo
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (rp *routeTree) makePlanValue(ctx planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	if ctx.isSubQueryToReplace(argumentName(n)) {
 		return nil, nil
 	}
@@ -452,7 +452,7 @@ func allNotNil(s []sqlparser.Expr) bool {
 }
 
 func (rp *routeTree) haveMatchingVindex(
-	ctx planningContext,
+	ctx *planningContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
 	column *sqlparser.ColName,
@@ -463,7 +463,7 @@ func (rp *routeTree) haveMatchingVindex(
 	newVindexFound := false
 	for _, v := range rp.vindexPreds {
 		// check that the
-		if !ctx.semTable.Dependencies(column).IsSolvedBy(v.tableID) {
+		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
 		cols := len(v.colVindex.Columns)
@@ -564,7 +564,7 @@ func (rp *routeTree) Predicates() sqlparser.Expr {
 }
 
 // resetRoutingSelections resets all vindex selections and replans this routeTree
-func (rp *routeTree) resetRoutingSelections(ctx planningContext) error {
+func (rp *routeTree) resetRoutingSelections(ctx *planningContext) error {
 
 	vschemaTable := rp.tables[0].(*routeTable).vtable
 

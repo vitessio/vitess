@@ -1464,7 +1464,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	want := []string{
 		"@unknown:" + query1,
 	}
-	assertCacheContains(t, r.plans, want)
+	assertCacheContains(t, r, want)
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
@@ -1483,7 +1483,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		KsTestUnsharded + "@unknown:" + query1,
 		"@unknown:" + query1,
 	}
-	assertCacheContains(t, r.plans, want)
+	assertCacheContains(t, r, want)
 	if logStats4.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
@@ -1501,10 +1501,10 @@ func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	}
 }
 
-func assertCacheContains(t *testing.T, c cache.Cache, want []string) {
+func assertCacheContains(t *testing.T, e *Executor, want []string) {
 	t.Helper()
 	for _, wantKey := range want {
-		if _, ok := c.Get(wantKey); !ok {
+		if _, ok := e.debugGetPlan(wantKey); !ok {
 			t.Errorf("missing key in plan cache: %v", wantKey)
 		}
 	}
@@ -1626,7 +1626,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	want := []string{
 		"@unknown:" + normalized,
 	}
-	assertCacheContains(t, r.plans, want)
+	assertCacheContains(t, r, want)
 
 	wantSQL := normalized + " /* comment 1 */"
 	if logStats1.SQL != wantSQL {
@@ -1673,14 +1673,14 @@ func TestGetPlanNormalized(t *testing.T) {
 		KsTestUnsharded + "@unknown:" + normalized,
 		"@unknown:" + normalized,
 	}
-	assertCacheContains(t, r.plans, want)
+	assertCacheContains(t, r, want)
 
 	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, nil)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
 	}
-	assertCacheContains(t, r.plans, want)
+	assertCacheContains(t, r, want)
 }
 
 func TestPassthroughDDL(t *testing.T) {

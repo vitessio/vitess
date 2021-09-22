@@ -17,7 +17,10 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -28,6 +31,7 @@ type tableCollector struct {
 	scoper    *scoper
 	si        SchemaInformation
 	currentDb string
+	org       originable
 }
 
 func newTableCollector(scoper *scoper, si SchemaInformation, currentDb string) *tableCollector {
@@ -48,7 +52,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
-			tableInfo := createVTableInfoForExpressions(sel.SelectExprs)
+			tables := tc.scoper.wScope[sel]
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -61,7 +66,9 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		case *sqlparser.Union:
-			tableInfo := createVTableInfoForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs)
+			firstSelect := sqlparser.GetFirstSelect(sel)
+			tables := tc.scoper.wScope[firstSelect]
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -73,7 +80,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		default:
-			return Gen4NotSupportedF("union in derived table")
+			return Gen4NotSupportedF("%T in a derived table", sel)
 		}
 
 	case sqlparser.TableName:
@@ -84,9 +91,13 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			isInfSchema = true
 		} else {
 			var err error
-			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+			var target key.Destination
+			tbl, vindex, _, _, target, err = tc.si.FindTableOrVindex(t)
 			if err != nil {
 				return err
+			}
+			if target != nil {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
 			}
 			if tbl == nil && vindex != nil {
 				tbl = newVindexTable(t.Name)
@@ -122,7 +133,7 @@ func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
 // The code lives in this file since it is only touching tableCollector data
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
-		if t == t2.GetExpr() {
+		if t == t2.getExpr() {
 			return TableSet(1 << i)
 		}
 	}
@@ -136,26 +147,21 @@ func (tc *tableCollector) createTable(
 	isInfSchema bool,
 	vindex vindexes.Vindex,
 ) TableInfo {
-	dbName := t.Qualifier.String()
-	if dbName == "" {
-		dbName = tc.currentDb
+	table := &RealTable{
+		tableName:   alias.As.String(),
+		ASTNode:     alias,
+		Table:       tbl,
+		isInfSchema: isInfSchema,
 	}
-	var table TableInfo
+
 	if alias.As.IsEmpty() {
-		table = &RealTable{
-			dbName:      dbName,
-			tableName:   t.Name.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
+		dbName := t.Qualifier.String()
+		if dbName == "" {
+			dbName = tc.currentDb
 		}
-	} else {
-		table = &AliasedTable{
-			tableName:   alias.As.String(),
-			ASTNode:     alias,
-			Table:       tbl,
-			isInfSchema: isInfSchema,
-		}
+
+		table.dbName = dbName
+		table.tableName = t.Name.String()
 	}
 
 	if vindex != nil {

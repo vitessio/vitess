@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func transformToLogicalPlan(ctx planningContext, tree queryTree) (logicalPlan, error) {
+func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, error) {
 	switch n := tree.(type) {
 	case *routeTree:
 		return transformRoutePlan(ctx, n)
@@ -94,7 +94,7 @@ func transformVindexTree(n *vindexTree) (logicalPlan, error) {
 	return plan, nil
 }
 
-func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, error) {
+func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, error) {
 	innerPlan, err := transformToLogicalPlan(ctx, n.inner)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func transformSubqueryTree(ctx planningContext, n *subqueryTree) (logicalPlan, e
 	return plan, err
 }
 
-func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, error) {
+func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, error) {
 	// transforming the inner part of the derived table into a logical plan
 	// so that we can do horizon planning on the inner. If the logical plan
 	// we've produced is a Route, we set its Select.From field to be an aliased
@@ -142,13 +142,20 @@ func transformDerivedPlan(ctx planningContext, n *derivedTree) (logicalPlan, err
 		Expr: derivedTable,
 		As:   sqlparser.NewTableIdent(n.alias),
 	}
+	selectExprs := sqlparser.SelectExprs{}
+	for _, colName := range n.columns {
+		selectExprs = append(selectExprs, &sqlparser.AliasedExpr{
+			Expr: colName,
+		})
+	}
 	rb.Select = &sqlparser.Select{
-		From: []sqlparser.TableExpr{tblExpr},
+		From:        []sqlparser.TableExpr{tblExpr},
+		SelectExprs: selectExprs,
 	}
 	return plan, nil
 }
 
-func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalPlan, error) {
+func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logicalPlan, error) {
 	var sources []logicalPlan
 
 	for i, source := range n.sources {
@@ -178,7 +185,7 @@ func transformConcatenatePlan(ctx planningContext, n *concatenateTree) (logicalP
 	}, nil
 }
 
-func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logicalPlan) logicalPlan {
+func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {
 	lroute, ok := left.(*route)
 	if !ok {
 		return nil
@@ -193,19 +200,13 @@ func mergeUnionLogicalPlans(ctx planningContext, left logicalPlan, right logical
 			Distinct:  false,
 			Statement: rroute.Select,
 		}
-		switch n := lroute.Select.(type) {
-		case *sqlparser.Union:
-			n.UnionSelects = append(n.UnionSelects, elem)
-		default:
-			lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
-		}
-
+		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
 		return lroute
 	}
 	return nil
 }
 
-func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
+func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparser.Select) (logicalPlan, error) {
 	plan, err := transformToLogicalPlan(ctx, source)
 	if err != nil {
 		return nil, err
@@ -222,7 +223,7 @@ func createLogicalPlan(ctx planningContext, source queryTree, selStmt *sqlparser
 	return plan, nil
 }
 
-func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
+func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -335,7 +336,7 @@ func transformRoutePlan(ctx planningContext, n *routeTree) (*route, error) {
 	}, nil
 }
 
-func transformDistinctPlan(ctx planningContext, n *distinctTree) (logicalPlan, error) {
+func transformDistinctPlan(ctx *planningContext, n *distinctTree) (logicalPlan, error) {
 	innerPlan, err := transformToLogicalPlan(ctx, n.source)
 	if err != nil {
 		return nil, err
@@ -351,7 +352,7 @@ func transformDistinctPlan(ctx planningContext, n *distinctTree) (logicalPlan, e
 	return newDistinct(innerPlan), nil
 }
 
-func transformJoinPlan(ctx planningContext, n *joinTree) (logicalPlan, error) {
+func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 	lhs, err := transformToLogicalPlan(ctx, n.lhs)
 	if err != nil {
 		return nil, err
