@@ -119,7 +119,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregat
 
 			found = true
 			referenced[j] = true
-			order.fromGroupBy = true
+			order.fromGroupBy = groupBy.FromGroupBy
 			selOrderBy = append(selOrderBy, order)
 			break
 		}
