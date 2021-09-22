@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,68 +36,66 @@ var _ Primitive = (*Gen4CompareV3)(nil)
 var _ Gen4Comparer = (*Gen4CompareV3)(nil)
 
 // GetGen4Primitive implements the Gen4Comparer interface
-func (c *Gen4CompareV3) GetGen4Primitive() Primitive {
-	return c.Gen4
+func (gc *Gen4CompareV3) GetGen4Primitive() Primitive {
+	return gc.Gen4
 }
 
 // RouteType implements the Primitive interface
-func (c *Gen4CompareV3) RouteType() string {
-	return c.Gen4.RouteType()
+func (gc *Gen4CompareV3) RouteType() string {
+	return gc.Gen4.RouteType()
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (c *Gen4CompareV3) GetKeyspaceName() string {
-	return c.Gen4.GetKeyspaceName()
+func (gc *Gen4CompareV3) GetKeyspaceName() string {
+	return gc.Gen4.GetKeyspaceName()
 }
 
 // GetTableName implements the Primitive interface
-func (c *Gen4CompareV3) GetTableName() string {
-	return c.Gen4.GetTableName()
+func (gc *Gen4CompareV3) GetTableName() string {
+	return gc.Gen4.GetTableName()
 }
 
 // GetFields implements the Primitive interface
-func (c *Gen4CompareV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return c.Gen4.GetFields(vcursor, bindVars)
+func (gc *Gen4CompareV3) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return gc.Gen4.GetFields(vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
-func (c *Gen4CompareV3) NeedsTransaction() bool {
-	return c.Gen4.NeedsTransaction()
+func (gc *Gen4CompareV3) NeedsTransaction() bool {
+	return gc.Gen4.NeedsTransaction()
 }
 
 // TryExecute implements the Primitive interface
-func (c *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	gen4Result, gen4Err := c.Gen4.TryExecute(vcursor, bindVars, wantfields)
-	v3Result, v3Err := c.V3.TryExecute(vcursor, bindVars, wantfields)
+func (gc *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	gen4Result, gen4Err := gc.Gen4.TryExecute(vcursor, bindVars, wantfields)
+	v3Result, v3Err := gc.V3.TryExecute(vcursor, bindVars, wantfields)
 	err := CompareV3AndGen4Errors(v3Err, gen4Err)
 	if err != nil {
 		return nil, err
 	}
 
 	var match bool
-	if c.HasOrderBy {
+	if gc.HasOrderBy {
 		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	} else {
 		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	}
 	if !match {
-		log.Infof("%T mismatch", c)
-		log.Infof("V3 got: %s", v3Result.Rows)
-		log.Infof("Gen4 got: %s", gen4Result.Rows)
+		gc.printMismatch(v3Result, gen4Result)
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
 	}
 	return gen4Result, nil
 }
 
 // TryStreamExecute implements the Primitive interface
-func (c *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (gc *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 
-	gen4Error := c.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+	gen4Error := gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		gen4Result.AppendResult(result)
 		return nil
 	})
-	v3Err := c.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+	v3Err := gc.V3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		v3Result.AppendResult(result)
 		return nil
 	})
@@ -106,28 +106,44 @@ func (c *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*q
 	}
 
 	var match bool
-	if c.HasOrderBy {
+	if gc.HasOrderBy {
 		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	} else {
 		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
 	}
 	if !match {
-		log.Infof("%T mismatch", c)
-		log.Infof("V3 got: %s", v3Result.Rows)
-		log.Infof("Gen4 got: %s", gen4Result.Rows)
+		gc.printMismatch(v3Result, gen4Result)
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
 	}
 	return callback(gen4Result)
 }
 
+func (gc *Gen4CompareV3) printMismatch(v3Result *sqltypes.Result, gen4Result *sqltypes.Result) {
+	log.Infof("%T mismatch", gc)
+	gen4plan := &Plan{
+		Instructions: gc.Gen4,
+	}
+	gen4JSON, _ := json.MarshalIndent(gen4plan, "", "  ")
+	log.Info("Gen4 plan:\n", string(gen4JSON))
+
+	v3plan := &Plan{
+		Instructions: gc.V3,
+	}
+	v3JSON, _ := json.MarshalIndent(v3plan, "", "  ")
+	log.Info("V3 plan:\n", string(v3JSON))
+
+	log.Infof("Gen4 got: %s", gen4Result.Rows)
+	log.Infof("V3 got: %s", v3Result.Rows)
+}
+
 // Inputs implements the Primitive interface
-func (c *Gen4CompareV3) Inputs() []Primitive {
-	return c.Gen4.Inputs()
+func (gc *Gen4CompareV3) Inputs() []Primitive {
+	return gc.Gen4.Inputs()
 }
 
 // Description implements the Primitive interface
-func (c *Gen4CompareV3) Description() PrimitiveDescription {
-	return c.Gen4.Description()
+func (gc *Gen4CompareV3) Description() PrimitiveDescription {
+	return gc.Gen4.Description()
 }
 
 func CompareV3AndGen4Errors(v3Err error, gen4Err error) error {
