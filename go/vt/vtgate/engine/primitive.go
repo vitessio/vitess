@@ -212,6 +212,12 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	// Gen4Comparer interfaces all Primitive used to compare Gen4 with other planners (V3, MySQL, ...).
+	Gen4Comparer interface {
+		Primitive
+		GetGen4Primitive() Primitive
+	}
 )
 
 // AddStats updates the plan execution statistics
