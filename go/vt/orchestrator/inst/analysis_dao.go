@@ -505,11 +505,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) != 0 && !a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && reparentutil.PrimarySemiSyncFromTablet(tablet) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
-		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) == 0 && a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && reparentutil.PrimarySemiSyncFromTablet(tablet) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
