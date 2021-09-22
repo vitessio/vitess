@@ -388,7 +388,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		}
 		toNode.OrderBy = node.OrderBy
 	default:
-		panic("this should not happen - we have covered all implementations of SelectStatement")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
 	}
 	return nil
 }
