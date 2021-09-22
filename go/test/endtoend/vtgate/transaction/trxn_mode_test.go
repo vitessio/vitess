@@ -127,7 +127,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Starting Vtgate in SINGLE transaction mode
-		clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "SINGLE", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "SINGLE", "-planner_version", "Gen4CompareV3"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}

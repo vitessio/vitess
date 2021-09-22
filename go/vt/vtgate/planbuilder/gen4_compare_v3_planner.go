@@ -25,9 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(statement sqlparser.Statement, vars *sqlparser.ReservedVars, schema ContextVSchema) (engine.Primitive, error) {
-		defer schema.SetPlannerVersion(Gen4Slow)
+		defer schema.SetPlannerVersion(Gen4CompareV3)
 
 		gen4Stmt := sqlparser.CloneStatement(statement)
 		schema.SetPlannerVersion(Gen4)
@@ -47,7 +47,7 @@ func gen4SlowPlanner(query string) func(sqlparser.Statement, *sqlparser.Reserved
 		if err != nil {
 			return nil, err
 		}
-		return &comparer{v3: v3Primitive, gen4: gen4Primitive}, nil
+		return &gen4CompareV3{v3: v3Primitive, gen4: gen4Primitive}, nil
 	}
 }
 
@@ -67,31 +67,33 @@ func treatV3AndGen4Errors(v3Err error, gen4Err error) error {
 	return nil
 }
 
-type comparer struct {
+type gen4CompareV3 struct {
 	v3, gen4 engine.Primitive
 }
 
-func (c *comparer) RouteType() string {
+var _ engine.Primitive = (*gen4CompareV3)(nil)
+
+func (c *gen4CompareV3) RouteType() string {
 	return c.gen4.RouteType()
 }
 
-func (c *comparer) GetKeyspaceName() string {
+func (c *gen4CompareV3) GetKeyspaceName() string {
 	return c.gen4.GetKeyspaceName()
 }
 
-func (c *comparer) GetTableName() string {
+func (c *gen4CompareV3) GetTableName() string {
 	return c.gen4.GetTableName()
 }
 
-func (c *comparer) GetFields(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (c *gen4CompareV3) GetFields(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return c.gen4.GetFields(vcursor, bindVars)
 }
 
-func (c *comparer) NeedsTransaction() bool {
+func (c *gen4CompareV3) NeedsTransaction() bool {
 	return c.gen4.NeedsTransaction()
 }
 
-func (c *comparer) TryExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (c *gen4CompareV3) TryExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	v3Result, v3Err := c.v3.TryExecute(vcursor, bindVars, wantfields)
 	gen4Result, gen4Err := c.gen4.TryExecute(vcursor, bindVars, wantfields)
 	err := treatV3AndGen4Errors(v3Err, gen4Err)
@@ -105,7 +107,7 @@ func (c *comparer) TryExecute(vcursor engine.VCursor, bindVars map[string]*query
 	return gen4Result, nil
 }
 
-func (c *comparer) TryStreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (c *gen4CompareV3) TryStreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 	v3Err := c.v3.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		v3Result.AppendResult(result)
@@ -126,12 +128,10 @@ func (c *comparer) TryStreamExecute(vcursor engine.VCursor, bindVars map[string]
 	return callback(gen4Result)
 }
 
-func (c *comparer) Inputs() []engine.Primitive {
+func (c *gen4CompareV3) Inputs() []engine.Primitive {
 	return c.gen4.Inputs()
 }
 
-func (c *comparer) Description() engine.PrimitiveDescription {
+func (c *gen4CompareV3) Description() engine.PrimitiveDescription {
 	return c.gen4.Description()
 }
-
-var _ engine.Primitive = (*comparer)(nil)

@@ -417,7 +417,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-planner_version", "Gen4CompareV3"}
 		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {

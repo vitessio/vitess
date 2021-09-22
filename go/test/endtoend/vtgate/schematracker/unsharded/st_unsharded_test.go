@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal", "-vschema_ddl_authorized_users", "%", "-planner_version", "Gen4CompareV3"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

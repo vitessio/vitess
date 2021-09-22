@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop", "-mysql_server_query_timeout", "60s", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-dbddl_plugin", "noop", "-mysql_server_query_timeout", "60s", "-planner_version", "Gen4CompareV3"}
 		vtgateProcess := clusterInstance.NewVtgateInstance()
 		vtgateProcess.SysVarSetEnabled = true
 		if err := vtgateProcess.Setup(); err != nil {

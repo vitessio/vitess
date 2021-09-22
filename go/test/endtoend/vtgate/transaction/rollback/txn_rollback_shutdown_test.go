@@ -74,7 +74,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Set a short onterm timeout so the test goes faster.
-		clusterInstance.VtGateExtraArgs = []string{"-onterm_timeout", "1s", "-planner_version", "Gen4Slow"}
+		clusterInstance.VtGateExtraArgs = []string{"-onterm_timeout", "1s", "-planner_version", "Gen4CompareV3"}
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			panic(err)
