@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -2658,9 +2660,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
-				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
@@ -2746,6 +2745,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	for _, tt := range tests {
 		tt := tt
@@ -4775,9 +4775,6 @@ func TestPlannedReparentShard(t *testing.T) {
 						Result: "promotion position",
 						Error:  nil,
 					},
-				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
