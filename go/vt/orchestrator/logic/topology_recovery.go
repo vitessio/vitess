@@ -660,13 +660,12 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	_, err = reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
 			log.Warningf("ERP - %s", value)
 		case logutilpb.Level_ERROR:
 			log.Errorf("ERP - %s", value)
-		default:
-			log.Infof("ERP - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)

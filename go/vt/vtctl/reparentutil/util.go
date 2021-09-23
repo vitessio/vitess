@@ -397,6 +397,7 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 
 // findIntermediatePrimaryCandidate finds the intermediate primary candidate for ERS. We always choose the most advanced one from our valid candidates list
 func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
+	logger.Infof("started finding the intermediate primary candidate")
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
 	if err != nil {
@@ -413,6 +414,9 @@ func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topoda
 	if err != nil {
 		return nil, nil, err
 	}
+	for _, tablet := range validTablets {
+		logger.Infof("finding intermediate primary - sorted replica: %v", tablet.Alias)
+	}
 
 	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
 	winningPrimaryTablet := validTablets[0]
@@ -427,6 +431,8 @@ func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topoda
 		if !ok {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
 		}
+		// if the requested tablet is as advanced as the most advanced tablet, then we can just use it for promotion.
+		// otherwise, we should let it catchup to the most advanced tablet and let it be the intermediate primary
 		if pos.AtLeast(winningPosition) {
 			requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 			if !isFound {
@@ -455,13 +461,17 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 }
 
 // intermediateCandidateIsIdeal is used to find whether the intermediate candidate that ERS chose is also the ideal one or not
-func intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) bool {
+func intermediateCandidateIsIdeal(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) bool {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	return getBetterCandidate(newPrimary, prevPrimary, validCandidates, tabletMap, opts) == newPrimary
+	return getBetterCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts) == newPrimary
 }
 
 // getBetterCandidate is used to find a better candidate for ERS promotion
-func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) *topodatapb.Tablet {
+func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet) {
+	defer func() {
+		logger.Infof("found better candidate - %v", candidate.Alias)
+	}()
+
 	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
@@ -483,33 +493,39 @@ func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandida
 	}
 
 	// So we've already promoted a replica.
-	// However, can we improve on our choice? Are there any replicas marked with "is_candidate"?
+	// However, can we improve on our choice? Are there any replicas with better promotion rules?
 	// Maybe we actually promoted such a replica. Does that mean we should keep it?
 	// Maybe we promoted a "neutral", and some "prefer" server is available.
 	// Maybe we promoted a "prefer_not"
-	// Maybe we promoted a server in a different DC than the primary
+	// Maybe we promoted a server in a different cell than the primary
 	// There's many options. We may wish to replace the server we promoted with a better one.
-	candidate := findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, true)
+
+	// check whether the one we promoted is in the same cell and belongs to the preferred candidates list
+	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, true)
 	if candidate != nil {
 		return candidate
 	}
+	// check whether there is some other tablet in the same cell belonging to the preferred candidates list
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, true)
 	if candidate != nil {
 		return candidate
 	}
-	// do not have a preferred candidate in the same cell
+	// we do not have a preferred candidate in the same cell
 
 	if !opts.preventCrossCellPromotion {
+		// check whether the one we promoted belongs to the preferred candidates list
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, false)
 		if candidate != nil {
 			return candidate
 		}
+		// check whether there is some other tablet belonging to the preferred candidates list
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, false)
 		if candidate != nil {
 			return candidate
 		}
 	}
 
+	// repeat the same process for the neutral candidates list
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, true)
 	if candidate != nil {
 		return candidate
@@ -530,6 +546,7 @@ func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandida
 		}
 	}
 
+	// return the one that we have if nothing found
 	return newPrimary
 }
 
