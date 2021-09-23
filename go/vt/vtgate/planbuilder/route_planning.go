@@ -377,6 +377,9 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
 		}
 		err = stripDownQuery(node.Left, toNode.Left)
+		if err != nil {
+			return err
+		}
 		err = stripDownQuery(node.Right, toNode.Right)
 		if err != nil {
 			return err
