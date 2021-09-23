@@ -39,6 +39,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
@@ -285,6 +287,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	}
 	defer clusterInstance.Teardown()
 
+	clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
