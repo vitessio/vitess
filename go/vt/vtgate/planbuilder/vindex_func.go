@@ -142,7 +142,7 @@ func (err UnsupportedSupplyWeightString) Error() string {
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (vf *vindexFunc) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
 	return 0, UnsupportedSupplyWeightString{Type: "vindex function"}
 }
 
