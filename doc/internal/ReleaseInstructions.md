@@ -124,7 +124,7 @@ The release cutover section is divided in 4 steps:
 
     > The Release Notes document can be put aside for now, it will be used when creating the release tag in a future step.
 
-* Create a new release branch from master.
+* Create a new release branch from main.
     ```shell
     git checkout -b release-12.0 upstream/main
     ```
@@ -244,7 +244,7 @@ And finally, click on `Publish release`.
 * Run following script to once the `base` Docker image is live. 
 
 ```
-https://github.com/vitessio/vitess/blob/master/helm/release.sh
+https://github.com/vitessio/vitess/blob/main/docker/release.sh
 ```
 
 * Deploy and release Java packages by following the `Java Packages Deploy & Release` section below. 
