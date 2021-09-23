@@ -51,3 +51,23 @@ Gen4 plan same as above
     "Table": "information_schema.`columns`, information_schema.`tables`"
   }
 }
+
+# system schema query as a subquery
+"SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);"
+{
+  "QueryType": "SELECT",
+  "Original": "SELECT (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1);",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) from dual where 1 != 1",
+    "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) from dual",
+    "SysTableTableSchema": "[VARBINARY(\"MyDatabase\")]",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
