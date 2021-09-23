@@ -208,9 +208,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+	erp.logger.Infof("intermediate primary selected - %v", intermediatePrimary.Alias)
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	isIdeal := intermediateCandidateIsIdeal(intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
+	isIdeal := intermediateCandidateIsIdeal(erp.logger, intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
+	erp.logger.Infof("intermediate primary is ideal - %v", isIdeal)
 
 	// Check (again) we still have the topology lock.
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -230,7 +232,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// try to find a better candidate using the list we got back
-		betterCandidate := getBetterCandidate(intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		betterCandidate := getBetterCandidate(erp.logger, intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
 		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediatePrimary.Alias) {
@@ -272,6 +274,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 }
 
 func (erp *EmergencyReparenter) promoteNewPrimary(ctx context.Context, ev *events.Reparent, newPrimary *topodatapb.Tablet, opts EmergencyReparentOptions, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus) error {
+	erp.logger.Infof("starting promotion for the new primary - %v", newPrimary.Alias)
 	// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
 	_, err := erp.tmc.PromoteReplica(ctx, newPrimary)
 	if err != nil {
