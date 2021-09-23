@@ -85,7 +85,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-		"-planner_version", vtgate.PlannerVersion.String(),
+	}
+	if vtgate.PlannerVersion > 0 {
+		args = append(args, "-planner_version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "-enable_system_settings")
