@@ -1416,6 +1416,25 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   }
 }
 
+# silly query that should be collapsed into a single unsharded UNION route
+"(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1"
+{
+  "QueryType": "SELECT",
+  "Original": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1) union select 1 from unsharded union all select 1 from unsharded order by 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "(select 1 from unsharded where 1 != 1 union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1) union select 1 from unsharded where 1 != 1 union all select 1 from unsharded where 1 != 1",
+    "Query": "(select 1 from unsharded union select 1 from unsharded union all select 1 from unsharded order by 1 asc) union select 1 from unsharded union all select 1 from unsharded order by 1 asc",
+    "Table": "unsharded"
+  }
+}
+Gen4 plan same as above
+
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "syntax error at position 34 near 'union'"
