@@ -109,11 +109,11 @@ func optimizeUnion(ctx *planningContext, op *abstract.Concatenate) (queryTree, e
 	}
 
 	tree := &concatenateTree{
+		distinct:    op.Distinct,
+		ordering:    op.OrderBy,
+		limit:       op.Limit,
 		selectStmts: op.SelectStmts,
 		sources:     sources,
-	}
-	if op.Distinct {
-		return &distinctTree{source: tree}, nil
 	}
 	return tree, nil
 }
