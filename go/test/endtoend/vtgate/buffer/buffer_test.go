@@ -209,7 +209,6 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		"-buffer_min_time_between_failovers", "20m",
 		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
 		"-gateway_implementation", "discoverygateway",
-		"-planner_version", "Gen4CompareV3",
 	}
 
 	// Start vtgate
