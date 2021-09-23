@@ -17,15 +17,11 @@ limitations under the License.
 package reparentutil
 
 import (
-	"context"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topotools/events"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type (
@@ -50,8 +46,4 @@ func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignore
 		waitReplicasTimeout:       waitReplicasTimeout,
 		preventCrossCellPromotion: preventCrossCellPromotion,
 	}
-}
-
-// PostERSCompletionHook implements the ReparentFunctions interface
-func (opts *EmergencyReparentOptions) PostERSCompletionHook(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient) {
 }

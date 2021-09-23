@@ -374,8 +374,8 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 	return currentPrimary
 }
 
-// replaceWithBetterCandidate promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
-func replaceWithBetterCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
+// waitForCatchingUp promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
+func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
 	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) error {
 	// Find the primary position of the previous primary
 	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
@@ -410,8 +410,8 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
 		}
-		// We only allow PRIMARY and REPLICA type of tablets to be considered for replication
-		if candidateInfo.Type != topodatapb.TabletType_PRIMARY && candidateInfo.Type != topodatapb.TabletType_REPLICA {
+		// We do not allow Experimental type of tablets to be considered for replication
+		if candidateInfo.Type == topodatapb.TabletType_EXPERIMENTAL {
 			continue
 		}
 		restrictedValidCandidates[candidate] = position
@@ -419,17 +419,12 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-// findPrimaryCandidate implements the ReparentFunctions interface
-func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
-	var validTablets []*topodatapb.Tablet
-	var tabletPositions []mysql.Position
-	for tabletAlias, position := range validCandidates {
-		tablet, isFound := tabletMap[tabletAlias]
-		if !isFound {
-			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
-		}
-		validTablets = append(validTablets, tablet.Tablet)
-		tabletPositions = append(tabletPositions, position)
+// findIntermediatePrimaryCandidate implements the ReparentFunctions interface
+func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
+	// convert the valid candidates into a list so that we can use it for sorting
+	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	idealCell := ""
@@ -437,18 +432,19 @@ func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet,
 		idealCell = prevPrimary.Alias.Cell
 	}
 
-	// sort
-	err := sortTabletsForERS(validTablets, tabletPositions, idealCell)
+	// sort the tablets for finding the best intermediate primary in ERS
+	err = sortTabletsForERS(validTablets, tabletPositions, idealCell)
 	if err != nil {
 		return nil, nil, err
 	}
 
+	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
 	winningPrimaryTablet := validTablets[0]
 	winningPosition := tabletPositions[0]
 
 	// If we were requested to elect a particular primary, verify it's a valid
-	// candidate (non-zero position, no errant GTIDs) and is at least as
-	// advanced as the winning position.
+	// candidate (non-zero position, no errant GTIDs)
+	// Also, if the candidate is
 	if opts.newPrimaryAlias != nil {
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
@@ -467,7 +463,21 @@ func findPrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet,
 	return winningPrimaryTablet, validTablets, nil
 }
 
-func promotedReplicaIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) bool {
+func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []mysql.Position, error) {
+	var validTablets []*topodatapb.Tablet
+	var tabletPositions []mysql.Position
+	for tabletAlias, position := range validCandidates {
+		tablet, isFound := tabletMap[tabletAlias]
+		if !isFound {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
+		}
+		validTablets = append(validTablets, tablet.Tablet)
+		tabletPositions = append(tabletPositions, position)
+	}
+	return validTablets, tabletPositions, nil
+}
+
+func intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) bool {
 	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		return topoproto.TabletAliasEqual(opts.newPrimaryAlias, newPrimary.Alias)
@@ -566,7 +576,7 @@ func promoteIntermediatePrimary(ctx context.Context, tmc tmclient.TabletManagerC
 	return replicasStartedReplication, nil
 }
 
-func checkIfNeedToOverridePromotion(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
+func checkIfConstraintsSatisfied(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
 	if opts.preventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
