@@ -242,9 +242,9 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
 }
 
-// KeyRangeIsContiguous returns true if the end of the left key range exactly
+// KeyRangeContiguous returns true if the end of the left key range exactly
 // matches the start of the right key range (i.e they are contigious)
-func KeyRangeIsContiguous(left, right *topodatapb.KeyRange) bool {
+func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
 	if left == nil {
 		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
 	}

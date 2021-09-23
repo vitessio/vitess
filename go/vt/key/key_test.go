@@ -346,7 +346,7 @@ func TestKeyRangeEqual(t *testing.T) {
 	}
 }
 
-func TestKeyRangeIsContiguous(t *testing.T) {
+func TestKeyRangeContiguous(t *testing.T) {
 	testcases := []struct {
 		first  string
 		second string
@@ -384,9 +384,9 @@ func TestKeyRangeIsContiguous(t *testing.T) {
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
-		out := KeyRangeIsContiguous(first, second)
+		out := KeyRangeContiguous(first, second)
 		if out != tcase.out {
-			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+			t.Fatalf("KeyRangeContiguous(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
 	}
 }
