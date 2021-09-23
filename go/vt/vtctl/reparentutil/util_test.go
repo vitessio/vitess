@@ -1285,3 +1285,372 @@ func TestPromoteIntermediatePrimary(t *testing.T) {
 		})
 	}
 }
+
+func TestGetBetterCandidate(t *testing.T) {
+	tests := []struct {
+		name                 string
+		emergencyReparentOps EmergencyReparentOptions
+		newPrimary           *topodatapb.Tablet
+		prevPrimary          *topodatapb.Tablet
+		validCandidates      []*topodatapb.Tablet
+		tabletMap            map[string]*topo.TabletInfo
+		err                  string
+		result               *topodatapb.Tablet
+	}{
+		{
+			name: "explicit request for a primary tablet",
+			emergencyReparentOps: EmergencyReparentOptions{newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			}},
+			newPrimary:  nil,
+			prevPrimary: nil,
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "explicit request for a primary tablet not in valid list",
+			emergencyReparentOps: EmergencyReparentOptions{newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			}},
+			newPrimary:      nil,
+			prevPrimary:     nil,
+			validCandidates: nil,
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+			},
+			err: "requested candidate zone1-0000000100 is not in valid candidates list",
+		}, {
+			name: "explicit request for a primary tablet not in tablet map",
+			emergencyReparentOps: EmergencyReparentOptions{newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  100,
+			}},
+			newPrimary:  nil,
+			prevPrimary: nil,
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			tabletMap: map[string]*topo.TabletInfo{},
+			err:       "candidate zone1-0000000100 not found in the tablet map; this an impossible situation",
+		}, {
+			name:                 "preferred candidate in the same cell same as our replica",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name:                 "preferred candidate in the same cell different from original replica",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_REPLICA,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name:                 "preferred candidate in the different cell same as original replica",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  101,
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  101,
+				},
+			},
+		}, {
+			name:                 "preferred candidate in the different cell different from original replica",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  101,
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  102,
+				},
+			},
+		}, {
+			name:                 "prevent cross cell promotion",
+			emergencyReparentOps: EmergencyReparentOptions{preventCrossCellPromotion: true},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			validCandidates: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  100,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  101,
+					},
+					Type: topodatapb.TabletType_RDONLY,
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone2",
+						Uid:  102,
+					},
+					Type: topodatapb.TabletType_PRIMARY,
+				},
+			},
+			tabletMap: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_ = SetDurabilityPolicy("none", nil)
+			logger := logutil.NewMemoryLogger()
+			res, err := getBetterCandidate(logger, test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			if test.err != "" {
+				assert.EqualError(t, err, test.err)
+				return
+			}
+			assert.NoError(t, err)
+			assert.True(t, topoproto.TabletAliasEqual(res.Alias, test.result.Alias))
+		})
+	}
+}
