@@ -149,15 +149,22 @@ func testString(op Operator) string {
 			value = op.Value.Key
 		}
 		return fmt.Sprintf("Vindex: {\n\tName: %s\n\tValue: %s\n}", op.Vindex.String(), value)
-	case *Distinct:
-		inner := indent(testString(op.Source))
-		return fmt.Sprintf("Distinct {\n%s\n}", inner)
 	case *Concatenate:
 		var inners []string
 		for _, source := range op.Sources {
 			inners = append(inners, indent(testString(source)))
 		}
-		return fmt.Sprintf("Concatenate {\n%s\n}", strings.Join(inners, ",\n"))
+		if len(op.OrderBy) > 0 {
+			inners = append(inners, indent(sqlparser.String(op.OrderBy)[1:]))
+		}
+		if op.Limit != nil {
+			inners = append(inners, indent(sqlparser.String(op.Limit)[1:]))
+		}
+		dist := ""
+		if op.Distinct {
+			dist = "(distinct)"
+		}
+		return fmt.Sprintf("Concatenate%s {\n%s\n}", dist, strings.Join(inners, ",\n"))
 	}
 	return fmt.Sprintf("implement me: %T", op)
 }

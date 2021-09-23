@@ -25,8 +25,11 @@ import (
 
 // Concatenate represents a UNION ALL.
 type Concatenate struct {
+	Distinct    bool
 	SelectStmts []*sqlparser.Select
 	Sources     []Operator
+	OrderBy     sqlparser.OrderBy
+	Limit       *sqlparser.Limit
 }
 
 var _ Operator = (*Concatenate)(nil)
@@ -59,4 +62,33 @@ func (c *Concatenate) CheckValid() error {
 		}
 	}
 	return nil
+}
+
+// Compact implements the Operator interface
+func (c *Concatenate) Compact() Operator {
+	var newSources []Operator
+	var newSels []*sqlparser.Select
+	for i, source := range c.Sources {
+		other, isConcat := source.(*Concatenate)
+		if !isConcat {
+			newSources = append(newSources, source)
+			newSels = append(newSels, c.SelectStmts[i])
+			continue
+		}
+		switch {
+		case other.Limit == nil && len(other.OrderBy) == 0 && !other.Distinct:
+			fallthrough
+		case c.Distinct && other.Limit == nil:
+			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
+			newSources = append(newSources, other.Sources...)
+			newSels = append(newSels, other.SelectStmts...)
+
+		default:
+			newSources = append(newSources, other)
+			newSels = append(newSels, nil)
+		}
+	}
+	c.Sources = newSources
+	c.SelectStmts = newSels
+	return c
 }

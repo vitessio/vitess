@@ -92,14 +92,6 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 		return createVindexTree(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
-	case *abstract.Distinct:
-		qt, err := optimizeQuery(ctx, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		return &distinctTree{
-			source: qt,
-		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -116,10 +108,14 @@ func optimizeUnion(ctx *planningContext, op *abstract.Concatenate) (queryTree, e
 		sources = append(sources, qt)
 	}
 
-	return &concatenateTree{
+	tree := &concatenateTree{
 		selectStmts: op.SelectStmts,
 		sources:     sources,
-	}, nil
+	}
+	if op.Distinct {
+		return &distinctTree{source: tree}, nil
+	}
+	return tree, nil
 }
 
 func createVindexTree(ctx *planningContext, op *abstract.Vindex) (*vindexTree, error) {
