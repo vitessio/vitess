@@ -1,23 +1,18 @@
 # Add your test case here for debugging and run go test -run=One.
-# union with the same target shard
-"select * from music where user_id = 1 union select * from user where id = 1"
+"select id from user union all select id from music"
 {
   "QueryType": "SELECT",
-  "Original": "select * from music where user_id = 1 union select * from user where id = 1",
+  "Original": "select id from user union all select id from music",
   "Instructions": {
     "OperatorType": "Route",
-    "Variant": "SelectEqualUnique",
+    "Variant": "SelectScatter",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
-    "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
-    "Table": "music",
-    "Values": [
-      1
-    ],
-    "Vindex": "user_index"
+    "FieldQuery": "select id from `user` where 1 != 1 union all select id from music where 1 != 1",
+    "Query": "select id from `user` union all select id from music",
+    "Table": "`user`"
   }
 }
 Gen4 plan same as above

@@ -1,14 +1,28 @@
+(select id from unsharded union all select id from unsharded_auto order by id) union select id from user
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:`user`
+	}
+}
+
 select id from unsharded union select id from unsharded_auto
-Distinct {
-	Concatenate {
-		QueryGraph: {
-		Tables:
-			1:unsharded
-		},
-		QueryGraph: {
-		Tables:
-			2:unsharded_auto
-		}
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
 	}
 }
 
@@ -24,8 +38,8 @@ Concatenate {
 	}
 }
 
-(select id from unsharded union all select id from unsharded_auto) union select id from x
-Distinct {
+(select id from unsharded union all select id from unsharded_auto limit 10) union select id from x order by id
+Concatenate(distinct) {
 	Concatenate {
 		QueryGraph: {
 		Tables:
@@ -35,11 +49,13 @@ Distinct {
 		Tables:
 			2:unsharded_auto
 		},
-		QueryGraph: {
-		Tables:
-			4:x
-		}
-	}
+		limit 10
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	},
+	order by id asc
 }
 
 (select id from unsharded union all select id from unsharded_auto) union all select id from x
@@ -59,8 +75,24 @@ Concatenate {
 }
 
 (select id from unsharded union select id from unsharded_auto) union select id from x
-Distinct {
-	Concatenate {
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	}
+}
+
+(select id from unsharded union select id from unsharded_auto) union all select id from x
+Concatenate {
+	Concatenate(distinct) {
 		QueryGraph: {
 		Tables:
 			1:unsharded
@@ -68,26 +100,6 @@ Distinct {
 		QueryGraph: {
 		Tables:
 			2:unsharded_auto
-		},
-		QueryGraph: {
-		Tables:
-			4:x
-		}
-	}
-}
-
-(select id from unsharded union select id from unsharded_auto) union all select id from x
-Concatenate {
-	Distinct {
-		Concatenate {
-			QueryGraph: {
-			Tables:
-				1:unsharded
-			},
-			QueryGraph: {
-			Tables:
-				2:unsharded_auto
-			}
 		}
 	},
 	QueryGraph: {
@@ -326,22 +338,36 @@ Derived u: {
 }
 
 select 1 from a union select 2 from b
-Distinct {
-	Concatenate {
-		QueryGraph: {
-		Tables:
-			1:a
-		},
-		QueryGraph: {
-		Tables:
-			2:b
-		}
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:a
+	},
+	QueryGraph: {
+	Tables:
+		2:b
 	}
 }
 
 select 1 from a union select 2 from b union select 3 from c
-Distinct {
-	Concatenate {
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:a
+	},
+	QueryGraph: {
+	Tables:
+		2:b
+	},
+	QueryGraph: {
+	Tables:
+		4:c
+	}
+}
+
+select 1 from a union select 2 from b union select 3 from c union all select 4 from d
+Concatenate {
+	Concatenate(distinct) {
 		QueryGraph: {
 		Tables:
 			1:a
@@ -354,29 +380,22 @@ Distinct {
 		Tables:
 			4:c
 		}
-	}
-}
-
-select 1 from a union select 2 from b union select 3 from c union all select 4 from d
-Concatenate {
-	Distinct {
-		Concatenate {
-			QueryGraph: {
-			Tables:
-				1:a
-			},
-			QueryGraph: {
-			Tables:
-				2:b
-			},
-			QueryGraph: {
-			Tables:
-				4:c
-			}
-		}
 	},
 	QueryGraph: {
 	Tables:
 		8:d
 	}
+}
+
+select id from unsharded union select id from unsharded_auto order by id
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	order by id asc
 }
