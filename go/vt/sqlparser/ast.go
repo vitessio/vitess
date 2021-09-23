@@ -241,14 +241,16 @@ type (
 		Distinct  bool
 		Statement SelectStatement
 	}
+
 	// Union represents a UNION statement.
 	Union struct {
-		FirstStatement SelectStatement
-		UnionSelects   []*UnionSelect
-		OrderBy        OrderBy
-		Limit          *Limit
-		Lock           Lock
-		Into           *SelectInto
+		Left     SelectStatement
+		Right    SelectStatement
+		Distinct bool
+		OrderBy  OrderBy
+		Limit    *Limit
+		Lock     Lock
+		Into     *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.

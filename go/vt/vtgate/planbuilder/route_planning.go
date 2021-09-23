@@ -376,15 +376,10 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
 		}
-		err = stripDownQuery(node.FirstStatement, toNode.FirstStatement)
+		err = stripDownQuery(node.Left, toNode.Left)
+		err = stripDownQuery(node.Right, toNode.Right)
 		if err != nil {
 			return err
-		}
-		for i, s := range node.UnionSelects {
-			err = stripDownQuery(s.Statement, toNode.UnionSelects[i].Statement)
-			if err != nil {
-				return err
-			}
 		}
 		toNode.OrderBy = node.OrderBy
 	default:

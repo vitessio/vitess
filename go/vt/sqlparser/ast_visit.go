@@ -2069,13 +2069,11 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectStatement(in.FirstStatement, f); err != nil {
+	if err := VisitSelectStatement(in.Left, f); err != nil {
 		return err
 	}
-	for _, el := range in.UnionSelects {
-		if err := VisitRefOfUnionSelect(el, f); err != nil {
-			return err
-		}
+	if err := VisitSelectStatement(in.Right, f); err != nil {
+		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err

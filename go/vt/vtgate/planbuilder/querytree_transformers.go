@@ -196,11 +196,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 	}
 
 	if canMergePlans(ctx, lroute, rroute) {
-		elem := &sqlparser.UnionSelect{
-			Distinct:  false,
-			Statement: rroute.Select,
-		}
-		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
+		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		return lroute
 	}
 	return nil

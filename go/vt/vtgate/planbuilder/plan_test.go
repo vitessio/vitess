@@ -588,7 +588,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("V3 - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
+					t.Errorf("V3 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 				if err != nil {
 					out = `"` + out + `"`

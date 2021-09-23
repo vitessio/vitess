@@ -2497,8 +2497,9 @@ func EqualsRefOfUnion(a, b *Union) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectStatement(a.FirstStatement, b.FirstStatement) &&
-		EqualsSliceOfRefOfUnionSelect(a.UnionSelects, b.UnionSelects) &&
+	return a.Distinct == b.Distinct &&
+		EqualsSelectStatement(a.Left, b.Left) &&
+		EqualsSelectStatement(a.Right, b.Right) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
@@ -3992,19 +3993,6 @@ func EqualsSliceOfRefOfConstraintDefinition(a, b []*ConstraintDefinition) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsRefOfConstraintDefinition(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// EqualsSliceOfRefOfUnionSelect does deep equals between the two objects.
-func EqualsSliceOfRefOfUnionSelect(a, b []*UnionSelect) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfUnionSelect(a[i], b[i]) {
 			return false
 		}
 	}
