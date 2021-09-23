@@ -65,25 +65,23 @@ var (
 	// SetShardTabletControl makes a SetShardTabletControl gRPC call to a vtctld.
 	SetShardTabletControl = &cobra.Command{
 		Use:   "SetShardTabletControl [--cells=c1,c2...] [--denied-tables=t1,t2,...] [--remove] [--disable-query-service[=0|false]] <keyspace/shard> <tablet_type>",
-		Short: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished vertical split. The MigrateServedFrom and MigrateServedType commands set this record appropriately already.",
+		Short: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables. The MigrateServedFrom and MigrateServedType commands set this record appropriately already.",
 		Long: `Sets the TabletControl record for a shard and tablet type.
 
-Only use this for an emergency fix or after a finished vertical split. The
-MigrateServedFrom and MigrateServedType commands set this record appropriately
-already.
+Only use this for an emergency fix or after a finished MoveTables. The MigrateServedFrom
+and MigrateServedType commands set this record appropriately already.
 
-Always specify the denied-tables flag for vertical splits, but never for
-horizontal splits.
+Always specify the denied-tables flag for MoveTables, but never for Reshard operations.
 
 To set the DisableQueryService flag, keep denied-tables empty, and set --disable-query-service
-to true or false. This is useful to fix horizontal splits gone wrong.
+to true or false. This is useful to fix Reshard operations gone wrong.
 
 To change the list of denied tables, specify the --denied-tables parameter with
 the new list. This is useful to fix tables that are being blocked after a
-vertical split.
+MoveTables operation.
 
 To remove the ShardTabletControl record entirely, use the --remove flag. This is
-useful after a vertical split finished to remove serving restrictions.`,
+useful after a MoveTables has finished to remove serving restrictions.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandSetShardTabletControl,
