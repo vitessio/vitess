@@ -18,6 +18,9 @@ package reparentutil
 
 import (
 	"context"
+	"time"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -49,6 +52,30 @@ type EmergencyReparenter struct {
 	ts     *topo.Server
 	tmc    tmclient.TabletManagerClient
 	logger logutil.Logger
+}
+
+type (
+	// EmergencyReparentOptions provides optional parameters to
+	// EmergencyReparentShard operations. Options are passed by value, so it is safe
+	// for callers to mutate and reuse options structs for multiple calls.
+	EmergencyReparentOptions struct {
+		newPrimaryAlias           *topodatapb.TabletAlias
+		ignoreReplicas            sets.String
+		waitReplicasTimeout       time.Duration
+		preventCrossCellPromotion bool
+
+		lockAction string
+	}
+)
+
+// NewEmergencyReparentOptions creates a new EmergencyReparentOptions which is used in ERS
+func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, preventCrossCellPromotion bool) EmergencyReparentOptions {
+	return EmergencyReparentOptions{
+		newPrimaryAlias:           newPrimaryAlias,
+		ignoreReplicas:            ignoreReplicas,
+		waitReplicasTimeout:       waitReplicasTimeout,
+		preventCrossCellPromotion: preventCrossCellPromotion,
+	}
 }
 
 // counters for Emergency Reparent Shard
