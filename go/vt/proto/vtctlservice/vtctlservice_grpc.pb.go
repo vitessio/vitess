@@ -273,8 +273,8 @@ type VtctldClient interface {
 	// tablet type.
 	//
 	// This should only be used for an emergency fix, or after a finished
-	// vertical split. See the documentation on SetShardTabletControlRequest for
-	// more information about the different update modes.
+	// Reshard. See the documentation on SetShardTabletControlRequest for more
+	// information about the different update modes.
 	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
@@ -931,8 +931,8 @@ type VtctldServer interface {
 	// tablet type.
 	//
 	// This should only be used for an emergency fix, or after a finished
-	// vertical split. See the documentation on SetShardTabletControlRequest for
-	// more information about the different update modes.
+	// Reshard. See the documentation on SetShardTabletControlRequest for more
+	// information about the different update modes.
 	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)

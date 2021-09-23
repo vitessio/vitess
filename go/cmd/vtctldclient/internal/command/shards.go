@@ -340,8 +340,8 @@ func init() {
 	Root.AddCommand(SetShardIsPrimaryServing)
 
 	SetShardTabletControl.Flags().StringSliceVarP(&setShardTabletControlOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to update.")
-	SetShardTabletControl.Flags().StringSliceVar(&setShardTabletControlOptions.DeniedTables, "denied-tables", nil, "Specifies a comma-separated list of tables to add to the denylist (for vertical splits). Each table name is either an exact match, or a regular expression of the form '/regexp/'.")
-	SetShardTabletControl.Flags().BoolVarP(&setShardTabletControlOptions.Remove, "remove", "r", false, "Removes the specified cells for vertical splits.")
+	SetShardTabletControl.Flags().StringSliceVar(&setShardTabletControlOptions.DeniedTables, "denied-tables", nil, "Specifies a comma-separated list of tables to add to the denylist (for MoveTables). Each table name is either an exact match, or a regular expression of the form '/regexp/'.")
+	SetShardTabletControl.Flags().BoolVarP(&setShardTabletControlOptions.Remove, "remove", "r", false, "Removes the specified cells for MoveTables operations.")
 	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Sets the DisableQueryService flag in the specified cells. This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
 	Root.AddCommand(SetShardTabletControl)
 

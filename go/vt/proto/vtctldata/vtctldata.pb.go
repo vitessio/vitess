@@ -5254,19 +5254,20 @@ type SetShardTabletControlRequest struct {
 	Cells      []string            `protobuf:"bytes,4,rep,name=cells,proto3" json:"cells,omitempty"`
 	// DeniedTables updates the list of denied tables the shard will serve for
 	// the given tablet type. This is useful to fix tables that are being blocked
-	// after a vertical split.
+	// after a MoveTables operation.
 	//
 	// NOTE: Setting this field will cause DisableQueryService to be ignored.
 	DeniedTables []string `protobuf:"bytes,5,rep,name=denied_tables,json=deniedTables,proto3" json:"denied_tables,omitempty"`
 	// DisableQueryService instructs whether to enable the query service on
-	// tablets of the given type in the shard. This is useful to fix horizontal
-	// splits gone awry.
+	// tablets of the given type in the shard. This is useful to fix Reshard
+	// operations gone awry.
 	//
 	// NOTE: this is ignored if DeniedTables is not empty.
 	DisableQueryService bool `protobuf:"varint,6,opt,name=disable_query_service,json=disableQueryService,proto3" json:"disable_query_service,omitempty"`
 	// Remove removes the ShardTabletControl record entirely. If set, this takes
 	// precedence over DeniedTables and DisableQueryService fields, and is useful
-	// to manually remove serving restrictions after a completed vertical split.
+	// to manually remove serving restrictions after a completed MoveTables
+	// operation.
 	Remove bool `protobuf:"varint,7,opt,name=remove,proto3" json:"remove,omitempty"`
 }
 

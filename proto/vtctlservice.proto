@@ -172,8 +172,8 @@ service Vtctld {
   // tablet type.
   //
   // This should only be used for an emergency fix, or after a finished
-  // vertical split. See the documentation on SetShardTabletControlRequest for
-  // more information about the different update modes.
+  // Reshard. See the documentation on SetShardTabletControlRequest for more
+  // information about the different update modes.
   rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
