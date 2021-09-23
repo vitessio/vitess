@@ -145,12 +145,12 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String, preventCrossCellPromotion bool) (err error) {
 	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
-		reparentutil.NewEmergencyReparentOptions(primaryElectTabletAlias, ignoredTablets, waitReplicasTimeout, false))
+		reparentutil.NewEmergencyReparentOptions(primaryElectTabletAlias, ignoredTablets, waitReplicasTimeout, preventCrossCellPromotion))
 
 	return err
 }

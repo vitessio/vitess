@@ -353,6 +353,9 @@ message EmergencyReparentShardRequest {
   // WaitReplicasTimeout is the duration of time to wait for replicas to catch
   // up in reparenting.
   vttime.Duration wait_replicas_timeout = 5;
+  // PreventCrossCellPromotion is used to only promote the new primary from the same cell
+  // as the failed primary.
+  bool prevent_cross_cell_promotion = 6;
 }
 
 message EmergencyReparentShardResponse {
