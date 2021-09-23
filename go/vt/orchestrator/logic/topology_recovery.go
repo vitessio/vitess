@@ -28,6 +28,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/orchestrator/attributes"
+	"vitess.io/vitess/go/vt/orchestrator/kv"
+
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 
@@ -187,8 +190,6 @@ func (this InstancesByCountReplicas) Less(i, j int) bool {
 	return len(this[i].Replicas) < len(this[j].Replicas)
 }
 
-var recoverDeadPrimarySuccessCounter = metrics.NewCounter()
-var recoverDeadPrimaryFailureCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimaryCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimarySuccessCounter = metrics.NewCounter()
 var recoverDeadIntermediatePrimaryFailureCounter = metrics.NewCounter()
@@ -198,8 +199,6 @@ var recoverDeadCoPrimaryFailureCounter = metrics.NewCounter()
 var countPendingRecoveriesGauge = metrics.NewGauge()
 
 func init() {
-	metrics.Register("recover.dead_primary.success", recoverDeadPrimarySuccessCounter)
-	metrics.Register("recover.dead_primary.fail", recoverDeadPrimaryFailureCounter)
 	metrics.Register("recover.dead_intermediate_primary.start", recoverDeadIntermediatePrimaryCounter)
 	metrics.Register("recover.dead_intermediate_primary.success", recoverDeadIntermediatePrimarySuccessCounter)
 	metrics.Register("recover.dead_intermediate_primary.fail", recoverDeadIntermediatePrimaryFailureCounter)
@@ -657,7 +656,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 
 	// TODO: Fix durations
 	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, 1*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
-	_, err = reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
@@ -670,8 +669,72 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)
 
+	RefreshTablets()
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
+	}
+	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
+
 	// TODO: fix recovery attempted
 	return true, topologyRecovery, err
+}
+
+func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
+	if promotedReplica != nil {
+		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, message)
+		inst.AuditOperation("recover-dead-primary", &analysisEntry.AnalyzedInstanceKey, message)
+	}
+	// And this is the end; whether successful or not, we're done.
+	resolveRecovery(topologyRecovery, promotedReplica)
+	// Now, see whether we are successful or not. From this point there's no going back.
+	if promotedReplica != nil {
+		// Success!
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.Key))
+
+		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
+		for _, kvPair := range kvPairs {
+			err := kv.PutKVPair(kvPair)
+			log.Errore(err)
+		}
+		{
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
+			err := kv.DistributePairs(kvPairs)
+			log.Errore(err)
+		}
+		if config.Config.PrimaryFailoverDetachReplicaPrimaryHost {
+			postponedFunction := func() error {
+				AuditTopologyRecovery(topologyRecovery, "- RecoverDeadPrimary: detaching primary host on promoted primary")
+				inst.DetachReplicaPrimaryHost(&promotedReplica.Key)
+				return nil
+			}
+			topologyRecovery.AddPostponedFunction(postponedFunction, fmt.Sprintf("RecoverDeadPrimary, detaching promoted primary host %+v", promotedReplica.Key))
+		}
+		func() error {
+			before := analysisEntry.AnalyzedInstanceKey.StringCode()
+			after := promotedReplica.Key.StringCode()
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- RecoverDeadPrimary: updating cluster_alias: %v -> %v", before, after))
+			//~~~inst.ReplaceClusterName(before, after)
+			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
+				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
+			} else {
+				inst.ReplaceAliasClusterName(before, after)
+			}
+			return nil
+		}()
+
+		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
+
+		if !skipProcesses {
+			// Execute post primary-failover processes
+			executeProcesses(config.Config.PostPrimaryFailoverProcesses, "PostPrimaryFailoverProcesses", topologyRecovery, false)
+		}
+	}
 }
 
 // isGenerallyValidAsCandidateSiblingOfIntermediatePrimary sees that basic server configuration and state are valid
