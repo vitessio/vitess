@@ -1289,6 +1289,133 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   }
 }
 
+# gen4 optimises away ORDER BY when it's safe to do
+"(select id from user union select id from music order by id) union select 1 from unsharded"
+"can't do ORDER BY on top of UNION"
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user union select id from music order by id) union select 1 from unsharded",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union select id from music where 1 != 1",
+            "Query": "select id from `user` union select id from music",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded where 1 != 1",
+            "Query": "select distinct 1 from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe
+"select id from user union select 3 limit 10"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user union select 3 limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 10,
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectReference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 3 from dual where 1 != 1",
+                "Query": "select 3 from dual",
+                "Table": "dual"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user union select 3 limit 10",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 10,
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select distinct id from `user` limit :__upper_limit",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectReference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 3 from dual where 1 != 1",
+                "Query": "select distinct 3 from dual limit :__upper_limit",
+                "Table": "dual"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"
 "syntax error at position 34 near 'union'"
@@ -1308,3 +1435,8 @@ Gen4 error: The used SELECT statements have a different number of columns
 "select id from user union select 3 order by user.id"
 "can't do ORDER BY on top of UNION"
 Gen4 error: Table 'user' from one of the SELECTs cannot be used in global ORDER clause
+
+# union with invalid order by clause with table qualifier
+"select id from user union select 3 order by id"
+"can't do ORDER BY on top of UNION"
+Gen4 plan same as above
