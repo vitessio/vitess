@@ -818,12 +818,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfUnion(a, b)
-	case *UnionSelect:
-		b, ok := inB.(*UnionSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUnionSelect(a, b)
 	case *UnlockTables:
 		b, ok := inB.(*UnlockTables)
 		if !ok {
@@ -2504,18 +2498,6 @@ func EqualsRefOfUnion(a, b *Union) bool {
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		EqualsRefOfSelectInto(a.Into, b.Into)
-}
-
-// EqualsRefOfUnionSelect does deep equals between the two objects.
-func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Distinct == b.Distinct &&
-		EqualsSelectStatement(a.Statement, b.Statement)
 }
 
 // EqualsRefOfUnlockTables does deep equals between the two objects.

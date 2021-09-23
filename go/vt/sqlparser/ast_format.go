@@ -83,16 +83,6 @@ func (node *Union) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *UnionSelect) Format(buf *TrackedBuffer) {
-
-	if requiresParen(node.Statement) {
-		buf.astPrintf(node, "(%v)", node.Statement)
-	} else {
-		buf.astPrintf(node, "%v", node.Statement)
-	}
-}
-
-// Format formats the node.
 func (node *VStream) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "vstream %v%v from %v",
 		node.Comments, node.SelectExpr, node.Table)
