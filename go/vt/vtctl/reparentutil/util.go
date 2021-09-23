@@ -378,7 +378,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet,
 	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) error {
 	// Find the primary position of the previous primary
-	pos, err := tmc.PrimaryPosition(ctx, prevPrimary)
+	pos, err := tmc.MasterPosition(ctx, prevPrimary)
 	if err != nil {
 		return err
 	}
@@ -477,15 +477,23 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 	return validTablets, tabletPositions, nil
 }
 
-func intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) bool {
+func intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) bool {
 	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		return topoproto.TabletAliasEqual(opts.newPrimaryAlias, newPrimary.Alias)
 	}
-	return getBetterCandidate(newPrimary, prevPrimary, validCandidates, opts) == newPrimary
+	return getBetterCandidate(newPrimary, prevPrimary, validCandidates, tabletMap, opts) == newPrimary
 }
 
-func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, opts EmergencyReparentOptions) *topodatapb.Tablet {
+func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) *topodatapb.Tablet {
+	if opts.newPrimaryAlias != nil {
+		// explicit request to promote a specific tablet
+		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
+		requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
+		if isFound {
+			return requestedPrimaryInfo.Tablet
+		}
+	}
 	var preferredCandidates []*topodatapb.Tablet
 	var neutralReplicas []*topodatapb.Tablet
 	for _, candidate := range validCandidates {
