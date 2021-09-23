@@ -298,30 +298,6 @@ func ChooseNewPrimary(
 	return nil, nil
 }
 
-// promotePrimaryCandidate promotes the primary candidate that we have, but it does not yet set to start accepting writes
-func promotePrimaryCandidate(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, isIdeal bool) ([]*topodatapb.Tablet, error) {
-	// first step is change the type of the newPrimary tablet to PRIMARY
-	if err := changeTypeToPrimary(ctx, tmc, newPrimary); err != nil {
-		return nil, err
-	}
-
-	// now we reparent all the other tablets to start replication from our new primary
-	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	replicasStartedReplication, err := reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, !isIdeal, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return replicasStartedReplication, nil
-}
-
-// changeTypeToPrimary changes the type of the tablet to primary
-// the tablet's shard sync will update the topo server for us.
-func changeTypeToPrimary(ctx context.Context, tmc tmclient.TabletManagerClient, newPrimary *topodatapb.Tablet) error {
-	return tmc.ChangeType(ctx, newPrimary, topodatapb.TabletType_PRIMARY)
-}
-
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
 // current primary is whichever tablet of type PRIMARY (if any) has the most
 // recent PrimaryTermStartTime, which is the same rule that vtgate uses to route
@@ -402,7 +378,7 @@ func getLockAction(newPrimaryAlias *topodatapb.TabletAlias) string {
 	return action
 }
 
-// restrictValidCandidates implements the ReparentFunctions interface
+// restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate primary
 func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
 	restrictedValidCandidates := make(map[string]mysql.Position)
 	for candidate, position := range validCandidates {
@@ -419,7 +395,7 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-// findIntermediatePrimaryCandidate implements the ReparentFunctions interface
+// findIntermediatePrimaryCandidate finds the intermediate primary candidate for ERS. We always choose the most advanced one from our valid candidates list
 func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
@@ -463,6 +439,7 @@ func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topoda
 	return winningPrimaryTablet, validTablets, nil
 }
 
+// getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
 func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []mysql.Position, error) {
 	var validTablets []*topodatapb.Tablet
 	var tabletPositions []mysql.Position
@@ -477,14 +454,13 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 	return validTablets, tabletPositions, nil
 }
 
+// intermediateCandidateIsIdeal is used to find whether the intermediate candidate that ERS chose is also the ideal one or not
 func intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) bool {
-	if opts.newPrimaryAlias != nil {
-		// explicit request to promote a specific tablet
-		return topoproto.TabletAliasEqual(opts.newPrimaryAlias, newPrimary.Alias)
-	}
+	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
 	return getBetterCandidate(newPrimary, prevPrimary, validCandidates, tabletMap, opts) == newPrimary
 }
 
+// getBetterCandidate is used to find a better candidate for ERS promotion
 func getBetterCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) *topodatapb.Tablet {
 	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
@@ -573,17 +549,19 @@ func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topo
 // promoteIntermediatePrimary promotes the primary candidate that we have, but it does not yet set to start accepting writes
 func promoteIntermediatePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
 	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
-	// now we reparent all the other tablets to start replication from our new primary
-	// if the promoted primary is not ideal then we wait for all the replicas so that we choose a better candidate from them later
-	replicasStartedReplication, err := reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, true, false)
+	// we reparent all the other tablets to start replication from our new primary
+	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
+	validCandidatesForImprovement, err := reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, true, false)
 	if err != nil {
 		return nil, err
 	}
 
-	replicasStartedReplication = append(replicasStartedReplication, newPrimary)
-	return replicasStartedReplication, nil
+	// also include the current tablet for being considered as part of valid candidates for ERS promotion
+	validCandidatesForImprovement = append(validCandidatesForImprovement, newPrimary)
+	return validCandidatesForImprovement, nil
 }
 
+// checkIfConstraintsSatisfied is used to check whether the constraints for ERS are satisfied or not.
 func checkIfConstraintsSatisfied(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
 	if opts.preventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
