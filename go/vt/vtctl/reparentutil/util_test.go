@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -510,6 +512,92 @@ func TestFindCurrentPrimary(t *testing.T) {
 
 			actual := FindCurrentPrimary(tt.in, logger)
 			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestCheckIfConstraintsSatisfied(t *testing.T) {
+	testcases := []struct {
+		name                    string
+		newPrimary, prevPrimary *topodatapb.Tablet
+		opts                    EmergencyReparentOptions
+		err                     string
+	}{
+		{
+			name: "no constraint failure",
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+				},
+			},
+			opts: EmergencyReparentOptions{preventCrossCellPromotion: true},
+			err:  "",
+		}, {
+			name: "promotion rule constraint failure",
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_RDONLY,
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+				},
+			},
+			opts: EmergencyReparentOptions{preventCrossCellPromotion: true},
+			err:  "elected primary does not satisfy promotion rule constraint - cell1-0000000100",
+		}, {
+			name: "cross cell constraint failure",
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell2",
+				},
+			},
+			opts: EmergencyReparentOptions{preventCrossCellPromotion: true},
+			err:  "elected primary does not satisfy geographic constraint - cell1-0000000100",
+		}, {
+			name: "cross cell but no constraint failure",
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "cell2",
+				},
+			},
+			opts: EmergencyReparentOptions{preventCrossCellPromotion: false},
+			err:  "",
+		},
+	}
+
+	_ = SetDurabilityPolicy("none", nil)
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			err := checkIfConstraintsSatisfied(testcase.newPrimary, testcase.prevPrimary, testcase.opts)
+			if testcase.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, testcase.err)
+			}
 		})
 	}
 }
