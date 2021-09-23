@@ -594,6 +594,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	}
 
 	span.Annotate("wait_replicas_timeout_sec", waitReplicasTimeout.Seconds())
+	span.Annotate("prevent_cross_cell_promotion", req.PreventCrossCellPromotion)
 
 	m := sync.RWMutex{}
 	logstream := []*logutilpb.Event{}
@@ -607,7 +608,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	ev, err := reparentutil.NewEmergencyReparenter(s.ts, s.tmc, logger).ReparentShard(ctx,
 		req.Keyspace,
 		req.Shard,
-		reparentutil.NewEmergencyReparentOptions(req.NewPrimary, sets.NewString(ignoreReplicaAliases...), waitReplicasTimeout, false))
+		reparentutil.NewEmergencyReparentOptions(req.NewPrimary, sets.NewString(ignoreReplicaAliases...), waitReplicasTimeout, req.PreventCrossCellPromotion))
 
 	resp := &vtctldatapb.EmergencyReparentShardResponse{
 		Keyspace: req.Keyspace,
