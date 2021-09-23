@@ -46,7 +46,7 @@ import (
 
 var (
 	restoreFromBackup     = flag.Bool("restore_from_backup", false, "(init restore parameter) will check BackupStorage for a recent backup at startup and start there")
-	restoreFromBackupTs   = flag.String("restore_from_backup_ts", "", "(init restore parameter) if set, restore the last backup taken at or before this timestamp. Example: '2021-04-29.133050'")
+	restoreFromBackupTs   = flag.String("restore_from_backup_ts", "", "(init restore parameter) if set, restore the latest backup taken at or before this timestamp. Example: '2021-04-29.133050'")
 	restoreConcurrency    = flag.Int("restore_concurrency", 4, "(init restore parameter) how many concurrent files to restore at once")
 	waitForBackupInterval = flag.Duration("wait_for_backup_interval", 0, "(init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear")
 

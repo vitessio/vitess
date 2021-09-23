@@ -296,7 +296,7 @@ func primaryBackup(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_primary=true", primary.Alias)
 	require.Nil(t, err)
 
-	// We'll restore this on the primary later to test timestamp based backups
+	// We'll restore this on the primary later to test restores using a backup timestamp
 	firstBackupTimestamp := time.Now().Format(mysqlctl.BackupTimestampFormat)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)

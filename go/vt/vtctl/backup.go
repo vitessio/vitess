@@ -56,7 +56,7 @@ func init() {
 	addCommand("Tablets", command{
 		"RestoreFromBackup",
 		commandRestoreFromBackup,
-		"[-backup_timestamp=yyyy-mm-dd.HHmmss] <tablet alias>",
+		"[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
 		"Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time."})
 }
 
