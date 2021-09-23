@@ -215,7 +215,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("intermediate primary selected - %v", intermediatePrimary.Alias)
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	isIdeal := intermediateCandidateIsIdeal(erp.logger, intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
+	var isIdeal bool
+	isIdeal, err = intermediateCandidateIsIdeal(erp.logger, intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
+	if err != nil {
+		return err
+	}
 	erp.logger.Infof("intermediate primary is ideal - %v", isIdeal)
 
 	// Check (again) we still have the topology lock.
@@ -236,7 +240,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// try to find a better candidate using the list we got back
-		betterCandidate := getBetterCandidate(erp.logger, intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		var betterCandidate *topodatapb.Tablet
+		betterCandidate, err = getBetterCandidate(erp.logger, intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		if err != nil {
+			return err
+		}
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
 		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediatePrimary.Alias) {

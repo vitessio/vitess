@@ -461,24 +461,36 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 }
 
 // intermediateCandidateIsIdeal is used to find whether the intermediate candidate that ERS chose is also the ideal one or not
-func intermediateCandidateIsIdeal(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) bool {
+func intermediateCandidateIsIdeal(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (bool, error) {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	return getBetterCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts) == newPrimary
+	candidate, err := getBetterCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts)
+	if err != nil {
+		return false, err
+	}
+	return candidate == newPrimary, nil
 }
 
 // getBetterCandidate is used to find a better candidate for ERS promotion
-func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet) {
+func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
-		logger.Infof("found better candidate - %v", candidate.Alias)
+		if candidate != nil {
+			logger.Infof("found better candidate - %v", candidate.Alias)
+		}
 	}()
 
 	if opts.newPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
 		requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
-		if isFound {
-			return requestedPrimaryInfo.Tablet
+		if !isFound {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 		}
+		for _, validCandidate := range validCandidates {
+			if topoproto.TabletAliasEqual(validCandidate.Alias, opts.newPrimaryAlias) {
+				return requestedPrimaryInfo.Tablet, nil
+			}
+		}
+		return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "requested candidate %v is not in valid candidates list", requestedPrimaryAlias)
 	}
 	var preferredCandidates []*topodatapb.Tablet
 	var neutralReplicas []*topodatapb.Tablet
@@ -503,12 +515,12 @@ func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodata
 	// check whether the one we promoted is in the same cell and belongs to the preferred candidates list
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, true)
 	if candidate != nil {
-		return candidate
+		return candidate, nil
 	}
 	// check whether there is some other tablet in the same cell belonging to the preferred candidates list
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, true)
 	if candidate != nil {
-		return candidate
+		return candidate, nil
 	}
 	// we do not have a preferred candidate in the same cell
 
@@ -516,38 +528,38 @@ func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodata
 		// check whether the one we promoted belongs to the preferred candidates list
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, false)
 		if candidate != nil {
-			return candidate
+			return candidate, nil
 		}
 		// check whether there is some other tablet belonging to the preferred candidates list
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, false, false)
 		if candidate != nil {
-			return candidate
+			return candidate, nil
 		}
 	}
 
 	// repeat the same process for the neutral candidates list
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, true)
 	if candidate != nil {
-		return candidate
+		return candidate, nil
 	}
 	candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, false, true)
 	if candidate != nil {
-		return candidate
+		return candidate, nil
 	}
 
 	if !opts.preventCrossCellPromotion {
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, false)
 		if candidate != nil {
-			return candidate
+			return candidate, nil
 		}
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, false, false)
 		if candidate != nil {
-			return candidate
+			return candidate, nil
 		}
 	}
 
 	// return the one that we have if nothing found
-	return newPrimary
+	return newPrimary, nil
 }
 
 func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topodatapb.Tablet, possibleCandidates []*topodatapb.Tablet, checkEqualPrimary bool, checkSameCell bool) *topodatapb.Tablet {
