@@ -66,32 +66,34 @@ func (gc *Gen4CompareV3) NeedsTransaction() bool {
 }
 
 // TryExecute implements the Primitive interface
-func (gc *Gen4CompareV3) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (gc *Gen4CompareV3) TryExecute(
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+) (*sqltypes.Result, error) {
 	gen4Result, gen4Err := gc.Gen4.TryExecute(vcursor, bindVars, wantfields)
 	v3Result, v3Err := gc.V3.TryExecute(vcursor, bindVars, wantfields)
-	err := CompareV3AndGen4Errors(v3Err, gen4Err)
-	if err != nil {
+
+	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {
 		return nil, err
 	}
 
-	var match bool
-	if gc.HasOrderBy {
-		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
-	} else {
-		match = sqltypes.ResultsEqualUnordered([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
-	}
-	if !match {
-		gc.printMismatch(v3Result, gen4Result)
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
+	if err := gc.compareResults(v3Result, gen4Result); err != nil {
+		return nil, err
 	}
 	return gen4Result, nil
 }
 
 // TryStreamExecute implements the Primitive interface
-func (gc *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (gc *Gen4CompareV3) TryStreamExecute(
+	vcursor VCursor,
+	bindVars map[string]*querypb.BindVariable,
+	wantfields bool,
+	callback func(*sqltypes.Result) error,
+) error {
 	v3Result, gen4Result := &sqltypes.Result{}, &sqltypes.Result{}
 
-	gen4Error := gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
+	gen4Err := gc.Gen4.TryStreamExecute(vcursor, bindVars, wantfields, func(result *sqltypes.Result) error {
 		gen4Result.AppendResult(result)
 		return nil
 	})
@@ -100,11 +102,17 @@ func (gc *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*
 		return nil
 	})
 
-	err := CompareV3AndGen4Errors(v3Err, gen4Error)
-	if err != nil {
+	if err := CompareV3AndGen4Errors(v3Err, gen4Err); err != nil {
 		return err
 	}
 
+	if err := gc.compareResults(v3Result, gen4Result); err != nil {
+		return err
+	}
+	return callback(gen4Result)
+}
+
+func (gc *Gen4CompareV3) compareResults(v3Result *sqltypes.Result, gen4Result *sqltypes.Result) error {
 	var match bool
 	if gc.HasOrderBy {
 		match = sqltypes.ResultsEqual([]sqltypes.Result{*v3Result}, []sqltypes.Result{*gen4Result})
@@ -113,27 +121,39 @@ func (gc *Gen4CompareV3) TryStreamExecute(vcursor VCursor, bindVars map[string]*
 	}
 	if !match {
 		gc.printMismatch(v3Result, gen4Result)
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "results did not match, see VTGate's logs for more information")
 	}
-	return callback(gen4Result)
+	return nil
 }
 
 func (gc *Gen4CompareV3) printMismatch(v3Result *sqltypes.Result, gen4Result *sqltypes.Result) {
-	log.Infof("%T mismatch", gc)
+	log.Warning("Results of Gen4 and V3 are not equal. Displaying diff.")
+
+	// get Gen4 plan and print it
 	gen4plan := &Plan{
 		Instructions: gc.Gen4,
 	}
 	gen4JSON, _ := json.MarshalIndent(gen4plan, "", "  ")
-	log.Info("Gen4 plan:\n", string(gen4JSON))
+	log.Warning("Gen4's plan:\n", string(gen4JSON))
 
+	// get V3's plan and print it
 	v3plan := &Plan{
 		Instructions: gc.V3,
 	}
 	v3JSON, _ := json.MarshalIndent(v3plan, "", "  ")
-	log.Info("V3 plan:\n", string(v3JSON))
+	log.Warning("V3's plan:\n", string(v3JSON))
 
-	log.Infof("Gen4 got: %s", gen4Result.Rows)
-	log.Infof("V3 got: %s", v3Result.Rows)
+	log.Warning("Gen4's results:\n")
+	log.Warningf("\t[rows affected: %d]\n", gen4Result.RowsAffected)
+	for _, row := range gen4Result.Rows {
+		log.Warningf("\t%s", row)
+	}
+	log.Warning("V3's results:\n")
+	log.Warningf("\t[rows affected: %d]\n", v3Result.RowsAffected)
+	for _, row := range v3Result.Rows {
+		log.Warningf("\t%s", row)
+	}
+	log.Warning("End of diff.")
 }
 
 // Inputs implements the Primitive interface
@@ -151,7 +171,7 @@ func CompareV3AndGen4Errors(v3Err error, gen4Err error) error {
 		if v3Err.Error() == gen4Err.Error() {
 			return gen4Err
 		}
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 and Gen4 failed with different errors: v3: %s | Gen4: %s", v3Err.Error(), gen4Err.Error())
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "v3 and Gen4 failed with different errors: v3: [%s], Gen4: [%s]", v3Err.Error(), gen4Err.Error())
 	}
 	if v3Err == nil && gen4Err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Gen4 failed while v3 did not: %s", gen4Err.Error())
