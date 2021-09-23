@@ -168,7 +168,7 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
-	opLHS, err := CreateOperatorFromAST(node.FirstStatement, semTable)
+	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
 	if err != nil {
 		return nil, err
 	}
@@ -177,102 +177,98 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 	// Example: S1 UNION S2 UNION ALL S3 UNION S4 UNION ALL S5
 	// To plan this query, we can do concatenate on S1, S2, S3, and S4, and then distinct, and lastly we concatenate S5
 
-	for _, rhsStatement := range node.UnionSelects {
-		isNodeDistinct := rhsStatement.Distinct
-		_, isRHSUnion := rhsStatement.Statement.(*sqlparser.Union)
-		if isRHSUnion {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
-		}
-		opRHS, err := CreateOperatorFromAST(rhsStatement.Statement, semTable)
-		if err != nil {
-			return nil, err
-		}
-		switch opRHS := opRHS.(type) {
-		case *Distinct:
-			switch opLHS := opLHS.(type) {
-			case *Distinct:
-				if isNodeDistinct {
-					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Source.Sources...)
-					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.Source.SelectStmts...)
-					return opLHS, nil
-				}
-				return &Concatenate{
-					SelectStmts: []*sqlparser.Select{nil, nil},
-					Sources:     []Operator{opLHS, opRHS},
-				}, nil
-			case *Concatenate:
-				if isNodeDistinct {
-					opRHS.Source.Sources = append(opLHS.Sources, opRHS.Source.Sources...)
-					opRHS.Source.SelectStmts = append(opLHS.SelectStmts, opRHS.Source.SelectStmts...)
-					return opRHS, nil
-				}
-				opLHS.Sources = append(opLHS.Sources, opRHS)
-				opLHS.SelectStmts = append(opLHS.SelectStmts, nil)
-				return opLHS, nil
-			default:
-				if isNodeDistinct {
-					opRHS.Source.Sources = append([]Operator{opLHS}, opRHS.Source.Sources...)
-					opRHS.Source.SelectStmts = append([]*sqlparser.Select{getSelect(node.FirstStatement)}, opRHS.Source.SelectStmts...)
-					return opRHS, nil
-				}
-				return &Concatenate{
-					SelectStmts: []*sqlparser.Select{getSelect(node.FirstStatement), nil},
-					Sources:     []Operator{opLHS, opRHS},
-				}, nil
-			}
-		case *Concatenate:
-			switch opLHS := opLHS.(type) {
-			case *Distinct:
-				if isNodeDistinct {
-					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Sources...)
-					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.SelectStmts...)
-					return opLHS, nil
-				}
-				opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
-				opRHS.SelectStmts = append([]*sqlparser.Select{nil}, opRHS.SelectStmts...)
-				return opRHS, nil
-			case *Concatenate:
-				opLHS.Sources = append(opLHS.Sources, opRHS.Sources...)
-				opLHS.SelectStmts = append(opLHS.SelectStmts, opRHS.SelectStmts...)
-				return createDistinctIfRequired(rhsStatement, opLHS)
-			default:
-				// lhs is a select
-				// rhs is a concat
-				opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
-				opRHS.SelectStmts = append([]*sqlparser.Select{getSelect(node.FirstStatement)}, opRHS.SelectStmts...)
-				return createDistinctIfRequired(rhsStatement, opRHS)
-			}
-		default:
-			switch opLHS := opLHS.(type) {
-			case *Distinct:
-				if isNodeDistinct {
-					opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS)
-					opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, getSelect(rhsStatement.Statement))
-					return opLHS, nil
-				}
-				return &Concatenate{
-					SelectStmts: []*sqlparser.Select{nil, getSelect(rhsStatement.Statement)},
-					Sources:     []Operator{opLHS, opRHS},
-				}, nil
-
-			case *Concatenate:
-				opLHS.Sources = append(opLHS.Sources, opRHS)
-				opLHS.SelectStmts = append(opLHS.SelectStmts, getSelect(rhsStatement.Statement))
-				return createDistinctIfRequired(rhsStatement, opLHS)
-			default:
-				concatOp := &Concatenate{
-					Sources:     []Operator{opLHS, opRHS},
-					SelectStmts: []*sqlparser.Select{getSelect(node.FirstStatement), getSelect(rhsStatement.Statement)},
-				}
-				return createDistinctIfRequired(rhsStatement, concatOp)
-			}
-		}
-
+	isNodeDistinct := node.Distinct
+	_, isRHSUnion := node.Right.(*sqlparser.Union)
+	if isRHSUnion {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
 	}
-	return nil, nil
+	opRHS, err := CreateOperatorFromAST(node.Right, semTable)
+	if err != nil {
+		return nil, err
+	}
+	switch opRHS := opRHS.(type) {
+	case *Distinct:
+		switch opLHS := opLHS.(type) {
+		case *Distinct:
+			if isNodeDistinct {
+				opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Source.Sources...)
+				opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.Source.SelectStmts...)
+				return opLHS, nil
+			}
+			return &Concatenate{
+				SelectStmts: []*sqlparser.Select{nil, nil},
+				Sources:     []Operator{opLHS, opRHS},
+			}, nil
+		case *Concatenate:
+			if isNodeDistinct {
+				opRHS.Source.Sources = append(opLHS.Sources, opRHS.Source.Sources...)
+				opRHS.Source.SelectStmts = append(opLHS.SelectStmts, opRHS.Source.SelectStmts...)
+				return opRHS, nil
+			}
+			opLHS.Sources = append(opLHS.Sources, opRHS)
+			opLHS.SelectStmts = append(opLHS.SelectStmts, nil)
+			return opLHS, nil
+		default:
+			if isNodeDistinct {
+				opRHS.Source.Sources = append([]Operator{opLHS}, opRHS.Source.Sources...)
+				opRHS.Source.SelectStmts = append([]*sqlparser.Select{getSelect(node.Left)}, opRHS.Source.SelectStmts...)
+				return opRHS, nil
+			}
+			return &Concatenate{
+				SelectStmts: []*sqlparser.Select{getSelect(node.Left), nil},
+				Sources:     []Operator{opLHS, opRHS},
+			}, nil
+		}
+	case *Concatenate:
+		switch opLHS := opLHS.(type) {
+		case *Distinct:
+			if isNodeDistinct {
+				opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS.Sources...)
+				opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, opRHS.SelectStmts...)
+				return opLHS, nil
+			}
+			opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
+			opRHS.SelectStmts = append([]*sqlparser.Select{nil}, opRHS.SelectStmts...)
+			return opRHS, nil
+		case *Concatenate:
+			opLHS.Sources = append(opLHS.Sources, opRHS.Sources...)
+			opLHS.SelectStmts = append(opLHS.SelectStmts, opRHS.SelectStmts...)
+			return createDistinctIfRequired(node, opLHS)
+		default:
+			// lhs is a select
+			// rhs is a concat
+			opRHS.Sources = append([]Operator{opLHS}, opRHS.Sources...)
+			opRHS.SelectStmts = append([]*sqlparser.Select{getSelect(node.Left)}, opRHS.SelectStmts...)
+			return createDistinctIfRequired(node, opRHS)
+		}
+	default:
+		switch opLHS := opLHS.(type) {
+		case *Distinct:
+			if isNodeDistinct {
+				opLHS.Source.Sources = append(opLHS.Source.Sources, opRHS)
+				opLHS.Source.SelectStmts = append(opLHS.Source.SelectStmts, getSelect(node.Right))
+				return opLHS, nil
+			}
+			return &Concatenate{
+				SelectStmts: []*sqlparser.Select{nil, getSelect(node.Right)},
+				Sources:     []Operator{opLHS, opRHS},
+			}, nil
+
+		case *Concatenate:
+			opLHS.Sources = append(opLHS.Sources, opRHS)
+			opLHS.SelectStmts = append(opLHS.SelectStmts, getSelect(node.Right))
+			return createDistinctIfRequired(node, opLHS)
+		default:
+			concatOp := &Concatenate{
+				Sources:     []Operator{opLHS, opRHS},
+				SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
+			}
+			return createDistinctIfRequired(node, concatOp)
+		}
+	}
 }
 
-func createDistinctIfRequired(union *sqlparser.UnionSelect, input *Concatenate) (Operator, error) {
+func createDistinctIfRequired(union *sqlparser.Union, input *Concatenate) (Operator, error) {
 	if !union.Distinct {
 		return input, nil
 	}

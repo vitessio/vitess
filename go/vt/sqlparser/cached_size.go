@@ -2156,16 +2156,13 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(96)
 	}
-	// field FirstStatement vitess.io/vitess/go/vt/sqlparser.SelectStatement
-	if cc, ok := cached.FirstStatement.(cachedObject); ok {
+	// field Left vitess.io/vitess/go/vt/sqlparser.SelectStatement
+	if cc, ok := cached.Left.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field UnionSelects []*vitess.io/vitess/go/vt/sqlparser.UnionSelect
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.UnionSelects)) * int64(8))
-		for _, elem := range cached.UnionSelects {
-			size += elem.CachedSize(true)
-		}
+	// field Right vitess.io/vitess/go/vt/sqlparser.SelectStatement
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field OrderBy vitess.io/vitess/go/vt/sqlparser.OrderBy
 	{
