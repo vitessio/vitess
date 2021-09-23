@@ -19,6 +19,8 @@ package controller
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgr/log"
+
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/vtgr/db"
 
@@ -249,7 +251,7 @@ func TestResolve(t *testing.T) {
 			{Hostname: "host1", Port: 10}: {HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.ONLINE, ReadOnly: false},
 			{Hostname: "host2", Port: 10}: {HostName: "host2", Port: 10, Role: db.SECONDARY, State: db.ONLINE, ReadOnly: true},
 			{Hostname: "host3", Port: 10}: {HostName: "host3", Port: 10, Role: db.SECONDARY, State: db.ONLINE, ReadOnly: true},
-		}}, ""},
+		}, nil}, ""},
 		{"test readonly with unreachable primary", []*db.GroupView{ // host1 is unreachable
 			{MySQLHost: "host2", MySQLPort: 10, GroupName: "group", UnresolvedMembers: []*db.GroupMember{
 				{HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.ONLINE, ReadOnly: false},
@@ -265,7 +267,7 @@ func TestResolve(t *testing.T) {
 			{Hostname: "host1", Port: 10}: {HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.ONLINE, ReadOnly: false},
 			{Hostname: "host2", Port: 10}: {HostName: "host2", Port: 10, Role: db.SECONDARY, State: db.ONLINE, ReadOnly: true},
 			{Hostname: "host3", Port: 10}: {HostName: "host3", Port: 10, Role: db.SECONDARY, State: db.ONLINE, ReadOnly: true},
-		}}, ""},
+		}, nil}, ""},
 		{"test split brain by group name", []*db.GroupView{
 			{MySQLHost: "host1", MySQLPort: 10, GroupName: "group", UnresolvedMembers: healthyView},
 			{MySQLHost: "host2", MySQLPort: 10, GroupName: "group1", UnresolvedMembers: healthyView},
@@ -285,7 +287,7 @@ func TestResolve(t *testing.T) {
 			{Hostname: "host1", Port: 10}: {HostName: "host1", Port: 10, Role: db.UNKNOWNROLE, State: db.OFFLINE, ReadOnly: true},
 			{Hostname: "host2", Port: 10}: {HostName: "host2", Port: 10, Role: db.UNKNOWNROLE, State: db.OFFLINE, ReadOnly: true},
 			{Hostname: "host3", Port: 10}: {HostName: "host3", Port: 10, Role: db.UNKNOWNROLE, State: db.OFFLINE, ReadOnly: true},
-		}}, ""},
+		}, nil}, ""},
 		{"test network partition by majority unreachable", []*db.GroupView{
 			{MySQLHost: "host1", MySQLPort: 10, GroupName: "group", UnresolvedMembers: []*db.GroupMember{
 				{HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.UNREACHABLE, ReadOnly: false},
@@ -308,7 +310,7 @@ func TestResolve(t *testing.T) {
 			{Hostname: "host1", Port: 10}: {HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.ONLINE, ReadOnly: false},
 			{Hostname: "host2", Port: 10}: {HostName: "host2", Port: 10, Role: db.SECONDARY, State: db.ONLINE, ReadOnly: true},
 			{Hostname: "host3", Port: 10}: {HostName: "host3", Port: 10, Role: db.SECONDARY, State: db.UNREACHABLE, ReadOnly: false},
-		}}, "group backoff error"},
+		}, nil}, "group backoff error"},
 		{"test network partition by unreachable primary", []*db.GroupView{
 			{MySQLHost: "host2", MySQLPort: 10, GroupName: "group", UnresolvedMembers: []*db.GroupMember{
 				{HostName: "host1", Port: 10, Role: db.PRIMARY, State: db.UNREACHABLE},
@@ -331,7 +333,7 @@ func TestResolve(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.testName, func(t *testing.T) {
-			group := SQLGroup{views: testCase.views, statsTags: []string{"ks", "0"}}
+			group := SQLGroup{views: testCase.views, statsTags: []string{"ks", "0"}, logger: log.NewVTGRLogger("ks", "0")}
 			err := group.Resolve()
 			if testCase.errorMsg != "" {
 				assert.EqualError(t, err, testCase.errorMsg)
@@ -341,7 +343,8 @@ func TestResolve(t *testing.T) {
 			if testCase.expected != nil {
 				rv := group.resolvedView
 				expected := testCase.expected
-				assert.Equal(t, expected, rv)
+				assert.Equal(t, expected.view, rv.view)
+				assert.Equal(t, expected.groupName, rv.groupName)
 			}
 		})
 	}
