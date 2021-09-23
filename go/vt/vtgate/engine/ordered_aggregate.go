@@ -48,6 +48,9 @@ type OrderedAggregate struct {
 	// the aggregation key.
 	Keys []int
 
+	// Keeps track if the keys above were added because of GroupBy or not
+	FromGroupBy []bool
+
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.

@@ -307,7 +307,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	size += cached.UpperLimit.CachedSize(false)
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(17)
+		size += int64(cap(cached.OrderBy)) * int64(18)
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -334,7 +334,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(17)
+		size += int64(cap(cached.OrderBy)) * int64(18)
 	}
 	return size
 }
@@ -366,7 +366,7 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(104)
 	}
 	// field Aggregates []vitess.io/vitess/go/vt/vtgate/engine.AggregateParams
 	{
@@ -379,6 +379,8 @@ func (cached *OrderedAggregate) CachedSize(alloc bool) int64 {
 	{
 		size += int64(cap(cached.Keys)) * int64(8)
 	}
+	// field FromGroupBy []bool
+	size += int64(cap(cached.FromGroupBy))
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
 		size += cc.CachedSize(true)
@@ -550,7 +552,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderbyParams
 	{
-		size += int64(cap(cached.OrderBy)) * int64(17)
+		size += int64(cap(cached.OrderBy)) * int64(18)
 	}
 	// field SysTableTableSchema vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.SysTableTableSchema.(cachedObject); ok {
