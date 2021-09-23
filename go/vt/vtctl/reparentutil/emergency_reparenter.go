@@ -19,6 +19,8 @@ package reparentutil
 import (
 	"context"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/stats"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -101,25 +103,26 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 	// run ERS with shard already locked
 	err = erp.reparentShardLocked(ctx, ev, keyspace, shard, opts)
 
-	opts.PostERSCompletionHook(ctx, ev, erp.logger, erp.tmc)
-
 	return ev, err
 }
 
 // reparentShardLocked performs Emergency Reparent Shard operation assuming that the shard is already locked
-func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, opts EmergencyReparentOptions) error {
+func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, opts EmergencyReparentOptions) (err error) {
 	// log the starting of the operation and increment the counter
 	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
 	ersCounter.Add(1)
 
 	// get the shard information from the topology server
-	shardInfo, err := erp.ts.GetShard(ctx, keyspace, shard)
+	var shardInfo *topo.ShardInfo
+	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
 	}
 	ev.ShardInfo = *shardInfo
 
-	// get the previous primary according to the topology server
+	// get the previous primary according to the topology server,
+	// we use this information to choose the best candidate in the same cell
+	// and to undo promotion in case of failure
 	var prevPrimary *topodatapb.Tablet
 	if shardInfo.PrimaryAlias != nil {
 		prevPrimaryInfo, err := erp.ts.GetTablet(ctx, shardInfo.PrimaryAlias)
@@ -131,13 +134,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// read all the tablets and there information
 	event.DispatchUpdate(ev, "reading all tablets")
-	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
+	var tabletMap map[string]*topo.TabletInfo
+	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
 	}
 
 	// Stop replication on all the tablets and build their status map
-	statusMap, primaryStatusMap, err := StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.waitReplicasTimeout, opts.ignoreReplicas, erp.logger)
+	var statusMap map[string]*replicationdatapb.StopReplicationStatus
+	var primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
+	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.waitReplicasTimeout, opts.ignoreReplicas, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -149,11 +155,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the valid candidates for becoming the primary
 	// this is where we check for errant GTIDs and remove the tablets that have them from consideration
-	validCandidates, err := FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
+	var validCandidates map[string]mysql.Position
+	validCandidates, err = FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
 	if err != nil {
 		return err
 	}
-	// Now, we restrict the valid candidates list according to the ReparentFunctions implementations
+	// Now, we restrict the valid candidates list, which removes some tablets from consideration
 	validCandidates, err = restrictValidCandidates(validCandidates, tabletMap)
 	if err != nil {
 		return err
@@ -162,39 +169,45 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err := waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, opts.waitReplicasTimeout); err != nil {
+	if err = waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, opts.waitReplicasTimeout); err != nil {
 		return err
 	}
 
-	// find the primary candidate that we want to promote
-	var newPrimary *topodatapb.Tablet
+	// find the intermediate primary candidate that we want to replicate from. This will always be the most advanced tablet that we have
+	// We let all the other tablets replicate from this primary. We will then try to choose a better candidate and let it catch up
+	var intermediatePrimary *topodatapb.Tablet
 	var validCandidateTablets []*topodatapb.Tablet
-	newPrimary, validCandidateTablets, err = findPrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
+	intermediatePrimary, validCandidateTablets, err = findIntermediatePrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	isIdeal := promotedReplicaIsIdeal(newPrimary, prevPrimary, validCandidateTablets, opts)
+	isIdeal := intermediateCandidateIsIdeal(intermediatePrimary, prevPrimary, validCandidateTablets, opts)
 
 	// Check (again) we still have the topology lock.
-	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
+	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return vterrors.Wrapf(err, "lost topology lock, aborting: %v", err)
 	}
 
+	// initialize the newPrimary with the intermediate primary, override this value if it is not the ideal candidate
+	newPrimary := intermediatePrimary
 	if !isIdeal {
-		// we now promote our primary candidate and also reparent all the other tablets to start replicating from this candidate
-		validReplacementCandidates, err := promoteIntermediatePrimary(ctx, erp.tmc, ev, erp.logger, newPrimary, opts.lockAction, tabletMap, statusMap, opts)
+		// we now promote our intermediate primary candidate and also reparent all the other tablets to start replicating from this candidate
+		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
+		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
+		var validReplacementCandidates []*topodatapb.Tablet
+		validReplacementCandidates, err = promoteIntermediatePrimary(ctx, erp.tmc, ev, erp.logger, intermediatePrimary, opts.lockAction, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}
 
-		// try to find a better candidate if we do not already have the most ideal one
-		betterCandidate := getBetterCandidate(newPrimary, prevPrimary, validReplacementCandidates, opts)
+		// try to find a better candidate using the list we got back
+		betterCandidate := getBetterCandidate(intermediatePrimary, prevPrimary, validReplacementCandidates, opts)
 
-		// if our better candidate is different from our previous candidate, then we replace our primary
-		if !topoproto.TabletAliasEqual(betterCandidate.Alias, newPrimary.Alias) {
-			err = replaceWithBetterCandidate(ctx, erp.tmc, erp.ts, ev, erp.logger, newPrimary, betterCandidate, opts.lockAction, tabletMap, statusMap, opts)
+		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
+		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediatePrimary.Alias) {
+			err = waitForCatchingUp(ctx, erp.tmc, erp.ts, ev, erp.logger, intermediatePrimary, betterCandidate, opts.lockAction, tabletMap, statusMap, opts)
 			if err != nil {
 				return err
 			}
@@ -202,45 +215,36 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 	}
 
-	// now we check if there is a need to override the promotion of the newPrimary
-	errInPromotion := checkIfNeedToOverridePromotion(newPrimary, prevPrimary, opts)
-	if errInPromotion != nil {
-		erp.logger.Errorf("have to override promotion because of constraint failure - %v", errInPromotion)
-		// we try and undo the promotion
-		newPrimary, err = erp.undoPromotion(ctx, erp.ts, ev, keyspace, shard, prevPrimary, opts.lockAction, tabletMap, statusMap, opts)
-		if err != nil {
-			return err
+	// now we check if all the constraints are satisfied. If they are not, then we should abort
+	constraintFailure := checkIfConstraintsSatisfied(newPrimary, prevPrimary, opts)
+	if constraintFailure != nil {
+		erp.logger.Errorf("have to override promotion because of constraint failure - %v", constraintFailure)
+		// we want to send both the errors to the user, constraint failure and also any error encountered in undoing the promotion
+		defer func() {
+			if err != nil {
+				err = vterrors.Errorf(vtrpc.Code_ABORTED, "error in undoing promotion - %v, constraint failure - %v", err, constraintFailure)
+			} else {
+				err = constraintFailure
+			}
+		}()
+		// we now try to undo are changes. We can do so by promoting the previous primary instead of the new one we selected
+		if prevPrimary == nil {
+			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not undo promotion, since shard record has no primary information")
 		}
-		if newPrimary == nil {
-			return vterrors.Errorf(vtrpc.Code_ABORTED, "could not undo promotion")
-		}
+		newPrimary = prevPrimary
 	}
 
-	// Finally, we call PromoteReplica which fixes the semi-sync, set the primary to read-write and flushes the binlogs
+	// Finally, we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
 	_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}
+	// we now reparent all the replicas to the new primary we have promoted
 	_, err = reparentReplicas(ctx, ev, erp.logger, erp.tmc, newPrimary, opts.lockAction, tabletMap, statusMap, opts, false, true)
 	if err != nil {
 		return err
 	}
 
 	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
-	return errInPromotion
-}
-
-func (erp *EmergencyReparenter) undoPromotion(ctx context.Context, ts *topo.Server, ev *events.Reparent, keyspace, shard string, prevPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) (*topodatapb.Tablet, error) {
-	var err error
-	if prevPrimary != nil {
-		// promote the original primary back
-		_, err = promotePrimaryCandidate(ctx, erp.tmc, ts, ev, erp.logger, prevPrimary, lockAction, tabletMap, statusMap, opts, true)
-		if err == nil {
-			return prevPrimary, nil
-		}
-		erp.logger.Errorf("error in undoing promotion - %v", err)
-	}
-
-	return prevPrimary, err
+	return err
 }
