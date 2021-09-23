@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -117,9 +119,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 					Error  error
 				}{
 					"zone1-0000000200": {},
-				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
 				},
 				MasterPositionResults: map[string]struct {
 					Position string
@@ -240,9 +239,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
-				},
 				MasterPositionResults: map[string]struct {
 					Position string
 					Error    error
@@ -299,6 +295,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	for _, tt := range tests {
 		tt := tt
@@ -434,9 +431,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
-				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
 					// reparent SetMaster calls
@@ -539,9 +533,6 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Result: "promotion position",
 						Error:  nil,
 					},
-				},
-				ChangeTabletTypeResult: map[string]error{
-					"zone1-0000000200": nil,
 				},
 				SetMasterResults: map[string]error{
 					"zone1-0000000200": nil, // waiting for master-position during promotion
