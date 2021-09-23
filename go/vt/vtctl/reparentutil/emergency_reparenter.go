@@ -80,7 +80,9 @@ func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignore
 
 // counters for Emergency Reparent Shard
 var (
-	ersCounter = stats.NewGauge("ers_counter", "Number of time Emergency Reparent Shard has been run")
+	ersCounter        = stats.NewGauge("ers_counter", "Number of times Emergency Reparent Shard has been run")
+	ersSuccessCounter = stats.NewGauge("ers_success_counter", "Number of times Emergency Reparent Shard has succeeded")
+	ersFailureCounter = stats.NewGauge("ers_failure_counter", "Number of times Emergency Reparent Shard has failed")
 )
 
 // NewEmergencyReparenter returns a new EmergencyReparenter object, ready to
@@ -121,8 +123,10 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, sha
 	defer func() {
 		switch err {
 		case nil:
+			ersSuccessCounter.Add(1)
 			event.DispatchUpdate(ev, "finished EmergencyReparentShard")
 		default:
+			ersFailureCounter.Add(1)
 			event.DispatchUpdate(ev, "failed EmergencyReparentShard: "+err.Error())
 		}
 	}()
