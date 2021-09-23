@@ -62,7 +62,7 @@ func TestErsSorter(t *testing.T) {
 
 	mysqlGTID1 := mysql.Mysql56GTID{
 		Server:   sid1,
-		Sequence: 10,
+		Sequence: 9,
 	}
 	mysqlGTID2 := mysql.Mysql56GTID{
 		Server:   sid2,

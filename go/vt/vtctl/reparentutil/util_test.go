@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1651,6 +1653,119 @@ func TestGetBetterCandidate(t *testing.T) {
 			}
 			assert.NoError(t, err)
 			assert.True(t, topoproto.TabletAliasEqual(res.Alias, test.result.Alias))
+		})
+	}
+}
+
+func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
+	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mysqlGTID1 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 9,
+	}
+	mysqlGTID2 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 10,
+	}
+	mysqlGTID3 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 11,
+	}
+
+	positionMostAdvanced := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+
+	positionIntermediate1 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+
+	positionIntermediate2 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+
+	tests := []struct {
+		name            string
+		validCandidates map[string]mysql.Position
+		tabletMap       map[string]*topo.TabletInfo
+		tabletRes       []*topodatapb.Tablet
+	}{
+		{
+			name: "test conversion",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionIntermediate2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			tabletRes: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Hostname: "requires force start",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, test.tabletRes, tabletRes)
+			assert.Equal(t, len(tabletRes), len(posRes))
+			for i, tablet := range tabletRes {
+				assert.Equal(t, test.validCandidates[topoproto.TabletAliasString(tablet.Alias)], posRes[i])
+			}
 		})
 	}
 }
