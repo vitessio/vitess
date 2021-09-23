@@ -753,9 +753,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"STOP SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
-		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 		// extra commands because of retry
 		"STOP SLAVE",
 		"FAKE SET MASTER",
@@ -765,8 +762,6 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		"FAKE SET MASTER",
-		"START SLAVE",
 		"FAKE SET MASTER",
 		"START SLAVE",
 		// extra commands because of retry

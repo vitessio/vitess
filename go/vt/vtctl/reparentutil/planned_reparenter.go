@@ -286,10 +286,6 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	promoteCtx, promoteCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 	defer promoteCancel()
 
-	err = pr.tmc.ChangeType(promoteCtx, primaryElect, topodatapb.TabletType_PRIMARY)
-	if err != nil {
-		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to change type to primary; please try again", primaryElectAliasStr)
-	}
 	rp, err := pr.tmc.PromoteReplica(promoteCtx, primaryElect)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "primary-elect tablet %v failed to be promoted to primary; please try again", primaryElectAliasStr)
