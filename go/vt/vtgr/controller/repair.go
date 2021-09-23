@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -79,13 +78,13 @@ func (shard *GRShard) Repair(ctx context.Context, status DiagnoseType) (RepairRe
 	case DiagnoseTypeBootstrapBackoff, DiagnoseTypeBackoffError:
 		code, err = shard.repairBackoffError(ctx, status)
 	case DiagnoseTypeError:
-		log.Errorf("%v is %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Errorf("%v is %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 	case DiagnoseTypeHealthy:
 		start := time.Now()
 		repairTimingsMs.Record([]string{string(status), "true"}, start)
 	}
 	if status != DiagnoseTypeHealthy {
-		log.Infof("VTGR repaired %v status=%v | code=%v", formatKeyspaceShard(shard.KeyspaceShard), status, code)
+		shard.logger.Infof("VTGR repaired %v status=%v | code=%v", formatKeyspaceShard(shard.KeyspaceShard), status, code)
 	}
 	return code, vterrors.Wrap(err, "vtgr repair")
 }
@@ -93,7 +92,7 @@ func (shard *GRShard) Repair(ctx context.Context, status DiagnoseType) (RepairRe
 func (shard *GRShard) repairShardHasNoGroup(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairShardHasNoGroup")
 	if err != nil {
-		log.Warningf("repairShardHasNoPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
+		shard.logger.Warningf("repairShardHasNoPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
@@ -102,11 +101,11 @@ func (shard *GRShard) repairShardHasNoGroup(ctx context.Context) (RepairResultCo
 	// which will update mysqlGroup stored in the shard
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeShardHasNoGroup {
-		log.Infof("Shard %v is no longer in DiagnoseTypeShardHasNoGroup: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeShardHasNoGroup: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	start := time.Now()
@@ -124,7 +123,7 @@ func (shard *GRShard) repairShardHasNoGroupAction(ctx context.Context) error {
 	mysqlGroup := shard.shardAgreedGroupName()
 	isAllOffline := shard.isAllOfflineOrError()
 	if mysqlGroup != "" {
-		log.Infof("Shard %v already have a group %v", formatKeyspaceShard(shard.KeyspaceShard), mysqlGroup)
+		shard.logger.Infof("Shard %v already have a group %v", formatKeyspaceShard(shard.KeyspaceShard), mysqlGroup)
 		return nil
 	}
 	// This should not really happen in reality
@@ -137,7 +136,7 @@ func (shard *GRShard) repairShardHasNoGroupAction(ctx context.Context) error {
 	replicas := shard.instances
 	// Sanity check to make sure there is at least one instance
 	if len(replicas) == 0 {
-		log.Warningf("Cannot find any instance for the shard %v", formatKeyspaceShard(shard.KeyspaceShard))
+		shard.logger.Warningf("Cannot find any instance for the shard %v", formatKeyspaceShard(shard.KeyspaceShard))
 		return nil
 	}
 	if !shard.sqlGroup.IsSafeToBootstrap() {
@@ -154,24 +153,24 @@ func (shard *GRShard) repairShardHasNoGroupAction(ctx context.Context) error {
 		return errors.New("fail to find any candidate to bootstrap")
 	}
 	// Bootstrap the group
-	log.Infof("Bootstrapping the group for %v on host=%v", formatKeyspaceShard(shard.KeyspaceShard), candidate.instanceKey.Hostname)
+	shard.logger.Infof("Bootstrapping the group for %v on host=%v", formatKeyspaceShard(shard.KeyspaceShard), candidate.instanceKey.Hostname)
 	// Make sure we still hold the topo server lock before moving on
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
 	if err := shard.dbAgent.BootstrapGroupLocked(candidate.instanceKey); err != nil {
 		// if bootstrap failed, the next one that gets the lock will try to do it again
-		log.Errorf("Failed to bootstrap mysql group on %v: %v", candidate.instanceKey.Hostname, err)
+		shard.logger.Errorf("Failed to bootstrap mysql group on %v: %v", candidate.instanceKey.Hostname, err)
 		return err
 	}
-	log.Infof("Bootstrapped the group for %v", formatKeyspaceShard(shard.KeyspaceShard))
+	shard.logger.Infof("Bootstrapped the group for %v", formatKeyspaceShard(shard.KeyspaceShard))
 	return nil
 }
 
 func (shard *GRShard) repairShardHasInactiveGroup(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairShardHasInactiveGroup")
 	if err != nil {
-		log.Warningf("repairShardHasInactiveGroup fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
+		shard.logger.Warningf("repairShardHasInactiveGroup fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
@@ -180,11 +179,11 @@ func (shard *GRShard) repairShardHasInactiveGroup(ctx context.Context) (RepairRe
 	// which will update mysqlGroup stored in the shard
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeShardHasInactiveGroup {
-		log.Infof("Shard %v is no longer in DiagnoseTypeShardHasInactiveGroup: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeShardHasInactiveGroup: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	// Now we know the shard has an agreed group but no member in it
@@ -202,22 +201,22 @@ func (shard *GRShard) repairShardHasInactiveGroup(ctx context.Context) (RepairRe
 func (shard *GRShard) repairBackoffError(ctx context.Context, diagnose DiagnoseType) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairBackoffError")
 	if err != nil {
-		log.Warningf("repairBackoffError fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
+		shard.logger.Warningf("repairBackoffError fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != diagnose {
-		log.Infof("Shard %v is no longer in %v: %v", formatKeyspaceShard(shard.KeyspaceShard), diagnose, status)
+		shard.logger.Infof("Shard %v is no longer in %v: %v", formatKeyspaceShard(shard.KeyspaceShard), diagnose, status)
 		return Noop, nil
 	}
 	if shard.lastDiagnoseResult != diagnose {
-		log.Infof("diagnose shard as %v but last diagnose result was %v", diagnose, shard.lastDiagnoseResult)
+		shard.logger.Infof("diagnose shard as %v but last diagnose result was %v", diagnose, shard.lastDiagnoseResult)
 		return Noop, nil
 	}
 	now := time.Now()
@@ -231,10 +230,10 @@ func (shard *GRShard) repairBackoffError(ctx context.Context, diagnose DiagnoseT
 		return Fail, fmt.Errorf("unsupported diagnose for repairBackoffError: %v", diagnose)
 	}
 	if now.Sub(shard.lastDiagnoseSince) < waitTime {
-		log.Infof("Detected %v at %v. In wait time for network partition", diagnose, shard.lastDiagnoseSince)
+		shard.logger.Infof("Detected %v at %v. In wait time for network partition", diagnose, shard.lastDiagnoseSince)
 		return Noop, nil
 	}
-	log.Infof("Detected %v at %v. Start repairing after %v", diagnose, shard.lastDiagnoseSince, shard.transientErrorWaitTime)
+	shard.logger.Infof("Detected %v at %v. Start repairing after %v", diagnose, shard.lastDiagnoseSince, shard.transientErrorWaitTime)
 	err = shard.stopAndRebootstrap(ctx)
 	repairTimingsMs.Record([]string{DiagnoseTypeBackoffError, strconv.FormatBool(err == nil)}, now)
 	if err != nil {
@@ -255,27 +254,27 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 		defer wg.Done()
 		status := shard.sqlGroup.GetStatus(instance.instanceKey)
 		if status != nil && status.State == db.OFFLINE {
-			log.Infof("stop group replication on %v skipped because it is already OFFLINE", instance.alias)
+			shard.logger.Infof("stop group replication on %v skipped because it is already OFFLINE", instance.alias)
 			return
 		}
-		log.Infof("stop group replication on %v", instance.alias)
+		shard.logger.Infof("stop group replication on %v", instance.alias)
 		err := shard.dbAgent.StopGroupLocked(instance.instanceKey)
 		if err != nil {
 			if !unreachableError(err) {
 				er.RecordError(err)
 			}
-			log.Warningf("Error during stop group replication on %v: %v", instance.instanceKey.Hostname, err)
+			shard.logger.Warningf("Error during stop group replication on %v: %v", instance.instanceKey.Hostname, err)
 		}
 	})
 	if errorRecorder.HasErrors() {
-		log.Errorf("Failed to stop group replication %v", errorRecorder.Error())
+		shard.logger.Errorf("Failed to stop group replication %v", errorRecorder.Error())
 		return errorRecorder.Error()
 	}
-	log.Infof("Stop the group for %v", formatKeyspaceShard(shard.KeyspaceShard))
-	log.Info("Start find candidate to rebootstrap")
+	shard.logger.Infof("Stop the group for %v", formatKeyspaceShard(shard.KeyspaceShard))
+	shard.logger.Info("Start find candidate to rebootstrap")
 	candidate, err := shard.findRebootstrapCandidate(ctx)
 	if err != nil {
-		log.Errorf("Failed to find rebootstrap candidate: %v", err)
+		shard.logger.Errorf("Failed to find rebootstrap candidate: %v", err)
 		return err
 	}
 	shard.refreshSQLGroup()
@@ -283,10 +282,10 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 		return errors.New("unsafe to bootstrap group")
 	}
 	if *abortRebootstrap {
-		log.Warningf("Abort stopAndRebootstrap because rebootstrap hook override")
+		shard.logger.Warningf("Abort stopAndRebootstrap because rebootstrap hook override")
 		return errForceAbortBootstrap
 	}
-	log.Infof("Rebootstrap %v on %v", formatKeyspaceShard(shard.KeyspaceShard), candidate.instanceKey.Hostname)
+	shard.logger.Infof("Rebootstrap %v on %v", formatKeyspaceShard(shard.KeyspaceShard), candidate.instanceKey.Hostname)
 	// Make sure we still hold the topo server lock before moving on
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
@@ -313,7 +312,7 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 	if skipPrimary && primary != nil {
 		status := shard.sqlGroup.GetStatus(primary.instanceKey)
 		mysqlPrimaryHost, mysqlPrimaryPort = status.HostName, status.Port
-		log.Infof("Found primary instance from MySQL on %v", mysqlPrimaryHost)
+		shard.logger.Infof("Found primary instance from MySQL on %v", mysqlPrimaryHost)
 	}
 	gtidRecorder := &groupGTIDRecorder{}
 	// Iterate through all the instances in the shard and find the one with largest GTID set with best effort
@@ -322,13 +321,13 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 	errorRecorder := shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		if skipPrimary && instance.instanceKey.Hostname == mysqlPrimaryHost && instance.instanceKey.Port == mysqlPrimaryPort {
-			log.Infof("Skip %v to failover to a non-primary node", mysqlPrimaryHost)
+			shard.logger.Infof("Skip %v to failover to a non-primary node", mysqlPrimaryHost)
 			return
 		}
 		gtids, err := shard.dbAgent.FetchApplierGTIDSet(instance.instanceKey)
 		if err != nil {
 			er.RecordError(err)
-			log.Errorf("%v get error while fetch applier GTIDs: %v", instance.alias, err)
+			shard.logger.Errorf("%v get error while fetch applier GTIDs: %v", instance.alias, err)
 			shard.shardStatusCollector.recordProblematics(instance)
 			if unreachableError(err) {
 				shard.shardStatusCollector.recordUnreachables(instance)
@@ -336,7 +335,7 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 			return
 		}
 		if gtids == nil {
-			log.Warningf("[failover candidate] skip %s with empty gtid", instance.alias)
+			shard.logger.Warningf("[failover candidate] skip %s with empty gtid", instance.alias)
 			return
 		}
 		gtidRecorder.recordGroupGTIDs(gtids, instance)
@@ -347,28 +346,28 @@ func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *
 func (shard *GRShard) findRebootstrapCandidate(ctx context.Context) (*grInstance, error) {
 	gtidRecorder, errorRecorder, err := shard.getGTIDSetFromAll(false)
 	if err != nil {
-		log.Errorf("Failed to get gtid from all: %v", err)
+		shard.logger.Errorf("Failed to get gtid from all: %v", err)
 		return nil, err
 	}
 	err = errorRecorder.Error()
 	// We cannot tolerate any error from mysql during a rebootstrap.
 	if err != nil {
-		log.Errorf("Failed to fetch all GTID with forAllInstances for rebootstrap: %v", err)
+		shard.logger.Errorf("Failed to fetch all GTID with forAllInstances for rebootstrap: %v", err)
 		return nil, err
 	}
 	candidate, err := shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, nil)
 	if err != nil {
-		log.Errorf("Failed to find rebootstrap candidate by GTID after forAllInstances: %v", err)
+		shard.logger.Errorf("Failed to find rebootstrap candidate by GTID after forAllInstances: %v", err)
 		return nil, err
 	}
 	if candidate == nil {
 		return nil, fmt.Errorf("failed to find rebootstrap candidate for %v", formatKeyspaceShard(shard.KeyspaceShard))
 	}
 	if !shard.instanceReachable(ctx, candidate) {
-		log.Errorf("rebootstrap candidate %v (%v) is not reachable via ping", candidate.alias, candidate.instanceKey.Hostname)
+		shard.logger.Errorf("rebootstrap candidate %v (%v) is not reachable via ping", candidate.alias, candidate.instanceKey.Hostname)
 		return nil, fmt.Errorf("%v is unreachable", candidate.alias)
 	}
-	log.Infof("%v is the rebootstrap candidate", candidate.alias)
+	shard.logger.Infof("%v is the rebootstrap candidate", candidate.alias)
 	return candidate, nil
 }
 
@@ -377,7 +376,7 @@ func (shard *GRShard) findRebootstrapCandidate(ctx context.Context) (*grInstance
 func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, error) {
 	gtidRecorder, errorRecorder, err := shard.getGTIDSetFromAll(true)
 	if err != nil {
-		log.Errorf("Failed to get gtid from all: %v", err)
+		shard.logger.Errorf("Failed to get gtid from all: %v", err)
 		return nil, err
 	}
 	err = errorRecorder.Error()
@@ -385,12 +384,12 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	// Failover within the group is safe, finding the largest GTID is an optimization.
 	// therefore we don't check error from errorRecorder just log it
 	if err != nil {
-		log.Warningf("Errors when fetch all GTID with forAllInstances for failover: %v", err)
+		shard.logger.Warningf("Errors when fetch all GTID with forAllInstances for failover: %v", err)
 	}
 	shard.forAllInstances(func(instance *grInstance, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 		defer wg.Done()
 		if !shard.instanceReachable(ctx, instance) {
-			log.Errorf("%v is not reachable via ping", instance.alias)
+			shard.logger.Errorf("%v is not reachable via ping", instance.alias)
 			shard.shardStatusCollector.recordProblematics(instance)
 			shard.shardStatusCollector.recordUnreachables(instance)
 		}
@@ -400,20 +399,20 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 		return !shard.shardStatusCollector.isUnreachable(instance)
 	})
 	if err != nil {
-		log.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)
+		shard.logger.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)
 		return nil, err
 	}
 	if candidate == nil {
 		return nil, fmt.Errorf("failed to find failover candidate for %v", formatKeyspaceShard(shard.KeyspaceShard))
 	}
-	log.Infof("%v is the failover candidate", candidate.alias)
+	shard.logger.Infof("%v is the failover candidate", candidate.alias)
 	return candidate, nil
 }
 
 func (shard *GRShard) repairWrongPrimaryTablet(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairWrongPrimaryTablet")
 	if err != nil {
-		log.Warningf("repairWrongPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
+		shard.logger.Warningf("repairWrongPrimaryTablet fails to grab lock for the shard %v: %v", shard.KeyspaceShard, err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
@@ -422,11 +421,11 @@ func (shard *GRShard) repairWrongPrimaryTablet(ctx context.Context) (RepairResul
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeWrongPrimaryTablet {
-		log.Infof("Shard %v is no longer in DiagnoseTypeWrongPrimaryTablet: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeWrongPrimaryTablet: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	start := time.Now()
@@ -457,7 +456,7 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to change type to primary on %v: %v", candidate.alias, err)
 	}
-	log.Infof("Successfully make %v the primary tablet", candidate.alias)
+	shard.logger.Infof("Successfully make %v the primary tablet", candidate.alias)
 	return nil
 }
 
@@ -466,18 +465,18 @@ func (shard *GRShard) fixPrimaryTabletLocked(ctx context.Context) error {
 func (shard *GRShard) repairUnconnectedReplica(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairUnconnectedReplica")
 	if err != nil {
-		log.Warningf("repairUnconnectedReplica fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
+		shard.logger.Warningf("repairUnconnectedReplica fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeUnconnectedReplica {
-		log.Infof("Shard %v is no longer in DiagnoseTypeUnconnectedReplica: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeUnconnectedReplica: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	start := time.Now()
@@ -496,20 +495,20 @@ func (shard *GRShard) repairUnconnectedReplicaAction(ctx context.Context) error 
 		return err
 	}
 	if target == nil {
-		log.Infof("there is no instance without group for %v", formatKeyspaceShard(shard.KeyspaceShard))
+		shard.logger.Infof("there is no instance without group for %v", formatKeyspaceShard(shard.KeyspaceShard))
 		return nil
 	}
-	log.Infof("Connecting replica %v to %v", target.instanceKey.Hostname, primaryInstance.instanceKey.Hostname)
+	shard.logger.Infof("Connecting replica %v to %v", target.instanceKey.Hostname, primaryInstance.instanceKey.Hostname)
 	status := shard.sqlGroup.GetStatus(target.instanceKey)
 	// Make sure we still hold the topo server lock before moving on
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
 	if status != nil && status.State != db.OFFLINE {
-		log.Infof("stop group replication on %v ($v) before join the group", target.alias, status.State)
+		shard.logger.Infof("stop group replication on %v (%v) before join the group", target.alias, status.State)
 		err := shard.dbAgent.StopGroupLocked(target.instanceKey)
 		if err != nil {
-			log.Errorf("Failed to stop group replication on %v: %v", target.instanceKey.Hostname, err)
+			shard.logger.Errorf("Failed to stop group replication on %v: %v", target.instanceKey.Hostname, err)
 			return err
 		}
 		// Make sure we still hold the topo server lock before moving on
@@ -523,18 +522,18 @@ func (shard *GRShard) repairUnconnectedReplicaAction(ctx context.Context) error 
 func (shard *GRShard) repairUnreachablePrimary(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairUnreachablePrimary")
 	if err != nil {
-		log.Warningf("repairUnreachablePrimary fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
+		shard.logger.Warningf("repairUnreachablePrimary fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeUnreachablePrimary {
-		log.Infof("Shard %v is no longer in DiagnoseTypeUnreachablePrimary: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeUnreachablePrimary: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	// We are here because either:
@@ -556,18 +555,18 @@ func (shard *GRShard) repairUnreachablePrimary(ctx context.Context) (RepairResul
 func (shard *GRShard) repairInsufficientGroupSize(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairInsufficientGroupSize")
 	if err != nil {
-		log.Warningf("repairInsufficientGroupSize fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
+		shard.logger.Warningf("repairInsufficientGroupSize fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeInsufficientGroupSize {
-		log.Infof("Shard %v is no longer in DiagnoseTypeInsufficientGroupSize: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeInsufficientGroupSize: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	// We check primary tablet is consistent with sql primary before InsufficientGroupSize
@@ -591,18 +590,18 @@ func (shard *GRShard) repairInsufficientGroupSize(ctx context.Context) (RepairRe
 func (shard *GRShard) repairReadOnlyShard(ctx context.Context) (RepairResultCode, error) {
 	ctx, err := shard.LockShard(ctx, "repairReadOnlyShard")
 	if err != nil {
-		log.Warningf("repairReadOnlyShard fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
+		shard.logger.Warningf("repairReadOnlyShard fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return Noop, err
 	}
 	defer shard.UnlockShard()
 	shard.refreshTabletsInShardLocked(ctx)
 	status, err := shard.diagnoseLocked(ctx)
 	if err != nil {
-		log.Errorf("Failed to diagnose: %v", err)
+		shard.logger.Errorf("Failed to diagnose: %v", err)
 		return Fail, err
 	}
 	if status != DiagnoseTypeReadOnlyShard {
-		log.Infof("Shard %v is no longer in DiagnoseTypeReadOnlyShard: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+		shard.logger.Infof("Shard %v is no longer in DiagnoseTypeReadOnlyShard: %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 		return Noop, nil
 	}
 	primary := shard.findShardPrimaryTablet()
@@ -622,7 +621,7 @@ func (shard *GRShard) repairReadOnlyShard(ctx context.Context) (RepairResultCode
 func (shard *GRShard) Failover(ctx context.Context) error {
 	ctx, err := shard.LockShard(ctx, "Failover")
 	if err != nil {
-		log.Warningf("Failover fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
+		shard.logger.Warningf("Failover fails to grab lock for the shard %v: %v", formatKeyspaceShard(shard.KeyspaceShard), err)
 		return err
 	}
 	defer shard.UnlockShard()
@@ -633,7 +632,7 @@ func (shard *GRShard) Failover(ctx context.Context) error {
 func (shard *GRShard) failoverLocked(ctx context.Context) error {
 	candidate, err := shard.findFailoverCandidate(ctx)
 	if err != nil {
-		log.Errorf("Failed to find failover candidate: %v", err)
+		shard.logger.Errorf("Failed to find failover candidate: %v", err)
 		return err
 	}
 	// Make sure we still hold the topo server lock before moving on
@@ -642,20 +641,20 @@ func (shard *GRShard) failoverLocked(ctx context.Context) error {
 	}
 	err = shard.dbAgent.Failover(candidate.instanceKey)
 	if err != nil {
-		log.Errorf("Failed to failover mysql to %v", candidate.alias)
+		shard.logger.Errorf("Failed to failover mysql to %v", candidate.alias)
 		return err
 	}
-	log.Infof("Successfully failover MySQL to %v for %v", candidate.instanceKey.Hostname, formatKeyspaceShard(shard.KeyspaceShard))
+	shard.logger.Infof("Successfully failover MySQL to %v for %v", candidate.instanceKey.Hostname, formatKeyspaceShard(shard.KeyspaceShard))
 	// Make sure we still hold the topo server lock before moving on
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
 	err = shard.tmc.ChangeType(ctx, candidate.tablet, topodatapb.TabletType_PRIMARY)
 	if err != nil {
-		log.Errorf("Failed to failover Vitess %v", candidate.alias)
+		shard.logger.Errorf("Failed to failover Vitess %v", candidate.alias)
 		return err
 	}
-	log.Infof("Successfully failover Vitess to %v for %v", candidate.alias, formatKeyspaceShard(shard.KeyspaceShard))
+	shard.logger.Infof("Successfully failover Vitess to %v for %v", candidate.alias, formatKeyspaceShard(shard.KeyspaceShard))
 	return nil
 }
 
@@ -667,7 +666,7 @@ func (shard *GRShard) findFailoverCandidateFromRecorder(ctx context.Context, rec
 	// in case they have same gtid set
 	recorder.sort()
 	for _, gtidInst := range recorder.gtidWithInstances {
-		log.Infof("[failover candidates] %s gtid %s", gtidInst.instance.alias, gtidInst.gtids.String())
+		shard.logger.Infof("[failover candidates] %s gtid %s", gtidInst.instance.alias, gtidInst.gtids.String())
 	}
 	var largestGTIDs mysql.GTIDSet
 	var candidate *grInstance
@@ -678,7 +677,7 @@ func (shard *GRShard) findFailoverCandidateFromRecorder(ctx context.Context, rec
 		gtids := elem.gtids
 		inst := elem.instance
 		if check != nil && !check(ctx, inst) {
-			log.Warningf("Skip %v as candidate with gtid %v because it failed the check", inst.alias, gtids.String())
+			shard.logger.Warningf("Skip %v as candidate with gtid %v because it failed the check", inst.alias, gtids.String())
 			continue
 		}
 		if largestGTIDs == nil {
@@ -698,7 +697,7 @@ func (shard *GRShard) findFailoverCandidateFromRecorder(ctx context.Context, rec
 		// we log and append to candidates so that we know there is a problem in the group
 		// after the iteration
 		if !isSuperset {
-			log.Errorf("FetchGroupView divergent GITD set from host=%v GTIDSet=%v", inst.instanceKey.Hostname, gtids)
+			shard.logger.Errorf("FetchGroupView divergent GITD set from host=%v GTIDSet=%v", inst.instanceKey.Hostname, gtids)
 			divergentCandidates = append(divergentCandidates, inst.alias)
 		}
 	}
@@ -728,7 +727,7 @@ func (shard *GRShard) checkShardLocked(ctx context.Context) error {
 	if err := topo.CheckShardLocked(ctx, shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard); err != nil {
 		labels := []string{shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard}
 		unexpectedLockLost.Add(labels, 1)
-		log.Errorf("lost topology lock; aborting")
+		shard.logger.Errorf("lost topology lock; aborting")
 		return vterrors.Wrap(err, "lost topology lock; aborting")
 	}
 	return nil
