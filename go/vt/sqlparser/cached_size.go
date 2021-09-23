@@ -1624,6 +1624,20 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *RootNode) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field SQLNode vitess.io/vitess/go/vt/sqlparser.SQLNode
+	if cc, ok := cached.SQLNode.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *SRollback) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2175,20 +2189,6 @@ func (cached *Union) CachedSize(alloc bool) int64 {
 	size += cached.Limit.CachedSize(true)
 	// field Into *vitess.io/vitess/go/vt/sqlparser.SelectInto
 	size += cached.Into.CachedSize(true)
-	return size
-}
-func (cached *UnionSelect) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	// field Statement vitess.io/vitess/go/vt/sqlparser.SelectStatement
-	if cc, ok := cached.Statement.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	return size
 }
 func (cached *Update) CachedSize(alloc bool) int64 {

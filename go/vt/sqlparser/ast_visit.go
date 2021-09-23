@@ -286,8 +286,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUnaryExpr(in, f)
 	case *Union:
 		return VisitRefOfUnion(in, f)
-	case *UnionSelect:
-		return VisitRefOfUnionSelect(in, f)
 	case *UnlockTables:
 		return VisitRefOfUnlockTables(in, f)
 	case *Update:
@@ -2082,18 +2080,6 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
-		return err
-	}
-	return nil
-}
-func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitSelectStatement(in.Statement, f); err != nil {
 		return err
 	}
 	return nil

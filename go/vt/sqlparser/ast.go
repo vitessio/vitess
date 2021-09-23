@@ -236,12 +236,6 @@ type (
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
-	// UnionSelect represents union type and select statement after first select statement.
-	UnionSelect struct {
-		Distinct  bool
-		Statement SelectStatement
-	}
-
 	// Union represents a UNION statement.
 	Union struct {
 		Left     SelectStatement

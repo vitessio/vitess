@@ -101,18 +101,6 @@ func (node *Union) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
-
-	if requiresParen(node.Statement) {
-		buf.WriteByte('(')
-		node.Statement.formatFast(buf)
-		buf.WriteByte(')')
-	} else {
-		node.Statement.formatFast(buf)
-	}
-}
-
-// formatFast formats the node.
 func (node *VStream) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("vstream ")
 	node.Comments.formatFast(buf)
