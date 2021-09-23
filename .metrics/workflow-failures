@@ -1,4 +1,3 @@
-2021-06-15T18:30:19Z,unit_race,https://github.com/vitessio/vitess/actions/runs/940323246
 2021-06-15T20:35:57Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/940650195
 2021-06-15T20:41:52Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/940664077
 2021-06-16T05:15:54Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/941688757
@@ -9998,3 +9997,4 @@
 2021-09-23T05:40:14Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1264618912
 2021-09-23T05:40:14Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1264618939
 2021-09-23T05:40:15Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1264618986
+2021-09-23T06:27:23Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1264720351
