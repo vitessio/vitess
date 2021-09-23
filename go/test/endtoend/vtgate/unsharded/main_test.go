@@ -173,7 +173,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-warn_sharded_only=true", "-planner_version", "Gen4CompareV3"}
+		clusterInstance.VtGateExtraArgs = []string{"-warn_sharded_only=true"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			log.Fatal(err.Error())
 			return 1
