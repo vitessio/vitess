@@ -210,7 +210,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	isIdeal := intermediateCandidateIsIdeal(intermediatePrimary, prevPrimary, validCandidateTablets, opts)
+	isIdeal := intermediateCandidateIsIdeal(intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
 
 	// Check (again) we still have the topology lock.
 	if err = topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -230,7 +230,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		}
 
 		// try to find a better candidate using the list we got back
-		betterCandidate := getBetterCandidate(intermediatePrimary, prevPrimary, validReplacementCandidates, opts)
+		betterCandidate := getBetterCandidate(intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
 		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediatePrimary.Alias) {
@@ -261,8 +261,19 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		newPrimary = prevPrimary
 	}
 
-	// Finally, we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
-	_, err = erp.tmc.PromoteReplica(ctx, newPrimary)
+	// Final step is to promote our primary candidate
+	err = erp.promoteNewPrimary(ctx, ev, newPrimary, opts, tabletMap, statusMap)
+	if err != nil {
+		return err
+	}
+
+	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
+	return err
+}
+
+func (erp *EmergencyReparenter) promoteNewPrimary(ctx context.Context, ev *events.Reparent, newPrimary *topodatapb.Tablet, opts EmergencyReparentOptions, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus) error {
+	// we call PromoteReplica which changes the tablet type, fixes the semi-sync, set the primary to read-write and flushes the binlogs
+	_, err := erp.tmc.PromoteReplica(ctx, newPrimary)
 	if err != nil {
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}
@@ -271,7 +282,5 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
-
-	ev.NewPrimary = proto.Clone(newPrimary).(*topodatapb.Tablet)
-	return err
+	return nil
 }
