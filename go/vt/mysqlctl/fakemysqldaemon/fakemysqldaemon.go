@@ -109,16 +109,16 @@ type FakeMysqlDaemon struct {
 	// StartReplicationUntilAfterPos is matched against the input
 	StartReplicationUntilAfterPos mysql.Position
 
-	// SetReplicationSourceInput is matched against the input of SetReplicationSource
-	// (as "%v:%v"). If it doesn't match, SetReplicationSource will return an error.
-	SetReplicationSourceInput string
+	// SetReplicationSourceInputs are matched against the input of SetReplicationSource
+	// (as "%v:%v"). If all of them don't match, SetReplicationSource will return an error.
+	SetReplicationSourceInputs []string
 
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
-	// WaitPrimaryPosition is checked by WaitSourcePos, if the
+	// WaitPrimaryPositions is checked by WaitSourcePos, if the
 	// same it returns nil, if different it returns an error
-	WaitPrimaryPosition mysql.Position
+	WaitPrimaryPositions []mysql.Position
 
 	// PromoteResult is returned by Promote
 	PromoteResult mysql.Position
@@ -376,8 +376,10 @@ func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos mysq
 // SetReplicationSource is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error {
 	input := fmt.Sprintf("%v:%v", host, port)
-	if fmd.SetReplicationSourceInput != input {
-		return fmt.Errorf("wrong input for SetReplicationSourceCommands: expected %v got %v", fmd.SetReplicationSourceInput, input)
+	for _, sourceInput := range fmd.SetReplicationSourceInputs {
+		if sourceInput != input {
+			return fmt.Errorf("wrong input for SetReplicationSourceCommands: expected a value in %v got %v", fmd.SetReplicationSourceInputs, input)
+		}
 	}
 	if fmd.SetReplicationSourceError != nil {
 		return fmd.SetReplicationSourceError
@@ -408,10 +410,12 @@ func (fmd *FakeMysqlDaemon) WaitSourcePos(_ context.Context, pos mysql.Position)
 	if fmd.TimeoutHook != nil {
 		return fmd.TimeoutHook()
 	}
-	if reflect.DeepEqual(fmd.WaitPrimaryPosition, pos) {
-		return nil
+	for _, position := range fmd.WaitPrimaryPositions {
+		if reflect.DeepEqual(position, pos) {
+			return nil
+		}
 	}
-	return fmt.Errorf("wrong input for WaitSourcePos: expected %v got %v", fmd.WaitPrimaryPosition, pos)
+	return fmt.Errorf("wrong input for WaitSourcePos: expected a value in %v got %v", fmd.WaitPrimaryPositions, pos)
 }
 
 // Promote is part of the MysqlDaemon interface

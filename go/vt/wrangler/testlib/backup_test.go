@@ -175,7 +175,7 @@ func TestBackupRestore(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -399,7 +399,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = destTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -567,7 +567,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
@@ -724,7 +724,7 @@ func TestDisableActiveReparents(t *testing.T) {
 		"SHOW DATABASES": {},
 	}
 	destTablet.FakeMysqlDaemon.SetReplicationPositionPos = sourceTablet.FakeMysqlDaemon.CurrentPrimaryPosition
-	destTablet.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(primary.Tablet)
+	destTablet.FakeMysqlDaemon.SetReplicationSourceInputs = append(destTablet.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 
 	destTablet.StartActionLoop(t, wr)
 	defer destTablet.StopActionLoop(t)
