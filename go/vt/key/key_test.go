@@ -212,20 +212,6 @@ func TestKeyRangeAdd(t *testing.T) {
 		out:    "40-c0",
 		ok:     true,
 	}}
-	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
-		if spec == "" {
-			return nil
-		}
-		parts := strings.Split(spec, "-")
-		if len(parts) != 2 {
-			panic("invalid spec")
-		}
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
-		if err != nil {
-			panic(err)
-		}
-		return kr
-	}
 	keyRangeToString := func(kr *topodatapb.KeyRange) string {
 		if kr == nil {
 			return ""
@@ -271,20 +257,6 @@ func TestKeyRangeEndEqual(t *testing.T) {
 		second: "-8000",
 		out:    true,
 	}}
-	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
-		if spec == "" {
-			return nil
-		}
-		parts := strings.Split(spec, "-")
-		if len(parts) != 2 {
-			panic("invalid spec")
-		}
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
-		if err != nil {
-			panic(err)
-		}
-		return kr
-	}
 
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
@@ -326,20 +298,6 @@ func TestKeyRangeStartEqual(t *testing.T) {
 		second: "-8000",
 		out:    true,
 	}}
-	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
-		if spec == "" {
-			return nil
-		}
-		parts := strings.Split(spec, "-")
-		if len(parts) != 2 {
-			panic("invalid spec")
-		}
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
-		if err != nil {
-			panic(err)
-		}
-		return kr
-	}
 
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
@@ -377,25 +335,56 @@ func TestKeyRangeEqual(t *testing.T) {
 		second: "-8000",
 		out:    true,
 	}}
-	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
-		if spec == "" {
-			return nil
-		}
-		parts := strings.Split(spec, "-")
-		if len(parts) != 2 {
-			panic("invalid spec")
-		}
-		kr, err := ParseKeyRangeParts(parts[0], parts[1])
-		if err != nil {
-			panic(err)
-		}
-		return kr
-	}
 
 	for _, tcase := range testcases {
 		first := stringToKeyRange(tcase.first)
 		second := stringToKeyRange(tcase.second)
 		out := KeyRangeEqual(first, second)
+		if out != tcase.out {
+			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
+		}
+	}
+}
+
+func TestKeyRangeIsContiguous(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    bool
+	}{{
+		first:  "-40",
+		second: "40-80",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "-40",
+		out:    false,
+	}, {
+		first:  "-",
+		second: "-40",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "c0-",
+		out:    false,
+	}, {
+		first:  "40-80",
+		second: "80-c0",
+		out:    true,
+	}, {
+		first:  "40-80",
+		second: "8000000000000000-c000000000000000",
+		out:    true,
+	}, {
+		first:  "4000000000000000-8000000000000000",
+		second: "80-c0",
+		out:    true,
+	}}
+
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out := KeyRangeIsContiguous(first, second)
 		if out != tcase.out {
 			t.Fatalf("KeyRangeEqual(%q, %q) expected %t, got %t", tcase.first, tcase.second, tcase.out, out)
 		}
@@ -814,4 +803,19 @@ func TestShardCalculatorForShardsGreaterThan512(t *testing.T) {
 	want := "ff80-"
 
 	assert.Equal(t, want, got[511], "Invalid mapping for a 512-shard keyspace. Expected %v, got %v", want, got[511])
+}
+
+func stringToKeyRange(spec string) *topodatapb.KeyRange {
+	if spec == "" {
+		return nil
+	}
+	parts := strings.Split(spec, "-")
+	if len(parts) != 2 {
+		panic("invalid spec")
+	}
+	kr, err := ParseKeyRangeParts(parts[0], parts[1])
+	if err != nil {
+		panic(err)
+	}
+	return kr
 }
