@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+
 	"vitess.io/vitess/go/vt/discovery"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +45,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -86,7 +89,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: newPrimaryRelayLogPos,
 	}
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPosition = newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition)
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"CREATE DATABASE IF NOT EXISTS _vt",
@@ -108,7 +111,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 	// old primary, will be scrapped
 	oldPrimary.FakeMysqlDaemon.ReadOnly = false
 	oldPrimary.FakeMysqlDaemon.ReplicationStatusError = mysql.ErrNotReplica
-	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newPrimary.Tablet)
+	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE",
 	}
@@ -131,8 +134,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: goodReplica1RelayLogPos,
 	}
-	goodReplica1.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition
-	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newPrimary.Tablet)
+	goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica1.FakeMysqlDaemon.WaitPrimaryPositions, goodReplica1.FakeMysqlDaemon.CurrentSourceFilePosition)
+	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
 		"STOP SLAVE",
@@ -158,8 +161,8 @@ func TestEmergencyReparentShard(t *testing.T) {
 	goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: goodReplica2RelayLogPos,
 	}
-	goodReplica2.FakeMysqlDaemon.WaitPrimaryPosition = goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition
-	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInput = topoproto.MysqlAddr(newPrimary.Tablet)
+	goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions = append(goodReplica2.FakeMysqlDaemon.WaitPrimaryPositions, goodReplica2.FakeMysqlDaemon.CurrentSourceFilePosition)
+	goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica2.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	goodReplica2.StartActionLoop(t, wr)
 	goodReplica2.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
@@ -191,6 +194,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -227,9 +231,16 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: newPrimaryRelayLogPos,
 	}
-	newPrimary.FakeMysqlDaemon.WaitPrimaryPosition = newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, newPrimary.FakeMysqlDaemon.CurrentSourceFilePosition)
+	newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(newPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(moreAdvancedReplica.Tablet))
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
+		"CREATE DATABASE IF NOT EXISTS _vt",
+		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
+		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
 	}
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)
@@ -265,9 +276,14 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition = mysql.Position{
 		GTIDSet: moreAdvancedReplicaLogPos,
 	}
-	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPosition = moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition
+	moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(moreAdvancedReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions = append(moreAdvancedReplica.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentSourceFilePosition)
+	newPrimary.FakeMysqlDaemon.WaitPrimaryPositions = append(newPrimary.FakeMysqlDaemon.WaitPrimaryPositions, moreAdvancedReplica.FakeMysqlDaemon.CurrentPrimaryPosition)
 	moreAdvancedReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"STOP SLAVE IO_THREAD",
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	moreAdvancedReplica.StartActionLoop(t, wr)
 	defer moreAdvancedReplica.StopActionLoop(t)
@@ -276,8 +292,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, newPrimary.Tablet.Alias, 10*time.Second, sets.NewString(), false)
 	cancel()
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "is not fully caught up")
+	assert.NoError(t, err)
 	// check what was run
 	err = newPrimary.FakeMysqlDaemon.CheckSuperQueryList()
 	require.NoError(t, err)
