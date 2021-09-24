@@ -179,15 +179,14 @@ func checkUnionColumns(cursor *sqlparser.Cursor) error {
 
 	count := len(firstProj)
 
-	for _, unionSelect := range union.UnionSelects {
-		proj := sqlparser.GetFirstSelect(unionSelect.Statement).SelectExprs
-		err := checkForStar(proj)
-		if err != nil {
-			return err
-		}
-		if len(proj) != count {
-			return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
-		}
+	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	err = checkForStar(secondProj)
+	if err != nil {
+		return err
+	}
+
+	if len(secondProj) != count {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 	}
 
 	return nil

@@ -1608,6 +1608,22 @@ func (s *VtctldServer) PlannedReparentShard(ctx context.Context, req *vtctldatap
 	return resp, err
 }
 
+// RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RebuildKeyspaceGraph(ctx context.Context, req *vtctldatapb.RebuildKeyspaceGraphRequest) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.RebuildKeyspaceGraph")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("allow_partial", req.AllowPartial)
+
+	if err := topotools.RebuildKeyspace(ctx, logutil.NewCallbackLogger(func(e *logutilpb.Event) {}), s.ts, req.Keyspace, req.Cells, req.AllowPartial); err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.RebuildKeyspaceGraphResponse{}, nil
+}
+
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RebuildVSchemaGraph(ctx context.Context, req *vtctldatapb.RebuildVSchemaGraphRequest) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RebuildVSchemaGraph")
@@ -1780,6 +1796,86 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		Keyspace: tablet.Keyspace,
 		Shard:    tablet.Shard,
 		Primary:  shard.PrimaryAlias,
+	}, nil
+}
+
+// SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardIsPrimaryServing")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("is_serving", req.IsServing)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, fmt.Sprintf("SetShardIsPrimaryServing(%v,%v,%v)", req.Keyspace, req.Shard, req.IsServing))
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		si.IsPrimaryServing = req.IsServing
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetShardIsPrimaryServingResponse{
+		Shard: si.Shard,
+	}, nil
+}
+
+// SetShardTabletControl is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetShardTabletControl(ctx context.Context, req *vtctldatapb.SetShardTabletControlRequest) (*vtctldatapb.SetShardTabletControlResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardTabletControl")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.TabletType))
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("denied_tables", strings.Join(req.DeniedTables, ","))
+	span.Annotate("disable_query_service", req.DisableQueryService)
+	span.Annotate("remove", req.Remove)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetShardTabletControl")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	si, err := s.ts.UpdateShardFields(ctx, req.Keyspace, req.Shard, func(si *topo.ShardInfo) error {
+		return si.UpdateSourceDeniedTables(ctx, req.TabletType, req.Cells, req.Remove, req.DeniedTables)
+	})
+
+	switch {
+	case topo.IsErrType(err, topo.NoUpdateNeeded):
+		// ok, fallthrough to DisableQueryService
+	case err != nil:
+		return nil, err
+	}
+
+	if si == nil { // occurs only when UpdateShardFields above returns NoUpdateNeeded
+		si, err = s.ts.GetShard(ctx, req.Keyspace, req.Shard)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !req.Remove && len(req.DeniedTables) == 0 {
+		err = s.ts.UpdateDisableQueryService(ctx, req.Keyspace, []*topo.ShardInfo{si}, req.TabletType, req.Cells, req.DisableQueryService)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &vtctldatapb.SetShardTabletControlResponse{
+		Shard: si.Shard,
 	}, nil
 }
 

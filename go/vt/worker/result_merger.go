@@ -74,7 +74,7 @@ func NewResultMerger(inputs []ResultReader, pkFieldCount int) (*ResultMerger, er
 
 	err := CheckValidTypesForResultMerger(fields, pkFieldCount)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "invalid PK types for ResultMerger. Use the vtworker LegacySplitClone command instead. %v", err.Error())
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "invalid PK types for ResultMerger. Use the vtworker SplitClone command instead. %v", err.Error())
 	}
 
 	// Initialize the priority queue with all input ResultReader which have at

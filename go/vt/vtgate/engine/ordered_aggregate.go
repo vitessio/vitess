@@ -65,6 +65,7 @@ type GroupByParams struct {
 	KeyCol          int
 	WeightStringCol int
 	Expr            sqlparser.Expr
+	FromGroupBy     bool
 }
 
 // String returns a string. Used for plan descriptions

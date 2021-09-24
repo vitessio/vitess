@@ -1329,7 +1329,12 @@ func commandSetShardIsPrimaryServing(ctx context.Context, wr *wrangler.Wrangler,
 		return err
 	}
 
-	return wr.SetShardIsPrimaryServing(ctx, keyspace, shard, isServing)
+	_, err = wr.VtctldServer().SetShardIsPrimaryServing(ctx, &vtctldatapb.SetShardIsPrimaryServingRequest{
+		Keyspace:  keyspace,
+		Shard:     shard,
+		IsServing: isServing,
+	})
+	return err
 }
 
 func commandUpdateSrvKeyspacePartition(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1403,14 +1408,16 @@ func commandSetShardTabletControl(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	err = wr.SetShardTabletControl(ctx, keyspace, shard, tabletType, cells, *remove, deniedTables)
-	if err != nil {
-		return err
-	}
-	if !*remove && len(deniedTables) == 0 {
-		return wr.UpdateDisableQueryService(ctx, keyspace, shard, tabletType, cells, *disableQueryService)
-	}
-	return nil
+	_, err = wr.VtctldServer().SetShardTabletControl(ctx, &vtctldatapb.SetShardTabletControlRequest{
+		Keyspace:            keyspace,
+		Shard:               shard,
+		TabletType:          tabletType,
+		Cells:               cells,
+		Remove:              *remove,
+		DeniedTables:        deniedTables,
+		DisableQueryService: *disableQueryService,
+	})
+	return err
 }
 
 func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -1835,7 +1842,12 @@ func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, sub
 		return err
 	}
 	for _, keyspace := range keyspaces {
-		if err := wr.RebuildKeyspaceGraph(ctx, keyspace, cellArray, *allowPartial); err != nil {
+		_, err := wr.VtctldServer().RebuildKeyspaceGraph(ctx, &vtctldatapb.RebuildKeyspaceGraphRequest{
+			Keyspace:     keyspace,
+			Cells:        cellArray,
+			AllowPartial: *allowPartial,
+		})
+		if err != nil {
 			return err
 		}
 	}

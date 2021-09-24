@@ -210,20 +210,20 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (jb *join) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := jb.resultColumns[colNumber]
 	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
 		return weightcolNumber, nil
 	}
 	routeNumber := rc.column.Origin().Order()
 	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
 		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
 	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber]-1, alsoAddToGroupBy)
 		if err != nil {
 			return 0, err
 		}
