@@ -81,6 +81,11 @@ func (client *localVtctldClient) DeleteShards(ctx context.Context, in *vtctldata
 	return client.s.DeleteShards(ctx, in)
 }
 
+// DeleteSrvVSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) DeleteSrvVSchema(ctx context.Context, in *vtctldatapb.DeleteSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteSrvVSchemaResponse, error) {
+	return client.s.DeleteSrvVSchema(ctx, in)
+}
+
 // DeleteTablets is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) DeleteTablets(ctx context.Context, in *vtctldatapb.DeleteTabletsRequest, opts ...grpc.CallOption) (*vtctldatapb.DeleteTabletsResponse, error) {
 	return client.s.DeleteTablets(ctx, in)
@@ -141,6 +146,11 @@ func (client *localVtctldClient) GetShard(ctx context.Context, in *vtctldatapb.G
 	return client.s.GetShard(ctx, in)
 }
 
+// GetSrvKeyspaceNames is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldatapb.GetSrvKeyspaceNamesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspaceNamesResponse, error) {
+	return client.s.GetSrvKeyspaceNames(ctx, in)
+}
+
 // GetSrvKeyspaces is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) GetSrvKeyspaces(ctx context.Context, in *vtctldatapb.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
 	return client.s.GetSrvKeyspaces(ctx, in)
@@ -181,14 +191,34 @@ func (client *localVtctldClient) InitShardPrimary(ctx context.Context, in *vtctl
 	return client.s.InitShardPrimary(ctx, in)
 }
 
+// PingTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) PingTablet(ctx context.Context, in *vtctldatapb.PingTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.PingTabletResponse, error) {
+	return client.s.PingTablet(ctx, in)
+}
+
 // PlannedReparentShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldatapb.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldatapb.PlannedReparentShardResponse, error) {
 	return client.s.PlannedReparentShard(ctx, in)
 }
 
+// RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RebuildKeyspaceGraph(ctx context.Context, in *vtctldatapb.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
+	return client.s.RebuildKeyspaceGraph(ctx, in)
+}
+
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RebuildVSchemaGraph(ctx context.Context, in *vtctldatapb.RebuildVSchemaGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
 	return client.s.RebuildVSchemaGraph(ctx, in)
+}
+
+// RefreshState is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RefreshState(ctx context.Context, in *vtctldatapb.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateResponse, error) {
+	return client.s.RefreshState(ctx, in)
+}
+
+// RefreshStateByShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) RefreshStateByShard(ctx context.Context, in *vtctldatapb.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateByShardResponse, error) {
+	return client.s.RefreshStateByShard(ctx, in)
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
@@ -206,9 +236,39 @@ func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctlda
 	return client.s.ReparentTablet(ctx, in)
 }
 
+// SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
+	return client.s.SetShardIsPrimaryServing(ctx, in)
+}
+
+// SetShardTabletControl is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldatapb.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardTabletControlResponse, error) {
+	return client.s.SetShardTabletControl(ctx, in)
+}
+
+// SetWritable is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetWritable(ctx context.Context, in *vtctldatapb.SetWritableRequest, opts ...grpc.CallOption) (*vtctldatapb.SetWritableResponse, error) {
+	return client.s.SetWritable(ctx, in)
+}
+
 // ShardReplicationPositions is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) ShardReplicationPositions(ctx context.Context, in *vtctldatapb.ShardReplicationPositionsRequest, opts ...grpc.CallOption) (*vtctldatapb.ShardReplicationPositionsResponse, error) {
 	return client.s.ShardReplicationPositions(ctx, in)
+}
+
+// SleepTablet is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SleepTablet(ctx context.Context, in *vtctldatapb.SleepTabletRequest, opts ...grpc.CallOption) (*vtctldatapb.SleepTabletResponse, error) {
+	return client.s.SleepTablet(ctx, in)
+}
+
+// StartReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) StartReplication(ctx context.Context, in *vtctldatapb.StartReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StartReplicationResponse, error) {
+	return client.s.StartReplication(ctx, in)
+}
+
+// StopReplication is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) StopReplication(ctx context.Context, in *vtctldatapb.StopReplicationRequest, opts ...grpc.CallOption) (*vtctldatapb.StopReplicationResponse, error) {
+	return client.s.StopReplication(ctx, in)
 }
 
 // TabletExternallyReparented is part of the vtctlservicepb.VtctldClient interface.
@@ -224,4 +284,19 @@ func (client *localVtctldClient) UpdateCellInfo(ctx context.Context, in *vtctlda
 // UpdateCellsAlias is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctldatapb.UpdateCellsAliasRequest, opts ...grpc.CallOption) (*vtctldatapb.UpdateCellsAliasResponse, error) {
 	return client.s.UpdateCellsAlias(ctx, in)
+}
+
+// Validate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
+	return client.s.Validate(ctx, in)
+}
+
+// ValidateKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldatapb.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	return client.s.ValidateKeyspace(ctx, in)
+}
+
+// ValidateShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ValidateShard(ctx context.Context, in *vtctldatapb.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateShardResponse, error) {
+	return client.s.ValidateShard(ctx, in)
 }
