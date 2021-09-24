@@ -1,0 +1,401 @@
+(select id from unsharded union all select id from unsharded_auto order by id) union select id from user
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:`user`
+	}
+}
+
+select id from unsharded union select id from unsharded_auto
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	}
+}
+
+select id from unsharded union all select id from unsharded_auto
+Concatenate {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	}
+}
+
+(select id from unsharded union all select id from unsharded_auto limit 10) union select id from x order by id
+Concatenate(distinct) {
+	Concatenate {
+		QueryGraph: {
+		Tables:
+			1:unsharded
+		},
+		QueryGraph: {
+		Tables:
+			2:unsharded_auto
+		},
+		limit 10
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	},
+	order by id asc
+}
+
+(select id from unsharded union all select id from unsharded_auto) union all select id from x
+Concatenate {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	}
+}
+
+(select id from unsharded union select id from unsharded_auto) union select id from x
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	}
+}
+
+(select id from unsharded union select id from unsharded_auto) union all select id from x
+Concatenate {
+	Concatenate(distinct) {
+		QueryGraph: {
+		Tables:
+			1:unsharded
+		},
+		QueryGraph: {
+		Tables:
+			2:unsharded_auto
+		}
+	},
+	QueryGraph: {
+	Tables:
+		4:x
+	}
+}
+
+select * from t
+QueryGraph: {
+Tables:
+	1:t
+}
+
+select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2
+QueryGraph: {
+Tables:
+	1:t
+	2:y
+	4:z
+JoinPredicates:
+	1:2 - t.c = y.c
+	1:2:4 - t.a = z.a or t.a = y.a
+ForAll: 1 < 2
+}
+
+select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101
+QueryGraph: {
+Tables:
+	1:t where t.`name` = 'foo'
+	2:y where y.col = 42
+	4:z where z.baz = 101
+JoinPredicates:
+	1:2 - t.id = y.t_id
+	1:4 - t.id = z.t_id
+}
+
+select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id
+QueryGraph: {
+Tables:
+	1:t where t.`name` = 'foo'
+	2:y where y.col = 42
+	4:z where z.baz = 101
+JoinPredicates:
+	1:2 - t.id = y.t_id
+	1:4 - t.id = z.t_id
+}
+
+select 1 from t where '1' = 1 and 12 = '12'
+QueryGraph: {
+Tables:
+	1:t
+ForAll: '1' = 1 and 12 = '12'
+}
+
+select 1 from t left join s on t.id = s.id
+OuterJoin: {
+	Inner: 	QueryGraph: {
+	Tables:
+		1:t
+	}
+	Outer: 	QueryGraph: {
+	Tables:
+		2:s
+	}
+	Predicate: t.id = s.id
+}
+
+select 1 from t join s on t.id = s.id and t.name = s.name
+QueryGraph: {
+Tables:
+	1:t
+	2:s
+JoinPredicates:
+	1:2 - t.id = s.id and t.`name` = s.`name`
+}
+
+select 1 from t left join s on t.id = s.id where t.name = 'Mister'
+OuterJoin: {
+	Inner: 	QueryGraph: {
+	Tables:
+		1:t where t.`name` = 'Mister'
+	}
+	Outer: 	QueryGraph: {
+	Tables:
+		2:s
+	}
+	Predicate: t.id = s.id
+}
+
+select 1 from t right join s on t.id = s.id
+OuterJoin: {
+	Inner: 	QueryGraph: {
+	Tables:
+		2:s
+	}
+	Outer: 	QueryGraph: {
+	Tables:
+		1:t
+	}
+	Predicate: t.id = s.id
+}
+
+select 1 from (a left join b on a.id = b.id) join (c left join d on c.id = d.id) on a.id = c.id
+Join: {
+	LHS: 	OuterJoin: {
+		Inner: 	QueryGraph: {
+		Tables:
+			1:a
+		}
+		Outer: 	QueryGraph: {
+		Tables:
+			2:b
+		}
+		Predicate: a.id = b.id
+	}
+	RHS: 	OuterJoin: {
+		Inner: 	QueryGraph: {
+		Tables:
+			4:c
+		}
+		Outer: 	QueryGraph: {
+		Tables:
+			8:d
+		}
+		Predicate: c.id = d.id
+	}
+	Predicate: a.id = c.id
+}
+
+select 1 from (select 42 as id from tbl) as t
+Derived t: {
+	Query: select 42 as id from tbl
+	Inner:	QueryGraph: {
+	Tables:
+		1:tbl
+	}
+}
+
+select 1 from (select id from tbl limit 10) as t join (select foo, count(*) from usr group by foo) as s on t.id = s.foo
+Join: {
+	LHS: 	Derived t: {
+		Query: select id from tbl limit 10
+		Inner:	QueryGraph: {
+		Tables:
+			1:tbl
+		}
+	}
+	RHS: 	Derived s: {
+		Query: select foo, count(*) from usr group by foo
+		Inner:	QueryGraph: {
+		Tables:
+			4:usr
+		}
+	}
+	Predicate: t.id = s.foo
+}
+
+select (select 1) from t where exists (select 1) and id in (select 1)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutValue
+		Query: 	QueryGraph: {
+		Tables:
+			2:dual
+		}
+	}
+	{
+		Type: PulloutExists
+		Query: 	QueryGraph: {
+		Tables:
+			4:dual
+		}
+	}
+	{
+		Type: PulloutIn
+		Query: 	QueryGraph: {
+		Tables:
+			8:dual
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:t where id in (select 1 from dual)
+	ForAll: exists (select 1 from dual)
+	}
+}
+
+select u.id from user u where u.id = (select id from user_extra where id = u.id)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutValue
+		Query: 	QueryGraph: {
+		Tables:
+			2:user_extra
+		JoinPredicates:
+			1:2 - id = u.id
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		1:`user` AS u
+	JoinPredicates:
+		1:2 - u.id = (select id from user_extra where id = u.id)
+	}
+}
+
+select id from user_index where id = :id
+Vindex: {
+	Name: user_index
+	Value: id
+}
+
+select ui.id from user_index as ui join user as u where ui.id = 1 and ui.id = u.id
+Join: {
+	LHS: 	Vindex: {
+		Name: user_index
+		Value: 1
+	}
+	RHS: 	QueryGraph: {
+	Tables:
+		2:`user` AS u
+	}
+	Predicate: ui.id = u.id
+}
+
+select u.id from (select id from user_index where id = 2) as u
+Derived u: {
+	Query: select id from user_index where id = 2
+	Inner:	Vindex: {
+		Name: user_index
+		Value: 2
+	}
+}
+
+select 1 from a union select 2 from b
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:a
+	},
+	QueryGraph: {
+	Tables:
+		2:b
+	}
+}
+
+select 1 from a union select 2 from b union select 3 from c
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:a
+	},
+	QueryGraph: {
+	Tables:
+		2:b
+	},
+	QueryGraph: {
+	Tables:
+		4:c
+	}
+}
+
+select 1 from a union select 2 from b union select 3 from c union all select 4 from d
+Concatenate {
+	Concatenate(distinct) {
+		QueryGraph: {
+		Tables:
+			1:a
+		},
+		QueryGraph: {
+		Tables:
+			2:b
+		},
+		QueryGraph: {
+		Tables:
+			4:c
+		}
+	},
+	QueryGraph: {
+	Tables:
+		8:d
+	}
+}
+
+select id from unsharded union select id from unsharded_auto order by id
+Concatenate(distinct) {
+	QueryGraph: {
+	Tables:
+		1:unsharded
+	},
+	QueryGraph: {
+	Tables:
+		2:unsharded_auto
+	},
+	order by id asc
+}

@@ -601,7 +601,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	default:
-		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
 }
 
