@@ -308,6 +308,15 @@ type VtctldClient interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(ctx context.Context, in *vtctldata.UpdateCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.UpdateCellsAliasResponse, error)
+	// Validate validates that all nodes from the global replication graph are
+	// reachable, and that all tablets in discoverable cells are consistent.
+	Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error)
+	// ValidateKeyspace validates that all nodes reachable from the specified
+	// keyspace are consistent.
+	ValidateKeyspace(ctx context.Context, in *vtctldata.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateShard validates that all nodes reachable from the specified shard
+	// are consistent.
+	ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
 }
 
 type vtctldClient struct {
@@ -786,6 +795,33 @@ func (c *vtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctldata.Updat
 	return out, nil
 }
 
+func (c *vtctldClient) Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error) {
+	out := new(vtctldata.ValidateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/Validate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ValidateKeyspace(ctx context.Context, in *vtctldata.ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error) {
+	out := new(vtctldata.ValidateKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ValidateShard(ctx context.Context, in *vtctldata.ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error) {
+	out := new(vtctldata.ValidateShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ValidateShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VtctldServer is the server API for Vtctld service.
 // All implementations must embed UnimplementedVtctldServer
 // for forward compatibility
@@ -966,6 +1002,15 @@ type VtctldServer interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error)
+	// Validate validates that all nodes from the global replication graph are
+	// reachable, and that all tablets in discoverable cells are consistent.
+	Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error)
+	// ValidateKeyspace validates that all nodes reachable from the specified
+	// keyspace are consistent.
+	ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
+	// ValidateShard validates that all nodes reachable from the specified shard
+	// are consistent.
+	ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
 
@@ -1128,6 +1173,15 @@ func (UnimplementedVtctldServer) UpdateCellInfo(context.Context, *vtctldata.Upda
 }
 func (UnimplementedVtctldServer) UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCellsAlias not implemented")
+}
+func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
+}
+func (UnimplementedVtctldServer) ValidateKeyspace(context.Context, *vtctldata.ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ValidateShard(context.Context, *vtctldata.ValidateShardRequest) (*vtctldata.ValidateShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateShard not implemented")
 }
 func (UnimplementedVtctldServer) mustEmbedUnimplementedVtctldServer() {}
 
@@ -2078,6 +2132,60 @@ func _Vtctld_UpdateCellsAlias_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).Validate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/Validate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).Validate(ctx, req.(*vtctldata.ValidateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateKeyspace(ctx, req.(*vtctldata.ValidateKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ValidateShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ValidateShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ValidateShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ValidateShard(ctx, req.(*vtctldata.ValidateShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Vtctld_ServiceDesc is the grpc.ServiceDesc for Vtctld service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -2292,6 +2400,18 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateCellsAlias",
 			Handler:    _Vtctld_UpdateCellsAlias_Handler,
+		},
+		{
+			MethodName: "Validate",
+			Handler:    _Vtctld_Validate_Handler,
+		},
+		{
+			MethodName: "ValidateKeyspace",
+			Handler:    _Vtctld_ValidateKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateShard",
+			Handler:    _Vtctld_ValidateShard_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
