@@ -14,16 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reparent
+package ers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -60,13 +58,13 @@ var (
 	primary key (id)
 	) Engine=InnoDB	
 `
-)
+	cell1         = "zone1"
+	cell2         = "zone2"
+	shardName     = "0"
+	keyspaceShard = keyspaceName + "/" + shardName
 
-//region cluster setup/teardown
-func setupRangeBasedCluster(ctx context.Context, t *testing.T) {
-	tablets := setupCluster(ctx, t, shardName, []string{cell1}, []int{2})
-	primaryTablet, replicaTablet = tablets[0], tablets[1]
-}
+	tab1, tab2, tab3, tab4 *cluster.Vttablet
+)
 
 func setupReparentCluster(t *testing.T) {
 	tablets := setupCluster(context.Background(), t, shardName, []string{cell1, cell2}, []int{3, 1})
@@ -216,47 +214,23 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 
 //endregion
 
-// region prs/ers
+// region ers
 
-func prs(t *testing.T, tab *cluster.Vttablet) (string, error) {
-	return prsWithTimeout(t, tab, false, "", "")
+func ers(tab *cluster.Vttablet, totalTimeout, waitReplicasTimeout string) (string, error) {
+	return ersIgnoreTablet(tab, totalTimeout, waitReplicasTimeout, nil)
 }
 
-func prsAvoid(t *testing.T, tab *cluster.Vttablet) (string, error) {
-	return prsWithTimeout(t, tab, true, "", "")
-}
-
-func prsWithTimeout(t *testing.T, tab *cluster.Vttablet, avoid bool, actionTimeout, waitTimeout string) (string, error) {
-	args := []string{
-		"PlannedReparentShard",
-		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
-	if actionTimeout != "" {
-		args = append(args, "-action_timeout", actionTimeout)
+func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet) (string, error) {
+	var args []string
+	if timeout != "" {
+		args = append(args, "-action_timeout", timeout)
 	}
-	if waitTimeout != "" {
-		args = append(args, "-wait_replicas_timeout", waitTimeout)
-	}
-	if avoid {
-		args = append(args, "-avoid_tablet")
-	} else {
-		args = append(args, "-new_primary")
-	}
-	args = append(args, tab.Alias)
-	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
-	return out, err
-}
-
-func ers(t *testing.T, tab *cluster.Vttablet, timeout string) (string, error) {
-	return ersIgnoreTablet(t, tab, timeout, nil)
-}
-
-func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabletsToIgnore []*cluster.Vttablet) (string, error) {
-	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
+	args = append(args, "EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName))
 	if tab != nil {
 		args = append(args, "-new_primary", tab.Alias)
 	}
-	if timeout != "" {
-		args = append(args, "-wait_replicas_timeout", "30s")
+	if waitReplicasTimeout != "" {
+		args = append(args, "-wait_replicas_timeout", waitReplicasTimeout)
 	}
 	if len(tabletsToIgnore) != 0 {
 		tabsString := ""
@@ -275,36 +249,6 @@ func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tablet
 func ersWithVtctl() (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	return clusterInstance.VtctlProcess.ExecuteCommandWithOutput(args...)
-}
-
-func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downPrimary bool, baseTime int64) {
-	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
-	require.Nil(t, err, "error should be Nil")
-	if !downPrimary {
-		assertNodeCount(t, result, int(3))
-	} else {
-		assertNodeCount(t, result, int(2))
-	}
-
-	// make sure the primary status page says it's the primary
-	status := tablet.VttabletProcess.GetStatus()
-	assert.Contains(t, status, "Tablet Type: PRIMARY")
-
-	// make sure the primary health stream says it's the primary too
-	// (health check is disabled on these servers, force it first)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
-	require.NoError(t, err)
-
-	streamHealth, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
-		"VtTabletStreamHealth",
-		"-count", "1", tablet.Alias)
-	require.NoError(t, err)
-
-	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	require.NoError(t, err)
-	assert.Equal(t, streamHealthResponse.Target.TabletType, topodatapb.TabletType_PRIMARY)
-	assert.True(t, streamHealthResponse.TabletExternallyReparentedTimestamp >= baseTime)
 }
 
 // endregion
@@ -340,72 +284,6 @@ func confirmOldPrimaryIsHangingAround(t *testing.T) {
 	out, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("Validate")
 	require.Error(t, err)
 	require.Contains(t, out, "already has primary")
-}
-
-//	Waits for tablet B to catch up to the replication position of tablet A.
-func waitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
-	posA, _ := cluster.GetPrimaryPosition(t, *tabletA, hostname)
-	timeout := time.Now().Add(5 * time.Second)
-	for time.Now().Before(timeout) {
-		posB, _ := cluster.GetPrimaryPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletB, posA, posB) {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("failed to catch up on replication position")
-}
-
-func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
-	isAtleast := false
-	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	require.NoError(t, err)
-	if strings.Contains(val, "true") {
-		isAtleast = true
-	}
-	return isAtleast
-}
-
-func assertNodeCount(t *testing.T, result string, want int) {
-	resultMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
-
-	nodes := reflect.ValueOf(resultMap["nodes"])
-	got := nodes.Len()
-	assert.Equal(t, want, got)
-}
-
-func checkDBvar(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
-	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	qr := execute(t, conn, fmt.Sprintf("show variables like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
-}
-
-func checkDBstatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, variable string, status string) {
-	tabletParams := getMysqlConnParam(tablet)
-	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	qr := execute(t, conn, fmt.Sprintf("show status like '%s'", variable))
-	got := fmt.Sprintf("%v", qr.Rows)
-	want := fmt.Sprintf("[[VARCHAR(\"%s\") VARCHAR(\"%s\")]]", variable, status)
-	assert.Equal(t, want, got)
-}
-
-func checkReplicaStatus(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) {
-	qr := runSQL(ctx, t, "show slave status", tablet)
-	IOThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
-	SQLThreadRunning := fmt.Sprintf("%v", qr.Rows[0][10])
-	assert.Equal(t, IOThreadRunning, "VARCHAR(\"No\")")
-	assert.Equal(t, SQLThreadRunning, "VARCHAR(\"No\")")
 }
 
 // Makes sure the tablet type is primary, and its health check agrees.
