@@ -28,7 +28,9 @@ var _ logicalPlan = (*sqlCalcFoundRows)(nil)
 
 type sqlCalcFoundRows struct {
 	LimitQuery, CountQuery logicalPlan
-	ljt, cjt               *jointab
+
+	// only used by WireUp for V3c
+	ljt, cjt *jointab
 }
 
 //Wireup implements the logicalPlan interface
