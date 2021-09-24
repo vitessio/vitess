@@ -1,7 +1,3 @@
-2021-06-18T02:14:12Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/948445105
-2021-06-18T02:14:12Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/948445120
-2021-06-18T02:14:12Z,Cluster (vtgate_schema),https://github.com/vitessio/vitess/actions/runs/948445107
-2021-06-18T02:14:12Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/948445067
 2021-06-18T02:14:12Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/948445078
 2021-06-18T02:14:12Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/948445114
 2021-06-18T02:14:12Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/948445116
@@ -9992,9 +9988,13 @@
 2021-09-24T02:04:40Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1268198766
 2021-09-24T05:00:26Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1268555702
 2021-09-24T05:00:26Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1268555647
+2021-09-24T05:00:26Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1268555656
+2021-09-24T05:00:26Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1268555684
 2021-09-24T05:00:26Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1268555629
 2021-09-24T05:00:26Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/1268555688
 2021-09-24T05:00:26Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1268555662
 2021-09-24T05:00:26Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1268555669
 2021-09-24T05:00:26Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1268555685
+2021-09-24T05:00:26Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1268555650
+2021-09-24T05:00:26Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1268555644
 2021-09-24T05:00:26Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1268555691
