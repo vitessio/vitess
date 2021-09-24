@@ -568,10 +568,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# nextval for simple route
-"select next value from user"
-"NEXT used on a non-sequence table"
-
 # last_insert_id for unsharded route
 "select last_insert_id() as x from main.unsharded"
 {
