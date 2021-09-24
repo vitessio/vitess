@@ -1886,3 +1886,73 @@ func TestWaitForCatchingUp(t *testing.T) {
 		})
 	}
 }
+
+func TestResrictValidCandidates(t *testing.T) {
+	tests := []struct {
+		name            string
+		validCandidates map[string]mysql.Position
+		tabletMap       map[string]*topo.TabletInfo
+		result          map[string]mysql.Position
+	}{
+		{
+			name: "remove experimental tablets",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+				"zone1-0000000103": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_EXPERIMENTAL,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_REPLICA,
+					},
+				},
+			},
+			result: map[string]mysql.Position{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000103": {},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
+			assert.NoError(t, err)
+			assert.Equal(t, res, test.result)
+		})
+	}
+}
