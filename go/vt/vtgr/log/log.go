@@ -20,32 +20,32 @@ func NewVTGRLogger(keyspace, shard string) *Logger {
 
 // Info formats arguments like fmt.Print
 func (logger *Logger) Info(msg string) {
-	log.Info(logger.annotate(msg))
+	log.InfoDepth(1, logger.annotate(msg))
 }
 
 // Infof formats arguments like fmt.Printf.
 func (logger *Logger) Infof(format string, args ...interface{}) {
-	log.Info(logger.annotate(fmt.Sprintf(format, args...)))
+	log.InfoDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 
 // Warning formats arguments like fmt.Print
 func (logger *Logger) Warning(msg string) {
-	log.Warning(logger.annotate(msg))
+	log.WarningDepth(1, logger.annotate(msg))
 }
 
 // Warningf formats arguments like fmt.Printf.
 func (logger *Logger) Warningf(format string, args ...interface{}) {
-	log.Warning(logger.annotate(fmt.Sprintf(format, args...)))
+	log.WarningDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 
 // Error formats arguments like fmt.Print
 func (logger *Logger) Error(msg string) {
-	log.Error(logger.annotate(msg))
+	log.ErrorDepth(1, logger.annotate(msg))
 }
 
 // Errorf formats arguments like fmt.Printf.
 func (logger *Logger) Errorf(format string, args ...interface{}) {
-	log.Error(logger.annotate(fmt.Sprintf(format, args...)))
+	log.ErrorDepth(1, logger.annotate(fmt.Sprintf(format, args...)))
 }
 
 func (logger *Logger) annotate(input string) string {
