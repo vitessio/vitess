@@ -80,7 +80,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		default:
-			return Gen4NotSupportedF("%T in a derived table", sel)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
 		}
 
 	case sqlparser.TableName:
