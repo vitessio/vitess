@@ -38,13 +38,13 @@ var (
 	}
 	// ValidateSchemaKeyspace makes a ValidateSchemaKeyspace gRPC call to a vtctld.
 	ValidateSchemaKeyspace = &cobra.Command{
-		Use:  "ValidateSchemaKeyspace [--include-vschema] [--skip-no-primary] [--include-views] [--exclude-tables TABLES ...] keyspace",
+		Use:  "ValidateSchemaKeyspace [--include-vschema] [--skip-no-primary] [--include-views] [--exclude-tables TABLES ...] <keyspace>",
 		Args: cobra.ExactArgs(1),
 		RunE: commandValidateSchemaKeyspace,
 	}
 	// ValidateSchemaShard makes a ValidateSchemaShard gRPC call to a vtctld.
 	ValidateSchemaShard = &cobra.Command{
-		Use:  "ValidateSchemaShard [--include-vschema] [--include-views] [--exclude-tables TABLES ...] keyspace/shard",
+		Use:  "ValidateSchemaShard [--include-vschema] [--include-views] [--exclude-tables TABLES ...] <keyspace/shard>",
 		Args: cobra.ExactArgs(1),
 		RunE: commandValidateSchemaShard,
 	}
@@ -106,20 +106,20 @@ func commandGetSchema(cmd *cobra.Command, args []string) error {
 
 var validateSchemaKeyspaceOptions = struct {
 	ExcludeTables  []string
-	IncludeVSchema bool
+	IncludeVschema bool
 	SkipNoPrimary  bool
 	IncludeViews   bool
 }{}
 
 func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-
 	cli.FinishedParsing(cmd)
+
+	keyspace := cmd.Flags().Arg(0)
 
 	_, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace:       keyspace,
 		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
-		IncludeVSchema: validateSchemaKeyspaceOptions.IncludeVSchema,
+		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVschema,
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
@@ -132,7 +132,7 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 
 var validateSchemaShardOptions = struct {
 	ExcludeTables  []string
-	IncludeVSchema bool
+	IncludeVschema bool
 	IncludeViews   bool
 }{}
 
@@ -148,7 +148,7 @@ func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
 	_, err := client.ValidateSchemaShard(commandCtx, &vtctldatapb.ValidateSchemaShardRequest{
 		Keyspace:       keyspaceShard[0],
 		ExcludeTables:  validateSchemaShardOptions.ExcludeTables,
-		IncludeVSchema: validateSchemaShardOptions.IncludeVSchema,
+		IncludeVschema: validateSchemaShardOptions.IncludeVschema,
 		IncludeViews:   validateSchemaShardOptions.IncludeViews,
 		Shard:          keyspaceShard[1],
 	})
@@ -170,12 +170,12 @@ func init() {
 
 	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", nil, "If specified, will exclude these tables from the schema validation")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "If specified, include views in the schema validation.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVschema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "If specified, will omit shards without a primary.")
 	Root.AddCommand(ValidateSchemaKeyspace)
 
 	ValidateSchemaShard.Flags().StringSliceVar(&validateSchemaShardOptions.ExcludeTables, "exclude-tables", nil, "If specified, will exclude these tables from the schema validation")
 	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeViews, "include-views", false, "If specified, include views in the schema validation.")
-	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeVSchema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
+	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeVschema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
 	Root.AddCommand(ValidateSchemaShard)
 }

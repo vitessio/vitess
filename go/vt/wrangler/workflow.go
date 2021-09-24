@@ -180,7 +180,7 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 
 		vschmErr := vrw.wr.ValidateVSchema(ctx, keyspace, vrw.params.SourceShards, excludeTables, true /*includeViews*/)
 		if vschmErr != nil {
-			return fmt.Errorf("ValidateVSchema(%v, %v, %v, %v) failed: %v", keyspace, vrw.params.SourceShards, excludeTables, true, vschmErr)
+			return fmt.Errorf("Create ReshardWorkflow failed: %v", vschmErr)
 		}
 
 		err = vrw.initReshard()

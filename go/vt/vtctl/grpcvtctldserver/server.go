@@ -1419,7 +1419,6 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	wg.Wait()
 
 	if err := rec.Error(); err != nil {
-		// if any of the replicas failed
 		return err
 	}
 
@@ -2658,8 +2657,8 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	defer span.Finish()
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("exclude_tables", req.ExcludeTables)
-	span.Annotate("include_tables", req.IncludeVSchema)
+	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
+	span.Annotate("include_vschema", req.IncludeVschema)
 	span.Annotate("skip_no_primary", req.SkipNoPrimary)
 	span.Annotate("include_views", req.IncludeViews)
 
@@ -2673,7 +2672,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			Keyspace:       req.Keyspace,
 			ExcludeTables:  req.ExcludeTables,
 			Shard:          shards[0],
-			IncludeVSchema: req.IncludeVSchema,
+			IncludeVschema: req.IncludeVschema,
 			IncludeViews:   req.IncludeViews,
 		}
 
@@ -2692,7 +2691,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		referenceAlias  *topodatapb.TabletAlias
 	)
 
-	if req.IncludeVSchema {
+	if req.IncludeVschema {
 		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
 			Keyspace:      req.Keyspace,
 			Shards:        shards,
@@ -2775,8 +2774,8 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
-	span.Annotate("exclude_tables", req.ExcludeTables)
-	span.Annotate("include_vschema", req.IncludeVSchema)
+	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
+	span.Annotate("include_vschema", req.IncludeVschema)
 	span.Annotate("include_views", req.IncludeViews)
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
@@ -2803,7 +2802,7 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 		return nil, vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias), req.ExcludeTables, req.IncludeViews, err)
 	}
 
-	if req.IncludeVSchema {
+	if req.IncludeVschema {
 		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
 			Keyspace:      req.Keyspace,
 			Shards:        []string{req.Shard},
@@ -2856,9 +2855,9 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	defer span.Finish()
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("shards", req.Shards)
+	span.Annotate("shards", strings.Join(req.Shards, ","))
 	span.Annotate("include_views", req.IncludeViews)
-	span.Annotate("exclude_tables", req.ExcludeTables)
+	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
 
 	vschm, err := s.ts.GetVSchema(ctx, req.Keyspace)
 	if err != nil {

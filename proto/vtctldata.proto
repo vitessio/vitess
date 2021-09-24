@@ -866,10 +866,10 @@ message ValidateShardResponse {
 }
 message ValidateSchemaKeyspaceRequest {
   string keyspace = 1;
-  repeated string excludeTables = 2;
-  bool includeViews = 3;
-  bool skipNoPrimary = 4;
-  bool includeVSchema = 5;
+  repeated string exclude_tables = 2;
+  bool include_views = 3;
+  bool skip_no_primary = 4;
+  bool include_vschema = 5;
 }
 
 message ValidateSchemaKeyspaceResponse {
@@ -878,9 +878,9 @@ message ValidateSchemaKeyspaceResponse {
 message ValidateSchemaShardRequest {
   string keyspace = 1;
   string shard = 2;
-  repeated string excludeTables = 3;
-  bool includeViews = 4;
-  bool includeVSchema = 5;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
+  bool include_vschema = 5;
 }
 
 message ValidateSchemaShardResponse {
@@ -889,8 +889,8 @@ message ValidateSchemaShardResponse {
 message ValidateVSchemaRequest {
   string keyspace = 1;
   repeated string shards = 2;
-  repeated string excludeTables = 3;
-  bool includeViews = 4;
+  repeated string exclude_tables = 3;
+  bool include_views = 4;
 }
 
 message ValidateVSchemaResponse {

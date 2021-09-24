@@ -155,9 +155,9 @@ var validateVSchemaOptions = struct {
 }{}
 
 func commandValidateVSchema(cmd *cobra.Command, args []string) error {
-	keyspace := cmd.Flags().Arg(0)
-
 	cli.FinishedParsing(cmd)
+
+	keyspace := cmd.Flags().Arg(0)
 
 	_, err := client.ValidateVSchema(commandCtx, &vtctldatapb.ValidateVSchemaRequest{
 		Keyspace:      keyspace,
@@ -165,7 +165,6 @@ func commandValidateVSchema(cmd *cobra.Command, args []string) error {
 		IncludeViews:  validateVSchemaOptions.IncludeViews,
 		Shards:        validateVSchemaOptions.Shards,
 	})
-
 	if err != nil {
 		return err
 	}
@@ -174,7 +173,6 @@ func commandValidateVSchema(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	// ApplyVSchema
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchema, "vschema", "", "VSchema")
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.VSchemaFile, "vschema-file", "", "VSchema File")
 	ApplyVSchema.Flags().StringVar(&applyVSchemaOptions.SQL, "sql", "", "A VSchema DDL SQL statement, e.g. `alter table t add vindex hash(id)`")
@@ -183,9 +181,9 @@ func init() {
 	ApplyVSchema.Flags().BoolVar(&applyVSchemaOptions.SkipRebuild, "skip-rebuild", false, "If set, do no rebuild the SrvSchema objects.")
 	ApplyVSchema.Flags().StringSliceVar(&applyVSchemaOptions.Cells, "cells", nil, "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
 	Root.AddCommand(ApplyVSchema)
-	// GetVSchema
+
 	Root.AddCommand(GetVSchema)
-	// ValidateVSchema
+
 	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.Shards, "shards", nil, "Validate the vschema on the following shards.")
 	ValidateVSchema.Flags().StringSliceVar(&validateVSchemaOptions.ExcludeTables, "exclude-tables", nil, "If specified, excludes these tables from the VSchema validation.")
 	ValidateVSchema.Flags().BoolVar(&validateVSchemaOptions.IncludeViews, "include-views", false, "If set, include views in the vschema validation.")

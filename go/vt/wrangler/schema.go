@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -150,10 +149,10 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		Shard:          shard,
 		ExcludeTables:  excludeTables,
 		IncludeViews:   includeViews,
-		IncludeVSchema: includeVSchema,
+		IncludeVschema: includeVSchema,
 	}
 
-	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaShard(ctx, req); err != nil {
+	if _, err := wr.VtctldServer().ValidateSchemaShard(ctx, req); err != nil {
 		return err
 	}
 
@@ -167,11 +166,11 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		Keyspace:       keyspace,
 		ExcludeTables:  excludeTables,
 		IncludeViews:   includeViews,
-		IncludeVSchema: includeVSchema,
+		IncludeVschema: includeVSchema,
 		SkipNoPrimary:  skipNoPrimary,
 	}
 
-	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateSchemaKeyspace(ctx, req); err != nil {
+	if _, err := wr.VtctldServer().ValidateSchemaKeyspace(ctx, req); err != nil {
 		return err
 	}
 
@@ -187,7 +186,7 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 		ExcludeTables: excludeTables,
 	}
 
-	if _, err := grpcvtctldserver.NewVtctldServer(wr.ts).ValidateVSchema(ctx, req); err != nil {
+	if _, err := wr.VtctldServer().ValidateVSchema(ctx, req); err != nil {
 		return err
 	}
 
