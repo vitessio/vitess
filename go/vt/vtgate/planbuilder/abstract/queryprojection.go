@@ -64,14 +64,11 @@ type (
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	switch sel := s.Col.(type) {
-	case *sqlparser.StarExpr:
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "starExpr does not have expr")
 	case *sqlparser.AliasedExpr:
 		return sel.Expr, nil
-	case *sqlparser.Nextval:
-		return sel.Expr, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T does not have expr", s.Col)
 	}
-	return nil, nil
 }
 
 // GetAliasedExpr returns the SelectExpr as a *sqlparser.AliasedExpr if its type allows it,
@@ -156,7 +153,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
-			return semantics.Gen4NotSupportedF("%T in select list", selExp)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in select list", selExp)
 		}
 	}
 	return nil
