@@ -517,6 +517,8 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		return colAdded || colAddedRecursively, nil
+	case *pulloutSubquery:
+		return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
@@ -603,6 +605,8 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		}
 		plan.input = newUnderlyingPlan
 		return plan, nil
+	case *simpleProjection:
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: ordering on derived table query")
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
