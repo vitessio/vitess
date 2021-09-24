@@ -18217,7 +18217,8 @@ export namespace query {
             Gen4 = 2,
             Gen4Greedy = 3,
             Gen4Left2Right = 4,
-            Gen4WithFallback = 5
+            Gen4WithFallback = 5,
+            Gen4CompareV3 = 6
         }
     }
 
