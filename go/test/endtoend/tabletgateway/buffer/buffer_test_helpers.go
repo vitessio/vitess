@@ -246,6 +246,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 
 	// Start vtgate
+	clusterInstance.VtGatePlannerVersion = 0
 	if err := clusterInstance.StartVtgate(); err != nil {
 		return nil, 1
 	}
@@ -285,7 +286,6 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	}
 	defer clusterInstance.Teardown()
 
-	clusterInstance.VtGatePlannerVersion = 0
 	vtParams := mysql.ConnParams{
 		Host: clusterInstance.Hostname,
 		Port: clusterInstance.VtgateMySQLPort,
