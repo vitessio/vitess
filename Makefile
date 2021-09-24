@@ -470,4 +470,4 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from $(FROM) -to $(TO) -release-branch $(RELEASE_BRANCH)
+	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"
