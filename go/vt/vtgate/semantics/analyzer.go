@@ -268,8 +268,9 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
-		if a.scoper.currentScope() == nil {
-			return nil
+		parent := cursor.Parent()
+		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS only supported in single SELECT queries")
 		}
 		errMsg := "INTO"
 		nextVal := false

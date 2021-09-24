@@ -763,7 +763,7 @@ func TestUnionOrderByRewrite(t *testing.T) {
 	assert.Equal(t, "select tabl1.id from tabl1 union select 1 from dual order by id asc", sqlparser.String(stmt))
 }
 
-func TestInvalidUnion(t *testing.T) {
+func TestInvalidQueries(t *testing.T) {
 	tcases := []struct {
 		sql string
 		err string
@@ -785,6 +785,15 @@ func TestInvalidUnion(t *testing.T) {
 	}, {
 		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
 		err: "Column 'id' in field list is ambiguous",
+	}, {
+		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
+		err: "SQL_CALC_FOUND_ROWS only supported in single SELECT queries",
+	}, {
+		sql: "select * from (select sql_calc_found_rows id from a) as t",
+		err: "SQL_CALC_FOUND_ROWS only supported in single SELECT queries",
+	}, {
+		sql: "select (select sql_calc_found_rows id from a) as t",
+		err: "SQL_CALC_FOUND_ROWS only supported in single SELECT queries",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {

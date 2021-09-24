@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -173,13 +173,6 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 		return nil, err
 	}
 	return lPlan, nil
-}
-
-func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.SQLCalcFoundRows {
-		return semantics.Gen4NotSupportedF("sql_calc_found_rows")
-	}
-	return nil
 }
 
 func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
