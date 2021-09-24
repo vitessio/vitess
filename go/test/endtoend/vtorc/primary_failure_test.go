@@ -155,6 +155,8 @@ func TestCrossDataCenterFailureError(t *testing.T) {
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	// new version of ERS does not check for lost replicas yet
+	// Earlier any replicas that were not able to replicate from the previous primary
+	// were detected by vtorc and could be configured to have their sources detached
 	t.Skip()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 2, nil, "test_config.json")
@@ -278,6 +280,8 @@ func TestPromotionLagSuccess(t *testing.T) {
 // covers the test case master-failover-fail-promotion-lag-minutes-failure from orchestrator
 func TestPromotionLagFailure(t *testing.T) {
 	// new version of ERS does not check for promotion lag yet
+	// Earlier vtorc used to check that the promotion lag between the new primary and the old one
+	// was smaller than the configured value, otherwise it would fail the promotion
 	t.Skip()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 3, 1, nil, "test_config_promotion_failure.json")

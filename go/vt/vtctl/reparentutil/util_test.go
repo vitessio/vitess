@@ -1288,7 +1288,7 @@ func TestPromoteIntermediatePrimary(t *testing.T) {
 	}
 }
 
-func TestGetBetterCandidate(t *testing.T) {
+func TestIdentifyPrimaryCandidate(t *testing.T) {
 	tests := []struct {
 		name                 string
 		emergencyReparentOps EmergencyReparentOptions
@@ -1646,7 +1646,7 @@ func TestGetBetterCandidate(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			_ = SetDurabilityPolicy("none", nil)
 			logger := logutil.NewMemoryLogger()
-			res, err := getBetterCandidate(logger, test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := identifyPrimaryCandidate(logger, test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
@@ -1887,7 +1887,7 @@ func TestWaitForCatchingUp(t *testing.T) {
 	}
 }
 
-func TestResrictValidCandidates(t *testing.T) {
+func TestRestrictValidCandidates(t *testing.T) {
 	tests := []struct {
 		name            string
 		validCandidates map[string]mysql.Position
@@ -1895,12 +1895,14 @@ func TestResrictValidCandidates(t *testing.T) {
 		result          map[string]mysql.Position
 	}{
 		{
-			name: "remove experimental tablets",
+			name: "remove invalid tablets",
 			validCandidates: map[string]mysql.Position{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
 				"zone1-0000000102": {},
 				"zone1-0000000103": {},
+				"zone1-0000000104": {},
+				"zone1-0000000105": {},
 			},
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
@@ -1927,7 +1929,7 @@ func TestResrictValidCandidates(t *testing.T) {
 							Cell: "zone1",
 							Uid:  102,
 						},
-						Type: topodatapb.TabletType_EXPERIMENTAL,
+						Type: topodatapb.TabletType_RESTORE,
 					},
 				},
 				"zone1-0000000103": {
@@ -1936,14 +1938,32 @@ func TestResrictValidCandidates(t *testing.T) {
 							Cell: "zone1",
 							Uid:  103,
 						},
-						Type: topodatapb.TabletType_REPLICA,
+						Type: topodatapb.TabletType_DRAINED,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_SPARE,
+					},
+				},
+				"zone1-0000000105": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_BACKUP,
 					},
 				},
 			},
 			result: map[string]mysql.Position{
 				"zone1-0000000100": {},
 				"zone1-0000000101": {},
-				"zone1-0000000103": {},
+				"zone1-0000000104": {},
 			},
 		},
 	}
@@ -1957,7 +1977,7 @@ func TestResrictValidCandidates(t *testing.T) {
 	}
 }
 
-func TestFindIntermediatePrimaryCandidate(t *testing.T) {
+func TestFindMostAdvanced(t *testing.T) {
 	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	mysqlGTID1 := mysql.Mysql56GTID{
 		Server:   sid1,
@@ -2275,7 +2295,7 @@ func TestFindIntermediatePrimaryCandidate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			winningTablet, _, err := findIntermediatePrimaryCandidate(logutil.NewMemoryLogger(), test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := findMostAdvanced(logutil.NewMemoryLogger(), test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
