@@ -218,11 +218,13 @@ service Vtctld {
   // ValidateShard validates that all nodes reachable from the specified shard
   // are consistent.
   rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
-  // ValidateSchemaKeyspace will diff the schema from all the tablets in
-  // the keyspace.
+  // ValidateSchemaKeyspace compares the schema off all tablets in a keyspace to a reference primary. 
+  // The RPC fails if there are differences.
   rpc ValidateSchemaKeyspace(vtctldata.ValidateSchemaKeyspaceRequest) returns (vtctldata.ValidateSchemaKeyspaceResponse) {};
-  // ValidateSchemaShard will diff the schema from all the tablets in the shard.
+  // ValidateSchemaShard compares the schema of all tablets in the shard to the primary.
+  // The RPC fails if there are  differences.
   rpc ValidateSchemaShard(vtctldata.ValidateSchemaShardRequest) returns (vtctldata.ValidateSchemaShardResponse) {};
-  // ValidateVSchema compares the schema of the primary in each specified shard to the vschema. The RPC fails if there are differences.
+  // ValidateVSchema compares the schema of the primary in each specified shard to the vschema.
+  // The RPC fails if there are differences.
   rpc ValidateVSchema(vtctldata.ValidateVSchemaRequest) returns (vtctldata.ValidateVSchemaResponse) {};
 }

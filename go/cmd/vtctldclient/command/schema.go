@@ -113,7 +113,6 @@ var validateSchemaKeyspaceOptions = struct {
 
 func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
-
 	keyspace := cmd.Flags().Arg(0)
 
 	_, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
