@@ -66,6 +66,7 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 }
 
 func TestAddCellInfo(t *testing.T) {
@@ -2745,7 +2746,6 @@ func TestEmergencyReparentShard(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	for _, tt := range tests {
 		tt := tt

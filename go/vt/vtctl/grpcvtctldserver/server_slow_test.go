@@ -21,8 +21,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -295,7 +293,6 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	_ = reparentutil.SetDurabilityPolicy("none", nil)
 
 	for _, tt := range tests {
 		tt := tt
