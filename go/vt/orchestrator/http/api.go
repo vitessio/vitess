@@ -218,7 +218,7 @@ func (this *HttpAPI) Discover(params martini.Params, r render.Render, req *http.
 	if orcraft.IsRaftEnabled() {
 		orcraft.PublishCommand("discover", instanceKey)
 	} else {
-		logic.DiscoverInstance(instanceKey)
+		logic.DiscoverInstance(instanceKey, false)
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance discovered: %+v", instance.Key), Details: instance})
