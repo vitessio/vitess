@@ -1,4 +1,3 @@
-2021-06-22T05:52:11Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/959556853
 2021-06-22T05:52:11Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/959556895
 2021-06-22T05:52:11Z,local_example,https://github.com/vitessio/vitess/actions/runs/959556881
 2021-06-22T05:52:11Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/959556880
@@ -9997,4 +9996,5 @@
 2021-09-24T20:22:58Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1271250696
 2021-09-24T20:22:58Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1271250651
 2021-09-24T20:22:58Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1271250675
+2021-09-24T20:22:58Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1271250653
 2021-09-24T20:22:58Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1271250625
