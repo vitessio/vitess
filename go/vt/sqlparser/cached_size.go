@@ -1624,6 +1624,20 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *RootNode) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field SQLNode vitess.io/vitess/go/vt/sqlparser.SQLNode
+	if cc, ok := cached.SQLNode.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *SRollback) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
