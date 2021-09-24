@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -364,6 +365,14 @@ func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
 		return data[i].Name < data[j].Name
 	})
 	return data
+}
+
+func releaseSummary(summaryFile string) (string, error) {
+	contentSummary, err := ioutil.ReadFile(summaryFile)
+	if err != nil {
+		return "", err
+	}
+	return string(contentSummary), nil
 }
 
 func getOutput(fileout string) (*os.File, error) {

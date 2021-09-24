@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -103,4 +104,21 @@ TEST@planetscale.com	docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.
 	assert.Equal(t, prs, []string{"7629", "7831", "7912", "7934", "7943", "7951", "7959", "7964", "7968", "7970"})
 	assert.Equal(t, authorCommits, []string{"385d0b327", "3b744e782", "4a0a943b0", "538709da5", "616f5562c", "6b9a731a2", "e5242a88a", "edac2baf8"})
 	assert.Equal(t, 28, nonMergeCommits)
+}
+
+func TestLoadSummaryReadme(t *testing.T) {
+	readmeFile, err := ioutil.TempFile("", "*.md")
+	require.NoError(t, err)
+
+	readmeContent := `- New Gen4 feature
+- Self hosted runners
+- Bunch of features
+`
+
+	err = ioutil.WriteFile(readmeFile.Name(), []byte(readmeContent), 0644)
+	require.NoError(t, err)
+
+	str, err := releaseSummary(readmeFile.Name())
+	require.NoError(t, err)
+	require.Equal(t, str, readmeContent)
 }
