@@ -19,9 +19,10 @@ package reparentutil
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
