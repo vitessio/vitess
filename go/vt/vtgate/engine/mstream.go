@@ -77,7 +77,7 @@ func (m *MStream) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for Stream")
 }
 
-func (m *MStream) description() PrimitiveDescription {
+func (m *MStream) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType:      "MStream",
 		Keyspace:          m.Keyspace,

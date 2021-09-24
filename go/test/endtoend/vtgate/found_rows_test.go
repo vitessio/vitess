@@ -36,6 +36,11 @@ func TestFoundRows(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	t.Skipf("This test uses `SQL_CALC_FOUND_ROWS`, which is currently unsupported by Gen4. Remove this once it is supported.")
+
+	exec(t, conn, "delete from t2")
+	defer exec(t, conn, "delete from t2")
+
 	exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 
 	runTests := func(workload string) {

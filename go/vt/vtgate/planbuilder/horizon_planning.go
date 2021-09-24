@@ -234,6 +234,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if err != nil {
 			return 0, false, err
 		}
+		for i, value := range node.eSimpleProj.Cols {
+			// we return early if we already have the column in the simple projection's
+			// output list so we do not add it again.
+			if reuseCol && value == offset {
+				return i, false, nil
+			}
+		}
 		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
 		return len(node.eSimpleProj.Cols) - 1, true, nil
 	case *orderedAggregate:
