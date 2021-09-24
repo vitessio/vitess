@@ -1956,3 +1956,333 @@ func TestResrictValidCandidates(t *testing.T) {
 		})
 	}
 }
+
+func TestFindIntermediatePrimaryCandidate(t *testing.T) {
+	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mysqlGTID1 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 9,
+	}
+	mysqlGTID2 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 10,
+	}
+	mysqlGTID3 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 11,
+	}
+
+	positionMostAdvanced := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+
+	positionIntermediate1 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+
+	positionIntermediate2 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+
+	positionOnly2 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionOnly2.GTIDSet = positionOnly2.GTIDSet.AddGTID(mysqlGTID2)
+
+	positionEmpty := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+
+	tests := []struct {
+		name                 string
+		validCandidates      map[string]mysql.Position
+		tabletMap            map[string]*topo.TabletInfo
+		prevPrimary          *topodatapb.Tablet
+		emergencyReparentOps EmergencyReparentOptions
+		result               *topodatapb.Tablet
+		err                  string
+	}{
+		{
+			name: "choose most advanced - with nil previous primary",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionIntermediate2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			prevPrimary: nil,
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "choose most advanced in the same cell of previous primary",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone2-0000000100": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone2-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone2",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "choose most advanced with the best promotion rule",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+		}, {
+			name: "choose most advanced with explicit request",
+			emergencyReparentOps: EmergencyReparentOptions{newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			}},
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionMostAdvanced,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			result: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  102,
+				},
+			},
+		}, {
+			name: "split brain detection",
+			emergencyReparentOps: EmergencyReparentOptions{newPrimaryAlias: &topodatapb.TabletAlias{
+				Cell: "zone1",
+				Uid:  102,
+			}},
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionOnly2,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionEmpty,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+				},
+			},
+			err: "split brain detected between servers",
+		},
+	}
+
+	_ = SetDurabilityPolicy("none", nil)
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			winningTablet, _, err := findIntermediatePrimaryCandidate(logutil.NewMemoryLogger(), test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			if test.err != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.err)
+			} else {
+				assert.NoError(t, err)
+				assert.True(t, topoproto.TabletAliasEqual(test.result.Alias, winningTablet.Alias))
+			}
+		})
+	}
+}
