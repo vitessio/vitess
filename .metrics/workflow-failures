@@ -1,4 +1,3 @@
-2021-06-18T02:14:12Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/948445078
 2021-06-18T02:14:12Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/948445114
 2021-06-18T02:14:12Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/948445116
 2021-06-18T02:14:12Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/948445061
@@ -9998,3 +9997,4 @@
 2021-09-24T05:00:26Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1268555650
 2021-09-24T05:00:26Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1268555644
 2021-09-24T05:00:26Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1268555691
+2021-09-24T05:31:33Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1268627907
