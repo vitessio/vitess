@@ -1,9 +1,3 @@
-2021-06-21T14:24:27Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/957394410
-2021-06-21T14:24:27Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/957394436
-2021-06-21T14:24:27Z,local_example,https://github.com/vitessio/vitess/actions/runs/957394446
-2021-06-21T14:24:27Z,unit,https://github.com/vitessio/vitess/actions/runs/957394438
-2021-06-21T15:33:01Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/957609928
-2021-06-21T15:33:01Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/957609997
 2021-06-21T15:33:01Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/957609982
 2021-06-21T15:34:54Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/957614874
 2021-06-21T15:34:54Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/957614923
@@ -9993,7 +9987,13 @@
 2021-09-24T13:16:57Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1269966669
 2021-09-24T13:16:57Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1269966681
 2021-09-24T13:16:57Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1269966623
+2021-09-24T14:04:46Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1270125394
+2021-09-24T14:04:46Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1270125443
+2021-09-24T14:04:46Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1270125436
+2021-09-24T14:04:46Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1270125448
+2021-09-24T14:04:46Z,Cluster (resharding_bytes),https://github.com/vitessio/vitess/actions/runs/1270125457
 2021-09-24T14:04:46Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1270125446
+2021-09-24T14:04:46Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1270125450
 2021-09-24T14:04:46Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1270125424
 2021-09-24T14:04:46Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1270125417
 2021-09-24T14:04:47Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1270125465
