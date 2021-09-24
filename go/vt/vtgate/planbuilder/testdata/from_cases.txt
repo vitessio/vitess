@@ -55,6 +55,125 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# select next from non-sequence table
+"select next value from user"
+"NEXT used on a non-sequence table"
+Gen4 plan same as above
+
+# select next in derived table
+"select 1 from (select next value from seq) t"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from (select next value from seq) t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNext",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 from (select next 1 values from seq where 1 != 1) as t where 1 != 1",
+    "Query": "select 1 from (select next 1 values from seq) as t",
+    "Table": "seq"
+  }
+}
+Gen4 error: Incorrect usage/placement of 'NEXT'
+
+# select next in derived table
+"select * from (select next value from seq) t"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select next value from seq) t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectNext",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from (select next 1 values from seq where 1 != 1) as t where 1 != 1",
+    "Query": "select * from (select next 1 values from seq) as t",
+    "Table": "seq"
+  }
+}
+Gen4 error: Incorrect usage/placement of 'NEXT'
+
+# select next in subquery
+"select 1 from user where id in (select next value from seq)"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user where id in (select next value from seq)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectNext",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select next 1 values from seq where 1 != 1",
+        "Query": "select next 1 values from seq",
+        "Table": "seq"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectIN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "::__sq1"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+Gen4 error: Incorrect usage/placement of 'NEXT'
+
+# select next in projection
+"select (select next value from seq) from user"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select next value from seq) from user",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectNext",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select next 1 values from seq where 1 != 1",
+        "Query": "select next 1 values from seq",
+        "Table": "seq"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :__sq1 from `user` where 1 != 1",
+        "Query": "select :__sq1 from `user`",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+Gen4 error: Incorrect usage/placement of 'NEXT'
+
 # Select from reference
 "select * from ref"
 {
