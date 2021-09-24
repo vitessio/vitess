@@ -38,15 +38,17 @@ type (
 		Name string `json:"name"`
 	}
 
+	labels []label
+
 	author struct {
 		Login string `json:"login"`
 	}
 
 	prInfo struct {
-		Labels []label `json:"labels"`
-		Number int     `json:"number"`
-		Title  string  `json:"title"`
-		Author author  `json:"author"`
+		Labels labels `json:"labels"`
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		Author author `json:"author"`
 	}
 
 	prsByComponent = map[string][]prInfo
@@ -72,6 +74,7 @@ type (
 		Version       string
 		Announcement  string
 		KnownIssues   string
+		AddDetails    string
 		ChangeLog     string
 		ChangeMetrics string
 	}
@@ -83,7 +86,14 @@ const (
 {{- if .Announcement }}
 ## Announcement
 {{ .Announcement }}
+{{- end }}
 
+{{- if .AddDetails }}
+> TODO: please detail these pull requests.
+{{ .AddDetails }}
+{{- end }}
+
+{{- if and (or .Announcement .AddDetails) (or .KnownIssues .ChangeLog) }}
 ------------
 {{- end }}
 
@@ -91,7 +101,9 @@ const (
 ## Known Issues
 {{ .KnownIssues }}
 
+{{- if .ChangeLog }}
 ------------
+{{- end }}
 {{- end }}
 
 {{- if .ChangeLog }}
@@ -124,6 +136,24 @@ const (
 	numberOfThreads   = 10
 	lengthOfSingleSHA = 40
 )
+
+func (l labels) needsToList() bool {
+	for _, label := range l {
+		if label.Name == "release notes" {
+			return true
+		}
+	}
+	return false
+}
+
+func (l labels) needsDetails() bool {
+	for _, label := range l {
+		if label.Name == "release notes (needs details)" {
+			return true
+		}
+	}
+	return false
+}
 
 func (rn *releaseNote) generate(writeTo io.Writer) error {
 	t := template.Must(template.New("release_notes").Parse(markdownTemplate))
@@ -254,7 +284,7 @@ type req struct {
 	key  string
 }
 
-func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
+func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, error) {
 	errChan := make(chan error)
 	wgDone := make(chan bool)
 	prChan := make(chan req, len(prs)+len(authorCommits))
@@ -267,7 +297,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	}
 	close(prChan)
 
-	var prInfos []prInfo
+	var prInfos, prNeedsDetails []prInfo
 	var authors []string
 	fmt.Printf("Found %d merged PRs. Loading PR info", len(prs))
 	wg := sync.WaitGroup{}
@@ -295,7 +325,11 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	addPR := func(in prInfo) {
 		mu.Lock()
 		defer mu.Unlock()
-		prInfos = append(prInfos, in)
+		if in.Labels.needsDetails() {
+			prNeedsDetails = append(prNeedsDetails, in)
+		} else if in.Labels.needsToList() {
+			prInfos = append(prInfos, in)
+		}
 	}
 
 	for i := 0; i < numberOfThreads; i++ {
@@ -347,7 +381,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 
 	sort.Strings(authors)
 
-	return prInfos, authors, err
+	return prInfos, prNeedsDetails, authors, err
 }
 
 func groupPRs(prInfos []prInfo) prsByType {
@@ -451,6 +485,18 @@ func getStringForKnownIssues(issues []knownIssue) (string, error) {
 	return buff.String(), nil
 }
 
+func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
+	if len(pr) == 0 {
+		return "", nil
+	}
+	prPerType := groupPRs(pr)
+	prStr, err := getStringForPullRequestInfos(prPerType)
+	if err != nil {
+		return "", err
+	}
+	return prStr, nil
+}
+
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
@@ -490,17 +536,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	prInfos, authors, err := loadAllPRs(prs, authorCommits)
+	prInfos, prNeedsDetails, authors, err := loadAllPRs(prs, authorCommits)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if len(prInfos) > 0 {
-		prPerType := groupPRs(prInfos)
-		prStr, err := getStringForPullRequestInfos(prPerType)
-		if err != nil {
-			log.Fatal(err)
-		}
-		releaseNotes.ChangeLog = prStr
+	releaseNotes.ChangeLog, err = groupAndStringifyPullRequest(prInfos)
+	if err != nil {
+		log.Fatal(err)
+	}
+	releaseNotes.AddDetails, err = groupAndStringifyPullRequest(prNeedsDetails)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// changelog metrics
