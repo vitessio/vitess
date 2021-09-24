@@ -29,67 +29,6 @@ import (
 
 // shard related methods for Wrangler
 
-// SetShardIsPrimaryServing changes the IsPrimaryServing parameter of a shard.
-// It does not rebuild any serving graph or do any consistency check.
-// This is an emergency manual operation.
-func (wr *Wrangler) SetShardIsPrimaryServing(ctx context.Context, keyspace, shard string, isServing bool) (err error) {
-	// lock the keyspace to not conflict with resharding operations
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardIsPrimaryServing(%v,%v,%v)", keyspace, shard, isServing))
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.IsPrimaryServing = isServing
-		return nil
-	})
-	return err
-}
-
-// SetShardTabletControl changes the TabletControl records
-// for a shard.  It does not rebuild any serving graph or do
-// cross-shard consistency check.
-// - sets list of denied tables in tablet control record
-//
-// This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) SetShardTabletControl(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, remove bool, deniedTables []string) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// update the shard
-	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		// we are setting / removing the denied tables only
-		return si.UpdateSourceDeniedTables(ctx, tabletType, cells, remove, deniedTables)
-	})
-	return err
-}
-
-// UpdateDisableQueryService changes the TabletControl records
-// for a shard.  It updates serving graph
-//
-// This takes the keyspace lock as to not interfere with resharding operations.
-func (wr *Wrangler) UpdateDisableQueryService(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, cells []string, disableQueryService bool) (err error) {
-	// lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetShardTabletControl")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	si, err := wr.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return err
-	}
-	// disable query service for shard
-	return wr.ts.UpdateDisableQueryService(ctx, keyspace, []*topo.ShardInfo{si}, tabletType, cells, disableQueryService)
-}
-
 // UpdateSrvKeyspacePartitions changes the SrvKeyspaceGraph
 // for a shard.  It updates serving graph
 //

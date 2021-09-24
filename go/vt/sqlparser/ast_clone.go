@@ -287,8 +287,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUnaryExpr(in)
 	case *Union:
 		return CloneRefOfUnion(in)
-	case *UnionSelect:
-		return CloneRefOfUnionSelect(in)
 	case *UnlockTables:
 		return CloneRefOfUnlockTables(in)
 	case *Update:
@@ -1659,21 +1657,11 @@ func CloneRefOfUnion(n *Union) *Union {
 		return nil
 	}
 	out := *n
-	out.FirstStatement = CloneSelectStatement(n.FirstStatement)
-	out.UnionSelects = CloneSliceOfRefOfUnionSelect(n.UnionSelects)
+	out.Left = CloneSelectStatement(n.Left)
+	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
-	return &out
-}
-
-// CloneRefOfUnionSelect creates a deep clone of the input.
-func CloneRefOfUnionSelect(n *UnionSelect) *UnionSelect {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Statement = CloneSelectStatement(n.Statement)
 	return &out
 }
 
@@ -2537,18 +2525,6 @@ func CloneSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*Constra
 	res := make([]*ConstraintDefinition, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfConstraintDefinition(x))
-	}
-	return res
-}
-
-// CloneSliceOfRefOfUnionSelect creates a deep clone of the input.
-func CloneSliceOfRefOfUnionSelect(n []*UnionSelect) []*UnionSelect {
-	if n == nil {
-		return nil
-	}
-	res := make([]*UnionSelect, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneRefOfUnionSelect(x))
 	}
 	return res
 }

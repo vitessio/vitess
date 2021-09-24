@@ -860,22 +860,22 @@ func (node *Union) SetInto(into *SelectInto) {
 
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
-	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+	node.Distinct = true
 }
 
 // GetColumnCount implements the SelectStatement interface
 func (node *Union) GetColumnCount() int {
-	return node.FirstStatement.GetColumnCount()
+	return node.Left.GetColumnCount()
 }
 
 // SetComments implements the SelectStatement interface
 func (node *Union) SetComments(comments Comments) {
-	node.FirstStatement.SetComments(comments)
+	node.Left.SetComments(comments)
 }
 
 // GetComments implements the SelectStatement interface
 func (node *Union) GetComments() Comments {
-	return node.FirstStatement.GetComments()
+	return node.Left.GetComments()
 }
 
 func requiresParen(stmt SelectStatement) bool {
@@ -1440,7 +1440,7 @@ func GetFirstSelect(selStmt SelectStatement) *Select {
 	case *Select:
 		return node
 	case *Union:
-		return GetFirstSelect(node.FirstStatement)
+		return GetFirstSelect(node.Left)
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
@@ -1451,12 +1451,7 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 	case *Select:
 		return []*Select{node}
 	case *Union:
-		var res []*Select
-		res = append(res, GetAllSelects(node.FirstStatement)...)
-		for _, unionSelect := range node.UnionSelects {
-			res = append(res, GetAllSelects(unionSelect.Statement)...)
-		}
-		return res
+		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
