@@ -1,12 +1,3 @@
-2021-06-22T05:52:11Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/959556887
-2021-06-22T05:52:11Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/959556849
-2021-06-22T05:52:11Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/959556865
-2021-06-22T05:52:11Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/959556873
-2021-06-22T05:52:11Z,Cluster (vtgate_schema),https://github.com/vitessio/vitess/actions/runs/959556828
-2021-06-22T05:52:11Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/959556883
-2021-06-22T05:52:11Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/959556874
-2021-06-22T05:52:11Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/959556848
-2021-06-22T05:52:11Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/959556850
 2021-06-22T05:52:11Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/959556851
 2021-06-22T05:52:11Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/959556892
 2021-06-22T05:52:11Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/959556844
@@ -9967,6 +9958,7 @@
 2021-09-24T18:17:49Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1270905940
 2021-09-24T18:17:49Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/1270905878
 2021-09-24T18:17:49Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1270905937
+2021-09-24T18:17:49Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1270905884
 2021-09-24T18:17:49Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1270905942
 2021-09-24T18:17:49Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1270905906
 2021-09-24T18:17:49Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1270905946
@@ -9988,9 +9980,16 @@
 2021-09-24T18:17:49Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1270905909
 2021-09-24T18:17:49Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1270905948
 2021-09-24T18:17:49Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1270905910
+2021-09-24T18:17:49Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1270905921
+2021-09-24T18:17:49Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1270905930
+2021-09-24T18:17:49Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1270905941
+2021-09-24T18:17:49Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1270905955
+2021-09-24T18:17:49Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1270905901
 2021-09-24T18:17:49Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1270905935
 2021-09-24T18:17:49Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1270905897
 2021-09-24T18:17:49Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1270905900
+2021-09-24T18:17:49Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1270905885
+2021-09-24T18:17:49Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1270905899
 2021-09-24T18:17:49Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1270905887
 2021-09-24T18:17:49Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1270905926
 2021-09-24T18:17:49Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1270905911
@@ -9998,3 +9997,4 @@
 2021-09-24T18:17:49Z,local_example,https://github.com/vitessio/vitess/actions/runs/1270905939
 2021-09-24T18:17:49Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1270905908
 2021-09-24T18:17:49Z,region_example,https://github.com/vitessio/vitess/actions/runs/1270905876
+2021-09-24T18:17:49Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1270905907
