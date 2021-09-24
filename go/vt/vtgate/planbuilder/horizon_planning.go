@@ -39,10 +39,6 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
-	if err := checkUnsupportedConstructs(hp.sel); err != nil {
-		return nil, err
-	}
-
 	rb, isRoute := plan.(*route)
 	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
