@@ -308,10 +308,10 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
 			{"Reshard", commandReshard,
-				"[-source_shards=<source_shards>] [-target_shards=<target_shards>] [-cells=<cells>] [-tablet_types=<source_tablet_types>]  [-skip_schema_copy] <action> <keyspace.workflow>",
+				"[-source_shards=<source_shards>] [-target_shards=<target_shards>] [-cells=<cells>] [-tablet_types=<source_tablet_types>]  [-skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
 				"Start a Resharding process. Example: Reshard -cells='zone1,alias1' -tablet_types='primary,replica,rdonly'  ks.workflow001 '0' '-80,80-'"},
 			{"MoveTables", commandMoveTables,
-				"[-source=<sourceKs>] [-tables=<tableSpecs>] [-cells=<cells>] [-tablet_types=<source_tablet_types>] [-all] [-exclude=<tables>] [-auto_start] [-stop_after_copy] <action> <targetKs.workflow>",
+				"[-source=<sourceKs>] [-tables=<tableSpecs>] [-cells=<cells>] [-tablet_types=<source_tablet_types>] [-all] [-exclude=<tables>] [-auto_start] [-stop_after_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <targetKs.workflow>",
 				`Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`},
 			{"Migrate", commandMigrate,
 				"[-cells=<cells>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
@@ -1982,8 +1982,6 @@ func getSourceKeyspace(clusterKeyspace string) (clusterName string, sourceKeyspa
 func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string,
 	workflowType wrangler.VReplicationWorkflowType) error {
 
-	action:= subFlags.String("action", "", "Only one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTraffic, Show, or Progress")
-	v1 := subFlags.Bool("v1", "true", "Enables usage of v1 command structure. (default false). Must be added to run the command with -workflow")
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "primary,replica,rdonly", "Source tablet types to replicate from (e.g. primary, replica, rdonly). Defaults to -vreplication_tablet_type parameter value for the tablet, which has the default value of replica.")
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken. -dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
@@ -2007,6 +2005,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 	targetShards := subFlags.String("target_shards", "", "Reshard only. Target shards")
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Reshard only. Skip copying of schema to target shards")
 
+	_ = subFlags.Bool("v1", false, "Enables usage of v1 command structure. (default false). Must be added to run the command with -workflow")
 	_ = subFlags.Bool("v2", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
