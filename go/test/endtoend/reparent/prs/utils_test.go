@@ -479,14 +479,6 @@ func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	}
 }
 
-func restartTablet(t *testing.T, tab *cluster.Vttablet) {
-	tab.MysqlctlProcess.InitMysql = false
-	err := tab.MysqlctlProcess.Start()
-	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-}
-
 func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
 	err := tab.MysqlctlProcess.Start()
