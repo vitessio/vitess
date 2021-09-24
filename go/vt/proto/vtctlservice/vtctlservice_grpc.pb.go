@@ -324,7 +324,7 @@ type VtctldClient interface {
 	ValidateSchemaKeyspace(ctx context.Context, in *vtctldata.ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateSchemaShard will diff the schema from all the tablets in the shard.
 	ValidateSchemaShard(ctx context.Context, in *vtctldata.ValidateSchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaShardResponse, error)
-	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+	// ValidateVSchema compares the schema of the primary in each specified shard to the vschema. The RPC fails if there are differences.
 	ValidateVSchema(ctx context.Context, in *vtctldata.ValidateVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVSchemaResponse, error)
 }
 
@@ -1063,7 +1063,7 @@ type VtctldServer interface {
 	ValidateSchemaKeyspace(context.Context, *vtctldata.ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
 	// ValidateSchemaShard will diff the schema from all the tablets in the shard.
 	ValidateSchemaShard(context.Context, *vtctldata.ValidateSchemaShardRequest) (*vtctldata.ValidateSchemaShardResponse, error)
-	// ValidateVSchema compares the schema of each primary tablet in "keyspace/shards..." to the vschema and errs if there are differences
+	// ValidateVSchema compares the schema of the primary in each specified shard to the vschema. The RPC fails if there are differences.
 	ValidateVSchema(context.Context, *vtctldata.ValidateVSchemaRequest) (*vtctldata.ValidateVSchemaResponse, error)
 	mustEmbedUnimplementedVtctldServer()
 }
