@@ -238,7 +238,7 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 }
 
 func buildSQLCalcFoundRowsPlan(
-	query string,
+	originalQuery string,
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema ContextVSchema,
@@ -249,7 +249,7 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, err
 	}
 
-	statement2, reserved2, err := sqlparser.Parse2(query)
+	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
 	if err != nil {
 		return nil, err
 	}

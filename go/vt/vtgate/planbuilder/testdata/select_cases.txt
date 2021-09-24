@@ -1656,6 +1656,50 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music limit 100",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 100,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select * from music limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from music where 1 != 1",
+            "Query": "select count(*) from music",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # sql_calc_found_rows with SelectEqualUnique plans
 "select sql_calc_found_rows * from music where user_id = 1 limit 2"
@@ -1698,6 +1742,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sql_calc_found_rows with group by and having
 "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
@@ -1747,14 +1792,62 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+            "ResultColumns": 2,
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from (select user_id, count(id) from music where 1 != 1 group by user_id) as t where 1 != 1",
+            "Query": "select count(*) from (select user_id, count(id) from music group by user_id having count(user_id) = 1) as t",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # sql_calc_found_rows in sub queries
 "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)"
 "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+Gen4 plan same as above
 
 # sql_calc_found_rows in derived table
 "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1"
 "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+Gen4 plan same as above
 
 # select from unsharded keyspace into dumpfile
 "select * from main.unsharded into Dumpfile 'x.txt'"
