@@ -83,7 +83,7 @@ type (
 const (
 	markdownTemplate = `# Release of Vitess {{.Version}}
 
-{{- if .Announcement }}
+{{- if or .Announcement .AddDetails }}
 ## Announcement
 {{ .Announcement }}
 {{- end }}

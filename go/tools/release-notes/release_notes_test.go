@@ -137,6 +137,55 @@ func TestGenerateReleaseNotes(t *testing.T) {
 			name:        "with version number",
 			releaseNote: releaseNote{Version: "v12.0.0"},
 			expectedOut: "# Release of Vitess v12.0.0\n",
+		}, {
+			name:        "with announcement",
+			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0"},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"## Announcement\n" +
+				"This is the new release.\n\nNew features got added.\n",
+		}, {
+			name:        "with announcement and known issues",
+			releaseNote: releaseNote{Announcement: "This is the new release.\n\nNew features got added.", Version: "v12.0.0", KnownIssues: "* bug 1\n* bug 2\n"},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"## Announcement\n" +
+				"This is the new release.\n\nNew features got added.\n" +
+				"------------\n" +
+				"## Known Issues\n" +
+				"* bug 1\n" +
+				"* bug 2\n\n",
+		}, {
+			name: "with announcement and change log",
+			releaseNote: releaseNote{
+				Announcement:  "This is the new release.\n\nNew features got added.",
+				Version:       "v12.0.0",
+				ChangeLog:     "* PR 1\n* PR 2\n",
+				ChangeMetrics: "optimization is the root of all evil",
+			},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"## Announcement\n" +
+				"This is the new release.\n\nNew features got added.\n" +
+				"------------\n" +
+				"## Changelog\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n" +
+				"optimization is the root of all evil\n",
+		}, {
+			name: "with add details and change log",
+			releaseNote: releaseNote{
+				AddDetails:    "* PR 92\n",
+				Version:       "v12.0.0",
+				ChangeLog:     "* PR 1\n* PR 2\n",
+				ChangeMetrics: "optimization is the root of all evil",
+			},
+			expectedOut: "# Release of Vitess v12.0.0\n" +
+				"## Announcement\n\n" +
+				"> TODO: please detail these pull requests.\n" +
+				"* PR 92\n\n" +
+				"------------\n" +
+				"## Changelog\n" +
+				"* PR 1\n" +
+				"* PR 2\n\n" +
+				"optimization is the root of all evil\n",
 		},
 	}
 
