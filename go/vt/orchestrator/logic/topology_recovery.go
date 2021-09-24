@@ -679,7 +679,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
 
-	// TODO: fix recovery attempted
 	return true, topologyRecovery, err
 }
 
