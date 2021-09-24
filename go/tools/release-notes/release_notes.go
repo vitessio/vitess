@@ -17,9 +17,11 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -65,14 +67,49 @@ type (
 		Number int    `json:"number"`
 		Title  string `json:"title"`
 	}
+
+	releaseNote struct {
+		Version       string
+		Announcement  string
+		KnownIssues   string
+		ChangeLog     string
+		ChangeMetrics string
+	}
 )
 
 const (
+	markdownTemplate = `# Release of Vitess {{.Version}}
+
+{{- if .Announcement }}
+## Announcement
+{{ .Announcement }}
+
+------------
+{{- end }}
+
+{{- if .KnownIssues }}
+## Known Issues
+
+{{ .KnownIssues }}
+
+------------
+{{- end }}
+
+{{- if .ChangeLog }}
+## Changelog
+
+{{ .ChangeLog }}
+
+{{ .ChangeMetrics }}
+
+{{- end }}
+`
+
 	markdownTemplatePR = `
 {{- range $type := . }}
-## {{ $type.Name }}
+### {{ $type.Name }}
 {{- range $component := $type.Components }} 
-### {{ $component.Name }}
+#### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
  * {{ $prInfo.Title }} #{{ $prInfo.Number }}
 {{- end }}
@@ -92,6 +129,15 @@ const (
 	numberOfThreads   = 10
 	lengthOfSingleSHA = 40
 )
+
+func (rn *releaseNote) generate(writeTo io.Writer) error {
+	t := template.Must(template.New("release_notes").Parse(markdownTemplate))
+	err := t.ExecuteTemplate(writeTo, "release_notes", rn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func loadKnownIssues(release string) ([]knownIssue, error) {
 	label := fmt.Sprintf("Known issue: %s", release)
@@ -383,78 +429,94 @@ func getOutput(fileout string) (*os.File, error) {
 	return os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
 
-func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
+func getStringForPullRequestInfos(prPerType prsByType) (string, error) {
 	data := createSortedPrTypeSlice(prPerType)
 
 	t := template.Must(template.New("markdownTemplatePR").Parse(markdownTemplatePR))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplatePR", data)
-	if err != nil {
-		return err
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplatePR", data); err != nil {
+		return "", err
 	}
-	return nil
+	return buff.String(), nil
 }
 
-func writeKnownIssues(writeTo *os.File, issues []knownIssue) (err error) {
+func getStringForKnownIssues(issues []knownIssue) (string, error) {
 	if len(issues) == 0 {
-		return nil
+		return "", nil
 	}
 	t := template.Must(template.New("markdownTemplateKnownIssues").Parse(markdownTemplateKnownIssues))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplateKnownIssues", issues)
-	if err != nil {
-		return err
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplateKnownIssues", issues); err != nil {
+		return "", err
 	}
-	return nil
+	return buff.String(), nil
 }
 
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
 	releaseBranch := flag.String("release-branch", "", "name of the release branch")
+	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
 	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
-
 	flag.Parse()
 
+	releaseNotes := releaseNote{}
+
+	// summary of the release
+	if *summaryFile != "" {
+		summary, err := releaseSummary(*summaryFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.Announcement = summary
+	}
+
+	// known issues
+	if *releaseBranch != "" {
+		knownIssues, err := loadKnownIssues(*releaseBranch)
+		if err != nil {
+			log.Fatal(err)
+		}
+		knownIssuesStr, err := getStringForKnownIssues(knownIssues)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.KnownIssues = knownIssuesStr
+	}
+
+	// changelog with pull requests
 	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	prInfos, authors, err := loadAllPRs(prs, authorCommits)
 	if err != nil {
 		log.Fatal(err)
 	}
+	if len(prInfos) > 0 {
+		prPerType := groupPRs(prInfos)
+		prStr, err := getStringForPullRequestInfos(prPerType)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.ChangeLog = prStr
+	}
 
-	prPerType := groupPRs(prInfos)
+	// changelog metrics
+	if commits > 0 && len(authors) > 0 {
+		releaseNotes.ChangeMetrics = fmt.Sprintf(`
+
+The release includes %d commits (excluding merges)
+Thanks to all our contributors: @%s
+`, commits, strings.Join(authors, ", @"))
+	}
+
 	out, err := getOutput(*fileout)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		_ = out.Close()
-	}()
-
-	err = writePrInfos(out, prPerType)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// known issues
-	knownIssues, err := loadKnownIssues(*releaseBranch)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = writeKnownIssues(out, knownIssues)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = out.WriteString(fmt.Sprintf("\n\nThe release includes %d commits (excluding merges)\n", commits))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: @%s\n", strings.Join(authors, ", @")))
-	if err != nil {
+	defer out.Close()
+	if err := releaseNotes.generate(out); err != nil {
 		log.Fatal(err)
 	}
 }

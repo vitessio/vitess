@@ -122,3 +122,33 @@ func TestLoadSummaryReadme(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, str, readmeContent)
 }
+
+func TestGenerateReleaseNotes(t *testing.T) {
+	tcs := []struct {
+		name        string
+		releaseNote releaseNote
+		expectedOut string
+	}{
+		{
+			name:        "empty",
+			releaseNote: releaseNote{},
+			expectedOut: "# Release of Vitess \n",
+		}, {
+			name:        "with version number",
+			releaseNote: releaseNote{Version: "v12.0.0"},
+			expectedOut: "# Release of Vitess v12.0.0\n",
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			outFile, err := ioutil.TempFile("", "*.md")
+			require.NoError(t, err)
+			err = tc.releaseNote.generate(outFile)
+			require.NoError(t, err)
+			all, err := ioutil.ReadFile(outFile.Name())
+			require.NoError(t, err)
+			require.Equal(t, tc.expectedOut, string(all))
+		})
+	}
+}
