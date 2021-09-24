@@ -170,7 +170,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	return combinedVars, nil
 }
 
-func (ps *PulloutSubquery) description() PrimitiveDescription {
+func (ps *PulloutSubquery) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Subquery",
 		Variant:      ps.Opcode.String(),

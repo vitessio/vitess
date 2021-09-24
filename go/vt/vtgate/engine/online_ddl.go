@@ -46,7 +46,7 @@ type OnlineDDL struct {
 	noInputs
 }
 
-func (v *OnlineDDL) description() PrimitiveDescription {
+func (v *OnlineDDL) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "OnlineDDL",
 		Keyspace:     v.Keyspace,
