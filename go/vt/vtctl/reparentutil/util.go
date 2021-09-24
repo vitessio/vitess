@@ -422,6 +422,14 @@ func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topoda
 	winningPrimaryTablet := validTablets[0]
 	winningPosition := tabletPositions[0]
 
+	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
+	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should abort the ERS
+	for i, position := range tabletPositions {
+		if !winningPosition.AtLeast(position) {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
+		}
+	}
+
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs)
 	// Also, if the candidate is
