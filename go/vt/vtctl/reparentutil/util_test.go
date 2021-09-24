@@ -1769,3 +1769,120 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 		})
 	}
 }
+
+func TestWaitForCatchingUp(t *testing.T) {
+	tests := []struct {
+		name        string
+		tmc         tmclient.TabletManagerClient
+		prevPrimary *topodatapb.Tablet
+		newPrimary  *topodatapb.Tablet
+		err         string
+	}{
+		{
+			name: "success",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    nil,
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": nil,
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name: "error in primary position",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    fmt.Errorf("found error in primary position"),
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": nil,
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			err: "found error in primary position",
+		}, {
+			name: "error in waiting for position",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    nil,
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": fmt.Errorf("found error in waiting for position"),
+					},
+				},
+			},
+			prevPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			err: "found error in waiting for position",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			logger := logutil.NewMemoryLogger()
+			err := waitForCatchingUp(ctx, test.tmc, logger, test.prevPrimary, test.newPrimary)
+			if test.err != "" {
+				assert.EqualError(t, err, test.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
