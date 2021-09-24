@@ -89,7 +89,6 @@ const (
 
 {{- if .KnownIssues }}
 ## Known Issues
-
 {{ .KnownIssues }}
 
 ------------
@@ -97,11 +96,8 @@ const (
 
 {{- if .ChangeLog }}
 ## Changelog
-
 {{ .ChangeLog }}
-
 {{ .ChangeMetrics }}
-
 {{- end }}
 `
 
@@ -118,7 +114,6 @@ const (
 `
 
 	markdownTemplateKnownIssues = `
-## Known issues
 {{- range $issue := . }}
  * {{ $issue.Title }} #{{ $issue.Number }} 
 {{- end }}
@@ -140,6 +135,10 @@ func (rn *releaseNote) generate(writeTo io.Writer) error {
 }
 
 func loadKnownIssues(release string) ([]knownIssue, error) {
+	idx := strings.Index(release, ".")
+	if idx > -1 {
+		release = release[:idx]
+	}
 	label := fmt.Sprintf("Known issue: %s", release)
 	out, err := execCmd("gh", "issue", "list", "--repo", "vitessio/vitess", "--label", label, "--json", "title,number")
 	if err != nil {
@@ -455,12 +454,14 @@ func getStringForKnownIssues(issues []knownIssue) (string, error) {
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	releaseBranch := flag.String("release-branch", "", "name of the release branch")
+	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
 	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
 	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
 	flag.Parse()
 
-	releaseNotes := releaseNote{}
+	releaseNotes := releaseNote{
+		Version: *versionName,
+	}
 
 	// summary of the release
 	if *summaryFile != "" {
@@ -472,8 +473,8 @@ func main() {
 	}
 
 	// known issues
-	if *releaseBranch != "" {
-		knownIssues, err := loadKnownIssues(*releaseBranch)
+	if *versionName != "" {
+		knownIssues, err := loadKnownIssues(*versionName)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -505,8 +506,8 @@ func main() {
 	// changelog metrics
 	if commits > 0 && len(authors) > 0 {
 		releaseNotes.ChangeMetrics = fmt.Sprintf(`
-
 The release includes %d commits (excluding merges)
+
 Thanks to all our contributors: @%s
 `, commits, strings.Join(authors, ", @"))
 	}
