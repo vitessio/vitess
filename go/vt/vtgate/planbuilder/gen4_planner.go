@@ -42,27 +42,11 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 				return p, err
 			}
 
-			if sel.SQLCalcFoundRows {
-				if sel.Limit != nil {
-					ksName := ""
-					if ks, _ := vschema.DefaultKeyspace(); ks != nil {
-						ksName = ks.Name
-					}
-					semTable, err := semantics.Analyze(sel, ksName, vschema)
-					if err != nil {
-						return nil, err
-					}
-					plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
-					if err != nil {
-						return nil, err
-					}
-					err = plan.WireupGen4(semTable)
-					if err != nil {
-						return nil, err
-					}
-					return plan.Primitive(), nil
-				}
+			if sel.SQLCalcFoundRows && sel.Limit != nil {
+				return gen4planSQLCalcFoundRows(vschema, sel, query, reservedVars)
 			}
+			// if there was no limit, we can safely ignore the SQLCalcFoundRows directive
+			sel.SQLCalcFoundRows = false
 		}
 
 		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
@@ -83,6 +67,26 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 		}
 		return plan.Primitive(), nil
 	}
+}
+
+func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	semTable, err := semantics.Analyze(sel, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
+	if err != nil {
+		return nil, err
+	}
+	err = plan.WireupGen4(semTable)
+	if err != nil {
+		return nil, err
+	}
+	return plan.Primitive(), nil
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
