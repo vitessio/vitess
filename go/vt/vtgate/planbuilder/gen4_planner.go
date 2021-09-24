@@ -27,7 +27,7 @@ import (
 
 var _ selectPlanner = gen4Planner
 
-func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
@@ -40,6 +40,28 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 			p, err := handleDualSelects(sel, vschema)
 			if err != nil || p != nil {
 				return p, err
+			}
+
+			if sel.SQLCalcFoundRows {
+				if sel.Limit != nil {
+					ksName := ""
+					if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+						ksName = ks.Name
+					}
+					semTable, err := semantics.Analyze(sel, ksName, vschema)
+					if err != nil {
+						return nil, err
+					}
+					plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
+					if err != nil {
+						return nil, err
+					}
+					err = plan.WireupGen4(semTable)
+					if err != nil {
+						return nil, err
+					}
+					return plan.Primitive(), nil
+				}
 			}
 		}
 
@@ -61,6 +83,14 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 		}
 		return plan.Primitive(), nil
 	}
+}
+
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, plan, nil
 }
 
 func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, error)) engine.Primitive {

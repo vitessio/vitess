@@ -269,8 +269,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		parent := cursor.Parent()
+		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS only supported in single SELECT queries")
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 		}
 		errMsg := "INTO"
 		nextVal := false
