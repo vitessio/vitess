@@ -140,6 +140,10 @@ service Vtctld {
   // current shard primary is in for promotion unless NewPrimary is explicitly
   // provided in the request.
   rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
+  // RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+  //
+  // This may trigger an update to all connected clients.
+  rpc RebuildKeyspaceGraph(vtctldata.RebuildKeyspaceGraphRequest) returns (vtctldata.RebuildKeyspaceGraphResponse) {};
   // RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
   // VSchema objects in the provided cells (or all cells in the topo none
   // provided).
@@ -159,6 +163,18 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // SetShardIsPrimaryServing adds or removes a shard from serving.
+  //
+  // This is meant as an emergency function. It does not rebuild any serving
+  // graph (i.e. it does not run RebuildKeyspaceGraph).
+  rpc SetShardIsPrimaryServing(vtctldata.SetShardIsPrimaryServingRequest) returns (vtctldata.SetShardIsPrimaryServingResponse) {};
+  // SetShardTabletControl updates the TabletControl topo record for a shard and
+  // tablet type.
+  //
+  // This should only be used for an emergency fix, or after a finished
+  // Reshard. See the documentation on SetShardTabletControlRequest for more
+  // information about the different update modes.
+  rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet

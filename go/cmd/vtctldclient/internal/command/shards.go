@@ -18,6 +18,7 @@ package command
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -51,6 +52,39 @@ var (
 		Use:  "RemoveShardCell <keyspace/shard> <cell>",
 		Args: cobra.ExactArgs(2),
 		RunE: commandRemoveShardCell,
+	}
+	// SetShardIsPrimaryServing makes a SetShardIsPrimaryServing gRPC call to a
+	// vtctld.
+	SetShardIsPrimaryServing = &cobra.Command{
+		Use:                   "SetShardIsPrimaryServing <keyspace/shard> <true/false>",
+		Short:                 "Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graphs; i.e. it does not run `RebuildKeyspaceGraph`.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSetShardIsPrimaryServing,
+	}
+	// SetShardTabletControl makes a SetShardTabletControl gRPC call to a vtctld.
+	SetShardTabletControl = &cobra.Command{
+		Use:   "SetShardTabletControl [--cells=c1,c2...] [--denied-tables=t1,t2,...] [--remove] [--disable-query-service[=0|false]] <keyspace/shard> <tablet_type>",
+		Short: "Sets the TabletControl record for a shard and tablet type. Only use this for an emergency fix or after a finished MoveTables. The MigrateServedFrom and MigrateServedType commands set this record appropriately already.",
+		Long: `Sets the TabletControl record for a shard and tablet type.
+
+Only use this for an emergency fix or after a finished MoveTables. The MigrateServedFrom
+and MigrateServedType commands set this record appropriately already.
+
+Always specify the denied-tables flag for MoveTables, but never for Reshard operations.
+
+To set the DisableQueryService flag, keep denied-tables empty, and set --disable-query-service
+to true or false. This is useful to fix Reshard operations gone wrong.
+
+To change the list of denied tables, specify the --denied-tables parameter with
+the new list. This is useful to fix tables that are being blocked after a
+MoveTables operation.
+
+To remove the ShardTabletControl record entirely, use the --remove flag. This is
+useful after a MoveTables has finished to remove serving restrictions.`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSetShardTabletControl,
 	}
 	// ShardReplicationPositions makes a ShardReplicationPositions gRPC request
 	// to a vtctld.
@@ -183,6 +217,79 @@ func commandRemoveShardCell(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandSetShardIsPrimaryServing(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return fmt.Errorf("cannot parse keyspace/shard: %w", err)
+	}
+
+	isServing, err := strconv.ParseBool(cmd.Flags().Arg(1))
+	if err != nil {
+		return fmt.Errorf("cannot parse is_serving as bool: %w", err)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetShardIsPrimaryServing(commandCtx, &vtctldatapb.SetShardIsPrimaryServingRequest{
+		Keyspace:  keyspace,
+		Shard:     shard,
+		IsServing: isServing,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Shard)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+var setShardTabletControlOptions = struct {
+	Cells               []string
+	DeniedTables        []string
+	Remove              bool
+	DisableQueryService bool
+}{}
+
+func commandSetShardTabletControl(cmd *cobra.Command, args []string) error {
+	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return fmt.Errorf("cannot parse keyspace/shard: %w", err)
+	}
+
+	tabletType, err := topoproto.ParseTabletType(cmd.Flags().Arg(1))
+	if err != nil {
+		return fmt.Errorf("cannot parse tablet type: %w", err)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetShardTabletControl(commandCtx, &vtctldatapb.SetShardTabletControlRequest{
+		Keyspace:            keyspace,
+		Shard:               shard,
+		TabletType:          tabletType,
+		Cells:               setShardTabletControlOptions.Cells,
+		DeniedTables:        setShardTabletControlOptions.DeniedTables,
+		Remove:              setShardTabletControlOptions.Remove,
+		DisableQueryService: setShardTabletControlOptions.DisableQueryService,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp.Shard)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 func commandShardReplicationPositions(cmd *cobra.Command, args []string) error {
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
 	if err != nil {
@@ -229,6 +336,14 @@ func init() {
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	RemoveShardCell.Flags().BoolVarP(&removeShardCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified shard.")
 	Root.AddCommand(RemoveShardCell)
+
+	Root.AddCommand(SetShardIsPrimaryServing)
+
+	SetShardTabletControl.Flags().StringSliceVarP(&setShardTabletControlOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to update.")
+	SetShardTabletControl.Flags().StringSliceVar(&setShardTabletControlOptions.DeniedTables, "denied-tables", nil, "Specifies a comma-separated list of tables to add to the denylist (for MoveTables). Each table name is either an exact match, or a regular expression of the form '/regexp/'.")
+	SetShardTabletControl.Flags().BoolVarP(&setShardTabletControlOptions.Remove, "remove", "r", false, "Removes the specified cells for MoveTables operations.")
+	SetShardTabletControl.Flags().BoolVar(&setShardTabletControlOptions.DisableQueryService, "disable-query-service", false, "Sets the DisableQueryService flag in the specified cells. This flag requires --denied-tables and --remove to be unset; if either is set, this flag is ignored.")
+	Root.AddCommand(SetShardTabletControl)
 
 	Root.AddCommand(ShardReplicationPositions)
 }
