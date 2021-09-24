@@ -241,6 +241,10 @@ type VtctldClient interface {
 	// current shard primary is in for promotion unless NewPrimary is explicitly
 	// provided in the request.
 	PlannedReparentShard(ctx context.Context, in *vtctldata.PlannedReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.PlannedReparentShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	//
+	// This may trigger an update to all connected clients.
+	RebuildKeyspaceGraph(ctx context.Context, in *vtctldata.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldata.RebuildKeyspaceGraphResponse, error)
 	// RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
 	// VSchema objects in the provided cells (or all cells in the topo none
 	// provided).
@@ -260,6 +264,18 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// SetShardIsPrimaryServing adds or removes a shard from serving.
+	//
+	// This is meant as an emergency function. It does not rebuild any serving
+	// graph (i.e. it does not run RebuildKeyspaceGraph).
+	SetShardIsPrimaryServing(ctx context.Context, in *vtctldata.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldata.SetShardIsPrimaryServingResponse, error)
+	// SetShardTabletControl updates the TabletControl topo record for a shard and
+	// tablet type.
+	//
+	// This should only be used for an emergency fix, or after a finished
+	// Reshard. See the documentation on SetShardTabletControlRequest for more
+	// information about the different update modes.
+	SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(ctx context.Context, in *vtctldata.SetWritableRequest, opts ...grpc.CallOption) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationPositions returns the replication position of each tablet
@@ -617,6 +633,15 @@ func (c *vtctldClient) PlannedReparentShard(ctx context.Context, in *vtctldata.P
 	return out, nil
 }
 
+func (c *vtctldClient) RebuildKeyspaceGraph(ctx context.Context, in *vtctldata.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldata.RebuildKeyspaceGraphResponse, error) {
+	out := new(vtctldata.RebuildKeyspaceGraphResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RebuildKeyspaceGraph", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RebuildVSchemaGraph(ctx context.Context, in *vtctldata.RebuildVSchemaGraphRequest, opts ...grpc.CallOption) (*vtctldata.RebuildVSchemaGraphResponse, error) {
 	out := new(vtctldata.RebuildVSchemaGraphResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RebuildVSchemaGraph", in, out, opts...)
@@ -665,6 +690,24 @@ func (c *vtctldClient) RemoveShardCell(ctx context.Context, in *vtctldata.Remove
 func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error) {
 	out := new(vtctldata.ReparentTabletResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReparentTablet", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldata.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
+	out := new(vtctldata.SetShardIsPrimaryServingResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetShardIsPrimaryServing", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldata.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldata.SetShardTabletControlResponse, error) {
+	out := new(vtctldata.SetShardTabletControlResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetShardTabletControl", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -856,6 +899,10 @@ type VtctldServer interface {
 	// current shard primary is in for promotion unless NewPrimary is explicitly
 	// provided in the request.
 	PlannedReparentShard(context.Context, *vtctldata.PlannedReparentShardRequest) (*vtctldata.PlannedReparentShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	//
+	// This may trigger an update to all connected clients.
+	RebuildKeyspaceGraph(context.Context, *vtctldata.RebuildKeyspaceGraphRequest) (*vtctldata.RebuildKeyspaceGraphResponse, error)
 	// RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
 	// VSchema objects in the provided cells (or all cells in the topo none
 	// provided).
@@ -875,6 +922,18 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// SetShardIsPrimaryServing adds or removes a shard from serving.
+	//
+	// This is meant as an emergency function. It does not rebuild any serving
+	// graph (i.e. it does not run RebuildKeyspaceGraph).
+	SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error)
+	// SetShardTabletControl updates the TabletControl topo record for a shard and
+	// tablet type.
+	//
+	// This should only be used for an emergency fix, or after a finished
+	// Reshard. See the documentation on SetShardTabletControlRequest for more
+	// information about the different update modes.
+	SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error)
 	// SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
 	SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error)
 	// ShardReplicationPositions returns the replication position of each tablet
@@ -1019,6 +1078,9 @@ func (UnimplementedVtctldServer) PingTablet(context.Context, *vtctldata.PingTabl
 func (UnimplementedVtctldServer) PlannedReparentShard(context.Context, *vtctldata.PlannedReparentShardRequest) (*vtctldata.PlannedReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedReparentShard not implemented")
 }
+func (UnimplementedVtctldServer) RebuildKeyspaceGraph(context.Context, *vtctldata.RebuildKeyspaceGraphRequest) (*vtctldata.RebuildKeyspaceGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RebuildKeyspaceGraph not implemented")
+}
 func (UnimplementedVtctldServer) RebuildVSchemaGraph(context.Context, *vtctldata.RebuildVSchemaGraphRequest) (*vtctldata.RebuildVSchemaGraphResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RebuildVSchemaGraph not implemented")
 }
@@ -1036,6 +1098,12 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 }
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
+}
+func (UnimplementedVtctldServer) SetShardTabletControl(context.Context, *vtctldata.SetShardTabletControlRequest) (*vtctldata.SetShardTabletControlResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetShardTabletControl not implemented")
 }
 func (UnimplementedVtctldServer) SetWritable(context.Context, *vtctldata.SetWritableRequest) (*vtctldata.SetWritableResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetWritable not implemented")
@@ -1704,6 +1772,24 @@ func _Vtctld_PlannedReparentShard_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RebuildKeyspaceGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RebuildKeyspaceGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RebuildKeyspaceGraph",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RebuildKeyspaceGraph(ctx, req.(*vtctldata.RebuildKeyspaceGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RebuildVSchemaGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RebuildVSchemaGraphRequest)
 	if err := dec(in); err != nil {
@@ -1808,6 +1894,42 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).ReparentTablet(ctx, req.(*vtctldata.ReparentTabletRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetShardIsPrimaryServingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetShardIsPrimaryServing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetShardIsPrimaryServing",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetShardIsPrimaryServing(ctx, req.(*vtctldata.SetShardIsPrimaryServingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SetShardTabletControl_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetShardTabletControlRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetShardTabletControl(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetShardTabletControl",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetShardTabletControl(ctx, req.(*vtctldata.SetShardTabletControlRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2104,6 +2226,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_PlannedReparentShard_Handler,
 		},
 		{
+			MethodName: "RebuildKeyspaceGraph",
+			Handler:    _Vtctld_RebuildKeyspaceGraph_Handler,
+		},
+		{
 			MethodName: "RebuildVSchemaGraph",
 			Handler:    _Vtctld_RebuildVSchemaGraph_Handler,
 		},
@@ -2126,6 +2252,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReparentTablet",
 			Handler:    _Vtctld_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "SetShardIsPrimaryServing",
+			Handler:    _Vtctld_SetShardIsPrimaryServing_Handler,
+		},
+		{
+			MethodName: "SetShardTabletControl",
+			Handler:    _Vtctld_SetShardTabletControl_Handler,
 		},
 		{
 			MethodName: "SetWritable",

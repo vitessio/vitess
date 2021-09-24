@@ -343,6 +343,15 @@ func (client *gRPCVtctldClient) PlannedReparentShard(ctx context.Context, in *vt
 	return client.c.PlannedReparentShard(ctx, in, opts...)
 }
 
+// RebuildKeyspaceGraph is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) RebuildKeyspaceGraph(ctx context.Context, in *vtctldatapb.RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildKeyspaceGraphResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.RebuildKeyspaceGraph(ctx, in, opts...)
+}
+
 // RebuildVSchemaGraph is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) RebuildVSchemaGraph(ctx context.Context, in *vtctldatapb.RebuildVSchemaGraphRequest, opts ...grpc.CallOption) (*vtctldatapb.RebuildVSchemaGraphResponse, error) {
 	if client.c == nil {
@@ -395,6 +404,24 @@ func (client *gRPCVtctldClient) ReparentTablet(ctx context.Context, in *vtctldat
 	}
 
 	return client.c.ReparentTablet(ctx, in, opts...)
+}
+
+// SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetShardIsPrimaryServing(ctx, in, opts...)
+}
+
+// SetShardTabletControl is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) SetShardTabletControl(ctx context.Context, in *vtctldatapb.SetShardTabletControlRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardTabletControlResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.SetShardTabletControl(ctx, in, opts...)
 }
 
 // SetWritable is part of the vtctlservicepb.VtctldClient interface.
