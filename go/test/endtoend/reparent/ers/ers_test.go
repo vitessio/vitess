@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reparent
+package ers
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func TestTrivialERS(t *testing.T) {
 	// We should be able to do a series of ERS-es, even if nothing
 	// is down, without issue
 	for i := 1; i <= 4; i++ {
-		out, err := ers(t, nil, "30s")
+		out, err := ers(nil, "60s", "30s")
 		log.Infof("ERS loop %d.  EmergencyReparentShard Output: %v", i, out)
 		require.NoError(t, err)
 		time.Sleep(5 * time.Second)
@@ -68,11 +68,11 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	stopTablet(t, tab3, true)
 
 	// We expect this one to fail because we have an unreachable replica
-	out, err := ers(t, nil, "30s")
+	out, err := ers(nil, "60s", "30s")
 	require.NotNil(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
-	out, err = ersIgnoreTablet(t, nil, "30s", []*cluster.Vttablet{tab3})
+	out, err = ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab3})
 	require.Nil(t, err, out)
 
 	// We'll bring back the replica we took down.
@@ -111,7 +111,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 	stopTablet(t, tab1, true)
 
 	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
-	out, err := ersIgnoreTablet(t, nil, "30s", []*cluster.Vttablet{tab4})
+	out, err := ersIgnoreTablet(nil, "30s", "30s", []*cluster.Vttablet{tab4})
 	require.NotNil(t, err, out)
 
 	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", keyspaceShard)
@@ -133,7 +133,7 @@ func TestERSPrefersSameCell(t *testing.T) {
 	stopTablet(t, tab1, true)
 
 	// We expect that tab3 will be promoted since it is in the same cell as the previous primary
-	out, err := ersIgnoreTablet(t, nil, "30s", []*cluster.Vttablet{tab2})
+	out, err := ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab2})
 	require.NoError(t, err, out)
 
 	newPrimary := getNewPrimary(t)
