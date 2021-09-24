@@ -386,8 +386,8 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 		if !ok {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
 		}
-		// We do not allow Experimental type of tablets to be considered for replication
-		if candidateInfo.Type == topodatapb.TabletType_EXPERIMENTAL {
+		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
+		if candidateInfo.Type == topodatapb.TabletType_BACKUP || candidateInfo.Type == topodatapb.TabletType_RESTORE || candidateInfo.Type == topodatapb.TabletType_DRAINED {
 			continue
 		}
 		restrictedValidCandidates[candidate] = position
@@ -395,8 +395,8 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-// findIntermediatePrimaryCandidate finds the intermediate primary candidate for ERS. We always choose the most advanced one from our valid candidates list
-func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
+// findMostAdvanced finds the intermediate primary candidate for ERS. We always choose the most advanced one from our valid candidates list
+func findMostAdvanced(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
 	logger.Infof("started finding the intermediate primary candidate")
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
@@ -423,7 +423,7 @@ func findIntermediatePrimaryCandidate(logger logutil.Logger, prevPrimary *topoda
 	winningPosition := tabletPositions[0]
 
 	// We have already removed the tablets with errant GTIDs before calling this function. At this point our winning position must be a
-	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should abort the ERS
+	// superset of all the other valid positions. If that is not the case, then we have a split brain scenario, and we should cancel the ERS
 	for i, position := range tabletPositions {
 		if !winningPosition.AtLeast(position) {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "split brain detected between servers - %v and %v", winningPrimaryTablet.Alias, validTablets[i].Alias)
@@ -471,15 +471,15 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 // intermediateCandidateIsIdeal is used to find whether the intermediate candidate that ERS chose is also the ideal one or not
 func intermediateCandidateIsIdeal(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (bool, error) {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := getBetterCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts)
+	candidate, err := identifyPrimaryCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return false, err
 	}
 	return candidate == newPrimary, nil
 }
 
-// getBetterCandidate is used to find a better candidate for ERS promotion
-func getBetterCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet, err error) {
+// identifyPrimaryCandidate is used to find a better candidate for ERS promotion
+func identifyPrimaryCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
 		if candidate != nil {
 			logger.Infof("found better candidate - %v", candidate.Alias)

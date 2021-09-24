@@ -53,7 +53,7 @@ func (ersSorter *ErsSorter) Swap(i, j int) {
 
 // Less implements the Interface for sorting
 func (ersSorter *ErsSorter) Less(i, j int) bool {
-	// Returning "true" in this function means [i] is before [j],
+	// Returning "true" in this function means [i] is before [j] in the sorting order,
 	// which will lead to [i] be a better candidate for promotion
 
 	// Should not happen

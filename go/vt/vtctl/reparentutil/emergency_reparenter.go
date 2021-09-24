@@ -204,19 +204,19 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
-	// find the intermediate primary candidate that we want to replicate from. This will always be the most advanced tablet that we have
-	// We let all the other tablets replicate from this primary. We will then try to choose a better candidate and let it catch up
-	var intermediatePrimary *topodatapb.Tablet
+	// find the intermediate replication source that we want to replicate from. This will always be the most advanced tablet that we have
+	// We let all the other tablets replicate from this tablet. We will then try to choose a better candidate and let it catch up
+	var intermediateSource *topodatapb.Tablet
 	var validCandidateTablets []*topodatapb.Tablet
-	intermediatePrimary, validCandidateTablets, err = findIntermediatePrimaryCandidate(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = findMostAdvanced(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
-	erp.logger.Infof("intermediate primary selected - %v", intermediatePrimary.Alias)
+	erp.logger.Infof("intermediate primary selected - %v", intermediateSource.Alias)
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
 	var isIdeal bool
-	isIdeal, err = intermediateCandidateIsIdeal(erp.logger, intermediatePrimary, prevPrimary, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = intermediateCandidateIsIdeal(erp.logger, intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -228,27 +228,27 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// initialize the newPrimary with the intermediate primary, override this value if it is not the ideal candidate
-	newPrimary := intermediatePrimary
+	newPrimary := intermediateSource
 	if !isIdeal {
 		// we now promote our intermediate primary candidate and also reparent all the other tablets to start replicating from this candidate
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
 		var validReplacementCandidates []*topodatapb.Tablet
-		validReplacementCandidates, err = promoteIntermediatePrimary(ctx, erp.tmc, ev, erp.logger, intermediatePrimary, opts.lockAction, tabletMap, statusMap, opts)
+		validReplacementCandidates, err = promoteIntermediatePrimary(ctx, erp.tmc, ev, erp.logger, intermediateSource, opts.lockAction, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}
 
 		// try to find a better candidate using the list we got back
 		var betterCandidate *topodatapb.Tablet
-		betterCandidate, err = getBetterCandidate(erp.logger, intermediatePrimary, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = identifyPrimaryCandidate(erp.logger, intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
 		if err != nil {
 			return err
 		}
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
-		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediatePrimary.Alias) {
-			err = waitForCatchingUp(ctx, erp.tmc, erp.logger, intermediatePrimary, betterCandidate)
+		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediateSource.Alias) {
+			err = waitForCatchingUp(ctx, erp.tmc, erp.logger, intermediateSource, betterCandidate)
 			if err != nil {
 				return err
 			}
