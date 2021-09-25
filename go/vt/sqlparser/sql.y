@@ -3448,7 +3448,7 @@ as_opt_id:
   {
     $$ = $1
   }
-| AS table_alias column_list_opt
+| AS table_alias
   {
     $$ = $2
   }
