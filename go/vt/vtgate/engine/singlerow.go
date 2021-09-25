@@ -69,7 +69,7 @@ func (s *SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVa
 	return &sqltypes.Result{}, nil
 }
 
-func (s *SingleRow) description() PrimitiveDescription {
+func (s *SingleRow) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SingleRow",
 	}

@@ -55,8 +55,13 @@ func CloneAST(in AST) AST {
 
 // CloneBytes creates a deep clone of the input.
 func CloneBytes(n Bytes) Bytes {
+	if n == nil {
+		return nil
+	}
 	res := make(Bytes, 0, len(n))
-	copy(res, n)
+	for _, x := range n {
+		res = append(res, x)
+	}
 	return res
 }
 
@@ -67,6 +72,9 @@ func CloneInterfaceContainer(n InterfaceContainer) InterfaceContainer {
 
 // CloneInterfaceSlice creates a deep clone of the input.
 func CloneInterfaceSlice(n InterfaceSlice) InterfaceSlice {
+	if n == nil {
+		return nil
+	}
 	res := make(InterfaceSlice, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneAST(x))
@@ -85,6 +93,9 @@ func CloneRefOfLeaf(n *Leaf) *Leaf {
 
 // CloneLeafSlice creates a deep clone of the input.
 func CloneLeafSlice(n LeafSlice) LeafSlice {
+	if n == nil {
+		return nil
+	}
 	res := make(LeafSlice, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfLeaf(x))
@@ -167,6 +178,9 @@ func CloneRefOfInterfaceContainer(n *InterfaceContainer) *InterfaceContainer {
 
 // CloneSliceOfAST creates a deep clone of the input.
 func CloneSliceOfAST(n []AST) []AST {
+	if n == nil {
+		return nil
+	}
 	res := make([]AST, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneAST(x))
@@ -176,6 +190,9 @@ func CloneSliceOfAST(n []AST) []AST {
 
 // CloneSliceOfInt creates a deep clone of the input.
 func CloneSliceOfInt(n []int) []int {
+	if n == nil {
+		return nil
+	}
 	res := make([]int, 0, len(n))
 	copy(res, n)
 	return res
@@ -183,6 +200,9 @@ func CloneSliceOfInt(n []int) []int {
 
 // CloneSliceOfRefOfLeaf creates a deep clone of the input.
 func CloneSliceOfRefOfLeaf(n []*Leaf) []*Leaf {
+	if n == nil {
+		return nil
+	}
 	res := make([]*Leaf, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneRefOfLeaf(x))

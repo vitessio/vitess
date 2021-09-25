@@ -110,3 +110,8 @@ func (v *Vindex) CheckValid() error {
 
 	return nil
 }
+
+// Compact implements the Operator interface
+func (v *Vindex) Compact() Operator {
+	return v
+}

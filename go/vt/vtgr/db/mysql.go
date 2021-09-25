@@ -56,6 +56,9 @@ type Agent interface {
 	// the caller should grab a lock before
 	BootstrapGroupLocked(instanceKey *inst.InstanceKey) error
 
+	// RebootstrapGroupLocked rebootstrap a group with an existing name
+	RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name string) error
+
 	// StopGroupLocked stops a mysql group
 	StopGroupLocked(instanceKey *inst.InstanceKey) error
 
@@ -175,6 +178,15 @@ func (agent *SQLAgentImpl) BootstrapGroupLocked(instanceKey *inst.InstanceKey) e
 		log.Infof("Try to bootstrap with a new uuid")
 	}
 	log.Infof("Bootstrap group on %v with %v", instanceKey.Hostname, uuid)
+	return agent.bootstrapInternal(instanceKey, uuid)
+}
+
+func (agent *SQLAgentImpl) RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name string) error {
+	log.Infof("Rebootstrapping group on %v with %v", instanceKey.Hostname, name)
+	return agent.bootstrapInternal(instanceKey, name)
+}
+
+func (agent *SQLAgentImpl) bootstrapInternal(instanceKey *inst.InstanceKey, uuid string) error {
 	// Use persist to set group_replication_group_name
 	// so that the instance will persist the name after restart
 	cmds := []string{
@@ -188,6 +200,7 @@ func (agent *SQLAgentImpl) BootstrapGroupLocked(instanceKey *inst.InstanceKey) e
 	}
 	for _, cmd := range cmds {
 		if err := execInstanceWithTopo(instanceKey, cmd); err != nil {
+			log.Errorf("Failed to execute: %v: %v", cmd, err)
 			return err
 		}
 	}

@@ -779,7 +779,7 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	return nil
 }
 
-func (route *Route) description() PrimitiveDescription {
+func (route *Route) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":      route.Query,
 		"Table":      route.TableName,

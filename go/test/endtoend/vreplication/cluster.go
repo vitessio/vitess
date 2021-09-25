@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,19 +30,20 @@ var (
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
 type ClusterConfig struct {
-	hostname            string
-	topoPort            int
-	vtctldPort          int
-	vtctldGrpcPort      int
-	vtdataroot          string
-	tmpDir              string
-	vtgatePort          int
-	vtgateGrpcPort      int
-	vtgateMySQLPort     int
-	tabletTypes         string
-	tabletPortBase      int
-	tabletGrpcPortBase  int
-	tabletMysqlPortBase int
+	hostname             string
+	topoPort             int
+	vtctldPort           int
+	vtctldGrpcPort       int
+	vtdataroot           string
+	tmpDir               string
+	vtgatePort           int
+	vtgateGrpcPort       int
+	vtgateMySQLPort      int
+	vtgatePlannerVersion planbuilder.PlannerVersion
+	tabletTypes          string
+	tabletPortBase       int
+	tabletGrpcPortBase   int
+	tabletMysqlPortBase  int
 
 	vreplicationCompressGTID bool
 }
@@ -380,7 +383,8 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		vc.ClusterConfig.tabletTypes,
 		vc.ClusterConfig.topoPort,
 		vc.ClusterConfig.tmpDir,
-		[]string{"-tablet_refresh_interval", "10ms"})
+		[]string{"-tablet_refresh_interval", "10ms"},
+		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {
 		t.Fatalf(err.Error())

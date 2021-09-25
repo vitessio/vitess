@@ -145,7 +145,7 @@ func (v *VStream) GetFields(_ VCursor, _ map[string]*querypb.BindVariable) (*sql
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for VStream")
 }
 
-func (v *VStream) description() PrimitiveDescription {
+func (v *VStream) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Table":    v.TableName,
 		"Limit":    v.Limit,
