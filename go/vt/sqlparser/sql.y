@@ -578,19 +578,19 @@ query_expression_body:
   }
 | query_expression_body union_op query_primary
   {
- 	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+ 	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_parens union_op query_primary
   {
-	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_body union_op query_expression_parens
   {
-  	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+  	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 | query_expression_parens union_op query_expression_parens
   {
-	$$ = &Union{FirstStatement: $1, UnionSelects: []*UnionSelect{{Distinct: $2, Statement: $3}}}
+	$$ = &Union{Left: $1, Distinct: $2, Right: $3}
   }
 
 select_statement:

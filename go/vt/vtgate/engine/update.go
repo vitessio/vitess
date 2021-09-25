@@ -269,7 +269,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (upd *Update) description() PrimitiveDescription {
+func (upd *Update) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                upd.Query,
 		"Table":                upd.GetTableName(),

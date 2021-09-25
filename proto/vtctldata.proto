@@ -625,6 +625,17 @@ message PlannedReparentShardResponse {
   repeated logutil.Event events = 4;
 }
 
+message RebuildKeyspaceGraphRequest {
+  string keyspace = 1;
+  repeated string cells = 2;
+  // AllowPartial, when set, allows a SNAPSHOT keyspace to serve with an
+  // incomplete set of shards. It is ignored for all other keyspace types.
+  bool allow_partial = 3;
+}
+
+message RebuildKeyspaceGraphResponse {
+}
+
 message RebuildVSchemaGraphRequest {
   // Cells specifies the cells to rebuild the SrvVSchema objects for. If empty,
   // RebuildVSchemaGraph rebuilds the SrvVSchema for every cell in the topo.
@@ -699,6 +710,46 @@ message ReparentTabletResponse {
   string shard = 2;
   // Primary is the alias of the tablet that the tablet was reparented under.
   topodata.TabletAlias primary = 3;
+}
+
+message SetShardIsPrimaryServingRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool is_serving = 3;
+}
+
+message SetShardIsPrimaryServingResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
+}
+
+message SetShardTabletControlRequest {
+  string keyspace = 1;
+  string shard = 2;
+  topodata.TabletType tablet_type = 3;
+  repeated string cells = 4;
+  // DeniedTables updates the list of denied tables the shard will serve for
+  // the given tablet type. This is useful to fix tables that are being blocked
+  // after a MoveTables operation.
+  //
+  // NOTE: Setting this field will cause DisableQueryService to be ignored.
+  repeated string denied_tables = 5;
+  // DisableQueryService instructs whether to enable the query service on
+  // tablets of the given type in the shard. This is useful to fix Reshard
+  // operations gone awry.
+  //
+  // NOTE: this is ignored if DeniedTables is not empty.
+  bool disable_query_service = 6;
+  // Remove removes the ShardTabletControl record entirely. If set, this takes
+  // precedence over DeniedTables and DisableQueryService fields, and is useful
+  // to manually remove serving restrictions after a completed MoveTables
+  // operation.
+  bool remove = 7;
+}
+
+message SetShardTabletControlResponse {
+  // Shard is the updated shard record.
+  topodata.Shard shard = 1;
 }
 
 message SetWritableRequest {
@@ -776,4 +827,33 @@ message UpdateCellsAliasRequest {
 message UpdateCellsAliasResponse {
   string name = 1;
   topodata.CellsAlias cells_alias = 2;
+}
+
+message ValidateRequest {
+  bool ping_tablets = 1;
+}
+
+message ValidateResponse {
+  repeated string results = 1;
+  map<string, ValidateKeyspaceResponse> results_by_keyspace = 2;
+}
+
+message ValidateKeyspaceRequest {
+  string keyspace = 1;
+  bool ping_tablets = 2;
+}
+
+message ValidateKeyspaceResponse {
+  repeated string results = 1;
+  map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  bool ping_tablets = 3;
+}
+
+message ValidateShardResponse {
+  repeated string results = 1;
 }

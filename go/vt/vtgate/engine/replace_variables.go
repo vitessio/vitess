@@ -79,8 +79,8 @@ func (r *ReplaceVariables) Inputs() []Primitive {
 	return []Primitive{r.Input}
 }
 
-// description implements the Primitive interface
-func (r *ReplaceVariables) description() PrimitiveDescription {
+// Description implements the Primitive interface
+func (r *ReplaceVariables) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "ReplaceVariables",
 	}

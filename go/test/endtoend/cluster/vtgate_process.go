@@ -30,6 +30,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -54,12 +56,15 @@ type VtgateProcess struct {
 	Directory             string
 	VerifyURL             string
 	SysVarSetEnabled      bool
+	PlannerVersion        planbuilder.PlannerVersion
 	//Extra Args to be set before starting the vtgate process
 	ExtraArgs []string
 
 	proc *exec.Cmd
 	exit chan error
 }
+
+const defaultVtGatePlannerVersion = planbuilder.Gen4CompareV3
 
 // Setup starts Vtgate process with required arguements
 func (vtgate *VtgateProcess) Setup() (err error) {
@@ -80,6 +85,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
+	}
+	if vtgate.PlannerVersion > 0 {
+		args = append(args, "-planner_version", vtgate.PlannerVersion.String())
 	}
 	if vtgate.SysVarSetEnabled {
 		args = append(args, "-enable_system_settings")
@@ -212,7 +220,14 @@ func (vtgate *VtgateProcess) TearDown() error {
 // VtgateProcessInstance returns a Vtgate handle for vtgate process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell string, cellsToWatch string, hostname string, tabletTypesToWait string, topoPort int, tmpDirectory string, extraArgs []string) *VtgateProcess {
+func VtgateProcessInstance(
+	port, grpcPort, mySQLServerPort int,
+	cell, cellsToWatch, hostname, tabletTypesToWait string,
+	topoPort int,
+	tmpDirectory string,
+	extraArgs []string,
+	plannerVersion planbuilder.PlannerVersion,
+) *VtgateProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtgate := &VtgateProcess{
 		Name:                  "vtgate",
@@ -232,6 +247,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		CommonArg:             *vtctl,
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,
+		PlannerVersion:        plannerVersion,
 	}
 
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
