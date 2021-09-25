@@ -80,3 +80,8 @@ func (j *Join) CheckValid() error {
 
 	return j.RHS.CheckValid()
 }
+
+// Compact implements the Operator interface
+func (j *Join) Compact() Operator {
+	return j
+}

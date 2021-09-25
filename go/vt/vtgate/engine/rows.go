@@ -79,6 +79,6 @@ func (r *Rows) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.R
 	}, nil
 }
 
-func (r *Rows) description() PrimitiveDescription {
+func (r *Rows) Description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: "Rows"}
 }

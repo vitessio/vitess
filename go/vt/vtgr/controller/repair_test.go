@@ -234,6 +234,17 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
 			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
 		}},
+		{"shard has inactive group and partial group name", "", testPort0, []data{
+			{alias0, testHost, testPort0, "", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-10"), topodatapb.TabletType_REPLICA},
+			{alias1, testHost, testPort1, "", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_MASTER},
+			{alias2, testHost, testPort2, "group", []db.TestGroupState{
+				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
+			}, true, getMysql56GTIDSet(sid1, "1-9"), topodatapb.TabletType_REPLICA},
+		}},
 		{"unreachable rebootstrap candidate", "vtgr repair: test_cell-0000000000 is unreachable", 0, []data{
 			{alias0, testHost, testPort0, "group", []db.TestGroupState{
 				{MemberHost: "", MemberPort: "NULL", MemberState: "OFFLINE", MemberRole: ""},
@@ -344,9 +355,9 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 			var lock sync.Mutex
 			dbAgent.
 				EXPECT().
-				// RepairShardHasNoGroup is fixed by calling BootstrapGroupLocked
-				BootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}).
-				DoAndReturn(func(target *inst.InstanceKey) error {
+				// RepairShardHasNoGroup is fixed by calling RebootstrapGroupLocked
+				RebootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}, gomock.Any()).
+				DoAndReturn(func(target *inst.InstanceKey, name string) error {
 					if target.Hostname == "" || target.Port == 0 {
 						return errors.New("invalid mysql instance key")
 					}
@@ -369,6 +380,9 @@ func TestRepairShardHasInactiveGroup(t *testing.T) {
 						}
 					}
 					inputMap[target.Port] = input
+					if name != "group" {
+						return errors.New("unexpected group name")
+					}
 					return nil
 				}).
 				Times(expectedCalls)
@@ -913,7 +927,7 @@ func TestRepairInsufficientGroupSize(t *testing.T) {
 			if tt.expectedCandidatePort != 0 {
 				dbAgent.
 					EXPECT().
-					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), true).
+					SetReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), true).
 					Return(nil).
 					Times(1)
 			}
@@ -1023,7 +1037,7 @@ func TestRepairReadOnlyShard(t *testing.T) {
 			if tt.expectedCandidatePort != 0 {
 				dbAgent.
 					EXPECT().
-					SetSuperReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), false).
+					SetReadOnly(gomock.Eq(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}), false).
 					Return(nil).
 					Times(1)
 			}
@@ -1129,8 +1143,8 @@ func TestRepairBackoffError(t *testing.T) {
 			var lock sync.Mutex
 			dbAgent.
 				EXPECT().
-				BootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}).
-				DoAndReturn(func(target *inst.InstanceKey) error {
+				RebootstrapGroupLocked(&inst.InstanceKey{Hostname: testHost, Port: tt.expectedCandidatePort}, "group").
+				DoAndReturn(func(target *inst.InstanceKey, name string) error {
 					if target.Hostname == "" || target.Port == 0 {
 						return errors.New("invalid mysql instance key")
 					}

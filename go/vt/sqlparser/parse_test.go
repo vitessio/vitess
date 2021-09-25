@@ -2143,6 +2143,18 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select `name`, numbers from (select * from users) as x()",
 		err:   "syntax error at position 57",
+  }, {
+		input: "select next 2 values from seq union select next value from seq",
+		err:   "syntax error at position 36 near 'union'",
+	}, {
+		input: "select next 2 values from user where id = 1",
+		err:   "syntax error at position 37 near 'where'",
+	}, {
+		input: "select next 2 values from seq, seq",
+		err:   "syntax error at position 31",
+	}, {
+		input: "select 1, next value from seq",
+		err:   "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {

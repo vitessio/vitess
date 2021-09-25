@@ -92,14 +92,6 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 		return createVindexTree(ctx, op)
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
-	case *abstract.Distinct:
-		qt, err := optimizeQuery(ctx, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		return &distinctTree{
-			source: qt,
-		}, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
@@ -116,10 +108,14 @@ func optimizeUnion(ctx *planningContext, op *abstract.Concatenate) (queryTree, e
 		sources = append(sources, qt)
 	}
 
-	return &concatenateTree{
+	tree := &concatenateTree{
+		distinct:    op.Distinct,
+		ordering:    op.OrderBy,
+		limit:       op.Limit,
 		selectStmts: op.SelectStmts,
 		sources:     sources,
-	}, nil
+	}
+	return tree, nil
 }
 
 func createVindexTree(ctx *planningContext, op *abstract.Vindex) (*vindexTree, error) {
@@ -150,7 +146,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 
 		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
 		merger := func(a, b *routeTree) (*routeTree, error) {
-			return mergeSubQuery(ctx, a, inner)
+			return mergeSubQuery(ctx, a, b, inner)
 		}
 
 		merged, err := tryMergeSubQuery(ctx, outerTree, treeInner, inner, preds, merger)
@@ -279,7 +275,7 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 	return rewriteError
 }
 
-func mergeSubQuery(ctx *planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
+func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
 	// this is needed to so that later when we try to push projections, we get the correct
@@ -294,6 +290,11 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, subq *abstract.SubQue
 	if err != nil {
 		return nil, err
 	}
+	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
+	for k, v := range inner.SysTableTableName {
+		outer.SysTableTableName[k] = v
+	}
+
 	err = outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
@@ -376,19 +377,17 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		if !ok {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
 		}
-		err = stripDownQuery(node.FirstStatement, toNode.FirstStatement)
+		err = stripDownQuery(node.Left, toNode.Left)
 		if err != nil {
 			return err
 		}
-		for i, s := range node.UnionSelects {
-			err = stripDownQuery(s.Statement, toNode.UnionSelects[i].Statement)
-			if err != nil {
-				return err
-			}
+		err = stripDownQuery(node.Right, toNode.Right)
+		if err != nil {
+			return err
 		}
 		toNode.OrderBy = node.OrderBy
 	default:
-		panic("this should not happen - we have covered all implementations of SelectStatement")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
 	}
 	return nil
 }
