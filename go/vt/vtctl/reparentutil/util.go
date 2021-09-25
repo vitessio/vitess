@@ -361,6 +361,7 @@ func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, lo
 
 	// Wait until the new primary has caught upto that position
 	// TODO - discuss, what happens in case of timeout
+	// TODO - Subcontext -> timeout for wait for position
 	err = tmc.WaitForPosition(ctx, newPrimary, pos)
 	if err != nil {
 		return err

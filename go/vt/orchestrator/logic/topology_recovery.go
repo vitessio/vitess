@@ -641,6 +641,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 
 	// check if we have received an ERS in progress, if we do, we should not continue with the recovery
+	// TODO - Mutex instead
 	val = atomic.LoadInt32(&ersInProgress)
 	if val > 0 {
 		AuditTopologyRecovery(topologyRecovery, "an ERS is already in progress, not issuing another")
@@ -654,7 +655,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	atomic.AddInt32(&shardsLockCounter, 1)
 	defer atomic.AddInt32(&shardsLockCounter, -1)
 
-	// TODO: Fix durations
+	// TODO: Introduce wait replicas timeout in configuration
 	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, 1*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
@@ -662,9 +663,9 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
-			log.Warningf("ERP - %s", value)
+			log.Warningf("ERS - %s", value)
 		case logutilpb.Level_ERROR:
-			log.Errorf("ERP - %s", value)
+			log.Errorf("ERS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)
