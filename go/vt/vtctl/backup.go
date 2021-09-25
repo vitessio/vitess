@@ -21,13 +21,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"time"
 
 	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -245,6 +249,18 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return fmt.Errorf("the RestoreFromBackup command requires the <tablet alias> argument")
 	}
 
+	// Zero date will cause us to use the latest, which is the default
+	backupTime := time.Time{}
+
+	// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+	if *backupTimestamp != "" {
+		var err error
+		backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *backupTimestamp)
+		if err != nil {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", *backupTimestamp))
+		}
+	}
+
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err != nil {
 		return err
@@ -253,7 +269,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, *backupTimestamp)
+	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, backupTime)
 	if err != nil {
 		return err
 	}
