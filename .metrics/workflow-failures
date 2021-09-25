@@ -1,4 +1,3 @@
-2021-06-28T02:13:34Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/977484978
 2021-06-28T02:13:34Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/977484967
 2021-06-28T02:40:21Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/977533844
 2021-06-28T02:40:21Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/977533907
@@ -9995,6 +9994,7 @@
 2021-09-25T20:21:32Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1273684227
 2021-09-25T20:21:32Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1273684182
 2021-09-25T20:21:32Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1273684186
+2021-09-25T20:21:32Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1273684199
 2021-09-25T20:21:32Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1273684216
 2021-09-25T20:21:32Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1273684212
 2021-09-25T20:21:32Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1273684169
