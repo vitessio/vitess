@@ -1250,7 +1250,7 @@ func tmRPCTestBackupPanic(ctx context.Context, t *testing.T, client tmclient.Tab
 	expectHandleRPCPanic(t, "Backup", true /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTimestamp string) error {
+func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -1259,8 +1259,8 @@ func (fra *fakeRPCTM) RestoreFromBackup(ctx context.Context, logger logutil.Logg
 	return nil
 }
 
-func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, backupTimestamp string) {
-	stream, err := client.RestoreFromBackup(ctx, tablet, backupTimestamp)
+func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, backupTime time.Time) {
+	stream, err := client.RestoreFromBackup(ctx, tablet, backupTime)
 	if err != nil {
 		t.Fatalf("RestoreFromBackup failed: %v", err)
 	}
@@ -1268,8 +1268,8 @@ func tmRPCTestRestoreFromBackup(ctx context.Context, t *testing.T, client tmclie
 	compareError(t, "RestoreFromBackup", err, true, testRestoreFromBackupCalled)
 }
 
-func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, backupTimestamp string) {
-	stream, err := client.RestoreFromBackup(ctx, tablet, backupTimestamp)
+func tmRPCTestRestoreFromBackupPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, backupTime time.Time) {
+	stream, err := client.RestoreFromBackup(ctx, tablet, backupTime)
 	if err != nil {
 		t.Fatalf("RestoreFromBackup failed: %v", err)
 	}
@@ -1301,7 +1301,7 @@ func (fra *fakeRPCTM) HandleRPCPanic(ctx context.Context, name string, args, rep
 func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet, fakeTM tabletmanager.RPCTM) {
 	ctx := context.Background()
 
-	backupTimestamp := ""
+	backupTime := time.Time{}
 
 	// Test RPC specific methods of the interface.
 	tmRPCTestDialExpiredContext(ctx, t, client, tablet)
@@ -1356,7 +1356,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 
 	// Backup / restore related methods
 	tmRPCTestBackup(ctx, t, client, tablet)
-	tmRPCTestRestoreFromBackup(ctx, t, client, tablet, backupTimestamp)
+	tmRPCTestRestoreFromBackup(ctx, t, client, tablet, backupTime)
 
 	//
 	// Tests panic handling everywhere now
@@ -1407,7 +1407,7 @@ func Run(t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.T
 	tmRPCTestReplicaWasRestartedPanic(ctx, t, client, tablet)
 	// Backup / restore related methods
 	tmRPCTestBackupPanic(ctx, t, client, tablet)
-	tmRPCTestRestoreFromBackupPanic(ctx, t, client, tablet, backupTimestamp)
+	tmRPCTestRestoreFromBackupPanic(ctx, t, client, tablet, backupTime)
 
 	client.Close()
 }

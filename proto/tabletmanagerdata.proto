@@ -26,6 +26,7 @@ import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
 import "logutil.proto";
+import "vttime.proto";
 
 //
 // Data structures
@@ -457,7 +458,7 @@ message BackupResponse {
 }
 
 message RestoreFromBackupRequest {
-  string backup_timestamp = 1;
+  vttime.Time backup_time = 1;
 }
 
 message RestoreFromBackupResponse {

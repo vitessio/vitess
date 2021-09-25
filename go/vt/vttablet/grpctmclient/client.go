@@ -937,13 +937,13 @@ func (e *restoreFromBackupStreamAdapter) Recv() (*logutilpb.Event, error) {
 }
 
 // RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
-func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTimestamp string) (logutil.EventStream, error) {
+func (client *Client) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
 	}
 
-	stream, err := c.RestoreFromBackup(ctx, &tabletmanagerdatapb.RestoreFromBackupRequest{BackupTimestamp: backupTimestamp})
+	stream, err := c.RestoreFromBackup(ctx, &tabletmanagerdatapb.RestoreFromBackupRequest{BackupTime: logutil.TimeToProto(backupTime)})
 	if err != nil {
 		closer.Close()
 		return nil, err

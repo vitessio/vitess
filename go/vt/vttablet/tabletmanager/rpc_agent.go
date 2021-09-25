@@ -149,7 +149,7 @@ type RPCTM interface {
 
 	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
 
-	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTimestamp string) error
+	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error
 
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.

@@ -13,6 +13,7 @@ import (
 	query "vitess.io/vitess/go/vt/proto/query"
 	replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
+	vttime "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -3941,10 +3942,13 @@ func (m *RestoreFromBackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.BackupTimestamp) > 0 {
-		i -= len(m.BackupTimestamp)
-		copy(dAtA[i:], m.BackupTimestamp)
-		i = encodeVarint(dAtA, i, uint64(len(m.BackupTimestamp)))
+	if m.BackupTime != nil {
+		size, err := m.BackupTime.MarshalToSizedBufferVT(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint(dAtA, i, uint64(size))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -5634,8 +5638,8 @@ func (m *RestoreFromBackupRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.BackupTimestamp)
-	if l > 0 {
+	if m.BackupTime != nil {
+		l = m.BackupTime.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -13790,9 +13794,9 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field BackupTimestamp", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field BackupTime", wireType)
 			}
-			var stringLen uint64
+			var msglen int
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -13802,23 +13806,27 @@ func (m *RestoreFromBackupRequest) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
+				msglen |= int(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}
 			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
+			if msglen < 0 {
 				return ErrInvalidLength
 			}
-			postIndex := iNdEx + intStringLen
+			postIndex := iNdEx + msglen
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.BackupTimestamp = string(dAtA[iNdEx:postIndex])
+			if m.BackupTime == nil {
+				m.BackupTime = &vttime.Time{}
+			}
+			if err := m.BackupTime.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
