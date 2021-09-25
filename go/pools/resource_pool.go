@@ -19,11 +19,12 @@ limitations under the License.
 package pools
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
+
+	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
@@ -111,6 +112,10 @@ type StaticResourcePool struct {
 type resourceWrapper struct {
 	resource Resource
 	timeUsed time.Time
+}
+
+func (rw resourceWrapper) IsExpired(idleTimeout time.Duration) bool {
+	return time.Since(rw.timeUsed) > idleTimeout
 }
 
 // NewStaticResourcePool creates a new StaticResourcePool ResourcePool.

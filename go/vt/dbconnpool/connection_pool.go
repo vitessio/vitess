@@ -64,13 +64,14 @@ type ConnectionPool struct {
 	wg          sync.WaitGroup
 	hostIsNotIP bool
 
-	name string
+	name    string
+	dynamic bool
 }
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
+func NewConnectionPool(name string, capacity int, dynamic bool, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{name: name, capacity: capacity, dynamic: dynamic, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -144,7 +145,11 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewStaticResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
+	if cp.dynamic {
+		cp.connections = pools.NewDynamicResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 10*time.Second, nil)
+	} else {
+		cp.connections = pools.NewStaticResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
+	}
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true

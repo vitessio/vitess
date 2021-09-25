@@ -47,6 +47,7 @@ var ErrConnPoolClosed = vterrors.New(vtrpcpb.Code_INTERNAL, "internal error: une
 type Pool struct {
 	env                tabletenv.Env
 	name               string
+	dynamic            bool
 	mu                 sync.Mutex
 	connections        pools.ResourcePool
 	capacity           int
@@ -66,12 +67,13 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	cp := &Pool{
 		env:                env,
 		name:               name,
+		dynamic:            cfg.Dynamic,
 		capacity:           cfg.Size,
 		prefillParallelism: cfg.PrefillParallelism,
 		timeout:            cfg.TimeoutSeconds.Get(),
 		idleTimeout:        idleTimeout,
 		waiterCap:          int64(cfg.MaxWaiters),
-		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
+		dbaPool:            dbconnpool.NewConnectionPool("", 1, false, idleTimeout, 0),
 	}
 	if name == "" {
 		return cp
@@ -109,7 +111,11 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
-	cp.connections = pools.NewStaticResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+	if cp.dynamic {
+		cp.connections = pools.NewDynamicResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, 10*time.Second, cp.getLogWaitCallback())
+	} else {
+		cp.connections = pools.NewStaticResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+	}
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)

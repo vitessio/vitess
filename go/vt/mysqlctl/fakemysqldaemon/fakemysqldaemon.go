@@ -180,7 +180,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		IOThreadRunning: true,
 	}
 	if db != nil {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, false, time.Minute, 0)
 		result.appPool.Open(db.ConnParams())
 	}
 	return result

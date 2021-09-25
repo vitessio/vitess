@@ -86,13 +86,17 @@ var (
 
 func init() {
 	flag.IntVar(&currentConfig.OltpReadPool.Size, "queryserver-config-pool-size", defaultConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
+	flag.BoolVar(&currentConfig.OltpReadPool.Dynamic, "queryserver-config-pool-dynamic", defaultConfig.OltpReadPool.Dynamic, "query server read pool dynamic sizing")
 	flag.IntVar(&currentConfig.OltpReadPool.PrefillParallelism, "queryserver-config-pool-prefill-parallelism", defaultConfig.OltpReadPool.PrefillParallelism, "query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
 	flag.IntVar(&currentConfig.OlapReadPool.Size, "queryserver-config-stream-pool-size", defaultConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
+	flag.BoolVar(&currentConfig.OlapReadPool.Dynamic, "queryserver-config-stream-pool-dynamic", defaultConfig.OlapReadPool.Dynamic, "query server stream pool dynamic sizing")
 	flag.IntVar(&currentConfig.OlapReadPool.PrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", defaultConfig.OlapReadPool.PrefillParallelism, "query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
 	flag.IntVar(&deprecatedMessagePoolSize, "queryserver-config-message-conn-pool-size", 0, "DEPRECATED")
 	flag.IntVar(&deprecatedMessagePoolPrefillParallelism, "queryserver-config-message-conn-pool-prefill-parallelism", 0, "DEPRECATED: Unused.")
 	flag.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
+	flag.BoolVar(&currentConfig.TxPool.Dynamic, "queryserver-config-transaction-dynamic", defaultConfig.TxPool.Dynamic, "query server transaction pool dynamic sizing")
 	flag.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
+
 	flag.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	flag.IntVar(&deprecatedFoundRowsPoolSize, "client-found-rows-pool-size", 0, "DEPRECATED: queryserver-config-transaction-cap will be used instead.")
 	SecondsVar(&currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
@@ -292,6 +296,7 @@ type TabletConfig struct {
 type ConnPoolConfig struct {
 	Size               int     `json:"size,omitempty"`
 	TimeoutSeconds     Seconds `json:"timeoutSeconds,omitempty"`
+	Dynamic            bool    `json:"dynamic,omitempty"`
 	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
 	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
 	MaxWaiters         int     `json:"maxWaiters,omitempty"`

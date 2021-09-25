@@ -32,7 +32,7 @@ import (
 // one method of acquisition, Acquire(context.Context), which always uses the
 // lower of the pool-global timeout or the context deadline.
 type RPCPool struct {
-	rp          *ResourcePool
+	rp          ResourcePool
 	waitTimeout time.Duration
 }
 
@@ -44,7 +44,7 @@ type RPCPool struct {
 // will not be called).
 func NewRPCPool(size int, waitTimeout time.Duration, logWait func(time.Time)) *RPCPool {
 	return &RPCPool{
-		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, size, logWait),
+		rp:          NewStaticResourcePool(rpcResourceFactory, size, size, 0, size, logWait),
 		waitTimeout: waitTimeout,
 	}
 }
