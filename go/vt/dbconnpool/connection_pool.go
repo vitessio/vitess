@@ -50,7 +50,7 @@ var (
 // PooledDBConnection objects.
 type ConnectionPool struct {
 	mu                  sync.Mutex
-	connections         *pools.ResourcePool
+	connections         pools.ResourcePool
 	capacity            int
 	idleTimeout         time.Duration
 	resolutionFrequency time.Duration
@@ -88,7 +88,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dns
 	return cp
 }
 
-func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
+func (cp *ConnectionPool) pool() (p pools.ResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -144,7 +144,7 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
+	cp.connections = pools.NewStaticResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil)
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true

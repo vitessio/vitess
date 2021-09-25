@@ -48,7 +48,7 @@ type Pool struct {
 	env                tabletenv.Env
 	name               string
 	mu                 sync.Mutex
-	connections        *pools.ResourcePool
+	connections        pools.ResourcePool
 	capacity           int
 	prefillParallelism int
 	timeout            time.Duration
@@ -89,7 +89,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	return cp
 }
 
-func (cp *Pool) pool() (p *pools.ResourcePool) {
+func (cp *Pool) pool() (p pools.ResourcePool) {
 	cp.mu.Lock()
 	p = cp.connections
 	cp.mu.Unlock()
@@ -109,7 +109,7 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+	cp.connections = pools.NewStaticResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
