@@ -477,6 +477,11 @@ func (a *application) rewriteRefOfAliasedTableExpr(parent SQLNode, node *Aliased
 	}) {
 		return false
 	}
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*AliasedTableExpr).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent

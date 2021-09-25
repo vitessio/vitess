@@ -1175,6 +1175,9 @@ func (node *AliasedTableExpr) formatFast(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.WriteString(" as ")
 		node.As.formatFast(buf)
+		if len(node.Columns) != 0 {
+			node.Columns.formatFast(buf)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
