@@ -978,7 +978,8 @@ func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
 	return EqualsSimpleTableExpr(a.Expr, b.Expr) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
 		EqualsTableIdent(a.As, b.As) &&
-		EqualsRefOfIndexHints(a.Hints, b.Hints)
+		EqualsRefOfIndexHints(a.Hints, b.Hints) &&
+		EqualsColumns(a.Columns, b.Columns)
 }
 
 // EqualsRefOfAlterCharset does deep equals between the two objects.
