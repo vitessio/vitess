@@ -2143,7 +2143,7 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select `name`, numbers from (select * from users) as x()",
 		err:   "syntax error at position 57",
-  }, {
+	}, {
 		input: "select next 2 values from seq union select next value from seq",
 		err:   "syntax error at position 36 near 'union'",
 	}, {

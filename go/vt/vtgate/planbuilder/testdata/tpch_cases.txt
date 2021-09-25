@@ -373,8 +373,8 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 
 # TPC-H query 13
 "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc"
-"syntax error at position 220"
-Gen4 plan same as above
+"unsupported: cross-shard query with aggregates"
+Gen4 error: symbol c_count not found
 
 # TPC-H query 14
 "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month"
