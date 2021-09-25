@@ -526,6 +526,7 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 		return err
 	}
 	defer tm.unlock()
+	// TODO - stop semi-sync over here
 
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
