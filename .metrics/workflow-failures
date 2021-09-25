@@ -1,10 +1,3 @@
-2021-06-24T08:29:56Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/967264399
-2021-06-24T08:29:56Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/967264398
-2021-06-24T08:29:56Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/967264426
-2021-06-24T08:29:56Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/967264405
-2021-06-24T08:29:56Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/967264456
-2021-06-24T08:29:56Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/967264414
-2021-06-24T08:29:56Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/967264435
 2021-06-24T08:29:56Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/967264432
 2021-06-24T08:29:56Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/967264429
 2021-06-24T08:29:56Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/967264462
@@ -9998,3 +9991,10 @@
 2021-09-25T10:56:09Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1272776208
 2021-09-25T10:56:09Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1272776215
 2021-09-25T10:56:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1272776247
+2021-09-25T11:18:49Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1272818382
+2021-09-25T11:18:49Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1272818347
+2021-09-25T11:18:49Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1272818378
+2021-09-25T11:18:49Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1272818333
+2021-09-25T11:23:09Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1272825270
+2021-09-25T11:23:09Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1272825291
+2021-09-25T11:23:09Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1272825339
