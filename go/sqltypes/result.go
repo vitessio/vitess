@@ -17,6 +17,8 @@ limitations under the License.
 package sqltypes
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"reflect"
 
 	"google.golang.org/protobuf/proto"
@@ -181,6 +183,61 @@ func ResultsEqual(r1, r2 []Result) bool {
 		}
 	}
 	return true
+}
+
+// ResultsEqualUnordered compares two unordered arrays of Result.
+func ResultsEqualUnordered(r1, r2 []Result) bool {
+	if len(r1) != len(r2) {
+		return false
+	}
+
+	// allRows is a hash map that contains a row hashed as a key and
+	// the number of occurrence as the value. we use this map to ensure
+	// equality between the two result sets. when analyzing r1, we
+	// increment each key's value by one for each row's occurrence, and
+	// then we decrement it by one each time we see the same key in r2.
+	// if one of the key's value is not equal to zero, then r1 and r2 do
+	// not match.
+	allRows := map[string]int{}
+	countRows := 0
+	for _, r := range r1 {
+		saveRowsAnalysis(r, allRows, &countRows, true)
+	}
+	for _, r := range r2 {
+		saveRowsAnalysis(r, allRows, &countRows, false)
+	}
+	if countRows != 0 {
+		return false
+	}
+	for _, i := range allRows {
+		if i != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func saveRowsAnalysis(r Result, allRows map[string]int, totalRows *int, increment bool) {
+	for _, row := range r.Rows {
+		newHash := hashCodeForRow(row)
+		if increment {
+			allRows[newHash] += 1
+		} else {
+			allRows[newHash] -= 1
+		}
+	}
+	if increment {
+		*totalRows += int(r.RowsAffected)
+	} else {
+		*totalRows -= int(r.RowsAffected)
+	}
+}
+
+func hashCodeForRow(val []Value) string {
+	h := sha256.New()
+	h.Write([]byte(fmt.Sprintf("%v", val)))
+
+	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
 // MakeRowTrusted converts a *querypb.Row to []Value based on the types

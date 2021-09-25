@@ -45,39 +45,38 @@ func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, C
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *sqlparser.ReservedVars, outer *symtab) error {
-	if err := pb.processPart(union.FirstStatement, reservedVars, outer); err != nil {
+	if err := pb.processPart(union.Left, reservedVars, outer); err != nil {
 		return err
 	}
-	for _, us := range union.UnionSelects {
-		rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-		if err := rpb.processPart(us.Statement, reservedVars, outer); err != nil {
-			return err
-		}
-		err := unionRouteMerge(pb.plan, rpb.plan, us)
-		if err != nil {
-			// we are merging between two routes - let's check if we can see so that we have the same amount of columns on both sides of the union
-			lhsCols := len(pb.plan.ResultColumns())
-			rhsCols := len(rpb.plan.ResultColumns())
-			if lhsCols != rhsCols {
-				return &mysql.SQLError{
-					Num:     mysql.ERWrongNumberOfColumnsInSelect,
-					State:   "21000",
-					Message: "The used SELECT statements have a different number of columns",
-					Query:   sqlparser.String(union),
-				}
-			}
 
-			pb.plan = &concatenate{
-				lhs: pb.plan,
-				rhs: rpb.plan,
-			}
-
-			if us.Distinct {
-				pb.plan = newDistinct(pb.plan)
-			}
-		}
-		pb.st.Outer = outer
+	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
+	if err := rpb.processPart(union.Right, reservedVars, outer); err != nil {
+		return err
 	}
+	err := unionRouteMerge(pb.plan, rpb.plan, union)
+	if err != nil {
+		// we are merging between two routes - let's check if we can see so that we have the same amount of columns on both sides of the union
+		lhsCols := len(pb.plan.ResultColumns())
+		rhsCols := len(rpb.plan.ResultColumns())
+		if lhsCols != rhsCols {
+			return &mysql.SQLError{
+				Num:     mysql.ERWrongNumberOfColumnsInSelect,
+				State:   "21000",
+				Message: "The used SELECT statements have a different number of columns",
+				Query:   sqlparser.String(union),
+			}
+		}
+
+		pb.plan = &concatenate{
+			lhs: pb.plan,
+			rhs: rpb.plan,
+		}
+
+		if union.Distinct {
+			pb.plan = newDistinct(pb.plan)
+		}
+	}
+	pb.st.Outer = outer
 
 	if err := setLock(pb.plan, union.Lock); err != nil {
 		return err
@@ -103,7 +102,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 }
 
 // TODO (systay) we never use this as an actual error. we should rethink the return type
-func unionRouteMerge(left, right logicalPlan, us *sqlparser.UnionSelect) error {
+func unionRouteMerge(left, right logicalPlan, us *sqlparser.Union) error {
 	lroute, ok := left.(*route)
 	if !ok {
 		return errors.New("unsupported: SELECT of UNION is non-trivial")
@@ -117,12 +116,7 @@ func unionRouteMerge(left, right logicalPlan, us *sqlparser.UnionSelect) error {
 		return errors.New("unsupported: UNION cannot be executed as a single route")
 	}
 
-	switch n := lroute.Select.(type) {
-	case *sqlparser.Union:
-		n.UnionSelects = append(n.UnionSelects, us)
-	default:
-		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{us}}
-	}
+	lroute.Select = &sqlparser.Union{Left: lroute.Select, Right: us.Right, Distinct: us.Distinct}
 
 	return nil
 }

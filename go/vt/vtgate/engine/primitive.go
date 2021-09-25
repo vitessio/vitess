@@ -196,12 +196,12 @@ type (
 		TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 		TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
-		// The inputs to this Primitive
+		// Inputs is a slice containing the inputs to this Primitive
 		Inputs() []Primitive
 
-		// description is the description, sans the inputs, of this Primitive.
+		// Description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
-		description() PrimitiveDescription
+		Description() PrimitiveDescription
 	}
 
 	// noInputs default implementation for Primitives that are leaves
@@ -212,6 +212,12 @@ type (
 
 	// txNeeded is a default implementation for Primitives that need transaction handling
 	txNeeded struct{}
+
+	// Gen4Comparer interfaces all Primitive used to compare Gen4 with other planners (V3, MySQL, ...).
+	Gen4Comparer interface {
+		Primitive
+		GetGen4Primitive() Primitive
+	}
 )
 
 // AddStats updates the plan execution statistics

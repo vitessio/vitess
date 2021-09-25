@@ -39,10 +39,6 @@ func TestQP(t *testing.T) {
 			sql: "select * from user",
 		},
 		{
-			sql:    "select next value from user_seq",
-			expErr: "gen4 does not yet support: *sqlparser.Nextval in select list",
-		},
-		{
 			sql:    "select 1, count(1) from user",
 			expErr: "In aggregated query without GROUP BY, expression of SELECT list contains nonaggregated column '1'; this is incompatible with sql_mode=only_full_group_by",
 		},

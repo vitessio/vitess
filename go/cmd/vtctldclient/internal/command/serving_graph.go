@@ -67,6 +67,14 @@ var (
 		RunE:                  commandGetSrvVSchemas,
 		DisableFlagsInUseLine: true,
 	}
+	// RebuildKeyspaceGraph makes one or more RebuildKeyspaceGraph gRPC calls to a vtctld.
+	RebuildKeyspaceGraph = &cobra.Command{
+		Use:                   "RebuildKeyspaceGraph [--cells=c1,c2,...] [--allow-partial] ks1 [ks2 ...]",
+		Short:                 "Rebuilds the serving data for the keyspace(s). This command may trigger an update to all connected clients.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(1),
+		RunE:                  commandRebuildKeyspaceGraph,
+	}
 	// RebuildVSchemaGraph makes a RebuildVSchemaGraph gRPC call to a vtctld.
 	RebuildVSchemaGraph = &cobra.Command{
 		Use:                   "RebuildVSchemaGraph [--cells=c1,c2,...]",
@@ -181,6 +189,29 @@ func commandGetSrvVSchemas(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var rebuildKeyspaceGraphOptions = struct {
+	Cells        []string
+	AllowPartial bool
+}{}
+
+func commandRebuildKeyspaceGraph(cmd *cobra.Command, args []string) error {
+	cli.FinishedParsing(cmd)
+
+	keyspaces := cmd.Flags().Args()
+	for _, ks := range keyspaces {
+		_, err := client.RebuildKeyspaceGraph(commandCtx, &vtctldatapb.RebuildKeyspaceGraphRequest{
+			Keyspace:     ks,
+			Cells:        rebuildKeyspaceGraphOptions.Cells,
+			AllowPartial: rebuildKeyspaceGraphOptions.AllowPartial,
+		})
+		if err != nil {
+			return fmt.Errorf("RebuildKeyspaceGraph(%v) failed: %v", ks, err)
+		}
+	}
+
+	return nil
+}
+
 var rebuildVSchemaGraphOptions = struct {
 	Cells []string
 }{}
@@ -207,6 +238,10 @@ func init() {
 	Root.AddCommand(GetSrvKeyspaces)
 	Root.AddCommand(GetSrvVSchema)
 	Root.AddCommand(GetSrvVSchemas)
+
+	RebuildKeyspaceGraph.Flags().StringSliceVarP(&rebuildKeyspaceGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to update.")
+	RebuildKeyspaceGraph.Flags().BoolVar(&rebuildKeyspaceGraphOptions.AllowPartial, "allow-partial", false, "Specifies whether a SNAPSHOT keyspace is allowed to serve with an incomplete set of shards. Ignored for all other types of keyspaces.")
+	Root.AddCommand(RebuildKeyspaceGraph)
 
 	RebuildVSchemaGraph.Flags().StringSliceVarP(&rebuildVSchemaGraphOptions.Cells, "cells", "c", nil, "Specifies a comma-separated list of cells to look for tablets")
 	Root.AddCommand(RebuildVSchemaGraph)

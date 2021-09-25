@@ -286,8 +286,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUnaryExpr(parent, node, replacer)
 	case *Union:
 		return a.rewriteRefOfUnion(parent, node, replacer)
-	case *UnionSelect:
-		return a.rewriteRefOfUnionSelect(parent, node, replacer)
 	case *UnlockTables:
 		return a.rewriteRefOfUnlockTables(parent, node, replacer)
 	case *Update:
@@ -4189,19 +4187,15 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 			return true
 		}
 	}
-	if !a.rewriteSelectStatement(node, node.FirstStatement, func(newNode, parent SQLNode) {
-		parent.(*Union).FirstStatement = newNode.(SelectStatement)
+	if !a.rewriteSelectStatement(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*Union).Left = newNode.(SelectStatement)
 	}) {
 		return false
 	}
-	for x, el := range node.UnionSelects {
-		if !a.rewriteRefOfUnionSelect(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*Union).UnionSelects[idx] = newNode.(*UnionSelect)
-			}
-		}(x)) {
-			return false
-		}
+	if !a.rewriteSelectStatement(node, node.Right, func(newNode, parent SQLNode) {
+		parent.(*Union).Right = newNode.(SelectStatement)
+	}) {
+		return false
 	}
 	if !a.rewriteOrderBy(node, node.OrderBy, func(newNode, parent SQLNode) {
 		parent.(*Union).OrderBy = newNode.(OrderBy)
@@ -4215,33 +4209,6 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}
 	if !a.rewriteRefOfSelectInto(node, node.Into, func(newNode, parent SQLNode) {
 		parent.(*Union).Into = newNode.(*SelectInto)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfUnionSelect(parent SQLNode, node *UnionSelect, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		parent.(*UnionSelect).Statement = newNode.(SelectStatement)
 	}) {
 		return false
 	}
