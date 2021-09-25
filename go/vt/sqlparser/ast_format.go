@@ -874,6 +874,9 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
+		if len(node.Columns) != 0 {
+			buf.astPrintf(node, "%v", node.Columns)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.

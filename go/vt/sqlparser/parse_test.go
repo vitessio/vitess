@@ -47,6 +47,15 @@ var (
 	}, {
 		input: "select 1 from t",
 	}, {
+		input: "select * from (select 1) as x(user)",
+		output: "select * from (select 1 from dual) as x(`user`)",
+	}, {
+		input: "select user from (select id from users ) as x(user)",
+		output: "select `user` from (select id from users) as x(`user`)",
+	}, {
+		input: "select name, numbers from (select * from users) as x(name, numbers)",
+		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
+	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
 	}, {
@@ -2131,6 +2140,9 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "select a from x order by y union select a from c",
 		err:   "syntax error",
+	}, {
+		input: "select `name`, numbers from (select * from users) as x()",
+		err: "syntax error at position 57",
 	}}
 
 	for _, tcase := range invalidSQL {

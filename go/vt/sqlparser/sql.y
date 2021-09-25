@@ -3320,9 +3320,9 @@ table_factor:
   {
     $$ = $1
   }
-| derived_table as_opt table_id
+| derived_table as_opt table_id column_list_opt
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3}
+    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
   }
 | openb table_references closeb
   {
@@ -3448,7 +3448,7 @@ as_opt_id:
   {
     $$ = $1
   }
-| AS table_alias
+| AS table_alias column_list_opt
   {
     $$ = $2
   }
