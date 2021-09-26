@@ -217,8 +217,12 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				continue
 			}
 		}
-		if !checkBackupTime /* not snapshot */ || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-			params.Logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+		if !checkBackupTime || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
+			if !checkBackupTime {
+				params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
+			} else {
+				params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+			}
 			break
 		}
 	}
