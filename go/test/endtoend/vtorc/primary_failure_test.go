@@ -30,6 +30,10 @@ import (
 // 2. bring down primary, let orc promote replica
 // covers the test case master-failover from orchestrator
 func TestDownPrimary(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -53,13 +57,15 @@ func TestDownPrimary(t *testing.T) {
 			break
 		}
 	}
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Failover should not be cross data centers, according to the configuration file
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestCrossDataCenterFailure(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -91,13 +97,15 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Failover will sometimes lead to a replica which can no longer replicate.
 // covers part of the test case master-failover-lost-replicas from orchestrator
 func TestLostReplicasOnPrimaryFailure(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -152,13 +160,15 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
 // covers the test case master-failover-fail-promotion-lag-minutes-success from orchestrator
 func TestPromotionLagSuccess(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 0, nil, "test_config_promotion_success.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -182,13 +192,15 @@ func TestPromotionLagSuccess(t *testing.T) {
 			break
 		}
 	}
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
 // covers the test case master-failover-fail-promotion-lag-minutes-failure from orchestrator
 func TestPromotionLagFailure(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	// skip the test since it fails now
 	t.Skip()
 	defer cluster.PanicHandler(t)
@@ -212,14 +224,16 @@ func TestPromotionLagFailure(t *testing.T) {
 
 	// the previous primary should still be the primary since recovery of dead primary should fail
 	checkPrimaryTablet(t, clusterInstance, curPrimary)
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate from orchestrator
 // We explicitly set one of the replicas to Prefer promotion rule.
 // That is the replica which should be promoted in case of primary failure
 func TestDownPrimaryPromotionRule(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_crosscenter_prefer.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -242,8 +256,6 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate-lag from orchestrator
@@ -251,6 +263,10 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 // That is the replica which should be promoted in case of primary failure
 // It should also be caught up when it is promoted
 func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_crosscenter_prefer.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -311,8 +327,6 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate-lag-cross-datacenter from orchestrator
@@ -320,6 +334,10 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 // We let a replica in our own cell lag. That is the replica which should be promoted in case of primary failure
 // It should also be caught up when it is promoted
 func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
+	defer func() {
+		logs, err := clusterInstance.VtorcProcess.GetLogs()
+		log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
+	}()
 	defer cluster.PanicHandler(t)
 	setupVttabletsAndVtorc(t, 2, 1, nil, "test_config_crosscenter_prefer_prevent.json")
 	keyspace := &clusterInstance.Keyspaces[0]
@@ -380,6 +398,4 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
-	logs, err := clusterInstance.VtorcProcess.GetLogs()
-	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
