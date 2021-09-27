@@ -641,22 +641,17 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	}
 
 	// check if we have received an ERS in progress, if we do, we should not continue with the recovery
-	// TODO - Mutex instead
-	val = atomic.LoadInt32(&ersInProgress)
-	if val > 0 {
+	if checkAndSetIfERSInProgress() {
 		AuditTopologyRecovery(topologyRecovery, "an ERS is already in progress, not issuing another")
 		return false, topologyRecovery, nil
 	}
-	// set the ers in progress
-	atomic.StoreInt32(&ersInProgress, 1)
-	defer atomic.StoreInt32(&ersInProgress, 0)
+	defer setERSCompleted()
 
 	// add to the shard lock counter since ERS will lock the shard
 	atomic.AddInt32(&shardsLockCounter, 1)
 	defer atomic.AddInt32(&shardsLockCounter, -1)
 
-	// TODO: Introduce wait replicas timeout in configuration
-	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, 1*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
+	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, time.Duration(config.Config.WaitReplicasTimeoutSeconds)*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
@@ -684,6 +679,24 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	postErsCompletion(topologyRecovery, analysisEntry, skipProcesses, promotedReplica)
 
 	return true, topologyRecovery, err
+}
+
+// checkAndSetIfERSInProgress checks if an ERS is already in progress. If it is not in progress, then we set it to be in progress.
+func checkAndSetIfERSInProgress() bool {
+	ersInProgressMutex.Lock()
+	defer ersInProgressMutex.Unlock()
+	if ersInProgress {
+		return true
+	}
+	ersInProgress = true
+	return false
+}
+
+// setERSCompleted sets the variable tracking if an ers is in progress to false.
+func setERSCompleted() {
+	ersInProgressMutex.Lock()
+	defer ersInProgressMutex.Unlock()
+	ersInProgress = false
 }
 
 func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, skipProcesses bool, promotedReplica *inst.Instance) {
