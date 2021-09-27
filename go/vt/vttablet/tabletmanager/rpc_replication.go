@@ -526,8 +526,9 @@ func (tm *TabletManager) SetReplicationSource(ctx context.Context, parentAlias *
 		return err
 	}
 	defer tm.unlock()
-	// TODO - stop semi-sync over here
 
+	// setReplicationSourceLocked also fixes the semi-sync. In case the tablet type is primary it assumes that it will become a replica if SetReplicationSource
+	// is called, so we always call fixSemiSync with a non-primary tablet type. This will always set the source side replication to false.
 	return tm.setReplicationSourceLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartReplication)
 }
 
