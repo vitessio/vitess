@@ -61,7 +61,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		_ = inst.InjectSeed(instanceKey)
-	})
+	}, false)
 	// TODO(sougou): parameterize poll interval.
 	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
@@ -70,10 +70,10 @@ func OpenTabletDiscovery() <-chan time.Time {
 func RefreshTablets(forceRefresh bool) {
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		DiscoverInstance(*instanceKey, forceRefresh)
-	})
+	}, forceRefresh)
 }
 
-func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	if !IsLeaderOrActive() {
 		return
 	}
@@ -93,7 +93,7 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 			wg.Add(1)
 			go func(cell string) {
 				defer wg.Done()
-				refreshTabletsInCell(refreshCtx, cell, loader)
+				refreshTabletsInCell(refreshCtx, cell, loader, forceRefresh)
 			}(cell)
 		}
 		wg.Wait()
@@ -136,14 +136,14 @@ func refreshTabletsUsing(loader func(instanceKey *inst.InstanceKey)) {
 			wg.Add(1)
 			go func(ks *topo.KeyspaceShard) {
 				defer wg.Done()
-				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader)
+				refreshTabletsInKeyspaceShard(refreshCtx, ks.Keyspace, ks.Shard, loader, forceRefresh)
 			}(ks)
 		}
 		wg.Wait()
 	}
 }
 
-func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsInCell(ctx context.Context, cell string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	tablets, err := topotools.GetTabletMapForCell(ctx, ts, cell)
 	if err != nil {
 		log.Errorf("Error fetching topo info for cell %v: %v", cell, err)
@@ -151,10 +151,10 @@ func refreshTabletsInCell(ctx context.Context, cell string, loader func(instance
 	}
 	query := "select hostname, port, info from vitess_tablet where cell = ?"
 	args := sqlutils.Args(cell)
-	refreshTablets(tablets, query, args, loader)
+	refreshTablets(tablets, query, args, loader, forceRefresh)
 }
 
-func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		log.Errorf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err)
@@ -162,10 +162,10 @@ func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, 
 	}
 	query := "select hostname, port, info from vitess_tablet where keyspace = ? and shard = ?"
 	args := sqlutils.Args(keyspace, shard)
-	refreshTablets(tablets, query, args, loader)
+	refreshTablets(tablets, query, args, loader, forceRefresh)
 }
 
-func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey)) {
+func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []interface{}, loader func(instanceKey *inst.InstanceKey), forceRefresh bool) {
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
@@ -188,7 +188,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []in
 			log.Errore(err)
 			continue
 		}
-		if proto.Equal(tablet, old) {
+		if !forceRefresh && proto.Equal(tablet, old) {
 			continue
 		}
 		if err := inst.SaveTablet(tablet); err != nil {
