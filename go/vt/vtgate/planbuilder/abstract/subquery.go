@@ -38,6 +38,7 @@ type SubQueryInner struct {
 	Type            engine.PulloutOpcode
 	SelectStatement *sqlparser.Select
 	ArgName         string
+	HasValues       string
 }
 
 // TableID implements the Operator interface

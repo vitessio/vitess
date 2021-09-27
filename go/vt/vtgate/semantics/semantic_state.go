@@ -104,9 +104,10 @@ type (
 	}
 
 	subquery struct {
-		ArgName  string
-		SubQuery *sqlparser.Subquery
-		OpCode   engine.PulloutOpcode
+		ArgName   string
+		HasValues string
+		SubQuery  *sqlparser.Subquery
+		OpCode    engine.PulloutOpcode
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.

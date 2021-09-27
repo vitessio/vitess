@@ -326,7 +326,7 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
-// AndExpressions ands together two expression, minimising the expr when possible
+// AndExpressions ands together two or more expressions, minimising the expr when possible
 func AndExpressions(exprs ...Expr) Expr {
 	switch len(exprs) {
 	case 0:
@@ -348,6 +348,35 @@ func AndExpressions(exprs ...Expr) Expr {
 				}
 				if !found {
 					result = &AndExpr{Left: result, Right: expr}
+				}
+			}
+		}
+		return result
+	}
+}
+
+// OrExpressions ors together two or more expressions, minimising the expr when possible
+func OrExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+		for i, expr := range exprs {
+			if result == nil {
+				result = expr
+			} else {
+				found := false
+				for j := 0; j < i; j++ {
+					if EqualsExpr(expr, exprs[j]) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					result = &OrExpr{Left: result, Right: expr}
 				}
 			}
 		}
