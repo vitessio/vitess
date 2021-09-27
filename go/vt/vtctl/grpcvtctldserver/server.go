@@ -2658,7 +2658,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
-	span.Annotate("include_vschema", req.IncludeVschema)
+	span.Annotate("include_vschema", req.IncludeVSchema)
 	span.Annotate("skip_no_primary", req.SkipNoPrimary)
 	span.Annotate("include_views", req.IncludeViews)
 
@@ -2672,7 +2672,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			Keyspace:       req.Keyspace,
 			ExcludeTables:  req.ExcludeTables,
 			Shard:          shards[0],
-			IncludeVschema: req.IncludeVschema,
+			IncludeVSchema: req.IncludeVSchema,
 			IncludeViews:   req.IncludeViews,
 		}
 
@@ -2691,7 +2691,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 		referenceAlias  *topodatapb.TabletAlias
 	)
 
-	if req.IncludeVschema {
+	if req.IncludeVSchema {
 		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
 			Keyspace:      req.Keyspace,
 			Shards:        shards,
@@ -2723,19 +2723,16 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 			referenceAlias = si.Shard.PrimaryAlias
 			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
 
-			getTabletReq := &vtctldatapb.GetTabletRequest{
-				TabletAlias: referenceAlias,
-			}
-
-			getTabletResp, err := s.GetTablet(ctx, getTabletReq)
-			if err != nil {
-				return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(referenceAlias), err)
-			}
-
-			referenceSchema, err = s.tmc.GetSchema(ctx, getTabletResp.GetTablet(), nil, req.ExcludeTables, req.IncludeViews)
+			primarySchemaResp, err := s.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+				TabletAlias:   referenceAlias,
+				ExcludeTables: req.ExcludeTables,
+				IncludeViews:  req.IncludeViews,
+			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", topoproto.TabletAliasString(referenceAlias), req.ExcludeTables, req.IncludeViews, err)
 			}
+
+			referenceSchema = primarySchemaResp.Schema
 		}
 
 		aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, shard)
@@ -2775,7 +2772,7 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 	span.Annotate("keyspace", req.Keyspace)
 	span.Annotate("shard", req.Shard)
 	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
-	span.Annotate("include_vschema", req.IncludeVschema)
+	span.Annotate("include_vschema", req.IncludeVSchema)
 	span.Annotate("include_views", req.IncludeViews)
 
 	si, err := s.ts.GetShard(ctx, req.Keyspace, req.Shard)
@@ -2788,21 +2785,18 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 	}
 	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias))
 
-	getTabletReq := &vtctldatapb.GetTabletRequest{
-		TabletAlias: si.Shard.PrimaryAlias,
-	}
-
-	getTabletResponse, err := s.GetTablet(ctx, getTabletReq)
+	primarySchemaResp, err := s.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+		TabletAlias:   si.PrimaryAlias,
+		ExcludeTables: req.ExcludeTables,
+		IncludeViews:  req.IncludeViews,
+	})
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(getTabletReq.TabletAlias), err)
+		return nil, vterrors.Wrapf(err, "GetSchema(%v, %+v, %+v) failed: %v", topoproto.TabletAliasString(si.PrimaryAlias), req.ExcludeTables, req.IncludeViews, err)
 	}
 
-	primarySchema, err := s.tmc.GetSchema(ctx, getTabletResponse.Tablet, nil, req.ExcludeTables, req.IncludeViews)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias), req.ExcludeTables, req.IncludeViews, err)
-	}
+	primarySchema := primarySchemaResp.Schema
 
-	if req.IncludeVschema {
+	if req.IncludeVSchema {
 		validateVSchemaReq := &vtctldatapb.ValidateVSchemaRequest{
 			Keyspace:      req.Keyspace,
 			Shards:        []string{req.Shard},
@@ -2815,8 +2809,8 @@ func (s *VtctldServer) ValidateSchemaShard(ctx context.Context, req *vtctldatapb
 		}
 	}
 
-	// read all the aliases in the shard, that is all tablets that are
-	// replicating from the primary
+	// Read all the aliases in the shard.
+	// Later we are going to filter out the primary, so we don't compare the primary schema with itself.
 	aliases, err := s.ts.FindAllTabletAliasesInShard(ctx, req.Keyspace, req.Shard)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "FindAllTabletAliasesInShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err)
@@ -2880,19 +2874,21 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 				return
 			}
 
-			primaryTablet, err := s.ts.GetTablet(ctx, si.Shard.PrimaryAlias)
+			primarySchemaResp, err := s.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+				TabletAlias:    si.PrimaryAlias,
+				ExcludeTables:  req.ExcludeTables,
+				IncludeViews:   req.IncludeViews,
+				TableNamesOnly: true,
+			})
 			if err != nil {
-				shardFailures.RecordError(vterrors.Wrapf(err, "GetTablet(%v) failed: %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias), err))
-				return
-			}
-
-			primarySchema, err := s.tmc.GetSchema(ctx, primaryTablet.Tablet, nil, req.ExcludeTables, req.IncludeViews)
-			if err != nil {
-				shardFailures.RecordError(vterrors.Wrapf(err, "GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", topoproto.TabletAliasString(si.Shard.PrimaryAlias),
-					req.ExcludeTables, req.IncludeViews, req.Keyspace, shard, err,
+				shardFailures.RecordError(vterrors.Wrapf(err, "GetSchema(%v, %+v, %+v) failed: %v", topoproto.TabletAliasString(si.PrimaryAlias),
+					req.ExcludeTables, req.IncludeViews, err,
 				))
 				return
 			}
+
+			primarySchema := primarySchemaResp.Schema
+
 			for _, tableDef := range primarySchema.TableDefinitions {
 				if _, ok := vschm.Tables[tableDef.Name]; !ok {
 					notFoundTables = append(notFoundTables, tableDef.Name)
@@ -2919,19 +2915,17 @@ func (s *VtctldServer) diffSchema(ctx context.Context, primarySchema *tabletmana
 
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
 
-	req := &vtctldatapb.GetTabletRequest{
-		TabletAlias: alias,
+	replicaSchemaResp, err := s.GetSchema(ctx, &vtctldatapb.GetSchemaRequest{
+		TabletAlias:   alias,
+		ExcludeTables: excludeTables,
+		IncludeViews:  includeViews,
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "GetSchema(%v, %+v, %+v) failed: %v", topoproto.TabletAliasString(alias),
+			excludeTables, includeViews, err)
 	}
 
-	getTabletResp, err := s.GetTablet(ctx, req)
-	if err != nil {
-		return vterrors.Wrapf(err, "GetTablet(%v) failed: %v", alias, err)
-	}
-
-	replicaSchema, err := s.tmc.GetSchema(ctx, getTabletResp.GetTablet(), nil, excludeTables, includeViews)
-	if err != nil {
-		return vterrors.Wrapf(err, "GetSchema(%v, nil, %v, %v) failed: %v", alias, excludeTables, includeViews, err)
-	}
+	replicaSchema := replicaSchemaResp.Schema
 
 	log.Infof("Diffing schema for %v", topoproto.TabletAliasString(alias))
 	tmutils.DiffSchema(topoproto.TabletAliasString(primaryTabletAlias), primarySchema, topoproto.TabletAliasString(alias), replicaSchema, &rec)

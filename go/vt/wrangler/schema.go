@@ -149,7 +149,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		Shard:          shard,
 		ExcludeTables:  excludeTables,
 		IncludeViews:   includeViews,
-		IncludeVschema: includeVSchema,
+		IncludeVSchema: includeVSchema,
 	}
 
 	if _, err := wr.VtctldServer().ValidateSchemaShard(ctx, req); err != nil {
@@ -166,7 +166,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		Keyspace:       keyspace,
 		ExcludeTables:  excludeTables,
 		IncludeViews:   includeViews,
-		IncludeVschema: includeVSchema,
+		IncludeVSchema: includeVSchema,
 		SkipNoPrimary:  skipNoPrimary,
 	}
 

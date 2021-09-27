@@ -106,7 +106,7 @@ func commandGetSchema(cmd *cobra.Command, args []string) error {
 
 var validateSchemaKeyspaceOptions = struct {
 	ExcludeTables  []string
-	IncludeVschema bool
+	IncludeVSchema bool
 	SkipNoPrimary  bool
 	IncludeViews   bool
 }{}
@@ -118,7 +118,7 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 	_, err := client.ValidateSchemaKeyspace(commandCtx, &vtctldatapb.ValidateSchemaKeyspaceRequest{
 		Keyspace:       keyspace,
 		ExcludeTables:  validateSchemaKeyspaceOptions.ExcludeTables,
-		IncludeVschema: validateSchemaKeyspaceOptions.IncludeVschema,
+		IncludeVSchema: validateSchemaKeyspaceOptions.IncludeVSchema,
 		SkipNoPrimary:  validateSchemaKeyspaceOptions.SkipNoPrimary,
 		IncludeViews:   validateSchemaKeyspaceOptions.IncludeViews,
 	})
@@ -131,25 +131,25 @@ func commandValidateSchemaKeyspace(cmd *cobra.Command, args []string) error {
 
 var validateSchemaShardOptions = struct {
 	ExcludeTables  []string
-	IncludeVschema bool
+	IncludeVSchema bool
 	IncludeViews   bool
 }{}
 
 func commandValidateSchemaShard(cmd *cobra.Command, args []string) error {
 
-	keyspaceShard := strings.Split(cmd.Flags().Arg(0), "/")
-	if len(keyspaceShard) != 2 {
-		return errors.New("invalid keyspace/shard argument")
+	kspace, shard, err := topoproto.ParseKeyspaceShard(cmd.Flags().Arg(0))
+	if err != nil {
+		return fmt.Errorf("Error parsing keyspace/shard: %v", err)
 	}
 
 	cli.FinishedParsing(cmd)
 
-	_, err := client.ValidateSchemaShard(commandCtx, &vtctldatapb.ValidateSchemaShardRequest{
-		Keyspace:       keyspaceShard[0],
+	_, err = client.ValidateSchemaShard(commandCtx, &vtctldatapb.ValidateSchemaShardRequest{
+		Keyspace:       kspace,
 		ExcludeTables:  validateSchemaShardOptions.ExcludeTables,
-		IncludeVschema: validateSchemaShardOptions.IncludeVschema,
+		IncludeVSchema: validateSchemaShardOptions.IncludeVSchema,
 		IncludeViews:   validateSchemaShardOptions.IncludeViews,
-		Shard:          keyspaceShard[1],
+		Shard:          shard,
 	})
 	if err != nil {
 		return err
@@ -169,12 +169,12 @@ func init() {
 
 	ValidateSchemaKeyspace.Flags().StringSliceVar(&validateSchemaKeyspaceOptions.ExcludeTables, "exclude-tables", nil, "If specified, will exclude these tables from the schema validation")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeViews, "include-views", false, "If specified, include views in the schema validation.")
-	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVschema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
+	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.IncludeVSchema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
 	ValidateSchemaKeyspace.Flags().BoolVar(&validateSchemaKeyspaceOptions.SkipNoPrimary, "skip-no-primary", false, "If specified, will omit shards without a primary.")
 	Root.AddCommand(ValidateSchemaKeyspace)
 
 	ValidateSchemaShard.Flags().StringSliceVar(&validateSchemaShardOptions.ExcludeTables, "exclude-tables", nil, "If specified, will exclude these tables from the schema validation")
 	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeViews, "include-views", false, "If specified, include views in the schema validation.")
-	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeVschema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
+	ValidateSchemaShard.Flags().BoolVar(&validateSchemaShardOptions.IncludeVSchema, "include-vschema", false, "If specified, will include a ValidateVSchema check")
 	Root.AddCommand(ValidateSchemaShard)
 }

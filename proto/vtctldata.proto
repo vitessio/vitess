@@ -869,7 +869,7 @@ message ValidateSchemaKeyspaceRequest {
   repeated string exclude_tables = 2;
   bool include_views = 3;
   bool skip_no_primary = 4;
-  bool include_vschema = 5;
+  bool include_v_schema = 5;
 }
 
 message ValidateSchemaKeyspaceResponse {
@@ -880,7 +880,7 @@ message ValidateSchemaShardRequest {
   string shard = 2;
   repeated string exclude_tables = 3;
   bool include_views = 4;
-  bool include_vschema = 5;
+  bool include_v_schema = 5;
 }
 
 message ValidateSchemaShardResponse {

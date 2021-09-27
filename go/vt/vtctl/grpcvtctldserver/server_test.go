@@ -9150,7 +9150,7 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 				Keyspace:       tt.keyspace,
 				SkipNoPrimary:  false,
 				ExcludeTables:  nil,
-				IncludeVschema: tt.includeVSchema,
+				IncludeVSchema: tt.includeVSchema,
 				IncludeViews:   true,
 			}
 			_, err = vtctld.ValidateSchemaKeyspace(ctx, req4)
@@ -9358,7 +9358,7 @@ func TestValidateSchemaShard(t *testing.T) {
 				Keyspace:       "ks",
 				Shard:          "-80",
 				ExcludeTables:  nil,
-				IncludeVschema: tt.includeVSchema,
+				IncludeVSchema: tt.includeVSchema,
 				IncludeViews:   true,
 			}
 			_, err = vtctld.ValidateSchemaShard(ctx, req4)

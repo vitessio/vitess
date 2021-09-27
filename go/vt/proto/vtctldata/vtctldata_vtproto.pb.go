@@ -6447,9 +6447,9 @@ func (m *ValidateSchemaKeyspaceRequest) MarshalToSizedBufferVT(dAtA []byte) (int
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.IncludeVschema {
+	if m.IncludeVSchema {
 		i--
-		if m.IncludeVschema {
+		if m.IncludeVSchema {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -6559,9 +6559,9 @@ func (m *ValidateSchemaShardRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.IncludeVschema {
+	if m.IncludeVSchema {
 		i--
-		if m.IncludeVschema {
+		if m.IncludeVSchema {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -9374,7 +9374,7 @@ func (m *ValidateSchemaKeyspaceRequest) SizeVT() (n int) {
 	if m.SkipNoPrimary {
 		n += 2
 	}
-	if m.IncludeVschema {
+	if m.IncludeVSchema {
 		n += 2
 	}
 	if m.unknownFields != nil {
@@ -9418,7 +9418,7 @@ func (m *ValidateSchemaShardRequest) SizeVT() (n int) {
 	if m.IncludeViews {
 		n += 2
 	}
-	if m.IncludeVschema {
+	if m.IncludeVSchema {
 		n += 2
 	}
 	if m.unknownFields != nil {
@@ -24501,7 +24501,7 @@ func (m *ValidateSchemaKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 			m.SkipNoPrimary = bool(v != 0)
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncludeVschema", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeVSchema", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -24518,7 +24518,7 @@ func (m *ValidateSchemaKeyspaceRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.IncludeVschema = bool(v != 0)
+			m.IncludeVSchema = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -24739,7 +24739,7 @@ func (m *ValidateSchemaShardRequest) UnmarshalVT(dAtA []byte) error {
 			m.IncludeViews = bool(v != 0)
 		case 5:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IncludeVschema", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeVSchema", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -24756,7 +24756,7 @@ func (m *ValidateSchemaShardRequest) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.IncludeVschema = bool(v != 0)
+			m.IncludeVSchema = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
