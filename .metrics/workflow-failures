@@ -1,6 +1,3 @@
-2021-06-28T11:40:10Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/978825758
-2021-06-28T11:40:10Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/978825754
-2021-06-28T11:40:10Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/978825774
 2021-06-28T11:40:10Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/978825755
 2021-06-28T11:40:10Z,endtoend,https://github.com/vitessio/vitess/actions/runs/978825765
 2021-06-28T12:24:15Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/978947746
@@ -9995,6 +9992,9 @@
 2021-09-27T08:48:33Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1277505167
 2021-09-27T08:48:33Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1277505195
 2021-09-27T08:48:33Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1277505197
+2021-09-27T10:24:28Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1277826202
+2021-09-27T10:24:28Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1277826185
+2021-09-27T10:24:28Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/1277826188
 2021-09-27T10:24:28Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1277826177
 2021-09-27T10:24:29Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1277826233
 2021-09-27T10:24:29Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1277826229
