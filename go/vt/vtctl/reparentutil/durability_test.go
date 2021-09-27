@@ -19,12 +19,137 @@ package reparentutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"github.com/stretchr/testify/assert"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func TestDurabilityNone(t *testing.T) {
+	err := SetDurabilityPolicy("none", nil)
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_RDONLY,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_SPARE,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+	require.Equal(t, 0, PrimarySemiSyncFromTablet(nil))
+	require.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
+}
+
+func TestDurabilitySemiSync(t *testing.T) {
+	err := SetDurabilityPolicy("semi_sync", nil)
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_RDONLY,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_SPARE,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+	require.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	require.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	}))
+	require.Equal(t, false, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_EXPERIMENTAL,
+	}))
+}
+
+func TestDurabilityCrossCell(t *testing.T) {
+	err := SetDurabilityPolicy("cross_cell", nil)
+	require.NoError(t, err)
+
+	promoteRule := PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+	})
+	require.Equal(t, NeutralPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_RDONLY,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+
+	promoteRule = PromotionRule(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_SPARE,
+	})
+	require.Equal(t, MustNotPromoteRule, promoteRule)
+	require.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	require.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}))
+	require.Equal(t, true, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell2",
+		},
+	}))
+	require.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+		Type: topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell1",
+		},
+	}, &topodatapb.Tablet{
+		Type: topodatapb.TabletType_EXPERIMENTAL,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "cell2",
+		},
+	}))
+}
+
+func TestError(t *testing.T) {
+	err := SetDurabilityPolicy("unknown", nil)
+	require.EqualError(t, err, "durability policy unknown not found")
+}
 
 func TestDurabilitySpecified(t *testing.T) {
 	cellName := "cell"
