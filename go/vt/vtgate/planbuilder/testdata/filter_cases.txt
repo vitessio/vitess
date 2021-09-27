@@ -1289,7 +1289,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
         "Table": "`user`",
         "Values": [
           [
@@ -1380,7 +1380,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
         "Table": "`user`",
         "Values": [
           [
@@ -1462,7 +1462,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
+        "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
         "Table": "`user`",
         "Values": [
           5
@@ -1550,7 +1550,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
+        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
         "Table": "`user`",
         "Values": [
           [
@@ -1741,7 +1741,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id in ::__vals",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -1812,7 +1812,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id not in ::__sq1",
+        "Query": "select id from `user` where :__sq_has_values1 = 0 or id not in ::__sq1",
         "Table": "`user`"
       }
     ]
@@ -1980,7 +1980,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id2 from `user` where 1 != 1",
-            "Query": "select id2 from `user` where id2 in ::__sq2",
+            "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
             "Table": "`user`"
           }
         ]
@@ -2395,7 +2395,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not id in ::__sq1 and id in ::__vals",
+            "Query": "select id from `user` where not (:__sq_has_values1 = 1 and id in ::__sq1) and :__sq_has_values2 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
               "::__sq2"
@@ -2555,7 +2555,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id in ::__vals",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -2809,7 +2809,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in ::__sq2",
+        "Query": "select id from `user` where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values2 = 1 and id in ::__sq2",
         "Table": "`user`",
         "Values": [
           5
@@ -2892,7 +2892,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and not id in ::__sq1 and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
+        "Query": "select id from `user` where id = 5 and not (:__sq_has_values1 = 1 and id in ::__sq1) and id in (select user_extra.col from user_extra where user_extra.user_id = 5)",
         "Table": "`user`",
         "Values": [
           5
