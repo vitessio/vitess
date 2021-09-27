@@ -740,8 +740,8 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
-	sel1 := union.FirstStatement.(*sqlparser.Select)
-	sel2 := union.UnionSelects[0].Statement.(*sqlparser.Select)
+	sel1 := union.Left.(*sqlparser.Select)
+	sel2 := union.Right.(*sqlparser.Select)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
@@ -763,7 +763,7 @@ func TestUnionOrderByRewrite(t *testing.T) {
 	assert.Equal(t, "select tabl1.id from tabl1 union select 1 from dual order by id asc", sqlparser.String(stmt))
 }
 
-func TestInvalidUnion(t *testing.T) {
+func TestInvalidQueries(t *testing.T) {
 	tcases := []struct {
 		sql string
 		err string
@@ -785,6 +785,15 @@ func TestInvalidUnion(t *testing.T) {
 	}, {
 		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
 		err: "Column 'id' in field list is ambiguous",
+	}, {
+		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
+		err: "SQL_CALC_FOUND_ROWS not supported with union",
+	}, {
+		sql: "select * from (select sql_calc_found_rows id from a) as t",
+		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+	}, {
+		sql: "select (select sql_calc_found_rows id from a) as t",
+		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -804,7 +813,7 @@ func TestUnionWithOrderBy(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
 	sel1 := sqlparser.GetFirstSelect(union)
-	sel2 := sqlparser.GetFirstSelect(union.UnionSelects[0].Statement)
+	sel2 := sqlparser.GetFirstSelect(union.Right)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)

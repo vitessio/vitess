@@ -52,7 +52,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	return parent.SQLNode
 }
 
-// RootNode is the root node of the AST. It is the first element of the tree.
+// RootNode is the root node of the AST when rewriting. It is the first element of the tree.
 type RootNode struct {
 	SQLNode
 }

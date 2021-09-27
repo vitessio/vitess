@@ -208,7 +208,7 @@ func (ms *MergeSort) getStreamingFields(handles []*streamHandle, callback func(*
 	return nil
 }
 
-func (ms *MergeSort) description() PrimitiveDescription {
+func (ms *MergeSort) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"OrderBy": ms.OrderBy,
 	}

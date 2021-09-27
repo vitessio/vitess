@@ -137,6 +137,11 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	GetReplicasResults map[string]struct {
+		Replicas []string
+		Error    error
+	}
+	// keyed by tablet alias.
 	GetSchemaDelays map[string]time.Duration
 	// keyed by tablet alias.
 	GetSchemaResults map[string]struct {
@@ -271,6 +276,20 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 	}
 
 	return nil, assert.AnError
+}
+
+// GetReplicas is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+	if fake.GetReplicasResults == nil {
+		return nil, fmt.Errorf("no results set on fake")
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.GetReplicasResults[key]; ok {
+		return result.Replicas, result.Error
+	}
+
+	return nil, fmt.Errorf("no result set for %v", key)
 }
 
 // GetSchema is part of the tmclient.TabletManagerClient interface.

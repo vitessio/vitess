@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/trace"
@@ -2259,6 +2260,368 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 		Name:       req.Name,
 		CellsAlias: updatedCa,
 	}, nil
+}
+
+// Validate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.Validate")
+	defer span.Finish()
+
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateResponse{}
+	getKeyspacesCtx, getKeyspacesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getKeyspacesCancel()
+
+	keyspaces, err := s.ts.GetKeyspaces(getKeyspacesCtx)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("GetKeyspaces failed: %v", err))
+		return &resp, nil
+	}
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		validateAllTablets := func(ctx context.Context, keyspaces []string) {
+			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
+			defer span.Finish()
+
+			cellSet := sets.NewString()
+			for _, keyspace := range keyspaces {
+				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
+				getShardNamesCancel() // don't defer in a loop
+
+				if err != nil {
+					m.Lock()
+					resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", keyspace, err))
+					m.Unlock()
+					continue
+				}
+
+				for _, shard := range shards {
+					findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, keyspace, shard)
+					findAllTabletAliasesCancel() // don't defer in a loop
+
+					if err != nil {
+						m.Lock()
+						resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.FindAllTabletAliasesInShard(%v/%v) failed: %v", keyspace, shard, err))
+						m.Unlock()
+						continue
+					}
+
+					for _, alias := range aliases {
+						cellSet.Insert(alias.Cell)
+					}
+				}
+			}
+
+			for _, cell := range cellSet.List() {
+				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+				aliases, err := s.ts.GetTabletsByCell(getTabletsByCellCtx, cell)
+				getTabletsByCellCancel() // don't defer in a loop
+
+				if err != nil {
+					m.Lock()
+					resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetTabletsByCell(%v) failed: %v", cell, err))
+					m.Unlock()
+					continue
+				}
+
+				for _, alias := range aliases {
+					wg.Add(1)
+					go func(alias *topodatapb.TabletAlias) {
+						defer wg.Done()
+
+						span, ctx := trace.NewSpan(ctx, "VtctldServer.validateTablet")
+						defer span.Finish()
+
+						key := topoproto.TabletAliasString(alias)
+						span.Annotate("tablet_alias", key)
+
+						ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+						defer cancel()
+
+						if err := topo.Validate(ctx, s.ts, alias); err != nil {
+							m.Lock()
+							defer m.Unlock()
+
+							resp.Results = append(resp.Results, fmt.Sprintf("topo.Validate(%v) failed: %v", key, err))
+							return
+						}
+
+						log.Infof("tablet %v is valid", key)
+					}(alias)
+				}
+			}
+		}
+
+		validateAllTablets(ctx, keyspaces)
+	}()
+
+	resp.ResultsByKeyspace = make(map[string]*vtctldatapb.ValidateKeyspaceResponse, len(keyspaces))
+
+	for _, keyspace := range keyspaces {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			keyspaceResp, err := s.ValidateKeyspace(ctx, &vtctldatapb.ValidateKeyspaceRequest{
+				Keyspace:    keyspace,
+				PingTablets: req.PingTablets,
+			})
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				resp.ResultsByKeyspace[keyspace] = &vtctldatapb.ValidateKeyspaceResponse{
+					Results: []string{fmt.Sprintf("failed to validate: %v", err)},
+				}
+				return
+			}
+
+			resp.ResultsByKeyspace[keyspace] = keyspaceResp
+		}(keyspace)
+	}
+
+	wg.Wait()
+	return &resp, nil
+}
+
+// ValidateKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateKeyspace(ctx context.Context, req *vtctldatapb.ValidateKeyspaceRequest) (*vtctldatapb.ValidateKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateKeyspaceResponse{}
+	getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getShardNamesCancel()
+
+	shards, err := s.ts.GetShardNames(getShardNamesCtx, req.Keyspace)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShardNames(%v) failed: %v", req.Keyspace, err))
+		return &resp, nil
+	}
+
+	resp.ResultsByShard = make(map[string]*vtctldatapb.ValidateShardResponse, len(shards))
+
+	var (
+		m  sync.Mutex
+		wg sync.WaitGroup
+	)
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			shardResp, err := s.ValidateShard(ctx, &vtctldatapb.ValidateShardRequest{
+				Keyspace:    req.Keyspace,
+				Shard:       shard,
+				PingTablets: req.PingTablets,
+			})
+
+			m.Lock()
+			defer m.Unlock()
+
+			if err != nil {
+				resp.Results = append(resp.Results, fmt.Sprintf("error validating shard %v/%v: %v", req.Keyspace, shard, err))
+				return
+			}
+
+			resp.ResultsByShard[shard] = shardResp
+		}(shard)
+	}
+
+	wg.Wait()
+	return &resp, nil
+}
+
+// ValidateShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.ValidateShardRequest) (*vtctldatapb.ValidateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ValidateShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("ping_tablets", req.PingTablets)
+
+	resp := vtctldatapb.ValidateShardResponse{}
+	getShardCtx, getShardCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getShardCancel()
+
+	si, err := s.ts.GetShard(getShardCtx, req.Keyspace, req.Shard)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.GetShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err))
+		return &resp, nil
+	}
+
+	findAllTabletAliasesCtx, findAllTabletAliasesCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer findAllTabletAliasesCancel()
+
+	aliases, err := s.ts.FindAllTabletAliasesInShard(findAllTabletAliasesCtx, req.Keyspace, req.Shard)
+	if err != nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("TopologyServer.FindAllTabletAliasesInShard(%v, %v) failed: %v", req.Keyspace, req.Shard, err))
+		return &resp, nil
+	}
+
+	getTabletMapCtx, getTabletMapCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer getTabletMapCancel()
+	tabletMap, _ := s.ts.GetTabletMap(getTabletMapCtx, aliases)
+
+	var primaryAlias *topodatapb.TabletAlias
+	for _, alias := range aliases {
+		key := topoproto.TabletAliasString(alias)
+		ti, ok := tabletMap[key]
+		if !ok {
+			resp.Results = append(resp.Results, fmt.Sprintf("tablet %v not found in map", key))
+			continue
+		}
+
+		if ti.Type == topodatapb.TabletType_PRIMARY {
+			switch primaryAlias {
+			case nil:
+				primaryAlias = alias
+			default:
+				resp.Results = append(resp.Results, fmt.Sprintf("shard %v/%v already has primary %v but found other primary %v", req.Keyspace, req.Shard, topoproto.TabletAliasString(primaryAlias), key))
+			}
+		}
+	}
+
+	if primaryAlias == nil {
+		resp.Results = append(resp.Results, fmt.Sprintf("no primary for shard %v/%v", req.Keyspace, req.Shard))
+	} else if !topoproto.TabletAliasEqual(si.PrimaryAlias, primaryAlias) {
+		resp.Results = append(resp.Results, fmt.Sprintf("primary mismatch for shard %v/%v: found %v, expected %v", si.Keyspace(), si.ShardName(), topoproto.TabletAliasString(primaryAlias), topoproto.TabletAliasString(si.PrimaryAlias)))
+	}
+
+	var (
+		wg      sync.WaitGroup
+		results = make(chan string, len(aliases))
+	)
+
+	for _, alias := range aliases {
+		wg.Add(1)
+		go func(alias *topodatapb.TabletAlias) {
+			defer wg.Done()
+
+			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			defer cancel()
+
+			if err := topo.Validate(ctx, s.ts, alias); err != nil {
+				results <- fmt.Sprintf("topo.Validate(%v) failed: %v", topoproto.TabletAliasString(alias), err)
+				return
+			}
+
+			log.Infof("tablet %v is valid", topoproto.TabletAliasString(alias))
+		}(alias)
+	}
+
+	if req.PingTablets {
+		validateReplication := func(ctx context.Context, si *topo.ShardInfo, tabletMap map[string]*topo.TabletInfo, results chan<- string) {
+			if si.PrimaryAlias == nil {
+				results <- fmt.Sprintf("no primary in shard record %v/%v", si.Keyspace(), si.ShardName())
+				return
+			}
+
+			shardPrimaryAliasStr := topoproto.TabletAliasString(si.PrimaryAlias)
+			primaryTabletInfo, ok := tabletMap[shardPrimaryAliasStr]
+			if !ok {
+				results <- fmt.Sprintf("primary %v not in tablet map", shardPrimaryAliasStr)
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			defer cancel()
+
+			replicaList, err := s.tmc.GetReplicas(ctx, primaryTabletInfo.Tablet)
+			if err != nil {
+				results <- fmt.Sprintf("GetReplicas(%v) failed: %v", primaryTabletInfo, err)
+				return
+			}
+
+			if len(replicaList) == 0 {
+				results <- fmt.Sprintf("no replicas of tablet %v found", shardPrimaryAliasStr)
+				return
+			}
+
+			tabletIPMap := make(map[string]*topodatapb.Tablet)
+			replicaIPMap := make(map[string]bool)
+			for _, tablet := range tabletMap {
+				ip, err := topoproto.MySQLIP(tablet.Tablet)
+				if err != nil {
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					continue
+				}
+
+				tabletIPMap[netutil.NormalizeIP(ip)] = tablet.Tablet
+			}
+
+			// See if every replica is in the replication graph.
+			for _, replicaAddr := range replicaList {
+				if tabletIPMap[netutil.NormalizeIP(replicaAddr)] == nil {
+					results <- fmt.Sprintf("replica %v not in replication graph for shard %v/%v (mysql instance without vttablet?)", replicaAddr, si.Keyspace(), si.ShardName())
+				}
+
+				replicaIPMap[netutil.NormalizeIP(replicaAddr)] = true
+			}
+
+			// See if every entry in the replication graph is connected to the primary.
+			for _, tablet := range tabletMap {
+				if !tablet.IsReplicaType() {
+					continue
+				}
+
+				ip, err := topoproto.MySQLIP(tablet.Tablet)
+				if err != nil {
+					results <- fmt.Sprintf("could not resolve IP for tablet %s: %v", tablet.Tablet.MysqlHostname, err)
+					continue
+				}
+
+				if !replicaIPMap[netutil.NormalizeIP(ip)] {
+					results <- fmt.Sprintf("replica %v not replicating: %v replica list: %q", topoproto.TabletAliasString(tablet.Alias), ip, replicaList)
+				}
+			}
+		}
+		pingTablets := func(ctx context.Context, tabletMap map[string]*topo.TabletInfo, results chan<- string) {
+			for alias, ti := range tabletMap {
+				wg.Add(1)
+				go func(alias string, ti *topo.TabletInfo) {
+					defer wg.Done()
+
+					ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+					defer cancel()
+
+					if err := s.tmc.Ping(ctx, ti.Tablet); err != nil {
+						results <- fmt.Sprintf("Ping(%v) failed: %v tablet hostname: %v", alias, err, ti.Hostname)
+					}
+				}(alias, ti)
+			}
+		}
+
+		validateReplication(ctx, si, tabletMap, results) // done synchronously
+		pingTablets(ctx, tabletMap, results)             // done async, using the waitgroup declared above in the main method body.
+	}
+
+	done := make(chan bool)
+	go func() {
+		for result := range results {
+			resp.Results = append(resp.Results, result)
+		}
+		done <- true
+	}()
+
+	wg.Wait()
+	close(results)
+	<-done
+
+	return &resp, nil
 }
 
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.

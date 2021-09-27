@@ -42,8 +42,6 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 		return transformSubqueryTree(ctx, n)
 	case *concatenateTree:
 		return transformConcatenatePlan(ctx, n)
-	case *distinctTree:
-		return transformDistinctPlan(ctx, n)
 	case *vindexTree:
 		return transformVindexTree(n)
 	}
@@ -51,19 +49,15 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
 }
 
-func pushDistinct(plan logicalPlan) error {
+func pushDistinct(plan logicalPlan) {
 	switch n := plan.(type) {
 	case *route:
 		n.Select.MakeDistinct()
 	case *concatenateGen4:
 		for _, source := range n.sources {
-			err := pushDistinct(source)
-			if err != nil {
-				return err
-			}
+			pushDistinct(source)
 		}
 	}
-	return nil
 }
 
 func transformVindexTree(n *vindexTree) (logicalPlan, error) {
@@ -133,7 +127,9 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 	if !isRoute {
 		return &simpleProjection{
 			logicalPlanCommon: newBuilderCommon(plan),
-			eSimpleProj:       &engine.SimpleProjection{},
+			eSimpleProj: &engine.SimpleProjection{
+				Cols: n.columnsOffset,
+			},
 		}, nil
 	}
 	innerSelect := rb.Select
@@ -176,13 +172,32 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 		sources = append(sources, plan)
 	}
 
-	if len(sources) == 1 {
-		return sources[0], nil
+	if n.distinct {
+		for _, source := range sources {
+			pushDistinct(source)
+		}
 	}
 
-	return &concatenateGen4{
-		sources: sources,
-	}, nil
+	var result logicalPlan
+	if len(sources) == 1 {
+		src := sources[0]
+		if rb, isRoute := src.(*route); isRoute && rb.isSingleShard() {
+			// if we have a single shard route, we don't need to do anything to make it distinct
+			rb.Select.SetLimit(n.limit)
+			rb.Select.SetOrderBy(n.ordering)
+			return src, nil
+		}
+		result = src
+	} else {
+		if len(n.ordering) > 0 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
+		}
+		result = &concatenateGen4{sources: sources}
+	}
+	if n.distinct {
+		return newDistinct(result), nil
+	}
+	return result, nil
 }
 
 func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {
@@ -196,11 +211,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 	}
 
 	if canMergePlans(ctx, lroute, rroute) {
-		elem := &sqlparser.UnionSelect{
-			Distinct:  false,
-			Statement: rroute.Select,
-		}
-		lroute.Select = &sqlparser.Union{FirstStatement: lroute.Select, UnionSelects: []*sqlparser.UnionSelect{elem}}
+		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		return lroute
 	}
 	return nil
@@ -334,22 +345,6 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		tables:    n.solved,
 		condition: condition,
 	}, nil
-}
-
-func transformDistinctPlan(ctx *planningContext, n *distinctTree) (logicalPlan, error) {
-	innerPlan, err := transformToLogicalPlan(ctx, n.source)
-	if err != nil {
-		return nil, err
-	}
-	err = pushDistinct(innerPlan)
-	if err != nil {
-		return nil, err
-	}
-	if rb, isRoute := innerPlan.(*route); isRoute && rb.isSingleShard() {
-		// if we have a single shard route, we don't need to do anything to make it distinct
-		return innerPlan, nil
-	}
-	return newDistinct(innerPlan), nil
 }
 
 func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {

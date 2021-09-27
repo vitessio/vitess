@@ -48,6 +48,9 @@ type (
 
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
+
+		// Compact will optimise the operator tree into a smaller but equivalent version
+		Compact() Operator
 	}
 )
 
@@ -157,77 +160,43 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 }
 
 // CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (Operator, error) {
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op Operator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
-		return createOperatorFromSelect(node, semTable)
+		op, err = createOperatorFromSelect(node, semTable)
 	case *sqlparser.Union:
-		return createOperatorFromUnion(node, semTable)
+		op, err = createOperatorFromUnion(node, semTable)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
-}
 
-func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
-	op, err := CreateOperatorFromAST(node.FirstStatement, semTable)
 	if err != nil {
 		return nil, err
 	}
-	sources := []Operator{op}
-	sel := getSelect(node.FirstStatement)
-	selectStmts := []*sqlparser.Select{sel}
-
-	var addToSource func(op Operator, sel *sqlparser.Select)
-
-	switch op := op.(type) {
-	case *Distinct:
-		switch src := op.Source.(type) {
-		case *Concatenate:
-			addToSource = func(op Operator, sel *sqlparser.Select) {
-				src.Sources = append(src.Sources, op)
-				src.SelectStmts = append(src.SelectStmts, sel)
-			}
-		}
-	}
-
-	// we only need a single DISTINCT, so we'll go over the UNION to find the last DISTINCT, and that is the one we will keep.
-	// Example: S1 UNION S2 UNION ALL S3 UNION S4 UNION ALL S5
-	// To plan this query, we can do concatenate on S1, S2, S3, and S4, and then distinct, and lastly we concatenate S5
-
-	distinctAt := lastDistinctAt(node)
-
-	for i, unionSelect := range node.UnionSelects {
-		op, err = CreateOperatorFromAST(unionSelect.Statement, semTable)
-		if err != nil {
-			return nil, err
-		}
-
-		sel = getSelect(unionSelect.Statement)
-		if addToSource != nil && i <= distinctAt {
-			// if we can, let's add it to the input instead of building up a new UNION
-			addToSource(op, sel)
-		} else {
-			sources = append(sources, op)
-			selectStmts = append(selectStmts, sel)
-
-			if i == distinctAt {
-				sources = []Operator{&Distinct{Source: &Concatenate{Sources: sources, SelectStmts: selectStmts}}}
-				selectStmts = []*sqlparser.Select{nil}
-			}
-		}
-	}
-	return createConcatenateIfRequired(sources, selectStmts), nil
+	return op.Compact(), nil
 }
 
-// lastDistinctAt finds the last DISTINCT in a list of queries UNIONed together
-func lastDistinctAt(node *sqlparser.Union) int {
-	distinctAt := -1
-	for i := len(node.UnionSelects) - 1; i >= 0; i-- {
-		if node.UnionSelects[i].Distinct {
-			distinctAt = i
-			break
-		}
+func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
+	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
+	if err != nil {
+		return nil, err
 	}
-	return distinctAt
+
+	_, isRHSUnion := node.Right.(*sqlparser.Union)
+	if isRHSUnion {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "nesting of unions at the right-hand side is not yet supported")
+	}
+	opRHS, err := CreateOperatorFromAST(node.Right, semTable)
+	if err != nil {
+		return nil, err
+	}
+	return &Concatenate{
+		Distinct:    node.Distinct,
+		SelectStmts: []*sqlparser.Select{getSelect(node.Left), getSelect(node.Right)},
+		Sources:     []Operator{opLHS, opRHS},
+		OrderBy:     node.OrderBy,
+		Limit:       node.Limit,
+	}, nil
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query

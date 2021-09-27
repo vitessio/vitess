@@ -204,7 +204,7 @@ func (vf *VindexFunc) buildRow(id sqltypes.Value, ksid []byte, kr *topodatapb.Ke
 	return row
 }
 
-func (vf *VindexFunc) description() PrimitiveDescription {
+func (vf *VindexFunc) Description() PrimitiveDescription {
 	fields := map[string]string{}
 	for _, field := range vf.Fields {
 		fields[field.Name] = field.Type.String()

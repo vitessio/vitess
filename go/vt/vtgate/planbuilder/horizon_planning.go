@@ -39,10 +39,6 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
-	if err := checkUnsupportedConstructs(hp.sel); err != nil {
-		return nil, err
-	}
-
 	rb, isRoute := plan.(*route)
 	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
@@ -233,6 +229,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		offset, _, err := pushProjection(expr, node.input, semTable, inner, true)
 		if err != nil {
 			return 0, false, err
+		}
+		for i, value := range node.eSimpleProj.Cols {
+			// we return early if we already have the column in the simple projection's
+			// output list so we do not add it again.
+			if reuseCol && value == offset {
+				return i, false, nil
+			}
 		}
 		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
 		return len(node.eSimpleProj.Cols) - 1, true, nil
@@ -601,7 +604,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	default:
-		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
 }
 

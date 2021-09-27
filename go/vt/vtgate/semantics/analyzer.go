@@ -21,6 +21,8 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -125,11 +127,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	}
 
 	if !a.hasRewritten {
-		if err := checkForInvalidConstructs(cursor); err != nil {
+		if err := a.scoper.down(cursor); err != nil {
 			a.setError(err)
 			return true
 		}
-		if err := a.scoper.down(cursor); err != nil {
+		if err := a.checkForInvalidConstructs(cursor); err != nil {
 			a.setError(err)
 			return true
 		}
@@ -179,15 +181,14 @@ func checkUnionColumns(cursor *sqlparser.Cursor) error {
 
 	count := len(firstProj)
 
-	for _, unionSelect := range union.UnionSelects {
-		proj := sqlparser.GetFirstSelect(unionSelect.Statement).SelectExprs
-		err := checkForStar(proj)
-		if err != nil {
-			return err
-		}
-		if len(proj) != count {
-			return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
-		}
+	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	err = checkForStar(secondProj)
+	if err != nil {
+		return err
+	}
+
+	if len(secondProj) != count {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 	}
 
 	return nil
@@ -264,14 +265,44 @@ func (a *analyzer) analyze(statement sqlparser.Statement) error {
 	return a.err
 }
 
-func checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
+func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
-		if node.Into == nil {
+		parent := cursor.Parent()
+		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+		}
+		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+		}
+		errMsg := "INTO"
+		nextVal := false
+		if len(node.SelectExprs) == 1 {
+			if _, isNextVal := node.SelectExprs[0].(*sqlparser.Nextval); isNextVal {
+				nextVal = true
+				errMsg = "NEXT"
+			}
+		}
+		if !nextVal && node.Into == nil {
 			return nil
 		}
-		if _, isRootNode := cursor.Parent().(*sqlparser.RootNode); !isRootNode {
+		if a.scoper.currentScope().parent != nil {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of '%s'", errMsg)
+		}
+	case *sqlparser.Nextval:
+		currScope := a.scoper.currentScope()
+		if currScope.parent != nil {
 			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+		}
+		if len(currScope.tables) != 1 {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
+		}
+		vindexTbl := currScope.tables[0].GetVindexTable()
+		if vindexTbl == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table information is not provided in vschema")
+		}
+		if vindexTbl.Type != vindexes.TypeSequence {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Condition != nil && node.Condition.Using != nil {

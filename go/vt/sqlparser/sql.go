@@ -6207,7 +6207,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:580
 		{
-			yyLOCAL = &Union{FirstStatement: yyDollar[1].selStmtUnion(), UnionSelects: []*UnionSelect{{Distinct: yyDollar[2].booleanUnion(), Statement: yyDollar[3].selStmtUnion()}}}
+			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 51:
@@ -6215,7 +6215,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:584
 		{
-			yyLOCAL = &Union{FirstStatement: yyDollar[1].selStmtUnion(), UnionSelects: []*UnionSelect{{Distinct: yyDollar[2].booleanUnion(), Statement: yyDollar[3].selStmtUnion()}}}
+			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 52:
@@ -6223,7 +6223,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:588
 		{
-			yyLOCAL = &Union{FirstStatement: yyDollar[1].selStmtUnion(), UnionSelects: []*UnionSelect{{Distinct: yyDollar[2].booleanUnion(), Statement: yyDollar[3].selStmtUnion()}}}
+			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 53:
@@ -6231,7 +6231,7 @@ yydefault:
 		var yyLOCAL SelectStatement
 //line sql.y:592
 		{
-			yyLOCAL = &Union{FirstStatement: yyDollar[1].selStmtUnion(), UnionSelects: []*UnionSelect{{Distinct: yyDollar[2].booleanUnion(), Statement: yyDollar[3].selStmtUnion()}}}
+			yyLOCAL = &Union{Left: yyDollar[1].selStmtUnion(), Distinct: yyDollar[2].booleanUnion(), Right: yyDollar[3].selStmtUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 54:

@@ -44,7 +44,7 @@ type RevertMigration struct {
 	noInputs
 }
 
-func (v *RevertMigration) description() PrimitiveDescription {
+func (v *RevertMigration) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RevertMigration",
 		Keyspace:     v.Keyspace,

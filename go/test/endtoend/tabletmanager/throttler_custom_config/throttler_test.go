@@ -208,7 +208,7 @@ func TestThreadsRunning(t *testing.T) {
 		}
 	})
 	t.Run("restored below threshold", func(t *testing.T) {
-		time.Sleep(time.Duration(sleepSeconds) * time.Second)
+		time.Sleep(time.Duration(sleepSeconds) * time.Second * 2) // * 2 since we have two planner executing the select sleep(6) query
 		// Restore
 		{
 			resp, err := throttleCheck(primaryTablet)

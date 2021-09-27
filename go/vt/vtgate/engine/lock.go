@@ -89,7 +89,7 @@ func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "not implements in lock primitive")
 }
 
-func (l *Lock) description() PrimitiveDescription {
+func (l *Lock) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query": l.Query,
 	}

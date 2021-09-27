@@ -150,7 +150,7 @@ func (s *Set) Inputs() []Primitive {
 	return []Primitive{s.Input}
 }
 
-func (s *Set) description() PrimitiveDescription {
+func (s *Set) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Ops": s.Ops,
 	}

@@ -77,7 +77,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		if rb, ok := pb.plan.(*route); ok {
 			sel, ok := rb.Select.(*sqlparser.Select)
 			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "1unexpected AST struct for query: %s", sqlparser.String(rb.Select))
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rb.Select))
 			}
 
 			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
@@ -334,12 +334,12 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	// Merge the AST.
 	sel, ok := lRoute.Select.(*sqlparser.Select)
 	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "2unexpected AST struct for query: %s", sqlparser.String(lRoute.Select))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(lRoute.Select))
 	}
 	if ajoin == nil {
 		rhsSel, ok := rRoute.Select.(*sqlparser.Select)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "3unexpected AST struct for query: %s", sqlparser.String(rRoute.Select))
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rRoute.Select))
 		}
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
