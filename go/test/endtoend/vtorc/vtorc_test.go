@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/k8stopo"
@@ -44,6 +46,9 @@ func TestPrimaryElection(t *testing.T) {
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
+
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Cases to test:
@@ -58,6 +63,8 @@ func TestSingleKeyspace(t *testing.T) {
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Cases to test:
@@ -72,6 +79,8 @@ func TestKeyspaceShard(t *testing.T) {
 
 	checkPrimaryTablet(t, clusterInstance, shard0.Vttablets[0])
 	checkReplication(t, clusterInstance, shard0.Vttablets[0], shard0.Vttablets[1:], 10*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 func waitForReadOnlyValue(t *testing.T, curPrimary *cluster.Vttablet, expectValue int64) (match bool) {
@@ -111,6 +120,8 @@ func TestPrimaryReadOnly(t *testing.T) {
 	// wait for repair
 	match := waitForReadOnlyValue(t, curPrimary, 0)
 	require.True(t, match)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // 4. make replica ReadWrite, let orc repair
@@ -139,6 +150,8 @@ func TestReplicaReadWrite(t *testing.T) {
 	// wait for repair
 	match := waitForReadOnlyValue(t, replica, 1)
 	require.True(t, match)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // 5. stop replication, let orc repair
@@ -171,6 +184,8 @@ func TestStopReplication(t *testing.T) {
 
 	// check replication is setup correctly
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica}, 15*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // 6. setup replication from non-primary, let orc repair
@@ -214,6 +229,8 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 
 	// check replication is setup correctly
 	checkReplication(t, clusterInstance, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 func TestRepairAfterTER(t *testing.T) {
@@ -246,6 +263,8 @@ func TestRepairAfterTER(t *testing.T) {
 	require.NoError(t, err)
 
 	checkReplication(t, clusterInstance, newPrimary, []*cluster.Vttablet{curPrimary}, 15*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // 7. make instance A replicates from B and B from A, wait for repair
@@ -280,4 +299,6 @@ func TestCircularReplication(t *testing.T) {
 	require.NoError(t, err)
 	// check replication is setup correctly
 	checkReplication(t, clusterInstance, primary, []*cluster.Vttablet{replica}, 10*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }

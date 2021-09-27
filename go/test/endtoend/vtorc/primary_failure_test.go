@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // 2. bring down primary, let orc promote replica
@@ -52,6 +53,8 @@ func TestDownPrimary(t *testing.T) {
 			break
 		}
 	}
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -88,6 +91,8 @@ func TestCrossDataCenterFailure(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // Failover will sometimes lead to a replica which can no longer replicate.
@@ -147,6 +152,8 @@ func TestLostReplicasOnPrimaryFailure(t *testing.T) {
 	out, err := runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", rdonly, "")
 	require.NoError(t, err)
 	require.Equal(t, "//localhost", out.Rows[0][0].ToString())
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
@@ -175,6 +182,8 @@ func TestPromotionLagSuccess(t *testing.T) {
 			break
 		}
 	}
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
@@ -203,6 +212,8 @@ func TestPromotionLagFailure(t *testing.T) {
 
 	// the previous primary should still be the primary since recovery of dead primary should fail
 	checkPrimaryTablet(t, clusterInstance, curPrimary)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate from orchestrator
@@ -231,6 +242,8 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate-lag from orchestrator
@@ -298,6 +311,8 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
 	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
 
 // covers the test case master-failover-candidate-lag-cross-datacenter from orchestrator
@@ -365,4 +380,6 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
 	runAdditionalCommands(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
+	logs, err := clusterInstance.VtorcProcess.GetLogs()
+	log.Errorf("logs for vtorc - %s, error while reading logs - %v", logs, err)
 }
