@@ -101,6 +101,22 @@ func (r *ReservedVars) ReserveSubQuery() string {
 	}
 }
 
+// ReserveSubQueryWithHasValues returns the next argument name to replace subquery with pullout value.
+func (r *ReservedVars) ReserveSubQueryWithHasValues() (string, string) {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		hasValuesJoinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
+		_, joinVarOK := r.reserved[string(joinVar)]
+		_, hasValuesJoinVarOK := r.reserved[string(hasValuesJoinVar)]
+		if !joinVarOK && !hasValuesJoinVarOK {
+			r.reserved[string(joinVar)] = struct{}{}
+			r.reserved[string(hasValuesJoinVar)] = struct{}{}
+			return string(joinVar), string(hasValuesJoinVar)
+		}
+	}
+}
+
 // ReserveHasValuesSubQuery returns the next argument name to replace subquery with has value.
 func (r *ReservedVars) ReserveHasValuesSubQuery() string {
 	for {

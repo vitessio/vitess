@@ -98,7 +98,7 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(n.opcode, n.argName, "", innerPlan)
+	plan := newPulloutSubquery(n.opcode, n.argName, n.hasValues, innerPlan)
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err

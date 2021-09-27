@@ -41,6 +41,8 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
+	case *sqlparser.ComparisonExpr:
+		rewriteInSubquery(cursor, r, node)
 	case *sqlparser.ExistsExpr:
 		return r.rewriteExistsSubquery(cursor, node)
 	case *sqlparser.Subquery:
@@ -92,6 +94,51 @@ func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
+func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) {
+	if node.Operator != sqlparser.InOp && node.Operator != sqlparser.NotInOp {
+		return
+	}
+	subq := &sqlparser.Subquery{}
+	var exp sqlparser.Expr
+	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
+		subq = lSubq
+		exp = node.Right
+	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
+		subq = rSubq
+		exp = node.Left
+	} else {
+		return
+	}
+
+	semTableSQ, found := r.semTable.SubqueryRef[subq]
+	if !found {
+		// should never happen
+		return
+	}
+
+	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
+	semTableSQ.ArgName = argName
+	semTableSQ.HasValues = hasValuesArg
+	newSubQExpr := &sqlparser.ComparisonExpr{
+		Operator: node.Operator,
+		Left:     exp,
+		Right:    sqlparser.NewListArg(argName),
+	}
+
+	hasValuesExpr := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     sqlparser.NewArgument(hasValuesArg),
+	}
+	switch node.Operator {
+	case sqlparser.InOp:
+		hasValuesExpr.Right = sqlparser.NewIntLiteral("1")
+		cursor.Replace(sqlparser.AndExpressions(hasValuesExpr, newSubQExpr))
+	case sqlparser.NotInOp:
+		hasValuesExpr.Right = sqlparser.NewIntLiteral("0")
+		cursor.Replace(sqlparser.OrExpressions(hasValuesExpr, newSubQExpr))
+	}
+}
+
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
 	semTableSQ, found := r.semTable.SubqueryRef[node]
 	if !found {
@@ -99,13 +146,10 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 		return
 	}
 
-	argName := r.reservedVars.ReserveSubQuery()
-	semTableSQ.ArgName = argName
-
 	switch semTableSQ.OpCode {
-	case engine.PulloutIn, engine.PulloutNotIn:
-		cursor.Replace(sqlparser.NewListArg(argName))
-	default:
+	case engine.PulloutValue:
+		argName := r.reservedVars.ReserveSubQuery()
+		semTableSQ.ArgName = argName
 		cursor.Replace(sqlparser.NewArgument(argName))
 	}
 }

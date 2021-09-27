@@ -159,10 +159,11 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 			}
 			unmerged = append(unmerged, &subqueryTree{
-				subquery: inner.SelectStatement,
-				inner:    treeInner,
-				opcode:   inner.Type,
-				argName:  inner.ArgName,
+				subquery:  inner.SelectStatement,
+				inner:     treeInner,
+				opcode:    inner.Type,
+				argName:   inner.ArgName,
+				hasValues: inner.HasValues,
 			})
 		} else {
 			outerTree = merged
