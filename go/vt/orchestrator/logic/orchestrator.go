@@ -52,7 +52,8 @@ var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
-var ersInProgress int32
+var ersInProgressMutex sync.Mutex
+var ersInProgress bool
 
 var discoveriesCounter = metrics.NewCounter()
 var failedDiscoveriesCounter = metrics.NewCounter()
