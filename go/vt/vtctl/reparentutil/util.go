@@ -351,7 +351,7 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 }
 
 // waitForCatchingUp promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
-func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet) error {
+func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet, waitTime time.Duration) error {
 	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, prevPrimary.Alias)
 	// Find the primary position of the previous primary
 	pos, err := tmc.MasterPosition(ctx, prevPrimary)
@@ -360,9 +360,9 @@ func waitForCatchingUp(ctx context.Context, tmc tmclient.TabletManagerClient, lo
 	}
 
 	// Wait until the new primary has caught upto that position
-	// TODO - discuss, what happens in case of timeout
-	// TODO - Subcontext -> timeout for wait for position
-	err = tmc.WaitForPosition(ctx, newPrimary, pos)
+	waitForPosCtx, cancelFunc := context.WithTimeout(ctx, waitTime)
+	defer cancelFunc()
+	err = tmc.WaitForPosition(waitForPosCtx, newPrimary, pos)
 	if err != nil {
 		return err
 	}
