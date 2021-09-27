@@ -39,17 +39,12 @@ type planningContext struct {
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
 	// these helps in replacing the argNames with the subquery
-	sqToReplace     map[string]*sqlparser.Select
+	sqToReplaceArg  map[string]*sqlparser.Select
 	sqToReplaceExpr map[sqlparser.Expr]sqlparser.Expr
 }
 
-type subqueryReplaceContext struct {
-	exprs []sqlparser.Expr
-	sel   *sqlparser.Select
-}
-
 func (c planningContext) isSubQueryToReplace(name string) bool {
-	_, found := c.sqToReplace[name]
+	_, found := c.sqToReplaceArg[name]
 	return found
 }
 
@@ -283,7 +278,7 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 }
 
 func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
-	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
+	ctx.sqToReplaceArg[subq.ArgName] = subq.SelectStatement
 	for _, expr := range subq.Replace {
 		ctx.sqToReplaceExpr[expr] = subq.ReplaceBy
 	}
