@@ -107,7 +107,6 @@ func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.L
 	var replicaMutex sync.Mutex
 
 	replCtx, replCancel := context.WithTimeout(ctx, opts.waitReplicasTimeout)
-	defer replCancel()
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
@@ -210,6 +209,11 @@ func reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.L
 
 		return nil, vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on primary: %v", primaryErr)
 	}
+
+	go func() {
+		replWg.Wait()
+		defer replCancel()
+	}()
 
 	select {
 	case <-replSuccessCtx.Done():
