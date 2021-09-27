@@ -119,6 +119,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
 	semTableSQ.ArgName = argName
 	semTableSQ.HasValues = hasValuesArg
+	semTableSQ.ReplaceBy = node
 	newSubQExpr := &sqlparser.ComparisonExpr{
 		Operator: node.Operator,
 		Left:     exp,
@@ -137,21 +138,21 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		hasValuesExpr.Right = sqlparser.NewIntLiteral("0")
 		cursor.Replace(sqlparser.OrExpressions(hasValuesExpr, newSubQExpr))
 	}
+	semTableSQ.Replace = append(semTableSQ.Replace, hasValuesExpr, newSubQExpr)
 }
 
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
 	semTableSQ, found := r.semTable.SubqueryRef[node]
-	if !found {
-		// should never happen
+	if !found || semTableSQ.OpCode != engine.PulloutValue {
 		return
 	}
 
-	switch semTableSQ.OpCode {
-	case engine.PulloutValue:
-		argName := r.reservedVars.ReserveSubQuery()
-		semTableSQ.ArgName = argName
-		cursor.Replace(sqlparser.NewArgument(argName))
-	}
+	argName := r.reservedVars.ReserveSubQuery()
+	arg := sqlparser.NewArgument(argName)
+	semTableSQ.ArgName = argName
+	semTableSQ.Replace = append(semTableSQ.Replace, arg)
+	semTableSQ.ReplaceBy = node
+	cursor.Replace(arg)
 }
 
 func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) bool {
@@ -162,9 +163,11 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 	}
 
 	argName := r.reservedVars.ReserveHasValuesSubQuery()
+	arg := sqlparser.NewArgument(argName)
 	semTableSQ.ArgName = argName
-
-	cursor.Replace(sqlparser.NewArgument(argName))
+	semTableSQ.Replace = append(semTableSQ.Replace, arg)
+	semTableSQ.ReplaceBy = node
+	cursor.Replace(arg)
 	return false
 }
 

@@ -108,6 +108,8 @@ type (
 		HasValues string
 		SubQuery  *sqlparser.Subquery
 		OpCode    engine.PulloutOpcode
+		Replace   []sqlparser.Expr
+		ReplaceBy sqlparser.Expr
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.

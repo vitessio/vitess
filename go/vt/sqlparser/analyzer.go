@@ -355,6 +355,21 @@ func AndExpressions(exprs ...Expr) Expr {
 	}
 }
 
+// SplitOrExpression breaks up the Expr into OR-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitOrExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *OrExpr:
+		filters = SplitOrExpression(filters, node.Left)
+		return SplitOrExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
 // OrExpressions ors together two or more expressions, minimising the expr when possible
 func OrExpressions(exprs ...Expr) Expr {
 	switch len(exprs) {

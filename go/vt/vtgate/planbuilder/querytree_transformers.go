@@ -324,7 +324,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(ctx.sqToReplace, sel)
+	replaceSubQuery(ctx.sqToReplace, ctx.sqToReplaceExpr, sel)
 
 	// TODO clean up when gen4 is the only planner
 	var condition sqlparser.Expr
@@ -439,39 +439,54 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 }
 
 type subQReplacer struct {
-	sqToReplace map[string]*sqlparser.Select
-	err         error
-	replaced    bool
+	sqToReplace     map[string]*sqlparser.Select
+	sqToReplaceExpr map[sqlparser.Expr]sqlparser.Expr
+	err             error
+	replaced        bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	argName := argumentName(cursor.Node())
-	if argName == "" {
+	var exprs []sqlparser.Expr
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AndExpr:
+		exprs = sqlparser.SplitAndExpression(nil, node)
+	case *sqlparser.OrExpr:
+		exprs = sqlparser.SplitOrExpression(nil, node)
+	case sqlparser.Argument:
+		exprs = append(exprs, node)
+	case sqlparser.ListArg:
+		exprs = append(exprs, node)
+	case *sqlparser.ExistsExpr:
+		exprs = append(exprs, node)
+	default:
 		return true
 	}
 
-	var node sqlparser.SQLNode
-	subqSelect, exists := sqr.sqToReplace[argName]
-	if !exists {
-		sqr.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to find subquery with argument: %s", argName)
-		return false
+	var replaceBy sqlparser.Expr
+	for _, expr := range exprs {
+		found := false
+		for sqExprToReplace, replaceByExpr := range sqr.sqToReplaceExpr {
+			if sqlparser.EqualsExpr(expr, sqExprToReplace) {
+				found = true
+				replaceBy = replaceByExpr
+				break
+			}
+		}
+		if !found {
+			return false
+		}
 	}
-	sq := &sqlparser.Subquery{Select: subqSelect}
-	node = sq
-
-	// if the subquery is in an EXISTS, e.g. "__sq_has_values1"
-	// then we encapsulate the subquery in an exists expression.
-	if strings.HasPrefix(argName, string(sqlparser.HasValueSubQueryBaseName)) {
-		node = &sqlparser.ExistsExpr{Subquery: sq}
+	if replaceBy == nil {
+		return true
 	}
-	cursor.Replace(node)
+	cursor.Replace(replaceBy)
 	sqr.replaced = true
 	return false
 }
 
-func replaceSubQuery(sqToReplace map[string]*sqlparser.Select, sel *sqlparser.Select) {
+func replaceSubQuery(sqToReplace map[string]*sqlparser.Select, expr map[sqlparser.Expr]sqlparser.Expr, sel *sqlparser.Select) {
 	if len(sqToReplace) > 0 {
-		sqr := &subQReplacer{sqToReplace: sqToReplace}
+		sqr := &subQReplacer{sqToReplace: sqToReplace, sqToReplaceExpr: expr}
 		sqlparser.Rewrite(sel, sqr.replacer, nil)
 		for sqr.replaced {
 			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left

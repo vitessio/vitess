@@ -216,6 +216,8 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 				Type:            sq.OpCode,
 				ArgName:         sq.ArgName,
 				HasValues:       sq.HasValues,
+				Replace:         sq.Replace,
+				ReplaceBy:       sq.ReplaceBy,
 			})
 		}
 	}
