@@ -614,7 +614,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	if !(forceInstanceRecovery || analysisEntry.ClusterDetails.HasAutomatedPrimaryRecovery) {
 		return false, nil, nil
 	}
-	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	tablet, err := TabletRefresh(analysisEntry.AnalyzedInstanceKey)
 	if err != nil {
 		return false, nil, err
 	}
@@ -633,6 +633,15 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 		return false, nil, err
 	}
 	log.Infof("Analysis: %v, deadprimary %+v", analysisEntry.Analysis, analysisEntry.AnalyzedInstanceKey)
+
+	// this check is needed because sometimes DeadPrimary code path is forcefully spawned off from other recoveries like PrimaryHasPrimary.
+	// So we need to check that we only run an ERS if the instance that we analyzed was actually a primary! Otherwise, we would end up running an ERS
+	// even when the cluster is fine or the problem can be fixed via some other recovery
+	if tablet.Type != topodatapb.TabletType_PRIMARY {
+		RefreshTablets(true)
+		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
+		return false, topologyRecovery, nil
+	}
 
 	// check if we have received SIGTERM, if we have, we should not continue with the recovery
 	val := atomic.LoadInt32(&hasReceivedSIGTERM)
