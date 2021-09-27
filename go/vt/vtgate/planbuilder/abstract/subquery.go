@@ -39,6 +39,8 @@ type SubQueryInner struct {
 	SelectStatement *sqlparser.Select
 	ArgName         string
 	HasValues       string
+	Replace         []sqlparser.Expr
+	ReplaceBy       sqlparser.Expr
 }
 
 // TableID implements the Operator interface
