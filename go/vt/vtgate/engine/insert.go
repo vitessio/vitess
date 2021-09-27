@@ -615,7 +615,7 @@ func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }
 
-func (ins *Insert) description() PrimitiveDescription {
+func (ins *Insert) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),

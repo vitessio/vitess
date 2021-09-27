@@ -32,31 +32,31 @@ type LeftJoin struct {
 var _ Operator = (*LeftJoin)(nil)
 
 // PushPredicate implements the Operator interface
-func (oj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
+func (lj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.RecursiveDeps(expr)
-	if deps.IsSolvedBy(oj.Left.TableID()) {
-		return oj.Left.PushPredicate(expr, semTable)
+	if deps.IsSolvedBy(lj.Left.TableID()) {
+		return lj.Left.PushPredicate(expr, semTable)
 	}
 
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
 // TableID implements the Operator interface
-func (oj *LeftJoin) TableID() semantics.TableSet {
-	return oj.Right.TableID().Merge(oj.Left.TableID())
+func (lj *LeftJoin) TableID() semantics.TableSet {
+	return lj.Right.TableID().Merge(lj.Left.TableID())
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (oj *LeftJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	ts := oj.TableID()
+func (lj *LeftJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
+	ts := lj.TableID()
 	var result []sqlparser.Expr
-	for _, expr := range oj.Left.UnsolvedPredicates(semTable) {
+	for _, expr := range lj.Left.UnsolvedPredicates(semTable) {
 		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
 		}
 	}
-	for _, expr := range oj.Right.UnsolvedPredicates(semTable) {
+	for _, expr := range lj.Right.UnsolvedPredicates(semTable) {
 		deps := semTable.DirectDeps(expr)
 		if !deps.IsSolvedBy(ts) {
 			result = append(result, expr)
@@ -66,10 +66,15 @@ func (oj *LeftJoin) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser
 }
 
 // CheckValid implements the Operator interface
-func (oj *LeftJoin) CheckValid() error {
-	err := oj.Left.CheckValid()
+func (lj *LeftJoin) CheckValid() error {
+	err := lj.Left.CheckValid()
 	if err != nil {
 		return err
 	}
-	return oj.Right.CheckValid()
+	return lj.Right.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (lj *LeftJoin) Compact() Operator {
+	return lj
 }

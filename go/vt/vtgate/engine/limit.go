@@ -206,7 +206,7 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 	return offset, nil
 }
 
-func (l *Limit) description() PrimitiveDescription {
+func (l *Limit) Description() PrimitiveDescription {
 	other := map[string]interface{}{}
 
 	if !l.Count.IsNull() {

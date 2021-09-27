@@ -169,7 +169,7 @@ func (d *Distinct) Inputs() []Primitive {
 	return []Primitive{d.Source}
 }
 
-func (d *Distinct) description() PrimitiveDescription {
+func (d *Distinct) Description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Distinct",
 	}

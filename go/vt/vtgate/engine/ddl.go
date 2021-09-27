@@ -47,7 +47,7 @@ type DDL struct {
 	noInputs
 }
 
-func (ddl *DDL) description() PrimitiveDescription {
+func (ddl *DDL) Description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query": ddl.SQL,
 	}

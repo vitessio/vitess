@@ -25,6 +25,9 @@ import (
 
 type (
 	concatenateTree struct {
+		distinct    bool
+		ordering    sqlparser.OrderBy
+		limit       *sqlparser.Limit
 		selectStmts []*sqlparser.Select
 		sources     []queryTree
 	}
