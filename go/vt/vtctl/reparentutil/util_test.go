@@ -1877,7 +1877,7 @@ func TestWaitForCatchingUp(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			logger := logutil.NewMemoryLogger()
-			err := waitForCatchingUp(ctx, test.tmc, logger, test.prevPrimary, test.newPrimary)
+			err := waitForCatchingUp(ctx, test.tmc, logger, test.prevPrimary, test.newPrimary, 2*time.Second)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {

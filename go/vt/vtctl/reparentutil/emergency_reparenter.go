@@ -248,7 +248,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
 		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediateSource.Alias) {
-			err = waitForCatchingUp(ctx, erp.tmc, erp.logger, intermediateSource, betterCandidate)
+			err = waitForCatchingUp(ctx, erp.tmc, erp.logger, intermediateSource, betterCandidate, opts.waitReplicasTimeout)
 			if err != nil {
 				return err
 			}
