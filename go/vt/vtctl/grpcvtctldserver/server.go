@@ -1800,6 +1800,11 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	}, nil
 }
 
+// RunHealthCheck is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunHealthCheckRequest) (*vtctldatapb.RunHealthCheckResponse, error) {
+	panic("unimplemented!")
+}
+
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardIsPrimaryServing")
