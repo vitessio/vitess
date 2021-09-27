@@ -241,6 +241,7 @@ func (rp *ResourcePool) closeIdleResources() {
 // reopen drains and reopens the connection pool
 func (rp *ResourcePool) reopen() {
 	capacity := int(rp.capacity.Get())
+	log.Infof("Draining and reopening resource pool with capacity %d on request", capacity)
 	rp.Close()
 	_ = rp.SetCapacity(capacity)
 	if rp.idleTimer != nil {
