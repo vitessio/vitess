@@ -1,19 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-# Composite IN: RHS not tuple
-"select id from user where (col1, name) in (select * from music where music.user_id=user.id)"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where (col1, name) in (select * from music where music.user_id=user.id)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from `user` where 1 != 1",
-    "Query": "select id from `user` where (col1, `name`) in (select * from music where music.user_id = `user`.id)",
-    "Table": "`user`"
-  }
-}
-Gen4 plan same as above

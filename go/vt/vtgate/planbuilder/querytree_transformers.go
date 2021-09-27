@@ -463,23 +463,27 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	}
 
 	var replaceBy sqlparser.Expr
+	var remainder sqlparser.Expr
 	for _, expr := range exprs {
 		found := false
 		for sqExprToReplace, replaceByExpr := range sqr.sqToReplaceExpr {
 			if sqlparser.EqualsExpr(expr, sqExprToReplace) {
+				allReplaceByExprs := sqlparser.SplitAndExpression(nil, replaceBy)
+				allReplaceByExprs = append(allReplaceByExprs, replaceByExpr)
+				replaceBy = sqlparser.AndExpressions(allReplaceByExprs...)
 				found = true
-				replaceBy = replaceByExpr
 				break
 			}
 		}
 		if !found {
-			return false
+			remainder = sqlparser.AndExpressions(remainder, expr)
 		}
 	}
 	if replaceBy == nil {
 		return true
 	}
-	cursor.Replace(replaceBy)
+	newNode := sqlparser.AndExpressions(remainder, replaceBy)
+	cursor.Replace(newNode)
 	sqr.replaced = true
 	return false
 }

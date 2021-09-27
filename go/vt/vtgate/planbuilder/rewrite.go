@@ -139,6 +139,8 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		cursor.Replace(sqlparser.OrExpressions(hasValuesExpr, newSubQExpr))
 	}
 	semTableSQ.Replace = append(semTableSQ.Replace, hasValuesExpr, newSubQExpr)
+	r.semTable.Recursive[hasValuesExpr] = r.semTable.RecursiveDeps(newSubQExpr)
+	r.semTable.Direct[hasValuesExpr] = r.semTable.DirectDeps(newSubQExpr)
 }
 
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {

@@ -34,7 +34,6 @@ type (
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	//  *  Vindex - Represents a query that selects from vindex tables.
 	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
-	//  *  Distinct - Represents elimination of duplicates from the output of the input source
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet

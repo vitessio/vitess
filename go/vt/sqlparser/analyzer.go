@@ -336,6 +336,9 @@ func AndExpressions(exprs ...Expr) Expr {
 	default:
 		result := (Expr)(nil)
 		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
 			if result == nil {
 				result = expr
 			} else {
