@@ -36,6 +36,7 @@ type VtorcProcess struct {
 	LogDir    string
 	ExtraArgs []string
 	Config    string
+	logFile   string
 	proc      *exec.Cmd
 	exit      chan error
 }
@@ -62,7 +63,8 @@ func (orc *VtorcProcess) Setup() (err error) {
 	orc.proc.Args = append(orc.proc.Args, orc.ExtraArgs...)
 	orc.proc.Args = append(orc.proc.Args, "-alsologtostderr", "http")
 
-	errFile, _ := os.Create(path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano())))
+	orc.logFile = path.Join(orc.LogDir, fmt.Sprintf("orc-stderr-%d.txt", time.Now().UnixNano()))
+	errFile, _ := os.Create(orc.logFile)
 	orc.proc.Stderr = errFile
 
 	orc.proc.Env = append(orc.proc.Env, os.Environ()...)
@@ -82,6 +84,15 @@ func (orc *VtorcProcess) Setup() (err error) {
 	}()
 
 	return nil
+}
+
+// GetLogs gets the logs of the vtorc process
+func (orc *VtorcProcess) GetLogs() (string, error) {
+	body, err := os.ReadFile(orc.logFile)
+	if err != nil {
+		return "", err
+	}
+	return string(body), nil
 }
 
 // TearDown shuts down the running vtorc service
