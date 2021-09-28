@@ -2387,7 +2387,7 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	promotionRule, err := promotionrule.ParseCandidatePromotionRule(params["promotionRule"])
+	promotionRule, err := promotionrule.Parse(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return

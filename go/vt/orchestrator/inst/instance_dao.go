@@ -934,7 +934,7 @@ func BulkReadInstance() ([](*InstanceKey), error) {
 }
 
 func ReadInstancePromotionRule(instance *Instance) (err error) {
-	var promotionRule promotionrule.CandidatePromotionRule = promotionrule.NeutralPromoteRule
+	var promotionRule promotionrule.CandidatePromotionRule = promotionrule.Neutral
 	query := `
 			select
 				ifnull(nullif(promotion_rule, ''), 'neutral') as promotion_rule
@@ -1428,7 +1428,7 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 		return neutralInstances, err
 	}
 	for _, instance := range instances {
-		if instance.PromotionRule == promotionrule.NeutralPromoteRule {
+		if instance.PromotionRule == promotionrule.Neutral {
 			neutralInstances = append(neutralInstances, instance)
 		}
 	}

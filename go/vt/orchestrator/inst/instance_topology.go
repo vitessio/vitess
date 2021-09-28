@@ -1610,7 +1610,7 @@ func isValidAsCandidatePrimaryInBinlogServerTopology(replica *Instance) bool {
 }
 
 func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
-	if replica.PromotionRule == promotionrule.MustNotPromoteRule {
+	if replica.PromotionRule == promotionrule.MustNot {
 		log.Debugf("instance %+v is banned because of promotion rule", replica.Key)
 		return true
 	}
