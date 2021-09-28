@@ -241,7 +241,7 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	backupTimestamp := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
+	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -253,11 +253,11 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	backupTime := time.Time{}
 
 	// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-	if *backupTimestamp != "" {
+	if *backupTimestampStr != "" {
 		var err error
-		backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *backupTimestamp)
+		backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *backupTimestampStr)
 		if err != nil {
-			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", *backupTimestamp))
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", *backupTimestampStr))
 		}
 	}
 
