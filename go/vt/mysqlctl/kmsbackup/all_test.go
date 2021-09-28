@@ -56,6 +56,25 @@ func TestListBackups(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestListBackupsWithExcludedKeyspace(t *testing.T) {
+	ctx := context.Background()
+	setTestDefaults(t)
+
+	content := fmt.Sprintf("%s=\"1234\"\n%s=\"not-included\"", lastBackupLabel, lastBackupExcludedKeyspacesLabel)
+	tmpfile := createTempFile(t, content)
+	defer os.Remove(tmpfile)
+	os.Setenv(annotationsFilePath, tmpfile)
+
+	fbs := &FilesBackupStorage{}
+	backups, err := fbs.ListBackups(ctx, "a/b")
+	assert.NoError(t, err)
+	require.Equal(t, 1, len(backups))
+
+	backups, err = fbs.ListBackups(ctx, "not-included/b")
+	assert.NoError(t, err)
+	require.Equal(t, 0, len(backups))
+}
+
 func TestStartBackup(t *testing.T) {
 	ctx := context.Background()
 	setTestDefaults(t)

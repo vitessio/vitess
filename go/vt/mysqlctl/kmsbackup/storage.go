@@ -10,7 +10,10 @@ import (
 	"os"
 	"path"
 	"strconv"
+	"strings"
 	"time"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -23,9 +26,10 @@ import (
 )
 
 const (
-	annotationsFilePath = "ANNOTATIONS_FILE_PATH"
-	lastBackupLabel     = "psdb.co/last-backup-id"
-	backupIDLabel       = "psdb.co/backup-id"
+	annotationsFilePath              = "ANNOTATIONS_FILE_PATH"
+	lastBackupLabel                  = "psdb.co/last-backup-id"
+	lastBackupExcludedKeyspacesLabel = "psdb.co/last-backup-excluded-keyspaces"
+	backupIDLabel                    = "psdb.co/backup-id"
 )
 
 var (
@@ -53,6 +57,23 @@ func (fbs *FilesBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	// lastBackupID won't be set if there was no previous backup.
 	if lastBackupID == "" {
 		return nil, nil
+	}
+
+	excludedKeyspaces, err := loadTag(lastBackupExcludedKeyspacesLabel)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := strings.Split(dir, "/")
+	if len(parts) == 0 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid backup directory: %v", dir)
+	}
+	keyspace := parts[0]
+	for _, excludedKeyspace := range strings.Split(excludedKeyspaces, ",") {
+		if keyspace == excludedKeyspace {
+			// We don't have this keyspace in the backup, so skip it.
+			return nil, nil
+		}
 	}
 
 	// We have to provide a vitess compliant name. Some vitess tools parse this info.
