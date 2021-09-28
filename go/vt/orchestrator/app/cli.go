@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 	"vitess.io/vitess/go/vt/orchestrator/process"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 var thisInstanceKey *inst.InstanceKey
@@ -1274,7 +1274,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("register-candidate", "Instance, meta", `Indicate that a specific instance is a preferred candidate for primary promotion`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			promotionRule, err := reparentutil.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
+			promotionRule, err := promotionrule.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
 			if err != nil {
 				log.Fatale(err)
 			}

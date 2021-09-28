@@ -30,7 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
 	"vitess.io/vitess/go/vt/orchestrator/os"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 type StopReplicationMethod string
@@ -1610,7 +1610,7 @@ func isValidAsCandidatePrimaryInBinlogServerTopology(replica *Instance) bool {
 }
 
 func IsBannedFromBeingCandidateReplica(replica *Instance) bool {
-	if replica.PromotionRule == reparentutil.MustNotPromoteRule {
+	if replica.PromotionRule == promotionrule.MustNotPromoteRule {
 		log.Debugf("instance %+v is banned because of promotion rule", replica.Key)
 		return true
 	}

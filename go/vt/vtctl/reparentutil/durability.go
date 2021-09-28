@@ -20,10 +20,9 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 //=======================================================================
@@ -56,7 +55,7 @@ func init() {
 
 // durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type durabler interface {
-	promotionRule(*topodatapb.Tablet) CandidatePromotionRule
+	promotionRule(*topodatapb.Tablet) promotionrule.CandidatePromotionRule
 	primarySemiSync(*topodatapb.Tablet) int
 	replicaSemiSync(primary, replica *topodatapb.Tablet) bool
 }
@@ -82,7 +81,7 @@ func SetDurabilityPolicy(name string, durabilityParams map[string]string) error 
 }
 
 // PromotionRule returns the promotion rule for the instance.
-func PromotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	return curDurabilityPolicy.promotionRule(tablet)
 }
 
@@ -103,12 +102,12 @@ func ReplicaSemiSyncFromTablet(primary, replica *topodatapb.Tablet) bool {
 // durabilityNone has no semi-sync and returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilityNone struct{}
 
-func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
+		return promotionrule.NeutralPromoteRule
 	}
-	return MustNotPromoteRule
+	return promotionrule.MustNotPromoteRule
 }
 
 func (d *durabilityNone) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -125,12 +124,12 @@ func (d *durabilityNone) replicaSemiSync(primary, replica *topodatapb.Tablet) bo
 // It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilitySemiSync struct{}
 
-func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
+		return promotionrule.NeutralPromoteRule
 	}
-	return MustNotPromoteRule
+	return promotionrule.MustNotPromoteRule
 }
 
 func (d *durabilitySemiSync) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -152,12 +151,12 @@ func (d *durabilitySemiSync) replicaSemiSync(primary, replica *topodatapb.Tablet
 // It returns NeutralPromoteRule for Primary and Replica tablet types, MustNotPromoteRule for everything else
 type durabilityCrossCell struct{}
 
-func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
+		return promotionrule.NeutralPromoteRule
 	}
-	return MustNotPromoteRule
+	return promotionrule.MustNotPromoteRule
 }
 
 func (d *durabilityCrossCell) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -181,10 +180,10 @@ func (d *durabilityCrossCell) replicaSemiSync(primary, replica *topodatapb.Table
 // durabilitySpecified is like durabilityNone. It has an additional map which it first queries with the tablet alias as the key
 // If a CandidatePromotionRule is found in that map, then that is used as the promotion rule. Otherwise, it reverts to the same logic as durabilityNone
 type durabilitySpecified struct {
-	promotionRules map[string]CandidatePromotionRule
+	promotionRules map[string]promotionrule.CandidatePromotionRule
 }
 
-func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) CandidatePromotionRule {
+func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	promoteRule, isFound := d.promotionRules[topoproto.TabletAliasString(tablet.Alias)]
 	if isFound {
 		return promoteRule
@@ -192,9 +191,9 @@ func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) Candidate
 
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return NeutralPromoteRule
+		return promotionrule.NeutralPromoteRule
 	}
-	return MustNotPromoteRule
+	return promotionrule.MustNotPromoteRule
 }
 
 func (d *durabilitySpecified) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -207,11 +206,11 @@ func (d *durabilitySpecified) replicaSemiSync(primary, replica *topodatapb.Table
 
 // newDurabilitySpecified is a function that is used to create a new durabilitySpecified struct
 func newDurabilitySpecified(m map[string]string) durabler {
-	promotionRules := map[string]CandidatePromotionRule{}
+	promotionRules := map[string]promotionrule.CandidatePromotionRule{}
 	// range over the map given by the user
 	for tabletAliasStr, promotionRuleStr := range m {
 		// parse the promotion rule
-		promotionRule, err := ParseCandidatePromotionRule(promotionRuleStr)
+		promotionRule, err := promotionrule.ParseCandidatePromotionRule(promotionRuleStr)
 		// if parsing is not successful, skip over this rule
 		if err != nil {
 			log.Errorf("invalid promotion rule %s found, received error - %v", promotionRuleStr, err)

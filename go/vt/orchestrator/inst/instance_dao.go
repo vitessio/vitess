@@ -50,6 +50,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 const (
@@ -933,7 +934,7 @@ func BulkReadInstance() ([](*InstanceKey), error) {
 }
 
 func ReadInstancePromotionRule(instance *Instance) (err error) {
-	var promotionRule reparentutil.CandidatePromotionRule = reparentutil.NeutralPromoteRule
+	var promotionRule promotionrule.CandidatePromotionRule = promotionrule.NeutralPromoteRule
 	query := `
 			select
 				ifnull(nullif(promotion_rule, ''), 'neutral') as promotion_rule
@@ -943,7 +944,7 @@ func ReadInstancePromotionRule(instance *Instance) (err error) {
 	args := sqlutils.Args(instance.Key.Hostname, instance.Key.Port)
 
 	err = db.QueryOrchestrator(query, args, func(m sqlutils.RowMap) error {
-		promotionRule = reparentutil.CandidatePromotionRule(m.GetString("promotion_rule"))
+		promotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
 		return nil
 	})
 	instance.PromotionRule = promotionRule
@@ -1023,7 +1024,7 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.IsLastCheckValid = m.GetBool("is_last_check_valid")
 	instance.SecondsSinceLastSeen = m.GetNullInt64("seconds_since_last_seen")
 	instance.IsCandidate = m.GetBool("is_candidate")
-	instance.PromotionRule = reparentutil.CandidatePromotionRule(m.GetString("promotion_rule"))
+	instance.PromotionRule = promotionrule.CandidatePromotionRule(m.GetString("promotion_rule"))
 	instance.IsDowntimed = m.GetBool("is_downtimed")
 	instance.DowntimeReason = m.GetString("downtime_reason")
 	instance.DowntimeOwner = m.GetString("downtime_owner")
@@ -1427,7 +1428,7 @@ func ReadClusterNeutralPromotionRuleInstances(clusterName string) (neutralInstan
 		return neutralInstances, err
 	}
 	for _, instance := range instances {
-		if instance.PromotionRule == reparentutil.NeutralPromoteRule {
+		if instance.PromotionRule == promotionrule.NeutralPromoteRule {
 			neutralInstances = append(neutralInstances, instance)
 		}
 	}

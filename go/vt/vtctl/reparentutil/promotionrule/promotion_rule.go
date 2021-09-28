@@ -14,7 +14,7 @@
    limitations under the License.
 */
 
-package reparentutil
+package promotionrule
 
 import (
 	"fmt"

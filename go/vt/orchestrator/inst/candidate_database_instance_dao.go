@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // RegisterCandidateInstance markes a given instance as suggested for succeeding a primary in the event of failover.
@@ -94,7 +94,7 @@ func BulkReadCandidateDatabaseInstance() ([]CandidateDatabaseInstance, error) {
 		cdi := CandidateDatabaseInstance{
 			Hostname:            m.GetString("hostname"),
 			Port:                m.GetInt("port"),
-			PromotionRule:       reparentutil.CandidatePromotionRule(m.GetString("promotion_rule")),
+			PromotionRule:       promotionrule.CandidatePromotionRule(m.GetString("promotion_rule")),
 			LastSuggestedString: m.GetString("last_suggested"),
 			PromotionRuleExpiry: m.GetString("promotion_rule_expiry"),
 		}

@@ -8,7 +8,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 var (
@@ -252,7 +252,7 @@ func TestIsBannedFromBeingCandidateReplica(t *testing.T) {
 	{
 		instances, _ := generateTestInstances()
 		for _, instance := range instances {
-			instance.PromotionRule = reparentutil.MustNotPromoteRule
+			instance.PromotionRule = promotionrule.MustNotPromoteRule
 		}
 		for _, instance := range instances {
 			test.S(t).ExpectTrue(IsBannedFromBeingCandidateReplica(instance))
@@ -472,7 +472,7 @@ func TestChooseCandidateReplicaPriorityBinlogFormatRowOverrides(t *testing.T) {
 func TestChooseCandidateReplicaMustNotPromoteRule(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instancesMap[i830Key.StringCode()].PromotionRule = reparentutil.MustNotPromoteRule
+	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.MustNotPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -486,8 +486,8 @@ func TestChooseCandidateReplicaMustNotPromoteRule(t *testing.T) {
 func TestChooseCandidateReplicaPreferNotPromoteRule(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
-	instancesMap[i830Key.StringCode()].PromotionRule = reparentutil.MustNotPromoteRule
-	instancesMap[i820Key.StringCode()].PromotionRule = reparentutil.PreferNotPromoteRule
+	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.MustNotPromoteRule
+	instancesMap[i820Key.StringCode()].PromotionRule = promotionrule.PreferNotPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -502,9 +502,9 @@ func TestChooseCandidateReplicaPreferNotPromoteRule2(t *testing.T) {
 	instances, instancesMap := generateTestInstances()
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
-		instance.PromotionRule = reparentutil.PreferNotPromoteRule
+		instance.PromotionRule = promotionrule.PreferNotPromoteRule
 	}
-	instancesMap[i830Key.StringCode()].PromotionRule = reparentutil.MustNotPromoteRule
+	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.MustNotPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -520,9 +520,9 @@ func TestChooseCandidateReplicaPromoteRuleOrdering(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
 		instance.ExecBinlogCoordinates = instancesMap[i710Key.StringCode()].ExecBinlogCoordinates
-		instance.PromotionRule = reparentutil.NeutralPromoteRule
+		instance.PromotionRule = promotionrule.NeutralPromoteRule
 	}
-	instancesMap[i830Key.StringCode()].PromotionRule = reparentutil.PreferPromoteRule
+	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.PreferPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -538,9 +538,9 @@ func TestChooseCandidateReplicaPromoteRuleOrdering2(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
 		instance.ExecBinlogCoordinates = instancesMap[i710Key.StringCode()].ExecBinlogCoordinates
-		instance.PromotionRule = reparentutil.PreferPromoteRule
+		instance.PromotionRule = promotionrule.PreferPromoteRule
 	}
-	instancesMap[i820Key.StringCode()].PromotionRule = reparentutil.MustPromoteRule
+	instancesMap[i820Key.StringCode()].PromotionRule = promotionrule.MustPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
@@ -556,11 +556,11 @@ func TestChooseCandidateReplicaPromoteRuleOrdering3(t *testing.T) {
 	applyGeneralGoodToGoReplicationParams(instances)
 	for _, instance := range instances {
 		instance.ExecBinlogCoordinates = instancesMap[i710Key.StringCode()].ExecBinlogCoordinates
-		instance.PromotionRule = reparentutil.NeutralPromoteRule
+		instance.PromotionRule = promotionrule.NeutralPromoteRule
 	}
-	instancesMap[i730Key.StringCode()].PromotionRule = reparentutil.MustPromoteRule
-	instancesMap[i810Key.StringCode()].PromotionRule = reparentutil.PreferPromoteRule
-	instancesMap[i830Key.StringCode()].PromotionRule = reparentutil.PreferNotPromoteRule
+	instancesMap[i730Key.StringCode()].PromotionRule = promotionrule.MustPromoteRule
+	instancesMap[i810Key.StringCode()].PromotionRule = promotionrule.PreferPromoteRule
+	instancesMap[i830Key.StringCode()].PromotionRule = promotionrule.PreferNotPromoteRule
 	instances = sortedReplicas(instances, NoStopReplication)
 	candidate, aheadReplicas, equalReplicas, laterReplicas, cannotReplicateReplicas, err := ChooseCandidateReplica(instances)
 	test.S(t).ExpectNil(err)
