@@ -341,83 +341,23 @@ Gen4 plan same as above
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select *
 "select *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi t.*
 "select t.*, t.name, t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.name, t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi *
 "select *, name, *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, name, *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, `name`, *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select *, `name`, *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by user_id"
