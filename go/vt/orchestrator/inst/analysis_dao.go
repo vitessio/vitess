@@ -21,8 +21,6 @@ import (
 	"regexp"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
@@ -31,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"

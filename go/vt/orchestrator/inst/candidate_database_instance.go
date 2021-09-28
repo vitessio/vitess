@@ -19,9 +19,8 @@ package inst
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 // CandidateDatabaseInstance contains information about explicit promotion rules for an instance
