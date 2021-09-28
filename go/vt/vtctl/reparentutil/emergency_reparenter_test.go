@@ -2068,7 +2068,7 @@ func TestEmergencyReparenter_waitForAllRelayLogsToApply(t *testing.T) {
 			t.Parallel()
 
 			erp := NewEmergencyReparenter(nil, tt.tmc, logger)
-			err := erp.waitForAllRelayLogsToApply(ctx, logger, tt.tmc, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
+			err := erp.waitForAllRelayLogsToApply(ctx, tt.candidates, tt.tabletMap, tt.statusMap, waitReplicasTimeout)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
@@ -2551,7 +2551,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
-			winningTablet, _, err := erp.findMostAdvanced(logutil.NewMemoryLogger(), test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -3030,7 +3030,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tabletInfo := tt.tabletMap[tt.newPrimaryTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, logger, tt.tmc, tabletInfo.Tablet, "", tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false, true)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false, true)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3316,7 +3316,7 @@ func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
 			tabletInfo := tt.tabletMap[tt.newPrimaryTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediatePrimary(ctx, tt.tmc, ev, logger, tabletInfo.Tablet, "", tt.tabletMap, tt.statusMap, tt.emergencyReparentOps)
+			res, err := erp.promoteIntermediatePrimary(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3689,7 +3689,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(logger, test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return
