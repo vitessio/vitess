@@ -93,8 +93,7 @@ func main() {
 		log.Warningf("cannot connect to syslog: %v", err)
 	}
 
-	err := reparentutil.SetDurabilityPolicy(*durability, nil)
-	if err != nil {
+	if err := reparentutil.SetDurabilityPolicy(*durability, nil); err != nil {
 		log.Errorf("error in setting durability policy: %v", err)
 		exit.Return(1)
 	}
@@ -113,7 +112,7 @@ func main() {
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
 
-	err = vtctl.RunCommand(ctx, wr, args)
+	err := vtctl.RunCommand(ctx, wr, args)
 	cancel()
 	switch err {
 	case vtctl.ErrUnknownCommand:
