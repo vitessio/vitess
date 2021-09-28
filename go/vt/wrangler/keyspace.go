@@ -18,13 +18,12 @@ package wrangler
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -56,39 +56,14 @@ var (
 
 // SetKeyspaceShardingInfo locks a keyspace and sets its ShardingColumnName
 // and ShardingColumnType
-func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) (err error) {
-	// Lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetKeyspaceShardingInfo")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and change it
-	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-
-	if ki.ShardingColumnName != "" && ki.ShardingColumnName != shardingColumnName {
-		if force {
-			wr.Logger().Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
-		} else {
-			return fmt.Errorf("cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
-		}
-	}
-
-	if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET && ki.ShardingColumnType != shardingColumnType {
-		if force {
-			wr.Logger().Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
-		} else {
-			return fmt.Errorf("cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
-		}
-	}
-
-	ki.ShardingColumnName = shardingColumnName
-	ki.ShardingColumnType = shardingColumnType
-	return wr.ts.UpdateKeyspace(ctx, ki)
+func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shardingColumnName string, shardingColumnType topodatapb.KeyspaceIdType, force bool) error {
+	_, err := wr.VtctldServer().SetKeyspaceShardingInfo(ctx, &vtctldatapb.SetKeyspaceShardingInfoRequest{
+		Keyspace:   keyspace,
+		ColumnName: shardingColumnName,
+		ColumnType: shardingColumnType,
+		Force:      force,
+	})
+	return err
 }
 
 // validateNewWorkflow ensures that the specified workflow doesn't already exist
@@ -1337,23 +1312,15 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 }
 
 // SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
-func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) (err error) {
-	// Lock the keyspace
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, "SetKeyspaceServedFrom")
-	if lockErr != nil {
-		return lockErr
-	}
-	defer unlock(&err)
-
-	// and update it
-	ki, err := wr.ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	if err := ki.UpdateServedFromMap(servedType, cells, sourceKeyspace, remove, nil); err != nil {
-		return err
-	}
-	return wr.ts.UpdateKeyspace(ctx, ki)
+func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) error {
+	_, err := wr.VtctldServer().SetKeyspaceServedFrom(ctx, &vtctldatapb.SetKeyspaceServedFromRequest{
+		Keyspace:       keyspace,
+		TabletType:     servedType,
+		Cells:          cells,
+		Remove:         remove,
+		SourceKeyspace: sourceKeyspace,
+	})
+	return err
 }
 
 // RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
