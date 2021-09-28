@@ -696,7 +696,6 @@ func resetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
 
-	// purge binary logs of the primary so that crossCellReplica cannot catch up
 	_, err = runSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
 	require.NoError(t, err)
 }

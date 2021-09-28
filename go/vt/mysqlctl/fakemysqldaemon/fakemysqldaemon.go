@@ -116,8 +116,8 @@ type FakeMysqlDaemon struct {
 	// SetReplicationSourceError is used by SetReplicationSource
 	SetReplicationSourceError error
 
-	// WaitPrimaryPositions is checked by WaitSourcePos, if the
-	// same it returns nil, if different it returns an error
+	// WaitPrimaryPositions is checked by WaitSourcePos, if the value is found
+	// in it, then the function returns nil, else the function returns an error
 	WaitPrimaryPositions []mysql.Position
 
 	// PromoteResult is returned by Promote

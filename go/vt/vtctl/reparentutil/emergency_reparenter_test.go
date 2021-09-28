@@ -3043,24 +3043,24 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 	}
 }
 
-func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
+func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name                  string
-		emergencyReparentOps  EmergencyReparentOptions
-		tmc                   *testutil.TabletManagerClient
-		unlockTopo            bool
-		newPrimaryTabletAlias string
-		ts                    *topo.Server
-		keyspace              string
-		shard                 string
-		tablets               []*topodatapb.Tablet
-		tabletMap             map[string]*topo.TabletInfo
-		statusMap             map[string]*replicationdatapb.StopReplicationStatus
-		shouldErr             bool
-		errShouldContain      string
-		result                []*topodatapb.Tablet
+		name                 string
+		emergencyReparentOps EmergencyReparentOptions
+		tmc                  *testutil.TabletManagerClient
+		unlockTopo           bool
+		newSourceTabletAlias string
+		ts                   *topo.Server
+		keyspace             string
+		shard                string
+		tablets              []*topodatapb.Tablet
+		tabletMap            map[string]*topo.TabletInfo
+		statusMap            map[string]*replicationdatapb.StopReplicationStatus
+		shouldErr            bool
+		errShouldContain     string
+		result               []*topodatapb.Tablet
 	}{
 		{
 			name:                 "success",
@@ -3083,7 +3083,7 @@ func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
 					"zone1-0000000404": assert.AnError, // okay, because we're ignoring it.
 				},
 			},
-			newPrimaryTabletAlias: "zone1-0000000100",
+			newSourceTabletAlias: "zone1-0000000100",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
@@ -3183,7 +3183,7 @@ func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
 					"zone1-0000000102": assert.AnError,
 				},
 			},
-			newPrimaryTabletAlias: "zone1-0000000100",
+			newSourceTabletAlias: "zone1-0000000100",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
@@ -3237,7 +3237,7 @@ func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
 					"zone1-0000000102": assert.AnError,
 				},
 			},
-			newPrimaryTabletAlias: "zone1-0000000100",
+			newSourceTabletAlias: "zone1-0000000100",
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
@@ -3314,10 +3314,10 @@ func TestEmergencyReparenter_promoteIntermediatePrimary(t *testing.T) {
 					require.NoError(t, lerr, "could not unlock %s/%s after test", tt.keyspace, tt.shard)
 				}()
 			}
-			tabletInfo := tt.tabletMap[tt.newPrimaryTabletAlias]
+			tabletInfo := tt.tabletMap[tt.newSourceTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			res, err := erp.promoteIntermediatePrimary(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps)
+			res, err := erp.promoteIntermediateSource(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)
@@ -3334,7 +3334,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 	tests := []struct {
 		name                 string
 		emergencyReparentOps EmergencyReparentOptions
-		newPrimary           *topodatapb.Tablet
+		intermediateSource   *topodatapb.Tablet
 		prevPrimary          *topodatapb.Tablet
 		validCandidates      []*topodatapb.Tablet
 		tabletMap            map[string]*topo.TabletInfo
@@ -3347,8 +3347,8 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				Cell: "zone1",
 				Uid:  100,
 			}},
-			newPrimary:  nil,
-			prevPrimary: nil,
+			intermediateSource: nil,
+			prevPrimary:        nil,
 			validCandidates: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -3379,9 +3379,9 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				Cell: "zone1",
 				Uid:  100,
 			}},
-			newPrimary:      nil,
-			prevPrimary:     nil,
-			validCandidates: nil,
+			intermediateSource: nil,
+			prevPrimary:        nil,
+			validCandidates:    nil,
 			tabletMap: map[string]*topo.TabletInfo{
 				"zone1-0000000100": {
 					Tablet: &topodatapb.Tablet{
@@ -3399,8 +3399,8 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 				Cell: "zone1",
 				Uid:  100,
 			}},
-			newPrimary:  nil,
-			prevPrimary: nil,
+			intermediateSource: nil,
+			prevPrimary:        nil,
 			validCandidates: []*topodatapb.Tablet{
 				{
 					Alias: &topodatapb.TabletAlias{
@@ -3414,7 +3414,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			name:                 "preferred candidate in the same cell same as our replica",
 			emergencyReparentOps: EmergencyReparentOptions{},
-			newPrimary: &topodatapb.Tablet{
+			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -3468,7 +3468,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			name:                 "preferred candidate in the same cell different from original replica",
 			emergencyReparentOps: EmergencyReparentOptions{},
-			newPrimary: &topodatapb.Tablet{
+			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -3522,7 +3522,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			name:                 "preferred candidate in the different cell same as original replica",
 			emergencyReparentOps: EmergencyReparentOptions{},
-			newPrimary: &topodatapb.Tablet{
+			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone2",
 					Uid:  101,
@@ -3576,7 +3576,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			name:                 "preferred candidate in the different cell different from original replica",
 			emergencyReparentOps: EmergencyReparentOptions{},
-			newPrimary: &topodatapb.Tablet{
+			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone2",
 					Uid:  101,
@@ -3630,7 +3630,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 		}, {
 			name:                 "prevent cross cell promotion",
 			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
-			newPrimary: &topodatapb.Tablet{
+			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -3690,7 +3690,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 
 			erp := NewEmergencyReparenter(nil, nil, logger)
-			res, err := erp.identifyPrimaryCandidate(test.newPrimary, test.newPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			res, err := erp.identifyPrimaryCandidate(test.intermediateSource, test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 				return

@@ -161,7 +161,7 @@ func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Posit
 	return validTablets, tabletPositions, nil
 }
 
-// restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate primary
+// restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
 func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
 	restrictedValidCandidates := make(map[string]mysql.Position)
 	for candidate, position := range validCandidates {
@@ -178,7 +178,13 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topodatapb.Tablet, possibleCandidates []*topodatapb.Tablet, checkEqualPrimary bool, checkSameCell bool) *topodatapb.Tablet {
+func findPossibleCandidateFromListWithRestrictions(
+	newPrimary *topodatapb.Tablet,
+	prevPrimary *topodatapb.Tablet,
+	possibleCandidates []*topodatapb.Tablet,
+	checkEqualPrimary bool,
+	checkSameCell bool,
+) *topodatapb.Tablet {
 	for _, candidate := range possibleCandidates {
 		if checkEqualPrimary && !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
 			continue
@@ -191,11 +197,18 @@ func findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary *topo
 	return nil
 }
 
-// waitForCatchUp promotes the newer candidate over the primary candidate that we have, but it does not set to start accepting writes
-func waitForCatchUp(ctx context.Context, tmc tmclient.TabletManagerClient, logger logutil.Logger, prevPrimary, newPrimary *topodatapb.Tablet, waitTime time.Duration) error {
-	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, prevPrimary.Alias)
+// waitForCatchUp is used to wait for the given tablet until it has caught up to the source
+func waitForCatchUp(
+	ctx context.Context,
+	tmc tmclient.TabletManagerClient,
+	logger logutil.Logger,
+	newPrimary *topodatapb.Tablet,
+	source *topodatapb.Tablet,
+	waitTime time.Duration,
+) error {
+	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, source.Alias)
 	// Find the primary position of the previous primary
-	pos, err := tmc.MasterPosition(ctx, prevPrimary)
+	pos, err := tmc.MasterPosition(ctx, source)
 	if err != nil {
 		return err
 	}

@@ -28,22 +28,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/vt/orchestrator/attributes"
-	"vitess.io/vitess/go/vt/orchestrator/kv"
-
-	"vitess.io/vitess/go/vt/logutil"
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/orchestrator/attributes"
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
+	"vitess.io/vitess/go/vt/orchestrator/kv"
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/os"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
