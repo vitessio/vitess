@@ -25,17 +25,17 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// ErsSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
+// ERSSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
 // candidate for intermediate promotion in emergency reparent shard
-type ErsSorter struct {
+type ERSSorter struct {
 	tablets   []*topodatapb.Tablet
 	positions []mysql.Position
 	idealCell string
 }
 
-// NewErsSorter creates a new ErsSorter
-func NewErsSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) *ErsSorter {
-	return &ErsSorter{
+// NewErsSorter creates a new ERSSorter
+func NewErsSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) *ERSSorter {
+	return &ERSSorter{
 		tablets:   tablets,
 		positions: positions,
 		idealCell: idealCell,
@@ -43,16 +43,16 @@ func NewErsSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idea
 }
 
 // Len implements the Interface for sorting
-func (ersSorter *ErsSorter) Len() int { return len(ersSorter.tablets) }
+func (ersSorter *ERSSorter) Len() int { return len(ersSorter.tablets) }
 
 // Swap implements the Interface for sorting
-func (ersSorter *ErsSorter) Swap(i, j int) {
+func (ersSorter *ERSSorter) Swap(i, j int) {
 	ersSorter.tablets[i], ersSorter.tablets[j] = ersSorter.tablets[j], ersSorter.tablets[i]
 	ersSorter.positions[i], ersSorter.positions[j] = ersSorter.positions[j], ersSorter.positions[i]
 }
 
 // Less implements the Interface for sorting
-func (ersSorter *ErsSorter) Less(i, j int) bool {
+func (ersSorter *ERSSorter) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is before [j] in the sorting order,
 	// which will lead to [i] be a better candidate for promotion
 
