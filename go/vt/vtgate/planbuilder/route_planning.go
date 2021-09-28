@@ -1142,6 +1142,7 @@ func createRoutePlanForOuter(ctx *planningContext, aRoute, bRoute *routeTree, ne
 			right: outer,
 			pred:  sqlparser.AndExpressions(joinPredicates...),
 		}),
+		predicates:  append(aRoute.predicates, bRoute.predicates...),
 		keyspace:    aRoute.keyspace,
 		vindexPreds: append(aRoute.vindexPreds, bRoute.vindexPreds...),
 	}

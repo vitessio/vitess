@@ -34,10 +34,12 @@ var _ Operator = (*LeftJoin)(nil)
 // PushPredicate implements the Operator interface
 func (lj *LeftJoin) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.RecursiveDeps(expr)
-	if deps.IsSolvedBy(lj.Left.TableID()) {
+	switch {
+	case deps.IsSolvedBy(lj.Left.TableID()):
 		return lj.Left.PushPredicate(expr, semTable)
+	case deps.IsSolvedBy(lj.Right.TableID()):
+		return lj.Right.PushPredicate(expr, semTable)
 	}
-
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Cannot push predicate: %s", sqlparser.String(expr))
 }
 
