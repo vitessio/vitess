@@ -40,7 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // APIResponseCode is an OK/ERROR response code
@@ -2387,7 +2387,7 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	promotionRule, err := reparentutil.ParseCandidatePromotionRule(params["promotionRule"])
+	promotionRule, err := promotionrule.ParseCandidatePromotionRule(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return

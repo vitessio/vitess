@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -595,10 +596,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 	)
 	for _, candidate := range validCandidates {
 		promotionRule := PromotionRule(candidate)
-		if promotionRule == MustPromoteRule || promotionRule == PreferPromoteRule {
+		if promotionRule == promotionrule.MustPromoteRule || promotionRule == promotionrule.PreferPromoteRule {
 			preferredCandidates = append(preferredCandidates, candidate)
 		}
-		if promotionRule == NeutralPromoteRule {
+		if promotionRule == promotionrule.NeutralPromoteRule {
 			neutralReplicas = append(neutralReplicas, candidate)
 		}
 	}
@@ -666,7 +667,7 @@ func (erp *EmergencyReparenter) checkIfConstraintsSatisfied(newPrimary, prevPrim
 	if opts.PreventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
-	if PromotionRule(newPrimary) == MustNotPromoteRule {
+	if PromotionRule(newPrimary) == promotionrule.MustNotPromoteRule {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy promotion rule constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
 	return nil
