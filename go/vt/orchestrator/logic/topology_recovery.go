@@ -659,7 +659,6 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	atomic.AddInt32(&shardsLockCounter, 1)
 	defer atomic.AddInt32(&shardsLockCounter, -1)
 
-	reparentFunctions := reparentutil.NewEmergencyReparentOptions(candidateTabletAlias, nil, time.Duration(config.Config.WaitReplicasTimeoutSeconds)*time.Second, config.Config.PreventCrossDataCenterPrimaryFailover)
 	ev, err := reparentutil.NewEmergencyReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
@@ -671,7 +670,16 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 			log.Errorf("ERS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(context.Background(), tablet.Keyspace, tablet.Shard, reparentFunctions)
+	})).ReparentShard(context.Background(),
+		tablet.Keyspace,
+		tablet.Shard,
+		reparentutil.EmergencyReparentOptions{
+			NewPrimaryAlias:           candidateTabletAlias,
+			IgnoreReplicas:            nil,
+			WaitReplicasTimeout:       time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
+		},
+	)
 
 	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
