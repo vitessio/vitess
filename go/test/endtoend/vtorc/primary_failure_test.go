@@ -65,7 +65,7 @@ func TestDownPrimary(t *testing.T) {
 	// check that the replica gets promoted
 	checkPrimaryTablet(t, clusterInstance, replica, true)
 	// also check that the replication is working correctly after failover
-	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	verifyWritesSucceed(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -108,7 +108,7 @@ func TestCrossDataCenterFailure(t *testing.T) {
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, replicaInSameCell, true)
 	// also check that the replication is working correctly after failover
-	runAdditionalCommands(t, replicaInSameCell, []*cluster.Vttablet{crossCellReplica, rdonly}, 10*time.Second)
+	verifyWritesSucceed(t, replicaInSameCell, []*cluster.Vttablet{crossCellReplica, rdonly}, 10*time.Second)
 }
 
 // Failover should not be cross data centers, according to the configuration file
@@ -200,7 +200,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that aheadRdonly is able to replicate. We also want to add some queries to aheadRdonly which will not be there in replica and rdonly
-	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{aheadRdonly}, 15*time.Second)
+	verifyWritesSucceed(t, curPrimary, []*cluster.Vttablet{aheadRdonly}, 15*time.Second)
 
 	// assert that the replica and rdonly are indeed lagging and do not have the new insertion by checking the count of rows in the tables
 	out, err := runSQL(t, "SELECT * FROM vt_insert_test", replica, "vt_ks")
@@ -226,7 +226,7 @@ func TestLostRdonlyOnPrimaryFailure(t *testing.T) {
 	checkPrimaryTablet(t, clusterInstance, replica, true)
 
 	// also check that the replication is setup correctly
-	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 15*time.Second)
+	verifyWritesSucceed(t, replica, []*cluster.Vttablet{rdonly}, 15*time.Second)
 
 	// check that the rdonly is lost. The lost replica has is detached and its host is prepended with `//`
 	out, err = runSQL(t, "SELECT HOST FROM performance_schema.replication_connection_configuration", aheadRdonly, "")
@@ -273,7 +273,7 @@ func TestPromotionLagSuccess(t *testing.T) {
 	// check that the replica gets promoted
 	checkPrimaryTablet(t, clusterInstance, replica, true)
 	// also check that the replication is working correctly after failover
-	runAdditionalCommands(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
+	verifyWritesSucceed(t, replica, []*cluster.Vttablet{rdonly}, 10*time.Second)
 }
 
 // This test checks that the promotion of a tablet succeeds if it passes the promotion lag test
@@ -369,7 +369,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica, true)
 	// also check that the replication is working correctly after failover
-	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
+	verifyWritesSucceed(t, crossCellReplica, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
 }
 
 // covers the test case master-failover-candidate-lag from orchestrator
@@ -412,7 +412,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that rdonly and replica are able to replicate. We also want to add some queries to replica which will not be there in crossCellReplica
-	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
+	verifyWritesSucceed(t, curPrimary, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
 
 	// reset the primary logs so that crossCellReplica can never catch up
 	resetPrimaryLogs(t, curPrimary)
@@ -446,7 +446,7 @@ func TestDownPrimaryPromotionRuleWithLag(t *testing.T) {
 	require.Equal(t, 2, len(out.Rows))
 
 	// check that rdonly and replica are able to replicate from the crossCellReplica
-	runAdditionalCommands(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
+	verifyWritesSucceed(t, crossCellReplica, []*cluster.Vttablet{replica, rdonly}, 15*time.Second)
 }
 
 // covers the test case master-failover-candidate-lag-cross-datacenter from orchestrator
@@ -489,7 +489,7 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that rdonly and crossCellReplica are able to replicate. We also want to add some queries to crossCenterReplica which will not be there in replica
-	runAdditionalCommands(t, curPrimary, []*cluster.Vttablet{rdonly, crossCellReplica}, 15*time.Second)
+	verifyWritesSucceed(t, curPrimary, []*cluster.Vttablet{rdonly, crossCellReplica}, 15*time.Second)
 
 	// reset the primary logs so that crossCellReplica can never catch up
 	resetPrimaryLogs(t, curPrimary)
@@ -523,5 +523,5 @@ func TestDownPrimaryPromotionRuleWithLagCrossCenter(t *testing.T) {
 	require.Equal(t, 2, len(out.Rows))
 
 	// check that rdonly and crossCellReplica are able to replicate from the replica
-	runAdditionalCommands(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
+	verifyWritesSucceed(t, replica, []*cluster.Vttablet{crossCellReplica, rdonly}, 15*time.Second)
 }

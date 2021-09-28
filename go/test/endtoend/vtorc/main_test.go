@@ -468,7 +468,7 @@ func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // call this function only after check replication.
 // it inserts more data into the table vt_insert_test and checks that it is replicated too
-func runAdditionalCommands(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+func verifyWritesSucceed(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	confirmReplication(t, primary, replicas, timeToWait, lastUsedValue)
 	lastUsedValue++
 }
