@@ -138,8 +138,22 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
 	ersCounter.Add(1)
 
+	// variables used by the ERS functions are declared here
+	var (
+		shardInfo                  *topo.ShardInfo
+		prevPrimary                *topodatapb.Tablet
+		tabletMap                  map[string]*topo.TabletInfo
+		statusMap                  map[string]*replicationdatapb.StopReplicationStatus
+		primaryStatusMap           map[string]*replicationdatapb.PrimaryStatus
+		validCandidates            map[string]mysql.Position
+		intermediateSource         *topodatapb.Tablet
+		validCandidateTablets      []*topodatapb.Tablet
+		validReplacementCandidates []*topodatapb.Tablet
+		betterCandidate            *topodatapb.Tablet
+		isIdeal                    bool
+	)
+
 	// get the shard information from the topology server
-	var shardInfo *topo.ShardInfo
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -149,7 +163,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// get the previous primary according to the topology server,
 	// we use this information to choose the best candidate in the same cell
 	// and to undo promotion in case of failure
-	var prevPrimary *topodatapb.Tablet
 	if shardInfo.PrimaryAlias != nil {
 		prevPrimaryInfo, err := erp.ts.GetTablet(ctx, shardInfo.PrimaryAlias)
 		if err != nil {
@@ -160,15 +173,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// read all the tablets and there information
 	event.DispatchUpdate(ev, "reading all tablets")
-	var tabletMap map[string]*topo.TabletInfo
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v: %v", keyspace, shard, err)
 	}
 
 	// Stop replication on all the tablets and build their status map
-	var statusMap map[string]*replicationdatapb.StopReplicationStatus
-	var primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
 	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
@@ -181,7 +191,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the valid candidates for becoming the primary
 	// this is where we check for errant GTIDs and remove the tablets that have them from consideration
-	var validCandidates map[string]mysql.Position
 	validCandidates, err = FindValidEmergencyReparentCandidates(statusMap, primaryStatusMap)
 	if err != nil {
 		return err
@@ -201,8 +210,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// find the intermediate replication source that we want to replicate from. This will always be the most advanced tablet that we have
 	// We let all the other tablets replicate from this tablet. We will then try to choose a better candidate and let it catch up
-	var intermediateSource *topodatapb.Tablet
-	var validCandidateTablets []*topodatapb.Tablet
 	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
@@ -210,7 +217,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("intermediate primary selected - %v", intermediateSource.Alias)
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
-	var isIdeal bool
 	isIdeal, err = erp.intermediateCandidateIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
@@ -228,14 +234,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we now promote our intermediate primary candidate and also reparent all the other tablets to start replicating from this candidate
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
-		var validReplacementCandidates []*topodatapb.Tablet
 		validReplacementCandidates, err = erp.promoteIntermediatePrimary(ctx, ev, intermediateSource, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}
 
 		// try to find a better candidate using the list we got back
-		var betterCandidate *topodatapb.Tablet
 		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
 		if err != nil {
 			return err
@@ -412,8 +416,10 @@ func (erp *EmergencyReparenter) promoteIntermediatePrimary(ctx context.Context, 
 // Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
 func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events.Reparent, newPrimaryTablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, waitForAllReplicas bool, populateReparentJournal bool) ([]*topodatapb.Tablet, error) {
 
-	var replicasStartedReplication []*topodatapb.Tablet
-	var replicaMutex sync.Mutex
+	var (
+		replicasStartedReplication []*topodatapb.Tablet
+		replicaMutex               sync.Mutex
+	)
 
 	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 
@@ -583,8 +589,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 		}
 		return nil, vterrors.Errorf(vtrpc.Code_ABORTED, "requested candidate %v is not in valid candidates list", requestedPrimaryAlias)
 	}
-	var preferredCandidates []*topodatapb.Tablet
-	var neutralReplicas []*topodatapb.Tablet
+	var (
+		preferredCandidates []*topodatapb.Tablet
+		neutralReplicas     []*topodatapb.Tablet
+	)
 	for _, candidate := range validCandidates {
 		promotionRule := PromotionRule(candidate)
 		if promotionRule == MustPromoteRule || promotionRule == PreferPromoteRule {
