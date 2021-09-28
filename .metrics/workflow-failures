@@ -1,10 +1,3 @@
-2021-06-30T06:10:08Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/985256525
-2021-06-30T06:10:08Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/985256539
-2021-06-30T06:10:08Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/985256535
-2021-06-30T06:10:08Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/985256581
-2021-06-30T06:10:08Z,unit_race,https://github.com/vitessio/vitess/actions/runs/985256571
-2021-06-30T06:14:31Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/985268094
-2021-06-30T06:14:31Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/985268067
 2021-06-30T06:14:31Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/985268080
 2021-06-30T06:14:31Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/985268078
 2021-06-30T06:14:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/985268104
@@ -9994,7 +9987,14 @@
 2021-09-28T13:37:47Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1282815925
 2021-09-28T13:37:47Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1282815952
 2021-09-28T13:37:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1282815940
+2021-09-28T13:40:58Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1282827995
 2021-09-28T13:40:58Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1282828010
+2021-09-28T13:40:58Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1282828054
 2021-09-28T13:40:58Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1282828006
+2021-09-28T13:40:58Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1282828072
+2021-09-28T13:50:39Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1282863386
 2021-09-28T13:50:39Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1282863330
 2021-09-28T13:50:39Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1282863404
+2021-09-28T14:04:23Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1282919895
+2021-09-28T14:04:23Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1282919943
+2021-09-28T14:04:23Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1282919931
