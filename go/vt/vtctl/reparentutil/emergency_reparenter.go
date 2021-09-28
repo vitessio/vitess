@@ -596,10 +596,10 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 	)
 	for _, candidate := range validCandidates {
 		promotionRule := PromotionRule(candidate)
-		if promotionRule == promotionrule.MustPromoteRule || promotionRule == promotionrule.PreferPromoteRule {
+		if promotionRule == promotionrule.Must || promotionRule == promotionrule.Prefer {
 			preferredCandidates = append(preferredCandidates, candidate)
 		}
-		if promotionRule == promotionrule.NeutralPromoteRule {
+		if promotionRule == promotionrule.Neutral {
 			neutralReplicas = append(neutralReplicas, candidate)
 		}
 	}
@@ -667,7 +667,7 @@ func (erp *EmergencyReparenter) checkIfConstraintsSatisfied(newPrimary, prevPrim
 	if opts.PreventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
-	if PromotionRule(newPrimary) == promotionrule.MustNotPromoteRule {
+	if PromotionRule(newPrimary) == promotionrule.MustNot {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy promotion rule constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
 	return nil

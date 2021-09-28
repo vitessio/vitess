@@ -1274,7 +1274,7 @@ func Cli(command string, strict bool, instance string, destination string, owner
 	case registerCliCommand("register-candidate", "Instance, meta", `Indicate that a specific instance is a preferred candidate for primary promotion`):
 		{
 			instanceKey, _ = inst.FigureInstanceKey(instanceKey, thisInstanceKey)
-			promotionRule, err := promotionrule.ParseCandidatePromotionRule(*config.RuntimeCLIFlags.PromotionRule)
+			promotionRule, err := promotionrule.Parse(*config.RuntimeCLIFlags.PromotionRule)
 			if err != nil {
 				log.Fatale(err)
 			}

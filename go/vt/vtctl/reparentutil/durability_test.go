@@ -34,22 +34,22 @@ func TestDurabilityNone(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 	assert.Equal(t, 0, PrimarySemiSyncFromTablet(nil))
 	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
 }
@@ -61,22 +61,22 @@ func TestDurabilitySemiSync(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
 	assert.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
@@ -93,22 +93,22 @@ func TestDurabilityCrossCell(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	assert.Equal(t, promotionrule.NeutralPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.Neutral, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	assert.Equal(t, promotionrule.MustNotPromoteRule, promoteRule)
+	assert.Equal(t, promotionrule.MustNot, promoteRule)
 	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
 	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
@@ -154,11 +154,11 @@ func TestDurabilitySpecified(t *testing.T) {
 	cellName := "cell"
 	durabilityRules := newDurabilitySpecified(
 		map[string]string{
-			"cell-0000000000": string(promotionrule.MustPromoteRule),
-			"cell-0000000001": string(promotionrule.PreferPromoteRule),
-			"cell-0000000002": string(promotionrule.NeutralPromoteRule),
-			"cell-0000000003": string(promotionrule.PreferNotPromoteRule),
-			"cell-0000000004": string(promotionrule.MustNotPromoteRule),
+			"cell-0000000000": string(promotionrule.Must),
+			"cell-0000000001": string(promotionrule.Prefer),
+			"cell-0000000002": string(promotionrule.Neutral),
+			"cell-0000000003": string(promotionrule.PreferNot),
+			"cell-0000000004": string(promotionrule.MustNot),
 		})
 
 	testcases := []struct {
@@ -172,7 +172,7 @@ func TestDurabilitySpecified(t *testing.T) {
 					Uid:  0,
 				},
 			},
-			promotionRule: promotionrule.MustNotPromoteRule,
+			promotionRule: promotionrule.MustNot,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
@@ -180,7 +180,7 @@ func TestDurabilitySpecified(t *testing.T) {
 					Uid:  1,
 				},
 			},
-			promotionRule: promotionrule.PreferPromoteRule,
+			promotionRule: promotionrule.Prefer,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
@@ -188,7 +188,7 @@ func TestDurabilitySpecified(t *testing.T) {
 					Uid:  2,
 				},
 			},
-			promotionRule: promotionrule.NeutralPromoteRule,
+			promotionRule: promotionrule.Neutral,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
@@ -196,7 +196,7 @@ func TestDurabilitySpecified(t *testing.T) {
 					Uid:  3,
 				},
 			},
-			promotionRule: promotionrule.PreferNotPromoteRule,
+			promotionRule: promotionrule.PreferNot,
 		}, {
 			tablet: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
@@ -204,7 +204,7 @@ func TestDurabilitySpecified(t *testing.T) {
 					Uid:  4,
 				},
 			},
-			promotionRule: promotionrule.MustNotPromoteRule,
+			promotionRule: promotionrule.MustNot,
 		},
 	}
 

@@ -25,19 +25,19 @@ import (
 type CandidatePromotionRule string
 
 const (
-	MustPromoteRule      CandidatePromotionRule = "must"
-	PreferPromoteRule    CandidatePromotionRule = "prefer"
-	NeutralPromoteRule   CandidatePromotionRule = "neutral"
-	PreferNotPromoteRule CandidatePromotionRule = "prefer_not"
-	MustNotPromoteRule   CandidatePromotionRule = "must_not"
+	Must      CandidatePromotionRule = "must"
+	Prefer    CandidatePromotionRule = "prefer"
+	Neutral   CandidatePromotionRule = "neutral"
+	PreferNot CandidatePromotionRule = "prefer_not"
+	MustNot   CandidatePromotionRule = "must_not"
 )
 
 var promotionRuleOrderMap = map[CandidatePromotionRule]int{
-	MustPromoteRule:      0,
-	PreferPromoteRule:    1,
-	NeutralPromoteRule:   2,
-	PreferNotPromoteRule: 3,
-	MustNotPromoteRule:   4,
+	Must:      0,
+	Prefer:    1,
+	Neutral:   2,
+	PreferNot: 3,
+	MustNot:   4,
 }
 
 func (this *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) bool {
@@ -48,9 +48,9 @@ func (this *CandidatePromotionRule) BetterThan(other CandidatePromotionRule) boo
 	return promotionRuleOrderMap[*this] < otherOrder
 }
 
-// ParseCandidatePromotionRule returns a CandidatePromotionRule by name.
+// Parse returns a CandidatePromotionRule by name.
 // It returns an error if there is no known rule by the given name.
-func ParseCandidatePromotionRule(ruleName string) (CandidatePromotionRule, error) {
+func Parse(ruleName string) (CandidatePromotionRule, error) {
 	switch ruleName {
 	case "prefer", "neutral", "prefer_not", "must_not":
 		return CandidatePromotionRule(ruleName), nil

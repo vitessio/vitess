@@ -105,9 +105,9 @@ type durabilityNone struct{}
 func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return promotionrule.NeutralPromoteRule
+		return promotionrule.Neutral
 	}
-	return promotionrule.MustNotPromoteRule
+	return promotionrule.MustNot
 }
 
 func (d *durabilityNone) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -127,9 +127,9 @@ type durabilitySemiSync struct{}
 func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return promotionrule.NeutralPromoteRule
+		return promotionrule.Neutral
 	}
-	return promotionrule.MustNotPromoteRule
+	return promotionrule.MustNot
 }
 
 func (d *durabilitySemiSync) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -154,9 +154,9 @@ type durabilityCrossCell struct{}
 func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return promotionrule.NeutralPromoteRule
+		return promotionrule.Neutral
 	}
-	return promotionrule.MustNotPromoteRule
+	return promotionrule.MustNot
 }
 
 func (d *durabilityCrossCell) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -191,9 +191,9 @@ func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) promotion
 
 	switch tablet.Type {
 	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA:
-		return promotionrule.NeutralPromoteRule
+		return promotionrule.Neutral
 	}
-	return promotionrule.MustNotPromoteRule
+	return promotionrule.MustNot
 }
 
 func (d *durabilitySpecified) primarySemiSync(tablet *topodatapb.Tablet) int {
@@ -210,7 +210,7 @@ func newDurabilitySpecified(m map[string]string) durabler {
 	// range over the map given by the user
 	for tabletAliasStr, promotionRuleStr := range m {
 		// parse the promotion rule
-		promotionRule, err := promotionrule.ParseCandidatePromotionRule(promotionRuleStr)
+		promotionRule, err := promotionrule.Parse(promotionRuleStr)
 		// if parsing is not successful, skip over this rule
 		if err != nil {
 			log.Errorf("invalid promotion rule %s found, received error - %v", promotionRuleStr, err)
