@@ -47,7 +47,9 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	if !ok {
 		return nil
 	}
-
+	if node.Columns != nil {
+		return Gen4NotSupportedF("column aliases in derived table")
+	}
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
