@@ -396,6 +396,9 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 	if err := VisitRefOfIndexHints(in.Hints, f); err != nil {
 		return err
 	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfAlterCharset(in *AlterCharset, f Visit) error {
