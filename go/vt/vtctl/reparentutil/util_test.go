@@ -27,13 +27,14 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type chooseNewPrimaryTestTMClient struct {
@@ -630,11 +631,11 @@ func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
 
 func TestWaitForCatchUp(t *testing.T) {
 	tests := []struct {
-		name        string
-		tmc         tmclient.TabletManagerClient
-		prevPrimary *topodatapb.Tablet
-		newPrimary  *topodatapb.Tablet
-		err         string
+		name       string
+		tmc        tmclient.TabletManagerClient
+		source     *topodatapb.Tablet
+		newPrimary *topodatapb.Tablet
+		err        string
 	}{
 		{
 			name: "success",
@@ -654,7 +655,7 @@ func TestWaitForCatchUp(t *testing.T) {
 					},
 				},
 			},
-			prevPrimary: &topodatapb.Tablet{
+			source: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -684,7 +685,7 @@ func TestWaitForCatchUp(t *testing.T) {
 					},
 				},
 			},
-			prevPrimary: &topodatapb.Tablet{
+			source: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -715,7 +716,7 @@ func TestWaitForCatchUp(t *testing.T) {
 					},
 				},
 			},
-			prevPrimary: &topodatapb.Tablet{
+			source: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
 					Uid:  100,
@@ -735,7 +736,7 @@ func TestWaitForCatchUp(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			logger := logutil.NewMemoryLogger()
-			err := waitForCatchUp(ctx, test.tmc, logger, test.prevPrimary, test.newPrimary, 2*time.Second)
+			err := waitForCatchUp(ctx, test.tmc, logger, test.newPrimary, test.source, 2*time.Second)
 			if test.err != "" {
 				assert.EqualError(t, err, test.err)
 			} else {
