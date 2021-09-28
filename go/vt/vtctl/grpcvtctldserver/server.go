@@ -1820,6 +1820,16 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 	return &vtctldatapb.RunHealthCheckResponse{}, nil
 }
 
+// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldatapb.SetKeyspaceServedFromRequest) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
+	panic("unimplemented!")
+}
+
+// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) SetKeyspaceShardingInfo(ctx context.Context, req *vtctldatapb.SetKeyspaceShardingInfoRequest) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
+	panic("unimplemented!")
+}
+
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetShardIsPrimaryServing(ctx context.Context, req *vtctldatapb.SetShardIsPrimaryServingRequest) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetShardIsPrimaryServing")

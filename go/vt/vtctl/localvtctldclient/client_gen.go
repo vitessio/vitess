@@ -241,6 +241,16 @@ func (client *localVtctldClient) RunHealthCheck(ctx context.Context, in *vtctlda
 	return client.s.RunHealthCheck(ctx, in)
 }
 
+// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
+	return client.s.SetKeyspaceServedFrom(ctx, in)
+}
+
+// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldatapb.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
+	return client.s.SetKeyspaceShardingInfo(ctx, in)
+}
+
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldatapb.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldatapb.SetShardIsPrimaryServingResponse, error) {
 	return client.s.SetShardIsPrimaryServing(ctx, in)
