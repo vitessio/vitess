@@ -119,11 +119,10 @@ func testString(op Operator) string {
 	case *Join:
 		leftStr := indent(testString(op.LHS))
 		rightStr := indent(testString(op.RHS))
-		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Exp))
-	case *LeftJoin:
-		leftStr := indent(testString(op.Left))
-		rightStr := indent(testString(op.Right))
-		return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+		if op.LeftJoin {
+			return fmt.Sprintf("OuterJoin: {\n\tInner: %s\n\tOuter: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
+		}
+		return fmt.Sprintf("Join: {\n\tLHS: %s\n\tRHS: %s\n\tPredicate: %s\n}", leftStr, rightStr, sqlparser.String(op.Predicate))
 	case *Derived:
 		inner := indent(testString(op.Inner))
 		query := sqlparser.String(op.Sel)

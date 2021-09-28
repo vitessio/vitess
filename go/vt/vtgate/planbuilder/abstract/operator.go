@@ -107,23 +107,18 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-			inner, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
+			lhs, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
-			outer, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
+			rhs, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
 			if tableExpr.Join == sqlparser.RightJoinType {
-				inner, outer = outer, inner
+				lhs, rhs = rhs, lhs
 			}
-			op := &LeftJoin{
-				Left:      inner,
-				Right:     outer,
-				Predicate: tableExpr.Condition.On,
-			}
-			return op, nil
+			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
 		case sqlparser.StraightJoinType:
 			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:

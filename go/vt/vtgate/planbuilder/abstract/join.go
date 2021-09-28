@@ -25,8 +25,9 @@ import (
 
 // Join represents a join. If we have a predicate, this is an inner join. If no predicate exists, it is a cross join
 type Join struct {
-	LHS, RHS Operator
-	Exp      sqlparser.Expr
+	LHS, RHS  Operator
+	Predicate sqlparser.Expr
+	LeftJoin  bool
 }
 
 var _ Operator = (*Join)(nil)
@@ -40,7 +41,7 @@ func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) 
 	case deps.IsSolvedBy(j.RHS.TableID()):
 		return j.RHS.PushPredicate(expr, semTable)
 	case deps.IsSolvedBy(j.LHS.TableID().Merge(j.RHS.TableID())):
-		j.Exp = sqlparser.AndExpressions(j.Exp, expr)
+		j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
 		return nil
 	}
 
