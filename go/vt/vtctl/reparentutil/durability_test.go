@@ -24,6 +24,7 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
