@@ -326,8 +326,23 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
-// AndExpressions ands together two or more expressions, minimising the expr when possible
-func AndExpressions(exprs ...Expr) Expr {
+// SplitOrExpression breaks up the Expr into OR-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitOrExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *OrExpr:
+		filters = SplitOrExpression(filters, node.Left)
+		return SplitOrExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
+// joinExpressions join together a list of Expr using the baseType as operator (either AndExpr or OrExpr).
+func joinExpressions(baseType Expr, exprs ...Expr) Expr {
 	switch len(exprs) {
 	case 0:
 		return nil
@@ -350,56 +365,28 @@ func AndExpressions(exprs ...Expr) Expr {
 					}
 				}
 				if !found {
-					result = &AndExpr{Left: result, Right: expr}
+					switch baseType.(type) {
+					case *AndExpr:
+						result = &AndExpr{Left: result, Right: expr}
+					case *OrExpr:
+						result = &OrExpr{Left: result, Right: expr}
+					}
 				}
 			}
 		}
 		return result
 	}
+
 }
 
-// SplitOrExpression breaks up the Expr into OR-separated conditions
-// and appends them to filters. Outer parenthesis are removed. Precedence
-// should be taken into account if expressions are recombined.
-func SplitOrExpression(filters []Expr, node Expr) []Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *OrExpr:
-		filters = SplitOrExpression(filters, node.Left)
-		return SplitOrExpression(filters, node.Right)
-	}
-	return append(filters, node)
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	return joinExpressions(&AndExpr{}, exprs...)
 }
 
 // OrExpressions ors together two or more expressions, minimising the expr when possible
 func OrExpressions(exprs ...Expr) Expr {
-	switch len(exprs) {
-	case 0:
-		return nil
-	case 1:
-		return exprs[0]
-	default:
-		result := (Expr)(nil)
-		for i, expr := range exprs {
-			if result == nil {
-				result = expr
-			} else {
-				found := false
-				for j := 0; j < i; j++ {
-					if EqualsExpr(expr, exprs[j]) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					result = &OrExpr{Left: result, Right: expr}
-				}
-			}
-		}
-		return result
-	}
+	return joinExpressions(&OrExpr{}, exprs...)
 }
 
 // TableFromStatement returns the qualified table name for the query.

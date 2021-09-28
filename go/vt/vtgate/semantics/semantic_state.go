@@ -104,10 +104,13 @@ type (
 	}
 
 	subquery struct {
-		ArgName          string
-		HasValues        string
-		SubQuery         *sqlparser.Subquery
-		OpCode           engine.PulloutOpcode
+		ArgName   string
+		HasValues string
+		SubQuery  *sqlparser.Subquery
+		OpCode    engine.PulloutOpcode
+
+		// ExprsNeedReplace list all the expressions that, if the subquery is later rewritten, need to
+		// be removed and replaced by ReplaceBy.
 		ExprsNeedReplace []sqlparser.Expr
 		ReplaceBy        sqlparser.Expr
 	}

@@ -210,13 +210,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement: subquerySelectStatement,
-				Inner:           opInner,
-				Type:            sq.OpCode,
-				ArgName:         sq.ArgName,
-				HasValues:       sq.HasValues,
-				Replace:         sq.ExprsNeedReplace,
-				ReplaceBy:       sq.ReplaceBy,
+				SelectStatement:  subquerySelectStatement,
+				Inner:            opInner,
+				Type:             sq.OpCode,
+				ArgName:          sq.ArgName,
+				HasValues:        sq.HasValues,
+				ExprsNeedReplace: sq.ExprsNeedReplace,
+				ReplaceBy:        sq.ReplaceBy,
 			})
 		}
 	}
