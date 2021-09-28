@@ -1,4 +1,3 @@
-2021-06-29T15:00:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/983135415
 2021-06-29T15:00:31Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/983135385
 2021-06-29T15:00:31Z,unit_race,https://github.com/vitessio/vitess/actions/runs/983135420
 2021-06-29T15:06:15Z,Unit Test (mariadb101),https://github.com/vitessio/vitess/actions/runs/983157991
@@ -9997,4 +9996,5 @@
 2021-09-28T08:34:41Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1281766213
 2021-09-28T08:34:41Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1281766223
 2021-09-28T08:34:41Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1281766172
+2021-09-28T08:34:41Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1281766212
 2021-09-28T08:34:41Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1281766191
