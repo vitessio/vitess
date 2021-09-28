@@ -420,9 +420,6 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 
 		err = json2.Unmarshal([]byte(result), &streamHealthResponse)
 		require.NoError(t, err)
-		//if !streamHealthResponse.GetServing() {
-		//	log.Exitf("stream health not updated")
-		//}
 		if checkServing && !streamHealthResponse.GetServing() {
 			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
