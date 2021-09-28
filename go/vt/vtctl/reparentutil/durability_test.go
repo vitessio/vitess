@@ -35,24 +35,24 @@ func TestDurabilityNone(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
-	require.Equal(t, 0, PrimarySemiSyncFromTablet(nil))
-	require.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, 0, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
 }
 
 func TestDurabilitySemiSync(t *testing.T) {
@@ -62,27 +62,27 @@ func TestDurabilitySemiSync(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
-	require.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
-	require.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	}))
-	require.Equal(t, false, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_EXPERIMENTAL,
 	}))
 }
@@ -94,24 +94,24 @@ func TestDurabilityCrossCell(t *testing.T) {
 	promoteRule := PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	})
-	require.Equal(t, NeutralPromoteRule, promoteRule)
+	assert.Equal(t, NeutralPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_RDONLY,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
 
 	promoteRule = PromotionRule(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_SPARE,
 	})
-	require.Equal(t, MustNotPromoteRule, promoteRule)
-	require.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
-	require.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, MustNotPromoteRule, promoteRule)
+	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -122,7 +122,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell1",
 		},
 	}))
-	require.Equal(t, true, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, true, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -133,7 +133,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell2",
 		},
 	}))
-	require.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -148,7 +148,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 
 func TestError(t *testing.T) {
 	err := SetDurabilityPolicy("unknown", nil)
-	require.EqualError(t, err, "durability policy unknown not found")
+	assert.EqualError(t, err, "durability policy unknown not found")
 }
 
 func TestDurabilitySpecified(t *testing.T) {
