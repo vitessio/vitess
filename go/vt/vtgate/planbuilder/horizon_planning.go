@@ -606,7 +606,9 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	case *simpleProjection:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: ordering on derived table query")
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+	case *vindexFunc:
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}

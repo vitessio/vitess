@@ -30,7 +30,6 @@ Gen4 error: unsupported: '*' expression in cross-shard query
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
-Gen4 error: unsupported: ordering on derived table query
 
 # natural join
 "select * from user natural join user_extra"
@@ -70,7 +69,6 @@ Gen4 plan same as above
 # left join where clauses
 "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
 "unsupported: cross-shard left join and where clause"
-Gen4 error: Cannot push predicate: user_extra.col = 5
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"

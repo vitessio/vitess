@@ -1485,6 +1485,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 error: nesting of unions at the right-hand side is not yet supported
 
 # unsharded nested union with limit
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
