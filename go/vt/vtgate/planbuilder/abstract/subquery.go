@@ -34,13 +34,13 @@ var _ Operator = (*SubQuery)(nil)
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner           Operator
-	Type            engine.PulloutOpcode
-	SelectStatement *sqlparser.Select
-	ArgName         string
-	HasValues       string
-	Replace         []sqlparser.Expr
-	ReplaceBy       sqlparser.Expr
+	Inner            Operator
+	Type             engine.PulloutOpcode
+	SelectStatement  *sqlparser.Select
+	ArgName          string
+	HasValues        string
+	ExprsNeedReplace []sqlparser.Expr
+	ReplaceBy        sqlparser.Expr
 }
 
 // TableID implements the Operator interface

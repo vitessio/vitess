@@ -98,15 +98,8 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 	if node.Operator != sqlparser.InOp && node.Operator != sqlparser.NotInOp {
 		return
 	}
-	var subq *sqlparser.Subquery
-	var exp sqlparser.Expr
-	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
-		subq = lSubq
-		exp = node.Right
-	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
-		subq = rSubq
-		exp = node.Left
-	} else {
+	subq, exp := filterSubqueryAndCompareExpr(node)
+	if subq == nil || exp == nil {
 		return
 	}
 
@@ -139,8 +132,24 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		cursor.Replace(sqlparser.OrExpressions(hasValuesExpr, newSubQExpr))
 	}
 	semTableSQ.ExprsNeedReplace = append(semTableSQ.ExprsNeedReplace, hasValuesExpr, newSubQExpr)
+
+	// setting the dependencies of the new has_value expression to the subquery's dependencies so
+	// later on, we know has_values depends on the same tables as the subquery
 	r.semTable.Recursive[hasValuesExpr] = r.semTable.RecursiveDeps(newSubQExpr)
 	r.semTable.Direct[hasValuesExpr] = r.semTable.DirectDeps(newSubQExpr)
+}
+
+func filterSubqueryAndCompareExpr(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
+	var subq *sqlparser.Subquery
+	var exp sqlparser.Expr
+	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
+		subq = lSubq
+		exp = node.Right
+	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
+		subq = rSubq
+		exp = node.Left
+	}
+	return subq, exp
 }
 
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
