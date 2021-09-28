@@ -139,3 +139,65 @@ func TestERSPrefersSameCell(t *testing.T) {
 	newPrimary := getNewPrimary(t)
 	require.Equal(t, newPrimary.Alias, tab3.Alias, "tab3 should be the promoted primary")
 }
+
+// TestPullFromRdonly tests that if a rdonly tablet is the most advanced, then our promoted primary should have
+// caught up to it by pulling transactions from it
+func TestPullFromRdonly(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+	var err error
+
+	ctx := context.Background()
+	// make tab2 a rdonly tablet.
+	// rename tablet so that the test is not confusing
+	rdonly := tab2
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", rdonly.Alias, "rdonly")
+	require.NoError(t, err)
+
+	// confirm that all the tablets can replicate successfully right now
+	confirmReplication(t, tab1, []*cluster.Vttablet{rdonly, tab3, tab4})
+
+	// stop replication on the other two tablets
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", tab3.Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", tab4.Alias)
+	require.NoError(t, err)
+
+	// stop semi-sync on the primary so that any transaction now added does not require an ack
+	runSQL(ctx, t, "SET GLOBAL rpl_semi_sync_master_enabled = false", tab1)
+
+	// confirm that rdonly is able to replicate from our primary
+	// This will also introduce a new transaction into the rdonly tablet which the other 2 replicas don't have
+	confirmReplication(t, tab1, []*cluster.Vttablet{rdonly})
+
+	// Make the current primary agent and database unavailable.
+	stopTablet(t, tab1, true)
+
+	// start the replication back on the two tablets
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tab3.Alias)
+	require.NoError(t, err)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartReplication", tab4.Alias)
+	require.NoError(t, err)
+
+	// check that tab3 and tab4 still only has 1 value
+	err = checkCountOfInsertedValues(ctx, t, tab3, 1)
+	require.NoError(t, err)
+	err = checkCountOfInsertedValues(ctx, t, tab4, 1)
+	require.NoError(t, err)
+
+	// At this point we have successfully made our rdonly tablet more advanced than tab3 and tab4 without introducing errant GTIDs
+	// We have simulated a network partition in which the primary and rdonly got isolated and then the primary went down leaving the rdonly most advanced
+
+	// We expect that tab3 will be promoted since it is in the same cell as the previous primary
+	// Also it must be fully caught up
+	out, err := ers(nil, "60s", "30s")
+	require.NoError(t, err, out)
+
+	newPrimary := getNewPrimary(t)
+	require.Equal(t, newPrimary.Alias, tab3.Alias, "tab3 should be the promoted primary")
+
+	// check that the new primary has the last transaction that only the rdonly had
+	err = checkInsertedValues(ctx, t, newPrimary, insertVal)
+	require.NoError(t, err)
+}

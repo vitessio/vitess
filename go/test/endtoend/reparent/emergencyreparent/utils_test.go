@@ -349,6 +349,15 @@ func checkInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vtta
 	return fmt.Errorf("data is not yet replicated on tablet %s", tablet.Alias)
 }
 
+func checkCountOfInsertedValues(ctx context.Context, t *testing.T, tablet *cluster.Vttablet, count int) error {
+	selectSQL := "select * from vt_insert_test"
+	qr := runSQL(ctx, t, selectSQL, tablet)
+	if len(qr.Rows) == count {
+		return nil
+	}
+	return fmt.Errorf("count does not match on the tablet %s", tablet.Alias)
+}
+
 // endregion
 
 // region tablet operations
