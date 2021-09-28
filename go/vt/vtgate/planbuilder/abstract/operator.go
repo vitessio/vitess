@@ -124,6 +124,8 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				Predicate: tableExpr.Condition.On,
 			}
 			return op, nil
+		case sqlparser.StraightJoinType:
+			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
@@ -205,7 +207,10 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement := sq.SubQuery.Select.(*sqlparser.Select)
+			subquerySelectStatement, isSel := sq.SubQuery.Select.(*sqlparser.Select)
+			if !isSel {
+				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
+			}
 			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
 			if err != nil {
 				return nil, err
