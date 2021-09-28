@@ -214,7 +214,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, erp.logger, erp.tmc, validCandidates, tabletMap, statusMap, opts.waitReplicasTimeout); err != nil {
+	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMap, opts.waitReplicasTimeout); err != nil {
 		return err
 	}
 
@@ -222,7 +222,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// We let all the other tablets replicate from this tablet. We will then try to choose a better candidate and let it catch up
 	var intermediateSource *topodatapb.Tablet
 	var validCandidateTablets []*topodatapb.Tablet
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(erp.logger, prevPrimary, validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// check weather the primary candidate selected is ideal or if it can be improved later
 	var isIdeal bool
-	isIdeal, err = erp.intermediateCandidateIsIdeal(erp.logger, intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
+	isIdeal, err = erp.intermediateCandidateIsIdeal(intermediateSource, prevPrimary, validCandidateTablets, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -248,14 +248,14 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		// we do not promote the tablet or change the shard record. We only change the replication for all the other tablets
 		// it also returns the list of the tablets that started replication successfully including itself. These are the candidates that we can use to find a replacement
 		var validReplacementCandidates []*topodatapb.Tablet
-		validReplacementCandidates, err = erp.promoteIntermediatePrimary(ctx, erp.tmc, ev, erp.logger, intermediateSource, opts.lockAction, tabletMap, statusMap, opts)
+		validReplacementCandidates, err = erp.promoteIntermediatePrimary(ctx, ev, intermediateSource, tabletMap, statusMap, opts)
 		if err != nil {
 			return err
 		}
 
 		// try to find a better candidate using the list we got back
 		var betterCandidate *topodatapb.Tablet
-		betterCandidate, err = erp.identifyPrimaryCandidate(erp.logger, intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
+		betterCandidate, err = erp.identifyPrimaryCandidate(intermediateSource, prevPrimary, validReplacementCandidates, tabletMap, opts)
 		if err != nil {
 			return err
 		}
@@ -299,7 +299,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	return err
 }
 
-func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(ctx context.Context, logger logutil.Logger, tmc tmclient.TabletManagerClient, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, waitReplicasTimeout time.Duration) error {
+func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(ctx context.Context, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, waitReplicasTimeout time.Duration) error {
 	errCh := make(chan error)
 	defer close(errCh)
 
@@ -328,14 +328,14 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(ctx context.Context, 
 		// place, so we skip it, and log that we did.
 		status, ok := statusMap[candidate]
 		if !ok {
-			logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly PRIMARY), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
+			erp.logger.Infof("EmergencyReparent candidate %v not in replica status map; this means it was not running replication (because it was formerly PRIMARY), so skipping WaitForRelayLogsToApply step for this candidate", candidate)
 			continue
 		}
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
 			var err error
 			defer func() { errCh <- err }()
-			err = WaitForRelayLogsToApply(groupCtx, tmc, tabletMap[alias], status)
+			err = WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status)
 		}(candidate, status)
 
 		waiterCount++
@@ -356,8 +356,8 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(ctx context.Context, 
 }
 
 // findMostAdvanced finds the intermediate primary candidate for ERS. We always choose the most advanced one from our valid candidates list
-func (erp *EmergencyReparenter) findMostAdvanced(logger logutil.Logger, prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
-	logger.Infof("started finding the intermediate primary candidate")
+func (erp *EmergencyReparenter) findMostAdvanced(prevPrimary *topodatapb.Tablet, validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (*topodatapb.Tablet, []*topodatapb.Tablet, error) {
+	erp.logger.Infof("started finding the intermediate primary candidate")
 	// convert the valid candidates into a list so that we can use it for sorting
 	validTablets, tabletPositions, err := getValidCandidatesAndPositionsAsList(validCandidates, tabletMap)
 	if err != nil {
@@ -375,7 +375,7 @@ func (erp *EmergencyReparenter) findMostAdvanced(logger logutil.Logger, prevPrim
 		return nil, nil, err
 	}
 	for _, tablet := range validTablets {
-		logger.Infof("finding intermediate primary - sorted replica: %v", tablet.Alias)
+		erp.logger.Infof("finding intermediate primary - sorted replica: %v", tablet.Alias)
 	}
 
 	// The first tablet in the sorted list will be the most eligible candidate unless explicitly asked for some other tablet
@@ -414,11 +414,10 @@ func (erp *EmergencyReparenter) findMostAdvanced(logger logutil.Logger, prevPrim
 }
 
 // promoteIntermediatePrimary promotes the primary candidate that we have, but it does not yet set to start accepting writes
-func (erp *EmergencyReparenter) promoteIntermediatePrimary(ctx context.Context, tmc tmclient.TabletManagerClient, ev *events.Reparent, logger logutil.Logger, newPrimary *topodatapb.Tablet,
-	lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
+func (erp *EmergencyReparenter) promoteIntermediatePrimary(ctx context.Context, ev *events.Reparent, newPrimary *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions) ([]*topodatapb.Tablet, error) {
 	// we reparent all the other tablets to start replication from our new primary
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, logger, tmc, newPrimary, lockAction, tabletMap, statusMap, opts, true, false)
+	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +429,7 @@ func (erp *EmergencyReparenter) promoteIntermediatePrimary(ctx context.Context, 
 
 // reparentReplicas reparents all the replicas provided and populates the reparent journal on the primary.
 // Also, it returns the replicas which started replicating only in the case where we wait for all the replicas
-func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events.Reparent, logger logutil.Logger, tmc tmclient.TabletManagerClient, newPrimaryTablet *topodatapb.Tablet, lockAction string, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, waitForAllReplicas bool, populateReparentJournal bool) ([]*topodatapb.Tablet, error) {
+func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events.Reparent, newPrimaryTablet *topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, statusMap map[string]*replicationdatapb.StopReplicationStatus, opts EmergencyReparentOptions, waitForAllReplicas bool, populateReparentJournal bool) ([]*topodatapb.Tablet, error) {
 
 	var replicasStartedReplication []*topodatapb.Tablet
 	var replicaMutex sync.Mutex
@@ -457,20 +456,20 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 	rec := concurrency.AllErrorRecorder{}
 
 	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
-		position, err := tmc.MasterPosition(replCtx, tablet)
+		position, err := erp.tmc.MasterPosition(replCtx, tablet)
 		if err != nil {
 			return err
 		}
 		if populateReparentJournal {
-			logger.Infof("populating reparent journal on new primary %v", alias)
-			return tmc.PopulateReparentJournal(replCtx, tablet, now, lockAction, newPrimaryTablet.Alias, position)
+			erp.logger.Infof("populating reparent journal on new primary %v", alias)
+			return erp.tmc.PopulateReparentJournal(replCtx, tablet, now, opts.lockAction, newPrimaryTablet.Alias, position)
 		}
 		return nil
 	}
 
 	handleReplica := func(alias string, ti *topo.TabletInfo) {
 		defer replWg.Done()
-		logger.Infof("setting new primary on replica %v", alias)
+		erp.logger.Infof("setting new primary on replica %v", alias)
 
 		forceStart := false
 		if status, ok := statusMap[alias]; ok {
@@ -485,7 +484,7 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 			forceStart = fs
 		}
 
-		err := tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
+		err := erp.tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -533,7 +532,7 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 
 	primaryErr := handlePrimary(topoproto.TabletAliasString(newPrimaryTablet.Alias), newPrimaryTablet)
 	if primaryErr != nil {
-		logger.Warningf("primary failed to PopulateReparentJournal")
+		erp.logger.Warningf("primary failed to PopulateReparentJournal")
 		replCancel()
 
 		return nil, vterrors.Wrapf(primaryErr, "failed to PopulateReparentJournal on primary: %v", primaryErr)
@@ -572,9 +571,9 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 }
 
 // intermediateCandidateIsIdeal is used to find whether the intermediate candidate that ERS chose is also the ideal one or not
-func (erp *EmergencyReparenter) intermediateCandidateIsIdeal(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (bool, error) {
+func (erp *EmergencyReparenter) intermediateCandidateIsIdeal(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (bool, error) {
 	// we try to find a better candidate with the current list of valid candidates, and if it matches our current primary candidate, then we return true
-	candidate, err := erp.identifyPrimaryCandidate(logger, newPrimary, prevPrimary, validCandidates, tabletMap, opts)
+	candidate, err := erp.identifyPrimaryCandidate(newPrimary, prevPrimary, validCandidates, tabletMap, opts)
 	if err != nil {
 		return false, err
 	}
@@ -582,10 +581,10 @@ func (erp *EmergencyReparenter) intermediateCandidateIsIdeal(logger logutil.Logg
 }
 
 // identifyPrimaryCandidate is used to find a better candidate for ERS promotion
-func (erp *EmergencyReparenter) identifyPrimaryCandidate(logger logutil.Logger, newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet, err error) {
+func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary *topodatapb.Tablet, validCandidates []*topodatapb.Tablet, tabletMap map[string]*topo.TabletInfo, opts EmergencyReparentOptions) (candidate *topodatapb.Tablet, err error) {
 	defer func() {
 		if candidate != nil {
-			logger.Infof("found better candidate - %v", candidate.Alias)
+			erp.logger.Infof("found better candidate - %v", candidate.Alias)
 		}
 	}()
 
@@ -692,7 +691,7 @@ func (erp *EmergencyReparenter) promoteNewPrimary(ctx context.Context, ev *event
 		return vterrors.Wrapf(err, "primary-elect tablet %v failed to be upgraded to primary: %v", newPrimary.Alias, err)
 	}
 	// we now reparent all the replicas to the new primary we have promoted
-	_, err = erp.reparentReplicas(ctx, ev, erp.logger, erp.tmc, newPrimary, opts.lockAction, tabletMap, statusMap, opts, false, true)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false, true)
 	if err != nil {
 		return err
 	}
