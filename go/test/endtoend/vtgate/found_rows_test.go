@@ -36,8 +36,6 @@ func TestFoundRows(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	t.Skipf("This test uses `SQL_CALC_FOUND_ROWS`, which is currently unsupported by Gen4. Remove this once it is supported.")
-
 	exec(t, conn, "delete from t2")
 	defer exec(t, conn, "delete from t2")
 
@@ -45,10 +43,10 @@ func TestFoundRows(t *testing.T) {
 
 	runTests := func(workload string) {
 		assertFoundRowsValue(t, conn, "select * from t2", workload, 5)
-		assertFoundRowsValue(t, conn, "select * from t2 limit 2", workload, 2)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", workload, 5)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", workload, 1)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 limit 2", workload, 3)
+		assertFoundRowsValue(t, conn, "select * from t2 order by id3 limit 2", workload, 2)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3)
 		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
 	}
 
