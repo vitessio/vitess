@@ -49,28 +49,18 @@ type EmergencyReparenter struct {
 	logger logutil.Logger
 }
 
-type (
-	// EmergencyReparentOptions provides optional parameters to
-	// EmergencyReparentShard operations. Options are passed by value, so it is safe
-	// for callers to mutate and reuse options structs for multiple calls.
-	EmergencyReparentOptions struct {
-		newPrimaryAlias           *topodatapb.TabletAlias
-		ignoreReplicas            sets.String
-		waitReplicasTimeout       time.Duration
-		preventCrossCellPromotion bool
+// EmergencyReparentOptions provides optional parameters to
+// EmergencyReparentShard operations. Options are passed by value, so it is safe
+// for callers to mutate and reuse options structs for multiple calls.
+type EmergencyReparentOptions struct {
+	NewPrimaryAlias           *topodatapb.TabletAlias
+	IgnoreReplicas            sets.String
+	WaitReplicasTimeout       time.Duration
+	PreventCrossCellPromotion bool
 
-		lockAction string
-	}
-)
-
-// NewEmergencyReparentOptions creates a new EmergencyReparentOptions which is used in ERS
-func NewEmergencyReparentOptions(newPrimaryAlias *topodatapb.TabletAlias, ignoreReplicas sets.String, waitReplicasTimeout time.Duration, preventCrossCellPromotion bool) EmergencyReparentOptions {
-	return EmergencyReparentOptions{
-		newPrimaryAlias:           newPrimaryAlias,
-		ignoreReplicas:            ignoreReplicas,
-		waitReplicasTimeout:       waitReplicasTimeout,
-		preventCrossCellPromotion: preventCrossCellPromotion,
-	}
+	// Private options managed internally. We use value passing to avoid leaking
+	// these details back out.
+	lockAction string
 }
 
 // counters for Emergency Reparent Shard
@@ -105,7 +95,7 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 // keyspace and shard.
 func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	// First step is to lock the shard for the given operation
-	opts.lockAction = erp.getLockAction(opts.newPrimaryAlias)
+	opts.lockAction = erp.getLockAction(opts.NewPrimaryAlias)
 	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, opts.lockAction)
 	if err != nil {
 		return nil, err
@@ -179,7 +169,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	// Stop replication on all the tablets and build their status map
 	var statusMap map[string]*replicationdatapb.StopReplicationStatus
 	var primaryStatusMap map[string]*replicationdatapb.PrimaryStatus
-	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.waitReplicasTimeout, opts.ignoreReplicas, erp.logger)
+	statusMap, primaryStatusMap, err = StopReplicationAndBuildStatusMaps(ctx, erp.tmc, ev, tabletMap, opts.WaitReplicasTimeout, opts.IgnoreReplicas, erp.logger)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to stop replication and build status maps: %v", err)
 	}
@@ -205,7 +195,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Wait for all candidates to apply relay logs
-	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMap, opts.waitReplicasTimeout); err != nil {
+	if err = erp.waitForAllRelayLogsToApply(ctx, validCandidates, tabletMap, statusMap, opts.WaitReplicasTimeout); err != nil {
 		return err
 	}
 
@@ -253,7 +243,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 		// if our better candidate is different from our previous candidate, then we wait for it to catch up to the intermediate primary
 		if !topoproto.TabletAliasEqual(betterCandidate.Alias, intermediateSource.Alias) {
-			err = waitForCatchUp(ctx, erp.tmc, erp.logger, intermediateSource, betterCandidate, opts.waitReplicasTimeout)
+			err = waitForCatchUp(ctx, erp.tmc, erp.logger, intermediateSource, betterCandidate, opts.WaitReplicasTimeout)
 			if err != nil {
 				return err
 			}
@@ -384,8 +374,8 @@ func (erp *EmergencyReparenter) findMostAdvanced(prevPrimary *topodatapb.Tablet,
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs)
 	// Also, if the candidate is
-	if opts.newPrimaryAlias != nil {
-		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
+	if opts.NewPrimaryAlias != nil {
+		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
 		if !ok {
 			return nil, nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "requested primary elect %v has errant GTIDs", requestedPrimaryAlias)
@@ -425,7 +415,7 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 	var replicasStartedReplication []*topodatapb.Tablet
 	var replicaMutex sync.Mutex
 
-	replCtx, replCancel := context.WithTimeout(ctx, opts.waitReplicasTimeout)
+	replCtx, replCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
 
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
@@ -500,7 +490,7 @@ func (erp *EmergencyReparenter) reparentReplicas(ctx context.Context, ev *events
 		switch {
 		case alias == topoproto.TabletAliasString(newPrimaryTablet.Alias):
 			continue
-		case !opts.ignoreReplicas.Has(alias):
+		case !opts.IgnoreReplicas.Has(alias):
 			replWg.Add(1)
 			numReplicas++
 			go handleReplica(alias, ti)
@@ -579,15 +569,15 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 		}
 	}()
 
-	if opts.newPrimaryAlias != nil {
+	if opts.NewPrimaryAlias != nil {
 		// explicit request to promote a specific tablet
-		requestedPrimaryAlias := topoproto.TabletAliasString(opts.newPrimaryAlias)
+		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 		requestedPrimaryInfo, isFound := tabletMap[requestedPrimaryAlias]
 		if !isFound {
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", requestedPrimaryAlias)
 		}
 		for _, validCandidate := range validCandidates {
-			if topoproto.TabletAliasEqual(validCandidate.Alias, opts.newPrimaryAlias) {
+			if topoproto.TabletAliasEqual(validCandidate.Alias, opts.NewPrimaryAlias) {
 				return requestedPrimaryInfo.Tablet, nil
 			}
 		}
@@ -625,7 +615,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 	}
 	// we do not have a preferred candidate in the same cell
 
-	if !opts.preventCrossCellPromotion {
+	if !opts.PreventCrossCellPromotion {
 		// check whether the one we promoted belongs to the preferred candidates list
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, preferredCandidates, true, false)
 		if candidate != nil {
@@ -648,7 +638,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 		return candidate, nil
 	}
 
-	if !opts.preventCrossCellPromotion {
+	if !opts.PreventCrossCellPromotion {
 		candidate = findPossibleCandidateFromListWithRestrictions(newPrimary, prevPrimary, neutralReplicas, true, false)
 		if candidate != nil {
 			return candidate, nil
@@ -665,7 +655,7 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(newPrimary, prevPrimary
 
 // checkIfConstraintsSatisfied is used to check whether the constraints for ERS are satisfied or not.
 func (erp *EmergencyReparenter) checkIfConstraintsSatisfied(newPrimary, prevPrimary *topodatapb.Tablet, opts EmergencyReparentOptions) error {
-	if opts.preventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
+	if opts.PreventCrossCellPromotion && prevPrimary != nil && newPrimary.Alias.Cell != prevPrimary.Alias.Cell {
 		return vterrors.Errorf(vtrpc.Code_ABORTED, "elected primary does not satisfy geographic constraint - %s", topoproto.TabletAliasString(newPrimary.Alias))
 	}
 	if PromotionRule(newPrimary) == MustNotPromoteRule {
