@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/syslog"
@@ -27,9 +28,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/cmd"
-
-	"context"
-
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
