@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"

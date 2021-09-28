@@ -19,13 +19,11 @@ package reparentutil
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"github.com/stretchr/testify/assert"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func TestDurabilityNone(t *testing.T) {
