@@ -22,32 +22,23 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/concurrency"
+	"google.golang.org/protobuf/proto"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/stats"
-
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/event"
-
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
@@ -112,7 +103,7 @@ func NewEmergencyReparenter(ts *topo.Server, tmc tmclient.TabletManagerClient, l
 
 // ReparentShard performs the EmergencyReparentShard operation on the given
 // keyspace and shard.
-func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
+func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace string, shard string, opts EmergencyReparentOptions) (*events.Reparent, error) {
 	// First step is to lock the shard for the given operation
 	opts.lockAction = erp.getLockAction(opts.newPrimaryAlias)
 	ctx, unlock, err := erp.ts.LockShard(ctx, keyspace, shard, opts.lockAction)

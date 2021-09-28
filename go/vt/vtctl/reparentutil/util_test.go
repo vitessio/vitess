@@ -22,22 +22,18 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql"
-
-	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 type chooseNewPrimaryTestTMClient struct {
