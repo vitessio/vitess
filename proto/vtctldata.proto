@@ -719,6 +719,31 @@ message RunHealthCheckRequest {
 message RunHealthCheckResponse {
 }
 
+message SetKeyspaceServedFromRequest {
+  string keyspace = 1;
+  topodata.TabletType tablet_type = 2;
+  repeated string cells = 3;
+  bool remove = 4;
+  string source_keyspace = 5;
+}
+
+message SetKeyspaceServedFromResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
+message SetKeyspaceShardingInfoRequest {
+  string keyspace = 1;
+  string column_name = 2;
+  topodata.KeyspaceIdType column_type = 3;
+  bool force = 4;
+}
+
+message SetKeyspaceShardingInfoResponse {
+  // Keyspace is the updated keyspace record.
+  topodata.Keyspace keyspace = 1;
+}
+
 message SetShardIsPrimaryServingRequest {
   string keyspace = 1;
   string shard = 2;
