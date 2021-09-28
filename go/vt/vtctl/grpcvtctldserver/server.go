@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -1822,12 +1823,99 @@ func (s *VtctldServer) RunHealthCheck(ctx context.Context, req *vtctldatapb.RunH
 
 // SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetKeyspaceServedFrom(ctx context.Context, req *vtctldatapb.SetKeyspaceServedFromRequest) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceServedFrom")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("tablet_type", topoproto.TabletTypeLString(req.TabletType))
+	span.Annotate("cells", strings.Join(req.Cells, ","))
+	span.Annotate("remove", req.Remove)
+	span.Annotate("source_keyspace", req.SourceKeyspace)
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceServedFrom")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	err = ki.UpdateServedFromMap(req.TabletType, req.Cells, req.SourceKeyspace, req.Remove, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceServedFromResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
 }
 
 // SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) SetKeyspaceShardingInfo(ctx context.Context, req *vtctldatapb.SetKeyspaceShardingInfoRequest) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.SetKeyspaceShardingInfo")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("column_name", req.ColumnName)
+	span.Annotate("column_type", key.KeyspaceIDTypeString(req.ColumnType))
+	span.Annotate("force", req.Force)
+
+	isColumnNameSet := req.ColumnName != ""
+	isColumnTypeSet := req.ColumnType != topodatapb.KeyspaceIdType_UNSET
+
+	if (isColumnNameSet && !isColumnTypeSet) || (!isColumnNameSet && isColumnTypeSet) {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "both <column_name:%v> and <column_type:%v> must be set, or both must be unset", req.ColumnName, key.KeyspaceIDTypeString(req.ColumnType))
+	}
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "SetKeyspaceShardingInfo")
+	if lockErr != nil {
+		return nil, lockErr
+	}
+
+	var err error
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, err
+	}
+
+	if ki.ShardingColumnName != "" && ki.ShardingColumnName != req.ColumnName {
+		if !req.Force {
+			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnName from %v to %v (use Force:true to override)", ki.ShardingColumnName, req.ColumnName)
+			return nil, err
+		}
+
+		log.Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, req.ColumnName)
+	}
+
+	if ki.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET && ki.ShardingColumnType != req.ColumnType {
+		if !req.Force {
+			err = vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot change ShardingColumnType from %v to %v (use Force:true to override)", key.KeyspaceIDTypeString(ki.ShardingColumnType), key.KeyspaceIDTypeString(req.ColumnType))
+			return nil, err
+		}
+	}
+
+	ki.ShardingColumnName = req.ColumnName
+	ki.ShardingColumnType = req.ColumnType
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.SetKeyspaceShardingInfoResponse{
+		Keyspace: ki.Keyspace,
+	}, nil
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldServer interface.
