@@ -612,6 +612,14 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 	}
 }
 
+func isSpecialOrderBy(o abstract.OrderBy) bool {
+	if sqlparser.IsNull(o.Inner.Expr) {
+		return true
+	}
+	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
+	return isFunction && f.Name.Lowered() == "rand"
+}
+
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
 	origColCount := plan.Select.GetColumnCount()
 	for _, order := range orderExprs {
@@ -620,7 +628,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			return nil, false, err
 		}
 		plan.Select.AddOrder(order.Inner)
-		if sqlparser.IsNull(order.Inner.Expr) {
+		if isSpecialOrderBy(order) {
 			continue
 		}
 		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
@@ -702,6 +710,19 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
+		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
+		if err != nil {
+			return nil, err
+		}
+		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Left = lhs
+		plan.Right = rhs
+		return plan, nil
+	}
 	if allLeft(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
