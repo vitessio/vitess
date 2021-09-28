@@ -24,8 +24,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
@@ -39,6 +37,7 @@ import (
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 const (

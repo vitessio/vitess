@@ -26,8 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/util"
@@ -35,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/kv"
 	"vitess.io/vitess/go/vt/orchestrator/logic"
 	"vitess.io/vitess/go/vt/orchestrator/process"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 var thisInstanceKey *inst.InstanceKey

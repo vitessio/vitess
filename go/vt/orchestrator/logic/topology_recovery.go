@@ -34,9 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
-
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
@@ -48,6 +45,8 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 var countPendingRecoveries int64

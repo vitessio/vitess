@@ -26,8 +26,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/cmd"
 
 	"context"
@@ -39,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"

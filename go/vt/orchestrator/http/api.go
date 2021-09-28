@@ -25,8 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/auth"
 	"github.com/martini-contrib/render"
@@ -42,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 // APIResponseCode is an OK/ERROR response code

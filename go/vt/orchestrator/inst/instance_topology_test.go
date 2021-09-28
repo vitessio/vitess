@@ -3,13 +3,12 @@ package inst
 import (
 	"math/rand"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	test "vitess.io/vitess/go/vt/orchestrator/external/golib/tests"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 var (

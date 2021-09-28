@@ -24,10 +24,9 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 const ReasonableDiscoveryLatency = 500 * time.Millisecond

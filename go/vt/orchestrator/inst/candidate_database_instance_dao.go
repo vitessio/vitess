@@ -19,10 +19,10 @@ package inst
 import (
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/log"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/sqlutils"
-	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/db"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 // RegisterCandidateInstance markes a given instance as suggested for succeeding a primary in the event of failover.
