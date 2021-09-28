@@ -678,9 +678,13 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if weightStrExpr == nil {
 		return offset, -1, added, nil
 	}
-	_, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+	if !sqlparser.IsColName(expr) {
+		unary, ok := expr.(*sqlparser.UnaryExpr)
+		if ok && sqlparser.IsColName(unary.Expr) {
+			expr = unary.Expr
+		} else {
+			return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+		}
 	}
 	qt := semTable.TypeFor(expr)
 	wsNeeded := true
