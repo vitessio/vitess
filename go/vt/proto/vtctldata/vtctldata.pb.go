@@ -6295,108 +6295,6 @@ func (x *UpdateCellsAliasResponse) GetCellsAlias() *topodata.CellsAlias {
 	return nil
 }
 
-type ValidateRequest struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	PingTablets bool `protobuf:"varint,1,opt,name=ping_tablets,json=pingTablets,proto3" json:"ping_tablets,omitempty"`
-}
-
-func (x *ValidateRequest) Reset() {
-	*x = ValidateRequest{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[113]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ValidateRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ValidateRequest) ProtoMessage() {}
-
-func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[113]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
-func (*ValidateRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{113}
-}
-
-func (x *ValidateRequest) GetPingTablets() bool {
-	if x != nil {
-		return x.PingTablets
-	}
-	return false
-}
-
-type ValidateResponse struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Results           []string                             `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
-	ResultsByKeyspace map[string]*ValidateKeyspaceResponse `protobuf:"bytes,2,rep,name=results_by_keyspace,json=resultsByKeyspace,proto3" json:"results_by_keyspace,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-}
-
-func (x *ValidateResponse) Reset() {
-	*x = ValidateResponse{}
-	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[114]
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		ms.StoreMessageInfo(mi)
-	}
-}
-
-func (x *ValidateResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ValidateResponse) ProtoMessage() {}
-
-func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[114]
-	if protoimpl.UnsafeEnabled && x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ValidateResponse.ProtoReflect.Descriptor instead.
-func (*ValidateResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{114}
-}
-
-func (x *ValidateResponse) GetResults() []string {
-	if x != nil {
-		return x.Results
-	}
-	return nil
-}
-
-func (x *ValidateResponse) GetResultsByKeyspace() map[string]*ValidateKeyspaceResponse {
-	if x != nil {
-		return x.ResultsByKeyspace
-	}
-	return nil
-}
-
 type ValidateKeyspaceRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -6409,7 +6307,7 @@ type ValidateKeyspaceRequest struct {
 func (x *ValidateKeyspaceRequest) Reset() {
 	*x = ValidateKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[115]
+		mi := &file_vtctldata_proto_msgTypes[113]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6422,7 +6320,7 @@ func (x *ValidateKeyspaceRequest) String() string {
 func (*ValidateKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[115]
+	mi := &file_vtctldata_proto_msgTypes[113]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6435,7 +6333,7 @@ func (x *ValidateKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{115}
+	return file_vtctldata_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *ValidateKeyspaceRequest) GetKeyspace() string {
@@ -6464,7 +6362,7 @@ type ValidateKeyspaceResponse struct {
 func (x *ValidateKeyspaceResponse) Reset() {
 	*x = ValidateKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[116]
+		mi := &file_vtctldata_proto_msgTypes[114]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6477,7 +6375,7 @@ func (x *ValidateKeyspaceResponse) String() string {
 func (*ValidateKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[116]
+	mi := &file_vtctldata_proto_msgTypes[114]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6490,7 +6388,7 @@ func (x *ValidateKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{116}
+	return file_vtctldata_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *ValidateKeyspaceResponse) GetResults() []string {
@@ -6507,33 +6405,31 @@ func (x *ValidateKeyspaceResponse) GetResultsByShard() map[string]*ValidateShard
 	return nil
 }
 
-type ValidateShardRequest struct {
+type ValidateRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Keyspace    string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	Shard       string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
-	PingTablets bool   `protobuf:"varint,3,opt,name=ping_tablets,json=pingTablets,proto3" json:"ping_tablets,omitempty"`
+	PingTablets bool `protobuf:"varint,1,opt,name=ping_tablets,json=pingTablets,proto3" json:"ping_tablets,omitempty"`
 }
 
-func (x *ValidateShardRequest) Reset() {
-	*x = ValidateShardRequest{}
+func (x *ValidateRequest) Reset() {
+	*x = ValidateRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[117]
+		mi := &file_vtctldata_proto_msgTypes[115]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *ValidateShardRequest) String() string {
+func (x *ValidateRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ValidateShardRequest) ProtoMessage() {}
+func (*ValidateRequest) ProtoMessage() {}
 
-func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[117]
+func (x *ValidateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[115]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6544,57 +6440,44 @@ func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ValidateShardRequest.ProtoReflect.Descriptor instead.
-func (*ValidateShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{117}
+// Deprecated: Use ValidateRequest.ProtoReflect.Descriptor instead.
+func (*ValidateRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{115}
 }
 
-func (x *ValidateShardRequest) GetKeyspace() string {
-	if x != nil {
-		return x.Keyspace
-	}
-	return ""
-}
-
-func (x *ValidateShardRequest) GetShard() string {
-	if x != nil {
-		return x.Shard
-	}
-	return ""
-}
-
-func (x *ValidateShardRequest) GetPingTablets() bool {
+func (x *ValidateRequest) GetPingTablets() bool {
 	if x != nil {
 		return x.PingTablets
 	}
 	return false
 }
 
-type ValidateShardResponse struct {
+type ValidateResponse struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Results []string `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	Results           []string                             `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	ResultsByKeyspace map[string]*ValidateKeyspaceResponse `protobuf:"bytes,2,rep,name=results_by_keyspace,json=resultsByKeyspace,proto3" json:"results_by_keyspace,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (x *ValidateShardResponse) Reset() {
-	*x = ValidateShardResponse{}
+func (x *ValidateResponse) Reset() {
+	*x = ValidateResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[118]
+		mi := &file_vtctldata_proto_msgTypes[116]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
 }
 
-func (x *ValidateShardResponse) String() string {
+func (x *ValidateResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ValidateShardResponse) ProtoMessage() {}
+func (*ValidateResponse) ProtoMessage() {}
 
-func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[118]
+func (x *ValidateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[116]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6605,14 +6488,21 @@ func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ValidateShardResponse.ProtoReflect.Descriptor instead.
-func (*ValidateShardResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{118}
+// Deprecated: Use ValidateResponse.ProtoReflect.Descriptor instead.
+func (*ValidateResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{116}
 }
 
-func (x *ValidateShardResponse) GetResults() []string {
+func (x *ValidateResponse) GetResults() []string {
 	if x != nil {
 		return x.Results
+	}
+	return nil
+}
+
+func (x *ValidateResponse) GetResultsByKeyspace() map[string]*ValidateKeyspaceResponse {
+	if x != nil {
+		return x.ResultsByKeyspace
 	}
 	return nil
 }
@@ -6632,7 +6522,7 @@ type ValidateSchemaKeyspaceRequest struct {
 func (x *ValidateSchemaKeyspaceRequest) Reset() {
 	*x = ValidateSchemaKeyspaceRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[119]
+		mi := &file_vtctldata_proto_msgTypes[117]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6645,7 +6535,7 @@ func (x *ValidateSchemaKeyspaceRequest) String() string {
 func (*ValidateSchemaKeyspaceRequest) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[119]
+	mi := &file_vtctldata_proto_msgTypes[117]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6658,7 +6548,7 @@ func (x *ValidateSchemaKeyspaceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{119}
+	return file_vtctldata_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *ValidateSchemaKeyspaceRequest) GetKeyspace() string {
@@ -6705,7 +6595,7 @@ type ValidateSchemaKeyspaceResponse struct {
 func (x *ValidateSchemaKeyspaceResponse) Reset() {
 	*x = ValidateSchemaKeyspaceResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[120]
+		mi := &file_vtctldata_proto_msgTypes[118]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6718,7 +6608,7 @@ func (x *ValidateSchemaKeyspaceResponse) String() string {
 func (*ValidateSchemaKeyspaceResponse) ProtoMessage() {}
 
 func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[120]
+	mi := &file_vtctldata_proto_msgTypes[118]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6731,7 +6621,7 @@ func (x *ValidateSchemaKeyspaceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaKeyspaceResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaKeyspaceResponse) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{120}
+	return file_vtctldata_proto_rawDescGZIP(), []int{118}
 }
 
 type ValidateSchemaShardRequest struct {
@@ -6749,7 +6639,7 @@ type ValidateSchemaShardRequest struct {
 func (x *ValidateSchemaShardRequest) Reset() {
 	*x = ValidateSchemaShardRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[121]
+		mi := &file_vtctldata_proto_msgTypes[119]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6762,7 +6652,7 @@ func (x *ValidateSchemaShardRequest) String() string {
 func (*ValidateSchemaShardRequest) ProtoMessage() {}
 
 func (x *ValidateSchemaShardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[121]
+	mi := &file_vtctldata_proto_msgTypes[119]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6775,7 +6665,7 @@ func (x *ValidateSchemaShardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaShardRequest.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaShardRequest) Descriptor() ([]byte, []int) {
-	return file_vtctldata_proto_rawDescGZIP(), []int{121}
+	return file_vtctldata_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *ValidateSchemaShardRequest) GetKeyspace() string {
@@ -6822,7 +6712,7 @@ type ValidateSchemaShardResponse struct {
 func (x *ValidateSchemaShardResponse) Reset() {
 	*x = ValidateSchemaShardResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_vtctldata_proto_msgTypes[122]
+		mi := &file_vtctldata_proto_msgTypes[120]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -6835,7 +6725,7 @@ func (x *ValidateSchemaShardResponse) String() string {
 func (*ValidateSchemaShardResponse) ProtoMessage() {}
 
 func (x *ValidateSchemaShardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vtctldata_proto_msgTypes[122]
+	mi := &file_vtctldata_proto_msgTypes[120]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6848,7 +6738,117 @@ func (x *ValidateSchemaShardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateSchemaShardResponse.ProtoReflect.Descriptor instead.
 func (*ValidateSchemaShardResponse) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{120}
+}
+
+type ValidateShardRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Keyspace    string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Shard       string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
+	PingTablets bool   `protobuf:"varint,3,opt,name=ping_tablets,json=pingTablets,proto3" json:"ping_tablets,omitempty"`
+}
+
+func (x *ValidateShardRequest) Reset() {
+	*x = ValidateShardRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[121]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ValidateShardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateShardRequest) ProtoMessage() {}
+
+func (x *ValidateShardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[121]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateShardRequest.ProtoReflect.Descriptor instead.
+func (*ValidateShardRequest) Descriptor() ([]byte, []int) {
+	return file_vtctldata_proto_rawDescGZIP(), []int{121}
+}
+
+func (x *ValidateShardRequest) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *ValidateShardRequest) GetShard() string {
+	if x != nil {
+		return x.Shard
+	}
+	return ""
+}
+
+func (x *ValidateShardRequest) GetPingTablets() bool {
+	if x != nil {
+		return x.PingTablets
+	}
+	return false
+}
+
+type ValidateShardResponse struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Results []string `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+}
+
+func (x *ValidateShardResponse) Reset() {
+	*x = ValidateShardResponse{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_vtctldata_proto_msgTypes[122]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *ValidateShardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValidateShardResponse) ProtoMessage() {}
+
+func (x *ValidateShardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vtctldata_proto_msgTypes[122]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValidateShardResponse.ProtoReflect.Descriptor instead.
+func (*ValidateShardResponse) Descriptor() ([]byte, []int) {
 	return file_vtctldata_proto_rawDescGZIP(), []int{122}
+}
+
+func (x *ValidateShardResponse) GetResults() []string {
+	if x != nil {
+		return x.Results
+	}
+	return nil
 }
 
 type ValidateVSchemaRequest struct {
@@ -8275,58 +8275,48 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x35, 0x0a, 0x0b, 0x63, 0x65, 0x6c, 0x6c, 0x73, 0x5f, 0x61, 0x6c, 0x69, 0x61, 0x73, 0x18, 0x02,
 	0x20, 0x01, 0x28, 0x0b, 0x32, 0x14, 0x2e, 0x74, 0x6f, 0x70, 0x6f, 0x64, 0x61, 0x74, 0x61, 0x2e,
 	0x43, 0x65, 0x6c, 0x6c, 0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x52, 0x0a, 0x63, 0x65, 0x6c, 0x6c,
-	0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x34, 0x0a, 0x0f, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
-	0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e,
-	0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52,
-	0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0xfb, 0x01, 0x0a,
-	0x10, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03,
-	0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x62, 0x0a, 0x13, 0x72,
-	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c,
-	0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73,
-	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x11, 0x72, 0x65,
-	0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x1a,
-	0x69, 0x0a, 0x16, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73,
-	0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x39, 0x0a, 0x05, 0x76,
-	0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x76, 0x74, 0x63,
-	0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52,
-	0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22, 0x58, 0x0a, 0x17, 0x56, 0x61,
-	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
-	0x65, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
-	0x73, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62,
-	0x6c, 0x65, 0x74, 0x73, 0x22, 0xfc, 0x01, 0x0a, 0x18, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74,
-	0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
-	0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03,
-	0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x61, 0x0a, 0x10, 0x72,
-	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18,
-	0x02, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x37, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74,
-	0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61,
-	0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c,
-	0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e,
-	0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63,
-	0x0a, 0x13, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64,
-	0x45, 0x6e, 0x74, 0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01,
-	0x28, 0x09, 0x52, 0x03, 0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61,
-	0x74, 0x61, 0x2e, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64,
-	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
-	0x02, 0x38, 0x01, 0x22, 0x6b, 0x0a, 0x14, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53,
-	0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b,
-	0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64,
-	0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72, 0x64, 0x12, 0x21, 0x0a,
-	0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x03, 0x20,
+	0x73, 0x41, 0x6c, 0x69, 0x61, 0x73, 0x22, 0x58, 0x0a, 0x17, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
+	0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x21, 0x0a,
+	0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73, 0x18, 0x02, 0x20,
 	0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62, 0x6c, 0x65, 0x74, 0x73,
-	0x22, 0x31, 0x0a, 0x15, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72,
-	0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x73,
-	0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73, 0x75,
-	0x6c, 0x74, 0x73, 0x22, 0xd9, 0x01, 0x0a, 0x1d, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
+	0x22, 0xfc, 0x01, 0x0a, 0x18, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79,
+	0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a,
+	0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07,
+	0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x12, 0x61, 0x0a, 0x10, 0x72, 0x65, 0x73, 0x75, 0x6c,
+	0x74, 0x73, 0x5f, 0x62, 0x79, 0x5f, 0x73, 0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x37, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61,
+	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
+	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79,
+	0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x0e, 0x72, 0x65, 0x73, 0x75,
+	0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x1a, 0x63, 0x0a, 0x13, 0x52, 0x65,
+	0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x53, 0x68, 0x61, 0x72, 0x64, 0x45, 0x6e, 0x74, 0x72,
+	0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x03,
+	0x6b, 0x65, 0x79, 0x12, 0x36, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20, 0x01,
+	0x28, 0x0b, 0x32, 0x20, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56,
+	0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70,
+	0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a, 0x02, 0x38, 0x01, 0x22,
+	0x34, 0x0a, 0x0f, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65,
+	0x74, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61,
+	0x62, 0x6c, 0x65, 0x74, 0x73, 0x22, 0xfb, 0x01, 0x0a, 0x10, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61,
+	0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65,
+	0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x73,
+	0x75, 0x6c, 0x74, 0x73, 0x12, 0x62, 0x0a, 0x13, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x5f,
+	0x62, 0x79, 0x5f, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x02, 0x20, 0x03, 0x28,
+	0x0b, 0x32, 0x32, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e, 0x56, 0x61,
+	0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x2e, 0x52,
+	0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
+	0x45, 0x6e, 0x74, 0x72, 0x79, 0x52, 0x11, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x42, 0x79,
+	0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x1a, 0x69, 0x0a, 0x16, 0x52, 0x65, 0x73, 0x75,
+	0x6c, 0x74, 0x73, 0x42, 0x79, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x45, 0x6e, 0x74,
+	0x72, 0x79, 0x12, 0x10, 0x0a, 0x03, 0x6b, 0x65, 0x79, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52,
+	0x03, 0x6b, 0x65, 0x79, 0x12, 0x39, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x02, 0x20,
+	0x01, 0x28, 0x0b, 0x32, 0x23, 0x2e, 0x76, 0x74, 0x63, 0x74, 0x6c, 0x64, 0x61, 0x74, 0x61, 0x2e,
+	0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65,
+	0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x3a,
+	0x02, 0x38, 0x01, 0x22, 0xd9, 0x01, 0x0a, 0x1d, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
 	0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x4b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x52, 0x65,
 	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
 	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63,
@@ -8356,7 +8346,17 @@ var file_vtctldata_proto_rawDesc = []byte{
 	0x6d, 0x61, 0x18, 0x05, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0e, 0x69, 0x6e, 0x63, 0x6c, 0x75, 0x64,
 	0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x22, 0x1d, 0x0a, 0x1b, 0x56, 0x61, 0x6c, 0x69,
 	0x64, 0x61, 0x74, 0x65, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52,
-	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x98, 0x01, 0x0a, 0x16, 0x56, 0x61, 0x6c, 0x69,
+	0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x22, 0x6b, 0x0a, 0x14, 0x56, 0x61, 0x6c, 0x69, 0x64,
+	0x61, 0x74, 0x65, 0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x12,
+	0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28,
+	0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x73,
+	0x68, 0x61, 0x72, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x73, 0x68, 0x61, 0x72,
+	0x64, 0x12, 0x21, 0x0a, 0x0c, 0x70, 0x69, 0x6e, 0x67, 0x5f, 0x74, 0x61, 0x62, 0x6c, 0x65, 0x74,
+	0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x08, 0x52, 0x0b, 0x70, 0x69, 0x6e, 0x67, 0x54, 0x61, 0x62,
+	0x6c, 0x65, 0x74, 0x73, 0x22, 0x31, 0x0a, 0x15, 0x56, 0x61, 0x6c, 0x69, 0x64, 0x61, 0x74, 0x65,
+	0x53, 0x68, 0x61, 0x72, 0x64, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x18, 0x0a,
+	0x07, 0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x09, 0x52, 0x07,
+	0x72, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x73, 0x22, 0x98, 0x01, 0x0a, 0x16, 0x56, 0x61, 0x6c, 0x69,
 	0x64, 0x61, 0x74, 0x65, 0x56, 0x53, 0x63, 0x68, 0x65, 0x6d, 0x61, 0x52, 0x65, 0x71, 0x75, 0x65,
 	0x73, 0x74, 0x12, 0x1a, 0x0a, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x18, 0x01,
 	0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x6b, 0x65, 0x79, 0x73, 0x70, 0x61, 0x63, 0x65, 0x12, 0x16,
@@ -8507,16 +8507,16 @@ var file_vtctldata_proto_goTypes = []interface{}{
 	(*UpdateCellInfoResponse)(nil),               // 111: vtctldata.UpdateCellInfoResponse
 	(*UpdateCellsAliasRequest)(nil),              // 112: vtctldata.UpdateCellsAliasRequest
 	(*UpdateCellsAliasResponse)(nil),             // 113: vtctldata.UpdateCellsAliasResponse
-	(*ValidateRequest)(nil),                      // 114: vtctldata.ValidateRequest
-	(*ValidateResponse)(nil),                     // 115: vtctldata.ValidateResponse
-	(*ValidateKeyspaceRequest)(nil),              // 116: vtctldata.ValidateKeyspaceRequest
-	(*ValidateKeyspaceResponse)(nil),             // 117: vtctldata.ValidateKeyspaceResponse
-	(*ValidateShardRequest)(nil),                 // 118: vtctldata.ValidateShardRequest
-	(*ValidateShardResponse)(nil),                // 119: vtctldata.ValidateShardResponse
-	(*ValidateSchemaKeyspaceRequest)(nil),        // 120: vtctldata.ValidateSchemaKeyspaceRequest
-	(*ValidateSchemaKeyspaceResponse)(nil),       // 121: vtctldata.ValidateSchemaKeyspaceResponse
-	(*ValidateSchemaShardRequest)(nil),           // 122: vtctldata.ValidateSchemaShardRequest
-	(*ValidateSchemaShardResponse)(nil),          // 123: vtctldata.ValidateSchemaShardResponse
+	(*ValidateKeyspaceRequest)(nil),              // 114: vtctldata.ValidateKeyspaceRequest
+	(*ValidateKeyspaceResponse)(nil),             // 115: vtctldata.ValidateKeyspaceResponse
+	(*ValidateRequest)(nil),                      // 116: vtctldata.ValidateRequest
+	(*ValidateResponse)(nil),                     // 117: vtctldata.ValidateResponse
+	(*ValidateSchemaKeyspaceRequest)(nil),        // 118: vtctldata.ValidateSchemaKeyspaceRequest
+	(*ValidateSchemaKeyspaceResponse)(nil),       // 119: vtctldata.ValidateSchemaKeyspaceResponse
+	(*ValidateSchemaShardRequest)(nil),           // 120: vtctldata.ValidateSchemaShardRequest
+	(*ValidateSchemaShardResponse)(nil),          // 121: vtctldata.ValidateSchemaShardResponse
+	(*ValidateShardRequest)(nil),                 // 122: vtctldata.ValidateShardRequest
+	(*ValidateShardResponse)(nil),                // 123: vtctldata.ValidateShardResponse
 	(*ValidateVSchemaRequest)(nil),               // 124: vtctldata.ValidateVSchemaRequest
 	(*ValidateVSchemaResponse)(nil),              // 125: vtctldata.ValidateVSchemaResponse
 	nil,                                          // 126: vtctldata.Workflow.ShardStreamsEntry
@@ -8533,8 +8533,8 @@ var file_vtctldata_proto_goTypes = []interface{}{
 	nil,                                  // 137: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry
 	nil,                                  // 138: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry
 	nil,                                  // 139: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry
-	nil,                                  // 140: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	nil,                                  // 141: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil,                                  // 140: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	nil,                                  // 141: vtctldata.ValidateResponse.ResultsByKeyspaceEntry
 	(*logutil.Event)(nil),                // 142: logutil.Event
 	(*topodata.Keyspace)(nil),            // 143: topodata.Keyspace
 	(*topodata.Shard)(nil),               // 144: topodata.Shard
@@ -8639,8 +8639,8 @@ var file_vtctldata_proto_depIdxs = []int32{
 	145, // 77: vtctldata.UpdateCellInfoResponse.cell_info:type_name -> topodata.CellInfo
 	159, // 78: vtctldata.UpdateCellsAliasRequest.cells_alias:type_name -> topodata.CellsAlias
 	159, // 79: vtctldata.UpdateCellsAliasResponse.cells_alias:type_name -> topodata.CellsAlias
-	140, // 80: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
-	141, // 81: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	140, // 80: vtctldata.ValidateKeyspaceResponse.results_by_shard:type_name -> vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry
+	141, // 81: vtctldata.ValidateResponse.results_by_keyspace:type_name -> vtctldata.ValidateResponse.ResultsByKeyspaceEntry
 	128, // 82: vtctldata.Workflow.ShardStreamsEntry.value:type_name -> vtctldata.Workflow.ShardStream
 	129, // 83: vtctldata.Workflow.ShardStream.streams:type_name -> vtctldata.Workflow.Stream
 	160, // 84: vtctldata.Workflow.ShardStream.tablet_controls:type_name -> topodata.Shard.TabletControl
@@ -8659,8 +8659,8 @@ var file_vtctldata_proto_depIdxs = []int32{
 	158, // 97: vtctldata.GetSrvVSchemasResponse.SrvVSchemasEntry.value:type_name -> vschema.SrvVSchema
 	163, // 98: vtctldata.ShardReplicationPositionsResponse.ReplicationStatusesEntry.value:type_name -> replicationdata.Status
 	150, // 99: vtctldata.ShardReplicationPositionsResponse.TabletMapEntry.value:type_name -> topodata.Tablet
-	117, // 100: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
-	119, // 101: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	123, // 100: vtctldata.ValidateKeyspaceResponse.ResultsByShardEntry.value:type_name -> vtctldata.ValidateShardResponse
+	115, // 101: vtctldata.ValidateResponse.ResultsByKeyspaceEntry.value:type_name -> vtctldata.ValidateKeyspaceResponse
 	102, // [102:102] is the sub-list for method output_type
 	102, // [102:102] is the sub-list for method input_type
 	102, // [102:102] is the sub-list for extension type_name
@@ -10031,30 +10031,6 @@ func file_vtctldata_proto_init() {
 			}
 		}
 		file_vtctldata_proto_msgTypes[113].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[114].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[115].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -10066,7 +10042,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[116].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[114].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -10078,31 +10054,31 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
+		file_vtctldata_proto_msgTypes[115].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ValidateRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[116].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ValidateResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 		file_vtctldata_proto_msgTypes[117].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateShardRequest); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[118].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ValidateShardResponse); i {
-			case 0:
-				return &v.state
-			case 1:
-				return &v.sizeCache
-			case 2:
-				return &v.unknownFields
-			default:
-				return nil
-			}
-		}
-		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateSchemaKeyspaceRequest); i {
 			case 0:
 				return &v.state
@@ -10114,7 +10090,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[118].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateSchemaKeyspaceResponse); i {
 			case 0:
 				return &v.state
@@ -10126,7 +10102,7 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[119].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateSchemaShardRequest); i {
 			case 0:
 				return &v.state
@@ -10138,8 +10114,32 @@ func file_vtctldata_proto_init() {
 				return nil
 			}
 		}
-		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
+		file_vtctldata_proto_msgTypes[120].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*ValidateSchemaShardResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[121].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ValidateShardRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_vtctldata_proto_msgTypes[122].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*ValidateShardResponse); i {
 			case 0:
 				return &v.state
 			case 1:

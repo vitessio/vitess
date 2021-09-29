@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"testing"
 	"time"
 
@@ -8922,19 +8921,18 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name     string
-		keyspace string
-		shards   []string
+		name string
+		cell string
 		// mapping of shard -> primaries
-		schemaMap      map[string]*tabletmanagerdatapb.SchemaDefinition
-		vschema        *vschemapb.Keyspace
-		includeVSchema bool
-		shouldErr      bool
+		schemaMap map[string]*tabletmanagerdatapb.SchemaDefinition
+		vschema   *vschemapb.Keyspace
+		tmc       *testutil.TabletManagerClient
+		ts        *topo.Server
+		req       *vtctldatapb.ValidateSchemaKeyspaceRequest
+		shouldErr bool
 	}{
 		{
-			name:     "should pass",
-			keyspace: "ks",
-			shards:   []string{"-80", "80-"},
+			name: "should pass",
 			schemaMap: map[string]*tabletmanagerdatapb.SchemaDefinition{
 				"-80": {
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -8953,14 +8951,26 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					},
 				},
 			},
-			vschema:        &vschemapb.Keyspace{},
-			includeVSchema: false,
-			shouldErr:      false,
+			vschema: &vschemapb.Keyspace{},
+			cell:    "zone1",
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			ts: memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks",
+				ExcludeTables:  nil,
+				IncludeVSchema: false,
+				IncludeViews:   false,
+				SkipNoPrimary:  false,
+			},
+			shouldErr: false,
 		},
 		{
-			name:     "t2 not in vschema",
-			keyspace: "ks",
-			shards:   []string{"-80", "80-"},
+			name: "t2 not in vschema",
 			schemaMap: map[string]*tabletmanagerdatapb.SchemaDefinition{
 				"-80": {
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -9011,13 +9021,25 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					},
 				},
 			},
-			includeVSchema: true,
-			shouldErr:      true,
+			cell: "zone1",
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			ts: memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks",
+				ExcludeTables:  nil,
+				IncludeVSchema: true,
+				IncludeViews:   false,
+				SkipNoPrimary:  false,
+			},
+			shouldErr: true,
 		},
 		{
-			name:     "extra tables but include vschema false",
-			keyspace: "ks",
-			shards:   []string{"-80", "80-"},
+			name: "extra tables but include vschema false",
 			schemaMap: map[string]*tabletmanagerdatapb.SchemaDefinition{
 				"-80": {
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -9068,8 +9090,22 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 					},
 				},
 			},
-			includeVSchema: false,
-			shouldErr:      false,
+			cell: "zone1",
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			ts: memorytopo.NewServer("zone1"),
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks",
+				ExcludeTables:  nil,
+				IncludeVSchema: false,
+				IncludeViews:   false,
+				SkipNoPrimary:  false,
+			},
+			shouldErr: false,
 		},
 	}
 
@@ -9079,81 +9115,65 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 			t.Parallel()
 
 			// Test Setup
-			ts, _ := memorytopo.NewServerAndFactory("zone1")
-			tmc := testutil.TabletManagerClient{
-				GetSchemaResults: map[string]struct {
-					Schema *tabletmanagerdatapb.SchemaDefinition
-					Error  error
-				}{},
-			}
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			tt.tmc.TopoServer = tt.ts
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
 
 			// Create Keyspace
-			req := &vtctldatapb.CreateKeyspaceRequest{
-				Name: tt.keyspace,
-				Type: topodatapb.KeyspaceType_NORMAL,
-			}
-
-			_, err := vtctld.CreateKeyspace(ctx, req)
-			require.NoError(t, err, fmt.Sprintf("error creating keyspace '%v'", tt.keyspace))
+			testutil.AddKeyspace(ctx, t, tt.ts, &vtctldatapb.Keyspace{
+				Name: tt.req.Keyspace,
+				Keyspace: &topodatapb.Keyspace{
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				},
+			})
 
 			// Create Shard
-			for i, shard := range tt.shards {
-				req2 := &vtctldatapb.CreateShardRequest{
-					Keyspace:  tt.keyspace,
-					ShardName: shard,
-				}
-				_, err = vtctld.CreateShard(ctx, req2)
-				require.NoError(t, err, fmt.Sprintf("error creating %v/%v", tt.keyspace, shard))
+			var tabletID uint32 = 100
 
-				tablet := &topodatapb.Tablet{
+			for shard, schema := range tt.schemaMap {
+
+				testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+					Keyspace: tt.req.Keyspace,
+					Name:     shard,
+					Shard:    &topodatapb.Shard{},
+				})
+
+				primaryTablet := &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  uint32(1111111111 + i),
+						Cell: tt.cell,
+						Uid:  tabletID,
 					},
-					Keyspace:  tt.keyspace,
+					Type:      topodatapb.TabletType_PRIMARY,
+					Keyspace:  tt.req.Keyspace,
 					Shard:     shard,
 					MysqlPort: 3306,
 				}
-				tmc.GetSchemaResults["zone1-"+strconv.Itoa(int(tablet.Alias.Uid))] = struct {
+
+				testutil.AddTablet(ctx, t, tt.ts, primaryTablet, &testutil.AddTabletOptions{AlsoSetShardPrimary: true})
+
+				tabletID += 10
+
+				tt.tmc.GetSchemaResults[topoproto.TabletAliasString(primaryTablet.Alias)] = struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
 					Error  error
 				}{
-					Schema: tt.schemaMap[shard],
+					Schema: schema,
 				}
-
-				err = ts.CreateTablet(ctx, tablet)
-				require.NoError(t, err, "error creating tablet")
-
-				_, err := ts.UpdateShardFields(ctx, tt.keyspace, shard, func(si *topo.ShardInfo) error {
-					si.PrimaryAlias = &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  tablet.Alias.Uid,
-					}
-					return nil
-				})
-				require.NoError(t, err, "error updating shard field")
 			}
 
 			// ApplyVSchema
-			req3 := &vtctldata.ApplyVSchemaRequest{
-				Keyspace: tt.keyspace,
-				Cells:    []string{"zone1"},
+			req3 := &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: tt.req.Keyspace,
+				Cells:    []string{tt.cell},
 				VSchema:  tt.vschema,
 			}
-			_, err = vtctld.ApplyVSchema(ctx, req3)
+
+			_, err := vtctld.ApplyVSchema(ctx, req3)
 			require.NoError(t, err, "error ApplyingVSchema")
 
-			req4 := &vtctldata.ValidateSchemaKeyspaceRequest{
-				Keyspace:       tt.keyspace,
-				SkipNoPrimary:  false,
-				ExcludeTables:  nil,
-				IncludeVSchema: tt.includeVSchema,
-				IncludeViews:   true,
-			}
-			_, err = vtctld.ValidateSchemaKeyspace(ctx, req4)
+			_, err = vtctld.ValidateSchemaKeyspace(ctx, tt.req)
 			if tt.shouldErr {
 				require.Error(t, err)
 				return
@@ -9168,11 +9188,14 @@ func TestValidateSchemaShard(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name           string
-		schemas        []*tabletmanagerdatapb.SchemaDefinition
-		vschema        *vschemapb.Keyspace
-		includeVSchema bool
-		shouldErr      bool
+		name      string
+		cell      string
+		schemas   []*tabletmanagerdatapb.SchemaDefinition
+		vschema   *vschemapb.Keyspace
+		tmc       *testutil.TabletManagerClient
+		ts        *topo.Server
+		req       *vtctldatapb.ValidateSchemaShardRequest
+		shouldErr bool
 	}{
 		{
 			name: "should pass",
@@ -9210,8 +9233,22 @@ func TestValidateSchemaShard(t *testing.T) {
 					},
 				},
 			},
-			includeVSchema: false,
-			shouldErr:      false,
+			cell: "zone1",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			req: &vtctldatapb.ValidateSchemaShardRequest{
+				Keyspace:       "ks",
+				Shard:          "-80",
+				IncludeVSchema: false,
+				IncludeViews:   true,
+				ExcludeTables:  nil,
+			},
+			shouldErr: false,
 		},
 		{
 			name: "different schemas",
@@ -9265,8 +9302,22 @@ func TestValidateSchemaShard(t *testing.T) {
 					},
 				},
 			},
-			includeVSchema: false,
-			shouldErr:      true,
+			cell: "zone1",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			req: &vtctldatapb.ValidateSchemaShardRequest{
+				Keyspace:       "ks",
+				Shard:          "-80",
+				IncludeVSchema: false,
+				IncludeViews:   true,
+				ExcludeTables:  nil,
+			},
+			shouldErr: true,
 		},
 	}
 
@@ -9276,92 +9327,70 @@ func TestValidateSchemaShard(t *testing.T) {
 			t.Parallel()
 
 			// Test Setup
-			ts, _ := memorytopo.NewServerAndFactory("zone1")
-			tmc := &testutil.TabletManagerClient{
-				TopoServer: ts,
-				GetSchemaResults: map[string]struct {
-					Schema *tabletmanagerdatapb.SchemaDefinition
-					Error  error
-				}{},
-			}
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			tt.tmc.TopoServer = tt.ts
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
 
 			// Create Keyspace
-			req := &vtctldatapb.CreateKeyspaceRequest{
-				Name: "ks",
-				Type: topodatapb.KeyspaceType_NORMAL,
-			}
-
-			_, err := vtctld.CreateKeyspace(ctx, req)
-			require.NoError(t, err, "error creating keyspace 'ks'")
+			testutil.AddKeyspace(ctx, t, tt.ts, &vtctldatapb.Keyspace{
+				Name: tt.req.Keyspace,
+				Keyspace: &topodatapb.Keyspace{
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+				},
+			})
 
 			// Create Shard
-			req2 := &vtctldatapb.CreateShardRequest{
-				Keyspace:  "ks",
-				ShardName: "-80",
-			}
-			_, err = vtctld.CreateShard(ctx, req2)
-			require.NoError(t, err, "error creating ks/-80")
+			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+				Keyspace: tt.req.Keyspace,
+				Name:     tt.req.Shard,
+				Shard:    &topodatapb.Shard{},
+			})
 
 			for i, schema := range tt.schemas {
+				var tabletType topodatapb.TabletType
+
+				if i == 0 {
+					tabletType = topodatapb.TabletType_PRIMARY
+				} else {
+					tabletType = topodatapb.TabletType_REPLICA
+				}
+
 				tablet := &topodatapb.Tablet{
 					Alias: &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  uint32(1111111111 + i),
+						Cell: tt.cell,
+						Uid:  uint32(100 + i),
 					},
-					Keyspace:  "ks",
-					Shard:     "-80",
+					Type:      tabletType,
+					Keyspace:  tt.req.Keyspace,
+					Shard:     tt.req.Shard,
 					MysqlPort: 3306,
 				}
-				tmc.GetSchemaResults["zone1-"+strconv.Itoa(int(tablet.Alias.Uid))] = struct {
+
+				testutil.AddTablet(ctx, t, tt.ts, tablet, &testutil.AddTabletOptions{
+					AlsoSetShardPrimary: true,
+				})
+
+				tt.tmc.GetSchemaResults[topoproto.TabletAliasString(tablet.Alias)] = struct {
 					Schema *tabletmanagerdatapb.SchemaDefinition
 					Error  error
 				}{
 					Schema: schema,
 				}
-
-				err = ts.CreateTablet(ctx, tablet)
-				require.NoError(t, err, "error creating tablet")
-
-				_, err := ts.UpdateShardFields(ctx, "ks", "-80", func(si *topo.ShardInfo) error {
-					si.PrimaryAlias = &topodatapb.TabletAlias{
-						Cell: "zone1",
-						Uid:  tablet.Alias.Uid,
-					}
-					return nil
-				})
-				require.NoError(t, err, "error updating shard field")
-
-				err = ts.UpdateShardReplicationFields(ctx, "zone1", "ks", "-80", func(sr *topodatapb.ShardReplication) error {
-					node := &topodatapb.ShardReplication_Node{
-						TabletAlias: tablet.Alias,
-					}
-					sr.Nodes = append(sr.Nodes, node)
-					return nil
-				})
-				require.NoError(t, err, "error updating shard replication field")
 			}
 
 			// ApplyVSchema
 			req3 := &vtctldatapb.ApplyVSchemaRequest{
-				Keyspace: "ks",
+				Keyspace: tt.req.Keyspace,
 				Cells:    []string{"zone1"},
 				VSchema:  tt.vschema,
 			}
-			_, err = vtctld.ApplyVSchema(ctx, req3)
+			_, err := vtctld.ApplyVSchema(ctx, req3)
 			require.NoError(t, err, "error ApplyingVSchema")
 
 			// ValidateSchemaShard
-			req4 := &vtctldatapb.ValidateSchemaShardRequest{
-				Keyspace:       "ks",
-				Shard:          "-80",
-				ExcludeTables:  nil,
-				IncludeVSchema: tt.includeVSchema,
-				IncludeViews:   true,
-			}
-			_, err = vtctld.ValidateSchemaShard(ctx, req4)
+			_, err = vtctld.ValidateSchemaShard(ctx, tt.req)
 
 			if tt.shouldErr {
 				require.Error(t, err)
@@ -9377,23 +9406,25 @@ func TestValidateVSchema(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		name          string
-		keyspace      string
-		shard         string
-		expVSchema    *vschemapb.Keyspace
-		primarySchema *tabletmanagerdatapb.SchemaDefinition
-		keyRange      *topodatapb.KeyRange
-		shouldErr     bool
+		name       string
+		expVSchema *vschemapb.Keyspace
+		// mapping of shard -> primarySchema
+		schemaMap map[string]*tabletmanagerdatapb.SchemaDefinition
+		cell      string
+		tmc       *testutil.TabletManagerClient
+		ts        *topo.Server
+		req       *vtctldata.ValidateVSchemaRequest
+		shouldErr bool
 	}{
 		{
-			name:     "should pass",
-			keyspace: "ks",
-			shard:    "-80",
-			primarySchema: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					{
-						Name:    "t1",
-						Columns: []string{"c1"},
+			name: "should pass",
+			schemaMap: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"-80": {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:    "t1",
+							Columns: []string{"c1"},
+						},
 					},
 				},
 			},
@@ -9420,18 +9451,32 @@ func TestValidateVSchema(t *testing.T) {
 						Type: "hash",
 					},
 				},
+			},
+			cell: "zone1",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			req: &vtctldatapb.ValidateVSchemaRequest{
+				Keyspace:      "ks",
+				Shards:        []string{"-80"},
+				ExcludeTables: nil,
+				IncludeViews:  true,
 			},
 			shouldErr: false,
 		},
 		{
-			name:     "primary has different schema",
-			keyspace: "ks",
-			shard:    "80-",
-			primarySchema: &tabletmanagerdatapb.SchemaDefinition{
-				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
-					{
-						Name:    "t2",
-						Columns: []string{"c1"},
+			name: "primary has different schema",
+			schemaMap: map[string]*tabletmanagerdatapb.SchemaDefinition{
+				"80-": {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+						{
+							Name:    "t2",
+							Columns: []string{"c1"},
+						},
 					},
 				},
 			},
@@ -9458,6 +9503,20 @@ func TestValidateVSchema(t *testing.T) {
 						Type: "hash",
 					},
 				},
+			},
+			cell: "zone1",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				GetSchemaResults: map[string]struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{},
+			},
+			req: &vtctldatapb.ValidateVSchemaRequest{
+				Keyspace:      "ks",
+				Shards:        []string{"80-"},
+				ExcludeTables: nil,
+				IncludeViews:  true,
 			},
 			shouldErr: true,
 		},
@@ -9469,74 +9528,62 @@ func TestValidateVSchema(t *testing.T) {
 			t.Parallel()
 
 			// Test Setup
-			ts, _ := memorytopo.NewServerAndFactory("zone1")
-			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{
-				TopoServer: ts,
-				GetSchemaResults: map[string]struct {
-					Schema *tabletmanagerdatapb.SchemaDefinition
-					Error  error
-				}{
-					"zone1-0000001234": {Schema: tt.primarySchema, Error: nil},
-				},
-			}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+			tt.tmc.TopoServer = tt.ts
+
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 				return NewVtctldServer(ts)
 			})
 
 			// Create Keyspace
-			req := &vtctldatapb.CreateKeyspaceRequest{
-				Name: tt.keyspace,
-				Type: topodatapb.KeyspaceType_NORMAL,
-			}
-
-			_, err := vtctld.CreateKeyspace(ctx, req)
-			require.NoError(t, err, fmt.Sprintf("error creating keyspace '%v'", tt.keyspace))
-
-			// Create Shard
-			req2 := &vtctldatapb.CreateShardRequest{
-				Keyspace:  tt.keyspace,
-				ShardName: tt.shard,
-			}
-			_, err = vtctld.CreateShard(ctx, req2)
-			require.NoError(t, err, fmt.Sprintf("error creating %v/%v", tt.keyspace, tt.shard))
-
-			tablet := &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  1234,
+			testutil.AddKeyspace(ctx, t, tt.ts, &vtctldatapb.Keyspace{
+				Name: tt.req.Keyspace,
+				Keyspace: &topodatapb.Keyspace{
+					KeyspaceType: topodatapb.KeyspaceType_NORMAL,
 				},
-				Keyspace:  tt.keyspace,
-				Shard:     tt.shard,
-				MysqlPort: 3306,
-			}
-
-			err = ts.CreateTablet(ctx, tablet)
-			require.NoError(t, err, "error creating tablet")
-
-			_, err = ts.UpdateShardFields(ctx, tt.keyspace, tt.shard, func(si *topo.ShardInfo) error {
-				si.PrimaryAlias = &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  1234,
-				}
-				return nil
 			})
-			require.NoError(t, err, "error updating shard field")
+
+			// Create Shards
+			for i, shard := range tt.req.Shards {
+				testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+					Keyspace: tt.req.Keyspace,
+					Name:     shard,
+					Shard:    &topodatapb.Shard{},
+				})
+
+				tablet := &topodatapb.Tablet{
+					Alias: &topodatapb.TabletAlias{
+						Cell: tt.cell,
+						Uid:  uint32(100 + i),
+					},
+					Type:      topodatapb.TabletType_PRIMARY,
+					Keyspace:  tt.req.Keyspace,
+					Shard:     shard,
+					MysqlPort: 3306,
+				}
+
+				testutil.AddTablet(ctx, t, tt.ts, tablet, &testutil.AddTabletOptions{
+					AlsoSetShardPrimary: true,
+				})
+
+				tt.tmc.GetSchemaResults[topoproto.TabletAliasString(tablet.Alias)] = struct {
+					Schema *tabletmanagerdatapb.SchemaDefinition
+					Error  error
+				}{
+					Schema: tt.schemaMap[shard],
+				}
+			}
 
 			// ApplyVSchema
-			req3 := &vtctldata.ApplyVSchemaRequest{
-				Keyspace: tt.keyspace,
-				Cells:    []string{"zone1"},
+			applyVSchemaReq := &vtctldatapb.ApplyVSchemaRequest{
+				Keyspace: tt.req.Keyspace,
+				Cells:    []string{tt.cell},
 				VSchema:  tt.expVSchema,
 			}
-			_, err = vtctld.ApplyVSchema(ctx, req3)
+			_, err := vtctld.ApplyVSchema(ctx, applyVSchemaReq)
 			require.NoError(t, err, "error ApplyingVSchema")
 
 			// ValidateVSchema
-			_, err = vtctld.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
-				Keyspace:      tt.keyspace,
-				Shards:        []string{tt.shard},
-				ExcludeTables: nil,
-				IncludeViews:  true,
-			})
+			_, err = vtctld.ValidateVSchema(ctx, tt.req)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
