@@ -170,7 +170,7 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
 		}
 		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
-		if candidateInfo.Type == topodatapb.TabletType_BACKUP || candidateInfo.Type == topodatapb.TabletType_RESTORE || candidateInfo.Type == topodatapb.TabletType_DRAINED {
+		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
 			continue
 		}
 		restrictedValidCandidates[candidate] = position

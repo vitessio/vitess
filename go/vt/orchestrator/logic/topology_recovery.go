@@ -637,7 +637,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	// So we need to check that we only run an ERS if the instance that we analyzed was actually a primary! Otherwise, we would end up running an ERS
 	// even when the cluster is fine or the problem can be fixed via some other recovery
 	if tablet.Type != topodatapb.TabletType_PRIMARY {
-		RefreshTablets(true)
+		RefreshTablets(true /* forceRefresh */)
 		AuditTopologyRecovery(topologyRecovery, "another agent seems to have fixed the problem")
 		return false, topologyRecovery, nil
 	}
@@ -684,7 +684,7 @@ func checkAndRecoverDeadPrimary(analysisEntry inst.ReplicationAnalysis, candidat
 	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
 	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
 	// PrimaryHasPrimary analysis which runs another ERS
-	RefreshTablets(true)
+	RefreshTablets(true /* forceRefresh */)
 	var promotedReplica *inst.Instance
 	if ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
