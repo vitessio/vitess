@@ -136,7 +136,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 
 		preds := inner.Inner.UnsolvedPredicates(ctx.semTable)
 		merger := func(a, b *routeTree) (*routeTree, error) {
-			return mergeSubQuery(ctx, a, b, inner)
+			return mergeSubQuery(ctx, a, inner)
 		}
 
 		merged, err := tryMergeSubQuery(ctx, outerTree, treeInner, inner, preds, merger)
@@ -265,7 +265,7 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 	return rewriteError
 }
 
-func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
+func mergeSubQuery(ctx *planningContext, outer *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
 	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
 	// this is needed to so that later when we try to push projections, we get the correct
@@ -280,11 +280,6 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, sub
 	if err != nil {
 		return nil, err
 	}
-	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
-	for k, v := range inner.SysTableTableName {
-		outer.SysTableTableName[k] = v
-	}
-
 	err = outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
