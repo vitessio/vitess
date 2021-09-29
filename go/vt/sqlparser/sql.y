@@ -248,7 +248,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
-%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_SHARDS VITESS_TABLETS VSCHEMA
+%token <str> VGTID_EXECUTED VITESS_KEYSPACES VITESS_METADATA VITESS_MIGRATIONS VITESS_REPLICATION_STATUS VITESS_SHARDS VITESS_TABLETS VSCHEMA
 
 // SET tokens
 %token <str> NAMES GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -2674,6 +2674,10 @@ show_statement:
   {
     $$ = &ShowMigrationLogs{UUID: string($3)}
   }
+| SHOW VITESS_REPLICATION_STATUS
+  {
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowLegacy{Type: string($2) + " " + string($3), Scope: ImplicitScope}}
@@ -3320,9 +3324,9 @@ table_factor:
   {
     $$ = $1
   }
-| derived_table as_opt table_id column_list_opt
+| derived_table as_opt table_id
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $3, Columns: $4}
+    $$ = &AliasedTableExpr{Expr:$1, As: $3}
   }
 | openb table_references closeb
   {
@@ -5287,6 +5291,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| VITESS_REPLICATION_STATUS
 | RESTRICT
 | REQUIRE_ROW_FORMAT
 | RESOURCE

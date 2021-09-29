@@ -665,7 +665,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 func (node *ShowLegacy) Format(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" ||
+		nodeType == "vitess_tablets" || nodeType == "vitess_replication_status") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.astPrintf(node, "show %s%s", node.Extended, nodeType)
@@ -868,9 +869,6 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
-		if len(node.Columns) != 0 {
-			buf.astPrintf(node, "%v", node.Columns)
-		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
