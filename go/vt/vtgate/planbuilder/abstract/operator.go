@@ -106,23 +106,20 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			return op, nil
 		case sqlparser.LeftJoinType, sqlparser.RightJoinType:
-			inner, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
+			lhs, err := getOperatorFromTableExpr(tableExpr.LeftExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
-			outer, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
+			rhs, err := getOperatorFromTableExpr(tableExpr.RightExpr, semTable)
 			if err != nil {
 				return nil, err
 			}
 			if tableExpr.Join == sqlparser.RightJoinType {
-				inner, outer = outer, inner
+				lhs, rhs = rhs, lhs
 			}
-			op := &LeftJoin{
-				Left:      inner,
-				Right:     outer,
-				Predicate: tableExpr.Condition.On,
-			}
-			return op, nil
+			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
+		case sqlparser.StraightJoinType:
+			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
@@ -204,7 +201,10 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement := sq.SubQuery.Select.(*sqlparser.Select)
+			subquerySelectStatement, isSel := sq.SubQuery.Select.(*sqlparser.Select)
+			if !isSel {
+				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
+			}
 			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
 			if err != nil {
 				return nil, err
