@@ -71,38 +71,3 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
-
-# system schema query as a derived table
-"SELECT * from (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1) x"
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * from (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1) x",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select * from (select 1 from information_schema.schemata where 1 != 1) as x where 1 != 1",
-    "Query": "select * from (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) as x",
-    "SysTableTableSchema": "[VARBINARY(\"MyDatabase\")]",
-    "Table": "information_schema.schemata"
-  }
-}
-{
-  "QueryType": "SELECT",
-  "Original": "SELECT * from (SELECT 1 FROM information_schema.schemata WHERE schema_name='MyDatabase' LIMIT 1) x",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectDBA",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select x.`1` from (select 1 from information_schema.schemata where 1 != 1) as x where 1 != 1",
-    "Query": "select x.`1` from (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) as x",
-    "SysTableTableSchema": "[VARBINARY(\"MyDatabase\")]",
-    "Table": "information_schema.schemata"
-  }
-}
