@@ -273,7 +273,7 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, sub
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			outer.solved |= ctx.semTable.TableSetFor(n)
+			outer.solved.MergeInPlace(ctx.semTable.TableSetFor(n))
 		}
 		return true, nil
 	}, subq.SelectStatement)
@@ -508,7 +508,7 @@ func breakPredicateInLHSandRHS(
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := semTable.RecursiveDeps(node)
-			if deps == 0 {
+			if deps.NumberOfTables() == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
 			}
@@ -534,7 +534,7 @@ func mergeOrJoinInner(ctx *planningContext, lhs, rhs queryTree, joinPredicates [
 }
 
 func mergeOrJoin(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
-	newTabletSet := lhs.tableID() | rhs.tableID()
+	newTabletSet := lhs.tableID().Merge(rhs.tableID())
 
 	merger := func(a, b *routeTree) (*routeTree, error) {
 		if inner {
@@ -1200,7 +1200,7 @@ func (p parenTables) Len() int {
 }
 
 func (p parenTables) Less(i, j int) bool {
-	return p[i].tableID() < p[j].tableID()
+	return p[i].tableID().TableOffset() < p[j].tableID().TableOffset()
 }
 
 func (p parenTables) Swap(i, j int) {

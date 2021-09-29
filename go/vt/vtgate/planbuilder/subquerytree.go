@@ -35,7 +35,7 @@ type subqueryTree struct {
 var _ queryTree = (*subqueryTree)(nil)
 
 func (s *subqueryTree) tableID() semantics.TableSet {
-	return s.inner.tableID() | s.outer.tableID()
+	return s.inner.tableID().Merge(s.outer.tableID())
 }
 
 func (s *subqueryTree) cost() int {

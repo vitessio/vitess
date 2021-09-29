@@ -192,7 +192,7 @@ func (qt *QueryTable) testString() string {
 		where = " where " + strings.Join(preds, " and ")
 	}
 
-	return fmt.Sprintf("\t%d:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
+	return fmt.Sprintf("\t%v:%s%s%s", qt.TableID, sqlparser.String(qt.Table), alias, where)
 }
 
 func (qg *QueryGraph) testString() string {
@@ -208,19 +208,13 @@ func (qg *QueryGraph) crossPredicateString() string {
 	}
 	var joinPreds []string
 	for deps, predicates := range qg.innerJoins {
-		var tables []string
-		deps.ForEachTable(func(id int) {
-			tables = append(tables, fmt.Sprintf("%d", id))
-		})
-
 		var expressions []string
 		for _, expr := range predicates {
 			expressions = append(expressions, sqlparser.String(expr))
 		}
 
-		tableConcat := strings.Join(tables, ":")
 		exprConcat := strings.Join(expressions, " and ")
-		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tableConcat, exprConcat))
+		joinPreds = append(joinPreds, fmt.Sprintf("\t%v - %s", deps, exprConcat))
 	}
 	sort.Strings(joinPreds)
 	return fmt.Sprintf("\nJoinPredicates:\n%s", strings.Join(joinPreds, "\n"))
