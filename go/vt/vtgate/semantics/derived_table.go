@@ -24,46 +24,33 @@ import (
 )
 
 type derivedTable struct {
-	tableName      string
-	ASTNode        *sqlparser.AliasedTableExpr
-	columnNames    []string
-	cols           []sqlparser.Expr
-	tables         TableSet
-	hasAliasedCols bool
+	tableName   string
+	ASTNode     *sqlparser.AliasedTableExpr
+	columnNames []string
+	cols        []sqlparser.Expr
+	tables      TableSet
 }
 
 var _ TableInfo = (*derivedTable)(nil)
 
 func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *derivedTable {
-	vTbl := &derivedTable{
-		hasAliasedCols: len(cols) > 0,
-	}
+	vTbl := &derivedTable{}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
 			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if expr.As.IsEmpty() {
+			if len(cols) > 0 {
+				vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
+			} else if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:
 					// for projections, we strip out the qualifier and keep only the column name
-					if len(cols) > 0 {
-						vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
-					} else {
-						vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
-					}
+					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
 				default:
-					if len(cols) > 0 {
-						vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
-					} else {
-						vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
-					}
+					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
 				}
 			} else {
-				if len(cols) > 0 {
-					vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
-				} else {
-					vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
-				}
+				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
