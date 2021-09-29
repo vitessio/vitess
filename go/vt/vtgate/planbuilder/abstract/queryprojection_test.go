@@ -78,7 +78,7 @@ func TestQP(t *testing.T) {
 			},
 		}, {
 			sql:    "select count(*) b from user group by b",
-			expErr: "Can't group on 'b'",
+			expErr: "Can't group on 'count(*)'",
 		},
 	}
 
