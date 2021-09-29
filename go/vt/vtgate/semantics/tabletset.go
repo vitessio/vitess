@@ -1,6 +1,23 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package semantics
 
 import (
+	"fmt"
 	"math/bits"
 )
 
@@ -14,13 +31,6 @@ func (ts *largeTableSet) overlapsSmall(small uint64) bool {
 
 func minlen(a, b []uint64) int {
 	if len(a) < len(b) {
-		return len(a)
-	}
-	return len(b)
-}
-
-func maxlen(a, b []uint64) int {
-	if len(a) > len(b) {
 		return len(a)
 	}
 	return len(b)
@@ -161,6 +171,20 @@ type TableSet struct {
 	large *largeTableSet
 }
 
+func (ts TableSet) Format(f fmt.State, verb rune) {
+	first := true
+	fmt.Fprintf(f, "TableSet{")
+	ts.ForEachTable(func(tid int) {
+		if first {
+			fmt.Fprintf(f, "%d", tid)
+			first = false
+		} else {
+			fmt.Fprintf(f, ",%d", tid)
+		}
+	})
+	fmt.Fprintf(f, "}")
+}
+
 // IsOverlapping returns true if at least one table exists in both sets
 func (ts TableSet) IsOverlapping(other TableSet) bool {
 	switch {
@@ -283,6 +307,13 @@ func SingleTableSet(tableidx int) TableSet {
 func MergeTableSets(tss ...TableSet) (result TableSet) {
 	for _, t := range tss {
 		result.MergeInPlace(t)
+	}
+	return
+}
+
+func TableSetFromIds(tids ...int) (ts TableSet) {
+	for _, tid := range tids {
+		ts.AddTable(tid)
 	}
 	return
 }

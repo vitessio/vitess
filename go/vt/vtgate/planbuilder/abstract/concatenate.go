@@ -38,7 +38,7 @@ var _ Operator = (*Concatenate)(nil)
 func (c *Concatenate) TableID() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.Sources {
-		tableSet |= source.TableID()
+		tableSet.MergeInPlace(source.TableID())
 	}
 	return tableSet
 }

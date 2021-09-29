@@ -37,7 +37,7 @@ type joinTree struct {
 var _ queryTree = (*joinTree)(nil)
 
 func (jp *joinTree) tableID() semantics.TableSet {
-	return jp.lhs.tableID() | jp.rhs.tableID()
+	return jp.lhs.tableID().Merge(jp.rhs.tableID())
 }
 
 func (jp *joinTree) clone() queryTree {
