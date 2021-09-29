@@ -209,13 +209,15 @@ func (qg *QueryGraph) crossPredicateString() string {
 	var joinPreds []string
 	for deps, predicates := range qg.innerJoins {
 		var tables []string
-		for _, id := range deps.Constituents() {
+		deps.ForEachTable(func(id int) {
 			tables = append(tables, fmt.Sprintf("%d", id))
-		}
+		})
+
 		var expressions []string
 		for _, expr := range predicates {
 			expressions = append(expressions, sqlparser.String(expr))
 		}
+
 		tableConcat := strings.Join(tables, ":")
 		exprConcat := strings.Join(expressions, " and ")
 		joinPreds = append(joinPreds, fmt.Sprintf("\t%s - %s", tableConcat, exprConcat))
