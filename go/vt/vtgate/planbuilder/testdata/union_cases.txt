@@ -747,10 +747,10 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
 }
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
-"(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
+"(select id from user order by 1 desc) union (select id from user order by 1 asc)"
 {
   "QueryType": "SELECT",
-  "Original": "(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)",
+  "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
   "Instructions": {
     "OperatorType": "Distinct",
     "Inputs": [
@@ -764,9 +764,9 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) DESC",
-            "Query": "select 1, weight_string(1) from `user` order by 1 desc",
+            "Query": "select id, weight_string(id) from `user` order by 1 desc",
             "ResultColumns": 1,
             "Table": "`user`"
           },
@@ -777,13 +777,35 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select 1, weight_string(1) from `user` order by 1 asc",
+            "Query": "select id, weight_string(id) from `user` order by 1 asc",
             "ResultColumns": 1,
             "Table": "`user`"
           }
         ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "(select id, weight_string(id) from `user` where 1 != 1) union (select id, weight_string(id) from `user` where 1 != 1)",
+        "OrderBy": "(0|1) DESC",
+        "Query": "(select id, weight_string(id) from `user` order by id desc) union (select id, weight_string(id) from `user` order by id asc)",
+        "ResultColumns": 1,
+        "Table": "`user`"
       }
     ]
   }
