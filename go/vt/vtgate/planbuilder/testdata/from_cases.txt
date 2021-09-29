@@ -4204,3 +4204,26 @@ Gen4 plan same as above
     "Vindex": "name_user_map"
   }
 }
+
+# derived table with aliased columns predicate in both the outer and inner
+"select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1"
+"unsupported: column aliases in derived table"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+    "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "name_user_map"
+  }
+}
