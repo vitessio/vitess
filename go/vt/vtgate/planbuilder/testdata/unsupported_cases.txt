@@ -581,5 +581,18 @@ Gen4 error: Column 'id' in field list is ambiguous
 # Column aliases in Derived Table
 "select id2 from (select id from user) as x (id2)"
 "unsupported: column aliases in derived table"
-gen4 does not yet support: column aliases in derived table
-
+{
+  "QueryType": "SELECT",
+  "Original": "select id2 from (select id from user) as x (id2)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x where 1 != 1",
+    "Query": "select id2 from (select id from `user`) as x",
+    "Table": "`user`"
+  }
+}
