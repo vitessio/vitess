@@ -394,6 +394,18 @@ func (rb *route) Inputs() []logicalPlan {
 // with the outer route.
 func (rb *route) MergeSubquery(pb *primitiveBuilder, inner *route) bool {
 	if rb.SubqueryCanMerge(pb, inner) {
+		if inner.eroute.Opcode == engine.SelectDBA && (len(inner.eroute.SysTableTableName) > 0 || len(inner.eroute.SysTableTableSchema) > 0) {
+			switch rb.eroute.Opcode {
+			case engine.SelectDBA, engine.SelectReference:
+				rb.eroute.SysTableTableSchema = append(rb.eroute.SysTableTableSchema, inner.eroute.SysTableTableSchema...)
+				for k, v := range inner.eroute.SysTableTableName {
+					rb.eroute.SysTableTableName[k] = v
+				}
+				rb.eroute.Opcode = engine.SelectDBA
+			default:
+				return false
+			}
+		}
 		rb.substitutions = append(rb.substitutions, inner.substitutions...)
 		inner.Redirect = rb
 		return true
