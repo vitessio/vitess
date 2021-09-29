@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
@@ -62,6 +63,34 @@ import (
 
 // this is the healthcheck used by vtgate, used by the "vstream * from" functionality
 var vtgateHealthCheck discovery.HealthCheck
+
+var getTabletThrottlerStatus = func(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/throttler/check?app=vtgate")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var elements struct {
+		StatusCode int
+		Value      int
+		Threshold  int
+		Message    string
+	}
+	err = json.Unmarshal(body, &elements)
+	if err != nil {
+		return "", err
+	}
+
+	httpStatusStr := http.StatusText(elements.StatusCode)
+
+	status := fmt.Sprintf("{\"state\":\"%s\",\"threshold\":%d,\"message\":\"%s\"}", httpStatusStr, elements.Threshold, elements.Message)
+	return status, nil
+}
 
 var (
 	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
@@ -1002,17 +1031,24 @@ func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sql
 				continue
 			}
 
+			tabletHostPort := ts.GetTabletHostPort()
+			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+			if err != nil {
+				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+			}
+
 			rows = append(rows, buildVarCharRow(
 				s.Target.Keyspace,
 				s.Target.Shard,
 				topoproto.TabletAliasString(ts.Tablet.Alias),
 				ts.Tablet.Hostname,
 				fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+				throttlerStatus,
 			))
 		}
 	}
 	return &sqltypes.Result{
-		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Lag"),
+		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Lag", "Throttler_Status"),
 		Rows:   rows,
 	}, nil
 }
