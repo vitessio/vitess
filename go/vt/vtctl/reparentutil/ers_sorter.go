@@ -34,8 +34,8 @@ type ERSSorter struct {
 	idealCell string
 }
 
-// NewErsSorter creates a new ERSSorter
-func NewErsSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) *ERSSorter {
+// NewERSSorter creates a new ERSSorter
+func NewERSSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) *ERSSorter {
 	return &ERSSorter{
 		tablets:   tablets,
 		positions: positions,
@@ -101,6 +101,6 @@ func sortTabletsForERS(tablets []*topodatapb.Tablet, positions []mysql.Position,
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(NewErsSorter(tablets, positions, idealCell))
+	sort.Sort(NewERSSorter(tablets, positions, idealCell))
 	return nil
 }

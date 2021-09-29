@@ -3032,7 +3032,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			tabletInfo := tt.tabletMap[tt.newPrimaryTabletAlias]
 
 			erp := NewEmergencyReparenter(tt.ts, tt.tmc, logger)
-			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false, true)
+			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, false /* waitForAllReplicas */, true /* populateReparentJournal */)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)

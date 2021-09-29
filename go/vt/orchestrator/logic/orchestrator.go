@@ -506,7 +506,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshTablets(false)
+			go RefreshTablets(false /* forceRefresh */)
 		}
 	}
 }

@@ -102,7 +102,6 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 	if err != nil {
 		return nil, err
 	}
-	// defer the unlock-shard function
 	defer unlock(&err)
 
 	// dispatch success or failure of ERS
@@ -118,7 +117,6 @@ func (erp *EmergencyReparenter) ReparentShard(ctx context.Context, keyspace stri
 		}
 	}()
 
-	// run ERS with shard already locked
 	err = erp.reparentShardLocked(ctx, ev, keyspace, shard, opts)
 
 	return ev, err
@@ -140,7 +138,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	erp.logger.Infof("will initiate emergency reparent shard in keyspace - %s, shard - %s", keyspace, shard)
 	ersCounter.Add(1)
 
-	// variables used by the ERS functions are declared here
 	var (
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
@@ -155,7 +152,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		isIdeal                    bool
 	)
 
-	// get the shard information from the topology server
 	shardInfo, err = erp.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -173,7 +169,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		prevPrimary = prevPrimaryInfo.Tablet
 	}
 
-	// read all the tablets and there information
+	// read all the tablets and their information
 	event.DispatchUpdate(ev, "reading all tablets")
 	tabletMap, err = erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
 	if err != nil {
@@ -428,7 +424,7 @@ func (erp *EmergencyReparenter) promoteIntermediateSource(
 ) ([]*topodatapb.Tablet, error) {
 	// we reparent all the other tablets to start replication from our new source
 	// we wait for all the replicas so that we can choose a better candidate from the ones that started replication later
-	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true, false)
+	validCandidatesForImprovement, err := erp.reparentReplicas(ctx, ev, source, tabletMap, statusMap, opts, true /* waitForAllReplicas */, false /* populateReparentJournal */)
 	if err != nil {
 		return nil, err
 	}
@@ -664,12 +660,12 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// There's many options. We may wish to replace the server we promoted with a better one.
 
 	// check whether the one we promoted is in the same cell and belongs to the preferred candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true, true)
+	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true /* checkEqualPrimary */, true /* checkSameCell */)
 	if candidate != nil {
 		return candidate, nil
 	}
 	// check whether there is some other tablet in the same cell belonging to the preferred candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false, true)
+	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false /* checkEqualPrimary */, true /* checkSameCell */)
 	if candidate != nil {
 		return candidate, nil
 	}
@@ -677,33 +673,33 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 
 	if !opts.PreventCrossCellPromotion {
 		// check whether the one we promoted belongs to the preferred candidates list
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true, false)
+		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true /* checkEqualPrimary */, false /* checkSameCell */)
 		if candidate != nil {
 			return candidate, nil
 		}
 		// check whether there is some other tablet belonging to the preferred candidates list
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false, false)
+		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false /* checkEqualPrimary */, false /* checkSameCell */)
 		if candidate != nil {
 			return candidate, nil
 		}
 	}
 
 	// repeat the same process for the neutral candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true, true)
+	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true /* checkEqualPrimary */, true /* checkSameCell */)
 	if candidate != nil {
 		return candidate, nil
 	}
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false, true)
+	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false /* checkEqualPrimary */, true /* checkSameCell */)
 	if candidate != nil {
 		return candidate, nil
 	}
 
 	if !opts.PreventCrossCellPromotion {
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true, false)
+		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true /* checkEqualPrimary */, false /* checkSameCell */)
 		if candidate != nil {
 			return candidate, nil
 		}
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false, false)
+		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false /* checkEqualPrimary */, false /* checkSameCell */)
 		if candidate != nil {
 			return candidate, nil
 		}
@@ -740,7 +736,7 @@ func (erp *EmergencyReparenter) promoteNewPrimary(
 	}
 	// we now reparent all the replicas to the new primary we have promoted.
 	// Here we do not need to wait for all the replicas, We can finish early when even 1 succeeds.
-	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false, true)
+	_, err = erp.reparentReplicas(ctx, ev, newPrimary, tabletMap, statusMap, opts, false /* waitForAllReplicas */, true /* populateReparentJournal */)
 	if err != nil {
 		return err
 	}

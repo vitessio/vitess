@@ -76,7 +76,7 @@ func SetDurabilityPolicy(name string, durabilityParams map[string]string) error 
 	if !found {
 		return fmt.Errorf("durability policy %v not found", name)
 	}
-	log.Infof("Durability setting: %v", name)
+	log.Infof("Setting durability policy to %v", name)
 	curDurabilityPolicy = newDurabilityCreationFunc(durabilityParams)
 	return nil
 }
