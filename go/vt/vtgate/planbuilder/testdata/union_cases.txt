@@ -355,6 +355,42 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a union select * from unsharded",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.a where 1 != 1",
+            "Query": "select distinct * from information_schema.a",
+            "Table": "information_schema.a"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from unsharded where 1 != 1",
+            "Query": "select distinct * from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -387,6 +423,42 @@ Gen4 plan same as above
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
             "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from unsharded union select * from information_schema.a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from unsharded where 1 != 1",
+            "Query": "select distinct * from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.a where 1 != 1",
+            "Query": "select distinct * from information_schema.a",
             "Table": "information_schema.a"
           }
         ]
@@ -643,6 +715,50 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
             },
             "FieldQuery": "select * from `user` where 1 != 1",
             "Query": "select * from `user` where id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from music where id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select distinct * from music where id = 1",
+            "Table": "music",
+            "Values": [
+              1
+            ],
+            "Vindex": "music_user_map"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select distinct * from `user` where id = 1",
             "Table": "`user`",
             "Values": [
               1
