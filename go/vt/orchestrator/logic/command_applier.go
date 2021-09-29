@@ -93,7 +93,7 @@ func (applier *CommandApplier) discover(value []byte) interface{} {
 	if err := json.Unmarshal(value, &instanceKey); err != nil {
 		return log.Errore(err)
 	}
-	DiscoverInstance(instanceKey, false)
+	DiscoverInstance(instanceKey, false /* forceDiscovery */)
 	return nil
 }
 

@@ -61,7 +61,7 @@ func OpenTabletDiscovery() <-chan time.Time {
 	}
 	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
 		_ = inst.InjectSeed(instanceKey)
-	}, false)
+	}, false /* forceRefresh */)
 	// TODO(sougou): parameterize poll interval.
 	return time.Tick(15 * time.Second) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
