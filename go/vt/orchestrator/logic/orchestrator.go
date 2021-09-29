@@ -171,7 +171,7 @@ func handleDiscoveryRequests() {
 					continue
 				}
 
-				DiscoverInstance(instanceKey, false)
+				DiscoverInstance(instanceKey, false /* forceDiscovery */)
 				discoveryQueue.Release(instanceKey)
 			}
 		}()
