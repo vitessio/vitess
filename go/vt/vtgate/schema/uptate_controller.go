@@ -99,15 +99,15 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 		return
 	}
 
+	u.mu.Lock()
+	defer u.mu.Unlock()
+
 	// Received a health check from primary tablet that is not reachable from VTGate.
 	// The connection will get reset and the tracker needs to reload the schema for the keyspace.
 	if !th.Serving {
 		u.loaded = false
 		return
 	}
-
-	u.mu.Lock()
-	defer u.mu.Unlock()
 
 	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
 	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
