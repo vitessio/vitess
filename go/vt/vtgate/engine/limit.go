@@ -51,7 +51,7 @@ func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()
 }
 
-// Execute satisfies the Primtive interface.
+// TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
@@ -85,7 +85,7 @@ func (l *Limit) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	return result, nil
 }
 
-// StreamExecute satisfies the Primtive interface.
+// TryStreamExecute satisfies the Primitive interface.
 func (l *Limit) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
@@ -206,7 +206,7 @@ func (l *Limit) fetchOffset(bindVars map[string]*querypb.BindVariable) (int, err
 	return offset, nil
 }
 
-func (l *Limit) Description() PrimitiveDescription {
+func (l *Limit) description() PrimitiveDescription {
 	other := map[string]interface{}{}
 
 	if !l.Count.IsNull() {

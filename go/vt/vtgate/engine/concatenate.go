@@ -230,7 +230,7 @@ func (c *Concatenate) Inputs() []Primitive {
 	return c.Sources
 }
 
-func (c *Concatenate) Description() PrimitiveDescription {
+func (c *Concatenate) description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: c.RouteType()}
 }
 
