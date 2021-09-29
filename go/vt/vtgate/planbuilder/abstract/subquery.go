@@ -34,11 +34,33 @@ var _ Operator = (*SubQuery)(nil)
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner            Operator
-	Type             engine.PulloutOpcode
-	SelectStatement  *sqlparser.Select
-	ArgName          string
-	HasValues        string
+	// Inner is the Operator inside the parenthesis of the subquery.
+	// i.e: select (select 1 union select 1), the Inner here would be
+	// of type Concatenate since we have a Union.
+	Inner Operator
+
+	// Type represents the type of the subquery (value, in, not in, exists)
+	Type engine.PulloutOpcode
+
+	// SelectStatement is the inner's select
+	SelectStatement *sqlparser.Select
+
+	// ArgName is the substitution argument string for the subquery.
+	// Subquery argument name looks like: `__sq1`, with `1` being an
+	// unique identifier. This is used when we wish to replace the
+	// subquery by an argument for PullOut subqueries.
+	ArgName string
+
+	// HasValues is a string of form `__sq_has_values1` with `1` being
+	// a unique identifier that matches the one used in ArgName.
+	// We use `__sq_has_values` for in and not in subqueries.
+	HasValues string
+
+	// ExprsNeedReplace is a slice of all the expressions that were
+	// introduced by the rewrite of the subquery and that potentially
+	// need to be re-replace if we can merge the subquery into a route.
+	// An expression that contains at least all of ExprsNeedReplace will
+	// be replaced by the expression in ReplaceBy.
 	ExprsNeedReplace []sqlparser.Expr
 	ReplaceBy        sqlparser.Expr
 }
