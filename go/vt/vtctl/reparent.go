@@ -54,7 +54,7 @@ func init() {
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
 		commandEmergencyReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>]",
+		"-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>] [-prevent_cross_cell_promotion=<true/false>]",
 		"Reparents the shard to the new primary. Assumes the old primary is dead and not responding."})
 	addCommand("Shards", command{
 		"TabletExternallyReparented",
