@@ -83,7 +83,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select}, nil
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 		}

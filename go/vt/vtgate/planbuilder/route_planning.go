@@ -72,9 +72,10 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 			return nil, err
 		}
 		return &derivedTree{
-			query: op.Sel,
-			inner: treeInner,
-			alias: op.Alias,
+			query:         op.Sel,
+			inner:         treeInner,
+			alias:         op.Alias,
+			columnAliases: op.ColumnAliases,
 		}, nil
 	case *abstract.SubQuery:
 		return optimizeSubQuery(ctx, op)

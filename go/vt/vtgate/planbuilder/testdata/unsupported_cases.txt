@@ -591,8 +591,8 @@ Gen4 error: Column 'id' in field list is ambiguous
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x where 1 != 1",
-    "Query": "select id2 from (select id from `user`) as x",
+    "FieldQuery": "select id2 from (select id from `user` where 1 != 1) as x(id2) where 1 != 1",
+    "Query": "select id2 from (select id from `user`) as x(id2)",
     "Table": "`user`"
   }
 }
