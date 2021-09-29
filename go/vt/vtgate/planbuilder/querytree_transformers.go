@@ -357,7 +357,7 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 		return nil, err
 	}
 	opCode := engine.InnerJoin
-	if n.outer {
+	if n.leftJoin {
 		opCode = engine.LeftJoin
 	}
 	return &joinGen4{

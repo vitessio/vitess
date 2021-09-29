@@ -517,6 +517,8 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		return colAdded || colAddedRecursively, nil
+	case *pulloutSubquery:
+		return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
@@ -603,9 +605,21 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		}
 		plan.input = newUnderlyingPlan
 		return plan, nil
+	case *simpleProjection:
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+	case *vindexFunc:
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
+}
+
+func isSpecialOrderBy(o abstract.OrderBy) bool {
+	if sqlparser.IsNull(o.Inner.Expr) {
+		return true
+	}
+	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
+	return isFunction && f.Name.Lowered() == "rand"
 }
 
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
@@ -616,7 +630,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			return nil, false, err
 		}
 		plan.Select.AddOrder(order.Inner)
-		if sqlparser.IsNull(order.Inner.Expr) {
+		if isSpecialOrderBy(order) {
 			continue
 		}
 		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
@@ -664,9 +678,13 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if weightStrExpr == nil {
 		return offset, -1, added, nil
 	}
-	_, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+	if !sqlparser.IsColName(expr) {
+		unary, ok := expr.(*sqlparser.UnaryExpr)
+		if ok && sqlparser.IsColName(unary.Expr) {
+			expr = unary.Expr
+		} else {
+			return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+		}
 	}
 	qt := semTable.TypeFor(expr)
 	wsNeeded := true
@@ -698,6 +716,19 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
+		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
+		if err != nil {
+			return nil, err
+		}
+		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Left = lhs
+		plan.Right = rhs
+		return plan, nil
+	}
 	if allLeft(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {

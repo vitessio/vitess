@@ -341,83 +341,23 @@ Gen4 plan same as above
 
 # ORDER BY on select t.*
 "select t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select *
 "select *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(9|2) ASC",
-    "Query": "select *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 2,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi t.*
 "select t.*, t.name, t.*, t.col from user t order by t.col"
-{
-  "QueryType": "SELECT",
-  "Original": "select t.*, t.name, t.*, t.col from user t order by t.col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select t.*, t.`name`, t.*, t.col, weight_string(t.col) from `user` as t order by t.col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY on select multi *
 "select *, name, *, col from user order by col"
-{
-  "QueryType": "SELECT",
-  "Original": "select *, name, *, col from user order by col",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectScatter",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select *, `name`, *, col, weight_string(col) from `user` where 1 != 1",
-    "OrderBy": "(19|4) ASC",
-    "Query": "select *, `name`, *, col, weight_string(col) from `user` order by col asc",
-    "ResultColumns": 4,
-    "Table": "`user`"
-  }
-}
+"unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list"
+Gen4 error: unsupported: '*' expression in cross-shard query
 
 # ORDER BY works for select * from authoritative table
 "select * from authoritative order by user_id"
@@ -754,7 +694,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select music.col3 from music where 1 != 1",
-        "Query": "select music.col3 from music where music.id = :user_id",
+        "Query": "select music.col3 from music where music.id = :user_id order by null",
         "Table": "music",
         "Values": [
           ":user_id"
@@ -1037,6 +977,7 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+Gen4 plan same as above
 
 # ORDER BY RAND() for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()"
@@ -1085,6 +1026,52 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,-3,1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where 1 != 1",
+        "Query": "select `user`.id, `user`.col1 as a, `user`.col2 from `user` where `user`.id = 1 order by RAND()",
+        "Table": "`user`",
+        "Values": [
+          1
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Query": "select music.col3 from music where music.id = :user_id order by RAND()",
+        "Table": "music",
+        "Values": [
+          ":user_id"
+        ],
+        "Vindex": "music_user_map"
+      }
+    ]
+  }
+}
+
 
 # ORDER BY RAND() after pull-out subquery
 "select col from user where col in (select col2 from user) order by rand()"
@@ -1115,6 +1102,38 @@ Gen4 plan same as above
         },
         "FieldQuery": "select col from `user` where 1 != 1",
         "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where col in (select col2 from user) order by rand()",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col2 from `user` where 1 != 1",
+        "Query": "select col2 from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user` where col in ::__sq1 order by rand()",
         "Table": "`user`"
       }
     ]
