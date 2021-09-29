@@ -575,3 +575,9 @@ Gen4 plan same as above
 "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2"
 "can't do ORDER BY on top of UNION"
 Gen4 error: Column 'id' in field list is ambiguous
+
+# Column aliases in Derived Table
+"select id2 from (select id from user) as x (id2)"
+"unsupported: column aliases in derived table"
+gen4 does not yet support: column aliases in derived table
+

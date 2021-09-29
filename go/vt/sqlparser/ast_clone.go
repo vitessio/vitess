@@ -375,6 +375,7 @@ func CloneRefOfAliasedTableExpr(n *AliasedTableExpr) *AliasedTableExpr {
 	out.Partitions = ClonePartitions(n.Partitions)
 	out.As = CloneTableIdent(n.As)
 	out.Hints = CloneRefOfIndexHints(n.Hints)
+	out.Columns = CloneColumns(n.Columns)
 	return &out
 }
 
