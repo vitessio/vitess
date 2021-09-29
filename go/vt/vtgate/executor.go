@@ -77,8 +77,8 @@ var getTabletThrottlerStatus = func(tabletAddr string) (string, error) {
 
 	var elements struct {
 		StatusCode int
-		Value      int
-		Threshold  int
+		Value      float64
+		Threshold  float64
 		Message    string
 	}
 	err = json.Unmarshal(body, &elements)
@@ -88,7 +88,12 @@ var getTabletThrottlerStatus = func(tabletAddr string) (string, error) {
 
 	httpStatusStr := http.StatusText(elements.StatusCode)
 
-	status := fmt.Sprintf("{\"state\":\"%s\",\"threshold\":%d,\"message\":\"%s\"}", httpStatusStr, elements.Threshold, elements.Message)
+	load := float64(0)
+	if elements.Threshold > 0 {
+		load = float64((elements.Value / elements.Threshold) * 100)
+	}
+
+	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
 	return status, nil
 }
 
