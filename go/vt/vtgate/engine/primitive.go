@@ -199,9 +199,9 @@ type (
 		// Inputs is a slice containing the inputs to this Primitive
 		Inputs() []Primitive
 
-		// Description is the description, sans the inputs, of this Primitive.
+		// description is the description, sans the inputs, of this Primitive.
 		// to get the plan description with all children, use PrimitiveToPlanDescription()
-		Description() PrimitiveDescription
+		description() PrimitiveDescription
 	}
 
 	// noInputs default implementation for Primitives that are leaves

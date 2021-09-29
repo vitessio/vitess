@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/cmd"
+	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
@@ -35,6 +36,8 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
@@ -106,19 +109,64 @@ func main() {
 	vtctl.WorkflowManager = workflow.NewManager(ts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), *waitTime)
-	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 	installSignalHandlers(cancel)
 
-	err := vtctl.RunCommand(ctx, wr, args)
-	cancel()
-	switch err {
-	case vtctl.ErrUnknownCommand:
-		flag.Usage()
-		exit.Return(1)
-	case nil:
-		// keep going
+	// (TODO:ajm188) <Begin backwards compatibility support>.
+	//
+	// For v12, we are going to support new commands by prefixing as:
+	//		vtctl VtctldCommand <command> <args...>
+	//
+	// Existing scripts will continue to use the legacy commands. This is the
+	// default case below.
+	//
+	// We will also support legacy commands by prefixing as:
+	//		vtctl LegacyVtctlCommand <command> <args...>
+	// This is the fallthrough to the default case.
+	//
+	// In v13, we will make the default behavior to use the new commands and
+	// drop support for the `vtctl VtctldCommand ...` prefix, and legacy
+	// commands will only by runnable with the `vtctl LegacyVtctlCommand ...`
+	// prefix.
+	//
+	// In v14, we will drop support for all legacy commands, only running new
+	// commands, without any prefixing required or supported.
+	switch {
+	case strings.EqualFold(action, "VtctldCommand"):
+		// New behavior. Strip off the prefix, and set things up to run through
+		// the vtctldclient command tree, using the localvtctldclient (in-process)
+		// client.
+		vtctld := grpcvtctldserver.NewVtctldServer(ts)
+		localvtctldclient.SetServer(vtctld)
+		command.VtctldClientProtocol = "local"
+
+		os.Args = append([]string{"vtctldclient"}, args[1:]...)
+		if err := command.Root.ExecuteContext(ctx); err != nil {
+			log.Errorf("action failed: %v %v", action, err)
+			exit.Return(255)
+		}
+	case strings.EqualFold(action, "LegacyVtctlCommand"):
+		// Strip off the prefix (being used for compatibility) and fallthrough
+		// to the legacy behavior.
+		args = args[1:]
+		fallthrough
 	default:
-		log.Errorf("action failed: %v %v", action, err)
-		exit.Return(255)
+		if args[0] == "--" {
+			args = args[1:]
+		}
+
+		action = args[0]
+		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+		err := vtctl.RunCommand(ctx, wr, args)
+		cancel()
+		switch err {
+		case vtctl.ErrUnknownCommand:
+			flag.Usage()
+			exit.Return(1)
+		case nil:
+			// keep going
+		default:
+			log.Errorf("action failed: %v %v", action, err)
+			exit.Return(255)
+		}
 	}
 }

@@ -37,15 +37,6 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		// plan statement using Gen4
 		gen4Primitive, gen4Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, Gen4)
 
-		// if onlyGen4 is set to true or Gen4's instruction contain a lock primitive,
-		// we use only Gen4's primitive and exit early without using V3's.
-		// since lock primitives can imply the creation or deletion of locks,
-		// we want to execute them once using Gen4 to avoid the duplicated locks
-		// or double lock-releases.
-		if onlyGen4 || hasLockPrimitive(gen4Primitive) {
-			return gen4Primitive, gen4Err
-		}
-
 		// get V3's plan
 		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, V3)
 
@@ -53,6 +44,15 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		err = engine.CompareV3AndGen4Errors(v3Err, gen4Err)
 		if err != nil {
 			return nil, err
+		}
+
+		// if onlyGen4 is set to true or Gen4's instruction contain a lock primitive,
+		// we use only Gen4's primitive and exit early without using V3's.
+		// since lock primitives can imply the creation or deletion of locks,
+		// we want to execute them once using Gen4 to avoid the duplicated locks
+		// or double lock-releases.
+		if onlyGen4 || hasLockPrimitive(gen4Primitive) {
+			return gen4Primitive, gen4Err
 		}
 
 		return &engine.Gen4CompareV3{

@@ -56,16 +56,6 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 		default:
 			return greedySolve(ctx, op)
 		}
-	case *abstract.LeftJoin:
-		treeInner, err := optimizeQuery(ctx, op.Left)
-		if err != nil {
-			return nil, err
-		}
-		treeOuter, err := optimizeQuery(ctx, op.Right)
-		if err != nil {
-			return nil, err
-		}
-		return mergeOrJoin(ctx, treeInner, treeOuter, []sqlparser.Expr{op.Predicate}, false)
 	case *abstract.Join:
 		treeInner, err := optimizeQuery(ctx, op.LHS)
 		if err != nil {
@@ -75,7 +65,7 @@ func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, e
 		if err != nil {
 			return nil, err
 		}
-		return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Exp), true)
+		return mergeOrJoin(ctx, treeInner, treeOuter, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	case *abstract.Derived:
 		treeInner, err := optimizeQuery(ctx, op.Inner)
 		if err != nil {
@@ -196,7 +186,7 @@ func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner
 		}
 		return merged, err
 	case *joinTree:
-		if outerTree.outer {
+		if outerTree.leftJoin {
 			return nil, nil
 		}
 		newMergefunc := func(a, b *routeTree) (*routeTree, error) {
@@ -501,10 +491,10 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 		return nil, err
 	}
 	return &joinTree{
-		lhs:   lhsPlan,
-		rhs:   rhsPlan,
-		outer: node.outer,
-		vars:  node.vars,
+		lhs:      lhsPlan,
+		rhs:      rhsPlan,
+		leftJoin: node.leftJoin,
+		vars:     node.vars,
 	}, nil
 }
 
@@ -558,7 +548,7 @@ func mergeOrJoin(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlp
 		return newPlan, nil
 	}
 
-	tree := &joinTree{lhs: lhs.clone(), rhs: rhs.clone(), outer: !inner, vars: map[string]int{}}
+	tree := &joinTree{lhs: lhs.clone(), rhs: rhs.clone(), leftJoin: !inner, vars: map[string]int{}}
 	return pushJoinPredicate(ctx, joinPredicates, tree)
 }
 

@@ -66,9 +66,10 @@ Gen4 plan same as above
 "unsupported: cross-shard left join and column expressions"
 Gen4 plan same as above
 
-# left join where clauses
-"select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col = 5"
+# left join where clauses #2
+"select user.id from user left join user_extra on user.col = user_extra.col where coalesce(user_extra.col, 4) = 5"
 "unsupported: cross-shard left join and where clause"
+Gen4 plan same as above
 
 # * expresson not allowed for cross-shard joins
 "select * from user join user_extra"
@@ -133,6 +134,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
 "unsupported: subqueries disallowed in GROUP or ORDER BY"
+Gen4 error: unsupported: subqueries disallowed in GROUP BY
 
 # Order by uses cross-shard expression
 "select id from user order by id+1"
@@ -575,3 +577,9 @@ Gen4 plan same as above
 "select a.id, b.id from user as a, user_extra as b union select 1, 2 order by 2"
 "can't do ORDER BY on top of UNION"
 Gen4 error: Column 'id' in field list is ambiguous
+
+# Column aliases in Derived Table
+"select id2 from (select id from user) as x (id2)"
+"unsupported: column aliases in derived table"
+gen4 does not yet support: column aliases in derived table
+
