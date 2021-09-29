@@ -19,6 +19,7 @@ package testutil
 import (
 	"context"
 	"fmt"
+	"path"
 	"sync"
 	"testing"
 	"time"
@@ -174,7 +175,11 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
-	RefreshStateResults      map[string]error
+	RefreshStateResults map[string]error
+	// keyed by `<tablet_alias>/<wait_pos>`.
+	ReloadSchemaDelays map[string]time.Duration
+	// keyed by `<tablet_alias>/<wait_pos>`.
+	ReloadSchemaResults      map[string]error
 	ReplicationStatusDelays  map[string]time.Duration
 	ReplicationStatusResults map[string]struct {
 		Position *replicationdatapb.Status
@@ -460,6 +465,32 @@ func (fake *TabletManagerClient) RefreshState(ctx context.Context, tablet *topod
 	}
 
 	return fmt.Errorf("%w: no RefreshState result set for tablet %s", assert.AnError, key)
+}
+
+// ReloadSchema is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
+	if fake.ReloadSchemaResults == nil {
+		return fmt.Errorf("%w: no ReloadSchema results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := path.Join(topoproto.TabletAliasString(tablet.Alias), waitPosition)
+
+	if fake.ReloadSchemaDelays != nil {
+		if delay, ok := fake.ReloadSchemaDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.ReloadSchemaResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no ReloadSchema result set for tablet %s", assert.AnError, key)
 }
 
 // ReplicationStatus is part of the tmclient.TabletManagerClient interface.
