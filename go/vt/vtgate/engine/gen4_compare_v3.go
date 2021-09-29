@@ -158,10 +158,10 @@ func (gc *Gen4CompareV3) printMismatch(v3Result *sqltypes.Result, gen4Result *sq
 
 // Inputs implements the Primitive interface
 func (gc *Gen4CompareV3) Inputs() []Primitive {
-	return gc.Gen4.Inputs()
+	return []Primitive{gc.Gen4, gc.V3}
 }
 
-// Description implements the Primitive interface
+// description implements the Primitive interface
 func (gc *Gen4CompareV3) description() PrimitiveDescription {
 	return PrimitiveDescription{OperatorType: "Gen4CompareV3"}
 }

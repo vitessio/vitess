@@ -113,7 +113,7 @@ func (r *RenameFields) Inputs() []Primitive {
 	return []Primitive{r.Input}
 }
 
-// Description implements the primitive interface
+// description implements the primitive interface
 func (r *RenameFields) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RenameFields",

@@ -77,7 +77,7 @@ func (s *SessionPrimitive) GetFields(_ VCursor, _ map[string]*querypb.BindVariab
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
 }
 
-// Description implements the Primitive interface
+// description implements the Primitive interface
 func (s *SessionPrimitive) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: s.name,
