@@ -162,11 +162,12 @@ func (gc *Gen4CompareV3) Inputs() []Primitive {
 }
 
 // Description implements the Primitive interface
-func (gc *Gen4CompareV3) Description() PrimitiveDescription {
-	return gc.Gen4.Description()
+func (gc *Gen4CompareV3) description() PrimitiveDescription {
+	return PrimitiveDescription{OperatorType: "Gen4CompareV3"}
 }
 
-func CompareV3AndGen4Errors(v3Err error, gen4Err error) error {
+// CompareV3AndGen4Errors compares the two errors, and if they don't match, produces an error
+func CompareV3AndGen4Errors(v3Err, gen4Err error) error {
 	if v3Err != nil && gen4Err != nil {
 		if v3Err.Error() == gen4Err.Error() {
 			return gen4Err

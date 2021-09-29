@@ -94,22 +94,22 @@ type (
 
 var _ Primitive = (*Set)(nil)
 
-//RouteType implements the Primitive interface method.
+// RouteType implements the Primitive interface method.
 func (s *Set) RouteType() string {
 	return "Set"
 }
 
-//GetKeyspaceName implements the Primitive interface method.
+// GetKeyspaceName implements the Primitive interface method.
 func (s *Set) GetKeyspaceName() string {
 	return ""
 }
 
-//GetTableName implements the Primitive interface method.
+// GetTableName implements the Primitive interface method.
 func (s *Set) GetTableName() string {
 	return ""
 }
 
-//Execute implements the Primitive interface method.
+// TryExecute implements the Primitive interface method.
 func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(s.Input, bindVars, false)
 	if err != nil {
@@ -131,7 +131,7 @@ func (s *Set) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVaria
 	return &sqltypes.Result{}, nil
 }
 
-//StreamExecute implements the Primitive interface method.
+// TryStreamExecute implements the Primitive interface method.
 func (s *Set) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	result, err := s.TryExecute(vcursor, bindVars, wantields)
 	if err != nil {
@@ -140,17 +140,17 @@ func (s *Set) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return callback(result)
 }
 
-//GetFields implements the Primitive interface method.
+// GetFields implements the Primitive interface method.
 func (s *Set) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
-//Inputs implements the Primitive interface
+// Inputs implements the Primitive interface
 func (s *Set) Inputs() []Primitive {
 	return []Primitive{s.Input}
 }
 
-func (s *Set) Description() PrimitiveDescription {
+func (s *Set) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Ops": s.Ops,
 	}
@@ -162,7 +162,7 @@ func (s *Set) Description() PrimitiveDescription {
 
 var _ SetOp = (*UserDefinedVariable)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -176,12 +176,12 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method.
+// VariableName implements the SetOp interface method.
 func (u *UserDefinedVariable) VariableName() string {
 	return u.Name
 }
 
-//Execute implements the SetOp interface method.
+// Execute implements the SetOp interface method.
 func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	value, err := u.Expr.Evaluate(env)
 	if err != nil {
@@ -192,7 +192,7 @@ func (u *UserDefinedVariable) Execute(vcursor VCursor, env evalengine.Expression
 
 var _ SetOp = (*SysVarIgnore)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -204,12 +204,12 @@ func (svi *SysVarIgnore) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method.
+// VariableName implements the SetOp interface method.
 func (svi *SysVarIgnore) VariableName() string {
 	return svi.Name
 }
 
-//Execute implements the SetOp interface method.
+// Execute implements the SetOp interface method.
 func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
 	log.Infof("Ignored inapplicable SET %v = %v", svi.Name, svi.Expr)
 	return nil
@@ -217,7 +217,7 @@ func (svi *SysVarIgnore) Execute(VCursor, evalengine.ExpressionEnv) error {
 
 var _ SetOp = (*SysVarCheckAndIgnore)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -229,12 +229,12 @@ func (svci *SysVarCheckAndIgnore) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method
+// VariableName implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) VariableName() string {
 	return svci.Name
 }
 
-//Execute implements the SetOp interface method
+// Execute implements the SetOp interface method
 func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	rss, _, err := vcursor.ResolveDestinations(svci.Keyspace.Name, nil, []key.Destination{svci.TargetDestination})
 	if err != nil {
@@ -261,7 +261,7 @@ func (svci *SysVarCheckAndIgnore) Execute(vcursor VCursor, env evalengine.Expres
 
 var _ SetOp = (*SysVarReservedConn)(nil)
 
-//MarshalJSON provides the type to SetOp for plan json
+// MarshalJSON provides the type to SetOp for plan json
 func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -273,12 +273,12 @@ func (svs *SysVarReservedConn) MarshalJSON() ([]byte, error) {
 
 }
 
-//VariableName implements the SetOp interface method
+// VariableName implements the SetOp interface method
 func (svs *SysVarReservedConn) VariableName() string {
 	return svs.Name
 }
 
-//Execute implements the SetOp interface method
+// Execute implements the SetOp interface method
 func (svs *SysVarReservedConn) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	// For those running on advanced vitess settings.
 	if svs.TargetDestination != nil {
@@ -349,7 +349,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evaleng
 
 var _ SetOp = (*SysVarSetAware)(nil)
 
-//MarshalJSON marshals all the json
+// MarshalJSON marshals all the json
 func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type string
@@ -362,7 +362,7 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	})
 }
 
-//Execute implements the SetOp interface method
+// Execute implements the SetOp interface method
 func (svss *SysVarSetAware) Execute(vcursor VCursor, env evalengine.ExpressionEnv) error {
 	var err error
 	switch svss.Name {
@@ -514,7 +514,7 @@ func (svss *SysVarSetAware) setBoolSysVar(env evalengine.ExpressionEnv, setter f
 	return setter(boolValue)
 }
 
-//VariableName implements the SetOp interface method
+// VariableName implements the SetOp interface method
 func (svss *SysVarSetAware) VariableName() string {
 	return svss.Name
 }
