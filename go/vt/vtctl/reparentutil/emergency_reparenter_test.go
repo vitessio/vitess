@@ -2269,13 +2269,12 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		name                 string
 		validCandidates      map[string]mysql.Position
 		tabletMap            map[string]*topo.TabletInfo
-		prevPrimary          *topodatapb.Tablet
 		emergencyReparentOps EmergencyReparentOptions
 		result               *topodatapb.Tablet
 		err                  string
 	}{
 		{
-			name: "choose most advanced - with nil previous primary",
+			name: "choose most advanced",
 			validCandidates: map[string]mysql.Position{
 				"zone1-0000000100": positionMostAdvanced,
 				"zone1-0000000101": positionIntermediate1,
@@ -2314,60 +2313,6 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 						},
 						Hostname: "ignored tablet",
 					},
-				},
-			},
-			prevPrimary: nil,
-			result: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-					Uid:  100,
-				},
-			},
-		}, {
-			name: "choose most advanced in the same cell of previous primary",
-			validCandidates: map[string]mysql.Position{
-				"zone1-0000000100": positionMostAdvanced,
-				"zone1-0000000101": positionIntermediate1,
-				"zone2-0000000100": positionMostAdvanced,
-			},
-			tabletMap: map[string]*topo.TabletInfo{
-				"zone1-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  100,
-						},
-					},
-				},
-				"zone1-0000000101": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  101,
-						},
-					},
-				},
-				"zone2-0000000100": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone2",
-							Uid:  100,
-						},
-					},
-				},
-				"zone1-0000000404": {
-					Tablet: &topodatapb.Tablet{
-						Alias: &topodatapb.TabletAlias{
-							Cell: "zone1",
-							Uid:  404,
-						},
-						Hostname: "ignored tablet",
-					},
-				},
-			},
-			prevPrimary: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
 				},
 			},
 			result: &topodatapb.Tablet{
@@ -2418,11 +2363,6 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 						},
 						Hostname: "ignored tablet",
 					},
-				},
-			},
-			prevPrimary: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
 				},
 			},
 			result: &topodatapb.Tablet{
@@ -2479,11 +2419,6 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
-			prevPrimary: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-				},
-			},
 			result: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -2538,11 +2473,6 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 					},
 				},
 			},
-			prevPrimary: &topodatapb.Tablet{
-				Alias: &topodatapb.TabletAlias{
-					Cell: "zone1",
-				},
-			},
 			err: "split brain detected between servers",
 		},
 	}
@@ -2553,7 +2483,7 @@ func TestEmergencyReparenter_findMostAdvanced(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			erp := NewEmergencyReparenter(nil, nil, logutil.NewMemoryLogger())
 
-			winningTablet, _, err := erp.findMostAdvanced(test.prevPrimary, test.validCandidates, test.tabletMap, test.emergencyReparentOps)
+			winningTablet, _, err := erp.findMostAdvanced(test.validCandidates, test.tabletMap, test.emergencyReparentOps)
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
@@ -3414,7 +3344,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			err:       "candidate zone1-0000000100 not found in the tablet map; this an impossible situation",
 		}, {
 			name:                 "preferred candidate in the same cell same as our replica",
-			emergencyReparentOps: EmergencyReparentOptions{},
+			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
 			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3468,7 +3398,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 			},
 		}, {
 			name:                 "preferred candidate in the same cell different from original replica",
-			emergencyReparentOps: EmergencyReparentOptions{},
+			emergencyReparentOps: EmergencyReparentOptions{PreventCrossCellPromotion: true},
 			intermediateSource: &topodatapb.Tablet{
 				Alias: &topodatapb.TabletAlias{
 					Cell: "zone1",
@@ -3540,7 +3470,7 @@ func TestEmergencyReparenter_identifyPrimaryCandidate(t *testing.T) {
 						Cell: "zone1",
 						Uid:  100,
 					},
-					Type: topodatapb.TabletType_RDONLY,
+					Type: topodatapb.TabletType_REPLICA,
 				}, {
 					Alias: &topodatapb.TabletAlias{
 						Cell: "zone1",

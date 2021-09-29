@@ -91,40 +91,34 @@ func TestErsSorter(t *testing.T) {
 		name          string
 		tablets       []*topodatapb.Tablet
 		positions     []mysql.Position
-		idealCell     string
 		containsErr   string
 		sortedTablets []*topodatapb.Tablet
 	}{
 		{
-			name:          "all advanced, ideal cell 1",
-			tablets:       []*topodatapb.Tablet{nil, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
-			positions:     []mysql.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
-			idealCell:     cell1,
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, tabletReplica2_100, nil},
+			name:          "all advanced, sort via promotion rules",
+			tablets:       []*topodatapb.Tablet{nil, tabletReplica1_100, tabletRdonly1_102},
+			positions:     []mysql.Position{positionMostAdvanced, positionMostAdvanced, positionMostAdvanced},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, nil},
 		}, {
 			name:          "ordering by position",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
 			positions:     []mysql.Position{positionEmpty, positionIntermediate1, positionIntermediate2, positionMostAdvanced},
-			idealCell:     cell1,
 			sortedTablets: []*topodatapb.Tablet{tabletRdonly1_102, tabletReplica1_100, tabletReplica2_100, tabletReplica1_101},
 		}, {
 			name:        "tablets and positions count error",
 			tablets:     []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100},
 			positions:   []mysql.Position{positionEmpty, positionIntermediate1, positionMostAdvanced},
-			idealCell:   cell1,
 			containsErr: "unequal number of tablets and positions",
 		}, {
 			name:          "promotion rule check",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 			positions:     []mysql.Position{positionMostAdvanced, positionMostAdvanced},
-			idealCell:     cell1,
 			sortedTablets: []*topodatapb.Tablet{tabletReplica1_101, tabletRdonly1_102},
 		}, {
 			name:          "mixed",
 			tablets:       []*topodatapb.Tablet{tabletReplica1_101, tabletReplica2_100, tabletReplica1_100, tabletRdonly1_102},
 			positions:     []mysql.Position{positionEmpty, positionIntermediate1, positionMostAdvanced, positionIntermediate1},
-			idealCell:     cell1,
-			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletRdonly1_102, tabletReplica2_100, tabletReplica1_101},
+			sortedTablets: []*topodatapb.Tablet{tabletReplica1_100, tabletReplica2_100, tabletRdonly1_102, tabletReplica1_101},
 		},
 	}
 
@@ -132,7 +126,7 @@ func TestErsSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForERS(testcase.tablets, testcase.positions, testcase.idealCell)
+			err := sortTabletsForERS(testcase.tablets, testcase.positions)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {

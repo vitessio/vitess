@@ -178,21 +178,45 @@ func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMa
 	return restrictedValidCandidates, nil
 }
 
-func findPossibleCandidateFromListWithRestrictions(
+func findCandidateSameCell(
 	newPrimary *topodatapb.Tablet,
 	prevPrimary *topodatapb.Tablet,
 	possibleCandidates []*topodatapb.Tablet,
-	checkEqualPrimary bool,
-	checkSameCell bool,
 ) *topodatapb.Tablet {
+	// check whether the one we have selected as the source is in the same cell and belongs to the candidate list provided
 	for _, candidate := range possibleCandidates {
-		if checkEqualPrimary && !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
+		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
 			continue
 		}
-		if checkSameCell && prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
+		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
 			continue
 		}
 		return candidate
+	}
+	// check whether there is some other tablet in the same cell belonging to the candidate list provided
+	for _, candidate := range possibleCandidates {
+		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
+			continue
+		}
+		return candidate
+	}
+	return nil
+}
+
+func findCandidateAnyCell(
+	newPrimary *topodatapb.Tablet,
+	possibleCandidates []*topodatapb.Tablet,
+) *topodatapb.Tablet {
+	// check whether the one we have selected as the source belongs to the candidate list provided
+	for _, candidate := range possibleCandidates {
+		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
+			continue
+		}
+		return candidate
+	}
+	// return the first candidate from this list, if it isn't empty
+	if len(possibleCandidates) > 0 {
+		return possibleCandidates[0]
 	}
 	return nil
 }

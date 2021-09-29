@@ -216,10 +216,10 @@ func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 // region ers
 
 func ers(tab *cluster.Vttablet, totalTimeout, waitReplicasTimeout string) (string, error) {
-	return ersIgnoreTablet(tab, totalTimeout, waitReplicasTimeout, nil)
+	return ersIgnoreTablet(tab, totalTimeout, waitReplicasTimeout, nil, false)
 }
 
-func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet) (string, error) {
+func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string, tabletsToIgnore []*cluster.Vttablet, preventCrossCellPromotion bool) (string, error) {
 	var args []string
 	if timeout != "" {
 		args = append(args, "-action_timeout", timeout)
@@ -230,6 +230,9 @@ func ersIgnoreTablet(tab *cluster.Vttablet, timeout, waitReplicasTimeout string,
 	}
 	if waitReplicasTimeout != "" {
 		args = append(args, "-wait_replicas_timeout", waitReplicasTimeout)
+	}
+	if preventCrossCellPromotion {
+		args = append(args, "-prevent_cross_cell_promotion=true")
 	}
 	if len(tabletsToIgnore) != 0 {
 		tabsString := ""

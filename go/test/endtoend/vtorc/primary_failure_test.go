@@ -366,7 +366,7 @@ func TestDownPrimaryPromotionRule(t *testing.T) {
 		permanentlyRemoveVttablet(curPrimary)
 	}()
 
-	// we have a replica in the same cell, so that is the one which should be promoted and not the one from another cell
+	// we have a replica with a preferred promotion rule, so that is the one which should be promoted
 	checkPrimaryTablet(t, clusterInstance, crossCellReplica, true)
 	// also check that the replication is working correctly after failover
 	verifyWritesSucceed(t, crossCellReplica, []*cluster.Vttablet{rdonly, replica}, 10*time.Second)
