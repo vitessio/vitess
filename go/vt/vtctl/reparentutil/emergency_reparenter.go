@@ -207,11 +207,11 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Find the intermediate source for replication that we want other tablets to replicate from.
-	// This step chooses the most advanced tablet. Further ties are broken by using the cell of the previous primary and the promotion rule.
+	// This step chooses the most advanced tablet. Further ties are broken by using the promotion rule.
 	// In case the user has specified a tablet specifically, then it is selected, as long as it is the most advanced.
 	// Here we also check for split brain scenarios and check that the selected replica must be more advanced than all the other valid candidates.
 	// We fail in case there is a split brain detected.
-	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(prevPrimary, validCandidates, tabletMap, opts)
+	intermediateSource, validCandidateTablets, err = erp.findMostAdvanced(validCandidates, tabletMap, opts)
 	if err != nil {
 		return err
 	}
@@ -349,9 +349,8 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	return nil
 }
 
-// findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the cell and promotion rules.
+// findMostAdvanced finds the intermediate source for ERS. We always choose the most advanced one from our valid candidates list. Further ties are broken by looking at the promotion rules.
 func (erp *EmergencyReparenter) findMostAdvanced(
-	prevPrimary *topodatapb.Tablet,
 	validCandidates map[string]mysql.Position,
 	tabletMap map[string]*topo.TabletInfo,
 	opts EmergencyReparentOptions,
@@ -363,13 +362,8 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 		return nil, nil, err
 	}
 
-	idealCell := ""
-	if prevPrimary != nil {
-		idealCell = prevPrimary.Alias.Cell
-	}
-
 	// sort the tablets for finding the best intermediate source in ERS
-	err = sortTabletsForERS(validTablets, tabletPositions, idealCell)
+	err = sortTabletsForERS(validTablets, tabletPositions)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -391,7 +385,6 @@ func (erp *EmergencyReparenter) findMostAdvanced(
 
 	// If we were requested to elect a particular primary, verify it's a valid
 	// candidate (non-zero position, no errant GTIDs)
-	// Also, if the candidate is
 	if opts.NewPrimaryAlias != nil {
 		requestedPrimaryAlias := topoproto.TabletAliasString(opts.NewPrimaryAlias)
 		pos, ok := validCandidates[requestedPrimaryAlias]
@@ -659,47 +652,34 @@ func (erp *EmergencyReparenter) identifyPrimaryCandidate(
 	// Maybe we promoted a server in a different cell than the primary
 	// There's many options. We may wish to replace the server we promoted with a better one.
 
-	// check whether the one we promoted is in the same cell and belongs to the preferred candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true /* checkEqualPrimary */, true /* checkSameCell */)
-	if candidate != nil {
-		return candidate, nil
-	}
-	// check whether there is some other tablet in the same cell belonging to the preferred candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false /* checkEqualPrimary */, true /* checkSameCell */)
-	if candidate != nil {
-		return candidate, nil
-	}
-	// we do not have a preferred candidate in the same cell
-
-	if !opts.PreventCrossCellPromotion {
-		// check whether the one we promoted belongs to the preferred candidates list
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, true /* checkEqualPrimary */, false /* checkSameCell */)
+	// If the user requested for prevention of cross cell promotion then we should only search for valid candidates in the same cell
+	// otherwise we can search in any cell
+	if opts.PreventCrossCellPromotion {
+		// find candidates in the same cell from the preferred candidates list
+		candidate = findCandidateSameCell(intermediateSource, prevPrimary, preferredCandidates)
 		if candidate != nil {
 			return candidate, nil
 		}
-		// check whether there is some other tablet belonging to the preferred candidates list
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, preferredCandidates, false /* checkEqualPrimary */, false /* checkSameCell */)
+		// we do not have a preferred candidate in the same cell
+	} else {
+		// find candidates in any cell from the preferred candidates list
+		candidate = findCandidateAnyCell(intermediateSource, preferredCandidates)
 		if candidate != nil {
 			return candidate, nil
 		}
 	}
 
 	// repeat the same process for the neutral candidates list
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true /* checkEqualPrimary */, true /* checkSameCell */)
-	if candidate != nil {
-		return candidate, nil
-	}
-	candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false /* checkEqualPrimary */, true /* checkSameCell */)
-	if candidate != nil {
-		return candidate, nil
-	}
-
-	if !opts.PreventCrossCellPromotion {
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, true /* checkEqualPrimary */, false /* checkSameCell */)
+	if opts.PreventCrossCellPromotion {
+		// find candidates in the same cell from the neutral candidates list
+		candidate = findCandidateSameCell(intermediateSource, prevPrimary, neutralReplicas)
 		if candidate != nil {
 			return candidate, nil
 		}
-		candidate = findPossibleCandidateFromListWithRestrictions(intermediateSource, prevPrimary, neutralReplicas, false /* checkEqualPrimary */, false /* checkSameCell */)
+		// we do not have a neutral candidate in the same cell
+	} else {
+		// find candidates in any cell from the neutral candidates list
+		candidate = findCandidateAnyCell(intermediateSource, neutralReplicas)
 		if candidate != nil {
 			return candidate, nil
 		}

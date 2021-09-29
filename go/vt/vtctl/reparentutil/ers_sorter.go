@@ -31,15 +31,13 @@ import (
 type ERSSorter struct {
 	tablets   []*topodatapb.Tablet
 	positions []mysql.Position
-	idealCell string
 }
 
 // NewERSSorter creates a new ERSSorter
-func NewERSSorter(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) *ERSSorter {
+func NewERSSorter(tablets []*topodatapb.Tablet, positions []mysql.Position) *ERSSorter {
 	return &ERSSorter{
 		tablets:   tablets,
 		positions: positions,
-		idealCell: idealCell,
 	}
 }
 
@@ -76,31 +74,20 @@ func (ersSorter *ERSSorter) Less(i, j int) bool {
 	}
 
 	// at this point, both have the same GTIDs
-	// So, we will now check which one is in the same cell
-	iInSameCell := ersSorter.tablets[i].Alias.Cell == ersSorter.idealCell
-	jInSameCell := ersSorter.tablets[j].Alias.Cell == ersSorter.idealCell
-	if iInSameCell && !jInSameCell {
-		return true
-	}
-	if jInSameCell && !iInSameCell {
-		return false
-	}
-
-	// at this point, either both are in the ideal cell
-	// or neither is, so we check their promotion rules
+	// so we check their promotion rules
 	jPromotionRule := PromotionRule(ersSorter.tablets[j])
 	iPromotionRule := PromotionRule(ersSorter.tablets[i])
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 
 // sortTabletsForERS sorts the tablets, given their positions for emergency reparent shard
-func sortTabletsForERS(tablets []*topodatapb.Tablet, positions []mysql.Position, idealCell string) error {
+func sortTabletsForERS(tablets []*topodatapb.Tablet, positions []mysql.Position) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(NewERSSorter(tablets, positions, idealCell))
+	sort.Sort(NewERSSorter(tablets, positions))
 	return nil
 }

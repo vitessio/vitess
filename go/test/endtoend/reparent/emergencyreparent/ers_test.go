@@ -72,7 +72,7 @@ func TestReparentIgnoreReplicas(t *testing.T) {
 	require.NotNil(t, err, out)
 
 	// Now let's run it again, but set the command to ignore the unreachable replica.
-	out, err = ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab3})
+	out, err = ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab3}, false)
 	require.Nil(t, err, out)
 
 	// We'll bring back the replica we took down.
@@ -111,7 +111,7 @@ func TestERSPromoteRdonly(t *testing.T) {
 	stopTablet(t, tab1, true)
 
 	// We expect this one to fail because we have ignored all the replicas and have only the rdonly's which should not be promoted
-	out, err := ersIgnoreTablet(nil, "30s", "30s", []*cluster.Vttablet{tab4})
+	out, err := ersIgnoreTablet(nil, "30s", "30s", []*cluster.Vttablet{tab4}, false)
 	require.NotNil(t, err, out)
 
 	out, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", keyspaceShard)
@@ -119,8 +119,8 @@ func TestERSPromoteRdonly(t *testing.T) {
 	require.Contains(t, out, `"uid": 101`, "the primary should still be 101 in the shard info")
 }
 
-// TestERSPrefersSameCell tests that we prefer to promote a replica in the same cell as the previous primary
-func TestERSPrefersSameCell(t *testing.T) {
+// TestERSPreventCrossCellPromotion tests that we promote a replica in the same cell as the previous primary if prevent cross cell promotion flag is set
+func TestERSPreventCrossCellPromotion(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
 	defer teardownCluster()
@@ -133,7 +133,7 @@ func TestERSPrefersSameCell(t *testing.T) {
 	stopTablet(t, tab1, true)
 
 	// We expect that tab3 will be promoted since it is in the same cell as the previous primary
-	out, err := ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab2})
+	out, err := ersIgnoreTablet(nil, "60s", "30s", []*cluster.Vttablet{tab2}, true)
 	require.NoError(t, err, out)
 
 	newPrimary := getNewPrimary(t)
@@ -190,8 +190,9 @@ func TestPullFromRdonly(t *testing.T) {
 	// We have simulated a network partition in which the primary and rdonly got isolated and then the primary went down leaving the rdonly most advanced
 
 	// We expect that tab3 will be promoted since it is in the same cell as the previous primary
+	// since we are preventing cross cell promotions
 	// Also it must be fully caught up
-	out, err := ers(nil, "60s", "30s")
+	out, err := ersIgnoreTablet(nil, "60s", "30s", nil, true)
 	require.NoError(t, err, out)
 
 	newPrimary := getNewPrimary(t)
