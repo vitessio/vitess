@@ -64,7 +64,7 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-// Execute satisfies the Primitive interface.
+// TryExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -90,7 +90,7 @@ func (ms *MemorySort) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
-// StreamExecute satisfies the Primitive interface.
+// TryStreamExecute satisfies the Primitive interface.
 func (ms *MemorySort) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -176,7 +176,7 @@ func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int
 	return count, nil
 }
 
-func (ms *MemorySort) Description() PrimitiveDescription {
+func (ms *MemorySort) description() PrimitiveDescription {
 	orderByIndexes := GenericJoin(ms.OrderBy, orderByParamsToString)
 	value := ms.UpperLimit.Value
 	other := map[string]interface{}{"OrderBy": orderByIndexes}

@@ -48,7 +48,7 @@ type Join struct {
 	Vars map[string]int `json:",omitempty"`
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (jn *Join) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := vcursor.ExecutePrimitive(jn.Left, bindVars, wantfields)
@@ -92,7 +92,7 @@ func (jn *Join) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	return result, nil
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (jn *Join) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
@@ -257,7 +257,7 @@ func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.
 	return out
 }
 
-func (jn *Join) Description() PrimitiveDescription {
+func (jn *Join) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),

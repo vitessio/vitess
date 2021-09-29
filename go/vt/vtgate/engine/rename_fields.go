@@ -60,7 +60,7 @@ func (r *RenameFields) GetTableName() string {
 	return r.Input.GetTableName()
 }
 
-// Execute implements the primitive interface
+// TryExecute implements the Primitive interface
 func (r *RenameFields) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
 	if err != nil {
@@ -82,7 +82,7 @@ func (r *RenameFields) renameFields(qr *sqltypes.Result) {
 	}
 }
 
-// StreamExecute implements the primitive interface
+// TryStreamExecute implements the Primitive interface
 func (r *RenameFields) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	if wantfields {
 		innerCallback := callback
@@ -114,7 +114,7 @@ func (r *RenameFields) Inputs() []Primitive {
 }
 
 // Description implements the primitive interface
-func (r *RenameFields) Description() PrimitiveDescription {
+func (r *RenameFields) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RenameFields",
 		Other: map[string]interface{}{

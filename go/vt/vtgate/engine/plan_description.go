@@ -121,7 +121,7 @@ func marshalAdd(prepend string, buf *bytes.Buffer, name string, obj interface{})
 
 // PrimitiveToPlanDescription transforms a primitive tree into a corresponding PlanDescription tree
 func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
-	this := in.Description()
+	this := in.description()
 
 	for _, input := range in.Inputs() {
 		this.Inputs = append(this.Inputs, PrimitiveToPlanDescription(input))
