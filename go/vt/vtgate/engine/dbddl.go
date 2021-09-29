@@ -194,7 +194,7 @@ func (c *DBDDL) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.
 	return &sqltypes.Result{}, nil
 }
 
-// Description implements the Primitive interface
+// description implements the Primitive interface
 func (c *DBDDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: strings.ToUpper(c.RouteType()),
