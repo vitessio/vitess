@@ -1042,18 +1042,39 @@ func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sql
 				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
 			}
 
+			replSourceHost := ""
+			replSourcePort := int64(0)
+			replIOThreadHealth := ""
+			replSQLThreadHealth := ""
+			replLastError := ""
+			sql := "show slave status"
+			results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
+			if err != nil {
+				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+			}
+			if len(results.Rows) == 1 {
+				replSourceHost = results.Rows[0][1].ToString()
+				replSourcePort, _ = results.Rows[0][3].ToInt64()
+				replIOThreadHealth = results.Rows[0][10].ToString()
+				replSQLThreadHealth = results.Rows[0][11].ToString()
+				replLastError = results.Rows[0][19].ToString()
+			}
+			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
 			rows = append(rows, buildVarCharRow(
 				s.Target.Keyspace,
 				s.Target.Shard,
 				topoproto.TabletAliasString(ts.Tablet.Alias),
 				ts.Tablet.Hostname,
+				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+				replicationHealth,
 				fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
 				throttlerStatus,
 			))
 		}
 	}
 	return &sqltypes.Result{
-		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Lag", "Throttler_Status"),
+		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Source", "Replication_Health", "Replication_Lag", "Throttler_Status"),
 		Rows:   rows,
 	}, nil
 }
