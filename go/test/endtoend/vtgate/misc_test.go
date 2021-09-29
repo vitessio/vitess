@@ -771,6 +771,20 @@ func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
 	assertMatches(t, conn, `SELECT id3 FROM t1 LEFT JOIN t2 ON t1.id1 = t2.id3 WHERE t2.id3 = 10`, `[]`)
 }
 
+func TestDerivedTableColumns(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `delete from t1`)
+	defer exec(t, conn, `delete from t1`)
+
+	exec(t, conn, "insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5)")
+	assertMatches(t, conn, `SELECT t.id FROM (SELECT id2 FROM t1) AS t(id)`, `[[INT64(10)] [INT64(9)] [INT64(8)] [INT64(7)] [INT64(6)] [INT64(5)]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := exec(t, conn, query)
