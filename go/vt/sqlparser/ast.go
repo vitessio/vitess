@@ -1661,6 +1661,7 @@ type (
 		Partitions Partitions
 		As         TableIdent
 		Hints      *IndexHints
+		Columns    Columns
 	}
 
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.

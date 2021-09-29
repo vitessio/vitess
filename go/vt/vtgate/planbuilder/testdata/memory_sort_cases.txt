@@ -675,6 +675,23 @@ Gen4 plan same as above
     "Table": "`user`"
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, binary a, weight_string(binary a) from `user` where 1 != 1",
+    "OrderBy": "(1|2) DESC",
+    "Query": "select a, binary a, weight_string(binary a) from `user` order by binary a desc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
 
 # unary expression in join query
 "select u.a from user u join music m on u.a = m.a order by binary a desc"

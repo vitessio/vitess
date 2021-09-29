@@ -58,12 +58,12 @@ func (s *SessionPrimitive) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (s *SessionPrimitive) TryExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())
 }
 
-// StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (s *SessionPrimitive) TryStreamExecute(vcursor VCursor, _ map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	qr, err := s.action(vcursor.Session())
 	if err != nil {
@@ -77,8 +77,8 @@ func (s *SessionPrimitive) GetFields(_ VCursor, _ map[string]*querypb.BindVariab
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
 }
 
-// Description implements the Primitive interface
-func (s *SessionPrimitive) Description() PrimitiveDescription {
+// description implements the Primitive interface
+func (s *SessionPrimitive) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: s.name,
 	}

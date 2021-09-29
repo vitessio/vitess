@@ -46,7 +46,7 @@ type OnlineDDL struct {
 	noInputs
 }
 
-func (v *OnlineDDL) Description() PrimitiveDescription {
+func (v *OnlineDDL) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "OnlineDDL",
 		Keyspace:     v.Keyspace,
@@ -71,7 +71,7 @@ func (v *OnlineDDL) GetTableName() string {
 	return v.DDL.GetTable().Name.String()
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -114,7 +114,7 @@ func (v *OnlineDDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindV
 	return result, err
 }
 
-//StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (v *OnlineDDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {

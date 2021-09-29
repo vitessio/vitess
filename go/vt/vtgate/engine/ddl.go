@@ -47,7 +47,7 @@ type DDL struct {
 	noInputs
 }
 
-func (ddl *DDL) Description() PrimitiveDescription {
+func (ddl *DDL) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query": ddl.SQL,
 	}
@@ -85,7 +85,7 @@ func (ddl *DDL) isOnlineSchemaDDL() bool {
 	return false
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	if ddl.CreateTempTable {
 		vcursor.Session().HasCreatedTempTable()
@@ -113,7 +113,7 @@ func (ddl *DDL) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVaria
 	}
 }
 
-// StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (ddl *DDL) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := ddl.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {

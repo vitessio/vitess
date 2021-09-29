@@ -44,8 +44,8 @@ func (s *SingleRow) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
-func (s *SingleRow) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute performs a non-streaming exec.
+func (s *SingleRow) TryExecute(VCursor, map[string]*query.BindVariable, bool) (*sqltypes.Result, error) {
 	result := sqltypes.Result{
 		Rows: [][]sqltypes.Value{
 			{},
@@ -54,8 +54,8 @@ func (s *SingleRow) TryExecute(vcursor VCursor, bindVars map[string]*query.BindV
 	return &result, nil
 }
 
-// StreamExecute performs a streaming exec.
-func (s *SingleRow) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+// TryStreamExecute performs a streaming exec.
+func (s *SingleRow) TryStreamExecute(_ VCursor, _ map[string]*query.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	result := sqltypes.Result{
 		Rows: [][]sqltypes.Value{
 			{},
@@ -65,11 +65,11 @@ func (s *SingleRow) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 }
 
 // GetFields fetches the field info.
-func (s *SingleRow) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
+func (s *SingleRow) GetFields(_ VCursor, _ map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{}, nil
 }
 
-func (s *SingleRow) Description() PrimitiveDescription {
+func (s *SingleRow) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "SingleRow",
 	}

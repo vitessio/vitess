@@ -242,7 +242,7 @@ func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
@@ -324,7 +324,7 @@ func filterOutNilErrors(errs []error) []error {
 	return errors
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
@@ -779,7 +779,7 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	return nil
 }
 
-func (route *Route) Description() PrimitiveDescription {
+func (route *Route) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":      route.Query,
 		"Table":      route.TableName,
