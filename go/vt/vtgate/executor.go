@@ -753,6 +753,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
+	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
+		return e.showVitessReplicationStatus(show)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -987,6 +989,30 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 	}
 	return &sqltypes.Result{
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
+		Rows:   rows,
+	}, nil
+}
+
+func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	rows := [][]sqltypes.Value{}
+	status := e.scatterConn.GetHealthCheckCacheStatus()
+	for _, s := range status {
+		for _, ts := range s.TabletsStats {
+			if ts.Tablet.Type != topodatapb.TabletType_REPLICA {
+				continue
+			}
+
+			rows = append(rows, buildVarCharRow(
+				s.Target.Keyspace,
+				s.Target.Shard,
+				topoproto.TabletAliasString(ts.Tablet.Alias),
+				ts.Tablet.Hostname,
+				fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+			))
+		}
+	}
+	return &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Lag"),
 		Rows:   rows,
 	}, nil
 }
