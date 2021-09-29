@@ -25,9 +25,10 @@ import (
 
 // Derived represents a derived table in the query
 type Derived struct {
-	Sel   sqlparser.SelectStatement
-	Inner Operator
-	Alias string
+	Sel           sqlparser.SelectStatement
+	Inner         Operator
+	Alias         string
+	ColumnAliases sqlparser.Columns
 }
 
 var _ Operator = (*Derived)(nil)

@@ -24,19 +24,19 @@ import (
 )
 
 type derivedTable struct {
-	tableName   string
-	ASTNode     *sqlparser.AliasedTableExpr
-	columnNames []string
-	cols        []sqlparser.Expr
-	aliases     sqlparser.Columns
-	tables      TableSet
+	tableName      string
+	ASTNode        *sqlparser.AliasedTableExpr
+	columnNames    []string
+	cols           []sqlparser.Expr
+	tables         TableSet
+	hasAliasedCols bool
 }
 
 var _ TableInfo = (*derivedTable)(nil)
 
 func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *derivedTable {
 	vTbl := &derivedTable{
-		aliases: cols,
+		hasAliasedCols: len(cols) > 0,
 	}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
