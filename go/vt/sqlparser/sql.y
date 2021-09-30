@@ -2674,9 +2674,10 @@ show_statement:
   {
     $$ = &ShowMigrationLogs{UUID: string($3)}
   }
-| SHOW VITESS_REPLICATION_STATUS
+| SHOW VITESS_REPLICATION_STATUS like_opt
   {
-    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope}}
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{&ShowLegacy{Type: string($2), Scope: ImplicitScope, ShowTablesOpt: showTablesOpt}}
   }
 | SHOW VSCHEMA TABLES
   {

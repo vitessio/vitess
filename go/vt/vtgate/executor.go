@@ -755,7 +755,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
 	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
-		return e.showVitessReplicationStatus(show)
+		return e.showVitessReplicationStatus(ctx, show)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -994,11 +994,12 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 	}, nil
 }
 
-func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), *HealthCheckTimeout)
+func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
 	defer cancel()
 	rows := [][]sqltypes.Value{}
 
+	// This is only used for tests
 	if UsingLegacyGateway() {
 		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
 
@@ -1050,8 +1051,18 @@ func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sql
 
 		for _, s := range status {
 			for _, ts := range s.TabletsStats {
+				// We only want to show replica tablets
 				if ts.Tablet.Type != topodatapb.TabletType_REPLICA {
 					continue
+				}
+
+				// Allow people to filter by keyspace and shard using a LIKE clause
+				if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+					ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+					keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+					if !ksFilterRegex.MatchString(keyspaceShardStr) {
+						continue
+					}
 				}
 
 				tabletHostPort := ts.GetTabletHostPort()
@@ -1066,9 +1077,10 @@ func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sql
 				replSQLThreadHealth := ""
 				replLastError := ""
 				sql := "show slave status"
-				results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
 					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+					continue
 				}
 				if len(results.Rows) == 1 {
 					replSourceHost = results.Rows[0][1].ToString()
