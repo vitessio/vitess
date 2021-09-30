@@ -117,8 +117,6 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	var refreshCheck pools.RefreshCheck
 	if net.ParseIP(appParams.Host()) == nil {
 		refreshCheck = netutil.DNSTracker(appParams.Host())
-	} else {
-		refreshCheck = nil
 	}
 
 	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
