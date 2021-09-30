@@ -2,15 +2,15 @@
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	},
 	QueryGraph: {
 	Tables:
-		4:`user`
+		TableSet{2}:`user`
 	}
 }
 
@@ -18,11 +18,11 @@ select id from unsharded union select id from unsharded_auto
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	}
 }
 
@@ -30,11 +30,11 @@ select id from unsharded union all select id from unsharded_auto
 Concatenate {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	}
 }
 
@@ -43,17 +43,17 @@ Concatenate(distinct) {
 	Concatenate {
 		QueryGraph: {
 		Tables:
-			1:unsharded
+			TableSet{0}:unsharded
 		},
 		QueryGraph: {
 		Tables:
-			2:unsharded_auto
+			TableSet{1}:unsharded_auto
 		},
 		limit 10
 	},
 	QueryGraph: {
 	Tables:
-		4:x
+		TableSet{2}:x
 	},
 	order by id asc
 }
@@ -62,15 +62,15 @@ Concatenate(distinct) {
 Concatenate {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	},
 	QueryGraph: {
 	Tables:
-		4:x
+		TableSet{2}:x
 	}
 }
 
@@ -78,15 +78,15 @@ Concatenate {
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	},
 	QueryGraph: {
 	Tables:
-		4:x
+		TableSet{2}:x
 	}
 }
 
@@ -95,63 +95,63 @@ Concatenate {
 	Concatenate(distinct) {
 		QueryGraph: {
 		Tables:
-			1:unsharded
+			TableSet{0}:unsharded
 		},
 		QueryGraph: {
 		Tables:
-			2:unsharded_auto
+			TableSet{1}:unsharded_auto
 		}
 	},
 	QueryGraph: {
 	Tables:
-		4:x
+		TableSet{2}:x
 	}
 }
 
 select * from t
 QueryGraph: {
 Tables:
-	1:t
+	TableSet{0}:t
 }
 
 select t.c from t,y,z where t.c = y.c and (t.a = z.a or t.a = y.a) and 1 < 2
 QueryGraph: {
 Tables:
-	1:t
-	2:y
-	4:z
+	TableSet{0}:t
+	TableSet{1}:y
+	TableSet{2}:z
 JoinPredicates:
-	1:2 - t.c = y.c
-	1:2:4 - t.a = z.a or t.a = y.a
+	TableSet{0,1,2} - t.a = z.a or t.a = y.a
+	TableSet{0,1} - t.c = y.c
 ForAll: 1 < 2
 }
 
 select t.c from t join y on t.id = y.t_id join z on t.id = z.t_id where t.name = 'foo' and y.col = 42 and z.baz = 101
 QueryGraph: {
 Tables:
-	1:t where t.`name` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
+	TableSet{0}:t where t.`name` = 'foo'
+	TableSet{1}:y where y.col = 42
+	TableSet{2}:z where z.baz = 101
 JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
+	TableSet{0,1} - t.id = y.t_id
+	TableSet{0,2} - t.id = z.t_id
 }
 
 select t.c from t,y,z where t.name = 'foo' and y.col = 42 and z.baz = 101 and t.id = y.t_id and t.id = z.t_id
 QueryGraph: {
 Tables:
-	1:t where t.`name` = 'foo'
-	2:y where y.col = 42
-	4:z where z.baz = 101
+	TableSet{0}:t where t.`name` = 'foo'
+	TableSet{1}:y where y.col = 42
+	TableSet{2}:z where z.baz = 101
 JoinPredicates:
-	1:2 - t.id = y.t_id
-	1:4 - t.id = z.t_id
+	TableSet{0,1} - t.id = y.t_id
+	TableSet{0,2} - t.id = z.t_id
 }
 
 select 1 from t where '1' = 1 and 12 = '12'
 QueryGraph: {
 Tables:
-	1:t
+	TableSet{0}:t
 ForAll: '1' = 1 and 12 = '12'
 }
 
@@ -159,11 +159,11 @@ select 1 from t left join s on t.id = s.id
 OuterJoin: {
 	Inner: 	QueryGraph: {
 	Tables:
-		1:t
+		TableSet{0}:t
 	}
 	Outer: 	QueryGraph: {
 	Tables:
-		2:s
+		TableSet{1}:s
 	}
 	Predicate: t.id = s.id
 }
@@ -171,21 +171,21 @@ OuterJoin: {
 select 1 from t join s on t.id = s.id and t.name = s.name
 QueryGraph: {
 Tables:
-	1:t
-	2:s
+	TableSet{0}:t
+	TableSet{1}:s
 JoinPredicates:
-	1:2 - t.id = s.id and t.`name` = s.`name`
+	TableSet{0,1} - t.id = s.id and t.`name` = s.`name`
 }
 
 select 1 from t left join s on t.id = s.id where t.name = 'Mister'
 OuterJoin: {
 	Inner: 	QueryGraph: {
 	Tables:
-		1:t where t.`name` = 'Mister'
+		TableSet{0}:t where t.`name` = 'Mister'
 	}
 	Outer: 	QueryGraph: {
 	Tables:
-		2:s
+		TableSet{1}:s
 	}
 	Predicate: t.id = s.id
 }
@@ -194,11 +194,11 @@ select 1 from t right join s on t.id = s.id
 OuterJoin: {
 	Inner: 	QueryGraph: {
 	Tables:
-		2:s
+		TableSet{1}:s
 	}
 	Outer: 	QueryGraph: {
 	Tables:
-		1:t
+		TableSet{0}:t
 	}
 	Predicate: t.id = s.id
 }
@@ -208,22 +208,22 @@ Join: {
 	LHS: 	OuterJoin: {
 		Inner: 	QueryGraph: {
 		Tables:
-			1:a
+			TableSet{0}:a
 		}
 		Outer: 	QueryGraph: {
 		Tables:
-			2:b
+			TableSet{1}:b
 		}
 		Predicate: a.id = b.id
 	}
 	RHS: 	OuterJoin: {
 		Inner: 	QueryGraph: {
 		Tables:
-			4:c
+			TableSet{2}:c
 		}
 		Outer: 	QueryGraph: {
 		Tables:
-			8:d
+			TableSet{3}:d
 		}
 		Predicate: c.id = d.id
 	}
@@ -235,7 +235,7 @@ Derived t: {
 	Query: select 42 as id from tbl
 	Inner:	QueryGraph: {
 	Tables:
-		1:tbl
+		TableSet{0}:tbl
 	}
 }
 
@@ -245,14 +245,14 @@ Join: {
 		Query: select id from tbl limit 10
 		Inner:	QueryGraph: {
 		Tables:
-			1:tbl
+			TableSet{0}:tbl
 		}
 	}
 	RHS: 	Derived s: {
 		Query: select foo, count(*) from usr group by foo
 		Inner:	QueryGraph: {
 		Tables:
-			4:usr
+			TableSet{2}:usr
 		}
 	}
 	Predicate: t.id = s.foo
@@ -265,26 +265,26 @@ SubQuery: {
 		Type: PulloutValue
 		Query: 	QueryGraph: {
 		Tables:
-			2:dual
+			TableSet{1}:dual
 		}
 	}
 	{
 		Type: PulloutExists
 		Query: 	QueryGraph: {
 		Tables:
-			4:dual
+			TableSet{2}:dual
 		}
 	}
 	{
 		Type: PulloutIn
 		Query: 	QueryGraph: {
 		Tables:
-			8:dual
+			TableSet{3}:dual
 		}
 	}]
 	Outer: 	QueryGraph: {
 	Tables:
-		1:t where id in (select 1 from dual)
+		TableSet{0}:t where id in (select 1 from dual)
 	ForAll: exists (select 1 from dual)
 	}
 }
@@ -296,16 +296,16 @@ SubQuery: {
 		Type: PulloutValue
 		Query: 	QueryGraph: {
 		Tables:
-			2:user_extra
+			TableSet{1}:user_extra
 		JoinPredicates:
-			1:2 - id = u.id
+			TableSet{0,1} - id = u.id
 		}
 	}]
 	Outer: 	QueryGraph: {
 	Tables:
-		1:`user` AS u
+		TableSet{0}:`user` AS u
 	JoinPredicates:
-		1:2 - u.id = (select id from user_extra where id = u.id)
+		TableSet{0,1} - u.id = (select id from user_extra where id = u.id)
 	}
 }
 
@@ -323,7 +323,7 @@ Join: {
 	}
 	RHS: 	QueryGraph: {
 	Tables:
-		2:`user` AS u
+		TableSet{1}:`user` AS u
 	}
 	Predicate: ui.id = u.id
 }
@@ -341,11 +341,11 @@ select 1 from a union select 2 from b
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:a
+		TableSet{0}:a
 	},
 	QueryGraph: {
 	Tables:
-		2:b
+		TableSet{1}:b
 	}
 }
 
@@ -353,15 +353,15 @@ select 1 from a union select 2 from b union select 3 from c
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:a
+		TableSet{0}:a
 	},
 	QueryGraph: {
 	Tables:
-		2:b
+		TableSet{1}:b
 	},
 	QueryGraph: {
 	Tables:
-		4:c
+		TableSet{2}:c
 	}
 }
 
@@ -370,20 +370,20 @@ Concatenate {
 	Concatenate(distinct) {
 		QueryGraph: {
 		Tables:
-			1:a
+			TableSet{0}:a
 		},
 		QueryGraph: {
 		Tables:
-			2:b
+			TableSet{1}:b
 		},
 		QueryGraph: {
 		Tables:
-			4:c
+			TableSet{2}:c
 		}
 	},
 	QueryGraph: {
 	Tables:
-		8:d
+		TableSet{3}:d
 	}
 }
 
@@ -391,11 +391,11 @@ select id from unsharded union select id from unsharded_auto order by id
 Concatenate(distinct) {
 	QueryGraph: {
 	Tables:
-		1:unsharded
+		TableSet{0}:unsharded
 	},
 	QueryGraph: {
 	Tables:
-		2:unsharded_auto
+		TableSet{1}:unsharded_auto
 	},
 	order by id asc
 }
