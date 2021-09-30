@@ -1133,7 +1133,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where col in ::__sq1 order by rand()",
+        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
         "Table": "`user`"
       }
     ]
