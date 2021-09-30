@@ -1029,48 +1029,98 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 
 func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
 	rows := [][]sqltypes.Value{}
-	status := e.scatterConn.GetHealthCheckCacheStatus()
-	for _, s := range status {
-		for _, ts := range s.TabletsStats {
-			if ts.Tablet.Type != topodatapb.TabletType_REPLICA {
-				continue
-			}
 
-			tabletHostPort := ts.GetTabletHostPort()
-			throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
-			if err != nil {
-				log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
-			}
+	if UsingLegacyGateway() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
 
-			replSourceHost := ""
-			replSourcePort := int64(0)
-			replIOThreadHealth := ""
-			replSQLThreadHealth := ""
-			replLastError := ""
-			sql := "show slave status"
-			results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
-			if err != nil {
-				log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-			}
-			if len(results.Rows) == 1 {
-				replSourceHost = results.Rows[0][1].ToString()
-				replSourcePort, _ = results.Rows[0][3].ToInt64()
-				replIOThreadHealth = results.Rows[0][10].ToString()
-				replSQLThreadHealth = results.Rows[0][11].ToString()
-				replLastError = results.Rows[0][19].ToString()
-			}
-			replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA {
+					continue
+				}
 
-			rows = append(rows, buildVarCharRow(
-				s.Target.Keyspace,
-				s.Target.Shard,
-				topoproto.TabletAliasString(ts.Tablet.Alias),
-				ts.Tablet.Hostname,
-				fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
-				replicationHealth,
-				fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
-				throttlerStatus,
-			))
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				}
+				if len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					throttlerStatus,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA {
+					continue
+				}
+
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				}
+				if len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					throttlerStatus,
+				))
+			}
 		}
 	}
 	return &sqltypes.Result{
