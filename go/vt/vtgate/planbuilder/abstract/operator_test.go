@@ -207,7 +207,8 @@ func (qg *QueryGraph) crossPredicateString() string {
 		return ""
 	}
 	var joinPreds []string
-	for deps, predicates := range qg.innerJoins {
+	for _, join := range qg.innerJoins {
+		deps, predicates := join.deps, join.exprs
 		var expressions []string
 		for _, expr := range predicates {
 			expressions = append(expressions, sqlparser.String(expr))

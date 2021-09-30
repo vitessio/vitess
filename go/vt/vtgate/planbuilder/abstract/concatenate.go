@@ -65,7 +65,7 @@ func (c *Concatenate) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (c *Concatenate) Compact() Operator {
+func (c *Concatenate) Compact(*semantics.SemTable) (Operator, error) {
 	var newSources []Operator
 	var newSels []*sqlparser.Select
 	for i, source := range c.Sources {
@@ -90,5 +90,5 @@ func (c *Concatenate) Compact() Operator {
 	}
 	c.Sources = newSources
 	c.SelectStmts = newSels
-	return c
+	return c, nil
 }
