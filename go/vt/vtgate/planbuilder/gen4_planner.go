@@ -178,10 +178,11 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 
 func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
 	ctx := &planningContext{
-		reservedVars: reservedVars,
-		semTable:     semTable,
-		vschema:      vschema,
-		sqToReplace:  map[string]*sqlparser.Select{},
+		reservedVars:          reservedVars,
+		semTable:              semTable,
+		vschema:               vschema,
+		argToReplaceBySelect:  map[string]*sqlparser.Select{},
+		exprToReplaceBySqExpr: map[sqlparser.Expr]sqlparser.Expr{},
 	}
 	return ctx
 }
@@ -216,7 +217,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 			sel: node,
 		}
 
-		replaceSubQuery(ctx.sqToReplace, node)
+		replaceSubQuery(ctx.exprToReplaceBySqExpr, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {

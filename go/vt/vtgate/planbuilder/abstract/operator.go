@@ -34,7 +34,6 @@ type (
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	//  *  Vindex - Represents a query that selects from vindex tables.
 	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
-	//  *  Distinct - Represents elimination of duplicates from the output of the input source
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -211,10 +210,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement: subquerySelectStatement,
-				Inner:           opInner,
-				Type:            sq.OpCode,
-				ArgName:         sq.ArgName,
+				SelectStatement:  subquerySelectStatement,
+				Inner:            opInner,
+				Type:             sq.OpCode,
+				ArgName:          sq.ArgName,
+				HasValues:        sq.HasValues,
+				ExprsNeedReplace: sq.ExprsNeedReplace,
+				ReplaceBy:        sq.ReplaceBy,
 			})
 		}
 	}
