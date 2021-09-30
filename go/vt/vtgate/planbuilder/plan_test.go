@@ -174,28 +174,28 @@ func TestPlan(t *testing.T) {
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
-	testFile(t, "aggr_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "dml_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "from_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "filter_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "select_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "symtab_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "large_cases.txt", testOutputTempDir, vschemaWrapper, true)
-	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "aggr_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "dml_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "from_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "filter_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "select_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "symtab_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "use_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "set_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "union_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "transaction_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "lock_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "large_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "ddl_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "flush_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "show_cases_no_default_keyspace.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "stream_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "systemtables_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -207,15 +207,15 @@ func TestSysVarSetDisabled(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
-	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "tpch_schema_test.json"),
 	}
 
-	testFile(t, "onecase.txt", "", vschema, true)
+	testFile(t, "onecase.txt", "", vschema)
 }
 
 func TestRubyOnRailsQueries(t *testing.T) {
@@ -232,7 +232,7 @@ func TestRubyOnRailsQueries(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOLTP(t *testing.T) {
@@ -249,7 +249,7 @@ func TestOLTP(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "oltp_cases.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "oltp_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestTPCC(t *testing.T) {
@@ -266,7 +266,7 @@ func TestTPCC(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "tpcc_cases.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "tpcc_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestTPCH(t *testing.T) {
@@ -283,7 +283,7 @@ func TestTPCH(t *testing.T) {
 		}
 	}()
 
-	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper, true)
+	testFile(t, "tpch_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func BenchmarkOLTP(b *testing.B) {
@@ -330,7 +330,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 		dest:       key.DestinationShard("-80")}
 
-	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema, true)
+	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema)
 }
 func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
@@ -349,7 +349,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 		dest:       key.DestinationExactKeyRange{KeyRange: keyRange[0]},
 	}
 
-	testFile(t, "bypass_keyrange_cases.txt", testOutputTempDir, vschema, true)
+	testFile(t, "bypass_keyrange_cases.txt", testOutputTempDir, vschema)
 }
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
@@ -370,12 +370,12 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
-	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "migration_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "flush_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "show_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "call_cases.txt", testOutputTempDir, vschema, false)
+	testFile(t, "alterVschema_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "migration_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "flush_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "show_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "call_cases.txt", testOutputTempDir, vschema)
 }
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
@@ -389,7 +389,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
-	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema, false)
+	testFile(t, "sysschema_default.txt", testOutputTempDir, vschema)
 }
 
 func TestOtherPlanningFromFile(t *testing.T) {
@@ -406,8 +406,8 @@ func TestOtherPlanningFromFile(t *testing.T) {
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
 
-	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema, false)
-	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema, false)
+	testFile(t, "other_read_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
 func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
@@ -580,11 +580,9 @@ func escapeNewLines(in string) string {
 	return strings.ReplaceAll(in, "\n", "\\n")
 }
 
-func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, checkGen4equalPlan bool) {
-	var checkAllTests = !false
+func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 	t.Run(filename, func(t *testing.T) {
 		expected := &strings.Builder{}
-		fail := checkAllTests
 		var outFirstPlanner string
 		for tcase := range iterateExecFile(filename) {
 			t.Run(fmt.Sprintf("%d V3: %s", tcase.lineno, tcase.comments), func(t *testing.T) {
@@ -593,7 +591,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 				out := getPlanOrErrorOutput(err, plan)
 
 				if out != tcase.output {
-					fail = true
 					t.Errorf("V3 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 				if err != nil {
@@ -603,11 +600,6 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n", tcase.comments, escapeNewLines(tcase.input), out))
 			})
-
-			empty := false
-			if tcase.output2ndPlanner == "" {
-				empty = true
-			}
 
 			vschema.version = Gen4
 			out, err := getPlanOutput(tcase, vschema)
@@ -624,40 +616,29 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 			//       with this last expectation, it is an error if the Gen4 planner
 			//       produces the same plan as the V3 planner does
 			testName := fmt.Sprintf("%d Gen4: %s", tcase.lineno, tcase.comments)
-			if !empty || checkAllTests {
-				t.Run(testName, func(t *testing.T) {
-					if out != tcase.output2ndPlanner {
-						fail = true
-						t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
-
-					}
-					if err != nil {
-						out = `"` + out + `"`
-					}
-
-					if outFirstPlanner == out {
-						expected.WriteString(samePlanMarker)
-					} else {
-						if err != nil {
-							out = out[1 : len(out)-1] // remove the double quotes
-							expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
-						} else {
-							expected.WriteString(fmt.Sprintf("%s\n", out))
-						}
-					}
-				})
-			} else {
-				if out == tcase.output && checkGen4equalPlan {
-					t.Run(testName, func(t *testing.T) {
-						t.Errorf("Gen4 - %s:%d\nplanner produces same output as V3", filename, tcase.lineno)
-					})
+			t.Run(testName, func(t *testing.T) {
+				if out != tcase.output2ndPlanner {
+					t.Errorf("Gen4 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output2ndPlanner, out), tcase.output, out)
 				}
-			}
+				if err != nil {
+					out = `"` + out + `"`
+				}
 
+				if outFirstPlanner == out {
+					expected.WriteString(samePlanMarker)
+				} else {
+					if err != nil {
+						out = out[1 : len(out)-1] // remove the double quotes
+						expected.WriteString(fmt.Sprintf("Gen4 error: %s\n", out))
+					} else {
+						expected.WriteString(fmt.Sprintf("%s\n", out))
+					}
+				}
+			})
 			expected.WriteString("\n")
 		}
 
-		if fail && tempDir != "" {
+		if tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
 			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
 			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
