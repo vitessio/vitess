@@ -231,7 +231,7 @@ func DNSTracker(host string) func() (bool, error) {
 		if !addrEqual(addrs, newaddrs) {
 			oldaddr := addrs
 			addrs = newaddrs // Update the closure variable
-			return true, fmt.Errorf("Connection DNS for %s has changed; old: [%v]  new: [%v]", dnsName, oldaddr, newaddrs)
+			return true, fmt.Errorf("Connection DNS for %s has changed; old: %v  new: %v", dnsName, oldaddr, newaddrs)
 		}
 		return false, nil
 	}
