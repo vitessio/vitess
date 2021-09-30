@@ -132,6 +132,8 @@ type OrderByParams struct {
 	WeightStringCol   int
 	Desc              bool
 	StarColFixedIndex int
+	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
+	FromGroupBy bool
 }
 
 // String returns a string. Used for plan descriptions
@@ -240,7 +242,7 @@ func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
@@ -322,7 +324,7 @@ func filterOutNilErrors(errs []error) []error {
 	return errors
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable

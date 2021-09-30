@@ -353,6 +353,8 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 		return planbuilder.Gen4Left2Right
 	case "gen4fallback":
 		return planbuilder.Gen4WithFallback
+	case "gen4comparev3":
+		return planbuilder.Gen4CompareV3
 	}
 
 	log.Warning("unknown planner version configured. using the default")

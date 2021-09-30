@@ -540,7 +540,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 //NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -567,6 +567,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, fro
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
+		Into:             into,
 		From:             from,
 		Where:            where,
 		GroupBy:          groupBy,
@@ -744,6 +745,11 @@ func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Select) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -752,6 +758,11 @@ func (node *Select) SetLimit(limit *Limit) {
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
+}
+
+// SetInto sets the into clause
+func (node *Select) SetInto(into *SelectInto) {
+	node.Into = into
 }
 
 // MakeDistinct makes the statement distinct
@@ -806,41 +817,6 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
-// AddOrder adds an order by element
-func (node *ParenSelect) AddOrder(order *Order) {
-	node.Select.AddOrder(order)
-}
-
-// SetLimit sets the limit clause
-func (node *ParenSelect) SetLimit(limit *Limit) {
-	node.Select.SetLimit(limit)
-}
-
-// SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock Lock) {
-	node.Select.SetLock(lock)
-}
-
-// MakeDistinct implements the SelectStatement interface
-func (node *ParenSelect) MakeDistinct() {
-	node.Select.MakeDistinct()
-}
-
-// GetColumnCount implements the SelectStatement interface
-func (node *ParenSelect) GetColumnCount() int {
-	return node.Select.GetColumnCount()
-}
-
-// SetComments implements the SelectStatement interface
-func (node *ParenSelect) SetComments(comments Comments) {
-	node.Select.SetComments(comments)
-}
-
-// GetComments implements the SelectStatement interface
-func (node *ParenSelect) GetComments() Comments {
-	return node.Select.GetComments()
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -862,6 +838,11 @@ func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Union) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -872,38 +853,44 @@ func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// SetInto sets the into clause
+func (node *Union) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
-	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+	node.Distinct = true
 }
 
 // GetColumnCount implements the SelectStatement interface
 func (node *Union) GetColumnCount() int {
-	return node.FirstStatement.GetColumnCount()
+	return node.Left.GetColumnCount()
 }
 
 // SetComments implements the SelectStatement interface
 func (node *Union) SetComments(comments Comments) {
-	node.FirstStatement.SetComments(comments)
+	node.Left.SetComments(comments)
 }
 
 // GetComments implements the SelectStatement interface
 func (node *Union) GetComments() Comments {
-	return node.FirstStatement.GetComments()
+	return node.Left.GetComments()
 }
 
-//Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
-	union, isUnion := lhs.(*Union)
-	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
-		union.OrderBy = by
-		union.Limit = limit
-		union.Lock = lock
-		return union
+func requiresParen(stmt SelectStatement) bool {
+	switch node := stmt.(type) {
+	case *Union:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+	case *Select:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return false
+}
+
+func setLockInSelect(stmt SelectStatement, lock Lock) {
+	stmt.SetLock(lock)
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -1453,9 +1440,18 @@ func GetFirstSelect(selStmt SelectStatement) *Select {
 	case *Select:
 		return node
 	case *Union:
-		return GetFirstSelect(node.FirstStatement)
-	case *ParenSelect:
-		return GetFirstSelect(node.Select)
+		return GetFirstSelect(node.Left)
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// GetAllSelects gets all the select statement s
+func GetAllSelects(selStmt SelectStatement) []*Select {
+	switch node := selStmt.(type) {
+	case *Select:
+		return []*Select{node}
+	case *Union:
+		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }

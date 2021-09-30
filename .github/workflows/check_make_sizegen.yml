@@ -8,7 +8,7 @@ jobs:
     steps:
     
     - name: Set up Go
-      uses: actions/setup-go@v1
+      uses: actions/setup-go@v2
       with:
         go-version: 1.17
 
@@ -34,6 +34,7 @@ jobs:
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
+        go install golang.org/x/tools/cmd/goimports@latest
 
     - name: Run make minimaltools
       run: |

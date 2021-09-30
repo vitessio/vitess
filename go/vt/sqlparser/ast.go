@@ -43,8 +43,10 @@ type (
 		iSelectStatement()
 		iInsertRows()
 		AddOrder(*Order)
+		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		SetInto(into *SelectInto)
 		MakeDistinct()
 		GetColumnCount() int
 		SetComments(comments Comments)
@@ -234,18 +236,15 @@ type (
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
-	// UnionSelect represents union type and select statement after first select statement.
-	UnionSelect struct {
-		Distinct  bool
-		Statement SelectStatement
-	}
 	// Union represents a UNION statement.
 	Union struct {
-		FirstStatement SelectStatement
-		UnionSelects   []*UnionSelect
-		OrderBy        OrderBy
-		Limit          *Limit
-		Lock           Lock
+		Left     SelectStatement
+		Right    SelectStatement
+		Distinct bool
+		OrderBy  OrderBy
+		Limit    *Limit
+		Lock     Lock
+		Into     *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -503,11 +502,6 @@ type (
 	Load struct {
 	}
 
-	// ParenSelect is a parenthesized SELECT statement.
-	ParenSelect struct {
-		Select SelectStatement
-	}
-
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -618,7 +612,6 @@ func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
@@ -1387,11 +1380,6 @@ func (node *AlterDatabase) GetDatabaseName() string {
 	return node.DBName.String()
 }
 
-// ParenSelect can actually not be a top level statement,
-// but we have to allow it because it's a requirement
-// of SelectStatement.
-func (*ParenSelect) iStatement() {}
-
 type (
 
 	// ShowInternal will represent all the show statement types.
@@ -1440,10 +1428,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows() {}
+func (*Union) iInsertRows()  {}
+func (Values) iInsertRows()  {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -1674,6 +1661,7 @@ type (
 		Partitions Partitions
 		As         TableIdent
 		Hints      *IndexHints
+		Columns    Columns
 	}
 
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.

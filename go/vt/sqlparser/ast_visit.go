@@ -198,8 +198,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *ParenTableExpr:
 		return VisitRefOfParenTableExpr(in, f)
 	case *PartitionDefinition:
@@ -226,6 +224,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfRevertMigration(in, f)
 	case *Rollback:
 		return VisitRefOfRollback(in, f)
+	case RootNode:
+		return VisitRootNode(in, f)
 	case *SRollback:
 		return VisitRefOfSRollback(in, f)
 	case *Savepoint:
@@ -286,8 +286,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUnaryExpr(in, f)
 	case *Union:
 		return VisitRefOfUnion(in, f)
-	case *UnionSelect:
-		return VisitRefOfUnionSelect(in, f)
 	case *UnlockTables:
 		return VisitRefOfUnlockTables(in, f)
 	case *Update:
@@ -396,6 +394,9 @@ func VisitRefOfAliasedTableExpr(in *AliasedTableExpr, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfIndexHints(in.Hints, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
 		return err
 	}
 	return nil
@@ -1460,18 +1461,6 @@ func VisitRefOfOtherRead(in *OtherRead, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfParenSelect(in *ParenSelect, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitSelectStatement(in.Select, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitRefOfParenTableExpr(in *ParenTableExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -1640,6 +1629,15 @@ func VisitRefOfRollback(in *Rollback, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRootNode(in RootNode, f Visit) error {
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.SQLNode, f); err != nil {
 		return err
 	}
 	return nil
@@ -2072,13 +2070,11 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitSelectStatement(in.FirstStatement, f); err != nil {
+	if err := VisitSelectStatement(in.Left, f); err != nil {
 		return err
 	}
-	for _, el := range in.UnionSelects {
-		if err := VisitRefOfUnionSelect(el, f); err != nil {
-			return err
-		}
+	if err := VisitSelectStatement(in.Right, f); err != nil {
+		return err
 	}
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
@@ -2086,16 +2082,7 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
-	return nil
-}
-func VisitRefOfUnionSelect(in *UnionSelect, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitSelectStatement(in.Statement, f); err != nil {
+	if err := VisitRefOfSelectInto(in.Into, f); err != nil {
 		return err
 	}
 	return nil
@@ -2546,8 +2533,6 @@ func VisitInsertRows(in InsertRows, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
 	case *Union:
@@ -2580,8 +2565,6 @@ func VisitSelectStatement(in SelectStatement, f Visit) error {
 		return nil
 	}
 	switch in := in.(type) {
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Select:
 		return VisitRefOfSelect(in, f)
 	case *Union:
@@ -2672,8 +2655,6 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherAdmin(in, f)
 	case *OtherRead:
 		return VisitRefOfOtherRead(in, f)
-	case *ParenSelect:
-		return VisitRefOfParenSelect(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:
@@ -2764,6 +2745,18 @@ func VisitRefOfColIdent(in *ColIdent, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+func VisitRefOfRootNode(in *RootNode, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitSQLNode(in.SQLNode, f); err != nil {
 		return err
 	}
 	return nil

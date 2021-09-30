@@ -48,22 +48,22 @@ func (v *AlterVSchema) description() PrimitiveDescription {
 	}
 }
 
-//RouteType implements the Primitive interface
+// RouteType implements the Primitive interface
 func (v *AlterVSchema) RouteType() string {
 	return "AlterVSchema"
 }
 
-//GetKeyspaceName implements the Primitive interface
+// GetKeyspaceName implements the Primitive interface
 func (v *AlterVSchema) GetKeyspaceName() string {
 	return v.Keyspace.Name
 }
 
-//GetTableName implements the Primitive interface
+// GetTableName implements the Primitive interface
 func (v *AlterVSchema) GetTableName() string {
 	return v.AlterVschemaDDL.Table.Name.String()
 }
 
-//Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	err := vcursor.ExecuteVSchema(v.Keyspace.Name, v.AlterVschemaDDL)
 	if err != nil {
@@ -72,12 +72,12 @@ func (v *AlterVSchema) TryExecute(vcursor VCursor, bindVars map[string]*query.Bi
 	return &sqltypes.Result{}, nil
 }
 
-//StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (v *AlterVSchema) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Alter vschema not supported in streaming")
 }
 
-//GetFields implements the Primitive interface
+// GetFields implements the Primitive interface
 func (v *AlterVSchema) GetFields(vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 }

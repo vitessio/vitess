@@ -25,6 +25,8 @@ import (
 	"path"
 	"strings"
 
+	"vitess.io/vitess/go/tools/goimports"
+
 	"vitess.io/vitess/go/tools/common"
 
 	"github.com/dave/jennifer/jen"
@@ -182,13 +184,13 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		var buf bytes.Buffer
-		if err := file.Render(&buf); err != nil {
-			errors = append(errors, fmt.Errorf("render error for '%s': %w", fullPath, err))
+		genFile, err := goimports.FormatJenFile(file)
+		if err != nil {
+			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
 		}
 
-		if !bytes.Equal(existing, buf.Bytes()) {
+		if !bytes.Equal(existing, genFile) {
 			errors = append(errors, fmt.Errorf("'%s' has changed", fullPath))
 			continue
 		}

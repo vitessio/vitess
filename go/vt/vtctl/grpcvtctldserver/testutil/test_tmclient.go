@@ -135,6 +135,11 @@ type TabletManagerClient struct {
 		Error  error
 	}
 	// keyed by tablet alias.
+	GetReplicasResults map[string]struct {
+		Replicas []string
+		Error    error
+	}
+	// keyed by tablet alias.
 	GetSchemaDelays map[string]time.Duration
 	// keyed by tablet alias.
 	GetSchemaResults map[string]struct {
@@ -148,6 +153,10 @@ type TabletManagerClient struct {
 		Position string
 		Error    error
 	}
+	// keyed by tablet alias
+	PingDelays map[string]time.Duration
+	// keyed by tablet alias
+	PingResults map[string]error
 	// keyed by tablet alias.
 	PopulateReparentJournalDelays map[string]time.Duration
 	// keyed by tablet alias
@@ -182,6 +191,10 @@ type TabletManagerClient struct {
 	SetReadWriteDelays map[string]time.Duration
 	// keyed by tablet alias.
 	SetReadWriteResults map[string]error
+	// keyed by tablet alias
+	SleepDelays map[string]time.Duration
+	// keyed by tablet alias
+	SleepResults map[string]error
 	// keyed by tablet alias
 	StartReplicationDelays map[string]time.Duration
 	// keyed by tablet alias
@@ -259,6 +272,20 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 	return nil, assert.AnError
 }
 
+// GetReplicas is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet) ([]string, error) {
+	if fake.GetReplicasResults == nil {
+		return nil, fmt.Errorf("no results set on fake")
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if result, ok := fake.GetReplicasResults[key]; ok {
+		return result.Replicas, result.Error
+	}
+
+	return nil, fmt.Errorf("no result set for %v", key)
+}
+
 // GetSchema is part of the tmclient.TabletManagerClient interface.
 func (fake *TabletManagerClient) GetSchema(ctx context.Context, tablet *topodatapb.Tablet, tablets []string, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
 	if fake.GetSchemaResults == nil {
@@ -317,6 +344,36 @@ func (fake *TabletManagerClient) MasterPosition(ctx context.Context, tablet *top
 	}
 
 	return "", assert.AnError
+}
+
+// Ping is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.PingResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.PingDelays != nil {
+		if delay, ok := fake.PingDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.PingResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no result for key %s", assert.AnError, key)
 }
 
 // PopulateReparentJournal is part of the tmclient.TabletManagerClient
@@ -501,6 +558,37 @@ func (fake *TabletManagerClient) SetReadWrite(ctx context.Context, tablet *topod
 	}
 
 	if err, ok := fake.SetReadWriteResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no result for key %s", assert.AnError, key)
+}
+
+// Sleep is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error {
+	if fake.SleepResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.SleepDelays != nil {
+		if delay, ok := fake.SleepDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.SleepResults[key]; ok {
+		time.Sleep(duration)
 		return err
 	}
 

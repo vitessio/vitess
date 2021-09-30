@@ -554,12 +554,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *ParenTableExpr:
 		b, ok := inB.(*ParenTableExpr)
 		if !ok {
@@ -638,6 +632,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfRollback(a, b)
+	case RootNode:
+		b, ok := inB.(RootNode)
+		if !ok {
+			return false
+		}
+		return EqualsRootNode(a, b)
 	case *SRollback:
 		b, ok := inB.(*SRollback)
 		if !ok {
@@ -818,12 +818,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfUnion(a, b)
-	case *UnionSelect:
-		b, ok := inB.(*UnionSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfUnionSelect(a, b)
 	case *UnlockTables:
 		b, ok := inB.(*UnlockTables)
 		if !ok {
@@ -978,7 +972,8 @@ func EqualsRefOfAliasedTableExpr(a, b *AliasedTableExpr) bool {
 	return EqualsSimpleTableExpr(a.Expr, b.Expr) &&
 		EqualsPartitions(a.Partitions, b.Partitions) &&
 		EqualsTableIdent(a.As, b.As) &&
-		EqualsRefOfIndexHints(a.Hints, b.Hints)
+		EqualsRefOfIndexHints(a.Hints, b.Hints) &&
+		EqualsColumns(a.Columns, b.Columns)
 }
 
 // EqualsRefOfAlterCharset does deep equals between the two objects.
@@ -1966,17 +1961,6 @@ func EqualsRefOfOtherRead(a, b *OtherRead) bool {
 	return true
 }
 
-// EqualsRefOfParenSelect does deep equals between the two objects.
-func EqualsRefOfParenSelect(a, b *ParenSelect) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return EqualsSelectStatement(a.Select, b.Select)
-}
-
 // EqualsRefOfParenTableExpr does deep equals between the two objects.
 func EqualsRefOfParenTableExpr(a, b *ParenTableExpr) bool {
 	if a == b {
@@ -2125,6 +2109,11 @@ func EqualsRefOfRollback(a, b *Rollback) bool {
 		return false
 	}
 	return true
+}
+
+// EqualsRootNode does deep equals between the two objects.
+func EqualsRootNode(a, b RootNode) bool {
+	return EqualsSQLNode(a.SQLNode, b.SQLNode)
 }
 
 // EqualsRefOfSRollback does deep equals between the two objects.
@@ -2503,23 +2492,13 @@ func EqualsRefOfUnion(a, b *Union) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSelectStatement(a.FirstStatement, b.FirstStatement) &&
-		EqualsSliceOfRefOfUnionSelect(a.UnionSelects, b.UnionSelects) &&
+	return a.Distinct == b.Distinct &&
+		EqualsSelectStatement(a.Left, b.Left) &&
+		EqualsSelectStatement(a.Right, b.Right) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
-		a.Lock == b.Lock
-}
-
-// EqualsRefOfUnionSelect does deep equals between the two objects.
-func EqualsRefOfUnionSelect(a, b *UnionSelect) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Distinct == b.Distinct &&
-		EqualsSelectStatement(a.Statement, b.Statement)
+		a.Lock == b.Lock &&
+		EqualsRefOfSelectInto(a.Into, b.Into)
 }
 
 // EqualsRefOfUnlockTables does deep equals between the two objects.
@@ -3253,12 +3232,6 @@ func EqualsInsertRows(inA, inB InsertRows) bool {
 		return false
 	}
 	switch a := inA.(type) {
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Select:
 		b, ok := inB.(*Select)
 		if !ok {
@@ -3325,12 +3298,6 @@ func EqualsSelectStatement(inA, inB SelectStatement) bool {
 		return false
 	}
 	switch a := inA.(type) {
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Select:
 		b, ok := inB.(*Select)
 		if !ok {
@@ -3556,12 +3523,6 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfOtherRead(a, b)
-	case *ParenSelect:
-		b, ok := inB.(*ParenSelect)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfParenSelect(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {
@@ -3897,6 +3858,17 @@ func EqualsSliceOfRefOfRenameTablePair(a, b []*RenameTablePair) bool {
 	return true
 }
 
+// EqualsRefOfRootNode does deep equals between the two objects.
+func EqualsRefOfRootNode(a, b *RootNode) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsSQLNode(a.SQLNode, b.SQLNode)
+}
+
 // EqualsRefOfBool does deep equals between the two objects.
 func EqualsRefOfBool(a, b *bool) bool {
 	if a == b {
@@ -4004,19 +3976,6 @@ func EqualsSliceOfRefOfConstraintDefinition(a, b []*ConstraintDefinition) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsRefOfConstraintDefinition(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// EqualsSliceOfRefOfUnionSelect does deep equals between the two objects.
-func EqualsSliceOfRefOfUnionSelect(a, b []*UnionSelect) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfUnionSelect(a[i], b[i]) {
 			return false
 		}
 	}

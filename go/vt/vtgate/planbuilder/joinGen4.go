@@ -76,7 +76,7 @@ func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumbe
 }
 
 // SupplyWeightString implements the logicalPlan interface
-func (j *joinGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (j *joinGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 

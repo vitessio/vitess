@@ -118,9 +118,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
+        "FieldQuery": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(textcol1), weight_string(b)",
         "OrderBy": "(1|5) ASC, (2|4) ASC, (3|6) ASC",
-        "Query": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b order by a asc, textcol1 asc, b asc",
+        "Query": "select count(*), a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(textcol1), weight_string(b) order by a asc, textcol1 asc, b asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -144,9 +144,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*), a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
+        "FieldQuery": "select count(*), a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b)",
         "OrderBy": "(1|4) ASC, (2|5) ASC, (3|6) ASC",
-        "Query": "select count(*), a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, textcol1, b order by a asc, textcol1 asc, b asc",
+        "Query": "select count(*), a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b) order by a asc, textcol1 asc, b asc",
         "Table": "`user`"
       }
     ]
@@ -229,9 +229,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b)",
             "OrderBy": "(2|4) ASC, (1|5) ASC, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b order by textcol1 asc, a asc, b asc",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1), weight_string(a), weight_string(b) from `user` group by a, textcol1, b, weight_string(textcol1), weight_string(textcol1), weight_string(textcol1), weight_string(a), weight_string(b) order by textcol1 asc, a asc, b asc",
             "ResultColumns": 5,
             "Table": "`user`"
           }
@@ -262,9 +262,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, textcol1, b",
+            "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b)",
             "OrderBy": "(1|4) ASC, (2|5) ASC, (3|6) ASC",
-            "Query": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, textcol1, b order by a asc, textcol1 asc, b asc",
+            "Query": "select count(*) as k, a, textcol1, b, weight_string(a), weight_string(textcol1), weight_string(b) from `user` group by a, weight_string(a), textcol1, weight_string(textcol1), b, weight_string(b) order by a asc, textcol1 asc, b asc",
             "Table": "`user`"
           }
         ]
@@ -478,9 +478,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1)",
         "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC",
-        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1 order by col1 asc, col2 asc, col1 asc",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1) order by col1 asc, col2 asc, col1 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -583,9 +583,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -609,9 +609,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -638,9 +638,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` where 1 != 1 group by col, baz",
+        "FieldQuery": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` where 1 != 1 group by col, weight_string(col), baz, weight_string(baz)",
         "OrderBy": "(0|2) ASC, (3|4) ASC",
-        "Query": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` group by col, baz order by col asc, baz asc",
+        "Query": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` group by col, weight_string(col), baz, weight_string(baz) order by col asc, baz asc",
         "Table": "`user`"
       }
     ]
@@ -665,9 +665,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `name`, count(*), weight_string(`name`) from `user` where 1 != 1 group by `name`",
+        "FieldQuery": "select `name`, count(*), weight_string(`name`) from `user` where 1 != 1 group by `name`, weight_string(`name`)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select `name`, count(*), weight_string(`name`) from `user` group by `name` order by `name` asc",
+        "Query": "select `name`, count(*), weight_string(`name`) from `user` group by `name`, weight_string(`name`) order by `name` asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -691,9 +691,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select `name`, count(*), weight_string(`name`) from `user` where 1 != 1 group by `name`",
+        "FieldQuery": "select `name`, count(*), weight_string(`name`) from `user` where 1 != 1 group by `name`, weight_string(`name`)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select `name`, count(*), weight_string(`name`) from `user` group by `name` order by `name` asc",
+        "Query": "select `name`, count(*), weight_string(`name`) from `user` group by `name`, weight_string(`name`) order by `name` asc",
         "Table": "`user`"
       }
     ]
@@ -993,9 +993,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "ResultColumns": 1,
         "Table": "`user`"
       }
@@ -1018,9 +1018,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1064,9 +1064,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1090,9 +1090,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1117,9 +1117,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1143,9 +1143,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -1169,9 +1169,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2",
+        "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col2, weight_string(col2) from `user` group by col2 order by col2 asc",
+        "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
         "ResultColumns": 1,
         "Table": "`user`"
       }
@@ -1194,9 +1194,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2",
+        "FieldQuery": "select col2, weight_string(col2) from `user` where 1 != 1 group by col2, weight_string(col2)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col2, weight_string(col2) from `user` group by col2 order by col2 asc",
+        "Query": "select col2, weight_string(col2) from `user` group by col2, weight_string(col2) order by col2 asc",
         "Table": "`user`"
       }
     ]
@@ -1221,9 +1221,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1247,9 +1247,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -1274,9 +1274,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1300,9 +1300,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+        "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -1327,9 +1327,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1",
+        "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1 order by col1 asc",
+        "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -1353,9 +1353,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1",
+        "FieldQuery": "select col1, min(distinct col2), weight_string(col1) from `user` where 1 != 1 group by col1, weight_string(col1)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1 order by col1 asc",
+        "Query": "select col1, min(distinct col2), weight_string(col1) from `user` group by col1, weight_string(col1) order by col1 asc",
         "Table": "`user`"
       }
     ]
@@ -1385,9 +1385,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc",
             "ResultColumns": 2,
             "Table": "`user`"
           }
@@ -1418,9 +1418,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+            "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2)",
             "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc",
+            "Query": "select col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2) order by col1 asc, col2 asc",
             "Table": "`user`"
           }
         ]
@@ -1452,9 +1452,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
         "ResultColumns": 3,
         "Table": "`user`"
       }
@@ -1478,9 +1478,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, weight_string(b), a, weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, weight_string(b), a, weight_string(a) order by b asc, a asc",
         "Table": "`user`"
       }
     ]
@@ -1505,9 +1505,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by 2, 1",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by 2, 1, weight_string(b), weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by 2, 1 order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by 2, 1, weight_string(b), weight_string(a) order by b asc, a asc",
         "ResultColumns": 3,
         "Table": "`user`"
       }
@@ -1531,9 +1531,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, weight_string(b), a, weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, weight_string(b), a, weight_string(a) order by b asc, a asc",
         "Table": "`user`"
       }
     ]
@@ -1558,9 +1558,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a, weight_string(b), weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a, weight_string(b), weight_string(a) order by b asc, a asc",
         "ResultColumns": 3,
         "Table": "`user`"
       }
@@ -1584,9 +1584,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, a",
+        "FieldQuery": "select a, b, count(*), weight_string(b), weight_string(a) from `user` where 1 != 1 group by b, weight_string(b), a, weight_string(a)",
         "OrderBy": "(1|3) ASC, (0|4) ASC",
-        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, a order by b asc, a asc",
+        "Query": "select a, b, count(*), weight_string(b), weight_string(a) from `user` group by b, weight_string(b), a, weight_string(a) order by b asc, a asc",
         "Table": "`user`"
       }
     ]
@@ -1610,9 +1610,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by 1",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by 1, weight_string(col)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by 1 order by col asc",
+        "Query": "select col, weight_string(col) from `user` group by 1, weight_string(col) order by col asc",
         "ResultColumns": 1,
         "Table": "`user`"
       }
@@ -1635,9 +1635,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1699,6 +1699,7 @@ Gen4 plan same as above
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
@@ -1718,9 +1719,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
         "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3 order by 1 asc, 2 asc, 3 asc",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by 1 asc, 2 asc, 3 asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1747,9 +1748,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c)",
         "OrderBy": "(0|5) ASC, (1|6) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3 order by a asc, b asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c) from `user` group by 1, 2, 3, weight_string(a), weight_string(b), weight_string(c) order by a asc, b asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1776,9 +1777,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, 4",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
         "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 1, 2, 3, 4 order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 1, 2, 3, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1802,9 +1803,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` where 1 != 1 group by a, b, c, d",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b), c, weight_string(c), d, weight_string(d)",
         "OrderBy": "(3|8) ASC, (1|6) ASC, (0|5) ASC, (2|7) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` group by a, b, c, d order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(a), weight_string(b), weight_string(c), weight_string(d) from `user` group by a, weight_string(a), b, weight_string(b), c, weight_string(c), d, weight_string(d) order by d asc, b asc, a asc, c asc",
         "Table": "`user`"
       }
     ]
@@ -1829,9 +1830,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 3, 2, 1, 4",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` where 1 != 1 group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c)",
         "OrderBy": "(3|5) ASC, (1|6) ASC, (0|7) ASC, (2|8) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 3, 2, 1, 4 order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(d), weight_string(b), weight_string(a), weight_string(c) from `user` group by 3, 2, 1, 4, weight_string(d), weight_string(b), weight_string(a), weight_string(c) order by d asc, b asc, a asc, c asc",
         "ResultColumns": 5,
         "Table": "`user`"
       }
@@ -1855,9 +1856,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` where 1 != 1 group by c, b, a, d",
+        "FieldQuery": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` where 1 != 1 group by c, weight_string(c), b, weight_string(b), a, weight_string(a), d, weight_string(d)",
         "OrderBy": "(3|8) ASC, (1|6) ASC, (0|7) ASC, (2|5) ASC",
-        "Query": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` group by c, b, a, d order by d asc, b asc, a asc, c asc",
+        "Query": "select a, b, c, d, count(*), weight_string(c), weight_string(b), weight_string(a), weight_string(d) from `user` group by c, weight_string(c), b, weight_string(b), a, weight_string(a), d, weight_string(d) order by d asc, b asc, a asc, c asc",
         "Table": "`user`"
       }
     ]
@@ -1882,9 +1883,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by 3, 2, 1",
+        "FieldQuery": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` where 1 != 1 group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b)",
         "OrderBy": "(0|4) DESC, (2|5) DESC, (1|6) ASC",
-        "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by 3, 2, 1 order by 1 desc, 3 desc, b asc",
+        "Query": "select a, b, c, count(*), weight_string(a), weight_string(c), weight_string(b) from `user` group by 3, 2, 1, weight_string(a), weight_string(c), weight_string(b) order by 1 desc, 3 desc, b asc",
         "ResultColumns": 4,
         "Table": "`user`"
       }
@@ -1908,9 +1909,9 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, c, count(*), weight_string(c), weight_string(b), weight_string(a) from `user` where 1 != 1 group by c, b, a",
+        "FieldQuery": "select a, b, c, count(*), weight_string(c), weight_string(b), weight_string(a) from `user` where 1 != 1 group by c, weight_string(c), b, weight_string(b), a, weight_string(a)",
         "OrderBy": "(0|6) DESC, (2|4) DESC, (1|5) ASC",
-        "Query": "select a, b, c, count(*), weight_string(c), weight_string(b), weight_string(a) from `user` group by c, b, a order by a desc, c desc, b asc",
+        "Query": "select a, b, c, count(*), weight_string(c), weight_string(b), weight_string(a) from `user` group by c, weight_string(c), b, weight_string(b), a, weight_string(a) order by a desc, c desc, b asc",
         "Table": "`user`"
       }
     ]
@@ -1944,9 +1945,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc limit :__upper_limit",
+            "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
             "ResultColumns": 2,
             "Table": "`user`"
           }
@@ -1976,9 +1977,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*), weight_string(col) from `user` group by col order by col asc limit :__upper_limit",
+            "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -2103,9 +2104,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "(0|2) ASC, (0|2) ASC",
-            "Query": "select a, count(*), weight_string(a) from `user` group by a order by a asc, a asc",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc, a asc",
             "ResultColumns": 2,
             "Table": "`user`"
           }
@@ -2136,9 +2137,9 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a",
+            "FieldQuery": "select a, count(*), weight_string(a) from `user` where 1 != 1 group by a, weight_string(a)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select a, count(*), weight_string(a) from `user` group by a order by a asc",
+            "Query": "select a, count(*), weight_string(a) from `user` group by a, weight_string(a) order by a asc",
             "Table": "`user`"
           }
         ]
@@ -2162,6 +2163,34 @@ Gen4 plan same as above
 "syntax error: count(distinct *)"
 Gen4 plan same as above
 
+# if derived table scatter and ordering, then V3 doesn't allow outer constructs to be pushed down.
+"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(0) AS count(*)",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "ResultColumns": 2,
+        "Table": "`user`, user_extra"
+      }
+    ]
+  }
+}
+
 # optimize group by when using distinct with no aggregation
 "select distinct col1, col2 from user group by col1, col2"
 {
@@ -2179,9 +2208,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2",
+        "FieldQuery": "select col1, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, weight_string(col1), weight_string(col2)",
         "OrderBy": "(0|2) ASC, (1|3) ASC, (0|2) ASC, (1|3) ASC",
-        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2 order by col1 asc, col2 asc, col1 asc, col2 asc",
+        "Query": "select distinct col1, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, weight_string(col1), weight_string(col2) order by col1 asc, col2 asc, col1 asc, col2 asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -2384,9 +2413,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select a, b, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, b",
+        "FieldQuery": "select a, b, weight_string(a), weight_string(b) from `user` where 1 != 1 group by a, weight_string(a), b, weight_string(b)",
         "OrderBy": "(0|2) ASC, (1|3) ASC",
-        "Query": "select a, b, weight_string(a), weight_string(b) from `user` group by a, b order by a asc, b asc",
+        "Query": "select a, b, weight_string(a), weight_string(b) from `user` group by a, weight_string(a), b, weight_string(b) order by a asc, b asc",
         "Table": "`user`"
       }
     ]
@@ -2413,9 +2442,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, col2, col2",
+        "FieldQuery": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` where 1 != 1 group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2)",
         "OrderBy": "(0|3) ASC, (1|4) ASC, (1|4) ASC",
-        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, col2, col2 order by col1 asc, col2 asc, col2 asc",
+        "Query": "select col1, col2, col2, weight_string(col1), weight_string(col2) from `user` group by col1, weight_string(col1), col2, weight_string(col2), col2, weight_string(col2) order by col1 asc, col2 asc, col2 asc",
         "Table": "`user`"
       }
     ]
@@ -2447,9 +2476,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+            "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
             "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+            "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
             "Table": "`user`"
           }
         ]
@@ -2476,9 +2505,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "ResultColumns": 2,
         "Table": "`user`"
       }
@@ -2502,9 +2531,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col",
+        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
         "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col order by col asc",
+        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
         "Table": "`user`"
       }
     ]
@@ -2595,3 +2624,158 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# weight_string addition to group by
+"select lower(textcol1) as v, count(*) from user group by v"
+{
+  "QueryType": "SELECT",
+  "Original": "select lower(textcol1) as v, count(*) from user group by v",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by v, weight_string(lower(textcol1))",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1)) order by v asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select lower(textcol1) as v, count(*) from user group by v",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` where 1 != 1 group by v, weight_string(lower(textcol1))",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select lower(textcol1) as v, count(*), weight_string(lower(textcol1)) from `user` group by v, weight_string(lower(textcol1)) order by v asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# weight_string addition to group by when also there in order by
+"select char_length(texcol1) as a, count(*) from user group by a order by a"
+{
+  "QueryType": "SELECT",
+  "Original": "select char_length(texcol1) as a, count(*) from user group by a order by a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1)",
+    "GroupBy": "0",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by a, weight_string(char_length(texcol1))",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by a, weight_string(char_length(texcol1)) order by a asc",
+        "ResultColumns": 2,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select char_length(texcol1) as a, count(*) from user group by a order by a",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "Aggregates": "count(1) AS count(*)",
+    "GroupBy": "(0|2)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` where 1 != 1 group by a, weight_string(char_length(texcol1))",
+        "OrderBy": "(0|2) ASC",
+        "Query": "select char_length(texcol1) as a, count(*), weight_string(char_length(texcol1)) from `user` group by a, weight_string(char_length(texcol1)) order by a asc",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# order by inside and outside parenthesis select
+"(select id from user order by 1 desc) order by 1 asc limit 2"
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select id, weight_string(id) from `user` order by 1 asc limit :__upper_limit",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) order by 1 asc limit 2",
+  "Instructions": {
+    "OperatorType": "Limit",
+    "Count": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
+        "OrderBy": "(0|1) ASC",
+        "Query": "select id, weight_string(id) from `user` order by id asc limit :__upper_limit",
+        "ResultColumns": 1,
+        "Table": "`user`"
+      }
+    ]
+  }
+}

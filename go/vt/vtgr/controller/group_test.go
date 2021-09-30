@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/orchestrator/inst"
-
 	"vitess.io/vitess/go/vt/vtgr/db"
 
 	"github.com/stretchr/testify/assert"

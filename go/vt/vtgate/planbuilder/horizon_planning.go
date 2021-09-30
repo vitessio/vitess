@@ -59,10 +59,6 @@ func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (
 
 	hp.qp = qp
 
-	if err := checkUnsupportedConstructs(hp.sel); err != nil {
-		return nil, err
-	}
-
 	needAggrOrHaving := hp.qp.NeedsAggregation() || hp.sel.Having != nil
 	canShortcut := isRoute && !needAggrOrHaving && len(hp.qp.OrderExprs) == 0
 
@@ -160,7 +156,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	return nil
 }
 
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool) (int, bool, error) {
+// pushProjection pushes a projection to the plan.
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *route:
 		value, err := makePlanValue(expr.Expr)
@@ -233,6 +230,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if err != nil {
 			return 0, false, err
 		}
+		for i, value := range node.eSimpleProj.Cols {
+			// we return early if we already have the column in the simple projection's
+			// output list so we do not add it again.
+			if reuseCol && value == offset {
+				return i, false, nil
+			}
+		}
 		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
 		return len(node.eSimpleProj.Cols) - 1, true, nil
 	case *orderedAggregate:
@@ -253,6 +257,8 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return i, true, nil
 	case *limit:
+		return pushProjection(expr, node.input, semTable, inner, reuseCol)
+	case *distinct:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
@@ -378,7 +384,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	}
 
 	for _, groupExpr := range hp.qp.GroupByExprs {
-		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable)
+		added, err := planGroupByGen4(groupExpr, newPlan, ctx.semTable, false)
 		if err != nil {
 			return nil, err
 		}
@@ -478,11 +484,17 @@ func hasUniqueVindex(vschema ContextVSchema, semTable *semantics.SemTable, group
 	return false
 }
 
-func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable) (bool, error) {
+func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *semantics.SemTable, wsAdded bool) (bool, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := node.Select.(*sqlparser.Select)
 		sel.GroupBy = append(sel.GroupBy, groupExpr.Inner)
+		// If a weight_string function is added to the select list,
+		// then we need to add that to the group by clause otherwise the query will fail on mysql with full_group_by error
+		// as the weight_string function might not be functionally dependent on the group by.
+		if wsAdded {
+			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
+		}
 		return false, nil
 	case *joinGen4:
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
@@ -500,13 +512,15 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WCol = wsOffset
 			}
 		}
-		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable)
+		colAddedRecursively, err := planGroupByGen4(groupExpr, node.input, semTable, wsOffset != -1)
 		if err != nil {
 			return false, err
 		}
 		return colAdded || colAddedRecursively, nil
+	case *pulloutSubquery:
+		return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
 	default:
-		return false, semantics.Gen4NotSupportedF("group by on: %T", plan)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
 }
 
@@ -591,9 +605,21 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		}
 		plan.input = newUnderlyingPlan
 		return plan, nil
+	case *simpleProjection:
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+	case *vindexFunc:
+		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
 	default:
-		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
+}
+
+func isSpecialOrderBy(o abstract.OrderBy) bool {
+	if sqlparser.IsNull(o.Inner.Expr) {
+		return true
+	}
+	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
+	return isFunction && f.Name.Lowered() == "rand"
 }
 
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
@@ -604,7 +630,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			return nil, false, err
 		}
 		plan.Select.AddOrder(order.Inner)
-		if sqlparser.IsNull(order.Inner.Expr) {
+		if isSpecialOrderBy(order) {
 			continue
 		}
 		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
@@ -652,9 +678,13 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if weightStrExpr == nil {
 		return offset, -1, added, nil
 	}
-	_, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return 0, 0, false, semantics.Gen4NotSupportedF("group by/order by non-column expression")
+	if !sqlparser.IsColName(expr) {
+		unary, ok := expr.(*sqlparser.UnaryExpr)
+		if ok && sqlparser.IsColName(unary.Expr) {
+			expr = unary.Expr
+		} else {
+			return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+		}
 	}
 	qt := semTable.TypeFor(expr)
 	wsNeeded := true
@@ -686,6 +716,19 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
+		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
+		if err != nil {
+			return nil, err
+		}
+		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Left = lhs
+		plan.Right = rhs
+		return plan, nil
+	}
 	if allLeft(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
@@ -971,14 +1014,9 @@ func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) er
 func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
 	switch node := plan.(type) {
 	case *route:
-		sel, ok := node.Select.(*sqlparser.Select)
-		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on unexpected select statement: %T", node.Select)
-		}
+		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
 		return nil
-	case *join:
-		return semantics.Gen4NotSupportedF("having on join")
 	case *pulloutSubquery:
 		return pushHaving(expr, node.underlying, semTable)
 	case *simpleProjection:

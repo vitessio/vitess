@@ -35,7 +35,7 @@ type vTableInfo struct {
 var _ TableInfo = (*vTableInfo)(nil)
 
 // Dependencies implements the TableInfo interface
-func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies, error) {
+func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	var err error
 	for i, name := range v.columnNames {
@@ -58,12 +58,12 @@ func (v *vTableInfo) Dependencies(colName string, org originable) (dependencies,
 		}
 
 		newDeps := createCertain(directDeps, recursiveDeps, qt)
-		deps, err = deps.Merge(newDeps)
+		deps, err = deps.merge(newDeps)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if deps.Empty() && v.hasStar() {
+	if deps.empty() && v.hasStar() {
 		return createUncertain(v.tables, v.tables), nil
 	}
 	return deps, nil
@@ -74,16 +74,11 @@ func (v *vTableInfo) IsInfSchema() bool {
 	return false
 }
 
-// IsActualTable implements the TableInfo interface
-func (v *vTableInfo) IsActualTable() bool {
-	return false
-}
-
-func (v *vTableInfo) Matches(name sqlparser.TableName) bool {
+func (v *vTableInfo) matches(name sqlparser.TableName) bool {
 	return v.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
-func (v *vTableInfo) Authoritative() bool {
+func (v *vTableInfo) authoritative() bool {
 	return true
 }
 
@@ -91,7 +86,7 @@ func (v *vTableInfo) Name() (sqlparser.TableName, error) {
 	return sqlparser.TableName{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "oh noes")
 }
 
-func (v *vTableInfo) GetExpr() *sqlparser.AliasedTableExpr {
+func (v *vTableInfo) getExpr() *sqlparser.AliasedTableExpr {
 	return nil
 }
 
@@ -100,7 +95,7 @@ func (v *vTableInfo) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (v *vTableInfo) GetColumns() []ColumnInfo {
+func (v *vTableInfo) getColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(v.columnNames))
 	for _, col := range v.columnNames {
 		cols = append(cols, ColumnInfo{
@@ -115,12 +110,12 @@ func (v *vTableInfo) hasStar() bool {
 }
 
 // GetTables implements the TableInfo interface
-func (v *vTableInfo) GetTables(org originable) TableSet {
+func (v *vTableInfo) getTableSet(org originable) TableSet {
 	return v.tables
 }
 
 // GetExprFor implements the TableInfo interface
-func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
+func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range v.columnNames {
 		if colName == s {
 			return v.cols[i], nil
@@ -130,27 +125,39 @@ func (v *vTableInfo) GetExprFor(s string) (sqlparser.Expr, error) {
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
-	vTbl := &vTableInfo{}
+	cols, colNames, ts := selectExprsToInfos(expressions, tables, org)
+	return &vTableInfo{
+		columnNames: colNames,
+		cols:        cols,
+		tables:      ts,
+	}
+}
+
+func selectExprsToInfos(
+	expressions sqlparser.SelectExprs,
+	tables []TableInfo,
+	org originable,
+) (cols []sqlparser.Expr, colNames []string, ts TableSet) {
 	for _, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
-			vTbl.cols = append(vTbl.cols, expr.Expr)
+			cols = append(cols, expr.Expr)
 			if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:
 					// for projections, we strip out the qualifier and keep only the column name
-					vTbl.columnNames = append(vTbl.columnNames, expr.Name.String())
+					colNames = append(colNames, expr.Name.String())
 				default:
-					vTbl.columnNames = append(vTbl.columnNames, sqlparser.String(expr))
+					colNames = append(colNames, sqlparser.String(expr))
 				}
 			} else {
-				vTbl.columnNames = append(vTbl.columnNames, expr.As.String())
+				colNames = append(colNames, expr.As.String())
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables |= table.GetTables(org)
+				ts |= table.getTableSet(org)
 			}
 		}
 	}
-	return vTbl
+	return
 }

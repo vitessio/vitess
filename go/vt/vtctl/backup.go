@@ -21,13 +21,17 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"time"
 
 	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -56,8 +60,8 @@ func init() {
 	addCommand("Tablets", command{
 		"RestoreFromBackup",
 		commandRestoreFromBackup,
-		"<tablet alias>",
-		"Stops mysqld and restores the data from the latest backup."})
+		"[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		"Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time."})
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -237,11 +241,24 @@ func commandRemoveBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 }
 
 func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	backupTimestampStr := subFlags.String("backup_timestamp", "", "Use the backup taken at or before this timestamp rather than using the latest backup.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the RestoreFromBackup command requires the <tablet alias> argument")
+	}
+
+	// Zero date will cause us to use the latest, which is the default
+	backupTime := time.Time{}
+
+	// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+	if *backupTimestampStr != "" {
+		var err error
+		backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, *backupTimestampStr)
+		if err != nil {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("unable to parse the backup timestamp value provided of '%s'", *backupTimestampStr))
+		}
 	}
 
 	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
@@ -252,7 +269,7 @@ func commandRestoreFromBackup(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet)
+	stream, err := wr.TabletManagerClient().RestoreFromBackup(ctx, tabletInfo.Tablet, backupTime)
 	if err != nil {
 		return err
 	}

@@ -18,7 +18,10 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
+
+	"vitess.io/vitess/go/tools/goimports"
 
 	. "vitess.io/vitess/go/tools/asthelpergen"
 )
@@ -46,7 +49,12 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			if err := file.Save(fullPath); err != nil {
+			content, err := goimports.FormatJenFile(file)
+			if err != nil {
+				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
+			}
+			err = ioutil.WriteFile(fullPath, content, 0664)
+			if err != nil {
 				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
 			}
 			log.Printf("saved '%s'", fullPath)

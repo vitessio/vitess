@@ -142,10 +142,6 @@ export class SplitCloneCommand extends DropDownFlag {
             label: 'SplitClone',
             value: 'SplitClone'
         });
-        options.push({
-            label: 'LegacySplitClone',
-            value: 'LegacySplitClone'
-        });
         this.setOptions(options);
         this.value = options[0].value;
         this.setDisplayOn('factory_name', setDisplayOn);

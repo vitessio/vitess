@@ -17,9 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -35,15 +38,17 @@ type (
 		Name string `json:"name"`
 	}
 
+	labels []label
+
 	author struct {
 		Login string `json:"login"`
 	}
 
 	prInfo struct {
-		Labels []label `json:"labels"`
-		Number int     `json:"number"`
-		Title  string  `json:"title"`
-		Author author  `json:"author"`
+		Labels labels `json:"labels"`
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+		Author author `json:"author"`
 	}
 
 	prsByComponent = map[string][]prInfo
@@ -64,14 +69,55 @@ type (
 		Number int    `json:"number"`
 		Title  string `json:"title"`
 	}
+
+	releaseNote struct {
+		Version       string
+		Announcement  string
+		KnownIssues   string
+		AddDetails    string
+		ChangeLog     string
+		ChangeMetrics string
+	}
 )
 
 const (
+	markdownTemplate = `# Release of Vitess {{.Version}}
+
+{{- if or .Announcement .AddDetails }}
+## Announcement
+{{ .Announcement }}
+{{- end }}
+
+{{- if .AddDetails }}
+> TODO: please detail these pull requests.
+{{ .AddDetails }}
+{{- end }}
+
+{{- if and (or .Announcement .AddDetails) (or .KnownIssues .ChangeLog) }}
+------------
+{{- end }}
+
+{{- if .KnownIssues }}
+## Known Issues
+{{ .KnownIssues }}
+
+{{- if .ChangeLog }}
+------------
+{{- end }}
+{{- end }}
+
+{{- if .ChangeLog }}
+## Changelog
+{{ .ChangeLog }}
+{{ .ChangeMetrics }}
+{{- end }}
+`
+
 	markdownTemplatePR = `
 {{- range $type := . }}
-## {{ $type.Name }}
+### {{ $type.Name }}
 {{- range $component := $type.Components }} 
-### {{ $component.Name }}
+#### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
  * {{ $prInfo.Title }} #{{ $prInfo.Number }}
 {{- end }}
@@ -80,7 +126,6 @@ const (
 `
 
 	markdownTemplateKnownIssues = `
-## Known issues
 {{- range $issue := . }}
  * {{ $issue.Title }} #{{ $issue.Number }} 
 {{- end }}
@@ -92,7 +137,38 @@ const (
 	lengthOfSingleSHA = 40
 )
 
+func (l labels) needsToList() bool {
+	for _, label := range l {
+		if label.Name == "release notes" {
+			return true
+		}
+	}
+	return false
+}
+
+func (l labels) needsDetails() bool {
+	for _, label := range l {
+		if label.Name == "release notes (needs details)" {
+			return true
+		}
+	}
+	return false
+}
+
+func (rn *releaseNote) generate(writeTo io.Writer) error {
+	t := template.Must(template.New("release_notes").Parse(markdownTemplate))
+	err := t.ExecuteTemplate(writeTo, "release_notes", rn)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func loadKnownIssues(release string) ([]knownIssue, error) {
+	idx := strings.Index(release, ".")
+	if idx > -1 {
+		release = release[:idx]
+	}
 	label := fmt.Sprintf("Known issue: %s", release)
 	out, err := execCmd("gh", "issue", "list", "--repo", "vitessio/vitess", "--label", label, "--json", "title,number")
 	if err != nil {
@@ -208,7 +284,7 @@ type req struct {
 	key  string
 }
 
-func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
+func loadAllPRs(prs, authorCommits []string) ([]prInfo, []prInfo, []string, error) {
 	errChan := make(chan error)
 	wgDone := make(chan bool)
 	prChan := make(chan req, len(prs)+len(authorCommits))
@@ -221,7 +297,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	}
 	close(prChan)
 
-	var prInfos []prInfo
+	var prInfos, prNeedsDetails []prInfo
 	var authors []string
 	fmt.Printf("Found %d merged PRs. Loading PR info", len(prs))
 	wg := sync.WaitGroup{}
@@ -249,7 +325,11 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 	addPR := func(in prInfo) {
 		mu.Lock()
 		defer mu.Unlock()
-		prInfos = append(prInfos, in)
+		if in.Labels.needsDetails() {
+			prNeedsDetails = append(prNeedsDetails, in)
+		} else if in.Labels.needsToList() {
+			prInfos = append(prInfos, in)
+		}
 	}
 
 	for i := 0; i < numberOfThreads; i++ {
@@ -301,7 +381,7 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 
 	sort.Strings(authors)
 
-	return prInfos, authors, err
+	return prInfos, prNeedsDetails, authors, err
 }
 
 func groupPRs(prInfos []prInfo) prsByType {
@@ -366,6 +446,14 @@ func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
 	return data
 }
 
+func releaseSummary(summaryFile string) (string, error) {
+	contentSummary, err := ioutil.ReadFile(summaryFile)
+	if err != nil {
+		return "", err
+	}
+	return string(contentSummary), nil
+}
+
 func getOutput(fileout string) (*os.File, error) {
 	if fileout == "" {
 		return os.Stdout, nil
@@ -374,78 +462,108 @@ func getOutput(fileout string) (*os.File, error) {
 	return os.OpenFile(fileout, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 }
 
-func writePrInfos(writeTo *os.File, prPerType prsByType) (err error) {
+func getStringForPullRequestInfos(prPerType prsByType) (string, error) {
 	data := createSortedPrTypeSlice(prPerType)
 
 	t := template.Must(template.New("markdownTemplatePR").Parse(markdownTemplatePR))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplatePR", data)
-	if err != nil {
-		return err
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplatePR", data); err != nil {
+		return "", err
 	}
-	return nil
+	return buff.String(), nil
 }
 
-func writeKnownIssues(writeTo *os.File, issues []knownIssue) (err error) {
+func getStringForKnownIssues(issues []knownIssue) (string, error) {
 	if len(issues) == 0 {
-		return nil
+		return "", nil
 	}
 	t := template.Must(template.New("markdownTemplateKnownIssues").Parse(markdownTemplateKnownIssues))
-	err = t.ExecuteTemplate(writeTo, "markdownTemplateKnownIssues", issues)
-	if err != nil {
-		return err
+	buff := bytes.Buffer{}
+	if err := t.ExecuteTemplate(&buff, "markdownTemplateKnownIssues", issues); err != nil {
+		return "", err
 	}
-	return nil
+	return buff.String(), nil
+}
+
+func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
+	if len(pr) == 0 {
+		return "", nil
+	}
+	prPerType := groupPRs(pr)
+	prStr, err := getStringForPullRequestInfos(prPerType)
+	if err != nil {
+		return "", err
+	}
+	return prStr, nil
 }
 
 func main() {
 	from := flag.String("from", "", "from sha/tag/branch")
 	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	releaseBranch := flag.String("release-branch", "", "name of the release branch")
+	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
+	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
 	fileout := flag.String("file", "", "file on which to write release notes, stdout if empty")
-
 	flag.Parse()
 
+	releaseNotes := releaseNote{
+		Version: *versionName,
+	}
+
+	// summary of the release
+	if *summaryFile != "" {
+		summary, err := releaseSummary(*summaryFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.Announcement = summary
+	}
+
+	// known issues
+	if *versionName != "" {
+		knownIssues, err := loadKnownIssues(*versionName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		knownIssuesStr, err := getStringForKnownIssues(knownIssues)
+		if err != nil {
+			log.Fatal(err)
+		}
+		releaseNotes.KnownIssues = knownIssuesStr
+	}
+
+	// changelog with pull requests
 	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	prInfos, authors, err := loadAllPRs(prs, authorCommits)
+	prInfos, prNeedsDetails, authors, err := loadAllPRs(prs, authorCommits)
+	if err != nil {
+		log.Fatal(err)
+	}
+	releaseNotes.ChangeLog, err = groupAndStringifyPullRequest(prInfos)
+	if err != nil {
+		log.Fatal(err)
+	}
+	releaseNotes.AddDetails, err = groupAndStringifyPullRequest(prNeedsDetails)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	prPerType := groupPRs(prInfos)
+	// changelog metrics
+	if commits > 0 && len(authors) > 0 {
+		releaseNotes.ChangeMetrics = fmt.Sprintf(`
+The release includes %d commits (excluding merges)
+
+Thanks to all our contributors: @%s
+`, commits, strings.Join(authors, ", @"))
+	}
+
 	out, err := getOutput(*fileout)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func() {
-		_ = out.Close()
-	}()
-
-	err = writePrInfos(out, prPerType)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// known issues
-	knownIssues, err := loadKnownIssues(*releaseBranch)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = writeKnownIssues(out, knownIssues)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = out.WriteString(fmt.Sprintf("\n\nThe release includes %d commits (excluding merges)\n", commits))
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	_, err = out.WriteString(fmt.Sprintf("Thanks to all our contributors: @%s\n", strings.Join(authors, ", @")))
-	if err != nil {
+	defer out.Close()
+	if err := releaseNotes.generate(out); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -61,7 +61,7 @@ describe('Tablets', () => {
                                 cell: 'cell1',
                                 uid: 3,
                             },
-                            type: topodata.TabletType.MASTER,
+                            type: topodata.TabletType.PRIMARY,
                         },
                     }),
                     pb.Tablet.create({

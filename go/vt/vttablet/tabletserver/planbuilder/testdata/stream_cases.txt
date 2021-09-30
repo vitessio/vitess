@@ -26,7 +26,7 @@
   "PlanID": "SelectStream",
   "TableName": "",
   "Permissions":[{"TableName":"a","Role":0},{"TableName":"b","Role":0}],
-  "FullQuery": "(select * from a) union (select * from b)"
+  "FullQuery": "select * from a union select * from b"
 }
 
 # show

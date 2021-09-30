@@ -27,8 +27,11 @@ ENV VTDATAROOT /vt/vtdataroot
 # create the vtdataroot directory
 RUN mkdir -p $VTDATAROOT
 
+# install goimports
+RUN go install golang.org/x/tools/cmd/goimports@latest
+
 # make tools
 RUN make tools
 
-  # sleep for 50 minutes
+# sleep for 50 minutes
 CMD sleep 3000

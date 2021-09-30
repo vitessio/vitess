@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -42,7 +44,7 @@ const (
 )
 
 var (
-	keepData           = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData           = flag.Bool("keep-data", true, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor         = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 	isCoverage         = flag.Bool("is-coverage", false, "whether coverage is required")
 	forceVTDATAROOT    = flag.String("force-vtdataroot", "", "force path for VTDATAROOT, which may already be populated")
@@ -88,7 +90,8 @@ type LocalProcessCluster struct {
 	VtTabletExtraArgs []string
 
 	//Extra arguments for vtGate
-	VtGateExtraArgs []string
+	VtGateExtraArgs      []string
+	VtGatePlannerVersion planbuilder.PlannerVersion
 
 	VtctldExtraArgs []string
 
@@ -459,7 +462,8 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		"MASTER,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
-		cluster.VtGateExtraArgs)
+		cluster.VtGateExtraArgs,
+		cluster.VtGatePlannerVersion)
 	return vtgateProcInstance
 }
 
@@ -469,6 +473,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	cluster.VtGatePlannerVersion = defaultVtGatePlannerVersion
 	if *forceVTDATAROOT != "" {
 		cluster.CurrentVTDATAROOT = *forceVTDATAROOT
 	}

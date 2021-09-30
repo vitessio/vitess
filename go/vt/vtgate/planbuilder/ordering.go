@@ -16,13 +16,20 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.OrderBy) (logicalPlan, error) {
+type v3Order struct {
+	*sqlparser.Order
+	fromGroupBy bool
+}
+
+type v3OrderBy []*v3Order
+
+func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy v3OrderBy) (logicalPlan, error) {
 	switch node := input.(type) {
 	case *simpleProjection, *vindexFunc:
 		if len(orderBy) == 0 {
@@ -48,15 +55,17 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy sqlparser.Ord
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
+	case *concatenate:
+		if len(orderBy) == 0 {
+			return input, nil
+		}
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
 	}
-	if orderBy == nil {
-		return input, nil
-	}
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
 }
 
-func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *orderedAggregate) (logicalPlan, error) {
+func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregate) (logicalPlan, error) {
 	// The requested order must be such that the ordering can be done
 	// before the group by, which will allow us to push it down to the
 	// route. This is actually true in most use cases, except for situations
@@ -78,7 +87,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	// referenced tracks the keys referenced by the order by clause.
 	referenced := make([]bool, len(oa.eaggr.GroupByKeys))
 	postSort := false
-	selOrderBy := make(sqlparser.OrderBy, 0, len(orderBy))
+	selOrderBy := make(v3OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
 		// Identify the order by column.
 		var orderByCol *column
@@ -110,6 +119,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 
 			found = true
 			referenced[j] = true
+			order.fromGroupBy = groupBy.FromGroupBy
 			selOrderBy = append(selOrderBy, order)
 			break
 		}
@@ -128,12 +138,18 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "generating order by clause")
 		}
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscOrder})
+		selOrderBy = append(selOrderBy, &v3Order{
+			Order:       &sqlparser.Order{Expr: col, Direction: sqlparser.AscOrder},
+			fromGroupBy: groupByKey.FromGroupBy,
+		})
 	}
 
 	// Append the distinct aggregate if any.
 	if oa.extraDistinct != nil {
-		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscOrder})
+		selOrderBy = append(selOrderBy, &v3Order{
+			Order:       &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscOrder},
+			fromGroupBy: true,
+		})
 	}
 
 	// Push down the order by.
@@ -151,7 +167,7 @@ func planOAOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, oa *ordered
 	return oa, nil
 }
 
-func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *join) (logicalPlan, error) {
+func planJoinOrdering(pb *primitiveBuilder, orderBy v3OrderBy, node *join) (logicalPlan, error) {
 	isSpecial := false
 	switch len(orderBy) {
 	case 0:
@@ -197,11 +213,11 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *joi
 				switch e := in.(type) {
 				case *sqlparser.ColName:
 					if e.Metadata.(*column).Origin().Order() > node.Left.Order() {
-						return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: order by spans across shards")
+						return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: order by spans across shards")
 					}
 				case *sqlparser.Subquery:
 					// Unreachable because ResolveSymbols perfoms this check up above.
-					return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: order by has subquery")
+					return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: order by has subquery")
 				}
 				return true, nil
 			}, order.Expr)
@@ -226,7 +242,7 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy sqlparser.OrderBy, node *joi
 	return node, nil
 }
 
-func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, error) {
+func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 	switch len(orderBy) {
 	case 0:
 		return node, nil
@@ -240,14 +256,14 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 			}
 		}
 		if isSpecial {
-			node.Select.AddOrder(orderBy[0])
+			node.Select.AddOrder(orderBy[0].Order)
 			return node, nil
 		}
 	}
 
 	if node.isSingleShard() {
 		for _, order := range orderBy {
-			node.Select.AddOrder(order)
+			node.Select.AddOrder(order.Order)
 		}
 		return node, nil
 	}
@@ -304,8 +320,8 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 						} else {
 							tableMeta = tableMap[tableName]
 						}
-						if tableMeta == nil {
-							break
+						if tableMeta == nil || !tableMeta.isAuthoritative {
+							return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list")
 						}
 						starColFixedIndex += len(tableMeta.columnNames) - 1
 					}
@@ -318,10 +334,11 @@ func planRouteOrdering(orderBy sqlparser.OrderBy, node *route) (logicalPlan, err
 			WeightStringCol:   -1,
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: starColFixedIndex,
+			FromGroupBy:       order.fromGroupBy,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 
-		node.Select.AddOrder(order)
+		node.Select.AddOrder(order.Order)
 	}
 	return newMergeSort(node), nil
 }

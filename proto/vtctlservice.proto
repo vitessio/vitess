@@ -129,6 +129,9 @@ service Vtctld {
   // PlannedReparentShard or EmergencyReparentShard should be used in those
   // cases instead.
   rpc InitShardPrimary(vtctldata.InitShardPrimaryRequest) returns (vtctldata.InitShardPrimaryResponse) {};
+  // PingTablet checks that the specified tablet is awake and responding to RPCs.
+  // This command can be blocked by other in-flight operations.
+  rpc PingTablet(vtctldata.PingTabletRequest) returns (vtctldata.PingTabletResponse) {};
   // PlannedReparentShard reparents the shard to the new primary, or away from
   // an old primary. Both the old and new primaries need to be reachable and
   // running.
@@ -137,6 +140,10 @@ service Vtctld {
   // current shard primary is in for promotion unless NewPrimary is explicitly
   // provided in the request.
   rpc PlannedReparentShard(vtctldata.PlannedReparentShardRequest) returns (vtctldata.PlannedReparentShardResponse) {};
+  // RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+  //
+  // This may trigger an update to all connected clients.
+  rpc RebuildKeyspaceGraph(vtctldata.RebuildKeyspaceGraphRequest) returns (vtctldata.RebuildKeyspaceGraphResponse) {};
   // RebuildVSchemaGraph rebuilds the per-cell SrvVSchema from the global
   // VSchema objects in the provided cells (or all cells in the topo none
   // provided).
@@ -156,6 +163,18 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // SetShardIsPrimaryServing adds or removes a shard from serving.
+  //
+  // This is meant as an emergency function. It does not rebuild any serving
+  // graph (i.e. it does not run RebuildKeyspaceGraph).
+  rpc SetShardIsPrimaryServing(vtctldata.SetShardIsPrimaryServingRequest) returns (vtctldata.SetShardIsPrimaryServingResponse) {};
+  // SetShardTabletControl updates the TabletControl topo record for a shard and
+  // tablet type.
+  //
+  // This should only be used for an emergency fix, or after a finished
+  // Reshard. See the documentation on SetShardTabletControlRequest for more
+  // information about the different update modes.
+  rpc SetShardTabletControl(vtctldata.SetShardTabletControlRequest) returns (vtctldata.SetShardTabletControlResponse) {};
   // SetWritable sets a tablet as read-write (writable=true) or read-only (writable=false).
   rpc SetWritable(vtctldata.SetWritableRequest) returns (vtctldata.SetWritableResponse) {};
   // ShardReplicationPositions returns the replication position of each tablet
@@ -164,6 +183,11 @@ service Vtctld {
   // ShardReplicationPositions will return non-error, and include valid results
   // for the reachable tablets.
   rpc ShardReplicationPositions(vtctldata.ShardReplicationPositionsRequest) returns (vtctldata.ShardReplicationPositionsResponse) {};
+  // SleepTablet blocks the aciton queue on the specified tablet for the
+  // specified duration.
+  //
+  // This is typically used for testing.
+  rpc SleepTablet(vtctldata.SleepTabletRequest) returns (vtctldata.SleepTabletResponse) {};
   // StartReplication starts replication on the specified tablet.
   rpc StartReplication(vtctldata.StartReplicationRequest) returns (vtctldata.StartReplicationResponse) {};
   // StopReplication stops replication on the specified tablet.
@@ -183,4 +207,13 @@ service Vtctld {
   // parameters. Empty values are ignored. If the alias does not exist, the
   // CellsAlias will be created.
   rpc UpdateCellsAlias(vtctldata.UpdateCellsAliasRequest) returns (vtctldata.UpdateCellsAliasResponse) {};
+  // Validate validates that all nodes from the global replication graph are
+  // reachable, and that all tablets in discoverable cells are consistent.
+  rpc Validate(vtctldata.ValidateRequest) returns (vtctldata.ValidateResponse) {};
+  // ValidateKeyspace validates that all nodes reachable from the specified
+  // keyspace are consistent.
+  rpc ValidateKeyspace(vtctldata.ValidateKeyspaceRequest) returns (vtctldata.ValidateKeyspaceResponse) {};
+  // ValidateShard validates that all nodes reachable from the specified shard
+  // are consistent.
+  rpc ValidateShard(vtctldata.ValidateShardRequest) returns (vtctldata.ValidateShardResponse) {};
 }

@@ -21,6 +21,7 @@ import (
 	"math"
 	"reflect"
 	"unsafe"
+
 	hack "vitess.io/vitess/go/hack"
 )
 
@@ -174,6 +175,24 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field V3 vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.V3.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Gen4 vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Gen4.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Generate) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -196,7 +215,7 @@ func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
@@ -344,7 +363,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	size += cached.UpperLimit.CachedSize(false)
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -371,7 +390,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
 	}
 	return size
 }
@@ -598,7 +617,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
 	}
 	// field SysTableTableSchema []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{

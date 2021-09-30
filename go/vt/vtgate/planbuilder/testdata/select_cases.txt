@@ -568,10 +568,6 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
-# nextval for simple route
-"select next value from user"
-"NEXT used on a non-sequence table"
-
 # last_insert_id for unsharded route
 "select last_insert_id() as x from main.unsharded"
 {
@@ -1336,8 +1332,8 @@ Gen4 error: symbol t.col not found
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select * from music where 1 != 1) union (select * from `user` where 1 != 1)",
-    "Query": "(select * from music where user_id = 1) union (select * from `user` where id = 1)",
+    "FieldQuery": "select * from music where 1 != 1 union select * from `user` where 1 != 1",
+    "Query": "select * from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
     "Values": [
       1
@@ -1359,8 +1355,8 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "FieldQuery": "(select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1) union (select * from `user` where 1 != 1)",
-    "Query": "(select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1) union (select * from `user` where id = 1)",
+    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from `user` where 1 != 1",
+    "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from `user` where id = 1",
     "Table": "music",
     "Values": [
       1
@@ -1382,8 +1378,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select * from ((select col1, col2 from unsharded where 1 != 1) union (select col1, col2 from unsharded where 1 != 1)) as a where 1 != 1",
-    "Query": "select * from ((select col1, col2 from unsharded where id = 1) union (select col1, col2 from unsharded where id = 3)) as a",
+    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+    "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
     "Table": "unsharded"
   }
 }
@@ -1397,8 +1393,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "select a.col1, a.col2 from ((select col1, col2 from unsharded where 1 != 1) union (select col1, col2 from unsharded where 1 != 1)) as a where 1 != 1",
-    "Query": "select a.col1, a.col2 from ((select col1, col2 from unsharded where id = 1) union (select col1, col2 from unsharded where id = 3)) as a",
+    "FieldQuery": "select a.col1, a.col2 from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+    "Query": "select a.col1, a.col2 from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
     "Table": "unsharded"
   }
 }
@@ -1416,7 +1412,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select id, `name` from unsharded where 1 != 1",
-    "Query": "select id, `name` from unsharded where id in ((select id from unsharded where id = 1) union (select id from unsharded where id = 3))",
+    "Query": "select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
     "Table": "unsharded"
   }
 }
@@ -1432,8 +1428,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)",
-    "Query": "(select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto order by id asc limit 5",
     "Table": "unsharded"
   }
 }
@@ -1451,8 +1447,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1)",
-    "Query": "(select id from unsharded) union (select id from unsharded_auto) union (select id from unsharded_auto where id in (132))",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "Table": "unsharded"
   }
 }
@@ -1466,8 +1462,8 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "(select id from unsharded where 1 != 1) union all (select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1)",
-    "Query": "(select id from unsharded) union all (select id from unsharded_auto) union (select id from unsharded_auto where id in (132))",
+    "FieldQuery": "select id from unsharded where 1 != 1 union all select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Query": "select id from unsharded union all select id from unsharded_auto union select id from unsharded_auto where id in (132)",
     "Table": "unsharded"
   }
 }
@@ -1484,11 +1480,12 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "FieldQuery": "((select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)) union ((select id from unsharded_auto where 1 != 1) union (select `name` from unsharded where 1 != 1))",
-    "Query": "((select id from unsharded) union (select id from unsharded_auto)) union ((select id from unsharded_auto) union (select `name` from unsharded))",
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1 union select `name` from unsharded where 1 != 1",
+    "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded",
     "Table": "unsharded"
   }
 }
+Gen4 error: nesting of unions at the right-hand side is not yet supported
 
 # unsharded nested union with limit
 "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1"
@@ -1660,6 +1657,50 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows * from music limit 100",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 100,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select * from music limit :__upper_limit",
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from music where 1 != 1",
+            "Query": "select count(*) from music",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # sql_calc_found_rows with SelectEqualUnique plans
 "select sql_calc_found_rows * from music where user_id = 1 limit 2"
@@ -1702,6 +1743,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # sql_calc_found_rows with group by and having
 "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2"
@@ -1751,14 +1793,62 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select sql_calc_found_rows user_id, count(id) from music group by user_id having count(user_id) = 1 order by user_id limit 2",
+  "Instructions": {
+    "OperatorType": "SQL_CALC_FOUND_ROWS",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, count(id), weight_string(user_id) from music where 1 != 1 group by user_id",
+            "OrderBy": "(0|2) ASC",
+            "Query": "select user_id, count(id), weight_string(user_id) from music group by user_id having count(user_id) = 1 order by user_id asc limit :__upper_limit",
+            "ResultColumns": 2,
+            "Table": "music"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) from (select user_id, count(id) from music where 1 != 1 group by user_id) as t where 1 != 1",
+            "Query": "select count(*) from (select user_id, count(id) from music group by user_id having count(user_id) = 1) as t",
+            "Table": "music"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # sql_calc_found_rows in sub queries
 "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)"
 "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+Gen4 plan same as above
 
 # sql_calc_found_rows in derived table
 "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1"
 "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+Gen4 plan same as above
 
 # select from unsharded keyspace into dumpfile
 "select * from main.unsharded into Dumpfile 'x.txt'"
@@ -1819,11 +1909,17 @@ Gen4 plan same as above
 
 # Union after into outfile is incorrect
 "select id from user into outfile 'out_file_name' union all select id from music"
-"Incorrect usage/placement of 'INTO'"
+"syntax error at position 55 near 'union'"
+Gen4 plan same as above
 
-# Into outfile s3 in sub-query is incorrect
+# Into outfile s3 in derived table is incorrect
 "select id from (select id from user into outfile s3 'inner_outfile') as t2"
-"Incorrect usage/placement of 'INTO'"
+"syntax error at position 41 near 'into'"
+Gen4 plan same as above
+
+# Into outfile s3 in derived table with union incorrect
+"select id from (select id from user into outfile s3 'inner_outfile' union select 1) as t2"
+"syntax error at position 41 near 'into'"
 Gen4 plan same as above
 
 "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1"
@@ -1924,32 +2020,21 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "((((select 1))))",
   "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectReference",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "((((select 1 from dual where 1 != 1))))",
-    "Query": "((((select 1 from dual))))",
-    "Table": "dual"
+    "OperatorType": "Projection",
+    "Columns": [
+      "1"
+    ],
+    "Expressions": [
+      "INT64(1)"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "SingleRow"
+      }
+    ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "((((select 1))))",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectReference",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "FieldQuery": "select 1 from dual where 1 != 1",
-    "Query": "select 1 from dual",
-    "Table": "dual"
-  }
-}
+Gen4 plan same as above
 
 # Merging dual with user
 "select 42, id from dual, user"
@@ -2039,37 +2124,4 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select 42, user.id from main.dual, user",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1,1",
-    "TableName": "dual_`user`",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectReference",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 42 from dual where 1 != 1",
-        "Query": "select 42 from dual",
-        "Table": "dual"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.id from `user` where 1 != 1",
-        "Query": "select `user`.id from `user`",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above

@@ -58,26 +58,13 @@ func (node *Select) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ParenSelect) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "(%v)", node.Select)
-}
-
-// Format formats the node.
 func (node *Union) Format(buf *TrackedBuffer) {
-	if _, isSel := node.FirstStatement.(*Select); isSel {
-		buf.astPrintf(node, "(%v)", node.FirstStatement)
+	if requiresParen(node.Left) {
+		buf.astPrintf(node, "(%v)", node.Left)
 	} else {
-		buf.astPrintf(node, "%v", node.FirstStatement)
+		buf.astPrintf(node, "%v", node.Left)
 	}
 
-	for _, us := range node.UnionSelects {
-		buf.astPrintf(node, "%v", us)
-	}
-	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.ToString())
-}
-
-// Format formats the node.
-func (node *UnionSelect) Format(buf *TrackedBuffer) {
 	buf.WriteString(" ")
 	if node.Distinct {
 		buf.WriteString(UnionStr)
@@ -86,11 +73,13 @@ func (node *UnionSelect) Format(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" ")
 
-	if _, isSel := node.Statement.(*Select); isSel {
-		buf.astPrintf(node, "(%v)", node.Statement)
+	if requiresParen(node.Right) {
+		buf.astPrintf(node, "(%v)", node.Right)
 	} else {
-		buf.astPrintf(node, "%v", node.Statement)
+		buf.astPrintf(node, "%v", node.Right)
 	}
+
+	buf.astPrintf(node, "%v%v%s", node.OrderBy, node.Limit, node.Lock.ToString())
 }
 
 // Format formats the node.
@@ -879,6 +868,9 @@ func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {
 		buf.astPrintf(node, " as %v", node.As)
+		if len(node.Columns) != 0 {
+			buf.astPrintf(node, "%v", node.Columns)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.

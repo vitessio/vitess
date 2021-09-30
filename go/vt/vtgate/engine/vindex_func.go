@@ -85,12 +85,12 @@ func (vf *VindexFunc) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (vf *VindexFunc) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars)
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (vf *VindexFunc) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {

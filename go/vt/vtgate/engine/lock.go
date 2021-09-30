@@ -58,7 +58,7 @@ func (l *Lock) GetTableName() string {
 	return "dual"
 }
 
-// Execute is part of the Primitive interface
+// TryExecute is part of the Primitive interface
 func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
@@ -75,7 +75,7 @@ func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	return vcursor.ExecuteLock(rss[0], query)
 }
 
-// StreamExecute is part of the Primitive interface
+// TryStreamExecute is part of the Primitive interface
 func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	qr, err := l.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {

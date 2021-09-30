@@ -226,7 +226,7 @@ func MysqlAddr(tablet *topodatapb.Tablet) string {
 	return netutil.JoinHostPort(tablet.MysqlHostname, tablet.MysqlPort)
 }
 
-// MySQLIP returns the MySQL server's IP by resolvign the host name.
+// MySQLIP returns the MySQL server's IP by resolving the hostname.
 func MySQLIP(tablet *topodatapb.Tablet) (string, error) {
 	ipAddrs, err := net.LookupHost(tablet.MysqlHostname)
 	if err != nil {
