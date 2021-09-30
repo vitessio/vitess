@@ -153,23 +153,14 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 
 func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logicalPlan, error) {
 	var sources []logicalPlan
-
-	for i, source := range n.sources {
-		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
-		if err != nil {
-			return nil, err
-		}
-		if i == 0 {
-			sources = append(sources, plan)
-			continue
-		}
-		last := sources[len(sources)-1]
-		newPlan := mergeUnionLogicalPlans(ctx, last, plan)
-		if newPlan != nil {
-			sources[len(sources)-1] = newPlan
-			continue
-		}
-		sources = append(sources, plan)
+	var err error
+	if n.distinct {
+		sources, err = transformAndMerge(ctx, n)
+	} else {
+		sources, err = transformAndMergeInOrder(ctx, n)
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	if n.distinct {
@@ -198,6 +189,71 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 		return newDistinct(result), nil
 	}
 	return result, nil
+}
+
+func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources []logicalPlan, err error) {
+	for i, source := range n.sources {
+		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		if i == 0 {
+			sources = append(sources, plan)
+			continue
+		}
+		last := sources[len(sources)-1]
+		newPlan := mergeUnionLogicalPlans(ctx, last, plan)
+		if newPlan != nil {
+			sources[len(sources)-1] = newPlan
+			continue
+		}
+		sources = append(sources, plan)
+	}
+	return sources, nil
+}
+
+func transformAndMerge(ctx *planningContext, n *concatenateTree) ([]logicalPlan, error) {
+	var sources []logicalPlan
+	for i, source := range n.sources {
+		plan, err := createLogicalPlan(ctx, source, n.selectStmts[i])
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, plan)
+	}
+
+	idx := 0
+	for idx < len(sources) {
+		keep := make([]bool, len(sources))
+		srcA := sources[idx]
+		merged := false
+		for j, srcB := range sources {
+			if j <= idx {
+				continue
+			}
+			newPlan := mergeUnionLogicalPlans(ctx, srcA, srcB)
+			if newPlan != nil {
+				sources[idx] = newPlan
+				srcA = newPlan
+				merged = true
+			} else {
+				keep[j] = true
+			}
+		}
+		if !merged {
+			return sources, nil
+		}
+		var phase []logicalPlan
+		for i, source := range sources {
+			if keep[i] || i <= idx {
+				phase = append(phase, source)
+			}
+		}
+		idx++
+		sources = phase
+	}
+
+	return sources, nil
 }
 
 func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logicalPlan) logicalPlan {

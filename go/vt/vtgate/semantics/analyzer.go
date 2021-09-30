@@ -156,44 +156,6 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func checkForStar(s sqlparser.SelectExprs) error {
-	for _, expr := range s {
-		_, isStar := expr.(*sqlparser.StarExpr)
-		if isStar {
-			return ProjError{
-				Inner: vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "can't handle * between UNIONs"),
-			}
-		}
-	}
-	return nil
-}
-
-func checkUnionColumns(cursor *sqlparser.Cursor) error {
-	union, isUnion := cursor.Node().(*sqlparser.Union)
-	if !isUnion {
-		return nil
-	}
-	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
-	err := checkForStar(firstProj)
-	if err != nil {
-		return err
-	}
-
-	count := len(firstProj)
-
-	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
-	err = checkForStar(secondProj)
-	if err != nil {
-		return err
-	}
-
-	if len(secondProj) != count {
-		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
-	}
-
-	return nil
-}
-
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
@@ -221,6 +183,41 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 
 	a.leaveProjection(cursor)
 	return a.shouldContinue()
+}
+
+func containsStar(s sqlparser.SelectExprs) bool {
+	for _, expr := range s {
+		_, isStar := expr.(*sqlparser.StarExpr)
+		if isStar {
+			return true
+		}
+	}
+	return false
+}
+
+func checkUnionColumns(cursor *sqlparser.Cursor) error {
+	union, isUnion := cursor.Node().(*sqlparser.Union)
+	if !isUnion {
+		return nil
+	}
+	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
+	if containsStar(firstProj) {
+		// if we still have *, we can't figure out if the query is invalid or not
+		// we'll fail it at run time instead
+		return nil
+	}
+	count := len(firstProj)
+
+	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
+	if containsStar(secondProj) {
+		return nil
+	}
+
+	if len(secondProj) != count {
+		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+	}
+
+	return nil
 }
 
 /*

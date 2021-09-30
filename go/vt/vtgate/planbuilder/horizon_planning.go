@@ -518,7 +518,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		}
 		return colAdded || colAddedRecursively, nil
 	case *pulloutSubquery:
-		return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
+		return planGroupByGen4(groupExpr, node.underlying, semTable, wsAdded)
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}

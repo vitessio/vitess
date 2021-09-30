@@ -113,6 +113,6 @@ func (s *SubQuery) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (s *SubQuery) Compact() Operator {
-	return s
+func (s *SubQuery) Compact(*semantics.SemTable) (Operator, error) {
+	return s, nil
 }
