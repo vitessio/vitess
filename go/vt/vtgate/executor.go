@@ -64,7 +64,7 @@ import (
 // this is the healthcheck used by vtgate, used by the "vstream * from" functionality
 var vtgateHealthCheck discovery.HealthCheck
 
-var getTabletThrottlerStatus = func(tabletAddr string) (string, error) {
+func getTabletThrottlerStatus (tabletAddr string) (string, error) {
 	resp, err := http.Get("http://" + tabletAddr + "/throttler/check?app=vtgate")
 	if err != nil {
 		return "", err
