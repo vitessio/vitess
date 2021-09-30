@@ -1024,8 +1024,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
 					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-				}
-				if len(results.Rows) == 1 {
+				} else if results != nil && len(results.Rows) == 1 {
 					replSourceHost = results.Rows[0][1].ToString()
 					replSourcePort, _ = results.Rows[0][3].ToInt64()
 					replIOThreadHealth = results.Rows[0][10].ToString()
@@ -1080,9 +1079,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
 					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-					continue
-				}
-				if len(results.Rows) == 1 {
+				} else if results != nil && len(results.Rows) == 1 {
 					replSourceHost = results.Rows[0][1].ToString()
 					replSourcePort, _ = results.Rows[0][3].ToInt64()
 					replIOThreadHealth = results.Rows[0][10].ToString()
