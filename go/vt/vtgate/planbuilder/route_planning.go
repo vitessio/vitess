@@ -529,10 +529,6 @@ func breakPredicateInLHSandRHS(
 	return
 }
 
-func mergeOrJoinInner(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr) (queryTree, error) {
-	return mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
-}
-
 func mergeOrJoin(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
 	newTabletSet := lhs.tableID().Merge(rhs.tableID())
 
@@ -616,7 +612,7 @@ func (cm cacheMap) getJoinTreeFor(ctx *planningContext, lhs, rhs queryTree, join
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoinInner(ctx, lhs, rhs, joinPredicates)
+	join, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
 	if err != nil {
 		return nil, err
 	}
@@ -671,7 +667,7 @@ func leftToRightSolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree,
 			continue
 		}
 		joinPredicates := qg.GetPredicates(acc.tableID(), plan.tableID())
-		acc, err = mergeOrJoinInner(ctx, acc, plan, joinPredicates)
+		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
 		}

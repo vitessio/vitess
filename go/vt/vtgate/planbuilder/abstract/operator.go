@@ -255,20 +255,15 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
+// TODO this logic should move to Compact
 func createJoin(LHS, RHS Operator) Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
 		op := &QueryGraph{
 			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
+			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		for k, v := range lqg.innerJoins {
-			op.innerJoins[k] = v
-		}
-		for k, v := range rqg.innerJoins {
-			op.innerJoins[k] = v
 		}
 		return op
 	}
