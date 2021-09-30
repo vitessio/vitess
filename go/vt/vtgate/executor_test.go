@@ -701,6 +701,18 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
+	// The TestTablets don't have support for these columns/values
+	// So let's be sure the statement works and we get the expected results
+	query = "show vitess_replication_status"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+	qr.Rows = [][]sqltypes.Value{}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Source", "Replication_Health", "Replication_Lag", "Throttler_Status"),
+		Rows:   [][]sqltypes.Value{},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
 	query = "show vitess_tablets"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
