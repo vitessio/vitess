@@ -1642,6 +1642,8 @@ var (
 	}, {
 		input: "show vitess_replication_status",
 	}, {
+		input: "show vitess_replication_status like '%'",
+	}, {
 		input: "show vitess_shards",
 	}, {
 		input: "show vitess_shards like '%'",
