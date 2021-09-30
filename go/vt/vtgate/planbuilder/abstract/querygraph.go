@@ -78,7 +78,7 @@ func (qg *QueryGraph) TableID() semantics.TableSet {
 func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
 	for tableSet, exprs := range qg.innerJoins {
-		if tableSet.IsSolvedBy(lhs|rhs) &&
+		if tableSet.IsSolvedBy(lhs.Merge(rhs)) &&
 			tableSet.IsOverlapping(rhs) &&
 			tableSet.IsOverlapping(lhs) {
 			allExprs = append(allExprs, exprs...)

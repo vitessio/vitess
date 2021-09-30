@@ -27,15 +27,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const T0 TableSet = 0
+var T0 TableSet
 
-const (
+var (
 	// Just here to make outputs more readable
-	T1 TableSet = 1 << iota
-	T2
-	T3
-	T4
-	T5
+	T1 = SingleTableSet(0)
+	T2 = SingleTableSet(1)
+	T3 = SingleTableSet(2)
+	T4 = SingleTableSet(3)
+	T5 = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -61,7 +61,7 @@ func TestBindingSingleTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
-			assert.EqualValues(t, 1, ts)
+			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			assert.Equal(t, T1, recursiveDeps, query)
@@ -87,7 +87,7 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
-			assert.EqualValues(t, 1, ts)
+			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			require.Equal(t, T1, recursiveDeps, query)
@@ -155,15 +155,15 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		numberOfTables: 1,
 	}, {
 		query:          "select max(t.col+s.col) from t, s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(t.col+s.col) from t join s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-		deps:           T1 | T2 | T3 | T5,
+		deps:           MergeTableSets(T1, T2, T3, T5),
 		numberOfTables: 4,
 		// }, {
 		// TODO: move to subquery
@@ -175,7 +175,7 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		// 	deps:  T1 | T2,
 	}, {
 		query:          "select u1.a + u2.a from u1, u2",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -201,15 +201,15 @@ func TestBindingMultiAliasedTablePositive(t *testing.T) {
 		numberOfTables: 1,
 	}, {
 		query:          "select X.col+S.col from t as X, s as S",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+S.col) from t as X, s as S",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+s.col) from t as X, s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -583,25 +583,25 @@ func TestOrderByBindingTable(t *testing.T) {
 		T2,
 	}, {
 		"(select id from t1) union (select uid from t2) order by id",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select id from t1 union (select uid from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select id from t1 union select uid from t2 union (select name from t) order by 1",
-		T1 | T2 | T3,
+		MergeTableSets(T1, T2, T3),
 	}, {
 		"select a.id from t1 as a union (select uid from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
-		T1 | T2 | T4,
+		MergeTableSets(T1, T2, T4),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
-		T1 | T2 | T4,
+		MergeTableSets(T1, T2, T4),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -719,7 +719,7 @@ func TestHavingBinding(t *testing.T) {
 		T1,
 	}, {
 		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
 		deps: T2,
@@ -747,8 +747,8 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
 	ts1 := semTable.TableSetFor(t1)
 	ts2 := semTable.TableSetFor(t2)
-	assert.EqualValues(t, 1, ts1)
-	assert.EqualValues(t, 2, ts2)
+	assert.Equal(t, SingleTableSet(0), ts1)
+	assert.Equal(t, SingleTableSet(1), ts2)
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
@@ -819,8 +819,8 @@ func TestUnionWithOrderBy(t *testing.T) {
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
 	ts1 := semTable.TableSetFor(t1)
 	ts2 := semTable.TableSetFor(t2)
-	assert.EqualValues(t, 1, ts1)
-	assert.EqualValues(t, 2, ts2)
+	assert.Equal(t, SingleTableSet(0), ts1)
+	assert.Equal(t, SingleTableSet(1), ts2)
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
@@ -875,11 +875,11 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:                "select t.id from (select * from user, music) as t",
 			expectation:          T3,
-			recursiveExpectation: T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
 		}, {
 			query:                "select t.id from (select * from user, music) as t order by t.id",
 			expectation:          T3,
-			recursiveExpectation: T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
 		}, {
 			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
 			expectation:          T2,
@@ -982,8 +982,8 @@ func TestScopingWVindexTables(t *testing.T) {
 			expectation:          T1,
 		}, {
 			query:                "select u.id + t.id from t as t join user_index as u where u.id = 1 and u.id = t.id",
-			recursiveExpectation: T1 | T2,
-			expectation:          T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
+			expectation:          MergeTableSets(T1, T2),
 		},
 	}
 	for _, query := range queries {

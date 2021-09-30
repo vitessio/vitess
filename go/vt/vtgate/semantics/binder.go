@@ -96,11 +96,11 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 		scope := b.scoper.currentScope()
-		ts := TableSet(0)
+		var ts TableSet
 		for _, table := range scope.tables {
 			expr := table.getExpr()
 			if expr != nil {
-				ts |= b.tc.tableSetFor(expr)
+				ts.MergeInPlace(b.tc.tableSetFor(expr))
 			}
 		}
 		b.recursive[node] = ts
