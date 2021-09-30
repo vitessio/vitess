@@ -178,6 +178,10 @@ type TabletManagerClient struct {
 		Position *replicationdatapb.Status
 		Error    error
 	}
+	// keyed by tablet alias
+	RunHealthCheckDelays map[string]time.Duration
+	// keyed by tablet alias
+	RunHealthCheckResults map[string]error
 	// keyed by tablet alias.
 	SetMasterDelays map[string]time.Duration
 	// keyed by tablet alias.
@@ -476,6 +480,36 @@ func (fake *TabletManagerClient) ReplicationStatus(ctx context.Context, tablet *
 	}
 
 	return nil, assert.AnError
+}
+
+// RunHealthCheck is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if fake.RunHealthCheckResults == nil {
+		return assert.AnError
+	}
+
+	if tablet.Alias == nil {
+		return assert.AnError
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+
+	if fake.RunHealthCheckDelays != nil {
+		if delay, ok := fake.RunHealthCheckDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+
+	if err, ok := fake.RunHealthCheckResults[key]; ok {
+		return err
+	}
+
+	return fmt.Errorf("%w: no result for key %s", assert.AnError, key)
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
