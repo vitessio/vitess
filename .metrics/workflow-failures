@@ -1,9 +1,3 @@
-2021-07-10T15:08:23Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1018185783
-2021-07-10T15:08:23Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1018185791
-2021-07-10T15:08:23Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1018185757
-2021-07-10T15:08:23Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1018185775
-2021-07-10T15:08:23Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1018185788
-2021-07-10T15:08:23Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1018185786
 2021-07-10T15:09:56Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1018188909
 2021-07-10T15:09:56Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1018188952
 2021-07-10T15:09:56Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1018188936
@@ -9996,5 +9990,11 @@
 2021-09-30T19:09:47Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1292359486
 2021-09-30T19:09:47Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1292359435
 2021-09-30T19:09:47Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1292359466
+2021-09-30T19:25:26Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1292410081
+2021-09-30T19:25:26Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1292410122
 2021-09-30T19:25:26Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1292410084
+2021-09-30T19:25:26Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1292410120
 2021-09-30T19:25:26Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1292410104
+2021-09-30T19:25:26Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1292410085
+2021-09-30T19:25:26Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1292410125
+2021-09-30T19:25:26Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1292410103
