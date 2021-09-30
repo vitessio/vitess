@@ -133,3 +133,61 @@ func PrimitiveToPlanDescription(in Primitive) PrimitiveDescription {
 
 	return this
 }
+
+func orderedStringIntMap(in map[string]int) orderedMap {
+	result := make(orderedMap, 0, len(in))
+	for k, v := range in {
+		result = append(result, keyVal{key: k, val: v})
+	}
+	sort.Sort(result)
+	return result
+}
+
+type keyVal struct {
+	key string
+	val interface{}
+}
+
+// Define an ordered, sortable map
+type orderedMap []keyVal
+
+func (m orderedMap) Len() int {
+	return len(m)
+}
+
+func (m orderedMap) Less(i, j int) bool {
+	return m[i].key < m[j].key
+}
+
+func (m orderedMap) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
+}
+
+var _ sort.Interface = (orderedMap)(nil)
+
+func (m orderedMap) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+
+	buf.WriteString("{")
+	for i, kv := range m {
+		if i != 0 {
+			buf.WriteString(",")
+		}
+		// marshal key
+		key, err := json.Marshal(kv.key)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(key)
+		buf.WriteString(":")
+		// marshal value
+		val, err := json.Marshal(kv.val)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(val)
+	}
+
+	buf.WriteString("}")
+	return buf.Bytes(), nil
+}
