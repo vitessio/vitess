@@ -64,39 +64,6 @@ import (
 // this is the healthcheck used by vtgate, used by the "vstream * from" functionality
 var vtgateHealthCheck discovery.HealthCheck
 
-var getTabletThrottlerStatus = func(tabletAddr string) (string, error) {
-	resp, err := http.Get("http://" + tabletAddr + "/throttler/check?app=vtgate")
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var elements struct {
-		StatusCode int
-		Value      float64
-		Threshold  float64
-		Message    string
-	}
-	err = json.Unmarshal(body, &elements)
-	if err != nil {
-		return "", err
-	}
-
-	httpStatusStr := http.StatusText(elements.StatusCode)
-
-	load := float64(0)
-	if elements.Threshold > 0 {
-		load = float64((elements.Value / elements.Threshold) * 100)
-	}
-
-	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
-	return status, nil
-}
-
 var (
 	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
 	defaultTabletType topodatapb.TabletType
@@ -1028,6 +995,8 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 }
 
 func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), *HealthCheckTimeout)
+	defer cancel()
 	rows := [][]sqltypes.Value{}
 
 	if UsingLegacyGateway() {
@@ -1051,7 +1020,7 @@ func (e *Executor) showVitessReplicationStatus(show *sqlparser.ShowLegacy) (*sql
 				replSQLThreadHealth := ""
 				replLastError := ""
 				sql := "show slave status"
-				results, err := e.txConn.gateway.Execute(context.TODO(), ts.Target, sql, nil, 0, 0, nil)
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
 					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
 				}
@@ -1701,4 +1670,37 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+}
+
+func getTabletThrottlerStatus(tabletAddr string) (string, error) {
+	resp, err := http.Get("http://" + tabletAddr + "/throttler/check?app=vtgate")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var elements struct {
+		StatusCode int
+		Value      float64
+		Threshold  float64
+		Message    string
+	}
+	err = json.Unmarshal(body, &elements)
+	if err != nil {
+		return "", err
+	}
+
+	httpStatusStr := http.StatusText(elements.StatusCode)
+
+	load := float64(0)
+	if elements.Threshold > 0 {
+		load = float64((elements.Value / elements.Threshold) * 100)
+	}
+
+	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
+	return status, nil
 }

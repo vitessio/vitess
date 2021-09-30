@@ -701,8 +701,8 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	// The TestTablets don't have support for these columns/values
-	// So let's be sure the statement works and we get the expected results
+	// The FakeLegacyTablets in FakeLegacyHealthCheck don't have support for these columns/values
+	// So let's just be sure the statement works and we get the expected results (none)
 	query = "show vitess_replication_status"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
