@@ -186,6 +186,6 @@ func (qg *QueryGraph) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (qg *QueryGraph) Compact() Operator {
-	return qg
+func (qg *QueryGraph) Compact(*semantics.SemTable) (Operator, error) {
+	return qg, nil
 }

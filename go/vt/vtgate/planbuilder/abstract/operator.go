@@ -50,7 +50,7 @@ type (
 		CheckValid() error
 
 		// Compact will optimise the operator tree into a smaller but equivalent version
-		Compact() Operator
+		Compact(semTable *semantics.SemTable) (Operator, error)
 	}
 )
 
@@ -170,7 +170,7 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 	if err != nil {
 		return nil, err
 	}
-	return op.Compact(), nil
+	return op.Compact(semTable)
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
@@ -255,7 +255,6 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
-// TODO this logic should move to Compact
 func createJoin(LHS, RHS Operator) Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)

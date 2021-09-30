@@ -212,7 +212,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "tpch_schema_test.json"),
+		v: loadSchema(t, "schema_test.json"),
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
