@@ -218,6 +218,23 @@ func TestOne(t *testing.T) {
 	testFile(t, "onecase.txt", "", vschema, true)
 }
 
+func TestRubyOnRailsQueries(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:             loadSchema(t, "rails_schema_test.json"),
+		sysVarEnabled: true,
+	}
+
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
+	defer func() {
+		if !t.Failed() {
+			os.RemoveAll(testOutputTempDir)
+		}
+	}()
+
+	testFile(t, "rails_cases.txt", testOutputTempDir, vschemaWrapper, true)
+}
+
 func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "oltp_schema_test.json"),
@@ -435,6 +452,12 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 func (vw *vschemaWrapper) Planner() PlannerVersion {
 	return vw.version
 }
+
+// SetPlannerVersion implements the ContextVSchema interface
+func (vw *vschemaWrapper) SetPlannerVersion(v PlannerVersion) {
+	vw.version = v
+}
+
 func (vw *vschemaWrapper) GetSemTable() *semantics.SemTable {
 	return nil
 }
@@ -571,7 +594,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper, c
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("V3 - File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
+					t.Errorf("V3 - %s:%d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.output, out), tcase.output, out)
 				}
 				if err != nil {
 					out = `"` + out + `"`

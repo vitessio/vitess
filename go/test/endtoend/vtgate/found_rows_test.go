@@ -36,14 +36,17 @@ func TestFoundRows(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
+	exec(t, conn, "delete from t2")
+	defer exec(t, conn, "delete from t2")
+
 	exec(t, conn, "insert into t2(id3,id4) values(1,2), (2,2), (3,3), (4,3), (5,3)")
 
 	runTests := func(workload string) {
 		assertFoundRowsValue(t, conn, "select * from t2", workload, 5)
-		assertFoundRowsValue(t, conn, "select * from t2 limit 2", workload, 2)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 limit 2", workload, 5)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 limit 2", workload, 1)
-		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 limit 2", workload, 3)
+		assertFoundRowsValue(t, conn, "select * from t2 order by id3 limit 2", workload, 2)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 order by id3 limit 2", workload, 5)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id3 = 4 order by id3 limit 2", workload, 1)
+		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS * from t2 where id4 = 3 order by id3 limit 2", workload, 3)
 		assertFoundRowsValue(t, conn, "select SQL_CALC_FOUND_ROWS id4, count(id3) from t2 where id3 = 3 group by id4 limit 1", workload, 1)
 	}
 

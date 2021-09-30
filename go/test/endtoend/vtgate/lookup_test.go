@@ -409,6 +409,13 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	require.Nil(t, err)
 	defer conn2.Close()
 
+	exec(t, conn, "delete from t2")
+	exec(t, conn, "delete from t2_id4_idx")
+	defer func() {
+		exec(t, conn, "delete from t2")
+		exec(t, conn, "delete from t2_id4_idx")
+	}()
+
 	// DB should start out clean
 	assertMatches(t, conn, "select count(*) from t2_id4_idx", "[[INT64(0)]]")
 	assertMatches(t, conn, "select count(*) from t2", "[[INT64(0)]]")

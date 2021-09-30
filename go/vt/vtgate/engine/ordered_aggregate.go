@@ -65,6 +65,7 @@ type GroupByParams struct {
 	KeyCol          int
 	WeightStringCol int
 	Expr            sqlparser.Expr
+	FromGroupBy     bool
 }
 
 // String returns a string. Used for plan descriptions
@@ -250,7 +251,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	return out, nil
 }
 
-// StreamExecute is a Primitive function.
+// TryStreamExecute is a Primitive function.
 func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value

@@ -126,8 +126,8 @@ install-testing: build
 	mkdir -p "$${PREFIX}/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
-grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
-	make -C go/vt/vtctl/grpcvtctldclient
+vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
+	make -C go/vt/vtctl/vtctldclient
 
 parser:
 	make -C go/vt/sqlparser
@@ -350,7 +350,9 @@ endif
 	git add --all
 	git commit -n -s -m "Release commit for $(RELEASE_VERSION)"
 	git tag -m Version\ $(RELEASE_VERSION) v$(RELEASE_VERSION)
+ifdef GODOC_RELEASE_VERSION
 	git tag -a v$(GODOC_RELEASE_VERSION) -m "Tagging $(RELEASE_VERSION) also as $(GODOC_RELEASE_VERSION) for godoc/go modules"
+endif
 	cd java && mvn versions:set -DnewVersion=$(DEV_VERSION)
 	echo package servenv > go/vt/servenv/version.go
 	echo  >> go/vt/servenv/version.go
@@ -358,8 +360,13 @@ endif
 	git add --all
 	git commit -n -s -m "Back to dev mode"
 	echo "Release preparations successful"
+ifdef GODOC_RELEASE_VERSION
 	echo "Two git tags were created, you can push them with:"
 	echo "   git push upstream v$(RELEASE_VERSION) && git push upstream v$(GODOC_RELEASE_VERSION)"
+else
+	echo "One git tag was created, you can push it with:"
+	echo "   git push upstream v$(RELEASE_VERSION)"
+endif
 	echo "The git branch has also been updated. You need to push it and get it merged"
 
 tools:
@@ -463,4 +470,4 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from $(FROM) -to $(TO) -release-branch $(RELEASE_BRANCH)
+	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"

@@ -58,3 +58,13 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Inner.UnsolvedPredicates(semTable)
 }
+
+// CheckValid implements the Operator interface
+func (d *Derived) CheckValid() error {
+	return d.Inner.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (d *Derived) Compact() Operator {
+	return d
+}

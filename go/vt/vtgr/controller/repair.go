@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -144,6 +145,9 @@ func (shard *GRShard) repairShardHasNoGroupAction(ctx context.Context) error {
 		return errors.New("unsafe to bootstrap group")
 	}
 	var candidate *grInstance
+	sort.SliceStable(replicas, func(i, j int) bool {
+		return replicas[i].alias < replicas[j].alias
+	})
 	for _, replica := range replicas {
 		if !shard.shardStatusCollector.isUnreachable(replica) {
 			candidate = replica
@@ -291,7 +295,11 @@ func (shard *GRShard) stopAndRebootstrap(ctx context.Context) error {
 	if err := shard.checkShardLocked(ctx); err != nil {
 		return err
 	}
-	return shard.dbAgent.BootstrapGroupLocked(candidate.instanceKey)
+	uuid := shard.sqlGroup.GetGroupName()
+	if uuid == "" {
+		return errors.New("trying to rebootstrap without uuid")
+	}
+	return shard.dbAgent.RebootstrapGroupLocked(candidate.instanceKey, uuid)
 }
 
 func (shard *GRShard) getGTIDSetFromAll(skipPrimary bool) (*groupGTIDRecorder, *concurrency.AllErrorRecorder, error) {
@@ -397,12 +405,7 @@ func (shard *GRShard) findFailoverCandidate(ctx context.Context) (*grInstance, e
 	})
 	var candidate *grInstance
 	candidate, err = shard.findFailoverCandidateFromRecorder(ctx, gtidRecorder, func(c context.Context, instance *grInstance) bool {
-		for _, unreachable := range shard.shardStatusCollector.status.Unreachables {
-			if unreachable == instance.alias {
-				return false
-			}
-		}
-		return true
+		return !shard.shardStatusCollector.isUnreachable(instance)
 	})
 	if err != nil {
 		log.Errorf("Failed to find failover candidate by GTID after forAllInstances: %v", err)

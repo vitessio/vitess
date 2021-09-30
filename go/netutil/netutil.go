@@ -248,3 +248,17 @@ func addrEqual(a, b []net.IP) bool {
 	}
 	return true
 }
+
+// NormalizeIP normalizes loopback addresses to avoid spurious errors when
+// communicating to different representations of the loopback.
+//
+// Note: this also maps IPv6 localhost to IPv4 localhost, as
+// TabletManagerClient.GetReplicas() (the only place this function is used on)
+// will return only IPv4 addresses.
+func NormalizeIP(s string) string {
+	if ip := net.ParseIP(s); ip != nil && ip.IsLoopback() {
+		return "127.0.0.1"
+	}
+
+	return s
+}

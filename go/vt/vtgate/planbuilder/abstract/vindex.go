@@ -48,7 +48,7 @@ type (
 var _ Operator = (*Vindex)(nil)
 
 // TableID implements the Operator interface
-func (v Vindex) TableID() semantics.TableSet {
+func (v *Vindex) TableID() semantics.TableSet {
 	return v.Table.TableID
 }
 
@@ -98,6 +98,20 @@ func (v *Vindex) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable
 }
 
 // UnsolvedPredicates implements the Operator interface
-func (v Vindex) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+func (v *Vindex) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
+	return nil
+}
+
+// CheckValid implements the Operator interface
+func (v *Vindex) CheckValid() error {
+	if len(v.Table.Predicates) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)")
+	}
+
+	return nil
+}
+
+// Compact implements the Operator interface
+func (v *Vindex) Compact() Operator {
+	return v
 }

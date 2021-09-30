@@ -97,6 +97,9 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 // columns that represent underlying vindex columns are also exposed as
 // vindex columns.
 func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars *sqlparser.ReservedVars) error {
+	if tableExpr.Columns != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: column aliases in derived table")
+	}
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)

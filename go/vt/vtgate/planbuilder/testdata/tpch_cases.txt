@@ -38,32 +38,46 @@ Gen4 error: unsupported: cross-shard correlated subquery
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
-                    "JoinColumnIndexes": "1,2,-2,-3,3,-4,-5",
+                    "JoinColumnIndexes": "-1,-2,1,2,-3,3,4",
                     "JoinVars": {
-                      "o_orderkey": 0
+                      "l_orderkey": 0
                     },
-                    "TableName": "orders_customer_lineitem",
+                    "TableName": "lineitem_orders_customer",
                     "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "SelectScatter",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where 1 != 1",
+                        "Query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where l_shipdate \u003e date('1995-03-15')",
+                        "Table": "lineitem"
+                      },
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "-2,-3,-4,-5,-6",
+                        "JoinColumnIndexes": "-2,-3,-4,-5",
                         "JoinVars": {
-                          "o_custkey": 0,
-                          "o_orderkey": 0
+                          "o_custkey": 0
                         },
                         "TableName": "orders_customer",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
-                            "Variant": "SelectScatter",
+                            "Variant": "SelectEqualUnique",
                             "Keyspace": {
                               "Name": "main",
                               "Sharded": true
                             },
-                            "FieldQuery": "select o_custkey, o_orderkey, o_orderdate, o_shippriority, weight_string(o_orderdate), weight_string(o_shippriority) from orders where 1 != 1",
-                            "Query": "select o_custkey, o_orderkey, o_orderdate, o_shippriority, weight_string(o_orderdate), weight_string(o_shippriority) from orders where o_orderdate \u003c date('1995-03-15')",
-                            "Table": "orders"
+                            "FieldQuery": "select o_custkey, o_orderdate, o_shippriority, weight_string(o_orderdate), weight_string(o_shippriority) from orders where 1 != 1",
+                            "Query": "select o_custkey, o_orderdate, o_shippriority, weight_string(o_orderdate), weight_string(o_shippriority) from orders where o_orderdate \u003c date('1995-03-15') and o_orderkey = :l_orderkey",
+                            "Table": "orders",
+                            "Values": [
+                              ":l_orderkey"
+                            ],
+                            "Vindex": "hash"
                           },
                           {
                             "OperatorType": "Route",
@@ -81,21 +95,6 @@ Gen4 error: unsupported: cross-shard correlated subquery
                             "Vindex": "hash"
                           }
                         ]
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "SelectEqualUnique",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where 1 != 1",
-                        "Query": "select l_orderkey, sum(l_extendedprice * (1 - l_discount)) as revenue, weight_string(l_orderkey) from lineitem where l_shipdate \u003e date('1995-03-15') and l_orderkey = :o_orderkey",
-                        "Table": "lineitem",
-                        "Values": [
-                          ":o_orderkey"
-                        ],
-                        "Vindex": "lineitem_map"
                       }
                     ]
                   }
@@ -203,28 +202,27 @@ Gen4 plan same as above
             "GroupBy": "(0|8), (1|9), (3|10), (6|11), (4|12), (5|13), (7|14)",
             "Inputs": [
               {
-                "OperatorType": "Join",
-                "Variant": "Join",
-                "JoinColumnIndexes": "-1,-2,1,-3,-4,-5,-6,-7,-8,-9,-10,-11,-12,-13,-14",
-                "JoinVars": {
-                  "c_custkey": 0
-                },
-                "TableName": "customer_nation_orders_lineitem",
+                "OperatorType": "Sort",
+                "Variant": "Memory",
+                "OrderBy": "(0|8) ASC, (1|9) ASC, (3|10) ASC, (6|11) ASC, (4|12) ASC, (5|13) ASC, (7|14) ASC",
                 "Inputs": [
                   {
-                    "OperatorType": "Sort",
-                    "Variant": "Memory",
-                    "OrderBy": "(0|7) ASC, (1|8) ASC, (2|9) ASC, (5|10) ASC, (3|11) ASC, (4|12) ASC, (6|13) ASC",
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "1,2,-2,3,4,5,6,7,8,9,10,11,12,13,14",
+                    "JoinVars": {
+                      "o_custkey": 0
+                    },
+                    "TableName": "orders_lineitem_customer_nation",
                     "Inputs": [
                       {
                         "OperatorType": "Join",
                         "Variant": "Join",
-                        "JoinColumnIndexes": "-2,-3,-4,1,-5,-6,-7,-8,-9,-10,-11,2,-12,-13",
+                        "JoinColumnIndexes": "-2,1",
                         "JoinVars": {
-                          "c_custkey": 0,
-                          "c_nationkey": 0
+                          "o_orderkey": 0
                         },
-                        "TableName": "customer_nation",
+                        "TableName": "orders_lineitem",
                         "Inputs": [
                           {
                             "OperatorType": "Route",
@@ -233,9 +231,50 @@ Gen4 plan same as above
                               "Name": "main",
                               "Sharded": true
                             },
+                            "FieldQuery": "select o_orderkey, o_custkey from orders where 1 != 1",
+                            "Query": "select o_orderkey, o_custkey from orders where o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month",
+                            "Table": "orders"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "SelectEqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1",
+                            "Query": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey",
+                            "Table": "lineitem",
+                            "Values": [
+                              ":o_orderkey"
+                            ],
+                            "Vindex": "lineitem_map"
+                          }
+                        ]
+                      },
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "-2,-3,-4,1,-5,-6,-7,-8,-9,-10,-11,2,-12,-13",
+                        "JoinVars": {
+                          "c_nationkey": 0
+                        },
+                        "TableName": "customer_nation",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "SelectEqualUnique",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": true
+                            },
                             "FieldQuery": "select c_nationkey, c_custkey, c_name, c_acctbal, c_address, c_phone, c_comment, weight_string(c_custkey), weight_string(c_name), weight_string(c_acctbal), weight_string(c_phone), weight_string(c_address), weight_string(c_comment) from customer where 1 != 1",
-                            "Query": "select c_nationkey, c_custkey, c_name, c_acctbal, c_address, c_phone, c_comment, weight_string(c_custkey), weight_string(c_name), weight_string(c_acctbal), weight_string(c_phone), weight_string(c_address), weight_string(c_comment) from customer",
-                            "Table": "customer"
+                            "Query": "select c_nationkey, c_custkey, c_name, c_acctbal, c_address, c_phone, c_comment, weight_string(c_custkey), weight_string(c_name), weight_string(c_acctbal), weight_string(c_phone), weight_string(c_address), weight_string(c_comment) from customer where c_custkey = :o_custkey",
+                            "Table": "customer",
+                            "Values": [
+                              ":o_custkey"
+                            ],
+                            "Vindex": "hash"
                           },
                           {
                             "OperatorType": "Route",
@@ -253,44 +292,6 @@ Gen4 plan same as above
                             "Vindex": "hash"
                           }
                         ]
-                      }
-                    ]
-                  },
-                  {
-                    "OperatorType": "Join",
-                    "Variant": "Join",
-                    "JoinColumnIndexes": "1",
-                    "JoinVars": {
-                      "o_custkey": 0,
-                      "o_orderkey": 0
-                    },
-                    "TableName": "orders_lineitem",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "SelectScatter",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select o_orderkey, o_custkey from orders where 1 != 1",
-                        "Query": "select o_orderkey, o_custkey from orders where o_orderdate \u003e= date('1993-10-01') and o_orderdate \u003c date('1993-10-01') + interval '3' month",
-                        "Table": "orders"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "SelectEqualUnique",
-                        "Keyspace": {
-                          "Name": "main",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where 1 != 1",
-                        "Query": "select sum(l_extendedprice * (1 - l_discount)) as revenue from lineitem where l_returnflag = 'R' and l_orderkey = :o_orderkey and :c_custkey = :o_custkey",
-                        "Table": "lineitem",
-                        "Values": [
-                          ":o_orderkey"
-                        ],
-                        "Vindex": "lineitem_map"
                       }
                     ]
                   }
@@ -372,8 +373,8 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 
 # TPC-H query 13
 "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc"
-"syntax error at position 220"
-Gen4 plan same as above
+"unsupported: column aliases in derived table"
+gen4 does not yet support: column aliases in derived table
 
 # TPC-H query 14
 "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month"
