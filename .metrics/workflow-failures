@@ -1,4 +1,3 @@
-2021-07-12T04:01:13Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1021525668
 2021-07-12T04:18:07Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1021560661
 2021-07-12T04:23:45Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1021570811
 2021-07-12T04:23:45Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1021570823
@@ -9998,3 +9997,4 @@
 2021-10-01T09:43:37Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1294545396
 2021-10-01T09:43:37Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1294545419
 2021-10-01T09:43:37Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1294545460
+2021-10-01T11:39:16Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1294885775
