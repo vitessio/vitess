@@ -310,6 +310,28 @@ type VtctldClient interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(ctx context.Context, in *vtctldata.UpdateCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.UpdateCellsAliasResponse, error)
+	// VTTabletBegin starts a transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	// (TODO:ajm188) move all RPCs that require -enable_queries to a separate
+	// service definition and enable via the -service_map flag, which allows
+	// clients to see if queries are available before attempting to make a query.
+	VTTabletBegin(ctx context.Context, in *vtctldata.VTTabletBeginRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletBeginResponse, error)
+	// VTTabletCommit commits the given transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletCommit(ctx context.Context, in *vtctldata.VTTabletCommitRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletCommitResponse, error)
+	// VTTabletExecute executes the given query on the specified tablet.
+	//
+	// NOTE: The TransactionId field is optional; use VTTabletBegin to start a
+	// transaction and obtain a transaction ID.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletExecute(ctx context.Context, in *vtctldata.VTTabletExecuteRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletExecuteResponse, error)
+	// VTTabletRollback rolls back the given transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletRollback(ctx context.Context, in *vtctldata.VTTabletRollbackRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletRollbackResponse, error)
 	// Validate validates that all nodes from the global replication graph are
 	// reachable, and that all tablets in discoverable cells are consistent.
 	Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error)
@@ -806,6 +828,42 @@ func (c *vtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctldata.Updat
 	return out, nil
 }
 
+func (c *vtctldClient) VTTabletBegin(ctx context.Context, in *vtctldata.VTTabletBeginRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletBeginResponse, error) {
+	out := new(vtctldata.VTTabletBeginResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VTTabletBegin", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VTTabletCommit(ctx context.Context, in *vtctldata.VTTabletCommitRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletCommitResponse, error) {
+	out := new(vtctldata.VTTabletCommitResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VTTabletCommit", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VTTabletExecute(ctx context.Context, in *vtctldata.VTTabletExecuteRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletExecuteResponse, error) {
+	out := new(vtctldata.VTTabletExecuteResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VTTabletExecute", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) VTTabletRollback(ctx context.Context, in *vtctldata.VTTabletRollbackRequest, opts ...grpc.CallOption) (*vtctldata.VTTabletRollbackResponse, error) {
+	out := new(vtctldata.VTTabletRollbackResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/VTTabletRollback", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error) {
 	out := new(vtctldata.ValidateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/Validate", in, out, opts...)
@@ -1015,6 +1073,28 @@ type VtctldServer interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error)
+	// VTTabletBegin starts a transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	// (TODO:ajm188) move all RPCs that require -enable_queries to a separate
+	// service definition and enable via the -service_map flag, which allows
+	// clients to see if queries are available before attempting to make a query.
+	VTTabletBegin(context.Context, *vtctldata.VTTabletBeginRequest) (*vtctldata.VTTabletBeginResponse, error)
+	// VTTabletCommit commits the given transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletCommit(context.Context, *vtctldata.VTTabletCommitRequest) (*vtctldata.VTTabletCommitResponse, error)
+	// VTTabletExecute executes the given query on the specified tablet.
+	//
+	// NOTE: The TransactionId field is optional; use VTTabletBegin to start a
+	// transaction and obtain a transaction ID.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletExecute(context.Context, *vtctldata.VTTabletExecuteRequest) (*vtctldata.VTTabletExecuteResponse, error)
+	// VTTabletRollback rolls back the given transaction on the specified tablet.
+	//
+	// This RPC will fail if a vtctld is run without the -enable_queries flag.
+	VTTabletRollback(context.Context, *vtctldata.VTTabletRollbackRequest) (*vtctldata.VTTabletRollbackResponse, error)
 	// Validate validates that all nodes from the global replication graph are
 	// reachable, and that all tablets in discoverable cells are consistent.
 	Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error)
@@ -1189,6 +1269,18 @@ func (UnimplementedVtctldServer) UpdateCellInfo(context.Context, *vtctldata.Upda
 }
 func (UnimplementedVtctldServer) UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCellsAlias not implemented")
+}
+func (UnimplementedVtctldServer) VTTabletBegin(context.Context, *vtctldata.VTTabletBeginRequest) (*vtctldata.VTTabletBeginResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VTTabletBegin not implemented")
+}
+func (UnimplementedVtctldServer) VTTabletCommit(context.Context, *vtctldata.VTTabletCommitRequest) (*vtctldata.VTTabletCommitResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VTTabletCommit not implemented")
+}
+func (UnimplementedVtctldServer) VTTabletExecute(context.Context, *vtctldata.VTTabletExecuteRequest) (*vtctldata.VTTabletExecuteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VTTabletExecute not implemented")
+}
+func (UnimplementedVtctldServer) VTTabletRollback(context.Context, *vtctldata.VTTabletRollbackRequest) (*vtctldata.VTTabletRollbackResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method VTTabletRollback not implemented")
 }
 func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
@@ -2166,6 +2258,78 @@ func _Vtctld_UpdateCellsAlias_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_VTTabletBegin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VTTabletBeginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VTTabletBegin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VTTabletBegin",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VTTabletBegin(ctx, req.(*vtctldata.VTTabletBeginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VTTabletCommit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VTTabletCommitRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VTTabletCommit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VTTabletCommit",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VTTabletCommit(ctx, req.(*vtctldata.VTTabletCommitRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VTTabletExecute_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VTTabletExecuteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VTTabletExecute(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VTTabletExecute",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VTTabletExecute(ctx, req.(*vtctldata.VTTabletExecuteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_VTTabletRollback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VTTabletRollbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VTTabletRollback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/VTTabletRollback",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VTTabletRollback(ctx, req.(*vtctldata.VTTabletRollbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateRequest)
 	if err := dec(in); err != nil {
@@ -2438,6 +2602,22 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateCellsAlias",
 			Handler:    _Vtctld_UpdateCellsAlias_Handler,
+		},
+		{
+			MethodName: "VTTabletBegin",
+			Handler:    _Vtctld_VTTabletBegin_Handler,
+		},
+		{
+			MethodName: "VTTabletCommit",
+			Handler:    _Vtctld_VTTabletCommit_Handler,
+		},
+		{
+			MethodName: "VTTabletExecute",
+			Handler:    _Vtctld_VTTabletExecute_Handler,
+		},
+		{
+			MethodName: "VTTabletRollback",
+			Handler:    _Vtctld_VTTabletRollback_Handler,
 		},
 		{
 			MethodName: "Validate",

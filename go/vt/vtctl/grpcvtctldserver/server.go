@@ -2286,6 +2286,26 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 	}, nil
 }
 
+// VTTabletBegin is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VTTabletBegin(ctx context.Context, req *vtctldatapb.VTTabletBeginRequest) (*vtctldatapb.VTTabletBeginResponse, error) {
+	panic("unimplemented!")
+}
+
+// VTTabletCommit is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VTTabletCommit(ctx context.Context, req *vtctldatapb.VTTabletCommitRequest) (*vtctldatapb.VTTabletCommitResponse, error) {
+	panic("unimplemented!")
+}
+
+// VTTabletExecute is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VTTabletExecute(ctx context.Context, req *vtctldatapb.VTTabletExecuteRequest) (*vtctldatapb.VTTabletExecuteResponse, error) {
+	panic("unimplemented!")
+}
+
+// VTTabletRollback is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VTTabletRollback(ctx context.Context, req *vtctldatapb.VTTabletRollbackRequest) (*vtctldatapb.VTTabletRollbackResponse, error) {
+	panic("unimplemented!")
+}
+
 // Validate is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRequest) (*vtctldatapb.ValidateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.Validate")

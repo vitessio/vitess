@@ -26,6 +26,7 @@ import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "replicationdata.proto";
+import "query.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
 import "vschema.proto";
@@ -834,6 +835,56 @@ message UpdateCellsAliasRequest {
 message UpdateCellsAliasResponse {
   string name = 1;
   topodata.CellsAlias cells_alias = 2;
+}
+
+message VTTabletBeginRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // Username, if set, is used as the immediate callerid in the request and is
+  // used by vttablet for any TableACL checks.
+  string username = 2;
+}
+
+message VTTabletBeginResponse {
+  int64 transaction_id = 1;
+}
+
+message VTTabletCommitRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  int64 transaction_id = 2;
+  // Username, if set, is used as the immediate callerid in the request and is
+  // used by vttablet for any TableACL checks.
+  string username = 3;
+}
+
+message VTTabletCommitResponse {
+}
+
+message VTTabletExecuteRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  string sql = 2;
+  // Username, if set, is used as the immediate callerid in the request and is
+  // used by vttablet for any TableACL checks.
+  string username = 3;
+  // TransactionId is the ID to use if inside a transaction. 0 implies
+  // no transaction.
+  int64 transaction_id = 4;
+  map<string, query.BindVariable> bind_variables = 5;
+  query.ExecuteOptions options = 6;
+}
+
+message VTTabletExecuteResponse {
+  query.QueryResult result = 1;
+}
+
+message VTTabletRollbackRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  int64 transaction_id = 2;
+  // Username, if set, is used as the immediate callerid in the request and is
+  // used by vttablet for any TableACL checks.
+  string username = 3;
+}
+
+message VTTabletRollbackResponse {
 }
 
 message ValidateRequest {

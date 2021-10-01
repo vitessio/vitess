@@ -36933,6 +36933,774 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a VTTabletBeginRequest. */
+    interface IVTTabletBeginRequest {
+
+        /** VTTabletBeginRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletBeginRequest username */
+        username?: (string|null);
+    }
+
+    /** Represents a VTTabletBeginRequest. */
+    class VTTabletBeginRequest implements IVTTabletBeginRequest {
+
+        /**
+         * Constructs a new VTTabletBeginRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletBeginRequest);
+
+        /** VTTabletBeginRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletBeginRequest username. */
+        public username: string;
+
+        /**
+         * Creates a new VTTabletBeginRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletBeginRequest instance
+         */
+        public static create(properties?: vtctldata.IVTTabletBeginRequest): vtctldata.VTTabletBeginRequest;
+
+        /**
+         * Encodes the specified VTTabletBeginRequest message. Does not implicitly {@link vtctldata.VTTabletBeginRequest.verify|verify} messages.
+         * @param message VTTabletBeginRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletBeginRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletBeginRequest message, length delimited. Does not implicitly {@link vtctldata.VTTabletBeginRequest.verify|verify} messages.
+         * @param message VTTabletBeginRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletBeginRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletBeginRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletBeginRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletBeginRequest;
+
+        /**
+         * Decodes a VTTabletBeginRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletBeginRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletBeginRequest;
+
+        /**
+         * Verifies a VTTabletBeginRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletBeginRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletBeginRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletBeginRequest;
+
+        /**
+         * Creates a plain object from a VTTabletBeginRequest message. Also converts values to other types if specified.
+         * @param message VTTabletBeginRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletBeginRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletBeginRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletBeginResponse. */
+    interface IVTTabletBeginResponse {
+
+        /** VTTabletBeginResponse transaction_id */
+        transaction_id?: (number|Long|null);
+    }
+
+    /** Represents a VTTabletBeginResponse. */
+    class VTTabletBeginResponse implements IVTTabletBeginResponse {
+
+        /**
+         * Constructs a new VTTabletBeginResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletBeginResponse);
+
+        /** VTTabletBeginResponse transaction_id. */
+        public transaction_id: (number|Long);
+
+        /**
+         * Creates a new VTTabletBeginResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletBeginResponse instance
+         */
+        public static create(properties?: vtctldata.IVTTabletBeginResponse): vtctldata.VTTabletBeginResponse;
+
+        /**
+         * Encodes the specified VTTabletBeginResponse message. Does not implicitly {@link vtctldata.VTTabletBeginResponse.verify|verify} messages.
+         * @param message VTTabletBeginResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletBeginResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletBeginResponse message, length delimited. Does not implicitly {@link vtctldata.VTTabletBeginResponse.verify|verify} messages.
+         * @param message VTTabletBeginResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletBeginResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletBeginResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletBeginResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletBeginResponse;
+
+        /**
+         * Decodes a VTTabletBeginResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletBeginResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletBeginResponse;
+
+        /**
+         * Verifies a VTTabletBeginResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletBeginResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletBeginResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletBeginResponse;
+
+        /**
+         * Creates a plain object from a VTTabletBeginResponse message. Also converts values to other types if specified.
+         * @param message VTTabletBeginResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletBeginResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletBeginResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletCommitRequest. */
+    interface IVTTabletCommitRequest {
+
+        /** VTTabletCommitRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletCommitRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** VTTabletCommitRequest username */
+        username?: (string|null);
+    }
+
+    /** Represents a VTTabletCommitRequest. */
+    class VTTabletCommitRequest implements IVTTabletCommitRequest {
+
+        /**
+         * Constructs a new VTTabletCommitRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletCommitRequest);
+
+        /** VTTabletCommitRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletCommitRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** VTTabletCommitRequest username. */
+        public username: string;
+
+        /**
+         * Creates a new VTTabletCommitRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletCommitRequest instance
+         */
+        public static create(properties?: vtctldata.IVTTabletCommitRequest): vtctldata.VTTabletCommitRequest;
+
+        /**
+         * Encodes the specified VTTabletCommitRequest message. Does not implicitly {@link vtctldata.VTTabletCommitRequest.verify|verify} messages.
+         * @param message VTTabletCommitRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletCommitRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletCommitRequest message, length delimited. Does not implicitly {@link vtctldata.VTTabletCommitRequest.verify|verify} messages.
+         * @param message VTTabletCommitRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletCommitRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletCommitRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletCommitRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletCommitRequest;
+
+        /**
+         * Decodes a VTTabletCommitRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletCommitRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletCommitRequest;
+
+        /**
+         * Verifies a VTTabletCommitRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletCommitRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletCommitRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletCommitRequest;
+
+        /**
+         * Creates a plain object from a VTTabletCommitRequest message. Also converts values to other types if specified.
+         * @param message VTTabletCommitRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletCommitRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletCommitRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletCommitResponse. */
+    interface IVTTabletCommitResponse {
+    }
+
+    /** Represents a VTTabletCommitResponse. */
+    class VTTabletCommitResponse implements IVTTabletCommitResponse {
+
+        /**
+         * Constructs a new VTTabletCommitResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletCommitResponse);
+
+        /**
+         * Creates a new VTTabletCommitResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletCommitResponse instance
+         */
+        public static create(properties?: vtctldata.IVTTabletCommitResponse): vtctldata.VTTabletCommitResponse;
+
+        /**
+         * Encodes the specified VTTabletCommitResponse message. Does not implicitly {@link vtctldata.VTTabletCommitResponse.verify|verify} messages.
+         * @param message VTTabletCommitResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletCommitResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletCommitResponse message, length delimited. Does not implicitly {@link vtctldata.VTTabletCommitResponse.verify|verify} messages.
+         * @param message VTTabletCommitResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletCommitResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletCommitResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletCommitResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletCommitResponse;
+
+        /**
+         * Decodes a VTTabletCommitResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletCommitResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletCommitResponse;
+
+        /**
+         * Verifies a VTTabletCommitResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletCommitResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletCommitResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletCommitResponse;
+
+        /**
+         * Creates a plain object from a VTTabletCommitResponse message. Also converts values to other types if specified.
+         * @param message VTTabletCommitResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletCommitResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletCommitResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletExecuteRequest. */
+    interface IVTTabletExecuteRequest {
+
+        /** VTTabletExecuteRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletExecuteRequest sql */
+        sql?: (string|null);
+
+        /** VTTabletExecuteRequest username */
+        username?: (string|null);
+
+        /** VTTabletExecuteRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** VTTabletExecuteRequest bind_variables */
+        bind_variables?: ({ [k: string]: query.IBindVariable }|null);
+
+        /** VTTabletExecuteRequest options */
+        options?: (query.IExecuteOptions|null);
+    }
+
+    /** Represents a VTTabletExecuteRequest. */
+    class VTTabletExecuteRequest implements IVTTabletExecuteRequest {
+
+        /**
+         * Constructs a new VTTabletExecuteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletExecuteRequest);
+
+        /** VTTabletExecuteRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletExecuteRequest sql. */
+        public sql: string;
+
+        /** VTTabletExecuteRequest username. */
+        public username: string;
+
+        /** VTTabletExecuteRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** VTTabletExecuteRequest bind_variables. */
+        public bind_variables: { [k: string]: query.IBindVariable };
+
+        /** VTTabletExecuteRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /**
+         * Creates a new VTTabletExecuteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletExecuteRequest instance
+         */
+        public static create(properties?: vtctldata.IVTTabletExecuteRequest): vtctldata.VTTabletExecuteRequest;
+
+        /**
+         * Encodes the specified VTTabletExecuteRequest message. Does not implicitly {@link vtctldata.VTTabletExecuteRequest.verify|verify} messages.
+         * @param message VTTabletExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletExecuteRequest message, length delimited. Does not implicitly {@link vtctldata.VTTabletExecuteRequest.verify|verify} messages.
+         * @param message VTTabletExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletExecuteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletExecuteRequest;
+
+        /**
+         * Decodes a VTTabletExecuteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletExecuteRequest;
+
+        /**
+         * Verifies a VTTabletExecuteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletExecuteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletExecuteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletExecuteRequest;
+
+        /**
+         * Creates a plain object from a VTTabletExecuteRequest message. Also converts values to other types if specified.
+         * @param message VTTabletExecuteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletExecuteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletExecuteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletExecuteResponse. */
+    interface IVTTabletExecuteResponse {
+
+        /** VTTabletExecuteResponse result */
+        result?: (query.IQueryResult|null);
+    }
+
+    /** Represents a VTTabletExecuteResponse. */
+    class VTTabletExecuteResponse implements IVTTabletExecuteResponse {
+
+        /**
+         * Constructs a new VTTabletExecuteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletExecuteResponse);
+
+        /** VTTabletExecuteResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /**
+         * Creates a new VTTabletExecuteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletExecuteResponse instance
+         */
+        public static create(properties?: vtctldata.IVTTabletExecuteResponse): vtctldata.VTTabletExecuteResponse;
+
+        /**
+         * Encodes the specified VTTabletExecuteResponse message. Does not implicitly {@link vtctldata.VTTabletExecuteResponse.verify|verify} messages.
+         * @param message VTTabletExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletExecuteResponse message, length delimited. Does not implicitly {@link vtctldata.VTTabletExecuteResponse.verify|verify} messages.
+         * @param message VTTabletExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletExecuteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletExecuteResponse;
+
+        /**
+         * Decodes a VTTabletExecuteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletExecuteResponse;
+
+        /**
+         * Verifies a VTTabletExecuteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletExecuteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletExecuteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletExecuteResponse;
+
+        /**
+         * Creates a plain object from a VTTabletExecuteResponse message. Also converts values to other types if specified.
+         * @param message VTTabletExecuteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletExecuteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletExecuteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletRollbackRequest. */
+    interface IVTTabletRollbackRequest {
+
+        /** VTTabletRollbackRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletRollbackRequest transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** VTTabletRollbackRequest username */
+        username?: (string|null);
+    }
+
+    /** Represents a VTTabletRollbackRequest. */
+    class VTTabletRollbackRequest implements IVTTabletRollbackRequest {
+
+        /**
+         * Constructs a new VTTabletRollbackRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletRollbackRequest);
+
+        /** VTTabletRollbackRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** VTTabletRollbackRequest transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** VTTabletRollbackRequest username. */
+        public username: string;
+
+        /**
+         * Creates a new VTTabletRollbackRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletRollbackRequest instance
+         */
+        public static create(properties?: vtctldata.IVTTabletRollbackRequest): vtctldata.VTTabletRollbackRequest;
+
+        /**
+         * Encodes the specified VTTabletRollbackRequest message. Does not implicitly {@link vtctldata.VTTabletRollbackRequest.verify|verify} messages.
+         * @param message VTTabletRollbackRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletRollbackRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletRollbackRequest message, length delimited. Does not implicitly {@link vtctldata.VTTabletRollbackRequest.verify|verify} messages.
+         * @param message VTTabletRollbackRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletRollbackRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletRollbackRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletRollbackRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletRollbackRequest;
+
+        /**
+         * Decodes a VTTabletRollbackRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletRollbackRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletRollbackRequest;
+
+        /**
+         * Verifies a VTTabletRollbackRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletRollbackRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletRollbackRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletRollbackRequest;
+
+        /**
+         * Creates a plain object from a VTTabletRollbackRequest message. Also converts values to other types if specified.
+         * @param message VTTabletRollbackRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletRollbackRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletRollbackRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a VTTabletRollbackResponse. */
+    interface IVTTabletRollbackResponse {
+    }
+
+    /** Represents a VTTabletRollbackResponse. */
+    class VTTabletRollbackResponse implements IVTTabletRollbackResponse {
+
+        /**
+         * Constructs a new VTTabletRollbackResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IVTTabletRollbackResponse);
+
+        /**
+         * Creates a new VTTabletRollbackResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VTTabletRollbackResponse instance
+         */
+        public static create(properties?: vtctldata.IVTTabletRollbackResponse): vtctldata.VTTabletRollbackResponse;
+
+        /**
+         * Encodes the specified VTTabletRollbackResponse message. Does not implicitly {@link vtctldata.VTTabletRollbackResponse.verify|verify} messages.
+         * @param message VTTabletRollbackResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IVTTabletRollbackResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VTTabletRollbackResponse message, length delimited. Does not implicitly {@link vtctldata.VTTabletRollbackResponse.verify|verify} messages.
+         * @param message VTTabletRollbackResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IVTTabletRollbackResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VTTabletRollbackResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns VTTabletRollbackResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VTTabletRollbackResponse;
+
+        /**
+         * Decodes a VTTabletRollbackResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns VTTabletRollbackResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VTTabletRollbackResponse;
+
+        /**
+         * Verifies a VTTabletRollbackResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VTTabletRollbackResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VTTabletRollbackResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.VTTabletRollbackResponse;
+
+        /**
+         * Creates a plain object from a VTTabletRollbackResponse message. Also converts values to other types if specified.
+         * @param message VTTabletRollbackResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.VTTabletRollbackResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VTTabletRollbackResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a ValidateRequest. */
     interface IValidateRequest {
 

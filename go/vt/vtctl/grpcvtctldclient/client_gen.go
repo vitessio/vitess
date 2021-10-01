@@ -505,6 +505,42 @@ func (client *gRPCVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctld
 	return client.c.UpdateCellsAlias(ctx, in, opts...)
 }
 
+// VTTabletBegin is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VTTabletBegin(ctx context.Context, in *vtctldatapb.VTTabletBeginRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletBeginResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VTTabletBegin(ctx, in, opts...)
+}
+
+// VTTabletCommit is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VTTabletCommit(ctx context.Context, in *vtctldatapb.VTTabletCommitRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletCommitResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VTTabletCommit(ctx, in, opts...)
+}
+
+// VTTabletExecute is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VTTabletExecute(ctx context.Context, in *vtctldatapb.VTTabletExecuteRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletExecuteResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VTTabletExecute(ctx, in, opts...)
+}
+
+// VTTabletRollback is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) VTTabletRollback(ctx context.Context, in *vtctldatapb.VTTabletRollbackRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletRollbackResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.VTTabletRollback(ctx, in, opts...)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	if client.c == nil {

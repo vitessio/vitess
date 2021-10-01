@@ -291,6 +291,26 @@ func (client *localVtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctl
 	return client.s.UpdateCellsAlias(ctx, in)
 }
 
+// VTTabletBegin is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VTTabletBegin(ctx context.Context, in *vtctldatapb.VTTabletBeginRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletBeginResponse, error) {
+	return client.s.VTTabletBegin(ctx, in)
+}
+
+// VTTabletCommit is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VTTabletCommit(ctx context.Context, in *vtctldatapb.VTTabletCommitRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletCommitResponse, error) {
+	return client.s.VTTabletCommit(ctx, in)
+}
+
+// VTTabletExecute is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VTTabletExecute(ctx context.Context, in *vtctldatapb.VTTabletExecuteRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletExecuteResponse, error) {
+	return client.s.VTTabletExecute(ctx, in)
+}
+
+// VTTabletRollback is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VTTabletRollback(ctx context.Context, in *vtctldatapb.VTTabletRollbackRequest, opts ...grpc.CallOption) (*vtctldatapb.VTTabletRollbackResponse, error) {
+	return client.s.VTTabletRollback(ctx, in)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	return client.s.Validate(ctx, in)

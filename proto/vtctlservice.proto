@@ -209,6 +209,28 @@ service Vtctld {
   // parameters. Empty values are ignored. If the alias does not exist, the
   // CellsAlias will be created.
   rpc UpdateCellsAlias(vtctldata.UpdateCellsAliasRequest) returns (vtctldata.UpdateCellsAliasResponse) {};
+  // VTTabletBegin starts a transaction on the specified tablet.
+  //
+  // This RPC will fail if a vtctld is run without the -enable_queries flag.
+  // (TODO:ajm188) move all RPCs that require -enable_queries to a separate
+  // service definition and enable via the -service_map flag, which allows
+  // clients to see if queries are available before attempting to make a query.
+  rpc VTTabletBegin(vtctldata.VTTabletBeginRequest) returns (vtctldata.VTTabletBeginResponse) {};
+  // VTTabletCommit commits the given transaction on the specified tablet.
+  //
+  // This RPC will fail if a vtctld is run without the -enable_queries flag.
+  rpc VTTabletCommit(vtctldata.VTTabletCommitRequest) returns (vtctldata.VTTabletCommitResponse) {};
+  // VTTabletExecute executes the given query on the specified tablet.
+  //
+  // NOTE: The TransactionId field is optional; use VTTabletBegin to start a
+  // transaction and obtain a transaction ID.
+  //
+  // This RPC will fail if a vtctld is run without the -enable_queries flag.
+  rpc VTTabletExecute(vtctldata.VTTabletExecuteRequest) returns (vtctldata.VTTabletExecuteResponse) {};
+  // VTTabletRollback rolls back the given transaction on the specified tablet.
+  //
+  // This RPC will fail if a vtctld is run without the -enable_queries flag.
+  rpc VTTabletRollback(vtctldata.VTTabletRollbackRequest) returns (vtctldata.VTTabletRollbackResponse) {};
   // Validate validates that all nodes from the global replication graph are
   // reachable, and that all tablets in discoverable cells are consistent.
   rpc Validate(vtctldata.ValidateRequest) returns (vtctldata.ValidateResponse) {};
