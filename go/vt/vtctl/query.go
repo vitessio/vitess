@@ -17,6 +17,7 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,17 +25,15 @@ import (
 	"io"
 	"strconv"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"github.com/olekukonko/tablewriter"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/internal/vtctlflags"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -45,10 +44,6 @@ import (
 // This file contains the query command group for vtctl.
 
 const queriesGroupName = "Queries"
-
-var (
-	enableQueries = flag.Bool("enable_queries", false, "if set, allows vtgate and vttablet queries. May have security implications, as the queries will be run from this process.")
-)
 
 func init() {
 	addCommandGroup(queriesGroupName)
@@ -140,7 +135,7 @@ func parseExecuteOptions(value string) (*querypb.ExecuteOptions, error) {
 }
 
 func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
@@ -185,7 +180,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
@@ -248,7 +243,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 }
 
 func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
@@ -295,7 +290,7 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 }
 
 func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
@@ -341,7 +336,7 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 }
 
 func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
@@ -387,7 +382,7 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 }
 
 func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
+	if !vtctlflags.AreQueriesEnabled() {
 		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
 	}
 
