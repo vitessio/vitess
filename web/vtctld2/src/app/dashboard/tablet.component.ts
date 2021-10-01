@@ -115,23 +115,23 @@ export class TabletComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  openStartSlaveDialog() {
+  openStartReplicationDialog() {
     this.dialogSettings = new DialogSettings('Start', `Start Replication, ${this.tablet.label}`, '',
                                              `There was a problem starting replication on, ${this.tablet.label}:`);
     this.dialogSettings.setMessage(`Started Replication, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new PingTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartSlave');
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartReplication');
     this.dialogSettings.toggleModal();
   }
 
-  openStopSlaveDialog() {
+  openStopReplicationDialog() {
     this.dialogSettings = new DialogSettings('Stop', `Stop Replication, ${this.tablet.label}`, '',
                                              `There was a problem stopping replication on, ${this.tablet.label}:`);
     this.dialogSettings.setMessage(`Stopped Replication, ${this.tablet.label}`);
     this.dialogSettings.onCloseFunction = this.refreshTabletView.bind(this);
     let flags = new PingTabletFlags(this.tablet.ref).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopSlave');
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopReplication');
     this.dialogSettings.toggleModal();
   }
 
