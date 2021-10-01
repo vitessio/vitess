@@ -720,7 +720,7 @@ Gen4 plan same as above
                           "Sharded": true
                         },
                         "FieldQuery": "select ps_partkey, ps_suppkey, weight_string(ps_suppkey) from partsupp where 1 != 1",
-                        "Query": "select ps_partkey, ps_suppkey, weight_string(ps_suppkey) from partsupp where ps_suppkey not in ::__sq1",
+                        "Query": "select ps_partkey, ps_suppkey, weight_string(ps_suppkey) from partsupp where :__sq_has_values1 = 0 or ps_suppkey not in ::__sq1",
                         "Table": "partsupp"
                       },
                       {
@@ -807,7 +807,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     },
                     "FieldQuery": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where 1 != 1",
                     "OrderBy": "(3|6) DESC, (2|5) ASC",
-                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
+                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
                     "Table": "orders",
                     "Values": [
                       "::__sq1"
