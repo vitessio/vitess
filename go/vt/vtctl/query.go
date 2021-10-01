@@ -29,7 +29,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -39,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 // This file contains the query command group for vtctl.
@@ -185,7 +185,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}
 
 	username := subFlags.String("username", "", "If set, value is set as immediate caller id in the request and used by vttablet for TableACL check")
-	transactionID := subFlags.Int("transaction_id", 0, "transaction id to use, if inside a transaction.")
+	transactionID := subFlags.Int64("transaction_id", 0, "transaction id to use, if inside a transaction.")
 	bindVariables := newBindvars(subFlags)
 	options := subFlags.String("options", "", "execute options values as a text encoded proto of the ExecuteOptions structure")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
@@ -200,41 +200,30 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 	executeOptions, err := parseExecuteOptions(*options)
 	if err != nil {
 		return err
 	}
-
-	if *username != "" {
-		ctx = callerid.NewContext(ctx,
-			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
-			callerid.NewImmediateCallerID(*username))
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
-	}
-	defer conn.Close(ctx)
 
 	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
 	if err != nil {
 		return fmt.Errorf("BuildBindVariables failed: %v", err)
 	}
 
-	// We do not support reserve connection through vtctl commands, so reservedID is always 0.
-	qr, err := conn.Execute(ctx, &querypb.Target{
-		Keyspace:   tabletInfo.Tablet.Keyspace,
-		Shard:      tabletInfo.Tablet.Shard,
-		TabletType: tabletInfo.Tablet.Type,
-	}, subFlags.Arg(1), bindVars, int64(*transactionID), 0, executeOptions)
+	resp, err := wr.VtctldServer().VTTabletExecute(ctx, &vtctldatapb.VTTabletExecuteRequest{
+		TabletAlias:   tabletAlias,
+		Sql:           subFlags.Arg(1),
+		Username:      *username,
+		TransactionId: *transactionID,
+		BindVariables: bindVars,
+		Options:       executeOptions,
+	})
 	if err != nil {
 		return fmt.Errorf("execute failed: %v", err)
 	}
+
+	qr := sqltypes.Proto3ToResult(resp.Result)
+
 	if *json {
 		return printJSON(wr.Logger(), qr)
 	}
@@ -258,33 +247,16 @@ func commandVtTabletBegin(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 
-	if *username != "" {
-		ctx = callerid.NewContext(ctx,
-			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
-			callerid.NewImmediateCallerID(*username))
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
-	}
-	defer conn.Close(ctx)
-
-	transactionID, _, err := conn.Begin(ctx, &querypb.Target{
-		Keyspace:   tabletInfo.Tablet.Keyspace,
-		Shard:      tabletInfo.Tablet.Shard,
-		TabletType: tabletInfo.Tablet.Type,
-	}, nil)
+	resp, err := wr.VtctldServer().VTTabletBegin(ctx, &vtctldatapb.VTTabletBeginRequest{
+		TabletAlias: tabletAlias,
+		Username:    *username,
+	})
 	if err != nil {
 		return fmt.Errorf("begin failed: %v", err)
 	}
 	result := map[string]int64{
-		"transaction_id": transactionID,
+		"transaction_id": resp.TransactionId,
 	}
 	return printJSON(wr.Logger(), result)
 }
@@ -309,29 +281,12 @@ func commandVtTabletCommit(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 
-	if *username != "" {
-		ctx = callerid.NewContext(ctx,
-			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
-			callerid.NewImmediateCallerID(*username))
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
-	}
-	defer conn.Close(ctx)
-
-	// we do not support reserving through vtctl commands
-	_, err = conn.Commit(ctx, &querypb.Target{
-		Keyspace:   tabletInfo.Tablet.Keyspace,
-		Shard:      tabletInfo.Tablet.Shard,
-		TabletType: tabletInfo.Tablet.Type,
-	}, transactionID)
+	_, err = wr.VtctldServer().VTTabletCommit(ctx, &vtctldatapb.VTTabletCommitRequest{
+		TabletAlias:   tabletAlias,
+		TransactionId: transactionID,
+		Username:      *username,
+	})
 	return err
 }
 
@@ -355,29 +310,12 @@ func commandVtTabletRollback(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
 
-	if *username != "" {
-		ctx = callerid.NewContext(ctx,
-			callerid.NewEffectiveCallerID("vtctl", "" /* component */, "" /* subComponent */),
-			callerid.NewImmediateCallerID(*username))
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
-	}
-	defer conn.Close(ctx)
-
-	// we do not support reserving through vtctl commands
-	_, err = conn.Rollback(ctx, &querypb.Target{
-		Keyspace:   tabletInfo.Tablet.Keyspace,
-		Shard:      tabletInfo.Tablet.Shard,
-		TabletType: tabletInfo.Tablet.Type,
-	}, transactionID)
+	_, err = wr.VtctldServer().VTTabletRollback(ctx, &vtctldatapb.VTTabletRollbackRequest{
+		TabletAlias:   tabletAlias,
+		TransactionId: transactionID,
+		Username:      *username,
+	})
 	return err
 }
 

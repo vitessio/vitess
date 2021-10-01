@@ -33,8 +33,11 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -47,10 +50,12 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -2288,22 +2293,197 @@ func (s *VtctldServer) UpdateCellsAlias(ctx context.Context, req *vtctldatapb.Up
 
 // VTTabletBegin is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VTTabletBegin(ctx context.Context, req *vtctldatapb.VTTabletBeginRequest) (*vtctldatapb.VTTabletBeginResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VTTabletBegin")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("username", req.Username)
+
+	if err := checkQueriesEnabled(span); err != nil {
+		return nil, err
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %s not found: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+
+	if req.Username != "" {
+		component, subcomponent := "", ""
+		ctx = callerid.NewContext(
+			ctx,
+			callerid.NewEffectiveCallerID("vtctl", component, subcomponent),
+			callerid.NewImmediateCallerID(req.Username),
+		)
+	}
+
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot connect to tablet %s: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+	defer conn.Close(ctx)
+
+	transactionID, _, err := conn.Begin(ctx, &querypb.Target{
+		Keyspace:   ti.Tablet.Keyspace,
+		Shard:      ti.Tablet.Shard,
+		TabletType: ti.Tablet.Type,
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.VTTabletBeginResponse{
+		TransactionId: transactionID,
+	}, nil
 }
 
 // VTTabletCommit is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VTTabletCommit(ctx context.Context, req *vtctldatapb.VTTabletCommitRequest) (*vtctldatapb.VTTabletCommitResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VTTabletCommit")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("username", req.Username)
+	span.Annotate("transaction_id", req.TransactionId)
+
+	if err := checkQueriesEnabled(span); err != nil {
+		return nil, err
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %s not found: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+
+	if req.Username != "" {
+		component, subcomponent := "", ""
+		ctx = callerid.NewContext(
+			ctx,
+			callerid.NewEffectiveCallerID("vtctl", component, subcomponent),
+			callerid.NewImmediateCallerID(req.Username),
+		)
+	}
+
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot connect to tablet %s: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+	defer conn.Close(ctx)
+
+	// We do not support reserving through vtctl commands, so we discard
+	// the returned reservedID.
+	_, err = conn.Commit(ctx, &querypb.Target{
+		Keyspace:   ti.Tablet.Keyspace,
+		Shard:      ti.Tablet.Shard,
+		TabletType: ti.Tablet.Type,
+	}, req.TransactionId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.VTTabletCommitResponse{}, nil
 }
 
 // VTTabletExecute is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VTTabletExecute(ctx context.Context, req *vtctldatapb.VTTabletExecuteRequest) (*vtctldatapb.VTTabletExecuteResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VTTabletCommit")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("username", req.Username)
+	span.Annotate("transaction_id", req.TransactionId)
+	span.Annotate("num_bindvars", len(req.BindVariables))
+	span.Annotate("options", req.Options)
+
+	if err := checkQueriesEnabled(span); err != nil {
+		return nil, err
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %s not found: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+
+	if req.Username != "" {
+		component, subcomponent := "", ""
+		ctx = callerid.NewContext(
+			ctx,
+			callerid.NewEffectiveCallerID("vtctl", component, subcomponent),
+			callerid.NewImmediateCallerID(req.Username),
+		)
+	}
+
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot connect to tablet %s: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+	defer conn.Close(ctx)
+
+	// We do not support reserve connection through vtctl commands,so
+	// reservedID is always 0.
+	reservedID := int64(0)
+	qr, err := conn.Execute(ctx, &querypb.Target{
+		Keyspace:   ti.Tablet.Keyspace,
+		Shard:      ti.Tablet.Shard,
+		TabletType: ti.Tablet.Type,
+	}, req.Sql, req.BindVariables, req.TransactionId, reservedID, req.Options)
+	if err != nil {
+		return nil, err
+	}
+
+	span.Annotate("rows_affected", qr.RowsAffected)
+	span.Annotate("num_rows", len(qr.Rows))
+
+	return &vtctldatapb.VTTabletExecuteResponse{
+		Result: sqltypes.ResultToProto3(qr),
+	}, nil
 }
 
 // VTTabletRollback is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) VTTabletRollback(ctx context.Context, req *vtctldatapb.VTTabletRollbackRequest) (*vtctldatapb.VTTabletRollbackResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VTTabletRollback")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+	span.Annotate("username", req.Username)
+	span.Annotate("transaction_id", req.TransactionId)
+
+	if err := checkQueriesEnabled(span); err != nil {
+		return nil, err
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "tablet %s not found: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+
+	if req.Username != "" {
+		component, subcomponent := "", ""
+		ctx = callerid.NewContext(
+			ctx,
+			callerid.NewEffectiveCallerID("vtctl", component, subcomponent),
+			callerid.NewImmediateCallerID(req.Username),
+		)
+	}
+
+	conn, err := tabletconn.GetDialer()(ti.Tablet, grpcclient.FailFast(false))
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot connect to tablet %s: %s", topoproto.TabletAliasString(req.TabletAlias), err)
+	}
+	defer conn.Close(ctx)
+
+	// We do not support reserving through vtctl commands, so we discard
+	// the returned reservedID.
+	_, err = conn.Rollback(ctx, &querypb.Target{
+		Keyspace:   ti.Tablet.Keyspace,
+		Shard:      ti.Tablet.Shard,
+		TabletType: ti.Tablet.Type,
+	}, req.TransactionId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.VTTabletRollbackResponse{}, nil
 }
 
 // Validate is part of the vtctlservicepb.VtctldServer interface.
