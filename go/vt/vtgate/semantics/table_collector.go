@@ -136,7 +136,7 @@ func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
 		if t == t2.getExpr() {
-			return TableSet(1 << i)
+			return SingleTableSet(i)
 		}
 	}
 	panic("unknown table")
