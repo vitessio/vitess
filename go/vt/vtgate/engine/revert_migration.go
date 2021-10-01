@@ -44,7 +44,7 @@ type RevertMigration struct {
 	noInputs
 }
 
-func (v *RevertMigration) Description() PrimitiveDescription {
+func (v *RevertMigration) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "RevertMigration",
 		Keyspace:     v.Keyspace,
@@ -69,7 +69,7 @@ func (v *RevertMigration) GetTableName() string {
 	return ""
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -116,7 +116,7 @@ func (v *RevertMigration) TryExecute(vcursor VCursor, bindVars map[string]*query
 	return result, err
 }
 
-//StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (v *RevertMigration) TryStreamExecute(vcursor VCursor, bindVars map[string]*query.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	results, err := v.TryExecute(vcursor, bindVars, wantfields)
 	if err != nil {

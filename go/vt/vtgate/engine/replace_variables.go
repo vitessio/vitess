@@ -49,7 +49,7 @@ func (r *ReplaceVariables) GetTableName() string {
 	return r.Input.GetTableName()
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (r *ReplaceVariables) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(r.Input, bindVars, wantfields)
 	if err != nil {
@@ -59,7 +59,7 @@ func (r *ReplaceVariables) TryExecute(vcursor VCursor, bindVars map[string]*quer
 	return qr, nil
 }
 
-// StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (r *ReplaceVariables) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	innerCallback := callback
 	callback = func(result *sqltypes.Result) error {
@@ -79,8 +79,8 @@ func (r *ReplaceVariables) Inputs() []Primitive {
 	return []Primitive{r.Input}
 }
 
-// Description implements the Primitive interface
-func (r *ReplaceVariables) Description() PrimitiveDescription {
+// description implements the Primitive interface
+func (r *ReplaceVariables) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "ReplaceVariables",
 	}

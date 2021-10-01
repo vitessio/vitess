@@ -54,7 +54,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables |= table.getTableSet(org)
+				vTbl.tables.MergeInPlace(table.getTableSet(org))
 			}
 		}
 	}
@@ -123,7 +123,7 @@ func (dt *derivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *derivedTable) hasStar() bool {
-	return dt.tables > 0
+	return dt.tables.NumberOfTables() > 0
 }
 
 // GetTables implements the TableInfo interface
