@@ -34,7 +34,6 @@ type (
 	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
 	//  *  Vindex - Represents a query that selects from vindex tables.
 	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
-	//  *  Distinct - Represents elimination of duplicates from the output of the input source
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -50,7 +49,7 @@ type (
 		CheckValid() error
 
 		// Compact will optimise the operator tree into a smaller but equivalent version
-		Compact() Operator
+		Compact(semTable *semantics.SemTable) (Operator, error)
 	}
 )
 
@@ -170,7 +169,7 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 	if err != nil {
 		return nil, err
 	}
-	return op.Compact(), nil
+	return op.Compact(semTable)
 }
 
 func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
@@ -211,10 +210,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement: subquerySelectStatement,
-				Inner:           opInner,
-				Type:            sq.OpCode,
-				ArgName:         sq.ArgName,
+				SelectStatement:  subquerySelectStatement,
+				Inner:            opInner,
+				Type:             sq.OpCode,
+				ArgName:          sq.ArgName,
+				HasValues:        sq.HasValues,
+				ExprsNeedReplace: sq.ExprsNeedReplace,
+				ReplaceBy:        sq.ReplaceBy,
 			})
 		}
 	}
@@ -261,14 +263,8 @@ func createJoin(LHS, RHS Operator) Operator {
 	if lok && rok {
 		op := &QueryGraph{
 			Tables:     append(lqg.Tables, rqg.Tables...),
-			innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
+			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
 			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
-		}
-		for k, v := range lqg.innerJoins {
-			op.innerJoins[k] = v
-		}
-		for k, v := range rqg.innerJoins {
-			op.innerJoins[k] = v
 		}
 		return op
 	}

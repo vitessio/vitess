@@ -712,6 +712,13 @@ message ReparentTabletResponse {
   topodata.TabletAlias primary = 3;
 }
 
+message RunHealthCheckRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message RunHealthCheckResponse {
+}
+
 message SetShardIsPrimaryServingRequest {
   string keyspace = 1;
   string shard = 2;

@@ -38,12 +38,14 @@ type planningContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
-	// these helps in replacing the argNames with the subquery
-	sqToReplace map[string]*sqlparser.Select
+	// these help in replacing the argNames with the subquery
+	argToReplaceBySelect map[string]*sqlparser.Select
+	// these help in replacing the argument's expressions by the original expression
+	exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr
 }
 
 func (c planningContext) isSubQueryToReplace(name string) bool {
-	_, found := c.sqToReplace[name]
+	_, found := c.argToReplaceBySelect[name]
 	return found
 }
 
@@ -149,10 +151,11 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 			}
 			unmerged = append(unmerged, &subqueryTree{
-				subquery: inner.SelectStatement,
-				inner:    treeInner,
-				opcode:   inner.Type,
-				argName:  inner.ArgName,
+				subquery:  inner.SelectStatement,
+				inner:     treeInner,
+				opcode:    inner.Type,
+				argName:   inner.ArgName,
+				hasValues: inner.HasValues,
 			})
 		} else {
 			outerTree = merged
@@ -266,14 +269,17 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 }
 
 func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
-	ctx.sqToReplace[subq.ArgName] = subq.SelectStatement
+	ctx.argToReplaceBySelect[subq.ArgName] = subq.SelectStatement
+	for _, expr := range subq.ExprsNeedReplace {
+		ctx.exprToReplaceBySqExpr[expr] = subq.ReplaceBy
+	}
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
 	// this is needed to so that later when we try to push projections, we get the correct
 	// solved tableID from the route, since it also includes the tables from the subquery after merging
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch n := node.(type) {
 		case *sqlparser.AliasedTableExpr:
-			outer.solved |= ctx.semTable.TableSetFor(n)
+			outer.solved.MergeInPlace(ctx.semTable.TableSetFor(n))
 		}
 		return true, nil
 	}, subq.SelectStatement)
@@ -508,7 +514,7 @@ func breakPredicateInLHSandRHS(
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := semTable.RecursiveDeps(node)
-			if deps == 0 {
+			if deps.NumberOfTables() == 0 {
 				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
 				return false
 			}
@@ -529,12 +535,8 @@ func breakPredicateInLHSandRHS(
 	return
 }
 
-func mergeOrJoinInner(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr) (queryTree, error) {
-	return mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
-}
-
 func mergeOrJoin(ctx *planningContext, lhs, rhs queryTree, joinPredicates []sqlparser.Expr, inner bool) (queryTree, error) {
-	newTabletSet := lhs.tableID() | rhs.tableID()
+	newTabletSet := lhs.tableID().Merge(rhs.tableID())
 
 	merger := func(a, b *routeTree) (*routeTree, error) {
 		if inner {
@@ -616,7 +618,7 @@ func (cm cacheMap) getJoinTreeFor(ctx *planningContext, lhs, rhs queryTree, join
 		return cachedPlan, nil
 	}
 
-	join, err := mergeOrJoinInner(ctx, lhs, rhs, joinPredicates)
+	join, err := mergeOrJoin(ctx, lhs, rhs, joinPredicates, true)
 	if err != nil {
 		return nil, err
 	}
@@ -671,7 +673,7 @@ func leftToRightSolve(ctx *planningContext, qg *abstract.QueryGraph) (queryTree,
 			continue
 		}
 		joinPredicates := qg.GetPredicates(acc.tableID(), plan.tableID())
-		acc, err = mergeOrJoinInner(ctx, acc, plan, joinPredicates)
+		acc, err = mergeOrJoin(ctx, acc, plan, joinPredicates, true)
 		if err != nil {
 			return nil, err
 		}
@@ -1200,7 +1202,7 @@ func (p parenTables) Len() int {
 }
 
 func (p parenTables) Less(i, j int) bool {
-	return p[i].tableID() < p[j].tableID()
+	return p[i].tableID().TableOffset() < p[j].tableID().TableOffset()
 }
 
 func (p parenTables) Swap(i, j int) {

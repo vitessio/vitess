@@ -409,7 +409,7 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
-// If the given sqlparser.Expr is an argument and can be found in the rp.sqToReplace then the
+// If the given sqlparser.Expr is an argument and can be found in the rp.argToReplaceBySelect then the
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.

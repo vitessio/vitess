@@ -270,7 +270,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		tablets := gw.hc.GetHealthyTabletStats(target)
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
-			if target.TabletType == topodatapb.TabletType_PRIMARY && gw.kev != nil && gw.kev.TargetIsBeingResharded(target.Keyspace, target.Shard) {
+			if gw.kev != nil && gw.kev.TargetIsBeingResharded(target) {
 				err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
 				continue
 			}
