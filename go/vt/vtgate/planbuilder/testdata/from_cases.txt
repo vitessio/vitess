@@ -2955,7 +2955,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
-        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where unsharded_a.col in ::__sq1",
+        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
         "Table": "unsharded_a, unsharded_b"
       }
     ]
@@ -3058,7 +3058,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where `user`.col in ::__sq1",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -3164,7 +3164,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where `user`.col in ::__sq1",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -3278,7 +3278,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where `user`.col in ::__sq1",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
             "Table": "`user`"
           },
           {

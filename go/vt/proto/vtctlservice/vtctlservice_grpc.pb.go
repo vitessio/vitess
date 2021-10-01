@@ -264,6 +264,8 @@ type VtctldClient interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
+	// RunHealthCheck runs a healthcheck on the remote tablet.
+	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -705,6 +707,15 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 	return out, nil
 }
 
+func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error) {
+	out := new(vtctldata.RunHealthCheckResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RunHealthCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldata.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	out := new(vtctldata.SetShardIsPrimaryServingResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetShardIsPrimaryServing", in, out, opts...)
@@ -958,6 +969,8 @@ type VtctldServer interface {
 	// only works if the current replica position matches the last known reparent
 	// action.
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
+	// RunHealthCheck runs a healthcheck on the remote tablet.
+	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1143,6 +1156,9 @@ func (UnimplementedVtctldServer) RemoveShardCell(context.Context, *vtctldata.Rem
 }
 func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReparentTablet not implemented")
+}
+func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
 }
 func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
@@ -1952,6 +1968,24 @@ func _Vtctld_ReparentTablet_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.RunHealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).RunHealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/RunHealthCheck",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).RunHealthCheck(ctx, req.(*vtctldata.RunHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetShardIsPrimaryServingRequest)
 	if err := dec(in); err != nil {
@@ -2360,6 +2394,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReparentTablet",
 			Handler:    _Vtctld_ReparentTablet_Handler,
+		},
+		{
+			MethodName: "RunHealthCheck",
+			Handler:    _Vtctld_RunHealthCheck_Handler,
 		},
 		{
 			MethodName: "SetShardIsPrimaryServing",

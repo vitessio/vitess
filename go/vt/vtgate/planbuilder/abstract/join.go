@@ -103,6 +103,26 @@ func (j *Join) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (j *Join) Compact() Operator {
-	return j
+func (j *Join) Compact(semTable *semantics.SemTable) (Operator, error) {
+	if j.LeftJoin {
+		// we can't merge outer joins into a single QG
+		return j, nil
+	}
+
+	lqg, lok := j.LHS.(*QueryGraph)
+	rqg, rok := j.RHS.(*QueryGraph)
+	if !lok || !rok {
+		return j, nil
+	}
+
+	op := &QueryGraph{
+		Tables:     append(lqg.Tables, rqg.Tables...),
+		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
+		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+	}
+	err := op.collectPredicate(j.Predicate, semTable)
+	if err != nil {
+		return nil, err
+	}
+	return op, nil
 }

@@ -251,7 +251,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	return out, nil
 }
 
-// StreamExecute is a Primitive function.
+// TryStreamExecute is a Primitive function.
 func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
@@ -505,7 +505,7 @@ func groupByParamsToString(i interface{}) string {
 	return i.(*GroupByParams).String()
 }
 
-func (oa *OrderedAggregate) Description() PrimitiveDescription {
+func (oa *OrderedAggregate) description() PrimitiveDescription {
 	aggregates := GenericJoin(oa.Aggregates, aggregateParamsToString)
 	groupBy := GenericJoin(oa.GroupByKeys, groupByParamsToString)
 	other := map[string]interface{}{

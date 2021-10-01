@@ -61,7 +61,7 @@ func (ps *PulloutSubquery) GetTableName() string {
 	return ps.Underlying.GetTableName()
 }
 
-// Execute satisfies the Primitive interface.
+// TryExecute satisfies the Primitive interface.
 func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
@@ -70,7 +70,7 @@ func (ps *PulloutSubquery) TryExecute(vcursor VCursor, bindVars map[string]*quer
 	return vcursor.ExecutePrimitive(ps.Underlying, combinedVars, wantfields)
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (ps *PulloutSubquery) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
 	if err != nil {
@@ -170,7 +170,7 @@ func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*qu
 	return combinedVars, nil
 }
 
-func (ps *PulloutSubquery) Description() PrimitiveDescription {
+func (ps *PulloutSubquery) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "Subquery",
 		Variant:      ps.Opcode.String(),

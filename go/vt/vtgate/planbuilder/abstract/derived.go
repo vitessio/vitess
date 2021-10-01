@@ -66,6 +66,6 @@ func (d *Derived) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (d *Derived) Compact() Operator {
-	return d
+func (d *Derived) Compact(*semantics.SemTable) (Operator, error) {
+	return d, nil
 }

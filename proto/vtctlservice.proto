@@ -163,6 +163,8 @@ service Vtctld {
   // only works if the current replica position matches the last known reparent
   // action.
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
+  // RunHealthCheck runs a healthcheck on the remote tablet.
+  rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving

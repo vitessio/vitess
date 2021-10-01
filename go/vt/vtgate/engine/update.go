@@ -80,7 +80,7 @@ func (upd *Update) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
+// TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
@@ -104,7 +104,7 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	}
 }
 
-// StreamExecute performs a streaming exec.
+// TryStreamExecute performs a streaming exec.
 func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", upd.Query)
 }
@@ -269,7 +269,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
-func (upd *Update) Description() PrimitiveDescription {
+func (upd *Update) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                upd.Query,
 		"Table":                upd.GetTableName(),

@@ -187,8 +187,8 @@ func (ins *Insert) GetTableName() string {
 	return ""
 }
 
-// Execute performs a non-streaming exec.
-func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// TryExecute performs a non-streaming exec.
+func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -205,13 +205,13 @@ func (ins *Insert) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	}
 }
 
-// StreamExecute performs a streaming exec.
-func (ins *Insert) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+// TryStreamExecute performs a streaming exec.
+func (ins *Insert) TryStreamExecute(VCursor, map[string]*querypb.BindVariable, bool, func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", ins.Query)
 }
 
 // GetFields fetches the field info.
-func (ins *Insert) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ins *Insert) GetFields(VCursor, map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable code for %q", ins.Query)
 }
 
@@ -615,7 +615,7 @@ func InsertVarName(col sqlparser.ColIdent, rowNum int) string {
 	return fmt.Sprintf("_%s_%d", col.CompliantName(), rowNum)
 }
 
-func (ins *Insert) Description() PrimitiveDescription {
+func (ins *Insert) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":                ins.Query,
 		"TableName":            ins.GetTableName(),

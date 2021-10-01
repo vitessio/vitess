@@ -997,11 +997,11 @@ func commandRunHealthCheck(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().RunHealthCheck(ctx, tabletInfo.Tablet)
+
+	_, err = wr.VtctldServer().RunHealthCheck(ctx, &vtctldatapb.RunHealthCheckRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandIgnoreHealthError(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -31,7 +31,7 @@ func (p *Projection) GetTableName() string {
 	return p.Input.GetTableName()
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantfields)
 	if err != nil {
@@ -64,7 +64,7 @@ func (p *Projection) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return result, nil
 }
 
-// StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (p *Projection) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
 	result, err := vcursor.ExecutePrimitive(p.Input, bindVars, wantields)
 	if err != nil {
@@ -130,8 +130,8 @@ func (p *Projection) Inputs() []Primitive {
 	return []Primitive{p.Input}
 }
 
-// Description implements the Primitive interface
-func (p *Projection) Description() PrimitiveDescription {
+// description implements the Primitive interface
+func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
 		exprs = append(exprs, e.String())
