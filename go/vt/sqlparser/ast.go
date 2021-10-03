@@ -47,6 +47,7 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
+		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
 		SetComments(comments Comments)
@@ -123,6 +124,18 @@ type (
 		DefaultVal  Expr
 	}
 
+	// With contains the lists of common table expression and specifies if it is recursive or not
+	With struct {
+		ctes      []*CommonTableExpr
+		Recursive bool
+	}
+
+	// CommonTableExpr is the structure for supporting common table expressions
+	CommonTableExpr struct {
+		TableID  TableIdent
+		Columns  Columns
+		Subquery *Subquery
+	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
 		OldColumn        *ColName
@@ -211,6 +224,7 @@ type (
 		Comments    Comments
 		SelectExprs SelectExprs
 		Where       *Where
+		With        *With
 		GroupBy     GroupBy
 		Having      *Where
 		OrderBy     OrderBy
@@ -242,6 +256,7 @@ type (
 		Right    SelectStatement
 		Distinct bool
 		OrderBy  OrderBy
+		With     *With
 		Limit    *Limit
 		Lock     Lock
 		Into     *SelectInto
@@ -291,6 +306,7 @@ type (
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
+		With       *With
 		Comments   Comments
 		Ignore     Ignore
 		TableExprs TableExprs
@@ -303,6 +319,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		With       *With
 		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
@@ -621,6 +638,8 @@ func (*AlterView) iStatement()         {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
+func (*With) isStatement()             {}
+func (*CommonTableExpr) isStatement()  {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}

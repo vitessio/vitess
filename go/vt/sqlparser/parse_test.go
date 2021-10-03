@@ -45,6 +45,12 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
+		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
+	}, {
+		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
+		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",

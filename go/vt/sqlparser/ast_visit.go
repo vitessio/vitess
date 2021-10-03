@@ -86,6 +86,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitComments(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
+	case *CommonTableExpr:
+		return VisitRefOfCommonTableExpr(in, f)
 	case *ComparisonExpr:
 		return VisitRefOfComparisonExpr(in, f)
 	case *ConstraintDefinition:
@@ -314,6 +316,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *With:
+		return VisitRefOfWith(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
 	default:
@@ -716,6 +720,24 @@ func VisitRefOfCommit(in *Commit, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.TableID, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -874,6 +896,9 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
@@ -1687,6 +1712,9 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitGroupBy(in.GroupBy, f); err != nil {
 		return err
 	}
@@ -2079,6 +2107,9 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
@@ -2101,6 +2132,9 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
@@ -2290,6 +2324,20 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfWith(in *With, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.ctes {
+		if err := VisitRefOfCommonTableExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }

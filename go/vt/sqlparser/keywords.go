@@ -378,7 +378,7 @@ var keywords = []keyword{
 	{"read_write", UNUSED},
 	{"real", REAL},
 	{"rebuild", REBUILD},
-	{"recursive", UNUSED},
+	{"recursive", RECURSIVE},
 	{"redundant", REDUNDANT},
 	{"references", REFERENCES},
 	{"regexp", REGEXP},

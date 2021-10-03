@@ -379,8 +379,8 @@ END
 INPUT
 select   (with recursive dt as     (select t1.a as a union select a+1 from dt where a<10)    select dt1.a from dt dt1 where dt1.a=t1.a   ) as subq from t1;
 END
-ERROR
-syntax error at position 15 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select dt1.a from dt as dt1 where dt1.a = t1.a) as subq from t1
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5) UNION ALL SELECT * FROM t2 ORDER BY a LIMIT 8;
@@ -919,8 +919,8 @@ END
 INPUT
 select   (with recursive dt as     (select t1.a as a union select a+1 from dt where a<10)    select concat(count(*), ' - ', avg(dt.a)) from dt   ) as subq from t1;
 END
-ERROR
-syntax error at position 15 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 SELECT 'before' AS t, id, val1, hex(val1) FROM t1 UNION  SELECT 'after' AS t, id, val1, hex(val1) FROM t2 ORDER BY id,t DESC;
@@ -1255,8 +1255,8 @@ END
 INPUT
 select   (with recursive dt as     (select t1.a as a union all select a+1 from dt where a<10)    select concat(count(*), ' - ', avg(dt.a)) from dt   ) as subq from t1;
 END
-ERROR
-syntax error at position 15 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union all select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 select a.text, b.id, b.betreff from    t2 a inner join t3 b on a.id = b.forum inner join   t1 c on b.id = c.thread where    match(b.betreff) against ('+abc' in boolean mode) union select a.text, b.id, b.betreff from    t2 a inner join t3 b on a.id = b.forum inner join   t1 c on b.id = c.thread where    match(c.beitrag) against ('+abc' in boolean mode) order by    match(b.betreff) against ('+abc' in boolean mode) desc;
