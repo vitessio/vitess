@@ -1,5 +1,3 @@
-2021-07-12T14:35:08Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1023189687
-2021-07-12T14:35:08Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1023189670
 2021-07-12T14:35:08Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1023189674
 2021-07-12T14:35:08Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1023189713
 2021-07-12T15:02:38Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1023270652
@@ -9998,3 +9996,5 @@
 2021-10-03T19:54:37Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1301218694
 2021-10-03T19:54:37Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1301218698
 2021-10-03T19:54:37Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1301218706
+2021-10-03T20:40:18Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1301299709
+2021-10-03T20:40:18Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1301299640
