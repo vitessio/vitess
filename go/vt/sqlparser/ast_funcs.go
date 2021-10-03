@@ -765,6 +765,11 @@ func (node *Select) SetInto(into *SelectInto) {
 	node.Into = into
 }
 
+// SetWith sets the with clause to a select statement
+func (node *Select) SetWith(with *With) {
+	node.With = with
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -856,6 +861,11 @@ func (node *Union) SetLock(lock Lock) {
 // SetInto sets the into clause
 func (node *Union) SetInto(into *SelectInto) {
 	node.Into = into
+}
+
+// SetWith sets the with clause to a union statement
+func (node *Union) SetWith(with *With) {
+	node.With = with
 }
 
 // MakeDistinct implements the SelectStatement interface

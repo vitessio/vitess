@@ -86,6 +86,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   subquery      *Subquery
   derivedTable  *DerivedTable
   when          *When
+  with			*With
+  cte			*CommonTableExpr
+  ctes			[]*CommonTableExpr
   order         *Order
   limit         *Limit
   updateExpr    *UpdateExpr
@@ -293,6 +296,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
+%type <with> with_clause_opt with_clause
+%type <cte> common_table_expr
+%type <ctes> with_list
 %type <renameTablePairs> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
@@ -517,6 +523,42 @@ load_statement:
   {
     $$ = &Load{}
   }
+
+with_clause:
+  WITH with_list
+  {
+	$$ = &With{ctes: $2, Recursive: false}
+  }
+| WITH RECURSIVE with_list
+  {
+	$$ = &With{ctes: $3, Recursive: true}
+  }
+
+with_clause_opt:
+  {
+    $$ = nil
+  }
+ | with_clause
+ {
+ 	$$ = $1
+ }
+
+with_list:
+  with_list ',' common_table_expr
+  {
+	$$ = append($1, $3)
+  }
+| common_table_expr
+  {
+	$$ = []*CommonTableExpr{$1}
+  }
+
+common_table_expr:
+  table_id column_list_opt AS subquery
+  {
+	$$ = &CommonTableExpr{TableID: $1, Columns: $2, Subquery: $4}
+  }
+
 query_expression_parens:
   openb query_expression_parens closeb
   {
@@ -551,9 +593,9 @@ query_expression_parens:
 query_expression:
  query_expression_body order_by_opt limit_opt
   {
-		$1.SetOrderBy($2)
-		$1.SetLimit($3)
-		$$ = $1
+	$1.SetOrderBy($2)
+	$1.SetLimit($3)
+	$$ = $1
   }
 | query_expression_parens limit_clause
   {
@@ -565,6 +607,30 @@ query_expression:
 	$1.SetOrderBy($2)
 	$1.SetLimit($3)
 	$$ = $1
+  }
+| with_clause query_expression_body order_by_opt limit_opt
+  {
+  		$2.SetWith($1)
+		$2.SetOrderBy($3)
+		$2.SetLimit($4)
+		$$ = $2
+  }
+| with_clause query_expression_parens limit_clause
+  {
+  		$2.SetWith($1)
+		$2.SetLimit($3)
+		$$ = $2
+  }
+| with_clause query_expression_parens order_by_clause limit_opt
+  {
+  		$2.SetWith($1)
+		$2.SetOrderBy($3)
+		$2.SetLimit($4)
+		$$ = $2
+  }
+| with_clause query_expression_parens
+  {
+	$2.SetWith($1)
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -701,27 +767,27 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
+  with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
+    $$ = &Update{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
 
 delete_statement:
-  DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_clause_opt DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$6}}, Partitions: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
-| DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
   }
-| DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
-| DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 
 from_or_using:
