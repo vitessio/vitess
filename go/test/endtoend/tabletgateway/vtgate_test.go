@@ -60,9 +60,9 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	require.Nil(t, err)
 	defer conn.Close()
 
-	// Only returns rows for REPLICA tablets -- so should be 1 of them
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
 	qr := exec(t, conn, "show vitess_replication_status like '%'", "")
-	expectNumRows := 1
+	expectNumRows := 2
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
 }

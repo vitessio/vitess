@@ -708,7 +708,7 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 	qr.Rows = [][]sqltypes.Value{}
 	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Source", "Replication_Health", "Replication_Lag", "Throttler_Status"),
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   [][]sqltypes.Value{},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
@@ -717,7 +717,7 @@ func TestExecutorShow(t *testing.T) {
 	require.NoError(t, err)
 	qr.Rows = [][]sqltypes.Value{}
 	wantqr = &sqltypes.Result{
-		Fields: buildVarCharFields("Keyspace", "Shard", "Alias", "Hostname", "Replication_Source", "Replication_Health", "Replication_Lag", "Throttler_Status"),
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   [][]sqltypes.Value{},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
