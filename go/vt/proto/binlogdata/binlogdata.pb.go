@@ -2080,6 +2080,86 @@ func (x *VStreamRowsRequest) GetLastpk() *query.QueryResult {
 	return nil
 }
 
+// VStreamRowsParallelRequest is a parallel payload for VStreamRowsParallel
+type VStreamRowsParallelRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	EffectiveCallerId *vtrpc.CallerID       `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *query.VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             []string              `protobuf:"bytes,4,rep,name=query,proto3" json:"query,omitempty"`
+	Lastpk            []*query.QueryResult  `protobuf:"bytes,5,rep,name=lastpk,proto3" json:"lastpk,omitempty"`
+}
+
+func (x *VStreamRowsParallelRequest) Reset() {
+	*x = VStreamRowsParallelRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_binlogdata_proto_msgTypes[23]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *VStreamRowsParallelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*VStreamRowsParallelRequest) ProtoMessage() {}
+
+func (x *VStreamRowsParallelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_binlogdata_proto_msgTypes[23]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use VStreamRowsParallelRequest.ProtoReflect.Descriptor instead.
+func (*VStreamRowsParallelRequest) Descriptor() ([]byte, []int) {
+	return file_binlogdata_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *VStreamRowsParallelRequest) GetEffectiveCallerId() *vtrpc.CallerID {
+	if x != nil {
+		return x.EffectiveCallerId
+	}
+	return nil
+}
+
+func (x *VStreamRowsParallelRequest) GetImmediateCallerId() *query.VTGateCallerID {
+	if x != nil {
+		return x.ImmediateCallerId
+	}
+	return nil
+}
+
+func (x *VStreamRowsParallelRequest) GetTarget() *query.Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *VStreamRowsParallelRequest) GetQuery() []string {
+	if x != nil {
+		return x.Query
+	}
+	return nil
+}
+
+func (x *VStreamRowsParallelRequest) GetLastpk() []*query.QueryResult {
+	if x != nil {
+		return x.Lastpk
+	}
+	return nil
+}
+
 // VStreamRowsResponse is the response from VStreamRows
 type VStreamRowsResponse struct {
 	state         protoimpl.MessageState
@@ -2096,7 +2176,7 @@ type VStreamRowsResponse struct {
 func (x *VStreamRowsResponse) Reset() {
 	*x = VStreamRowsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[23]
+		mi := &file_binlogdata_proto_msgTypes[24]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2109,7 +2189,7 @@ func (x *VStreamRowsResponse) String() string {
 func (*VStreamRowsResponse) ProtoMessage() {}
 
 func (x *VStreamRowsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[23]
+	mi := &file_binlogdata_proto_msgTypes[24]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2122,7 +2202,7 @@ func (x *VStreamRowsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VStreamRowsResponse.ProtoReflect.Descriptor instead.
 func (*VStreamRowsResponse) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{23}
+	return file_binlogdata_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *VStreamRowsResponse) GetFields() []*query.Field {
@@ -2172,7 +2252,7 @@ type LastPKEvent struct {
 func (x *LastPKEvent) Reset() {
 	*x = LastPKEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[24]
+		mi := &file_binlogdata_proto_msgTypes[25]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2185,7 +2265,7 @@ func (x *LastPKEvent) String() string {
 func (*LastPKEvent) ProtoMessage() {}
 
 func (x *LastPKEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[24]
+	mi := &file_binlogdata_proto_msgTypes[25]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2198,7 +2278,7 @@ func (x *LastPKEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LastPKEvent.ProtoReflect.Descriptor instead.
 func (*LastPKEvent) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{24}
+	return file_binlogdata_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *LastPKEvent) GetTableLastPK() *TableLastPK {
@@ -2227,7 +2307,7 @@ type TableLastPK struct {
 func (x *TableLastPK) Reset() {
 	*x = TableLastPK{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[25]
+		mi := &file_binlogdata_proto_msgTypes[26]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2240,7 +2320,7 @@ func (x *TableLastPK) String() string {
 func (*TableLastPK) ProtoMessage() {}
 
 func (x *TableLastPK) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[25]
+	mi := &file_binlogdata_proto_msgTypes[26]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2253,7 +2333,7 @@ func (x *TableLastPK) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableLastPK.ProtoReflect.Descriptor instead.
 func (*TableLastPK) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{25}
+	return file_binlogdata_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *TableLastPK) GetTableName() string {
@@ -2287,7 +2367,7 @@ type VStreamResultsRequest struct {
 func (x *VStreamResultsRequest) Reset() {
 	*x = VStreamResultsRequest{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[26]
+		mi := &file_binlogdata_proto_msgTypes[27]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2300,7 +2380,7 @@ func (x *VStreamResultsRequest) String() string {
 func (*VStreamResultsRequest) ProtoMessage() {}
 
 func (x *VStreamResultsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[26]
+	mi := &file_binlogdata_proto_msgTypes[27]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2313,7 +2393,7 @@ func (x *VStreamResultsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VStreamResultsRequest.ProtoReflect.Descriptor instead.
 func (*VStreamResultsRequest) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{26}
+	return file_binlogdata_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *VStreamResultsRequest) GetEffectiveCallerId() *vtrpc.CallerID {
@@ -2359,7 +2439,7 @@ type VStreamResultsResponse struct {
 func (x *VStreamResultsResponse) Reset() {
 	*x = VStreamResultsResponse{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[27]
+		mi := &file_binlogdata_proto_msgTypes[28]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2372,7 +2452,7 @@ func (x *VStreamResultsResponse) String() string {
 func (*VStreamResultsResponse) ProtoMessage() {}
 
 func (x *VStreamResultsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[27]
+	mi := &file_binlogdata_proto_msgTypes[28]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2385,7 +2465,7 @@ func (x *VStreamResultsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VStreamResultsResponse.ProtoReflect.Descriptor instead.
 func (*VStreamResultsResponse) Descriptor() ([]byte, []int) {
-	return file_binlogdata_proto_rawDescGZIP(), []int{27}
+	return file_binlogdata_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *VStreamResultsResponse) GetFields() []*query.Field {
@@ -2425,7 +2505,7 @@ type BinlogTransaction_Statement struct {
 func (x *BinlogTransaction_Statement) Reset() {
 	*x = BinlogTransaction_Statement{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_binlogdata_proto_msgTypes[28]
+		mi := &file_binlogdata_proto_msgTypes[29]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -2438,7 +2518,7 @@ func (x *BinlogTransaction_Statement) String() string {
 func (*BinlogTransaction_Statement) ProtoMessage() {}
 
 func (x *BinlogTransaction_Statement) ProtoReflect() protoreflect.Message {
-	mi := &file_binlogdata_proto_msgTypes[28]
+	mi := &file_binlogdata_proto_msgTypes[29]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2766,6 +2846,23 @@ var file_binlogdata_proto_rawDesc = []byte{
 	0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x12, 0x2a, 0x0a, 0x06, 0x6c, 0x61, 0x73, 0x74, 0x70, 0x6b,
 	0x18, 0x05, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x51,
 	0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x6c, 0x61, 0x73, 0x74,
+	0x70, 0x6b, 0x22, 0x8d, 0x02, 0x0a, 0x1a, 0x56, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x52, 0x6f,
+	0x77, 0x73, 0x50, 0x61, 0x72, 0x61, 0x6c, 0x6c, 0x65, 0x6c, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x3f, 0x0a, 0x13, 0x65, 0x66, 0x66, 0x65, 0x63, 0x74, 0x69, 0x76, 0x65, 0x5f, 0x63,
+	0x61, 0x6c, 0x6c, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0f,
+	0x2e, 0x76, 0x74, 0x72, 0x70, 0x63, 0x2e, 0x43, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x49, 0x44, 0x52,
+	0x11, 0x65, 0x66, 0x66, 0x65, 0x63, 0x74, 0x69, 0x76, 0x65, 0x43, 0x61, 0x6c, 0x6c, 0x65, 0x72,
+	0x49, 0x64, 0x12, 0x45, 0x0a, 0x13, 0x69, 0x6d, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x74, 0x65, 0x5f,
+	0x63, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x5f, 0x69, 0x64, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x15, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x56, 0x54, 0x47, 0x61, 0x74, 0x65, 0x43, 0x61,
+	0x6c, 0x6c, 0x65, 0x72, 0x49, 0x44, 0x52, 0x11, 0x69, 0x6d, 0x6d, 0x65, 0x64, 0x69, 0x61, 0x74,
+	0x65, 0x43, 0x61, 0x6c, 0x6c, 0x65, 0x72, 0x49, 0x64, 0x12, 0x25, 0x0a, 0x06, 0x74, 0x61, 0x72,
+	0x67, 0x65, 0x74, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x71, 0x75, 0x65, 0x72,
+	0x79, 0x2e, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x52, 0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74,
+	0x12, 0x14, 0x0a, 0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x18, 0x04, 0x20, 0x03, 0x28, 0x09, 0x52,
+	0x05, 0x71, 0x75, 0x65, 0x72, 0x79, 0x12, 0x2a, 0x0a, 0x06, 0x6c, 0x61, 0x73, 0x74, 0x70, 0x6b,
+	0x18, 0x05, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x51,
+	0x75, 0x65, 0x72, 0x79, 0x52, 0x65, 0x73, 0x75, 0x6c, 0x74, 0x52, 0x06, 0x6c, 0x61, 0x73, 0x74,
 	0x70, 0x6b, 0x22, 0xbd, 0x01, 0x0a, 0x13, 0x56, 0x53, 0x74, 0x72, 0x65, 0x61, 0x6d, 0x52, 0x6f,
 	0x77, 0x73, 0x52, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x24, 0x0a, 0x06, 0x66, 0x69,
 	0x65, 0x6c, 0x64, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32, 0x0c, 0x2e, 0x71, 0x75, 0x65,
@@ -2853,7 +2950,7 @@ func file_binlogdata_proto_rawDescGZIP() []byte {
 }
 
 var file_binlogdata_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_binlogdata_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_binlogdata_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_binlogdata_proto_goTypes = []interface{}{
 	(OnDDLAction)(0),   // 0: binlogdata.OnDDLAction
 	(VEventType)(0),    // 1: binlogdata.VEventType
@@ -2883,45 +2980,46 @@ var file_binlogdata_proto_goTypes = []interface{}{
 	(*VStreamRequest)(nil),                    // 25: binlogdata.VStreamRequest
 	(*VStreamResponse)(nil),                   // 26: binlogdata.VStreamResponse
 	(*VStreamRowsRequest)(nil),                // 27: binlogdata.VStreamRowsRequest
-	(*VStreamRowsResponse)(nil),               // 28: binlogdata.VStreamRowsResponse
-	(*LastPKEvent)(nil),                       // 29: binlogdata.LastPKEvent
-	(*TableLastPK)(nil),                       // 30: binlogdata.TableLastPK
-	(*VStreamResultsRequest)(nil),             // 31: binlogdata.VStreamResultsRequest
-	(*VStreamResultsResponse)(nil),            // 32: binlogdata.VStreamResultsResponse
-	(*BinlogTransaction_Statement)(nil),       // 33: binlogdata.BinlogTransaction.Statement
-	nil,                                       // 34: binlogdata.Rule.ConvertEnumToTextEntry
-	nil,                                       // 35: binlogdata.Rule.ConvertCharsetEntry
-	(*query.EventToken)(nil),                  // 36: query.EventToken
-	(*topodata.KeyRange)(nil),                 // 37: topodata.KeyRange
-	(topodata.TabletType)(0),                  // 38: topodata.TabletType
-	(*query.Row)(nil),                         // 39: query.Row
-	(*query.Field)(nil),                       // 40: query.Field
-	(*vtrpc.CallerID)(nil),                    // 41: vtrpc.CallerID
-	(*query.VTGateCallerID)(nil),              // 42: query.VTGateCallerID
-	(*query.Target)(nil),                      // 43: query.Target
-	(*query.QueryResult)(nil),                 // 44: query.QueryResult
+	(*VStreamRowsParallelRequest)(nil),        // 28: binlogdata.VStreamRowsParallelRequest
+	(*VStreamRowsResponse)(nil),               // 29: binlogdata.VStreamRowsResponse
+	(*LastPKEvent)(nil),                       // 30: binlogdata.LastPKEvent
+	(*TableLastPK)(nil),                       // 31: binlogdata.TableLastPK
+	(*VStreamResultsRequest)(nil),             // 32: binlogdata.VStreamResultsRequest
+	(*VStreamResultsResponse)(nil),            // 33: binlogdata.VStreamResultsResponse
+	(*BinlogTransaction_Statement)(nil),       // 34: binlogdata.BinlogTransaction.Statement
+	nil,                                       // 35: binlogdata.Rule.ConvertEnumToTextEntry
+	nil,                                       // 36: binlogdata.Rule.ConvertCharsetEntry
+	(*query.EventToken)(nil),                  // 37: query.EventToken
+	(*topodata.KeyRange)(nil),                 // 38: topodata.KeyRange
+	(topodata.TabletType)(0),                  // 39: topodata.TabletType
+	(*query.Row)(nil),                         // 40: query.Row
+	(*query.Field)(nil),                       // 41: query.Field
+	(*vtrpc.CallerID)(nil),                    // 42: vtrpc.CallerID
+	(*query.VTGateCallerID)(nil),              // 43: query.VTGateCallerID
+	(*query.Target)(nil),                      // 44: query.Target
+	(*query.QueryResult)(nil),                 // 45: query.QueryResult
 }
 var file_binlogdata_proto_depIdxs = []int32{
-	33, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
-	36, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
-	37, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
+	34, // 0: binlogdata.BinlogTransaction.statements:type_name -> binlogdata.BinlogTransaction.Statement
+	37, // 1: binlogdata.BinlogTransaction.event_token:type_name -> query.EventToken
+	38, // 2: binlogdata.StreamKeyRangeRequest.key_range:type_name -> topodata.KeyRange
 	5,  // 3: binlogdata.StreamKeyRangeRequest.charset:type_name -> binlogdata.Charset
 	6,  // 4: binlogdata.StreamKeyRangeResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
 	5,  // 5: binlogdata.StreamTablesRequest.charset:type_name -> binlogdata.Charset
 	6,  // 6: binlogdata.StreamTablesResponse.binlog_transaction:type_name -> binlogdata.BinlogTransaction
-	34, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
-	35, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
+	35, // 7: binlogdata.Rule.convert_enum_to_text:type_name -> binlogdata.Rule.ConvertEnumToTextEntry
+	36, // 8: binlogdata.Rule.convert_charset:type_name -> binlogdata.Rule.ConvertCharsetEntry
 	12, // 9: binlogdata.Filter.rules:type_name -> binlogdata.Rule
 	4,  // 10: binlogdata.Filter.fieldEventMode:type_name -> binlogdata.Filter.FieldEventMode
-	38, // 11: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
-	37, // 12: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
+	39, // 11: binlogdata.BinlogSource.tablet_type:type_name -> topodata.TabletType
+	38, // 12: binlogdata.BinlogSource.key_range:type_name -> topodata.KeyRange
 	13, // 13: binlogdata.BinlogSource.filter:type_name -> binlogdata.Filter
 	0,  // 14: binlogdata.BinlogSource.on_ddl:type_name -> binlogdata.OnDDLAction
-	39, // 15: binlogdata.RowChange.before:type_name -> query.Row
-	39, // 16: binlogdata.RowChange.after:type_name -> query.Row
+	40, // 15: binlogdata.RowChange.before:type_name -> query.Row
+	40, // 16: binlogdata.RowChange.after:type_name -> query.Row
 	15, // 17: binlogdata.RowEvent.row_changes:type_name -> binlogdata.RowChange
-	40, // 18: binlogdata.FieldEvent.fields:type_name -> query.Field
-	30, // 19: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
+	41, // 18: binlogdata.FieldEvent.fields:type_name -> query.Field
+	31, // 19: binlogdata.ShardGtid.table_p_ks:type_name -> binlogdata.TableLastPK
 	18, // 20: binlogdata.VGtid.shard_gtids:type_name -> binlogdata.ShardGtid
 	2,  // 21: binlogdata.Journal.migration_type:type_name -> binlogdata.MigrationType
 	18, // 22: binlogdata.Journal.shard_gtids:type_name -> binlogdata.ShardGtid
@@ -2931,38 +3029,42 @@ var file_binlogdata_proto_depIdxs = []int32{
 	17, // 26: binlogdata.VEvent.field_event:type_name -> binlogdata.FieldEvent
 	19, // 27: binlogdata.VEvent.vgtid:type_name -> binlogdata.VGtid
 	21, // 28: binlogdata.VEvent.journal:type_name -> binlogdata.Journal
-	29, // 29: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
-	40, // 30: binlogdata.MinimalTable.fields:type_name -> query.Field
+	30, // 29: binlogdata.VEvent.last_p_k_event:type_name -> binlogdata.LastPKEvent
+	41, // 30: binlogdata.MinimalTable.fields:type_name -> query.Field
 	23, // 31: binlogdata.MinimalSchema.tables:type_name -> binlogdata.MinimalTable
-	41, // 32: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	42, // 33: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	43, // 34: binlogdata.VStreamRequest.target:type_name -> query.Target
+	42, // 32: binlogdata.VStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	43, // 33: binlogdata.VStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	44, // 34: binlogdata.VStreamRequest.target:type_name -> query.Target
 	13, // 35: binlogdata.VStreamRequest.filter:type_name -> binlogdata.Filter
-	30, // 36: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
+	31, // 36: binlogdata.VStreamRequest.table_last_p_ks:type_name -> binlogdata.TableLastPK
 	22, // 37: binlogdata.VStreamResponse.events:type_name -> binlogdata.VEvent
-	41, // 38: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	42, // 39: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	43, // 40: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
-	44, // 41: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
-	40, // 42: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
-	40, // 43: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
-	39, // 44: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
-	39, // 45: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
-	30, // 46: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
-	44, // 47: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
-	41, // 48: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	42, // 49: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	43, // 50: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
-	40, // 51: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
-	39, // 52: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
-	3,  // 53: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
-	5,  // 54: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
-	11, // 55: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
-	56, // [56:56] is the sub-list for method output_type
-	56, // [56:56] is the sub-list for method input_type
-	56, // [56:56] is the sub-list for extension type_name
-	56, // [56:56] is the sub-list for extension extendee
-	0,  // [0:56] is the sub-list for field type_name
+	42, // 38: binlogdata.VStreamRowsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	43, // 39: binlogdata.VStreamRowsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	44, // 40: binlogdata.VStreamRowsRequest.target:type_name -> query.Target
+	45, // 41: binlogdata.VStreamRowsRequest.lastpk:type_name -> query.QueryResult
+	42, // 42: binlogdata.VStreamRowsParallelRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	43, // 43: binlogdata.VStreamRowsParallelRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	44, // 44: binlogdata.VStreamRowsParallelRequest.target:type_name -> query.Target
+	45, // 45: binlogdata.VStreamRowsParallelRequest.lastpk:type_name -> query.QueryResult
+	41, // 46: binlogdata.VStreamRowsResponse.fields:type_name -> query.Field
+	41, // 47: binlogdata.VStreamRowsResponse.pkfields:type_name -> query.Field
+	40, // 48: binlogdata.VStreamRowsResponse.rows:type_name -> query.Row
+	40, // 49: binlogdata.VStreamRowsResponse.lastpk:type_name -> query.Row
+	31, // 50: binlogdata.LastPKEvent.table_last_p_k:type_name -> binlogdata.TableLastPK
+	45, // 51: binlogdata.TableLastPK.lastpk:type_name -> query.QueryResult
+	42, // 52: binlogdata.VStreamResultsRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	43, // 53: binlogdata.VStreamResultsRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	44, // 54: binlogdata.VStreamResultsRequest.target:type_name -> query.Target
+	41, // 55: binlogdata.VStreamResultsResponse.fields:type_name -> query.Field
+	40, // 56: binlogdata.VStreamResultsResponse.rows:type_name -> query.Row
+	3,  // 57: binlogdata.BinlogTransaction.Statement.category:type_name -> binlogdata.BinlogTransaction.Statement.Category
+	5,  // 58: binlogdata.BinlogTransaction.Statement.charset:type_name -> binlogdata.Charset
+	11, // 59: binlogdata.Rule.ConvertCharsetEntry.value:type_name -> binlogdata.CharsetConversion
+	60, // [60:60] is the sub-list for method output_type
+	60, // [60:60] is the sub-list for method input_type
+	60, // [60:60] is the sub-list for extension type_name
+	60, // [60:60] is the sub-list for extension extendee
+	0,  // [0:60] is the sub-list for field type_name
 }
 
 func init() { file_binlogdata_proto_init() }
@@ -3248,7 +3350,7 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[23].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VStreamRowsResponse); i {
+			switch v := v.(*VStreamRowsParallelRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3260,7 +3362,7 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[24].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*LastPKEvent); i {
+			switch v := v.(*VStreamRowsResponse); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3272,7 +3374,7 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[25].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TableLastPK); i {
+			switch v := v.(*LastPKEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3284,7 +3386,7 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[26].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VStreamResultsRequest); i {
+			switch v := v.(*TableLastPK); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3296,7 +3398,7 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[27].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*VStreamResultsResponse); i {
+			switch v := v.(*VStreamResultsRequest); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -3308,6 +3410,18 @@ func file_binlogdata_proto_init() {
 			}
 		}
 		file_binlogdata_proto_msgTypes[28].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*VStreamResultsResponse); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_binlogdata_proto_msgTypes[29].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*BinlogTransaction_Statement); i {
 			case 0:
 				return &v.state
@@ -3326,7 +3440,7 @@ func file_binlogdata_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_binlogdata_proto_rawDesc,
 			NumEnums:      5,
-			NumMessages:   31,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -71,6 +71,8 @@ type QueryClient interface {
 	VStream(ctx context.Context, in *binlogdata.VStreamRequest, opts ...grpc.CallOption) (Query_VStreamClient, error)
 	// VStreamRows streams rows from the specified starting point.
 	VStreamRows(ctx context.Context, in *binlogdata.VStreamRowsRequest, opts ...grpc.CallOption) (Query_VStreamRowsClient, error)
+	// VStreamRowsParallel streams rows from the specified starting point.
+	VStreamRowsParallel(ctx context.Context, in *binlogdata.VStreamRowsParallelRequest, opts ...grpc.CallOption) (Query_VStreamRowsParallelClient, error)
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error)
 }
@@ -414,8 +416,40 @@ func (x *queryVStreamRowsClient) Recv() (*binlogdata.VStreamRowsResponse, error)
 	return m, nil
 }
 
+func (c *queryClient) VStreamRowsParallel(ctx context.Context, in *binlogdata.VStreamRowsParallelRequest, opts ...grpc.CallOption) (Query_VStreamRowsParallelClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[5], "/queryservice.Query/VStreamRowsParallel", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryVStreamRowsParallelClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_VStreamRowsParallelClient interface {
+	Recv() (*binlogdata.VStreamRowsResponse, error)
+	grpc.ClientStream
+}
+
+type queryVStreamRowsParallelClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryVStreamRowsParallelClient) Recv() (*binlogdata.VStreamRowsResponse, error) {
+	m := new(binlogdata.VStreamRowsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *queryClient) VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[5], "/queryservice.Query/VStreamResults", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[6], "/queryservice.Query/VStreamResults", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -501,6 +535,8 @@ type QueryServer interface {
 	VStream(*binlogdata.VStreamRequest, Query_VStreamServer) error
 	// VStreamRows streams rows from the specified starting point.
 	VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error
+	// VStreamRowsParallel streams rows from the specified starting point.
+	VStreamRowsParallel(*binlogdata.VStreamRowsParallelRequest, Query_VStreamRowsParallelServer) error
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error
 	mustEmbedUnimplementedQueryServer()
@@ -581,6 +617,9 @@ func (UnimplementedQueryServer) VStream(*binlogdata.VStreamRequest, Query_VStrea
 }
 func (UnimplementedQueryServer) VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamRows not implemented")
+}
+func (UnimplementedQueryServer) VStreamRowsParallel(*binlogdata.VStreamRowsParallelRequest, Query_VStreamRowsParallelServer) error {
+	return status.Errorf(codes.Unimplemented, "method VStreamRowsParallel not implemented")
 }
 func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamResults not implemented")
@@ -1045,6 +1084,27 @@ func (x *queryVStreamRowsServer) Send(m *binlogdata.VStreamRowsResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Query_VStreamRowsParallel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(binlogdata.VStreamRowsParallelRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).VStreamRowsParallel(m, &queryVStreamRowsParallelServer{stream})
+}
+
+type Query_VStreamRowsParallelServer interface {
+	Send(*binlogdata.VStreamRowsResponse) error
+	grpc.ServerStream
+}
+
+type queryVStreamRowsParallelServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryVStreamRowsParallelServer) Send(m *binlogdata.VStreamRowsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Query_VStreamResults_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(binlogdata.VStreamResultsRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1174,6 +1234,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VStreamRows",
 			Handler:       _Query_VStreamRows_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "VStreamRowsParallel",
+			Handler:       _Query_VStreamRowsParallel_Handler,
 			ServerStreams: true,
 		},
 		{

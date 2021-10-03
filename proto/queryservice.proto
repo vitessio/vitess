@@ -99,6 +99,9 @@ service Query {
   // VStreamRows streams rows from the specified starting point.
   rpc VStreamRows(binlogdata.VStreamRowsRequest) returns (stream binlogdata.VStreamRowsResponse) {};
 
+  // VStreamRowsParallel streams rows from the specified starting point.
+  rpc VStreamRowsParallel(binlogdata.VStreamRowsParallelRequest) returns (stream binlogdata.VStreamRowsResponse) {};
+
   // VStreamResults streams results along with the gtid of the snapshot.
   rpc VStreamResults(binlogdata.VStreamResultsRequest) returns (stream binlogdata.VStreamResultsResponse) {};
 }
