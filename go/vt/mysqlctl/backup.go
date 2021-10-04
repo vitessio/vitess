@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/flagutil"
+
 	"context"
 
 	"vitess.io/vitess/go/mysql"
@@ -88,9 +90,16 @@ var (
 	// once before the writer blocks
 	backupCompressBlocks = flag.Int("backup_storage_number_blocks", 2, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression")
 
+	// restoreExtraRestartArgs is the extra args for mysqld during restart for restore
+	restoreExtraRestartArgs flagutil.StringListValue
+
 	backupDuration  = stats.NewGauge("backup_duration_seconds", "How long it took to complete the last backup operation (in seconds)")
 	restoreDuration = stats.NewGauge("restore_duration_seconds", "How long it took to complete the last restore operation (in seconds)")
 )
+
+func init() {
+	flag.Var(&restoreExtraRestartArgs, "restore_extra_restart_args", "comma separated list of extra mysqld args to pass in during a restart for upgrade")
+}
 
 // Backup is the main entry point for a backup:
 // - uses the BackupStorage service to store a new backup
@@ -329,7 +338,9 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// of those who can connect.
 	params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 	// Note Start will use dba user for waiting, this is fine, it will be allowed.
-	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
+	restoreMysqldArgs := []string{"--skip-grant-tables", "--skip-networking"}
+	restoreMysqldArgs = append(restoreMysqldArgs, restoreExtraRestartArgs...)
+	err = params.Mysqld.Start(context.Background(), params.Cnf, restoreMysqldArgs...)
 	if err != nil {
 		return nil, err
 	}
