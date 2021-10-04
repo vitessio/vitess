@@ -18,7 +18,7 @@ package servenv
 
 import (
 	"html/template"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -51,7 +51,7 @@ func TestStatus(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	cases := []string{
@@ -90,7 +90,7 @@ func TestNamedStatus(t *testing.T) {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 
 	cases := []string{

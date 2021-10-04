@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime/debug"
@@ -161,7 +160,7 @@ func TestPlan(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -204,7 +203,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 		sysVarEnabled: false,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
 	testFile(t, "set_sysvar_disabled_cases.txt", testOutputTempDir, vschemaWrapper)
@@ -224,7 +223,7 @@ func TestRubyOnRailsQueries(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -241,7 +240,7 @@ func TestOLTP(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -258,7 +257,7 @@ func TestTPCC(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -275,7 +274,7 @@ func TestTPCH(t *testing.T) {
 		sysVarEnabled: true,
 	}
 
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -317,7 +316,7 @@ func benchmarkWorkload(b *testing.B, name string) {
 }
 
 func TestBypassPlanningShardTargetFromFile(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
 
@@ -333,7 +332,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	testFile(t, "bypass_shard_cases.txt", testOutputTempDir, vschema)
 }
 func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
 
@@ -354,7 +353,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 
 func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -380,7 +379,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 
 func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
@@ -394,7 +393,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 
 func TestOtherPlanningFromFile(t *testing.T) {
 	// We are testing this separately so we can set a default keyspace
-	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	testOutputTempDir, err := os.MkdirTemp("", "plan_test")
 	defer os.RemoveAll(testOutputTempDir)
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{
@@ -640,7 +639,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 		if tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
-			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
 			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})

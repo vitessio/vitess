@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -49,7 +48,7 @@ func TestClientServerWithCombineCerts(t *testing.T) {
 // And then performs a few tests on them.
 func testClientServer(t *testing.T, combineCerts bool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -234,7 +233,7 @@ func TestClientTLSConfigCaching(t *testing.T) {
 
 func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(ClientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", rootPrefix)
+	root, err := os.MkdirTemp("", rootPrefix)
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -281,7 +280,7 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(C
 
 func testNumberOfCertsWithOrWithoutCombining(t *testing.T, numCertsExpected int, combine bool) {
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

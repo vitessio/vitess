@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -75,7 +75,7 @@ func Init() {
 	data := []byte(*ldapAuthConfigString)
 	if *ldapAuthConfigFile != "" {
 		var err error
-		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
+		data, err = os.ReadFile(*ldapAuthConfigFile)
 		if err != nil {
 			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}

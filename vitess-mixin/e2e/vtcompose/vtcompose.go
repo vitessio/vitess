@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"regexp"
@@ -220,7 +219,7 @@ func main() {
 }
 
 func applyFilePatch(dockerYaml []byte, patchFile string) []byte {
-	yamlPatch, err := ioutil.ReadFile(patchFile)
+	yamlPatch, err := os.ReadFile(patchFile)
 	if err != nil {
 		log.Fatalf("reading yaml patch file %s: %s", patchFile, err)
 	}
@@ -272,7 +271,7 @@ func createFile(filePath string) *os.File {
 }
 
 func readFile(filePath string) []byte {
-	file, err := ioutil.ReadFile(filePath)
+	file, err := os.ReadFile(filePath)
 
 	if err != nil {
 		log.Fatalf("reading %s: %s", filePath, err)
@@ -296,7 +295,7 @@ func handleError(err error) {
 
 func appendToSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
-		data, err := ioutil.ReadFile(tablesPath + file)
+		data, err := os.ReadFile(tablesPath + file)
 		if err != nil {
 			log.Fatalf("reading %s: %s", tablesPath+file, err)
 		}
@@ -313,7 +312,7 @@ func appendToSqlFile(schemaFileNames []string, f *os.File) {
 }
 
 func getTableName(sqlFile string) string {
-	sqlFileData, err := ioutil.ReadFile(sqlFile)
+	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
 		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
 	}
@@ -325,7 +324,7 @@ func getTableName(sqlFile string) string {
 }
 
 func getPrimaryKey(sqlFile string) string {
-	sqlFileData, err := ioutil.ReadFile(sqlFile)
+	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
 		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
 	}
@@ -337,7 +336,7 @@ func getPrimaryKey(sqlFile string) string {
 }
 
 func getKeyColumns(sqlFile string) string {
-	sqlFileData, err := ioutil.ReadFile(sqlFile)
+	sqlFileData, err := os.ReadFile(sqlFile)
 	if err != nil {
 		log.Fatalf("reading sqlFile file %s: %s", sqlFile, err)
 	}
@@ -404,7 +403,7 @@ func writeVschemaFile(file []byte, fileName string) {
 }
 
 func writeFile(file []byte, fileName string) {
-	err := ioutil.WriteFile(fileName, file, 0644)
+	err := os.WriteFile(fileName, file, 0644)
 	if err != nil {
 		log.Fatalf("writing %s %s", fileName, err)
 	}
