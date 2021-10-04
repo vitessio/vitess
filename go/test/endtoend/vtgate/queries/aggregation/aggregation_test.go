@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package aggregation
 
 import (
 	"context"
@@ -66,4 +66,22 @@ func TestGroupBy(t *testing.T) {
 	// Test the same queries in streaming mode
 	utils.Exec(t, conn, "set workload = olap")
 	utils.AssertMatches(t, conn, "select id6, id7, count(*) k from t3 group by id6, id7 order by k", `[[INT64(3) INT64(6) INT64(1)] [INT64(2) INT64(4) INT64(2)] [INT64(1) INT64(2) INT64(3)]]`)
+}
+
+func TestDistinct(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+	utils.Exec(t, conn, "insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid,phone) values('1',4), ('2',4), ('3',3), ('4',1), ('5',1)")
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
+	utils.AssertMatches(t, conn, "select distinct val2, count(*) from aggr_test group by val2", `[[NULL INT64(2)] [INT64(1) INT64(4)] [INT64(3) INT64(1)] [INT64(4) INT64(1)]]`)
+	utils.AssertMatches(t, conn, "select distinct id6 from t3 join t7_xxhash on t3.id5 = t7_xxhash.phone", `[[INT64(3)] [INT64(5)]]`)
+	utils.Exec(t, conn, "delete from t3")
+	utils.Exec(t, conn, "delete from t7_xxhash")
+	utils.Exec(t, conn, "delete from aggr_test")
 }

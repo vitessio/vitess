@@ -48,13 +48,6 @@ create table vstream_test(
 	primary key(id)
 ) Engine=InnoDB;
 
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
-	val2 bigint,
-	primary key(id)
-) Engine=InnoDB;
-
 create table t2(
 	id3 bigint,
 	id4 bigint,

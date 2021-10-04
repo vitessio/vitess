@@ -65,3 +65,15 @@ func TestSubQueryOnTopOfSubQuery(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "select id1 from t1 where id1 not in (select id3 from t2) and id2 in (select id4 from t2) order by id1", `[[INT64(3)] [INT64(4)]]`)
 }
+
+func TestSubqueryInINClause(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer utils.Exec(t, conn, `delete from t1`)
+	utils.Exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
+	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
+}
