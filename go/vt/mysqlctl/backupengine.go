@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -307,7 +306,7 @@ func isDbDir(p string) bool {
 	}
 
 	// Look for at least one database file
-	fis, err := ioutil.ReadDir(p)
+	fis, err := os.ReadDir(p)
 	if err != nil {
 		return false
 	}
@@ -340,11 +339,16 @@ func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) (
 	p := path.Join(baseDir, subDir)
 	var size int64
 
-	fis, err := ioutil.ReadDir(p)
+	entries, err := os.ReadDir(p)
 	if err != nil {
 		return nil, 0, err
 	}
-	for _, fi := range fis {
+	for _, entry := range entries {
+		fi, err := entry.Info()
+		if err != nil {
+			return nil, 0, err
+		}
+
 		fes = append(fes, FileEntry{
 			Base: base,
 			Name: path.Join(subDir, fi.Name()),
@@ -397,7 +401,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
 	totalSize = totalSize + size
 
 	// then add DB directories
-	fis, err := ioutil.ReadDir(cnf.DataDir)
+	fis, err := os.ReadDir(cnf.DataDir)
 	if err != nil {
 		return nil, 0, err
 	}

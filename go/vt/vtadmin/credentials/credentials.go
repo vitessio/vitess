@@ -19,7 +19,7 @@ package credentials
 import (
 	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"text/template"
 
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -58,7 +58,7 @@ func renderTemplate(tmplStr string, data interface{}) (string, error) {
 }
 
 func loadCredentials(path string) (*grpcclient.StaticAuthClientCreds, error) {
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}

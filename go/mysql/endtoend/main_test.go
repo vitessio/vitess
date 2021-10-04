@@ -19,7 +19,6 @@ package endtoend
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -174,7 +173,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := func() int {
 		// Create the certs.
-		root, err := ioutil.TempDir("", "TestTLSServer")
+		root, err := os.MkdirTemp("", "TestTLSServer")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "TempDir failed: %v", err)
 			return 1
@@ -191,16 +190,16 @@ ssl-cert=%v/server-cert.pem
 ssl-key=%v/server-key.pem
 `, root, root, root)
 		extraMyCnf := path.Join(root, "ssl_my.cnf")
-		if err := ioutil.WriteFile(extraMyCnf, []byte(cnf), os.ModePerm); err != nil {
-			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v", extraMyCnf, err)
+		if err := os.WriteFile(extraMyCnf, []byte(cnf), os.ModePerm); err != nil {
+			fmt.Fprintf(os.Stderr, "os.WriteFile(%v) failed: %v", extraMyCnf, err)
 			return 1
 		}
 
 		// For LargeQuery tests
 		cnf = "max_allowed_packet=100M\n"
 		maxPacketMyCnf := path.Join(root, "max_packet.cnf")
-		if err := ioutil.WriteFile(maxPacketMyCnf, []byte(cnf), os.ModePerm); err != nil {
-			fmt.Fprintf(os.Stderr, "ioutil.WriteFile(%v) failed: %v", maxPacketMyCnf, err)
+		if err := os.WriteFile(maxPacketMyCnf, []byte(cnf), os.ModePerm); err != nil {
+			fmt.Fprintf(os.Stderr, "os.WriteFile(%v) failed: %v", maxPacketMyCnf, err)
 			return 1
 		}
 
