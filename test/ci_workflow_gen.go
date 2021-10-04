@@ -48,7 +48,6 @@ var (
 		"14",
 		"15",
 		"16",
-		"17",
 		"18",
 		"19",
 		"20",
@@ -91,6 +90,7 @@ var (
 	}
 
 	clusterSelfHostedList = []string{
+		"17",
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",

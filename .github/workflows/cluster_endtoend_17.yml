@@ -9,45 +9,33 @@ concurrency:
 jobs:
   build:
     name: Run endtoend tests on Cluster (17)
-    runs-on: ubuntu-18.04
+    runs-on: self-hosted
 
     steps:
-    - name: Set up Go
-      uses: actions/setup-go@v2
-      with:
-        go-version: 1.17
+      - name: Check out code
+        uses: actions/checkout@v2
 
-    - name: Tune the OS
-      run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+      - name: Build Docker Image
+        run: docker build -f ./.github/docker/cluster_test_17/Dockerfile -t cluster_test_17:$GITHUB_SHA  .
 
-    # TEMPORARY WHILE GITHUB FIXES THIS https://github.com/actions/virtual-environments/issues/3185
-    - name: Add the current IP address, long hostname and short hostname record to /etc/hosts file
-      run: |
-        echo -e "$(ip addr show eth0 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1)\t$(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts
-    # DON'T FORGET TO REMOVE CODE ABOVE WHEN ISSUE IS ADRESSED!
+      - name: Run test
+        timeout-minutes: 30
+        run: docker run --name "cluster_test_17_$GITHUB_SHA" cluster_test_17:$GITHUB_SHA /bin/bash -c 'source build.env && go run test.go -keep-data=true -docker=false -print-log -follow -shard 17 -- -- --keep-data=true'
 
-    - name: Check out code
-      uses: actions/checkout@v2
+      - name: Print Volume Used
+        if: ${{ always() }}
+        run: |
+          docker inspect -f '{{ (index .Mounts 0).Name }}' cluster_test_17_$GITHUB_SHA
 
-    - name: Get dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
+      - name: Cleanup Docker Volume
+        run: |
+          docker rm -v cluster_test_17_$GITHUB_SHA
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+      - name: Cleanup Docker Container
+        if: ${{ always() }}
+        run: |
+          docker rm -f cluster_test_17_$GITHUB_SHA
 
-    - name: Run cluster endtoend test
-      timeout-minutes: 30
-      run: |
-        source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 17
+      - name: Cleanup Docker Image
+        run: |
+          docker image rm cluster_test_17:$GITHUB_SHA
