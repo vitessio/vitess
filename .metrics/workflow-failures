@@ -1,8 +1,3 @@
-2021-07-16T07:36:28Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1036686638
-2021-07-16T07:36:28Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1036686598
-2021-07-16T08:45:13Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1036861352
-2021-07-16T09:48:44Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1037042830
-2021-07-16T10:58:15Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1037220979
 2021-07-16T10:58:15Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1037220980
 2021-07-16T10:58:15Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1037220984
 2021-07-16T10:58:15Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/1037220993
@@ -9993,8 +9988,13 @@
 2021-10-04T19:17:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1304969269
 2021-10-04T19:35:26Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1305025484
 2021-10-04T19:35:26Z,Cluster (onlineddl_revert),https://github.com/vitessio/vitess/actions/runs/1305025446
+2021-10-04T19:35:26Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/1305025423
 2021-10-04T19:35:26Z,Cluster (tabletmanager_tablegc),https://github.com/vitessio/vitess/actions/runs/1305025488
 2021-10-04T19:35:26Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1305025466
 2021-10-04T19:35:26Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1305025459
+2021-10-04T19:35:28Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1305025581
+2021-10-04T19:35:28Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/1305025589
+2021-10-04T19:35:28Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1305025640
 2021-10-04T19:35:28Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1305025631
+2021-10-04T19:35:28Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1305025609
 2021-10-04T19:35:28Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1305025625
