@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
@@ -753,6 +754,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
+	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
+		return e.showVitessReplicationStatus(ctx, show)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -987,6 +990,122 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 	}
 	return &sqltypes.Result{
 		Fields: buildVarCharFields("Cell", "Keyspace", "Shard", "TabletType", "State", "Alias", "Hostname", "PrimaryTermStartTime"),
+		Rows:   rows,
+	}, nil
+}
+
+func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
+	defer cancel()
+	rows := [][]sqltypes.Value{}
+
+	// This is only used for tests
+	if UsingLegacyGateway() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				// We only want to show REPLICA and RDONLY tablets
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+					continue
+				}
+
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				} else if results != nil && len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					throttlerStatus,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				// We only want to show REPLICA and RDONLY tablets
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+					continue
+				}
+
+				// Allow people to filter by Keyspace and Shard using a LIKE clause
+				if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+					ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+					keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+					if !ksFilterRegex.MatchString(keyspaceShardStr) {
+						continue
+					}
+				}
+
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				} else if results != nil && len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					throttlerStatus,
+				))
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
 		Rows:   rows,
 	}, nil
 }
@@ -1563,4 +1682,37 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+}
+
+func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
+	resp, err := http.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var elements struct {
+		StatusCode int
+		Value      float64
+		Threshold  float64
+		Message    string
+	}
+	err = json.Unmarshal(body, &elements)
+	if err != nil {
+		return "", err
+	}
+
+	httpStatusStr := http.StatusText(elements.StatusCode)
+
+	load := float64(0)
+	if elements.Threshold > 0 {
+		load = float64((elements.Value / elements.Threshold) * 100)
+	}
+
+	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
+	return status, nil
 }
