@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtgate
+package informationschema
 
 import (
 	"flag"
@@ -128,6 +128,12 @@ create table t7_fk(
     primary key(id),
     CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)
     on delete set null on update cascade
+) Engine=InnoDB;
+
+create table t8(
+	id8 bigint,
+	testId bigint,
+	primary key(id8)
 ) Engine=InnoDB;
 `
 
@@ -361,6 +367,14 @@ create table t7_fk(
         {
           "column": "t7_uid",
           "name": "unicode_loose_xxhash"
+        }
+      ]
+    },
+    "t8": {
+      "column_vindexes": [
+        {
+          "column": "id8",
+          "name": "hash"
         }
       ]
     }

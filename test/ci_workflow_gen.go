@@ -84,6 +84,8 @@ var (
 		"vtgate_unsharded",
 		"vtgate_vindex",
 		"vtgate_vschema",
+		"vtgate_queries",
+		"vtgate_schema_tracker",
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
