@@ -28,8 +28,8 @@ import (
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "ks"
-	Cell            = "test"
+	KeyspaceName    = "ks_union"
+	Cell            = "test_union"
 	SchemaSQL       = `create table t1(
 	id1 bigint,
 	id2 bigint,
@@ -152,11 +152,6 @@ func TestMain(m *testing.M) {
 		clusterInstance.VtGateExtraArgs = []string{"-schema_change_signal"}
 		clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal", "-queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
-		if err != nil {
-			return 1
-		}
-
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}
