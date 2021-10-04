@@ -1,9 +1,9 @@
-name: docker_test_3
+name: docker_test_cluster_10
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Docker Test 3
+    name: Docker Test Cluster 10
     runs-on: ubuntu-latest
 
     steps:
@@ -26,6 +26,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run tests which require docker - 3
+    - name: Run tests which require docker - 1
       run: |
-        go run test.go -docker=true --follow -shard 26
+        go run test.go -docker=true --follow -shard 10
