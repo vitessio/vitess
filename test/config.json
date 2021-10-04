@@ -791,7 +791,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_topo_sk2",
+			"Shard": "25",
 			"RetryMax": 1,
 			"Tags": []
 		},
