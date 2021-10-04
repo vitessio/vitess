@@ -48,6 +48,7 @@ var (
 		"14",
 		"15",
 		"16",
+		"17",
 		"18",
 		"19",
 		"20",
@@ -83,6 +84,8 @@ var (
 		"vtgate_unsharded",
 		"vtgate_vindex",
 		"vtgate_vschema",
+		"vtgate_queries",
+		"vtgate_schema_tracker",
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
@@ -90,7 +93,6 @@ var (
 	}
 
 	clusterSelfHostedList = []string{
-		"17",
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",

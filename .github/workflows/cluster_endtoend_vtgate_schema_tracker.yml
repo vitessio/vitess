@@ -1,14 +1,14 @@
 # DO NOT MODIFY: THIS FILE IS GENERATED USING "make generate_ci_workflows"
 
-name: Cluster (17)
+name: Cluster (vtgate_schema_tracker)
 on: [push, pull_request]
 concurrency:
-  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (17)')
+  group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_schema_tracker)')
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Run endtoend tests on Cluster (17)
+    name: Run endtoend tests on Cluster (vtgate_schema_tracker)
     runs-on: ubuntu-18.04
 
     steps:
@@ -50,4 +50,4 @@ jobs:
       timeout-minutes: 30
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 17
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard vtgate_schema_tracker
