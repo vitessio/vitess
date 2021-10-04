@@ -551,7 +551,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 
 # TPC-H query 15 view
 "with revenue0(supplier_no, total_revenue) as (select l_suppkey, sum(l_extendedprice * (1 - l_discount))  from lineitem where l_shipdate >= date('1996-01-01') and l_shipdate < date('1996-01-01') + interval '3' month group by l_suppkey )"
-"syntax error at position 5 near 'with'"
+"syntax error at position 236"
 Gen4 plan same as above
 
 # TPC-H query 15
