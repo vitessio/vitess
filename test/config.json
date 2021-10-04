@@ -800,7 +800,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "18",
+			"Shard": "27",
 			"RetryMax": 1,
 			"Tags": []
 		},
