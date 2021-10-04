@@ -43,7 +43,7 @@ func Cluster(api API) http.HandlerFunc {
 		data, err := json.Marshal(c.Debug())
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("could not marshal cluster debug map: %s\n", err)))
+			fmt.Fprintf(w, "could not marshal cluster debug map: %s\n", err)
 			return
 		}
 
@@ -64,7 +64,7 @@ func Clusters(api API) http.HandlerFunc {
 		data, err := json.Marshal(m)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(fmt.Sprintf("could not marshal cluster debug map: %s\n", err)))
+			fmt.Fprintf(w, "could not marshal cluster debug map: %s\n", err)
 			return
 		}
 
