@@ -17,8 +17,11 @@ limitations under the License.
 package connpool
 
 import (
+	"net"
 	"sync"
 	"time"
+
+	"vitess.io/vitess/go/netutil"
 
 	"context"
 
@@ -29,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -109,7 +113,13 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	f := func(ctx context.Context) (pools.Resource, error) {
 		return NewDBConn(ctx, cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
+
+	var refreshCheck pools.RefreshCheck
+	if net.ParseIP(appParams.Host()) == nil {
+		refreshCheck = netutil.DNSTracker(appParams.Host())
+	}
+
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)
