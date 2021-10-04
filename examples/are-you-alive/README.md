@@ -19,13 +19,13 @@ This client application:
 1. Measures all the important things:
    - Client connection errors
    - Write latency
-   - Read latency from masters
+   - Read latency from primaries
    - Read latency from replicas
    - Write errors
-   - Read errors on masters
+   - Read errors on primaries
    - Write errors on replicas
-   - Errors in other operations on masters and replicas (e.g. COUNT)
-   - Latency on other operations on masters and replicas (e.g. COUNT)
+   - Errors in other operations on primaries and replicas (e.g. COUNT)
+   - Latency on other operations on primaries and replicas (e.g. COUNT)
    - Data loss (by writing predictable data and testing for that)
 1. Reports all these metrics to Prometheus.
 
@@ -35,8 +35,8 @@ That's it!
 
 First, [initialize your database with the correct schemas](schemas/README.md).
 
-Run `are-you-alive --help` for usage.  You can us the command line flags to
-control the dataset size, whether to target reads at masters and replicas, your
+Run `are-you-alive --help` for usage.  You can use the command line flags to
+control the dataset size, whether to target reads at primaries and replicas, your
 mysql connection string, and the rate at which to send requests.
 
 Example:
@@ -75,10 +75,8 @@ exported.
 
 ## Test Specific Tablet Types
 
-See [this vitess
-documentation](https://vitess.io/docs/user-guides/faq/#how-do-i-choose-between-master-vs-replica-for-queries)
-for how to target specific tablet types. In the configuration file you'll want
-to, for example, put "@master" or "@replica" on the ends of your connection
+Queries can target specific tablet types. In the configuration file you simply
+need to, for example, put "@primary" or "@replica" on the ends of your connection
 strings.
 
 ## Push to Registry
