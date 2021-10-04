@@ -447,11 +447,11 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 // NewVtgateInstance returns an instance of vtgateprocess
 func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
-	vtgateGrpcPort := cluster.GetAndReservePort()
+	cluster.VtgateGrpcPort = cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
-		vtgateGrpcPort,
+		cluster.VtgateGrpcPort,
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
