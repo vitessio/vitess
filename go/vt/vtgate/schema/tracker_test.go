@@ -256,7 +256,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 
-	require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
 	require.Equal(t, []string{mysql.FetchTables, mysql.FetchUpdatedTables, mysql.FetchTables}, sbc.StringQueries())
 }
 
