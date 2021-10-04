@@ -72,6 +72,7 @@ var (
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
+		"tabletmanager_consul",
 		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
@@ -80,6 +81,8 @@ var (
 		"vtgate_reservedconn",
 		"vtgate_schema",
 		"vtgate_topo",
+		"vtgate_topo_consul",
+		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
 		"vtgate_vindex",
@@ -104,6 +107,8 @@ var (
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+		"vtgate_topo_consul",
+		"tabletmanager_consul",
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
