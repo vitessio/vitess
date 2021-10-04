@@ -1100,7 +1100,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionPostDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Millisecond * 5,
+					"zone1-0000000200": time.Second * 1,
 				},
 				WaitForPositionResults: map[string]map[string]error{
 					"zone1-0000000200": {
@@ -1349,7 +1349,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 					},
 				},
 				PromoteReplicaPostDelays: map[string]time.Duration{
-					"zone1-0000000200": time.Millisecond * 20, // 2x the parent context timeout
+					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
 				},
 				PromoteReplicaResults: map[string]struct {
 					Result string
