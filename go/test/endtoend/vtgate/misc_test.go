@@ -334,24 +334,6 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
 }
 
-func TestDistinct(t *testing.T) {
-	defer cluster.PanicHandler(t)
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
-	utils.Exec(t, conn, "insert into t3(id5,id6,id7) values(1,3,3), (2,3,4), (3,3,6), (4,5,7), (5,5,6)")
-	utils.Exec(t, conn, "insert into t7_xxhash(uid,phone) values('1',4), ('2',4), ('3',3), ('4',1), ('5',1)")
-	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
-	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
-	utils.AssertMatches(t, conn, "select distinct val2, count(*) from aggr_test group by val2", `[[NULL INT64(2)] [INT64(1) INT64(4)] [INT64(3) INT64(1)] [INT64(4) INT64(1)]]`)
-	utils.AssertMatches(t, conn, "select distinct id6 from t3 join t7_xxhash on t3.id5 = t7_xxhash.phone", `[[INT64(3)] [INT64(5)]]`)
-	utils.Exec(t, conn, "delete from t3")
-	utils.Exec(t, conn, "delete from t7_xxhash")
-	utils.Exec(t, conn, "delete from aggr_test")
-}
-
 func TestCreateIndex(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -523,18 +505,6 @@ ts12 TIMESTAMP DEFAULT LOCALTIME()
 
 	utils.Exec(t, conn, `create table function_default (x varchar(25) DEFAULT "check")`)
 	utils.Exec(t, conn, "drop table function_default")
-}
-
-func TestSubqueryInINClause(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	defer utils.Exec(t, conn, `delete from t1`)
-	utils.Exec(t, conn, "insert into t1(id1, id2) values(0,0),(1,1)")
-	utils.AssertMatches(t, conn, `SELECT id2 FROM t1 WHERE id1 IN (SELECT 1 FROM dual)`, `[[INT64(1)]]`)
 }
 
 func TestRenameFieldsOnOLAP(t *testing.T) {
