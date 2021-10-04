@@ -164,15 +164,9 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 		session = &vtgatepb.Session{Autocommit: true}
 	}
 
-	// For backward compatibility.
-	// The mysql query equivalent has logic to use topodatapb.TabletType_PRIMARY if tablet_type is not set.
-	tabletType := request.TabletType
-	if tabletType == topodatapb.TabletType_UNKNOWN {
-		tabletType = topodatapb.TabletType_PRIMARY
-	}
-
-	if session.TargetString == "" {
-		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(tabletType)
+	// Do not set target if the tablet_type is not set correctly.
+	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
+		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
 	}
 	if session.Options == nil {
 		session.Options = request.Options
