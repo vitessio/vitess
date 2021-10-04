@@ -104,6 +104,7 @@ var (
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+		"27",
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",
