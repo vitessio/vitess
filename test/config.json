@@ -525,7 +525,7 @@
 			],
 			"Command": [],
 			"Manual": false,
-			"Shard": "18",
+			"Shard": "tabletmanager_consul",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -854,7 +854,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/consul", "--topo-flavor=consul"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "18",
+			"Shard": "vtgate_topo_consul",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -863,7 +863,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/etcd2"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtgate_topo",
+			"Shard": "vtgate_topo_etcd",
 			"RetryMax": 1,
 			"Tags": []
 		},
