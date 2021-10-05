@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -277,7 +276,7 @@ func readFromFile(filePath string) (string, error) {
 	if filePath == "" {
 		return "", nil
 	}
-	fileBytes, err := ioutil.ReadFile(filePath)
+	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		log.Errorf("Could not read file: %s", filePath)
 		return "", err

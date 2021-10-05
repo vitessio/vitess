@@ -19,7 +19,6 @@ package endtoend
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"reflect"
 	"strings"
@@ -398,7 +397,7 @@ func TestHealth(t *testing.T) {
 		return
 	}
 	defer response.Body.Close()
-	result, err := ioutil.ReadAll(response.Body)
+	result, err := io.ReadAll(response.Body)
 	if err != nil {
 		t.Error(err)
 		return

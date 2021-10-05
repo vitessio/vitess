@@ -17,7 +17,7 @@ limitations under the License.
 package cluster
 
 import (
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -90,7 +90,7 @@ func (fc *FileConfig) Type() string {
 // Set is part of the flag.Value interface. It loads the file configuration
 // found at the path passed to the flag.
 func (fc *FileConfig) Set(value string) error {
-	data, err := ioutil.ReadFile(value)
+	data, err := os.ReadFile(value)
 	if err != nil {
 		return err
 	}

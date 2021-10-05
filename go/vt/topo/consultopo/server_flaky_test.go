@@ -19,7 +19,6 @@ package consultopo
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -46,7 +45,7 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 	// Create a temporary config file, as ports cannot all be set
 	// via command line. The file name has to end with '.json' so
 	// we're not using TempFile.
-	configDir, err := ioutil.TempDir("", "consul")
+	configDir, err := os.MkdirTemp("", "consul")
 	if err != nil {
 		t.Fatalf("cannot create temp dir: %v", err)
 	}
@@ -236,7 +235,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 
 	// Run the TopoServerTestSuite tests.
 	testIndex := 0
-	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
 
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
@@ -246,7 +245,7 @@ func TestConsulTopoWithAuth(t *testing.T) {
 	*consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"123456\"}, \"test\":{\"acl_token\":\"123456\"}}"
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -285,7 +284,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 		os.Remove(configFilename)
 	}()
 
-	tmpFile, err := ioutil.TempFile("", "consul_auth_client_static_file.json")
+	tmpFile, err := os.CreateTemp("", "consul_auth_client_static_file.json")
 
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
@@ -295,7 +294,7 @@ func TestConsulTopoWithAuthFailure(t *testing.T) {
 	*consulAuthClientStaticFile = tmpFile.Name()
 
 	jsonConfig := "{\"global\":{\"acl_token\":\"badtoken\"}}"
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 

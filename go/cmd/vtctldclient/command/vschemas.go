@@ -18,7 +18,7 @@ package command
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -78,7 +78,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	var err error
 	if sqlMode {
 		if applyVSchemaOptions.SQLFile != "" {
-			sqlBytes, err := ioutil.ReadFile(applyVSchemaOptions.SQLFile)
+			sqlBytes, err := os.ReadFile(applyVSchemaOptions.SQLFile)
 			if err != nil {
 				return err
 			}
@@ -89,7 +89,7 @@ func commandApplyVSchema(cmd *cobra.Command, args []string) error {
 	} else { // jsonMode
 		var schema []byte
 		if applyVSchemaOptions.VSchemaFile != "" {
-			schema, err = ioutil.ReadFile(applyVSchemaOptions.VSchemaFile)
+			schema, err = os.ReadFile(applyVSchemaOptions.VSchemaFile)
 			if err != nil {
 				return err
 			}
