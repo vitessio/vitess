@@ -67,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/utils"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
@@ -370,7 +371,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	if IsServingType(tsv.sm.Target().TabletType) {
+	if utils.IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -383,17 +384,6 @@ func (tsv *TabletServer) IsHealthy() error {
 		return err
 	}
 	return nil
-}
-
-// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
-// should not be serving in it's healthy state.
-func IsServingType(tabletType topodatapb.TabletType) bool {
-	switch tabletType {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
-		return true
-	default:
-		return false
-	}
 }
 
 // ReloadSchema reloads the schema.
