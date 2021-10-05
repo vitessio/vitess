@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package vault
 
 import (
 	"crypto/subtle"
@@ -32,6 +32,7 @@ import (
 	vaultapi "github.com/aquarapid/vaultlib"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/mysql"
 )
 
 var (
@@ -48,12 +49,12 @@ var (
 
 // AuthServerVault implements AuthServer with a config loaded from Vault.
 type AuthServerVault struct {
-	methods []AuthMethod
+	methods []mysql.AuthMethod
 	mu      sync.Mutex
 	// users, passwords and user data
 	// We use the same JSON format as for -mysql_auth_server_static
 	// Acts as a cache for the in-Vault data
-	entries                map[string][]*AuthServerStaticEntry
+	entries                map[string][]*mysql.AuthServerStaticEntry
 	vaultCacheExpireTicker *time.Ticker
 	vaultClient            *vaultapi.Client
 	vaultPath              string
@@ -81,7 +82,7 @@ func registerAuthServerVault(addr string, timeout time.Duration, caCertPath stri
 	if err != nil {
 		log.Exitf("%s", err)
 	}
-	RegisterAuthServer("vault", authServerVault)
+	mysql.RegisterAuthServer("vault", authServerVault)
 }
 
 func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, path string, ttl time.Duration, tokenFilePath string, roleID string, secretIDPath string, roleMountPoint string) (*AuthServerVault, error) {
@@ -135,11 +136,11 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 		vaultClient: client,
 		vaultPath:   path,
 		vaultTTL:    ttl,
-		entries:     make(map[string][]*AuthServerStaticEntry),
+		entries:     make(map[string][]*mysql.AuthServerStaticEntry),
 	}
 
-	authMethodNative := NewMysqlNativeAuthMethod(a, a)
-	a.methods = []AuthMethod{authMethodNative}
+	authMethodNative := mysql.NewMysqlNativeAuthMethod(a, a)
+	a.methods = []mysql.AuthMethod{authMethodNative}
 
 	a.reloadVault()
 	a.installSignalHandlers()
@@ -148,14 +149,14 @@ func newAuthServerVault(addr string, timeout time.Duration, caCertPath string, p
 
 // AuthMethods returns the list of registered auth methods
 // implemented by this auth server.
-func (a *AuthServerVault) AuthMethods() []AuthMethod {
+func (a *AuthServerVault) AuthMethods() []mysql.AuthMethod {
 	return a.methods
 }
 
 // DefaultAuthMethodDescription returns MysqlNativePassword as the default
 // authentication method for the auth server implementation.
-func (a *AuthServerVault) DefaultAuthMethodDescription() AuthMethodDescription {
-	return MysqlNativePassword
+func (a *AuthServerVault) DefaultAuthMethodDescription() mysql.AuthMethodDescription {
+	return mysql.MysqlNativePassword
 }
 
 // HandleUser is part of the Validator interface. We
@@ -165,34 +166,34 @@ func (a *AuthServerVault) HandleUser(user string) bool {
 }
 
 // UserEntryWithHash is called when mysql_native_password is used.
-func (a *AuthServerVault) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerVault) UserEntryWithHash(userCerts []*x509.Certificate, salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
 	a.mu.Lock()
 	userEntries, ok := a.entries[user]
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range userEntries {
 		if entry.MysqlNativePassword != "" {
-			hash, err := DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
+			hash, err := mysql.DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
-				return &StaticUserData{entry.UserData, entry.Groups}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+				return &mysql.StaticUserData{entry.UserData, entry.Groups}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}
-			isPass := VerifyHashedMysqlNativePassword(authResponse, salt, hash)
-			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
+			isPass := mysql.VerifyHashedMysqlNativePassword(authResponse, salt, hash)
+			if mysql.MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
+				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		} else {
-			computedAuthResponse := ScrambleMysqlNativePassword(salt, []byte(entry.Password))
+			computedAuthResponse := mysql.ScrambleMysqlNativePassword(salt, []byte(entry.Password))
 			// Validate the password.
-			if matchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
+			if mysql.MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
+				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		}
 	}
-	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 func (a *AuthServerVault) setTTLTicker(ttl time.Duration) {
@@ -225,8 +226,8 @@ func (a *AuthServerVault) reloadVault() error {
 		return fmt.Errorf("Empty vtgate credentials retrieved from Vault server")
 	}
 
-	entries := make(map[string][]*AuthServerStaticEntry)
-	if err := parseConfig(secret.JSONSecret, &entries); err != nil {
+	entries := make(map[string][]*mysql.AuthServerStaticEntry)
+	if err := mysql.ParseConfig(secret.JSONSecret, &entries); err != nil {
 		return fmt.Errorf("Error parsing vtgate Vault auth server config: %v", err)
 	}
 	if len(entries) == 0 {
