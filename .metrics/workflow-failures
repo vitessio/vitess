@@ -1,6 +1,3 @@
-2021-07-19T13:23:42Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/1045338578
-2021-07-19T13:23:42Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1045338564
-2021-07-19T13:23:42Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1045338565
 2021-07-19T13:23:42Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1045338587
 2021-07-19T13:23:42Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/1045338561
 2021-07-19T13:23:42Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1045338575
@@ -9998,3 +9995,6 @@
 2021-10-05T07:33:54Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1306832363
 2021-10-05T08:10:24Z,Cluster (tabletmanager_consul),https://github.com/vitessio/vitess/actions/runs/1306943098
 2021-10-05T08:10:24Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1306943127
+2021-10-05T08:52:00Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1307080330
+2021-10-05T08:52:00Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1307080364
+2021-10-05T08:52:00Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1307080343
