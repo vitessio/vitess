@@ -41,8 +41,9 @@ const (
 	charset = "charset"
 )
 
-func buildShowPlan(stmt *sqlparser.Show, vschema ContextVSchema) (engine.Primitive, error) {
-	switch show := stmt.Internal.(type) {
+func buildShowPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
+	showStmt := stmt.(*sqlparser.Show)
+	switch show := showStmt.Internal.(type) {
 	case *sqlparser.ShowBasic:
 		return buildShowBasicPlan(show, vschema)
 	case *sqlparser.ShowCreate:
