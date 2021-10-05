@@ -366,7 +366,7 @@ func assertTLSHandshakeFails(t *testing.T, serverConfig, clientConfig *tls.Confi
 }
 
 func TestClientServerWithRevokedServerCert(t *testing.T) {
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -426,7 +426,7 @@ func TestClientServerWithRevokedServerCert(t *testing.T) {
 }
 
 func TestClientServerWithRevokedClientCert(t *testing.T) {
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

@@ -274,17 +274,17 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	clientCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", clientCAName))
 	combinedCRLPath := path.Join(root, fmt.Sprintf("%s-%s-combined-crl.pem", serverCAName, clientCAName))
 
-	serverCRLBytes, err := ioutil.ReadFile(serverCRLPath)
+	serverCRLBytes, err := os.ReadFile(serverCRLPath)
 	if err != nil {
 		log.Fatalf("Could not read server CRL file")
 	}
 
-	clientCRLBytes, err := ioutil.ReadFile(clientCRLPath)
+	clientCRLBytes, err := os.ReadFile(clientCRLPath)
 	if err != nil {
 		log.Fatalf("Could not read client CRL file")
 	}
 
-	err = ioutil.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), 0777)
+	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), 0777)
 	if err != nil {
 		log.Fatalf("Could not write combined CRL file")
 	}
