@@ -42,7 +42,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -294,7 +293,7 @@ func main() {
 	log.Printf("Output directory: %v", outDir)
 
 	// Get test configs.
-	configData, err := ioutil.ReadFile(configFileName)
+	configData, err := os.ReadFile(configFileName)
 	if err != nil {
 		log.Fatalf("Can't read config file: %v", err)
 	}
@@ -371,7 +370,7 @@ func main() {
 	if *docker {
 		// Copy working repo to tmpDir.
 		// This doesn't work outside Docker since it messes up GOROOT.
-		tmpDir, err = ioutil.TempDir(os.TempDir(), "vt_")
+		tmpDir, err = os.MkdirTemp(os.TempDir(), "vt_")
 		if err != nil {
 			log.Fatalf("Can't create temp dir in %v", os.TempDir())
 		}
@@ -460,7 +459,7 @@ func main() {
 					test.logf("running (try %v/%v)...", try, tryMax)
 
 					// Make a unique VTDATAROOT.
-					dataDir, err := ioutil.TempDir(vtDataRoot, "vt_")
+					dataDir, err := os.MkdirTemp(vtDataRoot, "vt_")
 					if err != nil {
 						test.logf("Failed to create temporary subdir in VTDATAROOT: %v", vtDataRoot)
 						mu.Lock()
@@ -482,7 +481,7 @@ func main() {
 						outFile := fmt.Sprintf("%v.%v-%v.%v.log", test.flavor, test.name, test.runIndex+1, try)
 						outFilePath := path.Join(outDir, outFile)
 						test.logf("saving test output to %v", outFilePath)
-						if fileErr := ioutil.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
+						if fileErr := os.WriteFile(outFilePath, output, os.FileMode(0644)); fileErr != nil {
 							test.logf("WriteFile error: %v", fileErr)
 						}
 					}
@@ -661,7 +660,7 @@ func testFlaked(name string, try int) {
 func updateTestStats(name string, update func(*TestStats)) {
 	var stats Stats
 
-	data, err := ioutil.ReadFile(statsFileName)
+	data, err := os.ReadFile(statsFileName)
 	if err != nil {
 		log.Print("Can't read stats file, starting new one.")
 	} else {
@@ -683,7 +682,7 @@ func updateTestStats(name string, update func(*TestStats)) {
 		log.Printf("Can't encode stats file: %v", err)
 		return
 	}
-	if err := ioutil.WriteFile(statsFileName, data, 0644); err != nil {
+	if err := os.WriteFile(statsFileName, data, 0644); err != nil {
 		log.Printf("Can't write stats file: %v", err)
 	}
 }

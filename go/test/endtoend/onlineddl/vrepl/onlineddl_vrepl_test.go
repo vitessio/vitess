@@ -19,7 +19,7 @@ package vrepl
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -223,7 +223,7 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (resp *http.Respons
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }

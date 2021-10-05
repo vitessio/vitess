@@ -22,7 +22,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -447,7 +446,7 @@ func createSortedPrTypeSlice(prPerType prsByType) []sortedPRType {
 }
 
 func releaseSummary(summaryFile string) (string, error) {
-	contentSummary, err := ioutil.ReadFile(summaryFile)
+	contentSummary, err := os.ReadFile(summaryFile)
 	if err != nil {
 		return "", err
 	}

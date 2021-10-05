@@ -19,7 +19,7 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -157,7 +157,7 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCou
 	}
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			panic(err)
@@ -263,7 +263,7 @@ func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
 	}
 	if resp.StatusCode == 200 {
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			return nil, fmt.Errorf("not able to parse response body")

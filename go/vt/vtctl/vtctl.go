@@ -86,8 +86,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -570,7 +570,7 @@ func getFileParam(flag, flagFile, name string) (string, error) {
 	if flagFile == "" {
 		return "", fmt.Errorf("action requires one of %v or %v-file", name, name)
 	}
-	data, err := ioutil.ReadFile(flagFile)
+	data, err := os.ReadFile(flagFile)
 	if err != nil {
 		return "", fmt.Errorf("cannot read file %v: %v", flagFile, err)
 	}
@@ -3265,7 +3265,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	if sqlMode {
 		if *sqlFile != "" {
-			sqlBytes, err := ioutil.ReadFile(*sqlFile)
+			sqlBytes, err := os.ReadFile(*sqlFile)
 			if err != nil {
 				return err
 			}
@@ -3300,7 +3300,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 		var schema []byte
 		if *vschemaFile != "" {
 			var err error
-			schema, err = ioutil.ReadFile(*vschemaFile)
+			schema, err = os.ReadFile(*vschemaFile)
 			if err != nil {
 				return err
 			}
@@ -3363,7 +3363,7 @@ func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFla
 	var rulesBytes []byte
 	if *routingRulesFile != "" {
 		var err error
-		rulesBytes, err = ioutil.ReadFile(*routingRulesFile)
+		rulesBytes, err = os.ReadFile(*routingRulesFile)
 		if err != nil {
 			return err
 		}

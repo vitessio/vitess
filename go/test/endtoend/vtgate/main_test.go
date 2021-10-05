@@ -48,13 +48,6 @@ create table vstream_test(
 	primary key(id)
 ) Engine=InnoDB;
 
-create table aggr_test(
-	id bigint,
-	val1 varchar(16),
-	val2 bigint,
-	primary key(id)
-) Engine=InnoDB;
-
 create table t2(
 	id3 bigint,
 	id4 bigint,
@@ -135,12 +128,6 @@ create table t7_fk(
     primary key(id),
     CONSTRAINT t7_fk_ibfk_1 foreign key (t7_uid) references t7_xxhash(uid)
     on delete set null on update cascade
-) Engine=InnoDB;
-
-create table t8(
-	id8 bigint,
-	testId bigint,
-	primary key(id8)
 ) Engine=InnoDB;
 `
 
@@ -374,14 +361,6 @@ create table t8(
         {
           "column": "t7_uid",
           "name": "unicode_loose_xxhash"
-        }
-      ]
-    },
-    "t8": {
-      "column_vindexes": [
-        {
-          "column": "id8",
-          "name": "hash"
         }
       ]
     }
