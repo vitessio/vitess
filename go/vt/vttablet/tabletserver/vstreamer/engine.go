@@ -64,7 +64,7 @@ type Engine struct {
 	isOpen          bool
 	streamIdx       int
 	streamers       map[int]*uvstreamer
-	rowStreamers    map[int]*rowStreamer
+	rowStreamers    map[int]RowStreamer
 	resultStreamers map[int]*resultStreamer
 
 	// watcherOnce is used for initializing vschema
@@ -106,7 +106,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		throttlerClient: throttle.NewBackgroundClient(lagThrottler, throttlerAppName, throttle.ThrottleCheckSelf),
 
 		streamers:       make(map[int]*uvstreamer),
-		rowStreamers:    make(map[int]*rowStreamer),
+		rowStreamers:    make(map[int]RowStreamer),
 		resultStreamers: make(map[int]*resultStreamer),
 
 		lvschema: &localVSchema{vschema: &vindexes.VSchema{}},
@@ -245,6 +245,55 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		}
 
 		rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, query, lastpk, vse.lvschema, send, vse)
+		idx := vse.streamIdx
+		vse.rowStreamers[idx] = rowStreamer
+		vse.streamIdx++
+		// Now that we've added the stream, increment wg.
+		// This must be done before releasing the lock.
+		vse.wg.Add(1)
+		return rowStreamer, idx, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	// Remove stream from map and decrement wg when it ends.
+	defer func() {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		delete(vse.rowStreamers, idx)
+		vse.wg.Done()
+	}()
+
+	// No lock is held while streaming, but wg is incremented.
+	return rowStreamer.Stream()
+}
+
+// StreamRowsParallel streams rows.
+// This streams the table data rows (so we can copy the table data snapshot)
+func (vse *Engine) StreamRowsParallel(ctx context.Context, queries []string, lastpks [][]sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	// Ensure vschema is initialized and the watcher is started.
+	// Starting of the watcher has to be delayed till the first call to Stream
+	// because this overhead should be incurred only if someone uses this feature.
+	vse.watcherOnce.Do(vse.setWatch)
+	if len(queries) == len(lastpks) {
+		// really this condition has to be true; it's later tested by newParallelRowStreamer.
+		// but for the mere purpose of logging we're not going to return an error if the condition fails
+		for i := range queries {
+			log.Infof("Streaming rows for query %s, lastpk: %s", queries[i], lastpks[i])
+		}
+	}
+	// log.Infof("Streaming rows for query %s, lastpk: %s", query, lastpk)
+
+	// Create stream and add it to the map.
+	rowStreamer, idx, err := func() (RowStreamer, int, error) {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		if !vse.isOpen {
+			return nil, 0, errors.New("VStreamer is not open")
+		}
+
+		rowStreamer := newParallelRowStreamer(ctx, vse.env.Config().DB.AppWithDB(), vse.se, queries, lastpks, vse.lvschema, send, vse)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++
