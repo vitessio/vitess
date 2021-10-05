@@ -1082,7 +1082,6 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"show tables",
 		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
