@@ -20,7 +20,6 @@ package fakesqldb
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -153,9 +152,9 @@ type ExpectedExecuteFetch struct {
 // New creates a server, and starts listening.
 func New(t testing.TB) *DB {
 	// Pick a path for our socket.
-	socketDir, err := ioutil.TempDir("", "fakesqldb")
+	socketDir, err := os.MkdirTemp("", "fakesqldb")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir failed: %v", err)
+		t.Fatalf("os.MkdirTemp failed: %v", err)
 	}
 	socketFile := path.Join(socketDir, "fakesqldb.sock")
 

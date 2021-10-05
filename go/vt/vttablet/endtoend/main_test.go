@@ -20,7 +20,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -102,7 +101,7 @@ func TestMain(m *testing.M) {
 }
 
 func initTableACL() error {
-	file, err := ioutil.TempFile("", "tableacl.json")
+	file, err := os.CreateTemp("", "tableacl.json")
 	if err != nil {
 		return err
 	}

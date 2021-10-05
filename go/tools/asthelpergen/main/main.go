@@ -18,8 +18,8 @@ package main
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
+	"os"
 
 	"vitess.io/vitess/go/tools/goimports"
 
@@ -53,7 +53,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
 			}
-			err = ioutil.WriteFile(fullPath, content, 0664)
+			err = os.WriteFile(fullPath, content, 0664)
 			if err != nil {
 				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
 			}
