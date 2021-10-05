@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -108,4 +109,65 @@ func (conn *snapshotConn) Close() {
 
 func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
 	return cp.Connect(ctx)
+}
+
+// lockTablesWithHandler locks list of tables with READ lock, computes GTID, calls handler func, and unlocks the tables
+// It is a means for the handler func to create a transaction with consistent snapshot while writes are locked
+// and GTID is fixated.
+func (conn *snapshotConn) lockTablesWithHandler(ctx context.Context, tables []string, handler func() error) (gtid string, err error) {
+	tablesIdent := []string{}
+	tablesIdentLockRead := []string{}
+	for _, table := range tables {
+		tableIdent := sqlparser.String(sqlparser.NewTableIdent(table))
+		tablesIdent = append(tablesIdent, tableIdent)
+		tablesIdentLockRead = append(tablesIdentLockRead, fmt.Sprintf("%s read", tableIdent))
+	}
+	tablesList := strings.Join(tablesIdent, ", ")
+
+	// To be safe, always unlock tables, even if lock tables might fail.
+	defer func() {
+		_, err := conn.ExecuteFetch("unlock tables", 0, false)
+		if err != nil {
+			log.Warning("Unlock tables failed: %v", err)
+		} else {
+			log.Infof("Tables unlocked: %v", tablesList)
+		}
+	}()
+
+	log.Infof("Locking tables %s for copying", tablesList)
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("lock tables %s", tablesIdentLockRead), 1, false); err != nil {
+		log.Infof("Error locking tables %s to read", strings.Join(tablesIdent, ", "))
+		return "", err
+	}
+	mpos, err := conn.PrimaryPosition()
+	if err != nil {
+		return "", err
+	}
+
+	// Handler will run while tables are locked
+	if err := handler(); err != nil {
+		return "", err
+	}
+
+	return mysql.EncodePosition(mpos), nil
+}
+
+// startTransactionWithConsistentSnapshot prepares for and creates a transaction. This function does
+// not close (commit/rollback) the transaction.
+func (conn *snapshotConn) startTransactionWithConsistentSnapshot(ctx context.Context) (err error) {
+	// Starting a transaction now will allow us to start the read later,
+	// which will happen after we release the lock on the table.
+	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch("set @@session.time_zone = '+00:00'", 1, false); err != nil {
+		return err
+	}
+	if _, err := conn.ExecuteFetch("set names binary", 1, false); err != nil {
+		return err
+	}
+	return nil
 }
