@@ -701,6 +701,27 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
+	// The FakeLegacyTablets in FakeLegacyHealthCheck don't have support for these columns/values
+	// So let's just be sure the statement works and we get the expected results (none)
+	query = "show vitess_replication_status"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+	qr.Rows = [][]sqltypes.Value{}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
+		Rows:   [][]sqltypes.Value{},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+	query = "show vitess_replication_status like 'x'"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+	qr.Rows = [][]sqltypes.Value{}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
+		Rows:   [][]sqltypes.Value{},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
 	query = "show vitess_tablets"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)

@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -50,13 +50,30 @@ func TestVtgateHealthCheck(t *testing.T) {
 	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
 }
 
+func TestVtgateReplicationStatusCheck(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
+	time.Sleep(2 * time.Second)
+	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// Only returns rows for REPLICA and RDONLY tablets -- so should be 2 of them
+	qr := exec(t, conn, "show vitess_replication_status like '%'", "")
+	expectNumRows := 2
+	numRows := len(qr.Rows)
+	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+}
+
 func verifyVtgateVariables(t *testing.T, url string) {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")

@@ -22,7 +22,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -249,7 +248,7 @@ func (a *AuthServerStatic) DefaultAuthMethodDescription() AuthMethodDescription 
 func (a *AuthServerStatic) reload() {
 	jsonBytes := []byte(a.jsonConfig)
 	if a.file != "" {
-		data, err := ioutil.ReadFile(a.file)
+		data, err := os.ReadFile(a.file)
 		if err != nil {
 			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
 			return

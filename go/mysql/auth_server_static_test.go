@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"syscall"
@@ -128,7 +127,7 @@ func TestHostMatcher(t *testing.T) {
 }
 
 func TestStaticConfigHUP(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -136,7 +135,7 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	oldStr := "str5"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -159,7 +158,7 @@ func TestStaticConfigHUP(t *testing.T) {
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -167,7 +166,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -184,7 +183,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
@@ -205,7 +204,7 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 

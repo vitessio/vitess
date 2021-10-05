@@ -23,7 +23,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -344,7 +343,7 @@ func FuzzTLSServer(data []byte) int {
 
 	host := l.Addr().(*net.TCPAddr).IP.String()
 	port := l.Addr().(*net.TCPAddr).Port
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	if err != nil {
 		return -1
 	}

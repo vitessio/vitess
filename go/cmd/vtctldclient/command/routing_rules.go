@@ -19,7 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -71,7 +71,7 @@ func commandApplyRoutingRules(cmd *cobra.Command, args []string) error {
 
 	var rulesBytes []byte
 	if applyRoutingRulesOptions.RulesFilePath != "" {
-		data, err := ioutil.ReadFile(applyRoutingRulesOptions.RulesFilePath)
+		data, err := os.ReadFile(applyRoutingRulesOptions.RulesFilePath)
 		if err != nil {
 			return err
 		}
