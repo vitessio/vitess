@@ -1366,9 +1366,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	planHash := sha256.New()
-	planHash.Write([]byte(vcursor.planPrefixKey()))
-	planHash.Write([]byte{':'})
-	planHash.Write(hack.StringBytes(query))
+	_, _ = planHash.Write([]byte(vcursor.planPrefixKey()))
+	_, _ = planHash.Write([]byte{':'})
+	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
 	if plan, ok := e.plans.Get(planKey); ok {
