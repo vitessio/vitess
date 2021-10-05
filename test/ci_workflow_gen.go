@@ -57,7 +57,7 @@ var (
 		"22",
 		"23",
 		"24",
-		"26",
+		"27",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
