@@ -21,7 +21,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -67,7 +67,7 @@ func verifyPeerCertificateAgainstCRL(crl string) (verifyPeerCertificateFunc, err
 }
 
 func loadCRLSet(crl string) ([]*pkix.CertificateList, error) {
-	body, err := ioutil.ReadFile(crl)
+	body, err := os.ReadFile(crl)
 	if err != nil {
 		return nil, err
 	}
