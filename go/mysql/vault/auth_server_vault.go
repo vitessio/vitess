@@ -31,8 +31,8 @@ import (
 
 	vaultapi "github.com/aquarapid/vaultlib"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -179,17 +179,17 @@ func (a *AuthServerVault) UserEntryWithHash(userCerts []*x509.Certificate, salt 
 		if entry.MysqlNativePassword != "" {
 			hash, err := mysql.DecodeMysqlNativePasswordHex(entry.MysqlNativePassword)
 			if err != nil {
-				return &mysql.StaticUserData{entry.UserData, entry.Groups}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
+				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 			}
 			isPass := mysql.VerifyHashedMysqlNativePassword(authResponse, salt, hash)
 			if mysql.MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
-				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
+				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, nil
 			}
 		} else {
 			computedAuthResponse := mysql.ScrambleMysqlNativePassword(salt, []byte(entry.Password))
 			// Validate the password.
 			if mysql.MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
-				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
+				return &mysql.StaticUserData{Username: entry.UserData, Groups: entry.Groups}, nil
 			}
 		}
 	}
