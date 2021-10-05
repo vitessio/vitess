@@ -1901,6 +1901,12 @@ var (
 			input:  "start transaction",
 			output: "begin",
 		}, {
+			input:  "start transaction read only",
+			output: "begin read only",
+		}, {
+			input:  "start transaction read write",
+			output: "begin read write",
+		}, {
 			input: "commit",
 		}, {
 			input: "rollback",
@@ -3843,6 +3849,9 @@ var (
 	}, {
 		input:  "select * from foo limit '100'",
 		output: "syntax error at position 30 near '100'",
+	}, {
+		input:  "start transaction read",
+		output: "syntax error at position 23 near 'read'",
 	},
 	}
 )

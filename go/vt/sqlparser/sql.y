@@ -2743,6 +2743,14 @@ start_transaction_statement:
   {
     $$ = &Begin{}
   }
+| START TRANSACTION READ WRITE
+  {
+    $$ = &Begin{TransactionCharacteristic: TxReadWrite}
+  }
+ | START TRANSACTION READ ONLY
+  {
+    $$ = &Begin{TransactionCharacteristic: TxReadOnly}
+  }
 
 commit_statement:
   COMMIT

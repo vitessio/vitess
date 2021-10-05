@@ -2830,11 +2830,17 @@ func (node *Use) walkSubtree(visit Visit) error {
 }
 
 // Begin represents a Begin statement.
-type Begin struct{}
+type Begin struct {
+	TransactionCharacteristic string
+}
 
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
 	buf.WriteString("begin")
+
+	if node.TransactionCharacteristic != "" {
+		buf.Myprintf(" %s", node.TransactionCharacteristic)
+	}
 }
 
 func (node *Begin) walkSubtree(visit Visit) error {
