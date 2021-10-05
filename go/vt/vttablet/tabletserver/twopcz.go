@@ -181,7 +181,7 @@ func twopczHandler(txe *TxExecutor, w http.ResponseWriter, r *http.Request) {
 	w.Write(gridTable)
 	w.Write([]byte("<h2>WARNING: Actions on this page can jeopardize data integrity.</h2>\n"))
 	if msg != "" {
-		w.Write([]byte(fmt.Sprintf("%s\n", msg)))
+		fmt.Fprintln(w, msg)
 	}
 
 	w.Write(startTable)
