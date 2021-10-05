@@ -94,7 +94,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
 		// no throttler
 		return true
 	}
-	if c.lastSuccessfulThrottle >= atomic.LoadInt64(&throttleTicks) {
+	if atomic.LoadInt64(&c.lastSuccessfulThrottle) >= atomic.LoadInt64(&throttleTicks) {
 		// if last check was OK just very recently there is no need to check again
 		return true
 	}
@@ -103,7 +103,7 @@ func (c *Client) ThrottleCheckOK(ctx context.Context) (throttleCheckOK bool) {
 	if checkResult.StatusCode != http.StatusOK {
 		return false
 	}
-	c.lastSuccessfulThrottle = atomic.LoadInt64(&throttleTicks)
+	atomic.StoreInt64(&c.lastSuccessfulThrottle, atomic.LoadInt64(&throttleTicks))
 	return true
 
 }
