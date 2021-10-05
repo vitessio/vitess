@@ -718,6 +718,11 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, target *querypb.Targ
 	panic("not implemented")
 }
 
+// VStreamRowsParallel is part of the QueryService interface.
+func (f *FakeQueryService) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	panic("not implemented")
+}
+
 // VStreamResults is part of the QueryService interface.
 func (f *FakeQueryService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	panic("not implemented")

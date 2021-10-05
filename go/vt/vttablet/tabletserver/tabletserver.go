@@ -1137,6 +1137,26 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 	return tsv.vstreamer.StreamRows(ctx, query, row, send)
 }
 
+// VStreamRowsParallel streams rows from the specified starting point.
+func (tsv *TabletServer) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {
+		return err
+	}
+	var rows [][]sqltypes.Value
+	for _, lastpk := range lastpks {
+		var row []sqltypes.Value
+		if lastpk != nil {
+			r := sqltypes.Proto3ToResult(lastpk)
+			if len(r.Rows) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+			}
+			row = r.Rows[0]
+		}
+		rows = append(rows, row)
+	}
+	return tsv.vstreamer.StreamRowsParallel(ctx, queries, rows, send)
+}
+
 // VStreamResults streams rows from the specified starting point.
 func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	if err := tsv.sm.VerifyTarget(ctx, target); err != nil {

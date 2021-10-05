@@ -51,6 +51,9 @@ type VStreamerClient interface {
 
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
+
+	// VStreamRows streams rows of a table from the specified starting point.
+	VStreamRowsParallel(ctx context.Context, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
 }
 
 type externalConnector struct {
@@ -141,6 +144,22 @@ func (c *mysqlConnector) VStreamRows(ctx context.Context, query string, lastpk *
 	return c.vstreamer.StreamRows(ctx, query, row, send)
 }
 
+func (c *mysqlConnector) VStreamRowsParallel(ctx context.Context, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	var rows [][]sqltypes.Value
+	for _, lastpk := range lastpks {
+		var row []sqltypes.Value
+		if lastpk != nil {
+			r := sqltypes.Proto3ToResult(lastpk)
+			if len(r.Rows) != 1 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+			}
+			row = r.Rows[0]
+		}
+		rows = append(rows, row)
+	}
+	return c.vstreamer.StreamRowsParallel(ctx, queries, rows, send)
+}
+
 //-----------------------------------------------------------
 
 type tabletConnector struct {
@@ -176,4 +195,8 @@ func (tc *tabletConnector) VStream(ctx context.Context, startPos string, tablePK
 
 func (tc *tabletConnector) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	return tc.qs.VStreamRows(ctx, tc.target, query, lastpk, send)
+}
+
+func (tc *tabletConnector) VStreamRowsParallel(ctx context.Context, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return tc.qs.VStreamRowsParallel(ctx, tc.target, queries, lastpks, send)
 }
