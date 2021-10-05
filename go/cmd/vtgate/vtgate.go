@@ -34,7 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/utils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -127,7 +127,7 @@ func main() {
 				log.Errorf("unknown tablet type: %v", ttStr)
 				continue
 			}
-			if tabletserver.IsServingType(tt) {
+			if utils.IsServingType(tt) {
 				tabletTypes = append(tabletTypes, tt)
 			}
 		}
