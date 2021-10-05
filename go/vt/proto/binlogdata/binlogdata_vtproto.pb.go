@@ -1624,9 +1624,9 @@ func (m *VStreamRowsParallelRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Lastpk) > 0 {
-		for iNdEx := len(m.Lastpk) - 1; iNdEx >= 0; iNdEx-- {
-			size, err := m.Lastpk[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
+	if len(m.Lastpks) > 0 {
+		for iNdEx := len(m.Lastpks) - 1; iNdEx >= 0; iNdEx-- {
+			size, err := m.Lastpks[iNdEx].MarshalToSizedBufferVT(dAtA[:i])
 			if err != nil {
 				return 0, err
 			}
@@ -1636,11 +1636,11 @@ func (m *VStreamRowsParallelRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 			dAtA[i] = 0x2a
 		}
 	}
-	if len(m.Query) > 0 {
-		for iNdEx := len(m.Query) - 1; iNdEx >= 0; iNdEx-- {
-			i -= len(m.Query[iNdEx])
-			copy(dAtA[i:], m.Query[iNdEx])
-			i = encodeVarint(dAtA, i, uint64(len(m.Query[iNdEx])))
+	if len(m.Queries) > 0 {
+		for iNdEx := len(m.Queries) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Queries[iNdEx])
+			copy(dAtA[i:], m.Queries[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Queries[iNdEx])))
 			i--
 			dAtA[i] = 0x22
 		}
@@ -2741,14 +2741,14 @@ func (m *VStreamRowsParallelRequest) SizeVT() (n int) {
 		l = m.Target.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
-	if len(m.Query) > 0 {
-		for _, s := range m.Query {
+	if len(m.Queries) > 0 {
+		for _, s := range m.Queries {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
 	}
-	if len(m.Lastpk) > 0 {
-		for _, e := range m.Lastpk {
+	if len(m.Lastpks) > 0 {
+		for _, e := range m.Lastpks {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
@@ -7271,7 +7271,7 @@ func (m *VStreamRowsParallelRequest) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 4:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Query", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Queries", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -7299,11 +7299,11 @@ func (m *VStreamRowsParallelRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Query = append(m.Query, string(dAtA[iNdEx:postIndex]))
+			m.Queries = append(m.Queries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 5:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Lastpk", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Lastpks", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -7330,8 +7330,8 @@ func (m *VStreamRowsParallelRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Lastpk = append(m.Lastpk, &query.QueryResult{})
-			if err := m.Lastpk[len(m.Lastpk)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			m.Lastpks = append(m.Lastpks, &query.QueryResult{})
+			if err := m.Lastpks[len(m.Lastpks)-1].UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

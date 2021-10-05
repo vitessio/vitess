@@ -432,8 +432,8 @@ message VStreamRowsParallelRequest {
   query.VTGateCallerID immediate_caller_id = 2;
   query.Target target = 3;
 
-  repeated string query = 4;
-  repeated query.QueryResult lastpk = 5;
+  repeated string queries = 4;
+  repeated query.QueryResult lastpks = 5;
 }
 
 // VStreamRowsResponse is the response from VStreamRows
