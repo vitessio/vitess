@@ -1708,6 +1708,13 @@ func (m *VStreamRowsResponse) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.TableName) > 0 {
+		i -= len(m.TableName)
+		copy(dAtA[i:], m.TableName)
+		i = encodeVarint(dAtA, i, uint64(len(m.TableName)))
+		i--
+		dAtA[i] = 0x32
+	}
 	if m.Lastpk != nil {
 		size, err := m.Lastpk.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -2782,6 +2789,10 @@ func (m *VStreamRowsResponse) SizeVT() (n int) {
 	}
 	if m.Lastpk != nil {
 		l = m.Lastpk.SizeVT()
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.TableName)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -7565,6 +7576,38 @@ func (m *VStreamRowsResponse) UnmarshalVT(dAtA []byte) error {
 			if err := m.Lastpk.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TableName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.TableName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
