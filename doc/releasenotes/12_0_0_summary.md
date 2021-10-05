@@ -8,6 +8,11 @@ All functionality is backwards compatible except as noted under Incompatible Cha
 
 ### Gen4 Planner
 
+The newest version of the query planner, `Gen4`, becomes an experimental feature as part of this release.
+While `Gen4` has been under development for a few release cycles, we have now reached parity with its predecessor, `v3`.
+
+To use `Gen4`, VTGate's `-planner_version` flag needs to be set to `gen4`.
+
 ## Incompatible Changes
 
 ### vtctl command output
