@@ -3,7 +3,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -108,7 +108,7 @@ func getQueryCount(url string, query string) int {
 		fmt.Printf("http Get returns status %d\n", resp.StatusCode)
 		return 0
 	}
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	body := string(respByte)
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(body))

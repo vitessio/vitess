@@ -21,7 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -73,7 +73,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 	require.Equal(t, 200, resp.StatusCode, "Vtgate api url response not found")
 
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.NoError(t, err)
 	assert.Contains(t, resultMap, "VtgateVSchemaCounts", "Vschema count should be present in variables")

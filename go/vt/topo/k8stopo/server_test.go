@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -46,14 +45,14 @@ func TestKubernetesTopo(t *testing.T) {
 	}
 
 	// Create a data dir for test data
-	testDataDir, err := ioutil.TempDir("", "vt-test-k3s")
+	testDataDir, err := os.MkdirTemp("", "vt-test-k3s")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(testDataDir) // clean up
 
 	// Gen a temp file name for the config
-	testConfig, err := ioutil.TempFile("", "vt-test-k3s-config")
+	testConfig, err := os.CreateTemp("", "vt-test-k3s-config")
 	if err != nil {
 		t.Fatal(err)
 	}

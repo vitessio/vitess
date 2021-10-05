@@ -56,7 +56,7 @@ package encryptedtransport
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -389,12 +389,12 @@ func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
 func setCreds(t *testing.T, name string, ca string) {
 	f1, err := os.Open(path.Join(certDirectory, "ca-cert.pem"))
 	require.NoError(t, err)
-	b1, err := ioutil.ReadAll(f1)
+	b1, err := io.ReadAll(f1)
 	require.NoError(t, err)
 
 	f2, err := os.Open(path.Join(certDirectory, ca+"-cert.pem"))
 	require.NoError(t, err)
-	b2, err := ioutil.ReadAll(f2)
+	b2, err := io.ReadAll(f2)
 	require.NoError(t, err)
 
 	caContent := append(b1, b2...)

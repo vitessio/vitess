@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -1938,7 +1937,7 @@ func TestACLHUP(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 
-	f, err := ioutil.TempFile("", "tableacl")
+	f, err := os.CreateTemp("", "tableacl")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 

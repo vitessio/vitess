@@ -20,7 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sort"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -587,7 +587,7 @@ func LoadFormal(filename string) (*vschemapb.SrvVSchema, error) {
 	if filename == "" {
 		return formal, nil
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +605,7 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	if filename == "" {
 		return formal, nil
 	}
-	data, err := ioutil.ReadFile(filename)
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}

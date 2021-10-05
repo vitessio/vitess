@@ -18,7 +18,6 @@ package mysqlctl
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -37,7 +36,7 @@ func TestMycnf(t *testing.T) {
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	f, _ := ioutil.ReadFile("../../../config/mycnf/default.cnf")
+	f, _ := os.ReadFile("../../../config/mycnf/default.cnf")
 	myTemplateSource.Write(f)
 	data, err := cnf.makeMycnf(myTemplateSource.String())
 	if err != nil {
@@ -45,11 +44,11 @@ func TestMycnf(t *testing.T) {
 	} else {
 		t.Logf("data: %v", data)
 	}
-	err = ioutil.WriteFile(MycnfPath, []byte(data), 0666)
+	err = os.WriteFile(MycnfPath, []byte(data), 0666)
 	if err != nil {
 		t.Errorf("failed creating my.cnf %v", err)
 	}
-	_, err = ioutil.ReadFile(MycnfPath)
+	_, err = os.ReadFile(MycnfPath)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return
@@ -106,7 +105,7 @@ func NoTestMycnfHook(t *testing.T) {
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}
-	_, err = ioutil.ReadFile(cnf.path)
+	_, err = os.ReadFile(cnf.path)
 	if err != nil {
 		t.Errorf("failed reading, err %v", err)
 		return

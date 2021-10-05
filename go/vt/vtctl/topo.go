@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -170,7 +170,7 @@ func copyFileFromTopo(ctx context.Context, ts *topo.Server, cell, from, to strin
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(to, data, 0644)
+	return os.WriteFile(to, data, 0644)
 }
 
 func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string) error {
@@ -178,7 +178,7 @@ func copyFileToTopo(ctx context.Context, ts *topo.Server, cell, from, to string)
 	if err != nil {
 		return err
 	}
-	data, err := ioutil.ReadFile(from)
+	data, err := os.ReadFile(from)
 	if err != nil {
 		return err
 	}
