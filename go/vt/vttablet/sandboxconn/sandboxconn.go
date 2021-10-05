@@ -498,6 +498,11 @@ func (sbc *SandboxConn) VStreamRows(ctx context.Context, target *querypb.Target,
 	return fmt.Errorf("not implemented in test")
 }
 
+// VStreamRowsParallel is part of the QueryService interface.
+func (sbc *SandboxConn) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return fmt.Errorf("not implemented in test")
+}
+
 // VStreamResults is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return fmt.Errorf("not implemented in test")

@@ -690,6 +690,47 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 	}
 }
 
+// VStreamRows streams rows of a query from the specified starting point.
+func (conn *gRPCQueryClient) VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamRowsParallelRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Queries:           queries,
+			Lastpks:           lastpks,
+		}
+		stream, err := conn.c.VStreamRowsParallel(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r := binlogdatapb.VStreamRowsResponseFromVTPool()
+		err := stream.RecvMsg(r)
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err := send(r); err != nil {
+			return err
+		}
+		r.ReturnToVTPool()
+	}
+}
+
 // VStreamResults streams rows of a query from the specified starting point.
 func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamResultsClient, error) {
