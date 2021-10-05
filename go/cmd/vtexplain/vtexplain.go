@@ -19,7 +19,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
@@ -123,7 +123,7 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 
 		return "", nil
 	}
-	data, err := ioutil.ReadFile(flagFile)
+	data, err := os.ReadFile(flagFile)
 	if err != nil {
 		return "", fmt.Errorf("cannot read file %v: %v", flagFile, err)
 	}

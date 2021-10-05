@@ -19,7 +19,6 @@ package vtctldclient
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +33,7 @@ import (
 )
 
 func withTempFile(t *testing.T, tmpdir string, name string, f func(*testing.T, *os.File)) {
-	tmpfile, err := ioutil.TempFile(tmpdir, name)
+	tmpfile, err := os.CreateTemp(tmpdir, name)
 	require.NoError(t, err, "TempFile(%s, %s)", tmpdir, name)
 	defer os.Remove(tmpfile.Name())
 

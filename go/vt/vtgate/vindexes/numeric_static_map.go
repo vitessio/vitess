@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -128,7 +128,7 @@ func (vind *NumericStaticMap) Map(cursor VCursor, ids []sqltypes.Value) ([]key.D
 func loadNumericLookupTable(path string) (NumericLookupTable, error) {
 	var m map[string]uint64
 	lt := make(map[uint64]uint64)
-	data, err := ioutil.ReadFile(path)
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return lt, err
 	}
