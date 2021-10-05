@@ -1,4 +1,3 @@
-2021-07-19T13:23:42Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1045338615
 2021-07-19T13:23:42Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1045338600
 2021-07-19T13:23:42Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1045338602
 2021-07-19T13:23:42Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/1045338619
@@ -9998,3 +9997,4 @@
 2021-10-05T08:52:00Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1307080343
 2021-10-05T08:52:01Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1307080372
 2021-10-05T08:52:01Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1307080377
+2021-10-05T10:12:51Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1307368902
