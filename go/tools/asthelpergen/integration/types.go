@@ -110,6 +110,10 @@ func (r InterfaceSlice) String() string {
 	return "[" + strings.Join(elements, ", ") + "]"
 }
 
+func (r InterfaceSlice) IsRevisitable() bool {
+	return true
+}
+
 // We need to support these types - a slice of AST elements can implement the interface
 type Bytes []byte
 
