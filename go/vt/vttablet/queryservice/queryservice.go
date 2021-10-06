@@ -102,7 +102,7 @@ type QueryService interface {
 	// VStreamRows streams rows of a table from the specified starting point.
 	VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
 
-	// VStreamRows streams rows of a table from the specified starting point.
+	// VStreamRowsParallel streams rows of a table from the specified starting point.
 	VStreamRowsParallel(ctx context.Context, target *querypb.Target, queries []string, lastpks []*querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error
 
 	// VStreamResults streams results along with the gtid of the snapshot.

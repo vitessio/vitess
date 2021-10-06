@@ -366,6 +366,17 @@ func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream que
 	return vterrors.ToGRPC(err)
 }
 
+// VStreamRowsParallel is part of the queryservice.QueryServer interface
+func (q *query) VStreamRowsParallel(request *binlogdatapb.VStreamRowsParallelRequest, stream queryservicepb.Query_VStreamRowsParallelServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.VStreamRowsParallel(ctx, request.Target, request.Queries, request.Lastpks, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // VStreamResults is part of the queryservice.QueryServer interface
 func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stream queryservicepb.Query_VStreamResultsServer) (err error) {
 	defer q.server.HandlePanic(&err)
