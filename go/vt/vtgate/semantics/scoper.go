@@ -177,58 +177,8 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) downPost(cursor *sqlparser.Cursor) {
-	var scope *scope
-	var found bool
-
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
-		}
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			scope, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
-
-	if found {
-		s.push(scope)
-	}
-}
-
 func validAsMapKey(s sqlparser.SQLNode) bool {
 	return reflect.TypeOf(s).Comparable()
-}
-
-func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
-	var found bool
-
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
-		}
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			_, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
-
-	if found {
-		s.popScope()
-	}
-	return nil
 }
 
 func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error {
