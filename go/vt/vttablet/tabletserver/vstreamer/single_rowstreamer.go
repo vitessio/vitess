@@ -181,7 +181,7 @@ func (si *singleRowStreamer) streamQuery(ctx context.Context, gtid string) error
 		}
 	}
 
-	err = si.pstreamer.atomicSend(&binlogdatapb.VStreamRowsResponse{
+	err = si.pstreamer.sendResponse(&binlogdatapb.VStreamRowsResponse{
 		Fields:    si.plan.fields(),
 		Pkfields:  pkfields,
 		Gtid:      gtid,
@@ -249,7 +249,7 @@ func (si *singleRowStreamer) streamQuery(ctx context.Context, gtid string) error
 			si.pstreamer.vse.rowStreamerNumPackets.Add(int64(1))
 
 			startSend := time.Now()
-			err = si.pstreamer.atomicSend(response)
+			err = si.pstreamer.sendResponse(response)
 			if err != nil {
 				log.Infof("Rowstreamer send returned error %v", err)
 				return err
@@ -265,7 +265,7 @@ func (si *singleRowStreamer) streamQuery(ctx context.Context, gtid string) error
 		response.Lastpk = sqltypes.RowToProto3(lastpk)
 
 		si.pstreamer.vse.rowStreamerNumRows.Add(int64(len(response.Rows)))
-		err = si.pstreamer.atomicSend(response)
+		err = si.pstreamer.sendResponse(response)
 		if err != nil {
 			return err
 		}

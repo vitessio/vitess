@@ -53,9 +53,6 @@ type parallelRowStreamer struct {
 
 	// tableRowStreamerMap maps a table name and a single streamer for that table
 	tableRowStreamerMap map[string]*singleRowStreamer
-
-	// mutex will be used to serialize single streamer send()ings
-	mu sync.Mutex
 }
 
 func newParallelRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, queries []string, lastpks [][]sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine) *parallelRowStreamer {
@@ -209,9 +206,9 @@ func (rs *parallelRowStreamer) streamQueries(lockConn *snapshotConn) error {
 	return err
 }
 
-// atomicSend is called by the single streamers, and makes sure to serialize calls to the send function
-func (rs *parallelRowStreamer) atomicSend(resp *binlogdatapb.VStreamRowsResponse) error {
-	rs.mu.Lock()
-	defer rs.mu.Unlock()
+// sendResponse is called by the single streamers, and makes sure to serialize calls to the send function
+func (rs *parallelRowStreamer) sendResponse(resp *binlogdatapb.VStreamRowsResponse) error {
+	// rs.mu.Lock()
+	// defer rs.mu.Unlock()
 	return rs.send(resp)
 }
