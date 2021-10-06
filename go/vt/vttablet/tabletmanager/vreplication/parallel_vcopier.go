@@ -62,8 +62,8 @@ type parallelVcopier struct {
 	mu sync.Mutex
 }
 
-func newParallelVCopier(vr *vreplicator) *vcopier {
-	return &vcopier{
+func newParallelVCopier(vr *vreplicator) *parallelVcopier {
+	return &parallelVcopier{
 		vr: vr,
 	}
 }
