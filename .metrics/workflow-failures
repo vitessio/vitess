@@ -1,6 +1,3 @@
-2021-07-23T05:30:58Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1058647036
-2021-07-23T05:30:58Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1058647048
-2021-07-23T05:30:58Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/1058647047
 2021-07-23T05:30:58Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1058647042
 2021-07-23T05:30:58Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1058647069
 2021-07-23T05:30:58Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1058647050
@@ -9974,6 +9971,7 @@
 2021-10-06T12:55:53Z,local_example,https://github.com/vitessio/vitess/actions/runs/1311963714
 2021-10-06T12:55:53Z,region_example,https://github.com/vitessio/vitess/actions/runs/1311963752
 2021-10-06T12:55:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1311963754
+2021-10-06T13:30:32Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1312070869
 2021-10-06T13:30:32Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1312070851
 2021-10-06T13:30:32Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1312070837
 2021-10-06T13:30:32Z,Cluster (onlineddl_declarative),https://github.com/vitessio/vitess/actions/runs/1312070877
@@ -9981,6 +9979,8 @@
 2021-10-06T13:30:32Z,Cluster (onlineddl_singleton),https://github.com/vitessio/vitess/actions/runs/1312070883
 2021-10-06T13:30:32Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1312070859
 2021-10-06T13:30:32Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1312070857
+2021-10-06T13:30:32Z,Cluster (onlineddl_vrepl_stress_suite),https://github.com/vitessio/vitess/actions/runs/1312070884
+2021-10-06T13:30:32Z,Cluster (onlineddl_vrepl_suite),https://github.com/vitessio/vitess/actions/runs/1312070865
 2021-10-06T13:30:32Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1312070897
 2021-10-06T13:30:32Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1312070895
 2021-10-06T13:30:32Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1312070914
