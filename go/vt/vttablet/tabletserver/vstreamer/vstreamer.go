@@ -895,11 +895,18 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		// For binary(n) column types, mysql pads the data on the right with nulls. However the binlog event contains
+		// the data without this padding. This causes several issues:
+		//    * if a binary(n) column is part of the sharding key, the keyspace_id() returned during the copy phase
+		//      (where the value is the result of a mysql query) is different from the one during replication
+		//      (where the value is the one from the binlogs)
+		//    * mysql where clause comparisons do not do the right thing without padding
+		// So for fixed length binary() columns we right-pad it with nulls if necessary
+		//
 		// If this is a binary type in the binlog event but actually a CHAR column *with a
 		// binary collation*, then we need to factor in the max bytes per character of 3 for
-		// utf8[mb3] and 4 for utf8mb4 and trim the added padded as needed to accomodate
-		// for that
-		if value.IsBinary() {
+		// utf8[mb3] and 4 for utf8mb4 and accomodate for that when padding
+		if value.IsBinary() && sqltypes.IsBinary(plan.Table.Fields[colNum].Type) {
 			maxBytesPerChar := uint32(1)
 			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetMap["utf8"]) {
 				maxBytesPerChar = 3
@@ -909,10 +916,11 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 
 			if maxBytesPerChar > 1 {
 				maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
-				if uint32(value.Len()) > maxCharLen {
-					rightSizedVal := make([]byte, maxCharLen)
-					copy(rightSizedVal, value.ToBytes())
-					value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
+
+				if uint32(value.Len()) < maxCharLen {
+					paddedValue := make([]byte, maxCharLen)
+					copy(paddedValue[:maxCharLen], value.ToBytes())
+					value = sqltypes.MakeTrusted(querypb.Type_BINARY, paddedValue)
 				}
 			}
 		}
