@@ -21,6 +21,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -56,6 +57,8 @@ type tableCopyInfo struct {
 
 type parallelVcopier struct {
 	vr *vreplicator
+
+	mu sync.Mutex
 }
 
 func newparallelVCopier(vr *vreplicator) *vcopier {
@@ -248,7 +251,22 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 	rowsCopiedTicker := time.NewTicker(rowsCopiedUpdateInterval)
 	defer rowsCopiedTicker.Stop()
 
+	// semaphore implemented by channel with maxConcurrency capacity.
+	// semaphore "down" is done by inserting a value to the channel. Up to maxConcurrency is for free
+	// semaphore "up" is done by extracting a vlue from the channel (guaranteed to succeed if you inserted a value prior)
+	semaphore := make(chan bool, maxConcurrency)
+
 	err = vc.vr.sourceVStreamer.VStreamRowsParallel(ctx, queries, lastpkpbs, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		// this function could be called concurrently by parallel_rowstreamer
+
+		// wait for semaphore (limiting max concurrency) or for cancelled context.
+		select {
+		case semaphore <- true:
+			defer func() { <-semaphore }()
+		case <-ctx.Done():
+			return io.EOF
+		}
+
 		for {
 			select {
 			case <-rowsCopiedTicker.C:
@@ -365,6 +383,12 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 }
 
 func (vc *parallelVcopier) fastForward(ctx context.Context, copyState map[string]*sqltypes.Result, gtid string) error {
+	// We serialize the fastForward calls. Actually, all concurrent invocations of the callback function
+	// will share same GTID (all snapshot transactions started at the same `LOCK TABLES READ ...`) point.
+	// So only the first invocation here will do any actual work, and the rest will already be up-to-speed.
+	vc.mu.Lock()
+	defer vc.mu.Unlock()
+
 	defer vc.vr.stats.PhaseTimings.Record("fastforward", time.Now())
 	pos, err := mysql.DecodePosition(gtid)
 	if err != nil {
