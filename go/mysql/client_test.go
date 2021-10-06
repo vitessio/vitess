@@ -19,7 +19,6 @@ package mysql
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -139,7 +138,7 @@ func TestConnectTimeout(t *testing.T) {
 	// Tests a connection where Dial to a unix socket fails
 	// properly returns the right error. To simulate exactly the
 	// right failure, try to dial a Unix socket that's just a temp file.
-	fd, err := ioutil.TempFile("", "mysql")
+	fd, err := os.CreateTemp("", "mysql")
 	if err != nil {
 		t.Fatalf("cannot create TemFile: %v", err)
 	}
@@ -175,7 +174,7 @@ func TestTLSClientDisabled(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
@@ -248,7 +247,7 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
@@ -369,7 +368,7 @@ func TestTLSClientVerifyCA(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
@@ -453,7 +452,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
