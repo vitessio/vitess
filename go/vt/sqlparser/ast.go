@@ -207,7 +207,7 @@ type (
 		StraightJoinHint bool
 		SQLCalcFoundRows bool
 		// The From field must be the first AST element of this struct so the rewriter sees it first
-		From        []TableExpr
+		From        TableExprs
 		Comments    Comments
 		SelectExprs SelectExprs
 		Where       *Where
