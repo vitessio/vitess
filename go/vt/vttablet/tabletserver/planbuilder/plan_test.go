@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -269,7 +268,7 @@ func TestMessageStreamingPlan(t *testing.T) {
 }
 
 func loadSchema(name string) map[string]*schema.Table {
-	b, err := ioutil.ReadFile(locateFile(name))
+	b, err := os.ReadFile(locateFile(name))
 	if err != nil {
 		panic(err)
 	}

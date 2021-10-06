@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -145,7 +144,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletStatus(vttablet.ServingStatus); err != nil {
-			errFileContent, _ := ioutil.ReadFile(fname)
+			errFileContent, _ := os.ReadFile(fname)
 			if errFileContent != nil {
 				log.Infof("vttablet error:\n%s\n", string(errFileContent))
 			}
@@ -163,7 +162,7 @@ func (vttablet *VttabletProcess) GetStatus() string {
 		return ""
 	}
 	if resp.StatusCode == 200 {
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		defer resp.Body.Close()
 		return string(respByte)
 	}
@@ -178,7 +177,7 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	}
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			return nil
@@ -194,7 +193,7 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 	if err != nil {
 		return fmt.Sprintf("Status details failed: %v", err.Error())
 	}
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	return string(respByte)
 }
 
@@ -478,7 +477,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 
 // BulkLoad performs a bulk load of rows into a given vttablet.
 func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkInsert func(io.Writer)) {
-	tmpbulk, err := ioutil.TempFile(path.Join(vttablet.Directory, "tmp"), "bulk_load")
+	tmpbulk, err := os.CreateTemp(path.Join(vttablet.Directory, "tmp"), "bulk_load")
 	if err != nil {
 		t.Fatalf("failed to create tmp file for loading: %v", err)
 	}

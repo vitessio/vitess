@@ -15,7 +15,6 @@ package grpcoptionaltls
 import (
 	"context"
 	"crypto/tls"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -51,7 +50,7 @@ type testCredentials struct {
 
 func createCredentials() (*testCredentials, error) {
 	// Create a temporary directory.
-	certDir, err := ioutil.TempDir("", "optionaltls_grpc_test")
+	certDir, err := os.MkdirTemp("", "optionaltls_grpc_test")
 	if err != nil {
 		return nil, err
 	}

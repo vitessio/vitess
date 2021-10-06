@@ -21,8 +21,8 @@ import (
 	"flag"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -479,7 +479,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
 			}
-			err = ioutil.WriteFile(fullPath, content, 0664)
+			err = os.WriteFile(fullPath, content, 0664)
 			if err != nil {
 				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
 			}
@@ -493,7 +493,7 @@ func main() {
 // this test fail.
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
-		existing, err := ioutil.ReadFile(fullPath)
+		existing, err := os.ReadFile(fullPath)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
 			continue

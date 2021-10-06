@@ -19,7 +19,6 @@ package vtgate
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -76,7 +75,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -109,7 +108,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -139,7 +138,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 
 	authServer := newTestAuthServerStatic()
 
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -259,7 +258,7 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestInitTLSConfig")
+	root, err := os.MkdirTemp("", "TestInitTLSConfig")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

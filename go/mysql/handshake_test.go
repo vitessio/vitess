@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"crypto/tls"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -112,7 +111,7 @@ func TestSSLConnection(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestSSLConnection")
+	root, err := os.MkdirTemp("", "TestSSLConnection")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

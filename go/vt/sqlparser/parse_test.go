@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -1639,6 +1638,10 @@ var (
 	}, {
 		input:  "show vitess_keyspaces like '%'",
 		output: "show keyspaces like '%'",
+	}, {
+		input: "show vitess_replication_status",
+	}, {
+		input: "show vitess_replication_status like '%'",
 	}, {
 		input: "show vitess_shards",
 	}, {
@@ -3527,7 +3530,7 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -3539,7 +3542,7 @@ func TestValidUnionCases(t *testing.T) {
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -3603,7 +3606,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
-			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
 			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})

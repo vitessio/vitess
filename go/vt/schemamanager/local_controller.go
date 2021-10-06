@@ -18,7 +18,6 @@ package schemamanager
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -77,7 +76,7 @@ func NewLocalController(schemaChangeDir string) *LocalController {
 // schema change.
 func (controller *LocalController) Open(ctx context.Context) error {
 	// find all keyspace directories.
-	fileInfos, err := ioutil.ReadDir(controller.schemaChangeDir)
+	fileInfos, err := os.ReadDir(controller.schemaChangeDir)
 	if err != nil {
 		return err
 	}
@@ -86,7 +85,7 @@ func (controller *LocalController) Open(ctx context.Context) error {
 			continue
 		}
 		dirpath := path.Join(controller.schemaChangeDir, fileinfo.Name())
-		schemaChanges, err := ioutil.ReadDir(path.Join(dirpath, "input"))
+		schemaChanges, err := os.ReadDir(path.Join(dirpath, "input"))
 		if err != nil {
 			log.Warningf("there is no input dir in %s", dirpath)
 			continue
@@ -119,7 +118,7 @@ func (controller *LocalController) Read(ctx context.Context) ([]string, error) {
 	if controller.keyspace == "" || controller.sqlPath == "" {
 		return []string{}, nil
 	}
-	data, err := ioutil.ReadFile(controller.sqlPath)
+	data, err := os.ReadFile(controller.sqlPath)
 	if err != nil {
 		return nil, err
 	}

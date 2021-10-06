@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"fmt"
 	"go/types"
-	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"strings"
 
@@ -178,7 +178,7 @@ func (t *TypePaths) Set(path string) error {
 // currently exist on disk and returns any mismatches
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	for fullPath, file := range result {
-		existing, err := ioutil.ReadFile(fullPath)
+		existing, err := os.ReadFile(fullPath)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("missing file on disk: %s (%w)", fullPath, err))
 			continue
