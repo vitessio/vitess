@@ -38,10 +38,10 @@ type analyzer struct {
 	typer    *typer
 	rewriter *earlyRewriter
 
-	err error
+	err          error
 	inProjection int
 
-	projErr      error
+	projErr error
 }
 
 // newAnalyzer create the semantic analyzer

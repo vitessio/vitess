@@ -25,14 +25,14 @@ import (
 )
 
 type earlyRewriter struct {
-	scoper   *scoper
-	clause   string
+	scoper *scoper
+	clause string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case sqlparser.SelectExprs:
-		_, isSel:=cursor.Parent().(*sqlparser.Select)
+		_, isSel := cursor.Parent().(*sqlparser.Select)
 		if !isSel {
 			return nil
 		}
