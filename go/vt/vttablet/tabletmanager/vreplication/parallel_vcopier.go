@@ -42,7 +42,8 @@ import (
 
 const maxConcurrency = 6
 
-var _ = newparallelVCopier(nil) // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
+var _ = newParallelVCopier(nil) // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
+var _ = newVCopier(nil)         // TODO(shlomi): delete this; this was added to temporarily satisfy the linter
 
 type tableCopyInfo struct {
 	tableName       string
@@ -61,7 +62,7 @@ type parallelVcopier struct {
 	mu sync.Mutex
 }
 
-func newparallelVCopier(vr *vreplicator) *vcopier {
+func newParallelVCopier(vr *vreplicator) *vcopier {
 	return &vcopier{
 		vr: vr,
 	}
