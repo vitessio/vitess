@@ -1364,7 +1364,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	}
 	out := *n
 	out.Cache = CloneRefOfBool(n.Cache)
-	out.From = CloneSliceOfTableExpr(n.From)
+	out.From = CloneTableExprs(n.From)
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
@@ -2439,18 +2439,6 @@ func CloneRefOfBool(n *bool) *bool {
 	}
 	out := *n
 	return &out
-}
-
-// CloneSliceOfTableExpr creates a deep clone of the input.
-func CloneSliceOfTableExpr(n []TableExpr) []TableExpr {
-	if n == nil {
-		return nil
-	}
-	res := make([]TableExpr, 0, len(n))
-	for _, x := range n {
-		res = append(res, CloneTableExpr(x))
-	}
-	return res
 }
 
 // CloneSliceOfCharacteristic creates a deep clone of the input.

@@ -1679,7 +1679,7 @@ func (cached *Select) CachedSize(alloc bool) int64 {
 	}
 	// field Cache *bool
 	size += hack.RuntimeAllocSize(int64(1))
-	// field From []vitess.io/vitess/go/vt/sqlparser.TableExpr
+	// field From vitess.io/vitess/go/vt/sqlparser.TableExprs
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.From)) * int64(16))
 		for _, elem := range cached.From {

@@ -3310,14 +3310,10 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 			return true
 		}
 	}
-	for x, el := range node.From {
-		if !a.rewriteTableExpr(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*Select).From[idx] = newNode.(TableExpr)
-			}
-		}(x)) {
-			return false
-		}
+	if !a.rewriteTableExprs(node, node.From, func(newNode, parent SQLNode) {
+		parent.(*Select).From = newNode.(TableExprs)
+	}) {
+		return false
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Select).Comments = newNode.(Comments)
