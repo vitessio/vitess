@@ -3419,7 +3419,7 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		kontinue := !a.pre(&a.cur)
+ 		kontinue := !a.pre(&a.cur)
 		if a.cur.revisit {
 			node = a.cur.node.(SelectExprs)
 			a.cur.revisit = false

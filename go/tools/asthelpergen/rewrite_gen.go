@@ -27,10 +27,6 @@ const (
 	rewriteName = "rewrite"
 )
 
-type Revisitable interface {
-	IsRevisitable() bool
-}
-
 type rewriteGen struct {
 	ifaceName string
 	file      *jen.File

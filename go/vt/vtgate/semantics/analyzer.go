@@ -32,16 +32,16 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper *scoper
-	tables *tableCollector
-	binder *binder
-	typer  *typer
+	scoper   *scoper
+	tables   *tableCollector
+	binder   *binder
+	typer    *typer
+	rewriter *earlyRewriter
 
-	err          error
+	err error
 	inProjection int
 
-	projErr error
-
+	projErr      error
 	hasRewritten bool
 }
 
@@ -57,6 +57,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s.org = a
 	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
+	a.rewriter = &earlyRewriter{scoper: s}
 
 	return a
 }
@@ -75,9 +76,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	semTable := analyzer.newSemTable(statement)
 
 	// Rewriting operation
-	if err = earlyRewrite(statement, semTable, analyzer.scoper); err != nil {
-		return nil, err
-	}
 	analyzer.hasRewritten = true
 
 	// Analysis post rewriting
@@ -132,6 +130,10 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 			return true
 		}
 		if err := a.checkForInvalidConstructs(cursor); err != nil {
+			a.setError(err)
+			return true
+		}
+		if err := a.rewriter.down(cursor); err != nil {
 			a.setError(err)
 			return true
 		}
