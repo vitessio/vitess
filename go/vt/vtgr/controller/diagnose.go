@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -92,7 +91,7 @@ const (
 func (shard *GRShard) ScanAndRepairShard(ctx context.Context) {
 	status, err := shard.Diagnose(ctx)
 	if err != nil {
-		log.Errorf("fail to scanAndRepairShard %v/%v because of Diagnose error: %v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard, err)
+		shard.logger.Errorf("fail to scanAndRepairShard %v/%v because of Diagnose error: %v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard, err)
 		return
 	}
 	// We are able to get Diagnose without error
@@ -100,9 +99,9 @@ func (shard *GRShard) ScanAndRepairShard(ctx context.Context) {
 	// Note: all the recovery function should first try to grab a shard level lock
 	// and check the trigger conditions before doing anything. This is to avoid
 	// other VTGR instance try to do the same thing
-	log.Infof("%v status is %v", formatKeyspaceShard(shard.KeyspaceShard), status)
+	shard.logger.Infof("%v status is %v", formatKeyspaceShard(shard.KeyspaceShard), status)
 	if _, err := shard.Repair(ctx, status); err != nil {
-		log.Errorf("failed to repair %v: %v", status, err)
+		shard.logger.Errorf("failed to repair %v: %v", status, err)
 	}
 }
 
@@ -123,7 +122,7 @@ func (shard *GRShard) Diagnose(ctx context.Context) (DiagnoseType, error) {
 	shard.shardStatusCollector.recordDiagnoseResult(diagnoseResult)
 	shard.populateVTGRStatusLocked()
 	if diagnoseResult != DiagnoseTypeHealthy {
-		log.Warningf(`VTGR diagnose shard as unhealthy for %s/%s: result=%v | last_result=%v | instances=%v | primary=%v | primary_tablet=%v | problematics=%v | unreachables=%v | SQL group=%v`,
+		shard.logger.Warningf(`VTGR diagnose shard as unhealthy for %s/%s: result=%v | last_result=%v | instances=%v | primary=%v | primary_tablet=%v | problematics=%v | unreachables=%v | SQL group=%v`,
 			shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard,
 			shard.shardStatusCollector.status.DiagnoseResult,
 			shard.lastDiagnoseResult,
@@ -154,7 +153,7 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 				// later VTGR needs to find group name, primary etc from
 				// SQLGroup for repairing instead of getting nil
 				shard.sqlGroup.overrideView([]*db.GroupView{localView})
-				log.Infof("Diagnose %v from fast path", fastDiagnose)
+				shard.logger.Infof("Diagnose %v from fast path", fastDiagnose)
 				return fastDiagnose, nil
 			}
 		}
@@ -181,7 +180,7 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	// In this situation, instead of bootstrap a group, we should re-build the
 	// old group for the shard
 	if shard.isAllOfflineOrError() {
-		log.Info("Found all members are OFFLINE or ERROR")
+		shard.logger.Info("Found all members are OFFLINE or ERROR")
 		return DiagnoseTypeShardHasInactiveGroup, nil
 	}
 
@@ -196,7 +195,7 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 			// errMissingGroup means we cannot find a mysql group for the shard
 			// we are in DiagnoseTypeShardHasNoGroup state
 			if err == errMissingGroup {
-				log.Warning("Missing mysql group")
+				shard.logger.Warning("Missing mysql group")
 				return DiagnoseTypeShardHasNoGroup, nil
 			}
 			// errMissingPrimaryTablet means we cannot find a tablet based on mysql primary
@@ -268,7 +267,7 @@ func (shard *GRShard) getLocalView() *db.GroupView {
 	// We still have the fallback logic if this failed, therefore we don't raise error
 	// but try to get local view with best effort
 	if err != nil {
-		log.Errorf("failed to fetch local group view: %v", err)
+		shard.logger.Errorf("failed to fetch local group view: %v", err)
 	}
 	return view
 }
@@ -319,7 +318,7 @@ func (shard *GRShard) hasWrongPrimaryTablet(ctx context.Context) (bool, error) {
 	// in case the primary is unreachable
 	host, port, _ := shard.sqlGroup.GetPrimary()
 	if !isHostPortValid(host, port) {
-		log.Warningf("Invalid address for primary %v:%v", host, port)
+		shard.logger.Warningf("Invalid address for primary %v:%v", host, port)
 		return false, errMissingGroup
 	}
 	// Make sure we have a tablet available
@@ -329,7 +328,7 @@ func (shard *GRShard) hasWrongPrimaryTablet(ctx context.Context) (bool, error) {
 	// we retrun errMissingPrimaryTablet so that VTGR will trigger a failover
 	tablet := shard.findTabletByHostAndPort(host, port)
 	if tablet == nil || !shard.instanceReachable(ctx, tablet) {
-		log.Errorf("Failed to find tablet that is running with mysql on %v:%v", host, port)
+		shard.logger.Errorf("Failed to find tablet that is running with mysql on %v:%v", host, port)
 		return false, errMissingPrimaryTablet
 	}
 	// Now we know we have a valid mysql primary in the group
@@ -338,7 +337,7 @@ func (shard *GRShard) hasWrongPrimaryTablet(ctx context.Context) (bool, error) {
 	// If we failed to find primary for shard, it mostly means we are initializing the shard
 	// return true directly so that VTGR will set primary tablet according to MySQL group
 	if primary == nil {
-		log.Infof("unable to find primary tablet for %v", formatKeyspaceShard(shard.KeyspaceShard))
+		shard.logger.Infof("unable to find primary tablet for %v", formatKeyspaceShard(shard.KeyspaceShard))
 		return true, nil
 	}
 	return (host != primary.instanceKey.Hostname) || (port != primary.instanceKey.Port), nil
@@ -363,11 +362,11 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 	go func() { c <- shard.tmc.Ping(pingCtx, instance.tablet) }()
 	select {
 	case <-pingCtx.Done():
-		log.Errorf("Ping abort timeout %v", *pingTabletTimeout)
+		shard.logger.Errorf("Ping abort timeout %v", *pingTabletTimeout)
 		return false
 	case err := <-c:
 		if err != nil {
-			log.Errorf("Ping error host=%v: %v", instance.instanceKey.Hostname, err)
+			shard.logger.Errorf("Ping error host=%v: %v", instance.instanceKey.Hostname, err)
 		}
 		return err == nil
 	}
@@ -428,7 +427,7 @@ func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 		// Skip instance without hostname because they are not up and running
 		// also skip instances that raised unrecoverable errors
 		if shard.shardStatusCollector.isUnreachable(instance) {
-			log.Infof("Skip %v to check disconnectedInstance because it is unhealthy", instance.alias)
+			shard.logger.Infof("Skip %v to check disconnectedInstance because it is unhealthy", instance.alias)
 			continue
 		}
 		isUnconnected := shard.sqlGroup.IsUnconnectedReplica(instance.instanceKey)
@@ -530,7 +529,7 @@ func (shard *GRShard) forAllInstances(task func(instance *grInstance, wg *sync.W
 	}
 	wg.Wait()
 	if len(errorRecord.Errors) > 0 {
-		log.Errorf("get errors in forAllInstances call: %v", errorRecord.Error())
+		shard.logger.Errorf("get errors in forAllInstances call: %v", errorRecord.Error())
 	}
 	return &errorRecord
 }
@@ -571,7 +570,7 @@ func (shard *GRShard) refreshSQLGroup() error {
 			if unreachableError(err) {
 				shard.shardStatusCollector.recordUnreachables(instance)
 			}
-			log.Errorf("%v get error while fetch group info: %v", instance.alias, err)
+			shard.logger.Errorf("%v get error while fetch group info: %v", instance.alias, err)
 			return
 		}
 		shard.sqlGroup.recordView(view)
@@ -579,7 +578,7 @@ func (shard *GRShard) refreshSQLGroup() error {
 	// Only raise error if we failed to get any data from mysql
 	// otherwise, we will use what we get from mysql directly
 	if len(er.Errors) == len(shard.instances) {
-		log.Errorf("fail to fetch any data for mysql")
+		shard.logger.Errorf("fail to fetch any data for mysql")
 		return db.ErrGroupBackoffError
 	}
 	return shard.sqlGroup.Resolve()
