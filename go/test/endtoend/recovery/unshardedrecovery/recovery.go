@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -96,7 +95,7 @@ func TestMainImpl(m *testing.M) {
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
-		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
@@ -105,7 +104,7 @@ func TestMainImpl(m *testing.M) {
 SET GLOBAL old_alter_table = ON;
 `
 		sql = sql + oldAlterTableMode
-		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)

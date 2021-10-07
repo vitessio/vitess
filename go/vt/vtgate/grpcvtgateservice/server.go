@@ -163,7 +163,9 @@ func (vtg *VTGate) StreamExecute(request *vtgatepb.StreamExecuteRequest, stream 
 	if session == nil {
 		session = &vtgatepb.Session{Autocommit: true}
 	}
-	if session.TargetString == "" {
+
+	// Do not set target if the tablet_type is not set correctly.
+	if session.TargetString == "" && request.TabletType != topodatapb.TabletType_UNKNOWN {
 		session.TargetString = request.KeyspaceShard + "@" + topoproto.TabletTypeLString(request.TabletType)
 	}
 	if session.Options == nil {

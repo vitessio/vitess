@@ -20,7 +20,7 @@ package main
 import (
 	"bytes"
 	"flag"
-	"io/ioutil"
+	"os"
 
 	"context"
 
@@ -130,7 +130,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 	}
 
 	if *tabletConfig != "" {
-		bytes, err := ioutil.ReadFile(*tabletConfig)
+		bytes, err := os.ReadFile(*tabletConfig)
 		if err != nil {
 			log.Exitf("error reading config file %s: %v", *tabletConfig, err)
 		}
@@ -181,10 +181,10 @@ func extractOnlineDDL() error {
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
+		if err := os.WriteFile(binaryFileName, ghostBinary, 0755); err != nil {
 			// One possibility of failure is that gh-ost is up and running. In that case,
 			// let's pause and check if the running gh-ost is exact same binary as the one we wish to extract.
-			foundBytes, _ := ioutil.ReadFile(binaryFileName)
+			foundBytes, _ := os.ReadFile(binaryFileName)
 			if bytes.Equal(ghostBinary, foundBytes) {
 				// OK, it's the same binary, there is no need to extract the file anyway
 				return nil

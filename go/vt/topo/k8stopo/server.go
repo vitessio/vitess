@@ -30,7 +30,7 @@ package k8stopo
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -161,7 +161,7 @@ func NewServer(_, root string) (*Server, error) {
 		}
 
 		// When running in the cluster, use the namespace file to detect the current namespace
-		nsBytes, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+		nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
 			return nil, err
 		}
