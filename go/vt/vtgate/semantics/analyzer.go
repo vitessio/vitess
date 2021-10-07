@@ -32,17 +32,16 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper *scoper
-	tables *tableCollector
-	binder *binder
-	typer  *typer
+	scoper   *scoper
+	tables   *tableCollector
+	binder   *binder
+	typer    *typer
+	rewriter *earlyRewriter
 
 	err          error
 	inProjection int
 
 	projErr error
-
-	hasRewritten bool
 }
 
 // newAnalyzer create the semantic analyzer
@@ -57,6 +56,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s.org = a
 	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
+	a.rewriter = &earlyRewriter{scoper: s}
 
 	return a
 }
@@ -73,18 +73,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
-
-	// Rewriting operation
-	if err = earlyRewrite(statement, semTable, analyzer.scoper); err != nil {
-		return nil, err
-	}
-	analyzer.hasRewritten = true
-
-	// Analysis post rewriting
-	err = analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
 
 	semTable.ProjectionErr = analyzer.projErr
 	return semTable, nil
@@ -126,27 +114,21 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 
-	if !a.hasRewritten {
-		if err := a.scoper.down(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-		if err := a.checkForInvalidConstructs(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-	} else { // after expand star
-		if err := checkUnionColumns(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-
-		a.scoper.downPost(cursor)
-
-		if err := a.binder.down(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
+	if err := a.scoper.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.checkForInvalidConstructs(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.rewriter.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.binder.down(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
 
 	a.enterProjection(cursor)
@@ -161,24 +143,17 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if !a.hasRewritten {
-		if err := a.scoper.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.tables.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-	} else { // after expand star
-		if err := a.scoper.upPost(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.typer.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.typer.up(cursor); err != nil {
+		a.setError(err)
+		return false
 	}
 
 	a.leaveProjection(cursor)
@@ -195,11 +170,7 @@ func containsStar(s sqlparser.SelectExprs) bool {
 	return false
 }
 
-func checkUnionColumns(cursor *sqlparser.Cursor) error {
-	union, isUnion := cursor.Node().(*sqlparser.Union)
-	if !isUnion {
-		return nil
-	}
+func checkUnionColumns(union *sqlparser.Union) error {
 	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
@@ -333,6 +304,10 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			}
 			return true, nil
 		}, node.OrderBy)
+		if err != nil {
+			return err
+		}
+		err = checkUnionColumns(node)
 		if err != nil {
 			return err
 		}

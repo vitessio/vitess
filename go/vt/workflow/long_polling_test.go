@@ -18,7 +18,7 @@ package workflow
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -50,7 +50,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/create failed: %v", err)
 	}
-	tree, err := ioutil.ReadAll(resp.Body)
+	tree, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/create reading failed: %v", err)
@@ -78,7 +78,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/poll/1 failed: %v", err)
 	}
-	tree, err = ioutil.ReadAll(resp.Body)
+	tree, err = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/poll/1 reading failed: %v", err)
@@ -119,7 +119,7 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("/poll/1 failed: %v", err)
 	}
-	tree, err = ioutil.ReadAll(resp.Body)
+	tree, err = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		t.Fatalf("/poll/1 reading failed: %v", err)

@@ -4161,8 +4161,100 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id, `user`.col, id + 1 from `user` where 1 != 1",
-            "Query": "select `user`.id, `user`.col, id + 1 from `user`",
+            "FieldQuery": "select `user`.id, `user`.col, `user`.id + 1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col, `user`.id + 1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# derived table with aliased columns and outer predicate pushed in derived table
+"select u.a from (select id as b, name from user) u(a, n) where u.n = 1"
+"unsupported: column aliases in derived table"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from (select id as b, name from user) u(a, n) where u.n = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+    "Query": "select u.a from (select id as b, `name` from `user` where `name` = 1) as u(a, n)",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# derived table with aliased columns predicate in both the outer and inner
+"select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1"
+"unsupported: column aliases in derived table"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from (select id as b, name from user where b = 1) u(a, n) where u.n = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select u.a from (select id as b, `name` from `user` where 1 != 1) as u(a, n) where 1 != 1",
+    "Query": "select u.a from (select id as b, `name` from `user` where b = 1 and `name` = 1) as u(a, n)",
+    "Table": "`user`",
+    "Values": [
+      1
+    ],
+    "Vindex": "name_user_map"
+  }
+}
+
+# derived table with aliased columns and a join that requires pushProjection
+"select i+1 from (select user.id from user join user_extra) t(i)"
+"unsupported: column aliases in derived table"
+{
+  "QueryType": "SELECT",
+  "Original": "select i+1 from (select user.id from user join user_extra) t(i)",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      1
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.id + 1 from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.id + 1 from `user`",
             "Table": "`user`"
           },
           {

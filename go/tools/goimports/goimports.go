@@ -17,7 +17,6 @@ limitations under the License.
 package goimports
 
 import (
-	"io/ioutil"
 	"os"
 	"os/exec"
 
@@ -27,7 +26,7 @@ import (
 // FormatJenFile formats the given *jen.File with goimports and return a slice
 // of byte corresponding to the formatted file.
 func FormatJenFile(file *jen.File) ([]byte, error) {
-	tempFile, err := ioutil.TempFile("/tmp", "*.go")
+	tempFile, err := os.CreateTemp("/tmp", "*.go")
 	if err != nil {
 		return nil, err
 	}
@@ -43,5 +42,5 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ioutil.ReadFile(tempFile.Name())
+	return os.ReadFile(tempFile.Name())
 }

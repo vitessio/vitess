@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -607,7 +607,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		return fmt.Errorf("edit: cannot start $EDITOR: %v", err)
 	}
 
-	fileData, err := ioutil.ReadFile(tmpPath)
+	fileData, err := os.ReadFile(tmpPath)
 	if err != nil {
 		os.Remove(tmpPath)
 		return fmt.Errorf("edit: cannot read file %v", err)
@@ -784,7 +784,7 @@ func getPathData(ctx context.Context, filePath string) ([]byte, error) {
 	var err error
 	file, err := os.Open(filePath)
 	if err == nil {
-		data, err := ioutil.ReadAll(file)
+		data, err := io.ReadAll(file)
 		if err == nil {
 			return data, err
 		}
@@ -800,7 +800,7 @@ func setPathData(ctx context.Context, filePath string, data []byte) error {
 		}
 		return err
 	}
-	return ioutil.WriteFile(filePath, []byte(data), 0666)
+	return os.WriteFile(filePath, []byte(data), 0666)
 }
 
 func fileCp(ctx context.Context, srcPath, dstPath string) error {
@@ -954,7 +954,7 @@ func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 		if err != nil {
 			return fmt.Errorf("unzip: error %v", err)
 		}
-		data, err := ioutil.ReadAll(rc)
+		data, err := io.ReadAll(rc)
 		if err != nil {
 			return fmt.Errorf("unzip: failed reading archive: %v", err)
 		}

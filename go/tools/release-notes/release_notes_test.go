@@ -17,7 +17,7 @@ limitations under the License.
 package main
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,7 +107,7 @@ TEST@planetscale.com	docker/lite/install_dependencies.sh:  Upgrade MySQL 8 to 8.
 }
 
 func TestLoadSummaryReadme(t *testing.T) {
-	readmeFile, err := ioutil.TempFile("", "*.md")
+	readmeFile, err := os.CreateTemp("", "*.md")
 	require.NoError(t, err)
 
 	readmeContent := `- New Gen4 feature
@@ -115,7 +115,7 @@ func TestLoadSummaryReadme(t *testing.T) {
 - Bunch of features
 `
 
-	err = ioutil.WriteFile(readmeFile.Name(), []byte(readmeContent), 0644)
+	err = os.WriteFile(readmeFile.Name(), []byte(readmeContent), 0644)
 	require.NoError(t, err)
 
 	str, err := releaseSummary(readmeFile.Name())
@@ -191,11 +191,11 @@ func TestGenerateReleaseNotes(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			outFile, err := ioutil.TempFile("", "*.md")
+			outFile, err := os.CreateTemp("", "*.md")
 			require.NoError(t, err)
 			err = tc.releaseNote.generate(outFile)
 			require.NoError(t, err)
-			all, err := ioutil.ReadFile(outFile.Name())
+			all, err := os.ReadFile(outFile.Name())
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedOut, string(all))
 		})

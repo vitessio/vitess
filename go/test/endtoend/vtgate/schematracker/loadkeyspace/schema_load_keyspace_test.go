@@ -17,7 +17,7 @@ limitations under the License.
 package loadkeyspace
 
 import (
-	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 	"time"
@@ -82,7 +82,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 
 	// check warning logs
 	logDir := clusterInstance.VtgateProcess.LogDir
-	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "Unable to get initial schema reload")
 }
@@ -120,7 +120,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 
 	// check warning logs
 	logDir := clusterInstance.VtgateProcess.LogDir
-	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
+	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "Unable to get initial schema reload")
 }
@@ -148,7 +148,7 @@ func TestNoInitialKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// check info logs
-	all, err := ioutil.ReadFile(path.Join(logDir, "vtgate.INFO"))
+	all, err := os.ReadFile(path.Join(logDir, "vtgate.INFO"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "No keyspace to load")
 }

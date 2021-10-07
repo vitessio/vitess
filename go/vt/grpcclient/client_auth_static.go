@@ -19,7 +19,7 @@ package grpcclient
 import (
 	"encoding/json"
 	"flag"
-	"io/ioutil"
+	"os"
 
 	"context"
 
@@ -59,7 +59,7 @@ func AppendStaticAuth(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 	if *credsFile == "" {
 		return opts, nil
 	}
-	data, err := ioutil.ReadFile(*credsFile)
+	data, err := os.ReadFile(*credsFile)
 	if err != nil {
 		return nil, err
 	}

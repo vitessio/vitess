@@ -135,8 +135,9 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
-		Expr: derivedTable,
-		As:   sqlparser.NewTableIdent(n.alias),
+		Expr:    derivedTable,
+		As:      sqlparser.NewTableIdent(n.alias),
+		Columns: n.columnAliases,
 	}
 	selectExprs := sqlparser.SelectExprs{}
 	for _, colName := range n.columns {

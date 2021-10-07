@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -76,7 +75,7 @@ func TestPersistentMode(t *testing.T) {
 	conf := config
 	defer resetFlags(args, conf)
 
-	dir, err := ioutil.TempDir("/tmp", "vttestserver_persistent_mode_")
+	dir, err := os.MkdirTemp("/tmp", "vttestserver_persistent_mode_")
 	assert.NoError(t, err)
 	defer os.RemoveAll(dir)
 
@@ -230,7 +229,7 @@ func TestMtlsAuth(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
@@ -273,7 +272,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	defer resetFlags(args, conf)
 
 	// Our test root.
-	root, err := ioutil.TempDir("", "tlstest")
+	root, err := os.MkdirTemp("", "tlstest")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

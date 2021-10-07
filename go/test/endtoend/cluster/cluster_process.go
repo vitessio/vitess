@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -447,11 +446,11 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 // NewVtgateInstance returns an instance of vtgateprocess
 func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
-	vtgateGrpcPort := cluster.GetAndReservePort()
+	cluster.VtgateGrpcPort = cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
-		vtgateGrpcPort,
+		cluster.VtgateGrpcPort,
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
@@ -670,14 +669,14 @@ func getPort() int {
 	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
 		port = getVtStartPort()
 	} else {
-		result, _ := ioutil.ReadFile(tmpPortFileName)
+		result, _ := os.ReadFile(tmpPortFileName)
 		cport, err := strconv.Atoi(string(result))
 		if err != nil || cport > 60000 || cport == 0 {
 			cport = getVtStartPort()
 		}
 		port = cport
 	}
-	ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+	os.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
 	return port
 }
 

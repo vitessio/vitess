@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -60,7 +60,7 @@ type RegionJSON struct {
 func NewRegionJSON(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
-	data, err := ioutil.ReadFile(rmPath)
+	data, err := os.ReadFile(rmPath)
 	if err != nil {
 		return nil, err
 	}
