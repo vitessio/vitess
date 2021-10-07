@@ -554,9 +554,9 @@ func TestSQLSelectLimit(t *testing.T) {
 	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null), (4, 'a'), (5, 'a'), (6, 'b')")
 	defer utils.Exec(t, conn, "delete from t7_xxhash")
 
-	utils.Exec(t, conn, "set sql_select_limit = 2")
 	for _, workload := range []string{"olap", "oltp"} {
 		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set sql_select_limit = 2")
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
 		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
@@ -573,5 +573,41 @@ func TestSQLSelectLimit(t *testing.T) {
 		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
 		assert.Equal(t, 3, len(qr.Rows))
 	}
+}
 
+func TestSQLSelectLimitWithPlanCache(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null)")
+	defer utils.Exec(t, conn, "delete from t7_xxhash")
+
+	tcases := []struct {
+		limit int
+		out   string
+	}{{
+		limit: -1,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}, {
+		limit: 1,
+		out:   `[[VARCHAR("1") VARCHAR("a")]]`,
+	}, {
+		limit: 2,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`,
+	}, {
+		limit: 3,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}, {
+		limit: 4,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}}
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("set sql_select_limit = %d", tcase.limit))
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", tcase.out)
+		}
+	}
 }
