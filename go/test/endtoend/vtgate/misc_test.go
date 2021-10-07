@@ -544,3 +544,34 @@ func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
 	utils.Exec(t, conn, "insert into t2(id3, id4) values (0,20),(1,19),(2,18),(3,17),(4,16),(5,15)")
 	utils.AssertMatches(t, conn, `SELECT id3 FROM t1 LEFT JOIN t2 ON t1.id1 = t2.id3 WHERE t2.id3 = 10`, `[]`)
 }
+
+func TestSQLSelectLimit(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null), (4, 'a'), (5, 'a'), (6, 'b')")
+	defer utils.Exec(t, conn, "delete from t7_xxhash")
+
+	utils.Exec(t, conn, "set sql_select_limit = 2")
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
+		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
+		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
+		/*
+			planner does not support query with order by in union query. without order by the results are not deterministic for testing purpose
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid", ``)
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid limit 3", ``)
+		*/
+
+		//	without order by the results are not deterministic for testing purpose. Checking row count only.
+		qr := utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
+		assert.Equal(t, 2, len(qr.Rows))
+
+		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
+		assert.Equal(t, 3, len(qr.Rows))
+	}
+
+}
