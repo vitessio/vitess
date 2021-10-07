@@ -835,7 +835,7 @@ func (hp *horizonPlanning) planDistinct(ctx *planningContext, plan logicalPlan) 
 		}
 
 		return hp.addDistinct(ctx, plan)
-	case *joinGen4:
+	case *joinGen4, *pulloutSubquery:
 		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
 		return hp.planDistinctOA(p)
