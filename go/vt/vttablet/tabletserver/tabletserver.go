@@ -1145,10 +1145,10 @@ func (tsv *TabletServer) VStreamRowsParallel(ctx context.Context, target *queryp
 	var rows [][]sqltypes.Value
 	for _, lastpk := range lastpks {
 		var row []sqltypes.Value
-		if lastpk != nil {
+		if lastpk != nil && len(lastpk.Rows) > 0 {
 			r := sqltypes.Proto3ToResult(lastpk)
 			if len(r.Rows) != 1 {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v", lastpk)
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected lastpk input: %v, len: %v", lastpk, len(r.Rows))
 			}
 			row = r.Rows[0]
 		}

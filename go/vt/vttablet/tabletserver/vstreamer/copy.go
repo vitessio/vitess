@@ -176,7 +176,7 @@ func getLastPKFromQR(qr *querypb.QueryResult) []sqltypes.Value {
 	var lastPK []sqltypes.Value
 	r := sqltypes.Proto3ToResult(qr)
 	if len(r.Rows) != 1 {
-		log.Errorf("unexpected lastpk input: %v", qr)
+		log.Errorf("unexpected lastpk input: %v, len: %v", qr, len(r.Rows))
 		return nil
 	}
 	lastPK = r.Rows[0]
