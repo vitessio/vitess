@@ -339,7 +339,7 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, -1)
+				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, SQLSelectLimitUnset)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -619,7 +619,7 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", -1)
+			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", SQLSelectLimitUnset)
 			if err != nil {
 				b.Fatal(err)
 			}

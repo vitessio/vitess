@@ -35,6 +35,9 @@ var (
 	HasValueSubQueryBaseName = []byte("__sq_has_values")
 )
 
+// SQLSelectLimitUnset default value for sql_select_limit not set.
+const SQLSelectLimitUnset = -1
+
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
