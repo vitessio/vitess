@@ -477,7 +477,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "")
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", -1)
 	if err != nil {
 		return nil, err
 	}
@@ -1168,7 +1168,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		query,
 		comments,
 		bindVars,
-		skipQueryPlanCache(safeSession),
+		safeSession,
 		logStats,
 	)
 	if err != nil {
@@ -1314,9 +1314,14 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return destKeyspace, destTabletType, dest, err
 }
 
+type iQueryOption interface {
+	cachePlan() bool
+	getSelectLimit() int
+}
+
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
 	if logStats != nil {
 		logStats.SQL = comments.Leading + sql + comments.Trailing
 		logStats.BindVariables = bindVars
@@ -1341,9 +1346,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
+	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace)
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
 		if err != nil {
 			return nil, err
 		}
@@ -1375,7 +1380,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	plan.Warnings = vcursor.warnings
 	vcursor.warnings = nil
 
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
+	if qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
 
@@ -1389,14 +1394,6 @@ func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
 		return plan.(*engine.Plan), true
 	}
 	return nil, false
-}
-
-// skipQueryPlanCache extracts SkipQueryPlanCache from session
-func skipQueryPlanCache(safeSession *SafeSession) bool {
-	if safeSession == nil || safeSession.Options == nil {
-		return false
-	}
-	return safeSession.Options.SkipQueryPlanCache || safeSession.Options.HasCreatedTempTables
 }
 
 type cacheItem struct {
@@ -1583,7 +1580,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		query,
 		comments,
 		bindVars,
-		skipQueryPlanCache(safeSession),
+		safeSession,
 		logStats,
 	)
 	execStart := time.Now()
