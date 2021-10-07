@@ -393,23 +393,12 @@
 				"site_test"
 			]
 		},
-		"pitrtls_docker": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"pitrtls": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "27",
+			"Shard": "26",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"

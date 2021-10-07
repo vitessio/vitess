@@ -41,7 +41,8 @@ const (
 )
 
 var (
-	// Clusters 10, 25 and 26 are executed by the docker_test_cluster 10, 25, 26 workflows.
+	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
+	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"11",
 		"12",
@@ -57,7 +58,7 @@ var (
 		"22",
 		"23",
 		"24",
-		"27",
+		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
