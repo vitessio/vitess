@@ -100,7 +100,7 @@ func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, -1)
 	if err != nil {
 		return nil, err
 	}

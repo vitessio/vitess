@@ -1558,7 +1558,9 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
 	logStats := NewLogStats(ctx, "Test", "", nil)
-	plan, err := e.getPlan(vcursor, sql, comments, bindVars, skipQueryPlanCache, logStats)
+	plan, err := e.getPlan(vcursor, sql, comments, bindVars, &SafeSession{
+		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+	}, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1721,7 +1723,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	assertCacheContains(t, r, want)
 
-	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, nil)
+	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
