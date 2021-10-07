@@ -135,7 +135,7 @@ func (conn *snapshotConn) lockTablesWithHandler(ctx context.Context, tables []st
 	}()
 
 	log.Infof("Locking tables %s for copying", tablesList)
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("lock tables %s", tablesIdentLockRead), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch(fmt.Sprintf("lock tables %s", strings.Join(tablesIdentLockRead, ", ")), 1, false); err != nil {
 		log.Infof("Error locking tables %s to read", strings.Join(tablesIdent, ", "))
 		return "", err
 	}
