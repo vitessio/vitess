@@ -1021,6 +1021,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 				replIOThreadHealth := ""
 				replSQLThreadHealth := ""
 				replLastError := ""
+				replLag := int64(-1)
 				sql := "show slave status"
 				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
@@ -1031,6 +1032,9 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 					replIOThreadHealth = results.Rows[0][10].ToString()
 					replSQLThreadHealth = results.Rows[0][11].ToString()
 					replLastError = results.Rows[0][19].ToString()
+					if ts.Stats != nil {
+						replLag = int64(ts.Stats.ReplicationLagSeconds)
+					}
 				}
 				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
 
@@ -1042,7 +1046,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 					ts.Tablet.Hostname,
 					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 					replicationHealth,
-					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					fmt.Sprintf("%d", replLag),
 					throttlerStatus,
 				))
 			}
@@ -1077,6 +1081,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 				replIOThreadHealth := ""
 				replSQLThreadHealth := ""
 				replLastError := ""
+				replLag := int64(-1)
 				sql := "show slave status"
 				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
 				if err != nil {
@@ -1087,6 +1092,9 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 					replIOThreadHealth = results.Rows[0][10].ToString()
 					replSQLThreadHealth = results.Rows[0][11].ToString()
 					replLastError = results.Rows[0][19].ToString()
+					if ts.Stats != nil {
+						replLag = int64(ts.Stats.ReplicationLagSeconds)
+					}
 				}
 				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
 
@@ -1098,7 +1106,7 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 					ts.Tablet.Hostname,
 					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
 					replicationHealth,
-					fmt.Sprintf("%d", ts.Stats.ReplicationLagSeconds),
+					fmt.Sprintf("%d", replLag),
 					throttlerStatus,
 				))
 			}
@@ -1685,7 +1693,10 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 }
 
 func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
-	resp, err := http.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	client := http.Client{
+		Timeout: 100 * time.Millisecond,
+	}
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
 	if err != nil {
 		return "", err
 	}
