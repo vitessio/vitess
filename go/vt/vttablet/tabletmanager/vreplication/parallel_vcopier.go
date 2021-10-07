@@ -226,7 +226,9 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 
 	tableCopyInfoMap := map[string]*tableCopyInfo{}
 	for _, tableName := range tableNames {
-		tc := &tableCopyInfo{tableName: tableName}
+		tc := &tableCopyInfo{
+			tableName: tableName,
+		}
 
 		if initialPlan, ok := plan.TargetTables[tableName]; ok {
 			tc.initialPlan = initialPlan
@@ -238,7 +240,9 @@ func (vc *parallelVcopier) copyTables(ctx context.Context, tableNames []string, 
 			tc.lastpkpb = sqltypes.ResultToProto3(lastpkqr)
 		}
 
-		tableCopyInfoMap[tableName] = tc
+		// table name and match name could be different, as is the case in Online DDL,
+		// where match name could be my_table, and table name (on target) could be _b8a52fc2_2739_11ec_a96c_0a43f95f28a3_20211007064220_vrepl
+		tableCopyInfoMap[tc.initialPlan.SendRule.Match] = tc
 	}
 	ctx, cancel := context.WithTimeout(ctx, *copyPhaseDuration)
 	defer cancel()
