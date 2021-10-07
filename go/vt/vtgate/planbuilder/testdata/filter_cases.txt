@@ -3187,3 +3187,84 @@ Gen4 plan same as above
     ]
   }
 }
+
+#subquery on other table
+"select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|3)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC, (1|3) ASC",
+            "Query": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
