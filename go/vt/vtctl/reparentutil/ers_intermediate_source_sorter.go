@@ -26,57 +26,57 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// ERSSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
+// ERSIntermediateSourceSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
 // candidate for intermediate promotion in emergency reparent shard
-type ERSSorter struct {
+type ERSIntermediateSourceSorter struct {
 	tablets   []*topodatapb.Tablet
 	positions []mysql.Position
 }
 
-// NewERSSorter creates a new ERSSorter
-func NewERSSorter(tablets []*topodatapb.Tablet, positions []mysql.Position) *ERSSorter {
-	return &ERSSorter{
+// NewERSIntermediateSourceSorter creates a new ERSIntermediateSourceSorter
+func NewERSIntermediateSourceSorter(tablets []*topodatapb.Tablet, positions []mysql.Position) *ERSIntermediateSourceSorter {
+	return &ERSIntermediateSourceSorter{
 		tablets:   tablets,
 		positions: positions,
 	}
 }
 
 // Len implements the Interface for sorting
-func (ersSorter *ERSSorter) Len() int { return len(ersSorter.tablets) }
+func (ersISSorter *ERSIntermediateSourceSorter) Len() int { return len(ersISSorter.tablets) }
 
 // Swap implements the Interface for sorting
-func (ersSorter *ERSSorter) Swap(i, j int) {
-	ersSorter.tablets[i], ersSorter.tablets[j] = ersSorter.tablets[j], ersSorter.tablets[i]
-	ersSorter.positions[i], ersSorter.positions[j] = ersSorter.positions[j], ersSorter.positions[i]
+func (ersISSorter *ERSIntermediateSourceSorter) Swap(i, j int) {
+	ersISSorter.tablets[i], ersISSorter.tablets[j] = ersISSorter.tablets[j], ersISSorter.tablets[i]
+	ersISSorter.positions[i], ersISSorter.positions[j] = ersISSorter.positions[j], ersISSorter.positions[i]
 }
 
 // Less implements the Interface for sorting
-func (ersSorter *ERSSorter) Less(i, j int) bool {
+func (ersISSorter *ERSIntermediateSourceSorter) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is before [j] in the sorting order,
 	// which will lead to [i] be a better candidate for promotion
 
 	// Should not happen
 	// fail-safe code
-	if ersSorter.tablets[i] == nil {
+	if ersISSorter.tablets[i] == nil {
 		return false
 	}
-	if ersSorter.tablets[j] == nil {
+	if ersISSorter.tablets[j] == nil {
 		return true
 	}
 
-	if !ersSorter.positions[i].AtLeast(ersSorter.positions[j]) {
+	if !ersISSorter.positions[i].AtLeast(ersISSorter.positions[j]) {
 		// [i] does not have all GTIDs that [j] does
 		return false
 	}
-	if !ersSorter.positions[j].AtLeast(ersSorter.positions[i]) {
+	if !ersISSorter.positions[j].AtLeast(ersISSorter.positions[i]) {
 		// [j] does not have all GTIDs that [i] does
 		return true
 	}
 
 	// at this point, both have the same GTIDs
 	// so we check their promotion rules
-	jPromotionRule := PromotionRule(ersSorter.tablets[j])
-	iPromotionRule := PromotionRule(ersSorter.tablets[i])
+	jPromotionRule := PromotionRule(ersISSorter.tablets[j])
+	iPromotionRule := PromotionRule(ersISSorter.tablets[i])
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 
@@ -88,6 +88,6 @@ func sortTabletsForERS(tablets []*topodatapb.Tablet, positions []mysql.Position)
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(NewERSSorter(tablets, positions))
+	sort.Sort(NewERSIntermediateSourceSorter(tablets, positions))
 	return nil
 }

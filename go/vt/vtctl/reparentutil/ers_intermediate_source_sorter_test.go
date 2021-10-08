@@ -25,8 +25,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestErsSorter tests that the sorting for ERS works correctly
-func TestErsSorter(t *testing.T) {
+// TestErsInterMediateSourceSorter tests that the sorting for ERS works correctly
+func TestErsInterMediateSourceSorter(t *testing.T) {
 	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	cell1 := "cell1"

@@ -33,12 +33,12 @@ func ReplicaSemiSync(primaryKey, replicaKey InstanceKey) bool {
 	return reparentutil.ReplicaSemiSyncFromTablet(primary, replica)
 }
 
-// PrimarySemiSync returns the primary semi-sync setting for the instance.
+// SemiSyncAckers returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func PrimarySemiSync(instanceKey InstanceKey) int {
+func SemiSyncAckers(instanceKey InstanceKey) int {
 	primary, err := ReadTablet(instanceKey)
 	if err != nil {
 		return 0
 	}
-	return reparentutil.PrimarySemiSyncFromTablet(primary)
+	return reparentutil.SemiSyncAckersFromTablet(primary)
 }

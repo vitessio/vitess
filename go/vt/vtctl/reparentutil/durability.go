@@ -57,7 +57,7 @@ func init() {
 // durabler is the interface which is used to get the promotion rules for candidates and the semi sync setup
 type durabler interface {
 	promotionRule(*topodatapb.Tablet) promotionrule.CandidatePromotionRule
-	primarySemiSync(*topodatapb.Tablet) int
+	semiSyncAckers(*topodatapb.Tablet) int
 	replicaSemiSync(primary, replica *topodatapb.Tablet) bool
 }
 
@@ -86,10 +86,10 @@ func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRu
 	return curDurabilityPolicy.promotionRule(tablet)
 }
 
-// PrimarySemiSyncFromTablet returns the primary semi-sync setting for the instance.
+// SemiSyncAckersFromTablet returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func PrimarySemiSyncFromTablet(tablet *topodatapb.Tablet) int {
-	return curDurabilityPolicy.primarySemiSync(tablet)
+func SemiSyncAckersFromTablet(tablet *topodatapb.Tablet) int {
+	return curDurabilityPolicy.semiSyncAckers(tablet)
 }
 
 // ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
@@ -111,7 +111,7 @@ func (d *durabilityNone) promotionRule(tablet *topodatapb.Tablet) promotionrule.
 	return promotionrule.MustNot
 }
 
-func (d *durabilityNone) primarySemiSync(tablet *topodatapb.Tablet) int {
+func (d *durabilityNone) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 0
 }
 
@@ -133,7 +133,7 @@ func (d *durabilitySemiSync) promotionRule(tablet *topodatapb.Tablet) promotionr
 	return promotionrule.MustNot
 }
 
-func (d *durabilitySemiSync) primarySemiSync(tablet *topodatapb.Tablet) int {
+func (d *durabilitySemiSync) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 1
 }
 
@@ -160,7 +160,7 @@ func (d *durabilityCrossCell) promotionRule(tablet *topodatapb.Tablet) promotion
 	return promotionrule.MustNot
 }
 
-func (d *durabilityCrossCell) primarySemiSync(tablet *topodatapb.Tablet) int {
+func (d *durabilityCrossCell) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 1
 }
 
@@ -197,7 +197,7 @@ func (d *durabilitySpecified) promotionRule(tablet *topodatapb.Tablet) promotion
 	return promotionrule.MustNot
 }
 
-func (d *durabilitySpecified) primarySemiSync(tablet *topodatapb.Tablet) int {
+func (d *durabilitySpecified) semiSyncAckers(tablet *topodatapb.Tablet) int {
 	return 0
 }
 
