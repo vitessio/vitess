@@ -105,7 +105,7 @@ func ParseDBName(connectionString string) string {
 // See https://vitess.io/docs/faq/queries/ for where these come from.
 func ParseTabletType(connectionString string) string {
 	databaseName := ParseDBName(connectionString)
-        // for backwards compatibility
+	// for backwards compatibility
 	if strings.HasSuffix(databaseName, "@master") {
 		return "primary"
 	} else if strings.HasSuffix(databaseName, "@primary") {
