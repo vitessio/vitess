@@ -419,11 +419,6 @@ func (shard *GRShard) disconnectedInstance() (*grInstance, error) {
 		shard.instances[i], shard.instances[j] = shard.instances[j], shard.instances[i]
 	})
 	for _, instance := range shard.instances {
-		// Skip primary because VTGR always join group and then update tablet type
-		// which means if a tablet has type primary then it should have a group already
-		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
-			continue
-		}
 		// Skip instance without hostname because they are not up and running
 		// also skip instances that raised unrecoverable errors
 		if shard.shardStatusCollector.isUnreachable(instance) {
