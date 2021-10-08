@@ -18,12 +18,9 @@ package vstreamer
 
 import (
 	"context"
-	"fmt"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // snapshotConn is wrapper on mysql.Conn capable of
@@ -63,24 +60,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if err != nil {
 		return "", err
 	}
-	// To be safe, always unlock tables, even if lock tables might fail.
-	defer func() {
-		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
-		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
-		} else {
-			log.Infof("Tables unlocked: %v", table)
-		}
-		lockConn.Close()
-	}()
 
-	tableIdent := sqlparser.String(sqlparser.NewTableIdent(table))
-
-	log.Infof("Locking table %s for copying", table)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", tableIdent), 1, false); err != nil {
-		log.Infof("Error locking table %s to read", tableIdent)
-		return "", err
-	}
 	mpos, err := lockConn.PrimaryPosition()
 	if err != nil {
 		return "", err
