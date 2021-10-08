@@ -216,16 +216,18 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type)
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.binder.recursive.Dependencies(expr)
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type) {
+	recursive = a.binder.recursive.Dependencies(expr)
+	direct = a.binder.direct.Dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
-		return ts, nil
+		return
 	}
-	return ts, &qt
+	typ = &qt
+	return
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
