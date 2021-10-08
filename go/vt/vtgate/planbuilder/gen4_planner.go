@@ -181,8 +181,6 @@ func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		reservedVars:          reservedVars,
 		semTable:              semTable,
 		vschema:               vschema,
-		argToReplaceBySelect:  map[string]*sqlparser.Select{},
-		exprToReplaceBySqExpr: map[sqlparser.Expr]sqlparser.Expr{},
 	}
 	return ctx
 }
@@ -217,7 +215,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 			sel: node,
 		}
 
-		replaceSubQuery(ctx.exprToReplaceBySqExpr, node)
+		replaceSubQuery(ctx.reinsertSubQ, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {

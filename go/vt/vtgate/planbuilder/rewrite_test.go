@@ -140,7 +140,7 @@ func TestHavingRewrite(t *testing.T) {
 				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
 			}
 			for _, sq := range squeries {
-				assert.Equal(t, tcase.sqs[sq.ArgName], sqlparser.String(sq.SubQuery.Select))
+				assert.Equal(t, tcase.sqs[sq.ArgName], sqlparser.String(sq.Subquery))
 			}
 		})
 	}
