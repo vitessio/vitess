@@ -93,12 +93,12 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, n.subquery)
+	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery)
 	if err != nil {
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(n.opcode, n.argName, n.hasValues, innerPlan)
+	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), n.extracted.ArgName, n.extracted.HasValuesArg, innerPlan)
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err
@@ -381,7 +381,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(ctx.exprToReplaceBySqExpr, sel)
+	replaceSubQuery(ctx.reinsertSubQ, sel)
 
 	// TODO clean up when gen4 is the only planner
 	var condition sqlparser.Expr
@@ -496,54 +496,27 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 }
 
 type subQReplacer struct {
-	exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr
+	exprToReplaceBySqExpr []*sqlparser.ExtractedSubquery
 	replaced              bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	var exprs []sqlparser.Expr
-	switch node := cursor.Node().(type) {
-	case *sqlparser.AndExpr:
-		exprs = sqlparser.SplitAndExpression(nil, node)
-	case *sqlparser.OrExpr:
-		exprs = sqlparser.SplitOrExpression(nil, node)
-	case sqlparser.Argument:
-		exprs = append(exprs, node)
-	case sqlparser.ListArg:
-		exprs = append(exprs, node)
-	case *sqlparser.ExistsExpr:
-		exprs = append(exprs, node)
-	default:
+	ext, ok := cursor.Node().(*sqlparser.ExtractedSubquery)
+	if !ok {
 		return true
 	}
-
-	var replaceBy sqlparser.Expr
-	var remainder sqlparser.Expr
-	for _, expr := range exprs {
-		found := false
-		for sqExprToReplace, replaceByExpr := range sqr.exprToReplaceBySqExpr {
-			if sqlparser.EqualsExpr(expr, sqExprToReplace) {
-				allReplaceByExprs := sqlparser.SplitAndExpression(nil, replaceBy)
-				allReplaceByExprs = append(allReplaceByExprs, replaceByExpr)
-				replaceBy = sqlparser.AndExpressions(allReplaceByExprs...)
-				found = true
-				break
-			}
-		}
-		if !found {
-			remainder = sqlparser.AndExpressions(remainder, expr)
+	for _, replaceByExpr := range sqr.exprToReplaceBySqExpr {
+		// we are comparing the ArgNames in case the expressions have been cloned
+		if ext.ArgName == replaceByExpr.ArgName {
+			cursor.Replace(ext.Original)
+			sqr.replaced = true
+			return false
 		}
 	}
-	if replaceBy == nil {
-		return true
-	}
-	newNode := sqlparser.AndExpressions(remainder, replaceBy)
-	cursor.Replace(newNode)
-	sqr.replaced = true
-	return false
+	return true
 }
 
-func replaceSubQuery(exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr, sel *sqlparser.Select) {
+func replaceSubQuery(exprToReplaceBySqExpr []*sqlparser.ExtractedSubquery, sel *sqlparser.Select) {
 	if len(exprToReplaceBySqExpr) > 0 {
 		sqr := &subQReplacer{exprToReplaceBySqExpr: exprToReplaceBySqExpr}
 		sqlparser.Rewrite(sel, sqr.replacer, nil)

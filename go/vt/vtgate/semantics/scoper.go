@@ -159,7 +159,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func validAsMapKey(s sqlparser.SQLNode) bool {
+func ValidAsMapKey(s sqlparser.SQLNode) bool {
 	return reflect.TypeOf(s).Comparable()
 }
 

@@ -35,8 +35,8 @@ type binder struct {
 	tc          *tableCollector
 	org         originable
 	typer       *typer
-	subqueryMap map[*sqlparser.Select][]*subquery
-	subqueryRef map[*sqlparser.Subquery]*subquery
+	subqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
+	subqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 }
 
 func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer) *binder {
@@ -47,8 +47,8 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 		org:         org,
 		tc:          tc,
 		typer:       typer,
-		subqueryMap: map[*sqlparser.Select][]*subquery{},
-		subqueryRef: map[*sqlparser.Subquery]*subquery{},
+		subqueryMap: map[*sqlparser.Select][]*sqlparser.ExtractedSubquery{},
+		subqueryRef: map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery{},
 	}
 }
 
@@ -60,6 +60,7 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
 		}
 		opcode := engine.PulloutValue
+		var original sqlparser.Expr = node
 		switch par := cursor.Parent().(type) {
 		case *sqlparser.ComparisonExpr:
 			switch par.Operator {
@@ -68,12 +69,15 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 			case sqlparser.NotInOp:
 				opcode = engine.PulloutNotIn
 			}
+			original = par
 		case *sqlparser.ExistsExpr:
 			opcode = engine.PulloutExists
+			original = par
 		}
-		sq := &subquery{
-			SubQuery: node,
-			OpCode:   opcode,
+		sq := &sqlparser.ExtractedSubquery{
+			Subquery: node.Select,
+			OpCode:   int(opcode),
+			Original: sqlparser.CloneExpr(original),
 		}
 		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
 		b.subqueryRef[node] = sq

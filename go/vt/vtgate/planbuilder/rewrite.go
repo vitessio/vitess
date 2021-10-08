@@ -17,7 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -26,6 +28,7 @@ type rewriter struct {
 	semTable     *semantics.SemTable
 	reservedVars *sqlparser.ReservedVars
 	isInSubquery int
+	err          error
 }
 
 func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
@@ -42,12 +45,16 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Select:
 		rewriteHavingClause(node)
 	case *sqlparser.ComparisonExpr:
-		rewriteInSubquery(cursor, r, node)
+		err := rewriteInSubquery(cursor, r, node)
+		if err != nil {
+			r.err = err
+		}
 	case *sqlparser.ExistsExpr:
-		return r.rewriteExistsSubquery(cursor, node)
-	case *sqlparser.Subquery:
-		r.isInSubquery++
-		rewriteSubquery(cursor, r, node)
+		err := r.rewriteExistsSubquery(cursor, node)
+		if err != nil {
+			r.err = err
+		}
+		return false
 	case *sqlparser.AliasedTableExpr:
 		// rewrite names of the routed tables for the subquery
 		// We only need to do this for non-derived tables and if they are in a subquery
@@ -91,55 +98,35 @@ func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.Subquery:
 		r.isInSubquery--
 	}
-	return true
+	return r.err == nil
 }
 
-func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) {
-	if node.Operator != sqlparser.InOp && node.Operator != sqlparser.NotInOp {
-		return
+func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
+	if node.Operator != sqlparser.InOp &&
+		node.Operator != sqlparser.NotInOp &&
+		node.Operator != sqlparser.EqualOp &&
+		node.Operator != sqlparser.NotEqualOp {
+		return nil
 	}
-	subq, exp := filterSubqueryAndCompareExpr(node)
+	subq, exp := getSubqueryAndOtherSide(node)
 	if subq == nil || exp == nil {
-		return
+		return nil
 	}
 
 	semTableSQ, found := r.semTable.SubqueryRef[subq]
 	if !found {
-		// should never happen
-		return
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
 
 	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
 	semTableSQ.ArgName = argName
-	semTableSQ.HasValues = hasValuesArg
-	semTableSQ.ReplaceBy = node
-	newSubQExpr := &sqlparser.ComparisonExpr{
-		Operator: node.Operator,
-		Left:     exp,
-		Right:    sqlparser.NewListArg(argName),
-	}
-
-	hasValuesExpr := &sqlparser.ComparisonExpr{
-		Operator: sqlparser.EqualOp,
-		Left:     sqlparser.NewArgument(hasValuesArg),
-	}
-	switch node.Operator {
-	case sqlparser.InOp:
-		hasValuesExpr.Right = sqlparser.NewIntLiteral("1")
-		cursor.Replace(sqlparser.AndExpressions(hasValuesExpr, newSubQExpr))
-	case sqlparser.NotInOp:
-		hasValuesExpr.Right = sqlparser.NewIntLiteral("0")
-		cursor.Replace(sqlparser.OrExpressions(hasValuesExpr, newSubQExpr))
-	}
-	semTableSQ.ExprsNeedReplace = append(semTableSQ.ExprsNeedReplace, hasValuesExpr, newSubQExpr)
-
-	// setting the dependencies of the new has_value expression to the subquery's dependencies so
-	// later on, we know has_values depends on the same tables as the subquery
-	r.semTable.Recursive[hasValuesExpr] = r.semTable.RecursiveDeps(newSubQExpr)
-	r.semTable.Direct[hasValuesExpr] = r.semTable.DirectDeps(newSubQExpr)
+	semTableSQ.HasValuesArg = hasValuesArg
+	semTableSQ.OtherSide = exp
+	cursor.Replace(semTableSQ)
+	return nil
 }
 
-func filterSubqueryAndCompareExpr(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
+func getSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
 	var subq *sqlparser.Subquery
 	var exp sqlparser.Expr
 	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
@@ -152,34 +139,31 @@ func filterSubqueryAndCompareExpr(node *sqlparser.ComparisonExpr) (*sqlparser.Su
 	return subq, exp
 }
 
-func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) {
+func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node]
-	if !found || semTableSQ.OpCode != engine.PulloutValue {
-		return
+	if !found {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
+	}
+	if engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
+		return nil
 	}
 
 	argName := r.reservedVars.ReserveSubQuery()
-	arg := sqlparser.NewArgument(argName)
 	semTableSQ.ArgName = argName
-	semTableSQ.ExprsNeedReplace = append(semTableSQ.ExprsNeedReplace, arg)
-	semTableSQ.ReplaceBy = node
-	cursor.Replace(arg)
+	cursor.Replace(semTableSQ)
+	return nil
 }
 
-func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) bool {
+func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
 	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
 	if !found {
-		// should never happen
-		return false
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
 
 	argName := r.reservedVars.ReserveHasValuesSubQuery()
-	arg := sqlparser.NewArgument(argName)
 	semTableSQ.ArgName = argName
-	semTableSQ.ExprsNeedReplace = append(semTableSQ.ExprsNeedReplace, arg)
-	semTableSQ.ReplaceBy = node
-	cursor.Replace(arg)
-	return false
+	cursor.Replace(semTableSQ)
+	return nil
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {

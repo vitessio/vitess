@@ -1963,6 +1963,17 @@ type (
 		Name ColIdent
 		Fsp  Expr // fractional seconds precision, integer from 0 to 6
 	}
+
+	// ExtractedSubquery is a subquery that has been extracted from the original AST
+	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
+	ExtractedSubquery struct {
+		Original     Expr
+		ArgName      string
+		HasValuesArg string
+		OpCode       int // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery     SelectStatement
+		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -1997,6 +2008,7 @@ func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
+func (*ExtractedSubquery) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

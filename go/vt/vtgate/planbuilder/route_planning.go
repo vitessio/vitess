@@ -39,14 +39,21 @@ type planningContext struct {
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
 	// these help in replacing the argNames with the subquery
-	argToReplaceBySelect map[string]*sqlparser.Select
-	// these help in replacing the argument's expressions by the original expression
-	exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr
+	reinsertSubQ []*sqlparser.ExtractedSubquery
 }
 
-func (c planningContext) isSubQueryToReplace(name string) bool {
-	_, found := c.argToReplaceBySelect[name]
-	return found
+func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
+	ext, ok := e.(*sqlparser.ExtractedSubquery)
+	if !ok {
+		return false
+	}
+	for _, subq := range c.reinsertSubQ{
+		if subq == ext {
+			return true
+		}
+	}
+
+	return false
 }
 
 func optimizeQuery(ctx *planningContext, opTree abstract.Operator) (queryTree, error) {
@@ -152,11 +159,8 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 			}
 			unmerged = append(unmerged, &subqueryTree{
-				subquery:  inner.SelectStatement,
+				extracted: inner.ExtractedSubquery,
 				inner:     treeInner,
-				opcode:    inner.Type,
-				argName:   inner.ArgName,
-				hasValues: inner.HasValues,
 			})
 		} else {
 			outerTree = merged
@@ -237,16 +241,16 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 	// other side is RHS if the subquery is in the LHS, otherwise it is LHS
 	var rewriteError error
 	// go over the entire where expression in the subquery
-	sqlparser.Rewrite(subQueryInner.SelectStatement, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
-			// check weather the column name belongs to the other side of the join tree
+			// check whether the column name belongs to the other side of the join tree
 			if ctx.semTable.DirectDeps(node).IsSolvedBy(otherTree.tableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
 				bindVar := node.CompliantName()
 				cursor.Replace(sqlparser.NewArgument(bindVar))
-				// check wether the bindVariable already exists in the joinVars of the other tree
+				// check whether the bindVariable already exists in the joinVars of the other tree
 				_, alreadyExists := outerTree.vars[bindVar]
 				if alreadyExists {
 					return false
@@ -270,10 +274,8 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 }
 
 func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
-	ctx.argToReplaceBySelect[subq.ArgName] = subq.SelectStatement
-	for _, expr := range subq.ExprsNeedReplace {
-		ctx.exprToReplaceBySqExpr[expr] = subq.ReplaceBy
-	}
+	ctx.reinsertSubQ = append(ctx.reinsertSubQ, subq.ExtractedSubquery)
+
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
 	// this is needed to so that later when we try to push projections, we get the correct
 	// solved tableID from the route, since it also includes the tables from the subquery after merging
@@ -283,7 +285,7 @@ func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, sub
 			outer.solved.MergeInPlace(ctx.semTable.TableSetFor(n))
 		}
 		return true, nil
-	}, subq.SelectStatement)
+	}, subq.ExtractedSubquery.Subquery)
 	if err != nil {
 		return nil, err
 	}

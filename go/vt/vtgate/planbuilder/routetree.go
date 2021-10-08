@@ -191,43 +191,22 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
+		case *sqlparser.ExtractedSubquery:
+			comp, ok := node.Original.(*sqlparser.ComparisonExpr)
+			if !ok {
+				break
+			}
+			found, err := rp.planComparison(ctx, comp)
+			if err != nil {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
 		case *sqlparser.ComparisonExpr:
-			if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
-				// we are looking at ANDed predicates in the WHERE clause.
-				// since we know that nothing returns true when compared to NULL,
-				// so we can safely bail out here
-				rp.routeOpCode = engine.SelectNone
-				return false, nil
+			found, err := rp.planComparison(ctx, node)
+			if err != nil {
+				return false, err
 			}
-
-			switch node.Operator {
-			case sqlparser.EqualOp:
-				found, err := rp.planEqualOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.InOp:
-				if rp.isImpossibleIN(node) {
-					return false, nil
-				}
-				found, err := rp.planInOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.NotInOp:
-				// NOT IN is always a scatter, except when we can be sure it would return nothing
-				if rp.isImpossibleNotIN(node) {
-					return false, nil
-				}
-			case sqlparser.LikeOp:
-				found, err := rp.planLikeOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			}
+			newVindexFound = newVindexFound || found
 		case *sqlparser.IsExpr:
 			found, err := rp.planIsExpr(ctx, node)
 			if err != nil {
@@ -237,6 +216,46 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 		}
 	}
 	return newVindexFound, nil
+}
+
+func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, error) {
+	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
+		// we are looking at ANDed predicates in the WHERE clause.
+		// since we know that nothing returns true when compared to NULL,
+		// so we can safely bail out here
+		rp.routeOpCode = engine.SelectNone
+		return false, nil
+	}
+
+	switch node.Operator {
+	case sqlparser.EqualOp:
+		found, err := rp.planEqualOp(ctx, node)
+		if err != nil {
+			return false, err
+		}
+		return found, nil
+	case sqlparser.InOp:
+		if rp.isImpossibleIN(node) {
+			return false, nil
+		}
+		found, err := rp.planInOp(ctx, node)
+		if err != nil {
+			return false, err
+		}
+		return found, nil
+	case sqlparser.NotInOp:
+		// NOT IN is always a scatter, except when we can be sure it would return nothing
+		if rp.isImpossibleNotIN(node) {
+			return false, nil
+		}
+	case sqlparser.LikeOp:
+		found, err := rp.planLikeOp(ctx, node)
+		if err != nil {
+			return false, err
+		}
+		return found, nil
+	}
+	return false, nil
 }
 
 func (rp *routeTree) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
@@ -414,11 +433,24 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
 func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	if ctx.isSubQueryToReplace(argumentName(n)) {
+	if ctx.isSubQueryToReplace(n) {
 		return nil, nil
 	}
 
 	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
+		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
+			for subquery, extractedSubquery := range ctx.semTable.SubqueryRef {
+				if sqlparser.EqualsRefOfSubquery(subquery, subq) {
+					switch engine.PulloutOpcode(extractedSubquery.OpCode) {
+					case engine.PulloutIn, engine.PulloutNotIn:
+						expr = sqlparser.NewListArg(extractedSubquery.ArgName)
+					case engine.PulloutValue, engine.PulloutExists:
+						expr = sqlparser.NewArgument(extractedSubquery.ArgName)
+					}
+					break
+				}
+			}
+		}
 		pv, err := makePlanValue(expr)
 		if err != nil {
 			return nil, err
@@ -450,6 +482,19 @@ func allNotNil(s []sqlparser.Expr) bool {
 	}
 	return true
 }
+
+// func (rp *routeTree) findMatchingColumnVindex(ctx *planningContext, column *sqlparser.ColName) bool {
+// 	for _, pred := range rp.vindexPreds {
+// 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(pred.tableID) {
+// 			continue
+// 		}
+// 		for _, vindexCol := range pred.colVindex.Columns {
+// 			if column.Name.Equal(vindexCol) {
+//
+// 			}
+// 		}
+// 	}
+// }
 
 func (rp *routeTree) haveMatchingVindex(
 	ctx *planningContext,
