@@ -51,7 +51,7 @@ func TestDurabilityNone(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 0, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, 0, SemiSyncAckersFromTablet(nil))
 	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
 }
 
@@ -78,7 +78,7 @@ func TestDurabilitySemiSync(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, 1, SemiSyncAckersFromTablet(nil))
 	assert.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	}))
@@ -110,7 +110,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, PrimarySemiSyncFromTablet(nil))
+	assert.Equal(t, 1, SemiSyncAckersFromTablet(nil))
 	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{

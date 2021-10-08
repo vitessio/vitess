@@ -1878,7 +1878,7 @@ func electNewPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKe
 			return false, topologyRecovery, err
 		}
 	}
-	count := inst.PrimarySemiSync(candidate.Key)
+	count := inst.SemiSyncAckers(candidate.Key)
 	err = inst.SetSemiSyncPrimary(&candidate.Key, count > 0)
 	AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- electNewPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {
@@ -1941,7 +1941,7 @@ func fixPrimary(analysisEntry inst.ReplicationAnalysis, candidateInstanceKey *in
 	defer unlock(&err)
 
 	// TODO(sougou): this code pattern has reached DRY limits. Reuse.
-	count := inst.PrimarySemiSync(analysisEntry.AnalyzedInstanceKey)
+	count := inst.SemiSyncAckers(analysisEntry.AnalyzedInstanceKey)
 	err = inst.SetSemiSyncPrimary(&analysisEntry.AnalyzedInstanceKey, count > 0)
 	//AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- fixPrimary: applying semi-sync %v: success=%t", count > 0, (err == nil)))
 	if err != nil {
