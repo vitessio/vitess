@@ -30,6 +30,7 @@ Gen4 error: unsupported: '*' expression in cross-shard query
 # order by rand on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t order by rand()"
 "unsupported: memory sort: complex order by expression: rand()"
+Gen4 error: unsupported: in scatter query: complex order by expression: rand()
 
 # natural join
 "select * from user natural join user_extra"

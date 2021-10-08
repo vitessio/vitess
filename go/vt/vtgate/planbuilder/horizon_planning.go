@@ -630,7 +630,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	case *simpleProjection:
-		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+		return hp.createMemorySortPlan(ctx, plan, orderExprs)
 	case *vindexFunc:
 		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
 	default:
