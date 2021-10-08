@@ -459,7 +459,7 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 	// If cache is empty, we have to broadcast that we're not empty
 	// any more.
 	if mm.cache.IsEmpty() {
-		mm.cond.Broadcast()
+		defer mm.cond.Broadcast()
 	}
 	if !mm.cache.Add(mr) {
 		// Cache is full. Enter "messagesPending" mode.
