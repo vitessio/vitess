@@ -253,22 +253,35 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 	return nil
 }
 
-// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
-// column offsets, and returns an expression that is simpler to evaluate
+// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
+
 	colExpr, isColName := e.(*sqlparser.ColName)
-	if isColName && colExpr.Qualifier.IsEmpty() {
-		for _, selectExpr := range qp.SelectExprs {
-			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
-			if !isAliasedExpr {
-				continue
+	if isColName {
+		tblInfo, _ := semTable.TableInfoForExpr(e)
+		if tblInfo != nil {
+			if dTablInfo, ok := tblInfo.(*semantics.DerivedTable); ok {
+				weightStrExpr, err = semantics.RewriteDerivedExpression(colExpr, dTablInfo)
+				if err != nil {
+					return nil, nil, err
+				}
+				return e, weightStrExpr, nil
 			}
-			isAliasExpr := !aliasedExpr.As.IsEmpty()
-			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
-				return e, aliasedExpr.Expr, nil
+		}
+
+		if colExpr.Qualifier.IsEmpty() {
+			for _, selectExpr := range qp.SelectExprs {
+				aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
+				if !isAliasedExpr {
+					continue
+				}
+				isAliasExpr := !aliasedExpr.As.IsEmpty()
+				if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
+					return e, aliasedExpr.Expr, nil
+				}
 			}
 		}
 	}
