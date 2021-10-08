@@ -328,10 +328,10 @@ func (mm *messageManager) Open() {
 		return
 	}
 	mm.isOpen = true
-	mm.wg.Add(1)
 	mm.curReceiver = -1
 
-	go mm.runSend()
+	mm.wg.Add(1)
+	go mm.runSend() // calls the offsetting mm.wg.Done()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
 	mm.purgeTicks.Start(mm.runPurge)
@@ -538,7 +538,7 @@ func (mm *messageManager) runSend() {
 
 		// Send the message asynchronously.
 		mm.wg.Add(1)
-		go mm.send(receiver, &sqltypes.Result{Rows: rows})
+		go mm.send(receiver, &sqltypes.Result{Rows: rows}) // calls the offsetting mm.wg.Done()
 	}
 }
 
