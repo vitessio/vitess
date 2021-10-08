@@ -18,15 +18,12 @@ package messager
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,12 +31,12 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -359,9 +356,8 @@ func (mm *messageManager) Close() {
 	mm.cache.Clear()
 	// This broadcast will cause runSend to exit.
 	mm.cond.Broadcast()
-	mm.mu.Unlock()
-
 	mm.stopVStream()
+	mm.mu.Unlock()
 
 	mm.wg.Wait()
 }
