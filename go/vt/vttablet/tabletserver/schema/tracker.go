@@ -294,18 +294,21 @@ func MustReloadSchemaOnDDL(sql string, dbname string) bool {
 	case sqlparser.DBDDLStatement:
 		return false
 	case sqlparser.DDLStatement:
-		table := stmt.GetTable()
-		if table.IsEmpty() {
-			return false
+		tables := []sqlparser.TableName{stmt.GetTable()}
+		tables = append(tables, stmt.GetToTables()...)
+		for _, table := range tables {
+			if table.IsEmpty() {
+				continue
+			}
+			if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
+				continue
+			}
+			tableName := table.Name.String()
+			if schema.IsOnlineDDLTableName(tableName) {
+				continue
+			}
+			return true
 		}
-		if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
-			return false
-		}
-		tableName := table.Name.String()
-		if schema.IsOnlineDDLTableName(tableName) {
-			return false
-		}
-		return true
 	}
 	return false
 }
