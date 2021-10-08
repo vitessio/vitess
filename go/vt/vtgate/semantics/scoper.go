@@ -89,7 +89,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		if !exists {
 			break
 		}
-		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables, s.org))
+		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
 	case sqlparser.OrderBy:
 		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
@@ -171,10 +171,9 @@ func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) erro
 		// so before walking the rest of the tree, we change the scope to match this behaviour
 		incomingScope := s.currentScope()
 		nScope := newScope(incomingScope)
-		s.push(nScope)
-		wScope := s.wScope[parent]
-		nScope.tables = append(nScope.tables, wScope.tables...)
+		nScope.tables = s.wScope[parent].tables
 		nScope.selectStmt = incomingScope.selectStmt
+		s.push(nScope)
 
 		if s.rScope[parent] != incomingScope {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")

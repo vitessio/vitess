@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
 	tableName   string
 	ASTNode     *sqlparser.AliasedTableExpr
@@ -63,16 +64,13 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 
 // Dependencies implements the TableInfo interface
 func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
+	directDeps := org.tableSetFor(dt.ASTNode)
 	for i, name := range dt.columnNames {
 		if name != colName {
 			continue
 		}
-		recursiveDeps, qt := org.depsForExpr(dt.cols[i])
+		_, recursiveDeps, qt := org.depsForExpr(dt.cols[i])
 
-		directDeps := recursiveDeps
-		if dt.ASTNode != nil {
-			directDeps = org.tableSetFor(dt.ASTNode)
-		}
 		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
 
@@ -99,6 +97,7 @@ func (dt *DerivedTable) authoritative() bool {
 	return true
 }
 
+// Name implements the TableInfo interface
 func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
