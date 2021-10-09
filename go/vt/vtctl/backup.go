@@ -17,13 +17,12 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -115,7 +114,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if tablets == nil {
+	if err != nil {
 		return err
 	}
 
