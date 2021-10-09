@@ -1,4 +1,3 @@
-2021-07-28T15:13:14Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1075387507
 2021-07-28T15:13:15Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1075387501
 2021-07-28T15:13:15Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/1075387530
 2021-07-28T15:13:15Z,Cluster (mysql80),https://github.com/vitessio/vitess/actions/runs/1075387532
@@ -9979,6 +9978,7 @@
 2021-10-09T00:00:31Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1322258631
 2021-10-09T00:00:31Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1322258599
 2021-10-09T00:00:31Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1322258598
+2021-10-09T00:00:31Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1322258645
 2021-10-09T00:00:31Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1322258632
 2021-10-09T00:00:31Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1322258593
 2021-10-09T00:00:31Z,local_example,https://github.com/vitessio/vitess/actions/runs/1322258601
