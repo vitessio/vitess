@@ -789,10 +789,9 @@ var commands = []commandGroup{
 }
 
 func init() {
-	// This cannot be in the static 'commands ' array, as commands
-	// would reference commandHelp that references commands
-	// (circular reference)
-	// (TODO:ajm188) - is this comment still true?
+	// This cannot be in the static `commands` slice, as it causes an init cycle.
+	// Specifically, we would see:
+	// `commands` => refers to `commandHelp` => refers to `PrintAllCommands` => refers to `commands`
 	addCommand("Generic", command{
 		name:   "Help",
 		method: commandHelp,
