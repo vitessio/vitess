@@ -237,8 +237,26 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 		KeyRange:       keyRange,
 		Type:           tabletType,
 		DbNameOverride: *initDbNameOverride,
-		Tags:           initTags,
+		Tags:           mergeTags(servenv.AppVersion.ToStringMap(), initTags),
 	}, nil
+}
+
+func mergeTags(a, b map[string]string) map[string]string {
+	maxCap := len(a)
+	if x := len(b); x > maxCap {
+		maxCap = x
+	}
+
+	result := make(map[string]string, maxCap)
+	for k, v := range a {
+		result[k] = v
+	}
+
+	for k, v := range b {
+		result[k] = v
+	}
+
+	return result
 }
 
 // Start starts the TabletManager.
