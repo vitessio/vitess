@@ -20,7 +20,7 @@ package clustertest
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -35,7 +35,7 @@ func TestVttabletProcess(t *testing.T) {
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, _ := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
 	resultMap := make(map[string]interface{})
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err := json.Unmarshal(respByte, &resultMap)
 	if err != nil {
 		panic(err)

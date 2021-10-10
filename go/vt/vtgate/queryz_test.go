@@ -17,7 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -90,7 +90,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan4.ExecTime = uint64(200 * time.Millisecond)
 
 	queryzHandler(executor, resp, req)
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	planPattern1 := []string{
 		`<tr class="low">`,
 		`<td>select id from user where id = 1</td>`,

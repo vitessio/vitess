@@ -19,7 +19,7 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"strings"
 	"testing"
@@ -48,10 +48,10 @@ type testopts struct {
 }
 
 func initTest(mode string, opts *Options, topts *testopts, t *testing.T) {
-	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
+	schema, err := os.ReadFile("testdata/test-schema.sql")
 	require.NoError(t, err)
 
-	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
+	vSchema, err := os.ReadFile("testdata/test-vschema.json")
 	require.NoError(t, err)
 
 	shardmap := ""
@@ -86,11 +86,11 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 		initTest(mode, opts, topts, t)
 
 		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
-		sql, err := ioutil.ReadFile(sqlFile)
+		sql, err := os.ReadFile(sqlFile)
 		require.NoError(t, err, "vtexplain error")
 
 		textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
-		expected, _ := ioutil.ReadFile(textOutFile)
+		expected, _ := os.ReadFile(textOutFile)
 
 		explains, err := Run(string(sql))
 		require.NoError(t, err, "vtexplain error")
@@ -103,11 +103,11 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 			t.Errorf("Text output did not match (-want +got):\n%s", diff)
 
 			if testOutputTempDir == "" {
-				testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
+				testOutputTempDir, err = os.MkdirTemp("", "vtexplain_output")
 				require.NoError(t, err, "error getting tempdir")
 			}
 			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
-			ioutil.WriteFile(gotFile, []byte(explainText), 0644)
+			os.WriteFile(gotFile, []byte(explainText), 0644)
 
 			t.Logf("run the following command to update the expected output:")
 			t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))

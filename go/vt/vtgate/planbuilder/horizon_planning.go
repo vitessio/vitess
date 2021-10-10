@@ -180,6 +180,14 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
 		}
 
+		// if we are trying to push a projection that belongs to a DerivedTable
+		// we rewrite that expression, so it matches the column name used inside
+		// that derived table.
+		err = rewriteProjectionOfDerivedTable(expr, semTable)
+		if err != nil {
+			return 0, false, err
+		}
+
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, true, nil
@@ -263,6 +271,22 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
+}
+
+func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
+	var err error
+	ti, _ := semTable.TableInfoForExpr(expr.Expr)
+	if ti == nil {
+		return nil
+	}
+	_, isDerivedTable := ti.(*semantics.DerivedTable)
+	if isDerivedTable {
+		expr.Expr, err = semantics.RewriteDerivedExpression(expr.Expr, ti)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
@@ -835,7 +859,7 @@ func (hp *horizonPlanning) planDistinct(ctx *planningContext, plan logicalPlan) 
 		}
 
 		return hp.addDistinct(ctx, plan)
-	case *joinGen4:
+	case *joinGen4, *pulloutSubquery:
 		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
 		return hp.planDistinctOA(p)

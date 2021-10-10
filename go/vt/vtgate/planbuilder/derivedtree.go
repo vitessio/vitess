@@ -24,9 +24,10 @@ import (
 )
 
 type derivedTree struct {
-	query sqlparser.SelectStatement
-	inner queryTree
-	alias string
+	query         sqlparser.SelectStatement
+	inner         queryTree
+	alias         string
+	columnAliases sqlparser.Columns
 
 	// columns needed to feed other plans
 	columns       []*sqlparser.ColName

@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -388,7 +387,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 	defer authServer.close()
 
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	require.NoError(t, err, "Failed to create temp file")
 
 	os.Remove(unixSocket.Name())
@@ -821,7 +820,7 @@ func TestTLSServer(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSServer")
+	root, err := os.MkdirTemp("", "TestTLSServer")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
@@ -920,7 +919,7 @@ func TestTLSRequired(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestTLSRequired")
+	root, err := os.MkdirTemp("", "TestTLSRequired")
 	require.NoError(t, err)
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
@@ -999,7 +998,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestSSLConnection")
+	root, err := os.MkdirTemp("", "TestSSLConnection")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}

@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -136,7 +135,7 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	files, err := ioutil.ReadDir(testDataPath)
+	files, err := os.ReadDir(testDataPath)
 	require.NoError(t, err)
 	for _, f := range files {
 		if !f.IsDir() {
@@ -156,7 +155,7 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 		return "", false
 	}
 	require.NoError(t, err)
-	b, err := ioutil.ReadFile(filePath)
+	b, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	return strings.TrimSpace(string(b)), true
 }

@@ -20,7 +20,6 @@ package tlstest
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -108,7 +107,7 @@ func CreateCA(root string) {
 	openssl("genrsa", "-out", key)
 
 	config := path.Join(root, "ca.config")
-	if err := ioutil.WriteFile(config, []byte(caConfig), os.ModePerm); err != nil {
+	if err := os.WriteFile(config, []byte(caConfig), os.ModePerm); err != nil {
 		log.Fatalf("cannot write file %v: %v", config, err)
 	}
 	openssl("req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
@@ -129,7 +128,7 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 	req := path.Join(root, name+"-req.pem")
 
 	config := path.Join(root, name+".config")
-	if err := ioutil.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
+	if err := os.WriteFile(config, []byte(fmt.Sprintf(certConfig, commonName, commonName)), os.ModePerm); err != nil {
 		log.Fatalf("cannot write file %v: %v", config, err)
 	}
 	openssl("req", "-newkey", "rsa:2048", "-days", "3600", "-nodes",

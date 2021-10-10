@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strconv"
@@ -476,7 +477,7 @@ func (e *Executor) handleSet(ctx context.Context, sql string, logStats *LogStats
 		return nil, err
 	}
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
-	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "")
+	rewrittenAST, err := sqlparser.PrepareAST(stmt, reservedVars, nil, false, "", sqlparser.SQLSelectLimitUnset)
 	if err != nil {
 		return nil, err
 	}
@@ -753,6 +754,8 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		}, nil
 	case sqlparser.KeywordString(sqlparser.VITESS_TABLETS):
 		return e.showTablets(show)
+	case sqlparser.KeywordString(sqlparser.VITESS_REPLICATION_STATUS):
+		return e.showVitessReplicationStatus(ctx, show)
 	case "vitess_target":
 		var rows [][]sqltypes.Value
 		rows = append(rows, buildVarCharRow(safeSession.TargetString))
@@ -991,6 +994,130 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 	}, nil
 }
 
+func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlparser.ShowLegacy) (*sqltypes.Result, error) {
+	ctx, cancel := context.WithTimeout(ctx, *HealthCheckTimeout)
+	defer cancel()
+	rows := [][]sqltypes.Value{}
+
+	// This is only used for tests
+	if UsingLegacyGateway() {
+		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
+
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				// We only want to show REPLICA and RDONLY tablets
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+					continue
+				}
+
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				replLag := int64(-1)
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				} else if results != nil && len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+					if ts.Stats != nil {
+						replLag = int64(ts.Stats.ReplicationLagSeconds)
+					}
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", replLag),
+					throttlerStatus,
+				))
+			}
+		}
+	} else {
+		status := e.scatterConn.GetHealthCheckCacheStatus()
+
+		for _, s := range status {
+			for _, ts := range s.TabletsStats {
+				// We only want to show REPLICA and RDONLY tablets
+				if ts.Tablet.Type != topodatapb.TabletType_REPLICA && ts.Tablet.Type != topodatapb.TabletType_RDONLY {
+					continue
+				}
+
+				// Allow people to filter by Keyspace and Shard using a LIKE clause
+				if show.ShowTablesOpt != nil && show.ShowTablesOpt.Filter != nil {
+					ksFilterRegex := sqlparser.LikeToRegexp(show.ShowTablesOpt.Filter.Like)
+					keyspaceShardStr := fmt.Sprintf("%s/%s", ts.Tablet.Keyspace, ts.Tablet.Shard)
+					if !ksFilterRegex.MatchString(keyspaceShardStr) {
+						continue
+					}
+				}
+
+				tabletHostPort := ts.GetTabletHostPort()
+				throttlerStatus, err := getTabletThrottlerStatus(tabletHostPort)
+				if err != nil {
+					log.Warningf("Could not get throttler status from %s: %v", tabletHostPort, err)
+				}
+
+				replSourceHost := ""
+				replSourcePort := int64(0)
+				replIOThreadHealth := ""
+				replSQLThreadHealth := ""
+				replLastError := ""
+				replLag := int64(-1)
+				sql := "show slave status"
+				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
+				if err != nil {
+					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
+				} else if results != nil && len(results.Rows) == 1 {
+					replSourceHost = results.Rows[0][1].ToString()
+					replSourcePort, _ = results.Rows[0][3].ToInt64()
+					replIOThreadHealth = results.Rows[0][10].ToString()
+					replSQLThreadHealth = results.Rows[0][11].ToString()
+					replLastError = results.Rows[0][19].ToString()
+					if ts.Stats != nil {
+						replLag = int64(ts.Stats.ReplicationLagSeconds)
+					}
+				}
+				replicationHealth := fmt.Sprintf("{\"EventStreamRunning\":\"%s\",\"EventApplierRunning\":\"%s\",\"LastError\":\"%s\"}", replIOThreadHealth, replSQLThreadHealth, replLastError)
+
+				rows = append(rows, buildVarCharRow(
+					s.Target.Keyspace,
+					s.Target.Shard,
+					ts.Target.TabletType.String(),
+					topoproto.TabletAliasString(ts.Tablet.Alias),
+					ts.Tablet.Hostname,
+					fmt.Sprintf("%s:%d", replSourceHost, replSourcePort),
+					replicationHealth,
+					fmt.Sprintf("%d", replLag),
+					throttlerStatus,
+				))
+			}
+		}
+	}
+	return &sqltypes.Result{
+		Fields: buildVarCharFields("Keyspace", "Shard", "TabletType", "Alias", "Hostname", "ReplicationSource", "ReplicationHealth", "ReplicationLag", "ThrottlerStatus"),
+		Rows:   rows,
+	}, nil
+}
+
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
 	if destKeyspace == "" {
 		return nil, errNoKeyspace
@@ -1049,7 +1176,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		query,
 		comments,
 		bindVars,
-		skipQueryPlanCache(safeSession),
+		safeSession,
 		logStats,
 	)
 	if err != nil {
@@ -1195,9 +1322,14 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 	return destKeyspace, destTabletType, dest, err
 }
 
+type iQueryOption interface {
+	cachePlan() bool
+	getSelectLimit() int
+}
+
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *LogStats) (*engine.Plan, error) {
 	if logStats != nil {
 		logStats.SQL = comments.Leading + sql + comments.Trailing
 		logStats.BindVariables = bindVars
@@ -1222,9 +1354,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 
 	// Normalize if possible and retry.
-	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt) {
+	if (e.normalize && sqlparser.CanNormalize(stmt)) || sqlparser.MustRewriteAST(stmt, qo.getSelectLimit() > 0) {
 		parameterize := e.normalize // the public flag is called normalize
-		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace)
+		result, err := sqlparser.PrepareAST(stmt, reservedVars, bindVars, parameterize, vcursor.keyspace, qo.getSelectLimit())
 		if err != nil {
 			return nil, err
 		}
@@ -1239,9 +1371,9 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	planHash := sha256.New()
-	planHash.Write([]byte(vcursor.planPrefixKey()))
-	planHash.Write([]byte{':'})
-	planHash.Write(hack.StringBytes(query))
+	_, _ = planHash.Write([]byte(vcursor.planPrefixKey()))
+	_, _ = planHash.Write([]byte{':'})
+	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
 	if plan, ok := e.plans.Get(planKey); ok {
@@ -1256,7 +1388,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	plan.Warnings = vcursor.warnings
 	vcursor.warnings = nil
 
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(statement) && sqlparser.CachePlan(statement) {
+	if qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
 
@@ -1270,14 +1402,6 @@ func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
 		return plan.(*engine.Plan), true
 	}
 	return nil, false
-}
-
-// skipQueryPlanCache extracts SkipQueryPlanCache from session
-func skipQueryPlanCache(safeSession *SafeSession) bool {
-	if safeSession == nil || safeSession.Options == nil {
-		return false
-	}
-	return safeSession.Options.SkipQueryPlanCache || safeSession.Options.HasCreatedTempTables
 }
 
 type cacheItem struct {
@@ -1464,7 +1588,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		query,
 		comments,
 		bindVars,
-		skipQueryPlanCache(safeSession),
+		safeSession,
 		logStats,
 	)
 	execStart := time.Now()
@@ -1563,4 +1687,40 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "plan includes scatter, which is disallowed using the `no_scatter` command line argument")
+}
+
+func getTabletThrottlerStatus(tabletHostPort string) (string, error) {
+	client := http.Client{
+		Timeout: 100 * time.Millisecond,
+	}
+	resp, err := client.Get(fmt.Sprintf("http://%s/throttler/check?app=vtgate", tabletHostPort))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var elements struct {
+		StatusCode int
+		Value      float64
+		Threshold  float64
+		Message    string
+	}
+	err = json.Unmarshal(body, &elements)
+	if err != nil {
+		return "", err
+	}
+
+	httpStatusStr := http.StatusText(elements.StatusCode)
+
+	load := float64(0)
+	if elements.Threshold > 0 {
+		load = float64((elements.Value / elements.Threshold) * 100)
+	}
+
+	status := fmt.Sprintf("{\"state\":\"%s\",\"load\":%.2f,\"message\":\"%s\"}", httpStatusStr, load, elements.Message)
+	return status, nil
 }
