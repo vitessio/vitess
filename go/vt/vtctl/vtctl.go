@@ -484,14 +484,6 @@ var commands = []commandGroup{
 	},
 	{
 		"Workflow", []command{
-			{"VExec", commandVExec,
-				"<ks.workflow> <query> --dry-run",
-				"Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
-			},
-		},
-	},
-	{
-		"Workflow", []command{
 			{"Workflow", commandWorkflow,
 				"<ks.workflow> <action> --dry-run",
 				"Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
@@ -3017,38 +3009,6 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			}
 			query = `update _vt.schema_migrations set migration_status='cancel-all'`
 		}
-	case "revert":
-		{
-			deprecationMessage := `OnlineDDL 'revert' command will be deprecated in version v12. Use "REVERT VITESS_MIGRATION '<uuid>'" SQL command`
-			log.Warningf(deprecationMessage)
-
-			if arg == "" {
-				return fmt.Errorf("UUID required")
-			}
-			uuid = arg
-			contextUUID, err := schema.CreateUUID()
-			if err != nil {
-				return err
-			}
-			requestContext := fmt.Sprintf("vtctl:%s", contextUUID)
-
-			ddlStrategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, "")
-			onlineDDL, err := schema.NewOnlineDDL(keyspace, "", fmt.Sprintf("revert %s", uuid), ddlStrategySetting, requestContext)
-			if err != nil {
-				return err
-			}
-			conn, err := wr.TopoServer().ConnForCell(ctx, topo.GlobalCell)
-			if err != nil {
-				return err
-			}
-			err = onlineDDL.WriteTopo(ctx, conn, schema.MigrationRequestsPath())
-			if err != nil {
-				return err
-			}
-			wr.Logger().Infof("UUID=%+v", onlineDDL.UUID)
-			wr.Logger().Printf("%s\n", onlineDDL.UUID)
-			return nil
-		}
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
@@ -3539,45 +3499,6 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 		return fmt.Errorf("when calling the Help command, either specify a single argument that identifies the name of the command to get help with or do not specify any additional arguments")
 	}
 
-	return nil
-}
-
-func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
-	log.Warningf(deprecationMessage)
-
-	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of tablets on which it will be applied")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: VExec --dry-run keyspace.workflow \"<query>\"")
-	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
-	if err != nil {
-		wr.Logger().Errorf("keyspace %s not found", keyspace)
-	}
-	query := subFlags.Arg(1)
-
-	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		return nil
-	}
-	if qr == nil {
-		wr.Logger().Printf("no result returned\n")
-	}
-	if *json {
-		return printJSON(wr.Logger(), qr)
-	}
-	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
 }
 
