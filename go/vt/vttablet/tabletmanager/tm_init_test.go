@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -67,6 +68,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Shard:          "0",
 		KeyRange:       nil,
 		Type:           topodatapb.TabletType_REPLICA,
+		Tags:           servenv.AppVersion.ToStringMap(),
 		DbNameOverride: "aa",
 	}
 
