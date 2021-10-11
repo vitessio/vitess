@@ -230,10 +230,15 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
 			return true, nil
 		}
 
-		set, found := d[expr]
-		if found {
-			deps.MergeInPlace(set)
+		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
+			if extracted.OtherSide != nil {
+				set := d.Dependencies(extracted.OtherSide)
+				deps.MergeInPlace(set)
+			}
+			return false, nil
 		}
+		set, found := d[expr]
+		deps.MergeInPlace(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
