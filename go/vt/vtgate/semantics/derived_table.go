@@ -78,10 +78,7 @@ func (dt *DerivedTable) dependencies(colName string, org originable) (dependenci
 		return &nothing{}, nil
 	}
 
-	recursive := dt.tables
-	direct := org.tableSetFor(dt.ASTNode)
-
-	return createUncertain(direct, recursive), nil
+	return createUncertain(directDeps, dt.tables), nil
 }
 
 // IsInfSchema implements the TableInfo interface

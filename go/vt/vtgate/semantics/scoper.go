@@ -83,8 +83,8 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 
-		// adding a VTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
-		// the VTableInfo we are creating here should not be confused with derived tables' VTableInfo
+		// adding a vTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
+		// the vTableInfo we are creating here should not be confused with derived tables' vTableInfo
 		wScope, exists := s.wScope[sel]
 		if !exists {
 			break
