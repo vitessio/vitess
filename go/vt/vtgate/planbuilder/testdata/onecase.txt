@@ -1,19 +1,1 @@
 # Add your test case here for debugging and run go test -run=One.
-# Single table with unique vindex match and IN (null)
-"select id from music where user_id = 4 and id IN (null)"
-{
-  "QueryType": "SELECT",
-  "Original": "select id from music where user_id = 4 and id IN (null)",
-  "Instructions": {
-    "OperatorType": "Route",
-    "Variant": "SelectNone",
-    "Keyspace": {
-      "Name": "user",
-      "Sharded": true
-    },
-    "FieldQuery": "select id from music where 1 != 1",
-    "Query": "select id from music where user_id = 4 and id in (null)",
-    "Table": "music"
-  }
-}
-Gen4 plan same as above
