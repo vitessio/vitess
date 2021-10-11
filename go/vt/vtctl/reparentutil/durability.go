@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"fmt"
+	"sync"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -38,6 +39,8 @@ var (
 	durabilityPolicies = make(map[string]newDurabler)
 	// curDurabilityPolicy is the current durability policy in use
 	curDurabilityPolicy durabler
+	// curDurabilityPolicyMutex is the mutex protecting the curDurabilityPolicy variable
+	curDurabilityPolicyMutex sync.Mutex
 )
 
 func init() {
@@ -77,24 +80,32 @@ func SetDurabilityPolicy(name string, durabilityParams map[string]string) error 
 		return fmt.Errorf("durability policy %v not found", name)
 	}
 	log.Infof("Setting durability policy to %v", name)
+	curDurabilityPolicyMutex.Lock()
+	defer curDurabilityPolicyMutex.Unlock()
 	curDurabilityPolicy = newDurabilityCreationFunc(durabilityParams)
 	return nil
 }
 
 // PromotionRule returns the promotion rule for the instance.
 func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRule {
+	curDurabilityPolicyMutex.Lock()
+	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.promotionRule(tablet)
 }
 
 // SemiSyncAckersFromTablet returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
 func SemiSyncAckersFromTablet(tablet *topodatapb.Tablet) int {
+	curDurabilityPolicyMutex.Lock()
+	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.semiSyncAckers(tablet)
 }
 
 // ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
 func ReplicaSemiSyncFromTablet(primary, replica *topodatapb.Tablet) bool {
+	curDurabilityPolicyMutex.Lock()
+	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.replicaSemiSync(primary, replica)
 }
 
