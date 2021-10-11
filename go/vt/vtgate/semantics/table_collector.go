@@ -47,15 +47,12 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	if !ok {
 		return nil
 	}
-	if node.Columns != nil {
-		return Gen4NotSupportedF("column aliases in derived table")
-	}
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
 			tables := tc.scoper.wScope[sel]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, node.Columns, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -70,7 +67,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		case *sqlparser.Union:
 			firstSelect := sqlparser.GetFirstSelect(sel)
 			tables := tc.scoper.wScope[firstSelect]
-			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, node.Columns, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}

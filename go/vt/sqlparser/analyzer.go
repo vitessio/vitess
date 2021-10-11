@@ -132,16 +132,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union,
-		*Insert, *Update, *Delete, *Stream:
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
 //MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -151,6 +161,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }

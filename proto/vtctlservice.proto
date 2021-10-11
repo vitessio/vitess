@@ -165,6 +165,13 @@ service Vtctld {
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
+  // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+  // only for emergency fixes. This does not rebuild the serving graph.
+  //
+  // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+  rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
+  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving
