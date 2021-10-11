@@ -274,10 +274,9 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 }
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
-	var err error
-	ti, _ := semTable.TableInfoForExpr(expr.Expr)
-	if ti == nil {
-		return nil
+	ti, err := semTable.TableInfoForExpr(expr.Expr)
+	if err != nil && err != semantics.ErrMultipleTables {
+		return err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {

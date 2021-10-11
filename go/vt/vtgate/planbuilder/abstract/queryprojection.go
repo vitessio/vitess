@@ -260,34 +260,40 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
 
 	colExpr, isColName := e.(*sqlparser.ColName)
-	if isColName {
-		tblInfo, _ := semTable.TableInfoForExpr(e)
-		if tblInfo != nil {
-			if dTablInfo, ok := tblInfo.(*semantics.DerivedTable); ok {
-				weightStrExpr, err = semantics.RewriteDerivedExpression(colExpr, dTablInfo)
-				if err != nil {
-					return nil, nil, err
-				}
-				return e, weightStrExpr, nil
-			}
-		}
-
-		if colExpr.Qualifier.IsEmpty() {
-			for _, selectExpr := range qp.SelectExprs {
-				aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
-				if !isAliasedExpr {
-					continue
-				}
-				isAliasExpr := !aliasedExpr.As.IsEmpty()
-				if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
-					return e, aliasedExpr.Expr, nil
-				}
-			}
-		}
+	if !isColName {
+		return e, e, nil
 	}
 
 	if sqlparser.IsNull(e) {
 		return e, nil, nil
+	}
+
+	tblInfo, err := semTable.TableInfoForExpr(e)
+	if err != nil && err != semantics.ErrMultipleTables {
+		// we can live with ErrMultipleTables and just ignore it. anything else should fail this method
+		return nil, nil, err
+	}
+	if tblInfo != nil {
+		if dTablInfo, ok := tblInfo.(*semantics.DerivedTable); ok {
+			weightStrExpr, err = semantics.RewriteDerivedExpression(colExpr, dTablInfo)
+			if err != nil {
+				return nil, nil, err
+			}
+			return e, weightStrExpr, nil
+		}
+	}
+
+	if colExpr.Qualifier.IsEmpty() {
+		for _, selectExpr := range qp.SelectExprs {
+			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
+			if !isAliasedExpr {
+				continue
+			}
+			isAliasExpr := !aliasedExpr.As.IsEmpty()
+			if isAliasExpr && colExpr.Name.Equal(aliasedExpr.As) {
+				return e, aliasedExpr.Expr, nil
+			}
+		}
 	}
 
 	return e, e, nil
