@@ -314,6 +314,12 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 				if predicate.Operator == sqlparser.InOp {
 					switch predicate.Left.(type) {
 					case *sqlparser.ColName:
+						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
+							extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+							if extractedSubquery != nil {
+								extractedSubquery.ArgName = engine.ListVarName
+							}
+						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
 				}
