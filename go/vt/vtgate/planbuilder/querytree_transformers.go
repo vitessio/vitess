@@ -387,7 +387,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(ctx.reinsertSubQ, sel)
+	replaceSubQuery(ctx, sel)
 
 	// TODO clean up when gen4 is the only planner
 	var condition sqlparser.Expr
@@ -522,14 +522,19 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func replaceSubQuery(exprToReplaceBySqExpr []*sqlparser.ExtractedSubquery, sel *sqlparser.Select) {
-	if len(exprToReplaceBySqExpr) > 0 {
-		sqr := &subQReplacer{exprToReplaceBySqExpr: exprToReplaceBySqExpr}
+func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
+	if len(ctx.reinsertSubQ) == 0 {
+		return
+	}
+	extractedSubqueries := []*sqlparser.ExtractedSubquery{}
+	for _, subquery := range ctx.reinsertSubQ {
+		extractedSubqueries = append(extractedSubqueries, ctx.semTable.FindSubqueryReference(subquery))
+	}
+	sqr := &subQReplacer{exprToReplaceBySqExpr: extractedSubqueries}
+	sqlparser.Rewrite(sel, sqr.replacer, nil)
+	for sqr.replaced {
+		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+		sqr.replaced = false
 		sqlparser.Rewrite(sel, sqr.replacer, nil)
-		for sqr.replaced {
-			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
-			sqr.replaced = false
-			sqlparser.Rewrite(sel, sqr.replacer, nil)
-		}
 	}
 }
