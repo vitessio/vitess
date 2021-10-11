@@ -946,6 +946,32 @@ func TestExecutorShow(t *testing.T) {
 	assert.EqualError(t, err, want, query)
 }
 
+func TestExecutorShowTargeted(t *testing.T) {
+	executor, _, sbc2, _ := createLegacyExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
+
+	queries := []string{
+		"show databases",
+		"show variables like 'read_only'",
+		"show collation",
+		"show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+		"show tables",
+		fmt.Sprintf("show tables from %v", KsTestUnsharded),
+		"show create table user_seq",
+		"show full columns from table1",
+		"show plugins",
+		"show warnings",
+	}
+
+	for _, sql := range queries {
+		_, err := executor.Execute(ctx, "TestExecutorShowTargeted", session, sql, nil)
+		require.NoError(t, err)
+		assert.NotZero(t, len(sbc2.Queries), "Tablet should have received 'show' query")
+		lastQuery := sbc2.Queries[len(sbc2.Queries)-1].Sql
+		assert.Equal(t, sql, lastQuery, "Got: %v, want %v", lastQuery, sql)
+	}
+}
+
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
@@ -1056,7 +1082,6 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"show tables",
 		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
@@ -1533,7 +1558,9 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
 	logStats := NewLogStats(ctx, "Test", "", nil)
-	plan, err := e.getPlan(vcursor, sql, comments, bindVars, skipQueryPlanCache, logStats)
+	plan, err := e.getPlan(vcursor, sql, comments, bindVars, &SafeSession{
+		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+	}, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1696,7 +1723,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	assertCacheContains(t, r, want)
 
-	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, nil)
+	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
