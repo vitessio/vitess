@@ -1,4 +1,3 @@
-2021-07-29T12:44:21Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/1078611999
 2021-07-29T12:44:21Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/1078612074
 2021-07-29T12:44:21Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/1078612076
 2021-07-29T12:44:21Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1078612019
@@ -9996,5 +9995,6 @@
 2021-10-11T14:37:59Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1329414097
 2021-10-11T14:37:59Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1329414117
 2021-10-11T15:30:51Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1329602122
+2021-10-11T15:30:51Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/1329602094
 2021-10-11T15:30:51Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1329602062
 2021-10-11T15:30:51Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1329602060
