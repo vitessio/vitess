@@ -18,6 +18,7 @@ package abstract
 
 import (
 	"encoding/json"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -99,9 +100,11 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		if err != nil {
 			return nil, err
 		}
-		if sqlparser.ContainsAggregation(weightStrExpr) {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+		err = checkForInvalidGroupingExpressions(weightStrExpr)
+		if err != nil {
+			return nil, err
 		}
+
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
@@ -338,4 +341,18 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 		return false
 	}
 	return true
+}
+
+func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if sqlparser.IsAggregation(node) {
+			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+		}
+		_, isSubQ := node.(*sqlparser.Subquery)
+		arg, isArg := node.(sqlparser.Argument)
+		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
+		}
+		return true, nil
+	}, expr)
 }

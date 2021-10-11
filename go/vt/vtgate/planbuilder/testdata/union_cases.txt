@@ -355,6 +355,42 @@ Gen4 plan same as above
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a union select * from unsharded",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.a where 1 != 1",
+            "Query": "select distinct * from information_schema.a",
+            "Table": "information_schema.a"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from unsharded where 1 != 1",
+            "Query": "select distinct * from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
@@ -387,6 +423,42 @@ Gen4 plan same as above
             },
             "FieldQuery": "select * from information_schema.a where 1 != 1",
             "Query": "select * from information_schema.a",
+            "Table": "information_schema.a"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from unsharded union select * from information_schema.a",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from unsharded where 1 != 1",
+            "Query": "select distinct * from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select * from information_schema.a where 1 != 1",
+            "Query": "select distinct * from information_schema.a",
             "Table": "information_schema.a"
           }
         ]
@@ -654,6 +726,50 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select * from music where id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from music where 1 != 1",
+            "Query": "select distinct * from music where id = 1",
+            "Table": "music",
+            "Values": [
+              1
+            ],
+            "Vindex": "music_user_map"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectEqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select * from `user` where 1 != 1",
+            "Query": "select distinct * from `user` where id = 1",
+            "Table": "`user`",
+            "Values": [
+              1
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
@@ -747,10 +863,10 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
 }
 
 # multiple select statement have inner order by with union - TODO (systay) no need to send down ORDER BY if we are going to loose it with UNION DISTINCT
-"(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)"
+"(select id from user order by 1 desc) union (select id from user order by 1 asc)"
 {
   "QueryType": "SELECT",
-  "Original": "(select 1 from user order by 1 desc) union (select 1 from user order by 1 asc)",
+  "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
   "Instructions": {
     "OperatorType": "Distinct",
     "Inputs": [
@@ -764,9 +880,9 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) DESC",
-            "Query": "select 1, weight_string(1) from `user` order by 1 desc",
+            "Query": "select id, weight_string(id) from `user` order by 1 desc",
             "ResultColumns": 1,
             "Table": "`user`"
           },
@@ -777,13 +893,35 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1, weight_string(1) from `user` where 1 != 1",
+            "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1",
             "OrderBy": "(0|1) ASC",
-            "Query": "select 1, weight_string(1) from `user` order by 1 asc",
+            "Query": "select id, weight_string(id) from `user` order by 1 asc",
             "ResultColumns": 1,
             "Table": "`user`"
           }
         ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "(select id from user order by 1 desc) union (select id from user order by 1 asc)",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "(select id, weight_string(id) from `user` where 1 != 1) union (select id, weight_string(id) from `user` where 1 != 1)",
+        "OrderBy": "(0|1) DESC",
+        "Query": "(select id, weight_string(id) from `user` order by id desc) union (select id, weight_string(id) from `user` order by id asc)",
+        "ResultColumns": 1,
+        "Table": "`user`"
       }
     ]
   }
@@ -1434,6 +1572,123 @@ Gen4 error: nesting of unions at the right-hand side is not yet supported
   }
 }
 Gen4 plan same as above
+
+# UNION that needs to be reordered to be merged more aggressively. Gen4 is able to get it down to 2 routes
+"select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Distinct",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Concatenate",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "SelectUnsharded",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": false
+                            },
+                            "FieldQuery": "select col from unsharded where 1 != 1",
+                            "Query": "select col from unsharded",
+                            "Table": "unsharded"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "SelectScatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select id from `user` where 1 != 1",
+                            "Query": "select id from `user`",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "SelectUnsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select col2 from unsharded where 1 != 1",
+                    "Query": "select col2 from unsharded",
+                    "Table": "unsharded"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from user_extra where 1 != 1",
+            "Query": "select col from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select col from unsharded union select id from user union select col2 from unsharded union select col from user_extra",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select col from unsharded where 1 != 1 union select col2 from unsharded where 1 != 1",
+            "Query": "select col from unsharded union select col2 from unsharded",
+            "Table": "unsharded"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1 union select col from user_extra where 1 != 1",
+            "Query": "select id from `user` union select col from user_extra",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # ambiguous LIMIT
 "select id from user limit 1 union all select id from music limit 1"

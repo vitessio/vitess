@@ -32,7 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -360,7 +360,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 
 	var metadata VTGateBufferingStats
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &metadata)
 	require.NoError(t, err)
 

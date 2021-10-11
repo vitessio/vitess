@@ -100,7 +100,7 @@ func (c *concatenateGen4) Rewrite(inputs ...logicalPlan) error {
 func (c *concatenateGen4) ContainsTables() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.sources {
-		tableSet |= source.ContainsTables()
+		tableSet.MergeInPlace(source.ContainsTables())
 	}
 	return tableSet
 }

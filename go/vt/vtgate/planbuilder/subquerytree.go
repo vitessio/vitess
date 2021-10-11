@@ -25,17 +25,18 @@ import (
 )
 
 type subqueryTree struct {
-	subquery *sqlparser.Select
-	outer    queryTree
-	inner    queryTree
-	opcode   engine.PulloutOpcode
-	argName  string
+	subquery  *sqlparser.Select
+	outer     queryTree
+	inner     queryTree
+	opcode    engine.PulloutOpcode
+	argName   string
+	hasValues string
 }
 
 var _ queryTree = (*subqueryTree)(nil)
 
 func (s *subqueryTree) tableID() semantics.TableSet {
-	return s.inner.tableID() | s.outer.tableID()
+	return s.inner.tableID().Merge(s.outer.tableID())
 }
 
 func (s *subqueryTree) cost() int {
@@ -44,11 +45,12 @@ func (s *subqueryTree) cost() int {
 
 func (s *subqueryTree) clone() queryTree {
 	result := &subqueryTree{
-		subquery: s.subquery,
-		outer:    s.outer.clone(),
-		inner:    s.inner.clone(),
-		opcode:   s.opcode,
-		argName:  s.argName,
+		subquery:  s.subquery,
+		outer:     s.outer.clone(),
+		inner:     s.inner.clone(),
+		opcode:    s.opcode,
+		argName:   s.argName,
+		hasValues: s.hasValues,
 	}
 	return result
 }

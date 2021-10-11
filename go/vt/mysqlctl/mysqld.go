@@ -30,7 +30,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -70,7 +69,9 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
-	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	// PoolDynamicHostnameResolution is whether we should retry DNS resolution of hostname targets
+	// and reconnect if necessary
+	PoolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
@@ -107,11 +108,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
@@ -793,12 +794,12 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(outFile, []byte(configData), 0664)
+	return os.WriteFile(outFile, []byte(configData), 0664)
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
 	if *mycnfTemplateFile != "" {
-		data, err := ioutil.ReadFile(*mycnfTemplateFile)
+		data, err := os.ReadFile(*mycnfTemplateFile)
 		if err != nil {
 			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
 		}
@@ -830,7 +831,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
 		parts := strings.Split(extraCnf, ":")
 		for _, path := range parts {
-			data, dataErr := ioutil.ReadFile(path)
+			data, dataErr := os.ReadFile(path)
 			if dataErr != nil {
 				log.Infof("could not open config file for mycnf: %v", path)
 				continue
@@ -858,7 +859,7 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	log.Info("Checking for updates to my.cnf")
-	f, err := ioutil.TempFile(path.Dir(cnf.path), "my.cnf")
+	f, err := os.CreateTemp(path.Dir(cnf.path), "my.cnf")
 	if err != nil {
 		return fmt.Errorf("could not create temp file: %v", err)
 	}
@@ -869,11 +870,11 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 		return fmt.Errorf("could not initConfig in %v: %v", f.Name(), err)
 	}
 
-	existing, err := ioutil.ReadFile(cnf.path)
+	existing, err := os.ReadFile(cnf.path)
 	if err != nil {
 		return fmt.Errorf("could not read existing file %v: %v", cnf.path, err)
 	}
-	updated, err := ioutil.ReadFile(f.Name())
+	updated, err := os.ReadFile(f.Name())
 	if err != nil {
 		return fmt.Errorf("could not read updated file %v: %v", f.Name(), err)
 	}
@@ -1051,7 +1052,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 // defaultsExtraFile returns the filename for a temporary config file
 // that contains the user, password and socket file to connect to
 // mysqld.  We write a temporary config file so the password is never
-// passed as a command line parameter.  Note ioutil.TempFile uses 0600
+// passed as a command line parameter.  Note os.CreateTemp uses 0600
 // as permissions, so only the local user can read the file.  The
 // returned temporary file should be removed after use, typically in a
 // 'defer os.Remove()' statement.
@@ -1075,7 +1076,7 @@ socket=%v
 `, connParams.Uname, connParams.Pass, connParams.UnixSocket)
 	}
 
-	tmpfile, err := ioutil.TempFile("", "example")
+	tmpfile, err := os.CreateTemp("", "example")
 	if err != nil {
 		return "", err
 	}

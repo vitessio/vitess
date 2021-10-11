@@ -23,7 +23,6 @@ package zkctl
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -126,7 +125,7 @@ func (zkd *Zkd) Start() error {
 // Shutdown kills a ZooKeeper server, but keeps its data dir intact.
 func (zkd *Zkd) Shutdown() error {
 	log.Infof("zkctl.Shutdown")
-	pidData, err := ioutil.ReadFile(zkd.config.PidFile())
+	pidData, err := os.ReadFile(zkd.config.PidFile())
 	if err != nil {
 		return err
 	}
@@ -173,7 +172,7 @@ func (zkd *Zkd) Init() error {
 
 	configData, err := zkd.makeCfg()
 	if err == nil {
-		err = ioutil.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
+		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
 	}
 	if err != nil {
 		log.Errorf("failed creating %v: %v", zkd.config.ConfigFile(), err)

@@ -132,16 +132,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union,
-		*Insert, *Update, *Delete, *Stream:
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
 //MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -151,6 +161,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -326,8 +338,23 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
-// AndExpressions ands together two expression, minimising the expr when possible
-func AndExpressions(exprs ...Expr) Expr {
+// SplitOrExpression breaks up the Expr into OR-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitOrExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *OrExpr:
+		filters = SplitOrExpression(filters, node.Left)
+		return SplitOrExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
+// joinExpressions join together a list of Expr using the baseType as operator (either AndExpr or OrExpr).
+func joinExpressions(baseType Expr, exprs ...Expr) Expr {
 	switch len(exprs) {
 	case 0:
 		return nil
@@ -336,6 +363,9 @@ func AndExpressions(exprs ...Expr) Expr {
 	default:
 		result := (Expr)(nil)
 		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
 			if result == nil {
 				result = expr
 			} else {
@@ -347,12 +377,28 @@ func AndExpressions(exprs ...Expr) Expr {
 					}
 				}
 				if !found {
-					result = &AndExpr{Left: result, Right: expr}
+					switch baseType.(type) {
+					case *AndExpr:
+						result = &AndExpr{Left: result, Right: expr}
+					case *OrExpr:
+						result = &OrExpr{Left: result, Right: expr}
+					}
 				}
 			}
 		}
 		return result
 	}
+
+}
+
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	return joinExpressions(&AndExpr{}, exprs...)
+}
+
+// OrExpressions ors together two or more expressions, minimising the expr when possible
+func OrExpressions(exprs ...Expr) Expr {
+	return joinExpressions(&OrExpr{}, exprs...)
 }
 
 // TableFromStatement returns the qualified table name for the query.

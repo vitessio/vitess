@@ -6,8 +6,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	nethttp "net/http"
+	"os"
 	"strings"
 
 	"github.com/go-martini/martini"
@@ -68,7 +68,7 @@ func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
 func ReadCAFile(caFile string) (*x509.CertPool, error) {
 	var caCertPool *x509.CertPool
 	if caFile != "" {
-		data, err := ioutil.ReadFile(caFile)
+		data, err := os.ReadFile(caFile)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +149,7 @@ func AppendKeyPairWithPassword(tlsConfig *tls.Config, certFile string, keyFile s
 
 // Read a PEM file and ask for a password to decrypt it if needed
 func ReadPEMData(pemFile string, pemPass []byte) ([]byte, error) {
-	pemData, err := ioutil.ReadFile(pemFile)
+	pemData, err := os.ReadFile(pemFile)
 	if err != nil {
 		return pemData, err
 	}
@@ -193,7 +193,7 @@ func GetPEMPassword(pemFile string) []byte {
 
 // Determine if PEM file is encrypted
 func IsEncryptedPEM(pemFile string) bool {
-	pemData, err := ioutil.ReadFile(pemFile)
+	pemData, err := os.ReadFile(pemFile)
 	if err != nil {
 		return false
 	}
