@@ -133,15 +133,6 @@ func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Ex
 
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.RecursiveDeps(predicate)
-	extracted, ok := predicate.(*sqlparser.ExtractedSubquery)
-	if ok {
-		// we don't want to look at the subquery dependencies
-		if extracted.OtherSide == nil {
-			deps = semantics.SingleTableSet(0)
-		} else {
-			deps = semTable.RecursiveDeps(extracted.OtherSide)
-		}
-	}
 	switch deps.NumberOfTables() {
 	case 0:
 		qg.addNoDepsPredicate(predicate)
