@@ -43,4 +43,8 @@ jobs:
           echo "Expecting PR to have label 'Type: ...'"
           exit 1
         fi
+        if ! cat ${LABELS_JSON} | jq -r '.[].name ' | grep 'release notes' | wc -l | grep -q 1 ; then
+          echo "Expecting PR to have only one of the following labels: 'release notes', 'release notes none', 'release notes (needs details)'."
+          exit 1
+        fi
         exit 0

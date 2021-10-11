@@ -894,12 +894,7 @@ func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
-	maxRows := qre.tsv.qe.maxResultSize.Get()
-	sqlLimit := qre.options.GetSqlSelectLimit()
-	if sqlLimit > 0 && sqlLimit < maxRows {
-		return sqlLimit
-	}
-	return maxRows
+	return qre.tsv.qe.maxResultSize.Get()
 }
 
 func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfields bool) (*sqltypes.Result, error) {
