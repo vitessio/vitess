@@ -18,7 +18,6 @@ package initialsharding
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -630,7 +629,7 @@ func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions
 // Create a new init_db.sql file that sets up passwords for all users.
 // Then we use a db-credentials-file with the passwords.
 func writeInitDBFile() {
-	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
 	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `
@@ -664,7 +663,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   ON *.* TO 'vt_filtered'@'127.0.0.1';
 FLUSH PRIVILEGES;
 `
-	ioutil.WriteFile(newInitDbFile, []byte(sql), 0666)
+	os.WriteFile(newInitDbFile, []byte(sql), 0666)
 
 }
 
@@ -678,7 +677,7 @@ func WriteDbCredentialToTmp(tmpDir string) string {
         "vt_filtered": ["VtFilteredPass"]
     	}`)
 	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
-	ioutil.WriteFile(dbCredentialFile, data, 0666)
+	os.WriteFile(dbCredentialFile, data, 0666)
 	return dbCredentialFile
 }
 

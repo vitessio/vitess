@@ -263,7 +263,7 @@ func (jn *Join) description() PrimitiveDescription {
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
 	}
 	if len(jn.Vars) > 0 {
-		other["JoinVars"] = jn.Vars
+		other["JoinVars"] = orderedStringIntMap(jn.Vars)
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

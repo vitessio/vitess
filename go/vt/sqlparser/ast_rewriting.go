@@ -35,6 +35,9 @@ var (
 	HasValueSubQueryBaseName = []byte("__sq_has_values")
 )
 
+// SQLSelectLimitUnset default value for sql_select_limit not set.
+const SQLSelectLimitUnset = -1
+
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
 	*BindVarNeeds
@@ -97,6 +100,22 @@ func (r *ReservedVars) ReserveSubQuery() string {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
 			r.reserved[string(joinVar)] = struct{}{}
 			return string(joinVar)
+		}
+	}
+}
+
+// ReserveSubQueryWithHasValues returns the next argument name to replace subquery with pullout value.
+func (r *ReservedVars) ReserveSubQueryWithHasValues() (string, string) {
+	for {
+		r.sqNext++
+		joinVar := strconv.AppendInt(subQueryBaseArgName, r.sqNext, 10)
+		hasValuesJoinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
+		_, joinVarOK := r.reserved[string(joinVar)]
+		_, hasValuesJoinVarOK := r.reserved[string(hasValuesJoinVar)]
+		if !joinVarOK && !hasValuesJoinVarOK {
+			r.reserved[string(joinVar)] = struct{}{}
+			r.reserved[string(hasValuesJoinVar)] = struct{}{}
+			return string(joinVar), string(hasValuesJoinVar)
 		}
 	}
 }
@@ -177,19 +196,19 @@ func NewReservedVars(prefix string, known BindVars) *ReservedVars {
 }
 
 // PrepareAST will normalize the query
-func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string) (*RewriteASTResult, error) {
+func PrepareAST(in Statement, reservedVars *ReservedVars, bindVars map[string]*querypb.BindVariable, parameterize bool, keyspace string, selectLimit int) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace)
+	return RewriteAST(in, keyspace, selectLimit)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
-func RewriteAST(in Statement, keyspace string) (*RewriteASTResult, error) {
-	er := newExpressionRewriter(keyspace)
+func RewriteAST(in Statement, keyspace string, selectLimit int) (*RewriteASTResult, error) {
+	er := newExpressionRewriter(keyspace, selectLimit)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	setRewriter := &setNormalizer{}
 	result := Rewrite(in, er.rewrite, setRewriter.rewriteSetComingUp)
@@ -236,11 +255,12 @@ type expressionRewriter struct {
 	// we need to know this to make a decision if we can safely rewrite JOIN USING => JOIN ON
 	hasStarInSelect bool
 
-	keyspace string
+	keyspace    string
+	selectLimit int
 }
 
-func newExpressionRewriter(keyspace string) *expressionRewriter {
-	return &expressionRewriter{bindVars: &BindVarNeeds{}, keyspace: keyspace}
+func newExpressionRewriter(keyspace string, selectLimit int) *expressionRewriter {
+	return &expressionRewriter{bindVars: &BindVarNeeds{}, keyspace: keyspace, selectLimit: selectLimit}
 }
 
 const (
@@ -261,7 +281,7 @@ const (
 )
 
 func (er *expressionRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newExpressionRewriter(er.keyspace)
+	inner := newExpressionRewriter(er.keyspace, er.selectLimit)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -296,6 +316,15 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 				}
 				er.bindVars.MergeWith(innerBindVarNeeds)
 			}
+		}
+		// set select limit if explicitly not set when sql_select_limit is set on the connection.
+		if er.selectLimit > 0 && node.Limit == nil {
+			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+		}
+	case *Union:
+		// set select limit if explicitly not set when sql_select_limit is set on the connection.
+		if er.selectLimit > 0 && node.Limit == nil {
+			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
 		}
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)

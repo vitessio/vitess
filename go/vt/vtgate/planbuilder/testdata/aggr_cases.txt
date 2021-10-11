@@ -1432,7 +1432,7 @@ Gen4 plan same as above
 # scatter aggregate group by aggregate function
 "select count(*) b from user group by b"
 "Can't group on 'b'"
-Gen4 plan same as above
+Gen4 error: Can't group on 'count(*)'
 
 # scatter aggregate multiple group by (columns)
 "select a, b, count(*) from user group by b, a"

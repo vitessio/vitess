@@ -19,7 +19,7 @@ package workflow
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -237,7 +237,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 			return err
 		}
 
-		data, err := ioutil.ReadAll(r.Body)
+		data, err := io.ReadAll(r.Body)
 		if err != nil {
 			return err
 		}

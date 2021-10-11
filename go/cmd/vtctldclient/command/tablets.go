@@ -107,6 +107,15 @@ Valid output formats are "awk" and "json".`,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandRefreshStateByShard,
 	}
+	// RunHealthCheck makes a RunHealthCheck gRPC call to a vtctld.
+	RunHealthCheck = &cobra.Command{
+		Use:                   "RunHealthCheck <tablet_alias>",
+		Aliases:               []string{"RunHealthcheck"},
+		Short:                 "Runs a healthcheck on the remote tablet.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandRunHealthCheck,
+	}
 	// SetWritable makes a SetWritable gRPC call to a vtctld.
 	SetWritable = &cobra.Command{
 		Use:                   "SetWritable <alias> <true/false>",
@@ -384,6 +393,20 @@ func commandRefreshStateByShard(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandRunHealthCheck(cmd *cobra.Command, args []string) error {
+	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	_, err = client.RunHealthCheck(commandCtx, &vtctldatapb.RunHealthCheckRequest{
+		TabletAlias: alias,
+	})
+	return err
+}
+
 func commandSetWritable(cmd *cobra.Command, args []string) error {
 	alias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
 	if err != nil {
@@ -475,6 +498,7 @@ func init() {
 	RefreshStateByShard.Flags().StringSliceVarP(&refreshStateByShardOptions.Cells, "cells", "c", nil, "If specified, only call RefreshState on tablets in the specified cells. If empty, all cells are considered.")
 	Root.AddCommand(RefreshStateByShard)
 
+	Root.AddCommand(RunHealthCheck)
 	Root.AddCommand(SetWritable)
 	Root.AddCommand(SleepTablet)
 	Root.AddCommand(StartReplication)

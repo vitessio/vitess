@@ -19,8 +19,9 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }
@@ -79,7 +80,7 @@ func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }
@@ -198,7 +199,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 func insertInitialData(t *testing.T) {
 	t.Run("insertInitialData", func(t *testing.T) {
 		log.Infof("Inserting initial data")
-		lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
+		lines, _ := os.ReadFile("unsharded_init_data.sql")
 		execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 		execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")

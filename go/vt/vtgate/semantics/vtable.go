@@ -106,7 +106,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables > 0
+	return v.tables.NumberOfTables() > 0
 }
 
 // GetTables implements the TableInfo interface
@@ -155,7 +155,7 @@ func selectExprsToInfos(
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				ts |= table.getTableSet(org)
+				ts.MergeInPlace(table.getTableSet(org))
 			}
 		}
 	}

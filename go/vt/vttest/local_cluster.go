@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -139,7 +138,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 	}
 
 	// Create a base temporary directory.
-	tempSchemaDir, err := ioutil.TempDir("", "vttest")
+	tempSchemaDir, err := os.MkdirTemp("", "vttest")
 	if err != nil {
 		return err
 	}
@@ -152,7 +151,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 		fileName := path.Join(ksDir, "schema.sql")
-		err = ioutil.WriteFile(fileName, []byte(schema), 0666)
+		err = os.WriteFile(fileName, []byte(schema), 0666)
 		if err != nil {
 			return err
 		}
@@ -165,7 +164,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
+		if err := os.WriteFile(vschemaFilePath, vschemaJSON, 0644); err != nil {
 			return err
 		}
 	}

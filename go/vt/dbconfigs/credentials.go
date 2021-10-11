@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"strings"
@@ -119,7 +118,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 	if fcs.dbCredentials == nil {
 		fcs.dbCredentials = make(map[string][]string)
 
-		data, err := ioutil.ReadFile(*dbCredentialsFile)
+		data, err := os.ReadFile(*dbCredentialsFile)
 		if err != nil {
 			log.Warningf("Failed to read dbCredentials file: %v", *dbCredentialsFile)
 			return "", "", err
@@ -249,7 +248,7 @@ func readFromFile(filePath string) (string, error) {
 	if filePath == "" {
 		return "", nil
 	}
-	fileBytes, err := ioutil.ReadFile(filePath)
+	fileBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return "", err
 	}

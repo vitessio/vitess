@@ -100,7 +100,7 @@ func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +202,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
-		return buildShowPlan(stmt, vschema)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildShowPlan)
 	case *sqlparser.LockTables:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:

@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
+	"os"
 
 	"github.com/spf13/pflag"
 
@@ -94,7 +94,7 @@ func NewStaticFile(cluster *vtadminpb.Cluster, flags *pflag.FlagSet, args []stri
 		return nil, errors.New("must specify path to the service discovery JSON config file")
 	}
 
-	b, err := ioutil.ReadFile(*filePath)
+	b, err := os.ReadFile(*filePath)
 	if err != nil {
 		return nil, err
 	}

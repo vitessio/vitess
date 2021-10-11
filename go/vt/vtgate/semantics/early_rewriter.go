@@ -25,29 +25,21 @@ import (
 )
 
 type earlyRewriter struct {
-	err      error
-	semTable *SemTable
-	scoper   *scoper
-	clause   string
+	scoper *scoper
+	clause string
 }
 
-// earlyRewrite rewrites the query before the binder has had a chance to work on the query
-// it introduces new expressions that the binder will later need to bind correctly
-func earlyRewrite(statement sqlparser.SelectStatement, semTable *SemTable, scoper *scoper) error {
-	r := earlyRewriter{
-		semTable: semTable,
-		scoper:   scoper,
-	}
-	sqlparser.Rewrite(statement, r.rewrite, nil)
-	return r.err
-}
-
-func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
+func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
-	case *sqlparser.Select:
-		tables := r.semTable.GetSelectTables(node)
+	case sqlparser.SelectExprs:
+		_, isSel := cursor.Parent().(*sqlparser.Select)
+		if !isSel {
+			return nil
+		}
+		tables := r.scoper.currentScope().tables
 		var selExprs sqlparser.SelectExprs
-		for _, selectExpr := range node.SelectExprs {
+		changed := false
+		for _, selectExpr := range node {
 			starExpr, isStarExpr := selectExpr.(*sqlparser.StarExpr)
 			if !isStarExpr {
 				selExprs = append(selExprs, selectExpr)
@@ -55,16 +47,18 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 			}
 			starExpanded, colNames, err := expandTableColumns(tables, starExpr)
 			if err != nil {
-				r.err = err
-				return false
+				return err
 			}
 			if !starExpanded || colNames == nil {
 				selExprs = append(selExprs, selectExpr)
 				continue
 			}
 			selExprs = append(selExprs, colNames...)
+			changed = true
 		}
-		node.SelectExprs = selExprs
+		if changed {
+			cursor.ReplaceAndRevisit(selExprs)
+		}
 	case *sqlparser.Order:
 		r.clause = "order clause"
 	case sqlparser.GroupBy:
@@ -77,27 +71,24 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 		}
 		num, err := strconv.Atoi(node.Val)
 		if err != nil {
-			r.err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
-			break
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "error parsing column number: %s", node.Val)
+
 		}
 		if num < 1 || num > len(currScope.selectStmt.SelectExprs) {
-			r.err = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
-			break
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, r.clause)
 		}
 
 		for i := 0; i < num; i++ {
 			expr := currScope.selectStmt.SelectExprs[i]
 			_, ok := expr.(*sqlparser.AliasedExpr)
 			if !ok {
-				r.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
-				return true
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot use column offsets in %s when using `%s`", r.clause, sqlparser.String(expr))
 			}
 		}
 
 		aliasedExpr, ok := currScope.selectStmt.SelectExprs[num-1].(*sqlparser.AliasedExpr)
 		if !ok {
-			r.err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
-			break
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to handle %s", sqlparser.String(node))
 		}
 
 		if !aliasedExpr.As.IsEmpty() {
@@ -107,7 +98,7 @@ func (r *earlyRewriter) rewrite(cursor *sqlparser.Cursor) bool {
 			cursor.Replace(expr)
 		}
 	}
-	return true
+	return nil
 }
 
 // realCloneOfColNames clones all the expressions including ColName.

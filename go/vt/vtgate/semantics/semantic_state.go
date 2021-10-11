@@ -63,11 +63,6 @@ type (
 		Type querypb.Type
 	}
 
-	// TableSet is how a set of tables is expressed.
-	// Tables get unique bits assigned in the order that they are encountered during semantic analysis
-	TableSet uint64 // we can only join 64 tables with this underlying data type
-	// TODO : change uint64 to struct to support arbitrary number of tables.
-
 	// ExprDependencies stores the tables that an expression depends on as a map
 	ExprDependencies map[sqlparser.Expr]TableSet
 
@@ -104,9 +99,15 @@ type (
 	}
 
 	subquery struct {
-		ArgName  string
-		SubQuery *sqlparser.Subquery
-		OpCode   engine.PulloutOpcode
+		ArgName   string
+		HasValues string
+		SubQuery  *sqlparser.Subquery
+		OpCode    engine.PulloutOpcode
+
+		// ExprsNeedReplace list all the expressions that, if the subquery is later rewritten, need to
+		// be removed and replaced by ReplaceBy.
+		ExprsNeedReplace []sqlparser.Expr
+		ReplaceBy        sqlparser.Expr
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -135,18 +136,19 @@ func NewSemTable() *SemTable {
 func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for idx, t2 := range st.Tables {
 		if t == t2.getExpr() {
-			return 1 << idx
+			return SingleTableSet(idx)
 		}
 	}
-	return 0
+	return TableSet{}
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
-	if id.NumberOfTables() > 1 {
+	offset := id.TableOffset()
+	if offset < 0 {
 		return nil, ErrMultipleTables
 	}
-	return st.Tables[id.TableOffset()], nil
+	return st.Tables[offset], nil
 }
 
 // RecursiveDeps return the table dependencies of the expression.
@@ -232,7 +234,7 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 
 		set, found := d[expr]
 		if found {
-			deps |= set
+			deps.MergeInPlace(set)
 		}
 
 		// if we found a cached value, there is no need to continue down to visit children
@@ -241,52 +243,6 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 
 	d[expr] = deps
 	return deps
-}
-
-// IsOverlapping returns true if at least one table exists in both sets
-func (ts TableSet) IsOverlapping(b TableSet) bool { return ts&b != 0 }
-
-// IsSolvedBy returns true if all of `ts` is contained in `b`
-func (ts TableSet) IsSolvedBy(b TableSet) bool { return ts&b == ts }
-
-// NumberOfTables returns the number of bits set
-func (ts TableSet) NumberOfTables() int {
-	// Brian Kernighan’s Algorithm
-	count := 0
-	for ts > 0 {
-		ts &= ts - 1
-		count++
-	}
-	return count
-}
-
-// TableOffset returns the offset in the Tables array from TableSet
-func (ts TableSet) TableOffset() int {
-	offset := 0
-	for ts > 1 {
-		ts = ts >> 1
-		offset++
-	}
-	return offset
-}
-
-// Constituents returns an slice with all the
-// individual tables in their own TableSet identifier
-func (ts TableSet) Constituents() (result []TableSet) {
-	mask := ts
-
-	for mask > 0 {
-		maskLeft := mask & (mask - 1)
-		constituent := mask ^ maskLeft
-		mask = maskLeft
-		result = append(result, constituent)
-	}
-	return
-}
-
-// Merge creates a TableSet that contains both inputs
-func (ts TableSet) Merge(other TableSet) TableSet {
-	return ts | other
 }
 
 // RewriteDerivedExpression rewrites all the ColName instances in the supplied expression with

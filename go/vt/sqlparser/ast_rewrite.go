@@ -1130,7 +1130,13 @@ func (a *application) rewriteColumns(parent SQLNode, node Columns, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Columns)
+			a.cur.revisit = false
+			return a.rewriteColumns(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1161,7 +1167,13 @@ func (a *application) rewriteComments(parent SQLNode, node Comments, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Comments)
+			a.cur.revisit = false
+			return a.rewriteComments(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -1846,7 +1858,13 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Exprs)
+			a.cur.revisit = false
+			return a.rewriteExprs(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2002,7 +2020,13 @@ func (a *application) rewriteGroupBy(parent SQLNode, node GroupBy, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(GroupBy)
+			a.cur.revisit = false
+			return a.rewriteGroupBy(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2629,7 +2653,13 @@ func (a *application) rewriteOnDup(parent SQLNode, node OnDup, replacer replacer
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(OnDup)
+			a.cur.revisit = false
+			return a.rewriteOnDup(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2746,7 +2776,13 @@ func (a *application) rewriteOrderBy(parent SQLNode, node OrderBy, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(OrderBy)
+			a.cur.revisit = false
+			return a.rewriteOrderBy(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -2957,7 +2993,13 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Partitions)
+			a.cur.revisit = false
+			return a.rewritePartitions(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3377,7 +3419,13 @@ func (a *application) rewriteSelectExprs(parent SQLNode, node SelectExprs, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(SelectExprs)
+			a.cur.revisit = false
+			return a.rewriteSelectExprs(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3496,7 +3544,13 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(SetExprs)
+			a.cur.revisit = false
+			return a.rewriteSetExprs(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3883,7 +3937,13 @@ func (a *application) rewriteTableExprs(parent SQLNode, node TableExprs, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(TableExprs)
+			a.cur.revisit = false
+			return a.rewriteTableExprs(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3964,7 +4024,13 @@ func (a *application) rewriteTableNames(parent SQLNode, node TableNames, replace
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(TableNames)
+			a.cur.revisit = false
+			return a.rewriteTableNames(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -3995,7 +4061,13 @@ func (a *application) rewriteTableOptions(parent SQLNode, node TableOptions, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(TableOptions)
+			a.cur.revisit = false
+			return a.rewriteTableOptions(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -4338,7 +4410,13 @@ func (a *application) rewriteUpdateExprs(parent SQLNode, node UpdateExprs, repla
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(UpdateExprs)
+			a.cur.revisit = false
+			return a.rewriteUpdateExprs(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -4443,7 +4521,13 @@ func (a *application) rewriteValTuple(parent SQLNode, node ValTuple, replacer re
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(ValTuple)
+			a.cur.revisit = false
+			return a.rewriteValTuple(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -4498,7 +4582,13 @@ func (a *application) rewriteValues(parent SQLNode, node Values, replacer replac
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Values)
+			a.cur.revisit = false
+			return a.rewriteValues(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}

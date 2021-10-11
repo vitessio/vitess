@@ -36,10 +36,15 @@ type (
 		Tables []*QueryTable
 
 		// innerJoins contains the predicates that need multiple Tables
-		innerJoins map[semantics.TableSet][]sqlparser.Expr
+		innerJoins []*innerJoin
 
 		// NoDeps contains the predicates that can be evaluated anywhere.
 		NoDeps sqlparser.Expr
+	}
+
+	innerJoin struct {
+		deps  semantics.TableSet
+		exprs []sqlparser.Expr
 	}
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
@@ -77,8 +82,9 @@ func (qg *QueryGraph) TableID() semantics.TableSet {
 // GetPredicates returns the predicates that are applicable for the two given TableSets
 func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Expr {
 	var allExprs []sqlparser.Expr
-	for tableSet, exprs := range qg.innerJoins {
-		if tableSet.IsSolvedBy(lhs|rhs) &&
+	for _, join := range qg.innerJoins {
+		tableSet, exprs := join.deps, join.exprs
+		if tableSet.IsSolvedBy(lhs.Merge(rhs)) &&
 			tableSet.IsOverlapping(rhs) &&
 			tableSet.IsOverlapping(lhs) {
 			allExprs = append(allExprs, exprs...)
@@ -88,9 +94,7 @@ func (qg *QueryGraph) GetPredicates(lhs, rhs semantics.TableSet) []sqlparser.Exp
 }
 
 func newQueryGraph() *QueryGraph {
-	return &QueryGraph{
-		innerJoins: map[semantics.TableSet][]sqlparser.Expr{},
-	}
+	return &QueryGraph{}
 }
 
 func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semantics.SemTable) error {
@@ -105,6 +109,28 @@ func (qg *QueryGraph) collectPredicates(sel *sqlparser.Select, semTable *semanti
 	return nil
 }
 
+func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Expr, bool) {
+	for _, join := range qg.innerJoins {
+		if join.deps == ts {
+			return join.exprs, true
+		}
+	}
+	return nil, false
+}
+func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Expr) {
+	for _, join := range qg.innerJoins {
+		if join.deps == ts {
+			join.exprs = append(join.exprs, expr)
+			return
+		}
+	}
+
+	qg.innerJoins = append(qg.innerJoins, &innerJoin{
+		deps:  ts,
+		exprs: []sqlparser.Expr{expr},
+	})
+}
+
 func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *semantics.SemTable) error {
 	deps := semTable.RecursiveDeps(predicate)
 	switch deps.NumberOfTables() {
@@ -116,13 +142,7 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v for predicate %v not found", deps, sqlparser.String(predicate))
 		}
 	default:
-		allPredicates, found := qg.innerJoins[deps]
-		if found {
-			allPredicates = append(allPredicates, predicate)
-		} else {
-			allPredicates = []sqlparser.Expr{predicate}
-		}
-		qg.innerJoins[deps] = allPredicates
+		qg.addJoinPredicates(deps, predicate)
 	}
 	return nil
 }
@@ -151,7 +171,8 @@ func (qg *QueryGraph) addNoDepsPredicate(predicate sqlparser.Expr) {
 // UnsolvedPredicates implements the Operator interface
 func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr {
 	var result []sqlparser.Expr
-	for set, exprs := range qg.innerJoins {
+	for _, join := range qg.innerJoins {
+		set, exprs := join.deps, join.exprs
 		if !set.IsSolvedBy(qg.TableID()) {
 			result = append(result, exprs...)
 		}
@@ -165,6 +186,6 @@ func (qg *QueryGraph) CheckValid() error {
 }
 
 // Compact implements the Operator interface
-func (qg *QueryGraph) Compact() Operator {
-	return qg
+func (qg *QueryGraph) Compact(*semantics.SemTable) (Operator, error) {
+	return qg, nil
 }
