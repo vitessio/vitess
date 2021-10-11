@@ -206,10 +206,17 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 }
 
 // Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := d[expr]
-	if found {
-		return deps
+func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
+	if ValidAsMapKey(expr) {
+		// we have something that could live in the cache
+		var found bool
+		deps, found = d[expr]
+		if found {
+			return deps
+		}
+		defer func() {
+			d[expr] = deps
+		}()
 	}
 
 	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
@@ -232,7 +239,6 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
 		return !found, nil
 	}, expr)
 
-	d[expr] = deps
 	return deps
 }
 
