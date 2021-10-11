@@ -259,10 +259,14 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
-			if err != nil {
-				return false
+			if err == nil {
+				cursor.Replace(exp)
+			} else {
+				// cloning the expression and removing the qualifier
+				col := *node
+				col.Qualifier = sqlparser.TableName{}
+				cursor.Replace(&col)
 			}
-			cursor.Replace(exp)
 			return false
 		}
 		return true
