@@ -927,6 +927,65 @@ func TestScopingWDerivedTables(t *testing.T) {
 	}
 }
 
+func TestDerivedTablesOrderClause(t *testing.T) {
+	queries := []struct {
+		query                string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{{
+		query:                "select 1 from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by t.id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id as foo from (select id from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}}
+	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewTableIdent("t")}}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", si)
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
+
+		})
+	}
+}
+
 func TestScopingWComplexDerivedTables(t *testing.T) {
 	queries := []struct {
 		query            string

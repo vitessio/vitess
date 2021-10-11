@@ -129,7 +129,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+	return &SemTable{
+		Recursive:        map[sqlparser.Expr]TableSet{},
+		Direct:           map[sqlparser.Expr]TableSet{},
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+	}
 }
 
 // TableSetFor returns the bitmask for this particular table
