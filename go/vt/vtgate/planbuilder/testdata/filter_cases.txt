@@ -1399,7 +1399,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
@@ -1481,7 +1481,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -1569,7 +1569,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
@@ -2143,7 +2143,7 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # Select with equals null
-"select id from music where id = 5 and id = null"
+"select id from music where id = null"
 {
   "QueryType": "SELECT",
   "Original": "select id from music where id = null",
