@@ -236,7 +236,7 @@ func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.Compar
 		return found, false, nil
 	case sqlparser.InOp:
 		if rp.isImpossibleIN(node) {
-			return false, false, nil
+			return false, true, nil
 		}
 		found, err := rp.planInOp(ctx, node)
 		if err != nil {
