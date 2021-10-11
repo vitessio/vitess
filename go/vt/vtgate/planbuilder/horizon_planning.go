@@ -274,10 +274,9 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 }
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
-	var err error
-	ti, _ := semTable.TableInfoForExpr(expr.Expr)
-	if ti == nil {
-		return nil
+	ti, err := semTable.TableInfoForExpr(expr.Expr)
+	if err != nil && err != semantics.ErrMultipleTables {
+		return err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
@@ -630,7 +629,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	case *simpleProjection:
-		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+		return hp.createMemorySortPlan(ctx, plan, orderExprs)
 	case *vindexFunc:
 		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
 	default:
