@@ -215,7 +215,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 			sel: node,
 		}
 
-		replaceSubQuery(ctx.reinsertSubQ, node)
+		replaceSubQuery(ctx, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {
