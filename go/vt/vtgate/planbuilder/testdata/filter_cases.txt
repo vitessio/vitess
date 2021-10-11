@@ -2143,7 +2143,7 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # Select with equals null
-"select id from music where id = null"
+"select id from music where id = 5 and id = null"
 {
   "QueryType": "SELECT",
   "Original": "select id from music where id = null",

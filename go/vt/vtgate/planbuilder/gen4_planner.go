@@ -178,9 +178,9 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 
 func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
 	ctx := &planningContext{
-		reservedVars:          reservedVars,
-		semTable:              semTable,
-		vschema:               vschema,
+		reservedVars: reservedVars,
+		semTable:     semTable,
+		vschema:      vschema,
 	}
 	return ctx
 }
