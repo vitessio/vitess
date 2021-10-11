@@ -51,8 +51,8 @@ func TestDurabilityNone(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 0, SemiSyncAckersFromTablet(nil))
-	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, nil))
+	assert.Equal(t, 0, SemiSyncAckers(nil))
+	assert.Equal(t, false, ReplicaSemiSync(nil, nil))
 }
 
 func TestDurabilitySemiSync(t *testing.T) {
@@ -78,11 +78,11 @@ func TestDurabilitySemiSync(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, SemiSyncAckersFromTablet(nil))
-	assert.Equal(t, true, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+	assert.Equal(t, 1, SemiSyncAckers(nil))
+	assert.Equal(t, true, ReplicaSemiSync(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_REPLICA,
 	}))
-	assert.Equal(t, false, ReplicaSemiSyncFromTablet(nil, &topodatapb.Tablet{
+	assert.Equal(t, false, ReplicaSemiSync(nil, &topodatapb.Tablet{
 		Type: topodatapb.TabletType_EXPERIMENTAL,
 	}))
 }
@@ -110,8 +110,8 @@ func TestDurabilityCrossCell(t *testing.T) {
 		Type: topodatapb.TabletType_SPARE,
 	})
 	assert.Equal(t, promotionrule.MustNot, promoteRule)
-	assert.Equal(t, 1, SemiSyncAckersFromTablet(nil))
-	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, 1, SemiSyncAckers(nil))
+	assert.Equal(t, false, ReplicaSemiSync(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -122,7 +122,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell1",
 		},
 	}))
-	assert.Equal(t, true, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, true, ReplicaSemiSync(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
@@ -133,7 +133,7 @@ func TestDurabilityCrossCell(t *testing.T) {
 			Cell: "cell2",
 		},
 	}))
-	assert.Equal(t, false, ReplicaSemiSyncFromTablet(&topodatapb.Tablet{
+	assert.Equal(t, false, ReplicaSemiSync(&topodatapb.Tablet{
 		Type: topodatapb.TabletType_PRIMARY,
 		Alias: &topodatapb.TabletAlias{
 			Cell: "cell1",
