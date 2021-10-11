@@ -138,7 +138,7 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 		// we don't want to look at the subquery dependencies
 		if extracted.OtherSide == nil {
 			deps = semantics.SingleTableSet(0)
-		} else if semantics.ValidAsMapKey(extracted.OtherSide) {
+		} else {
 			deps = semTable.RecursiveDeps(extracted.OtherSide)
 		}
 	}

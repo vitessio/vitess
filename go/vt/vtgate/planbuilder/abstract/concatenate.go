@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Concatenate represents a UNION ALL.
+// Concatenate represents a UNION ALL/DISTINCT.
 type Concatenate struct {
 	Distinct    bool
 	SelectStmts []*sqlparser.Select

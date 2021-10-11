@@ -25,15 +25,6 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	// An operator can be:
-	//	*  Derived - which represents an expression that generates a table.
-	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
-	//     while still preserving the results
-	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
-	//	*  Join - A join represents inner join.
-	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
-	//  *  Vindex - Represents a query that selects from vindex tables.
-	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
