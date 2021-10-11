@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,6 +64,28 @@ func TestAndOrPrecedence(t *testing.T) {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}
 	}
+}
+
+func TestNotInSubqueryPrecedence(t *testing.T) {
+	tree, err := Parse("select * from a where not id in (select 42)")
+	require.NoError(t, err)
+	not := tree.(*Select).Where.Expr.(*NotExpr)
+	cmp := not.Expr.(*ComparisonExpr)
+	subq := cmp.Right.(*Subquery)
+	fmt.Println(subq)
+
+	extracted := &ExtractedSubquery{
+		Original:     cmp,
+		ArgName:      "arg1",
+		HasValuesArg: "has_values1",
+		OpCode:       1,
+		Subquery:     subq.Select,
+		OtherSide:    cmp.Left,
+	}
+	not.Expr = extracted
+
+	output := readable(not)
+	assert.Equal(t, "not (:has_values1 = 1 and id in ::arg1)", output)
 }
 
 func TestPlusStarPrecedence(t *testing.T) {
