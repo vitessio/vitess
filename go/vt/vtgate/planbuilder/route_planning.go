@@ -47,7 +47,7 @@ func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
 	if !ok {
 		return false
 	}
-	for _, subq := range c.reinsertSubQ{
+	for _, subq := range c.reinsertSubQ {
 		if subq == ext {
 			return true
 		}

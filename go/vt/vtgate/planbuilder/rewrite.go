@@ -89,6 +89,13 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
+	case *sqlparser.Subquery:
+		r.isInSubquery++
+		err := rewriteSubquery(cursor, r, node)
+		if err != nil {
+			r.err = err
+		}
+
 	}
 	return true
 }
@@ -144,10 +151,9 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 	if !found {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
-	if engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
+	if semTableSQ.ArgName != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
 		return nil
 	}
-
 	argName := r.reservedVars.ReserveSubQuery()
 	semTableSQ.ArgName = argName
 	cursor.Replace(semTableSQ)

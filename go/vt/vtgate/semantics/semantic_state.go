@@ -260,3 +260,13 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 	}, nil)
 	return newExpr, nil
 }
+
+// FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
+func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
+	for foundSubq, extractedSubquery := range st.SubqueryRef {
+		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq) {
+			return extractedSubquery
+		}
+	}
+	return nil
+}
