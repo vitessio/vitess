@@ -93,17 +93,17 @@ func PromotionRule(tablet *topodatapb.Tablet) promotionrule.CandidatePromotionRu
 	return curDurabilityPolicy.promotionRule(tablet)
 }
 
-// SemiSyncAckersFromTablet returns the primary semi-sync setting for the instance.
+// SemiSyncAckers returns the primary semi-sync setting for the instance.
 // 0 means none. Non-zero specifies the number of required ackers.
-func SemiSyncAckersFromTablet(tablet *topodatapb.Tablet) int {
+func SemiSyncAckers(tablet *topodatapb.Tablet) int {
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.semiSyncAckers(tablet)
 }
 
-// ReplicaSemiSyncFromTablet returns the replica semi-sync setting from the tablet record.
+// ReplicaSemiSync returns the replica semi-sync setting from the tablet record.
 // Prefer using this function if tablet record is available.
-func ReplicaSemiSyncFromTablet(primary, replica *topodatapb.Tablet) bool {
+func ReplicaSemiSync(primary, replica *topodatapb.Tablet) bool {
 	curDurabilityPolicyMutex.Lock()
 	defer curDurabilityPolicyMutex.Unlock()
 	return curDurabilityPolicy.replicaSemiSync(primary, replica)
