@@ -281,3 +281,13 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 	}
 	return nil
 }
+
+func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
+	var res []*sqlparser.ExtractedSubquery
+	for _, extractedSubquery := range st.SubqueryRef {
+		if extractedSubquery.NeedsRewrite {
+			res = append(res, extractedSubquery)
+		}
+	}
+	return res
+}

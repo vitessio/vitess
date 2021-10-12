@@ -38,8 +38,6 @@ type planningContext struct {
 	reservedVars *sqlparser.ReservedVars
 	semTable     *semantics.SemTable
 	vschema      ContextVSchema
-	// these help in replacing the argNames with the subquery
-	reinsertSubQ []*sqlparser.Subquery
 }
 
 func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
@@ -47,12 +45,11 @@ func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
 	if !ok {
 		return false
 	}
-	for _, subq := range c.reinsertSubQ {
-		if sqlparser.EqualsRefOfSubquery(subq, ext) {
+	for _, extractedSubq := range c.semTable.GetSubqueryNeedingRewrite() {
+		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(&sqlparser.Subquery{Select: extractedSubq.Subquery}, ext) {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -274,7 +271,7 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 }
 
 func mergeSubQuery(ctx *planningContext, outer *routeTree, inner *routeTree, subq *abstract.SubQueryInner) (*routeTree, error) {
-	ctx.reinsertSubQ = append(ctx.reinsertSubQ, &sqlparser.Subquery{Select: subq.ExtractedSubquery.Subquery})
+	subq.ExtractedSubquery.NeedsRewrite = true
 
 	// go over the subquery and add its tables to the one's solved by the route it is merged with
 	// this is needed to so that later when we try to push projections, we get the correct

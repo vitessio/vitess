@@ -523,12 +523,9 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 }
 
 func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
-	if len(ctx.reinsertSubQ) == 0 {
+	extractedSubqueries := ctx.semTable.GetSubqueryNeedingRewrite()
+	if len(extractedSubqueries) == 0 {
 		return
-	}
-	extractedSubqueries := []*sqlparser.ExtractedSubquery{}
-	for _, subquery := range ctx.reinsertSubQ {
-		extractedSubqueries = append(extractedSubqueries, ctx.semTable.FindSubqueryReference(subquery))
 	}
 	sqr := &subQReplacer{exprToReplaceBySqExpr: extractedSubqueries}
 	sqlparser.Rewrite(sel, sqr.replacer, nil)

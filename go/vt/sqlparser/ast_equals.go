@@ -1566,6 +1566,7 @@ func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 	return a.ArgName == b.ArgName &&
 		a.HasValuesArg == b.HasValuesArg &&
 		a.OpCode == b.OpCode &&
+		a.NeedsRewrite == b.NeedsRewrite &&
 		EqualsExpr(a.Original, b.Original) &&
 		EqualsSelectStatement(a.Subquery, b.Subquery) &&
 		EqualsExpr(a.OtherSide, b.OtherSide)
