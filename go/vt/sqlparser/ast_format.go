@@ -1728,8 +1728,8 @@ func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 	case *ComparisonExpr:
 		// other_side = :__sq
 		cmp := &ComparisonExpr{
-			Left: node.OtherSide,
-			Right: NewArgument(node.ArgName),
+			Left:     node.OtherSide,
+			Right:    NewArgument(node.ArgName),
 			Operator: original.Operator,
 		}
 		var expr Expr = cmp

@@ -89,19 +89,6 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
-
-		if len(r.subqueryStack) == 0 {
-			break
-		}
-		currSuqbuery := r.subqueryStack[len(r.subqueryStack)-1]
-		sqlparser.Rewrite(currSuqbuery.Original, func(cursor *sqlparser.Cursor) bool {
-			switch cursor.Node().(type) {
-			case *sqlparser.Subquery:
-				cursor.Replace(&sqlparser.Subquery{Select: currSuqbuery.Subquery})
-				return false
-			}
-			return true
-		}, nil)
 	case *sqlparser.Subquery:
 		err := rewriteSubquery(cursor, r, node)
 		if err != nil {
@@ -126,7 +113,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		node.Operator != sqlparser.NotEqualOp {
 		return nil
 	}
-	subq, exp := getSubqueryAndOtherSide(node)
+	subq, exp := semantics.GetSubqueryAndOtherSide(node)
 	if subq == nil || exp == nil {
 		return nil
 	}
@@ -140,22 +127,8 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
 	semTableSQ.ArgName = argName
 	semTableSQ.HasValuesArg = hasValuesArg
-	semTableSQ.OtherSide = exp
 	cursor.Replace(semTableSQ)
 	return nil
-}
-
-func getSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
-	var subq *sqlparser.Subquery
-	var exp sqlparser.Expr
-	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
-		subq = lSubq
-		exp = node.Right
-	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
-		subq = rSubq
-		exp = node.Left
-	}
-	return subq, exp
 }
 
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
