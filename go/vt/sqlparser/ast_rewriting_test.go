@@ -215,6 +215,18 @@ func TestRewrites(in *testing.T) {
 		expected: "CALL proc(:__vtudvfoo)",
 		udv:      1,
 	}, {
+		in:       "SELECT * FROM tbl WHERE NOT id IN (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id NOT IN (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id = 12",
+		expected: "SELECT * FROM tbl WHERE id != 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id > 12",
+		expected: "SELECT * FROM tbl WHERE id <= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not true",
+		expected: "SELECT * FROM tbl WHERE false",
+	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
 		autocommit:                  true,
