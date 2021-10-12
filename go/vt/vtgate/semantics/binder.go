@@ -59,26 +59,33 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		if currScope.selectStmt == nil {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
 		}
-		opcode := engine.PulloutValue
-		var original sqlparser.Expr = node
+
+		sq := &sqlparser.ExtractedSubquery{
+			Subquery: node.Select,
+			Original: node,
+			OpCode:   int(engine.PulloutValue),
+		}
+
 		switch par := cursor.Parent().(type) {
 		case *sqlparser.ComparisonExpr:
 			switch par.Operator {
 			case sqlparser.InOp:
-				opcode = engine.PulloutIn
+				sq.OpCode = int(engine.PulloutIn)
 			case sqlparser.NotInOp:
-				opcode = engine.PulloutNotIn
+				sq.OpCode = int(engine.PulloutNotIn)
 			}
-			original = par
+			subq, exp := GetSubqueryAndOtherSide(par)
+			sq.Original = &sqlparser.ComparisonExpr{
+				Left:     exp,
+				Operator: par.Operator,
+				Right:    subq,
+			}
+			sq.OtherSide = exp
 		case *sqlparser.ExistsExpr:
-			opcode = engine.PulloutExists
-			original = par
+			sq.OpCode = int(engine.PulloutExists)
+			sq.Original = par
 		}
-		sq := &sqlparser.ExtractedSubquery{
-			Subquery: node.Select,
-			OpCode:   int(opcode),
-			Original: sqlparser.CloneExpr(original),
-		}
+
 		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
 		b.subqueryRef[node] = sq
 	case *sqlparser.ColName:
@@ -160,4 +167,17 @@ func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Column '%s' in field list is ambiguous", sqlparser.String(colName))
 	}
 	return err
+}
+
+func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
+	var subq *sqlparser.Subquery
+	var exp sqlparser.Expr
+	if lSubq, lIsSubq := node.Left.(*sqlparser.Subquery); lIsSubq {
+		subq = lSubq
+		exp = node.Right
+	} else if rSubq, rIsSubq := node.Right.(*sqlparser.Subquery); rIsSubq {
+		subq = rSubq
+		exp = node.Left
+	}
+	return subq, exp
 }

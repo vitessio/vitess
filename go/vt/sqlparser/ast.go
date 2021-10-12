@@ -1967,13 +1967,13 @@ type (
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
 	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
 	ExtractedSubquery struct {
-		Original     Expr
+		Original     Expr // original expression that was replaced by this ExtractedSubquery
 		ArgName      string
 		HasValuesArg string
 		OpCode       int // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
 		Subquery     SelectStatement
 		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		NeedsRewrite bool
+		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
 	}
 )
 
