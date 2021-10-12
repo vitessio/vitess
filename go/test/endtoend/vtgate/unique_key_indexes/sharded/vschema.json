@@ -1,0 +1,37 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+
+    "t2_lookup_id_keyspace_idx": {
+      "type": "lookup_unique",
+      "params": {
+        "from": "lookup_id",
+        "table": "unsharded.t2_lookup_id_keyspace_idx",
+        "to": "keyspace_id"
+      },
+      "owner": "t2"
+    }
+  },
+  "tables": {
+    "t2": {
+      "column_vindexes": [
+        {
+          "name": "hash",
+          "columns": [
+            "sharding_id"
+          ]
+        },
+
+        {
+          "name": "t2_lookup_id_keyspace_idx",
+          "columns": [
+            "lookup_id"
+          ]
+        }
+      ]
+    }
+  }
+}
