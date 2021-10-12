@@ -1973,6 +1973,7 @@ type (
 		OpCode       int // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
 		Subquery     SelectStatement
 		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		NeedsRewrite bool
 	}
 )
 
