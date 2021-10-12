@@ -63,6 +63,9 @@ type ContextVSchema interface {
 	// that could become a problem if they move to a sharded keyspace
 	WarnUnshardedOnly(format string, params ...interface{})
 
+	// PlannerWarning records warning created during planning.
+	PlannerWarning(message string)
+
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode() string
 }

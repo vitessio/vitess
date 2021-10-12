@@ -90,6 +90,8 @@ type (
 		// ColumnEqualities is used to enable transitive closures
 		// if a == b and b == c then a == c
 		ColumnEqualities map[columnName][]sqlparser.Expr
+
+		Warning string
 	}
 
 	columnName struct {
