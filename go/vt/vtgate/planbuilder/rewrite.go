@@ -107,12 +107,6 @@ func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
 }
 
 func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.ComparisonExpr) error {
-	if node.Operator != sqlparser.InOp &&
-		node.Operator != sqlparser.NotInOp &&
-		node.Operator != sqlparser.EqualOp &&
-		node.Operator != sqlparser.NotEqualOp {
-		return nil
-	}
 	subq, exp := semantics.GetSubqueryAndOtherSide(node)
 	if subq == nil || exp == nil {
 		return nil
