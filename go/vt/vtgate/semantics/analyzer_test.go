@@ -539,6 +539,11 @@ func TestSubqueriesMappingWhereClause(t *testing.T) {
 			opCode:        engine.PulloutExists,
 			otherSideName: "",
 		},
+		{
+			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
 	}
 
 	for i, tc := range tcs {
