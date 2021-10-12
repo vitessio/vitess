@@ -2258,9 +2258,9 @@ func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
 	case *ComparisonExpr:
 		// other_side = :__sq
 		cmp := &ComparisonExpr{
-			Left:		node.OtherSide,
-			Right:		NewArgument(node.ArgName),
-			Operator:	original.Operator,
+			Left:     node.OtherSide,
+			Right:    NewArgument(node.ArgName),
+			Operator: original.Operator,
 		}
 		var expr Expr = cmp
 		switch original.Operator {
