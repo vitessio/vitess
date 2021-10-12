@@ -79,7 +79,6 @@
   }
 }
 
-
 # bind var already in use
 "select e.col, u.id uid, e.id eid from user u join user_extra e having uid = eid and e.col = :uid"
 {
@@ -1073,6 +1072,10 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Limit",
@@ -1137,6 +1140,10 @@
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Limit",
@@ -1208,6 +1215,10 @@
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1268,6 +1279,9 @@
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",

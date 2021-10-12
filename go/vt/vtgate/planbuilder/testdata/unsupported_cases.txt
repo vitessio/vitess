@@ -361,7 +361,6 @@ Gen4 plan same as above
 "unsupported: where clause for vindex function must be of the form id = <val> (where clause missing)"
 Gen4 plan same as above
 
-
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
 Gen4 plan same as above

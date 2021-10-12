@@ -106,6 +106,10 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -146,6 +150,10 @@ Gen4 error: Incorrect usage/placement of 'NEXT'
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -722,64 +730,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select user.col from user left join user_extra as e left join unsharded as m1 on m1.col = e.col on user.col = e.col",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "LeftJoin",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "user_col": 0
-    },
-    "TableName": "`user`_user_extra_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Join",
-        "Variant": "LeftJoin",
-        "JoinVars": {
-          "e_col": 0
-        },
-        "TableName": "user_extra_unsharded",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select e.col from user_extra as e where 1 != 1",
-            "Query": "select e.col from user_extra as e where e.col = :user_col",
-            "Table": "user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 1 from unsharded as m1 where 1 != 1",
-            "Query": "select 1 from unsharded as m1 where m1.col = :e_col",
-            "Table": "unsharded"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Right join
 "select m1.col from unsharded as m1 right join unsharded as m2 on m1.a=m2.b"
@@ -2404,72 +2355,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "t_col1": 0,
-      "t_id": 1
-    },
-    "TableName": "`user`_user_extra_unsharded",
-    "Inputs": [
-      {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          1,
-          0
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectScatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectScatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded where 1 != 1",
-        "Query": "select 1 from unsharded where unsharded.col1 = :t_col1 and unsharded.id = :t_id",
-        "Table": "unsharded"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # wire-up on within cross-shard derived table
 "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
@@ -2627,67 +2513,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
-  "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "TableName": "unsharded_a_`user`_user_extra",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectUnsharded",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
-        "FieldQuery": "select 1 from unsharded_a as ua where 1 != 1",
-        "Query": "select 1 from unsharded_a as ua",
-        "Table": "unsharded_a"
-      },
-      {
-        "OperatorType": "SimpleProjection",
-        "Columns": [
-          1
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "-1,-2",
-            "TableName": "`user`_user_extra",
-            "Inputs": [
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectScatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "SelectScatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from user_extra where 1 != 1",
-                "Query": "select 1 from user_extra",
-                "Table": "user_extra"
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Join with cross-shard derived table on rhs - push down join predicate to derived table
 "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id"
@@ -2769,6 +2595,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2801,6 +2631,9 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2836,6 +2669,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2868,6 +2705,9 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2903,6 +2743,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2935,6 +2779,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2970,6 +2818,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -3021,6 +2873,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -3093,6 +2949,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3127,6 +2987,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -3188,6 +3052,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3252,6 +3120,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -4282,6 +4154,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -4297,6 +4173,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Limit",
@@ -4341,6 +4221,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Limit",
@@ -4362,6 +4246,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
