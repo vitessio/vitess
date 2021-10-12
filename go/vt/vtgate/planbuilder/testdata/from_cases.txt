@@ -4273,3 +4273,124 @@ Gen4 plan same as above
     ]
   }
 }
+
+# two subqueries with different Select and OpCode
+"select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from user_extra where 1 != 1",
+        "Query": "select id from user_extra",
+        "Table": "user_extra"
+      },
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id from user_extra where 1 != 1",
+                "Query": "select user_id from user_extra limit :__upper_limit",
+                "Table": "user_extra"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectIN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col = :__sq1 and :__sq_has_values2 = 1 and id in ::__vals",
+            "Table": "`user`",
+            "Values": [
+              "::__sq2"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where id in (select id from user_extra) and col = (select user_id from user_extra limit 1)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id from user_extra where 1 != 1",
+            "Query": "select user_id from user_extra limit :__upper_limit",
+            "Table": "user_extra"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from user_extra where 1 != 1",
+            "Query": "select id from user_extra",
+            "Table": "user_extra"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectIN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals) and col = :__sq2",
+            "Table": "`user`",
+            "Values": [
+              "::__sq1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}

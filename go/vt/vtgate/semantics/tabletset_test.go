@@ -77,14 +77,6 @@ func TestTableSet_LargeTablesConstituents(t *testing.T) {
 	assert.Equal(t, expected, ts.Constituents())
 }
 
-func TestRemoveSmall(t *testing.T) {
-	ts1 := SingleTableSet(1)
-	ts2 := SingleTableSet(2)
-	tsX := ts1.Merge(ts2)
-	tsX.RemoveInPlace(ts2)
-	assert.Equal(t, tsX.Constituents(), ts1.Constituents())
-}
-
 func TestTabletSet_LargeMergeInPlace(t *testing.T) {
 	const SetRange = 256
 	const Blocks = 64
