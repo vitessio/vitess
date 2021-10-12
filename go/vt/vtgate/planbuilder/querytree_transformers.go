@@ -502,8 +502,8 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 }
 
 type subQReplacer struct {
-	exprToReplaceBySqExpr []*sqlparser.ExtractedSubquery
-	replaced              bool
+	subqueryToReplace []*sqlparser.ExtractedSubquery
+	replaced          bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
@@ -511,7 +511,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	if !ok {
 		return true
 	}
-	for _, replaceByExpr := range sqr.exprToReplaceBySqExpr {
+	for _, replaceByExpr := range sqr.subqueryToReplace {
 		// we are comparing the ArgNames in case the expressions have been cloned
 		if ext.ArgName == replaceByExpr.ArgName {
 			cursor.Replace(ext.Original)
@@ -527,7 +527,7 @@ func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
 	if len(extractedSubqueries) == 0 {
 		return
 	}
-	sqr := &subQReplacer{exprToReplaceBySqExpr: extractedSubqueries}
+	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
 	sqlparser.Rewrite(sel, sqr.replacer, nil)
 	for sqr.replaced {
 		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left

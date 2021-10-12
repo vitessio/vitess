@@ -97,13 +97,6 @@ func (ts *largeTableSet) mergeSmall(small uint64) *largeTableSet {
 	return &largeTableSet{merged}
 }
 
-func (ts *largeTableSet) removeSmall(small uint64) *largeTableSet {
-	merged := make([]uint64, len(ts.tables))
-	copy(merged, ts.tables)
-	merged[0] &= ^small
-	return &largeTableSet{merged}
-}
-
 func (ts *largeTableSet) mergeInPlace(other *largeTableSet) {
 	if len(other.tables) > len(ts.tables) {
 		merged := make([]uint64, len(other.tables))
@@ -115,18 +108,8 @@ func (ts *largeTableSet) mergeInPlace(other *largeTableSet) {
 	}
 }
 
-func (ts *largeTableSet) removeInPlace(other *largeTableSet) {
-	for i := range ts.tables {
-		ts.tables[i] &= ^other.tables[i]
-	}
-}
-
 func (ts *largeTableSet) mergeSmallInPlace(small uint64) {
 	ts.tables[0] |= small
-}
-
-func (ts *largeTableSet) removeSmallInPlace(small uint64) {
-	ts.tables[0] &= ^small
 }
 
 func (ts *largeTableSet) tableOffset() (offset int) {
@@ -297,20 +280,6 @@ func (ts *TableSet) MergeInPlace(other TableSet) {
 		ts.large.mergeSmallInPlace(other.small)
 	default:
 		ts.large.mergeInPlace(other.large)
-	}
-}
-
-// RemoveInPlace removes all the tables in `other` from this TableSet
-func (ts *TableSet) RemoveInPlace(other TableSet) {
-	switch {
-	case ts.large == nil && other.large == nil:
-		ts.small &= ^other.small
-	case ts.large == nil:
-		ts.large = other.large.removeSmall(ts.small)
-	case other.large == nil:
-		ts.large.removeSmallInPlace(other.small)
-	default:
-		ts.large.removeInPlace(other.large)
 	}
 }
 

@@ -25,10 +25,10 @@ import (
 )
 
 type rewriter struct {
-	semTable      *semantics.SemTable
-	reservedVars  *sqlparser.ReservedVars
-	subqueryStack []*sqlparser.ExtractedSubquery
-	err           error
+	semTable     *semantics.SemTable
+	reservedVars *sqlparser.ReservedVars
+	inSubquery   int
+	err          error
 }
 
 func queryRewrite(semTable *semantics.SemTable, reservedVars *sqlparser.ReservedVars, statement sqlparser.SelectStatement) error {
@@ -58,7 +58,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 	case *sqlparser.AliasedTableExpr:
 		// rewrite names of the routed tables for the subquery
 		// We only need to do this for non-derived tables and if they are in a subquery
-		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || len(r.subqueryStack) == 0 {
+		if _, isDerived := node.Expr.(*sqlparser.DerivedTable); isDerived || r.inSubquery == 0 {
 			break
 		}
 		// find the tableSet and tableInfo that this table points to
@@ -101,7 +101,7 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 func (r *rewriter) rewriteUp(cursor *sqlparser.Cursor) bool {
 	switch cursor.Node().(type) {
 	case *sqlparser.Subquery:
-		r.subqueryStack = r.subqueryStack[:len(r.subqueryStack)-1]
+		r.inSubquery--
 	}
 	return r.err == nil
 }
@@ -117,7 +117,7 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
 
-	r.subqueryStack = append(r.subqueryStack, semTableSQ)
+	r.inSubquery++
 	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
 	semTableSQ.ArgName = argName
 	semTableSQ.HasValuesArg = hasValuesArg
@@ -133,7 +133,7 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 	if semTableSQ.ArgName != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
 		return nil
 	}
-	r.subqueryStack = append(r.subqueryStack, semTableSQ)
+	r.inSubquery++
 	argName := r.reservedVars.ReserveSubQuery()
 	semTableSQ.ArgName = argName
 	cursor.Replace(semTableSQ)
@@ -146,7 +146,7 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
 
-	r.subqueryStack = append(r.subqueryStack, semTableSQ)
+	r.inSubquery++
 	argName := r.reservedVars.ReserveHasValuesSubQuery()
 	semTableSQ.ArgName = argName
 	cursor.Replace(semTableSQ)
