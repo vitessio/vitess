@@ -1,0 +1,39 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "t1_id_keyspace_idx": {
+      "type": "lookup_unique",
+      "params": {
+        "from": "id",
+        "table": "unsharded.t1_id_keyspace_idx",
+        "to": "keyspace_id"
+      },
+      "owner": "t1"
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "name": "hash",
+          "columns": [
+            "lookup_id"
+          ]
+        },
+        {
+          "name": "t1_id_keyspace_idx",
+          "columns": [
+            "id"
+          ]
+        }
+      ],
+      "auto_increment": {
+        "column": "id",
+        "sequence": "unsharded.t1_id_seq"
+      }
+    }
+  }
+}

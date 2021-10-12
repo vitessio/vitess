@@ -1,0 +1,8 @@
+{
+  "sharded": false,
+  "tables": {
+    "t1_id_seq": {
+      "type": "sequence"
+    }
+  }
+}
