@@ -18,7 +18,6 @@ package schema
 
 import (
 	"context"
-	"strings"
 	"sync"
 	"time"
 
@@ -53,9 +52,6 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
-
-		// we'll only log a failed keyspace loading once
-		failedKeyspaces []string
 	}
 )
 
@@ -131,38 +127,13 @@ func (t *Tracker) newUpdateController() *updateController {
 	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
 }
 
-func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
-	if t.isFailedKeyspace(th) {
-		return false
-	}
-
+func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		t.checkIfWeShouldFailKeyspace(th, err)
 		log.Warningf("Unable to add keyspace to tracker: %v", err)
-		return false
+		return err
 	}
-	return true
-}
-
-// checkIfWeShouldFailKeyspace inspects an error and
-// will mark a keyspace as failed and won't try to load more information from it
-func (t *Tracker) checkIfWeShouldFailKeyspace(th *discovery.TabletHealth, err error) {
-	errMessage := err.Error()
-	if strings.Contains(errMessage, "Unknown database '") ||
-		strings.Contains(errMessage, "Table '_vt.schemacopy' doesn't exist") {
-		t.failedKeyspaces = append(t.failedKeyspaces, th.Target.Keyspace)
-	}
-}
-
-func (t *Tracker) isFailedKeyspace(th *discovery.TabletHealth) bool {
-	for _, keyspace := range t.failedKeyspaces {
-		if th.Target.Keyspace == keyspace {
-			// this keyspace is marked as failed. we are not going to reload
-			return true
-		}
-	}
-	return false
+	return nil
 }
 
 // Stop stops the schema tracking
@@ -246,8 +217,13 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 
 // AddNewKeyspace adds keyspace to the tracker.
 func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	t.tracked[target.Keyspace] = t.newUpdateController()
-	return t.LoadKeyspace(conn, target)
+	updateController := t.newUpdateController()
+	t.tracked[target.Keyspace] = updateController
+	err := t.LoadKeyspace(conn, target)
+	if err != nil {
+		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))
+	}
+	return err
 }
 
 type tableMap struct {
