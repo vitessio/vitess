@@ -542,7 +542,7 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 # TPC-H query 13
 "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc"
 "unsupported: column aliases in derived table"
-gen4 does not yet support: column aliases in derived table
+Gen4 error: unsupported: cross-shard left join and column expressions
 
 # TPC-H query 14
 "select 100.00 * sum(case when p_type like 'PROMO%' then l_extendedprice * (1 - l_discount) else 0 end) /  sum(l_extendedprice * (1 - l_discount)) as promo_revenue from lineitem, part where l_partkey = p_partkey and l_shipdate >= date('1995-09-01') and l_shipdate < date('1995-09-01') + interval '1' month"
@@ -562,6 +562,10 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -629,6 +633,10 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -686,6 +694,10 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
           {
             "OperatorType": "Subquery",
             "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values1",
+              "__sq1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -768,6 +780,10 @@ Gen4 error: unsupported: cross-shard correlated subquery
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -807,7 +823,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     },
                     "FieldQuery": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where 1 != 1",
                     "OrderBy": "(3|6) DESC, (2|5) ASC",
-                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
+                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where (:__sq_has_values1 = 1 and o_orderkey in ::__vals) order by o_totalprice desc, o_orderdate asc",
                     "Table": "orders",
                     "Values": [
                       "::__sq1"

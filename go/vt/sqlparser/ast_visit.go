@@ -130,6 +130,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainTab(in, f)
 	case Exprs:
 		return VisitExprs(in, f)
+	case *ExtractedSubquery:
+		return VisitRefOfExtractedSubquery(in, f)
 	case *Flush:
 		return VisitRefOfFlush(in, f)
 	case *Force:
@@ -1049,6 +1051,24 @@ func VisitExprs(in Exprs, f Visit) error {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Original, f); err != nil {
+		return err
+	}
+	if err := VisitSelectStatement(in.Subquery, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.OtherSide, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2535,6 +2555,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfDefault(in, f)
 	case *ExistsExpr:
 		return VisitRefOfExistsExpr(in, f)
+	case *ExtractedSubquery:
+		return VisitRefOfExtractedSubquery(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:

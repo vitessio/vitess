@@ -93,12 +93,12 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, n.subquery)
+	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery)
 	if err != nil {
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(n.opcode, n.argName, n.hasValues, innerPlan)
+	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), n.extracted.ArgName, n.extracted.HasValuesArg, innerPlan)
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 	if err != nil {
 		return nil, err
@@ -135,8 +135,9 @@ func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, er
 	innerSelect := rb.Select
 	derivedTable := &sqlparser.DerivedTable{Select: innerSelect}
 	tblExpr := &sqlparser.AliasedTableExpr{
-		Expr: derivedTable,
-		As:   sqlparser.NewTableIdent(n.alias),
+		Expr:    derivedTable,
+		As:      sqlparser.NewTableIdent(n.alias),
+		Columns: n.columnAliases,
 	}
 	selectExprs := sqlparser.SelectExprs{}
 	for _, colName := range n.columns {
@@ -313,6 +314,12 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 				if predicate.Operator == sqlparser.InOp {
 					switch predicate.Left.(type) {
 					case *sqlparser.ColName:
+						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
+							extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+							if extractedSubquery != nil {
+								extractedSubquery.ArgName = engine.ListVarName
+							}
+						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
 				}
@@ -380,7 +387,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 		Comments:    ctx.semTable.Comments,
 	}
 
-	replaceSubQuery(ctx.exprToReplaceBySqExpr, sel)
+	replaceSubQuery(ctx, sel)
 
 	// TODO clean up when gen4 is the only planner
 	var condition sqlparser.Expr
@@ -495,61 +502,36 @@ func relToTableExpr(t relation) (sqlparser.TableExpr, error) {
 }
 
 type subQReplacer struct {
-	exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr
-	replaced              bool
+	subqueryToReplace []*sqlparser.ExtractedSubquery
+	replaced          bool
 }
 
 func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
-	var exprs []sqlparser.Expr
-	switch node := cursor.Node().(type) {
-	case *sqlparser.AndExpr:
-		exprs = sqlparser.SplitAndExpression(nil, node)
-	case *sqlparser.OrExpr:
-		exprs = sqlparser.SplitOrExpression(nil, node)
-	case sqlparser.Argument:
-		exprs = append(exprs, node)
-	case sqlparser.ListArg:
-		exprs = append(exprs, node)
-	case *sqlparser.ExistsExpr:
-		exprs = append(exprs, node)
-	default:
+	ext, ok := cursor.Node().(*sqlparser.ExtractedSubquery)
+	if !ok {
 		return true
 	}
-
-	var replaceBy sqlparser.Expr
-	var remainder sqlparser.Expr
-	for _, expr := range exprs {
-		found := false
-		for sqExprToReplace, replaceByExpr := range sqr.exprToReplaceBySqExpr {
-			if sqlparser.EqualsExpr(expr, sqExprToReplace) {
-				allReplaceByExprs := sqlparser.SplitAndExpression(nil, replaceBy)
-				allReplaceByExprs = append(allReplaceByExprs, replaceByExpr)
-				replaceBy = sqlparser.AndExpressions(allReplaceByExprs...)
-				found = true
-				break
-			}
-		}
-		if !found {
-			remainder = sqlparser.AndExpressions(remainder, expr)
+	for _, replaceByExpr := range sqr.subqueryToReplace {
+		// we are comparing the ArgNames in case the expressions have been cloned
+		if ext.ArgName == replaceByExpr.ArgName {
+			cursor.Replace(ext.Original)
+			sqr.replaced = true
+			return false
 		}
 	}
-	if replaceBy == nil {
-		return true
-	}
-	newNode := sqlparser.AndExpressions(remainder, replaceBy)
-	cursor.Replace(newNode)
-	sqr.replaced = true
-	return false
+	return true
 }
 
-func replaceSubQuery(exprToReplaceBySqExpr map[sqlparser.Expr]sqlparser.Expr, sel *sqlparser.Select) {
-	if len(exprToReplaceBySqExpr) > 0 {
-		sqr := &subQReplacer{exprToReplaceBySqExpr: exprToReplaceBySqExpr}
+func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
+	extractedSubqueries := ctx.semTable.GetSubqueryNeedingRewrite()
+	if len(extractedSubqueries) == 0 {
+		return
+	}
+	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
+	sqlparser.Rewrite(sel, sqr.replacer, nil)
+	for sqr.replaced {
+		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
+		sqr.replaced = false
 		sqlparser.Rewrite(sel, sqr.replacer, nil)
-		for sqr.replaced {
-			// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
-			sqr.replaced = false
-			sqlparser.Rewrite(sel, sqr.replacer, nil)
-		}
 	}
 }
