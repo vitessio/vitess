@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -35,9 +37,12 @@ type (
 		queue          *queue
 		consumeDelay   time.Duration
 		update         func(th *discovery.TabletHealth) bool
-		reloadKeyspace func(th *discovery.TabletHealth) bool
+		reloadKeyspace func(th *discovery.TabletHealth) error
 		signal         func()
 		loaded         bool
+
+		// we'll only log a failed keyspace loading once
+		ignore bool
 	}
 )
 
@@ -60,12 +65,28 @@ func (u *updateController) consume() {
 		if u.loaded {
 			success = u.update(item)
 		} else {
-			success = u.reloadKeyspace(item)
+			if err := u.reloadKeyspace(item); err == nil {
+				success = true
+			} else {
+				u.ignore = checkIfWeShouldIgnoreKeyspace(err)
+				success = false
+			}
 		}
 		if success && u.signal != nil {
 			u.signal()
 		}
 	}
+}
+
+// checkIfWeShouldIgnoreKeyspace inspects an error and
+// will mark a keyspace as failed and won't try to load more information from it
+func checkIfWeShouldIgnoreKeyspace(err error) bool {
+	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	if sqlErr.Num == mysql.ERBadDb || sqlErr.Num == mysql.ERNoSuchTable {
+		// if we are missing the db or table, not point in retrying
+		return true
+	}
+	return false
 }
 
 func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
@@ -114,6 +135,17 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 		return
 	}
 
+	if len(th.Stats.TableSchemaChanged) > 0 && u.ignore {
+		// we got an update for this keyspace - we need to stop ignoring it, and reload everything
+		u.ignore = false
+		u.loaded = false
+	}
+
+	if u.ignore {
+		// keyspace marked as not working correctly, so we are ignoring it for now
+		return
+	}
+
 	if u.queue == nil {
 		u.queue = &queue{}
 		go u.consume()
@@ -125,4 +157,10 @@ func (u *updateController) setLoaded(loaded bool) {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 	u.loaded = loaded
+}
+
+func (u *updateController) setIgnore(i bool) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.ignore = i
 }
