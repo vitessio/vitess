@@ -266,6 +266,13 @@ type VtctldClient interface {
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+	// only for emergency fixes. This does not rebuild the serving graph.
+	//
+	// The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+	SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error)
+	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+	SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -716,6 +723,24 @@ func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHeal
 	return out, nil
 }
 
+func (c *vtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error) {
+	out := new(vtctldata.SetKeyspaceServedFromResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceServedFrom", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
+	out := new(vtctldata.SetKeyspaceShardingInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceShardingInfo", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) SetShardIsPrimaryServing(ctx context.Context, in *vtctldata.SetShardIsPrimaryServingRequest, opts ...grpc.CallOption) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	out := new(vtctldata.SetShardIsPrimaryServingResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetShardIsPrimaryServing", in, out, opts...)
@@ -971,6 +996,13 @@ type VtctldServer interface {
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+	// only for emergency fixes. This does not rebuild the serving graph.
+	//
+	// The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+	SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error)
+	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+	SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1159,6 +1191,12 @@ func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.Repa
 }
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceServedFrom not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceShardingInfo not implemented")
 }
 func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
@@ -1986,6 +2024,42 @@ func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceServedFromRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceServedFrom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceServedFrom",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceServedFrom(ctx, req.(*vtctldata.SetKeyspaceServedFromRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SetKeyspaceShardingInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceShardingInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceShardingInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, req.(*vtctldata.SetKeyspaceShardingInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_SetShardIsPrimaryServing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.SetShardIsPrimaryServingRequest)
 	if err := dec(in); err != nil {
@@ -2398,6 +2472,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _Vtctld_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceServedFrom",
+			Handler:    _Vtctld_SetKeyspaceServedFrom_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceShardingInfo",
+			Handler:    _Vtctld_SetKeyspaceShardingInfo_Handler,
 		},
 		{
 			MethodName: "SetShardIsPrimaryServing",

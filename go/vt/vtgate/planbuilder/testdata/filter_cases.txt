@@ -1308,7 +1308,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col)",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
@@ -1399,7 +1399,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id)",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
@@ -1481,7 +1481,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id = 5 and u.id in (select m2 from `user` where `user`.id = 5)",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = 5) and u.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -1569,7 +1569,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select u.m from `user` as u where 1 != 1",
-        "Query": "select u.m from `user` as u where u.id in ::__vals and u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id))",
+        "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
         "Table": "`user`",
         "Values": [
           [
@@ -1704,6 +1704,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1740,6 +1744,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1760,7 +1768,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals)",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -1779,6 +1787,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutNotIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1805,38 +1817,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select id from user where id not in (select col from user)",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutNotIn",
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 0 or id not in ::__sq1",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # cross-shard subquery in EXISTS clause.
 "select id from user where exists (select col from user)"
@@ -1846,6 +1827,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1872,7 +1857,41 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select id from user where exists (select col from user)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "Query": "select col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where :__sq_has_values1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # cross-shard subquery as expression
 "select id from user where id = (select col from user)"
@@ -1882,6 +1901,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1922,10 +1945,18 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1975,10 +2006,18 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values2",
+          "__sq2"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1999,7 +2038,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id2 from `user` where 1 != 1",
-            "Query": "select id2 from `user` where :__sq_has_values2 = 1 and id2 in ::__sq2",
+            "Query": "select id2 from `user` where (:__sq_has_values2 = 1 and id2 in ::__sq2)",
             "Table": "`user`"
           }
         ]
@@ -2050,6 +2089,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2310,6 +2353,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2329,6 +2376,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2371,6 +2422,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2390,6 +2445,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2414,7 +2473,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where not (:__sq_has_values1 = 1 and id in ::__sq1) and :__sq_has_values2 = 1 and id in ::__vals",
+            "Query": "select id from `user` where not (:__sq_has_values1 = 1 and id in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
             "Table": "`user`",
             "Values": [
               "::__sq2"
@@ -2518,6 +2577,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2554,6 +2617,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2574,7 +2641,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals)",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -2724,6 +2791,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2754,7 +2825,45 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.col from user as u1 where not exists (select u2.name from user u2 where u2.id = 5)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutExists",
+    "PulloutVars": [
+      "__sq_has_values1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u2.`name` from `user` as u2 where 1 != 1",
+        "Query": "select u2.`name` from `user` as u2 where u2.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u1.col from `user` as u1 where 1 != 1",
+        "Query": "select u1.col from `user` as u1 where not :__sq_has_values1",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
 
 # The outer and first inner are SelectEqualUnique with same Vindex value, the second inner has different Vindex value
 "select id from user where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and id in (select user_extra.col from user_extra where user_extra.user_id = 4)"
@@ -2764,6 +2873,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2804,6 +2917,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values2",
+      "__sq2"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2828,7 +2945,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and :__sq_has_values2 = 1 and id in ::__sq2",
+        "Query": "select id from `user` where id = 5 and not id in (select user_extra.col from user_extra where user_extra.user_id = 5) and (:__sq_has_values2 = 1 and id in ::__sq2)",
         "Table": "`user`",
         "Values": [
           5
@@ -2847,6 +2964,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2887,6 +3008,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -3183,6 +3308,95 @@ Gen4 plan same as above
         "FieldQuery": "select 1 from user_extra where 1 != 1",
         "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col",
         "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+#subquery on other table
+"select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')"
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Distinct",
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col from `user` where 1 != 1",
+            "Query": "select `user`.id, `user`.col from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select distinct user.id, user.col from user where user.col in (select id from music where col2 = 'a')",
+  "Instructions": {
+    "OperatorType": "Aggregate",
+    "Variant": "Ordered",
+    "GroupBy": "(0|2), (1|3)",
+    "ResultColumns": 2,
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from music where 1 != 1",
+            "Query": "select id from music where col2 = 'a'",
+            "Table": "music"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC, (1|3) ASC",
+            "Query": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where (:__sq_has_values1 = 1 and `user`.col in ::__sq1) order by `user`.id asc, `user`.col asc",
+            "Table": "`user`"
+          }
+        ]
       }
     ]
   }
