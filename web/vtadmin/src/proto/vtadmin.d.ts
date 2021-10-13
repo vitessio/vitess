@@ -1827,8 +1827,8 @@ export namespace vtadmin {
         /** Workflow keyspace */
         keyspace?: (string|null);
 
-        /** Workflow nope */
-        nope?: (vtctldata.IWorkflow|null);
+        /** Workflow workflow */
+        workflow?: (vtctldata.IWorkflow|null);
     }
 
     /** Represents a Workflow. */
@@ -1846,8 +1846,8 @@ export namespace vtadmin {
         /** Workflow keyspace. */
         public keyspace: string;
 
-        /** Workflow nope. */
-        public nope?: (vtctldata.IWorkflow|null);
+        /** Workflow workflow. */
+        public workflow?: (vtctldata.IWorkflow|null);
 
         /**
          * Creates a new Workflow instance using the specified properties.
