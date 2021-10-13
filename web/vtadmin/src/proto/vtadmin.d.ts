@@ -35043,6 +35043,408 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a SetKeyspaceServedFromRequest. */
+    interface ISetKeyspaceServedFromRequest {
+
+        /** SetKeyspaceServedFromRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetKeyspaceServedFromRequest tablet_type */
+        tablet_type?: (topodata.TabletType|null);
+
+        /** SetKeyspaceServedFromRequest cells */
+        cells?: (string[]|null);
+
+        /** SetKeyspaceServedFromRequest remove */
+        remove?: (boolean|null);
+
+        /** SetKeyspaceServedFromRequest source_keyspace */
+        source_keyspace?: (string|null);
+    }
+
+    /** Represents a SetKeyspaceServedFromRequest. */
+    class SetKeyspaceServedFromRequest implements ISetKeyspaceServedFromRequest {
+
+        /**
+         * Constructs a new SetKeyspaceServedFromRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceServedFromRequest);
+
+        /** SetKeyspaceServedFromRequest keyspace. */
+        public keyspace: string;
+
+        /** SetKeyspaceServedFromRequest tablet_type. */
+        public tablet_type: topodata.TabletType;
+
+        /** SetKeyspaceServedFromRequest cells. */
+        public cells: string[];
+
+        /** SetKeyspaceServedFromRequest remove. */
+        public remove: boolean;
+
+        /** SetKeyspaceServedFromRequest source_keyspace. */
+        public source_keyspace: string;
+
+        /**
+         * Creates a new SetKeyspaceServedFromRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceServedFromRequest instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceServedFromRequest): vtctldata.SetKeyspaceServedFromRequest;
+
+        /**
+         * Encodes the specified SetKeyspaceServedFromRequest message. Does not implicitly {@link vtctldata.SetKeyspaceServedFromRequest.verify|verify} messages.
+         * @param message SetKeyspaceServedFromRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceServedFromRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceServedFromRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceServedFromRequest.verify|verify} messages.
+         * @param message SetKeyspaceServedFromRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceServedFromRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceServedFromRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceServedFromRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceServedFromRequest;
+
+        /**
+         * Decodes a SetKeyspaceServedFromRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceServedFromRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceServedFromRequest;
+
+        /**
+         * Verifies a SetKeyspaceServedFromRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceServedFromRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceServedFromRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceServedFromRequest;
+
+        /**
+         * Creates a plain object from a SetKeyspaceServedFromRequest message. Also converts values to other types if specified.
+         * @param message SetKeyspaceServedFromRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceServedFromRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceServedFromRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetKeyspaceServedFromResponse. */
+    interface ISetKeyspaceServedFromResponse {
+
+        /** SetKeyspaceServedFromResponse keyspace */
+        keyspace?: (topodata.IKeyspace|null);
+    }
+
+    /** Represents a SetKeyspaceServedFromResponse. */
+    class SetKeyspaceServedFromResponse implements ISetKeyspaceServedFromResponse {
+
+        /**
+         * Constructs a new SetKeyspaceServedFromResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceServedFromResponse);
+
+        /** SetKeyspaceServedFromResponse keyspace. */
+        public keyspace?: (topodata.IKeyspace|null);
+
+        /**
+         * Creates a new SetKeyspaceServedFromResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceServedFromResponse instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceServedFromResponse): vtctldata.SetKeyspaceServedFromResponse;
+
+        /**
+         * Encodes the specified SetKeyspaceServedFromResponse message. Does not implicitly {@link vtctldata.SetKeyspaceServedFromResponse.verify|verify} messages.
+         * @param message SetKeyspaceServedFromResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceServedFromResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceServedFromResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceServedFromResponse.verify|verify} messages.
+         * @param message SetKeyspaceServedFromResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceServedFromResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceServedFromResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceServedFromResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceServedFromResponse;
+
+        /**
+         * Decodes a SetKeyspaceServedFromResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceServedFromResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceServedFromResponse;
+
+        /**
+         * Verifies a SetKeyspaceServedFromResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceServedFromResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceServedFromResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceServedFromResponse;
+
+        /**
+         * Creates a plain object from a SetKeyspaceServedFromResponse message. Also converts values to other types if specified.
+         * @param message SetKeyspaceServedFromResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceServedFromResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceServedFromResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetKeyspaceShardingInfoRequest. */
+    interface ISetKeyspaceShardingInfoRequest {
+
+        /** SetKeyspaceShardingInfoRequest keyspace */
+        keyspace?: (string|null);
+
+        /** SetKeyspaceShardingInfoRequest column_name */
+        column_name?: (string|null);
+
+        /** SetKeyspaceShardingInfoRequest column_type */
+        column_type?: (topodata.KeyspaceIdType|null);
+
+        /** SetKeyspaceShardingInfoRequest force */
+        force?: (boolean|null);
+    }
+
+    /** Represents a SetKeyspaceShardingInfoRequest. */
+    class SetKeyspaceShardingInfoRequest implements ISetKeyspaceShardingInfoRequest {
+
+        /**
+         * Constructs a new SetKeyspaceShardingInfoRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceShardingInfoRequest);
+
+        /** SetKeyspaceShardingInfoRequest keyspace. */
+        public keyspace: string;
+
+        /** SetKeyspaceShardingInfoRequest column_name. */
+        public column_name: string;
+
+        /** SetKeyspaceShardingInfoRequest column_type. */
+        public column_type: topodata.KeyspaceIdType;
+
+        /** SetKeyspaceShardingInfoRequest force. */
+        public force: boolean;
+
+        /**
+         * Creates a new SetKeyspaceShardingInfoRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceShardingInfoRequest instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceShardingInfoRequest): vtctldata.SetKeyspaceShardingInfoRequest;
+
+        /**
+         * Encodes the specified SetKeyspaceShardingInfoRequest message. Does not implicitly {@link vtctldata.SetKeyspaceShardingInfoRequest.verify|verify} messages.
+         * @param message SetKeyspaceShardingInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceShardingInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceShardingInfoRequest message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceShardingInfoRequest.verify|verify} messages.
+         * @param message SetKeyspaceShardingInfoRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceShardingInfoRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceShardingInfoRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceShardingInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceShardingInfoRequest;
+
+        /**
+         * Decodes a SetKeyspaceShardingInfoRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceShardingInfoRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceShardingInfoRequest;
+
+        /**
+         * Verifies a SetKeyspaceShardingInfoRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceShardingInfoRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceShardingInfoRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceShardingInfoRequest;
+
+        /**
+         * Creates a plain object from a SetKeyspaceShardingInfoRequest message. Also converts values to other types if specified.
+         * @param message SetKeyspaceShardingInfoRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceShardingInfoRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceShardingInfoRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a SetKeyspaceShardingInfoResponse. */
+    interface ISetKeyspaceShardingInfoResponse {
+
+        /** SetKeyspaceShardingInfoResponse keyspace */
+        keyspace?: (topodata.IKeyspace|null);
+    }
+
+    /** Represents a SetKeyspaceShardingInfoResponse. */
+    class SetKeyspaceShardingInfoResponse implements ISetKeyspaceShardingInfoResponse {
+
+        /**
+         * Constructs a new SetKeyspaceShardingInfoResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.ISetKeyspaceShardingInfoResponse);
+
+        /** SetKeyspaceShardingInfoResponse keyspace. */
+        public keyspace?: (topodata.IKeyspace|null);
+
+        /**
+         * Creates a new SetKeyspaceShardingInfoResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns SetKeyspaceShardingInfoResponse instance
+         */
+        public static create(properties?: vtctldata.ISetKeyspaceShardingInfoResponse): vtctldata.SetKeyspaceShardingInfoResponse;
+
+        /**
+         * Encodes the specified SetKeyspaceShardingInfoResponse message. Does not implicitly {@link vtctldata.SetKeyspaceShardingInfoResponse.verify|verify} messages.
+         * @param message SetKeyspaceShardingInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.ISetKeyspaceShardingInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified SetKeyspaceShardingInfoResponse message, length delimited. Does not implicitly {@link vtctldata.SetKeyspaceShardingInfoResponse.verify|verify} messages.
+         * @param message SetKeyspaceShardingInfoResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.ISetKeyspaceShardingInfoResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a SetKeyspaceShardingInfoResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns SetKeyspaceShardingInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.SetKeyspaceShardingInfoResponse;
+
+        /**
+         * Decodes a SetKeyspaceShardingInfoResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns SetKeyspaceShardingInfoResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.SetKeyspaceShardingInfoResponse;
+
+        /**
+         * Verifies a SetKeyspaceShardingInfoResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a SetKeyspaceShardingInfoResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns SetKeyspaceShardingInfoResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.SetKeyspaceShardingInfoResponse;
+
+        /**
+         * Creates a plain object from a SetKeyspaceShardingInfoResponse message. Also converts values to other types if specified.
+         * @param message SetKeyspaceShardingInfoResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.SetKeyspaceShardingInfoResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this SetKeyspaceShardingInfoResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SetShardIsPrimaryServingRequest. */
     interface ISetShardIsPrimaryServingRequest {
 
