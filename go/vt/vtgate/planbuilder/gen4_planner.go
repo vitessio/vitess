@@ -78,10 +78,9 @@ func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, que
 	if err != nil {
 		return nil, err
 	}
-	if semTable.Warning != "" {
-		// log it as planning warning.
-		vschema.PlannerWarning(semTable.Warning)
-	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
 	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
 	if err != nil {
 		return nil, err
@@ -124,6 +123,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
