@@ -219,8 +219,8 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}()
 	}
 
-	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
-	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
@@ -282,6 +282,7 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 	return nil
 }
 
+// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
