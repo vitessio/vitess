@@ -69,10 +69,12 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 
 	vtgateSession.TargetString = opts.Target
 
-	if vtgateSession.Options == nil {
-		vtgateSession.Options = &querypb.ExecuteOptions{}
+	if opts.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		if vtgateSession.Options == nil {
+			vtgateSession.Options = &querypb.ExecuteOptions{}
+		}
+		vtgateSession.Options.PlannerVersion = opts.PlannerVersion
 	}
-	vtgateSession.Options.PlannerVersion = opts.PlannerVersion
 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
