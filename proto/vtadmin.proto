@@ -200,7 +200,7 @@ message VTGate {
 message Workflow {
     Cluster cluster = 1;
     string keyspace = 2;
-    vtctldata.Workflow workflow = 3;
+    vtctldata.Workflow nope = 3;
 }
 
 /* Request/Response types */
