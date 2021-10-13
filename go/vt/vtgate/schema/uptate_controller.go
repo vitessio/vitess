@@ -59,16 +59,19 @@ func (u *updateController) consume() {
 
 		// todo: scan queue for multiple update from the same shard, be clever
 		item := u.getItemFromQueueLocked()
+		loaded := u.loaded
 		u.mu.Unlock()
 
 		var success bool
-		if u.loaded {
+		if loaded {
 			success = u.update(item)
 		} else {
 			if err := u.reloadKeyspace(item); err == nil {
 				success = true
 			} else {
-				u.ignore = checkIfWeShouldIgnoreKeyspace(err)
+				if checkIfWeShouldIgnoreKeyspace(err) {
+					u.setIgnore(true)
+				}
 				success = false
 			}
 		}
