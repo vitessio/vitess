@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -249,6 +250,13 @@ func (wr *Wrangler) validateSourceTablesExist(ctx context.Context, sourceKeyspac
 	var missingTables []string
 	for _, table := range tables {
 		found := false
+
+		// Skip Vitess internal tables
+		if schema.IsInternalOperationTableName(table) {
+			log.Infof("found internal table %s, ignoring in materialization schema validation", table)
+			continue
+		}
+
 		for _, ksTable := range ksTables {
 			if table == ksTable {
 				found = true
@@ -488,7 +496,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
 	if sourceVSchemaTable == nil {
-		return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		if schema.IsInternalOperationTableName(sourceTableName) {
+			log.Infof("found internal table %s, ignoring in materialization", sourceTableName)
+		} else {
+			return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
+		}
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
 		// For a conflict, the vindex name and column should match.
