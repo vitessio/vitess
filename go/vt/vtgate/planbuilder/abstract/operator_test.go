@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/assert"
@@ -130,9 +132,9 @@ func testString(op Operator) string {
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("{\n\tType: %s", sqOp.Type.String())
-			if sqOp.ArgName != "" {
-				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ArgName)
+			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
+			if sqOp.ExtractedSubquery.ArgName != "" {
+				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.ArgName)
 			}
 			subquery += fmt.Sprintf("\n\tQuery: %s\n}", indent(testString(sqOp.Inner)))
 			subquery = indent(subquery)

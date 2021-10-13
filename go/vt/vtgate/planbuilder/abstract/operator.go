@@ -25,15 +25,6 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	// An operator can be:
-	//	*  Derived - which represents an expression that generates a table.
-	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
-	//     while still preserving the results
-	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
-	//	*  Join - A join represents inner join.
-	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
-	//  *  Vindex - Represents a query that selects from vindex tables.
-	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -201,7 +192,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement, isSel := sq.SubQuery.Select.(*sqlparser.Select)
+			subquerySelectStatement, isSel := sq.Subquery.(*sqlparser.Select)
 			if !isSel {
 				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
 			}
@@ -210,13 +201,8 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement:  subquerySelectStatement,
-				Inner:            opInner,
-				Type:             sq.OpCode,
-				ArgName:          sq.ArgName,
-				HasValues:        sq.HasValues,
-				ExprsNeedReplace: sq.ExprsNeedReplace,
-				ReplaceBy:        sq.ReplaceBy,
+				Inner:             opInner,
+				ExtractedSubquery: sq,
 			})
 		}
 	}
