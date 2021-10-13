@@ -131,6 +131,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainTab(in)
 	case Exprs:
 		return CloneExprs(in)
+	case *ExtractedSubquery:
+		return CloneRefOfExtractedSubquery(in)
 	case *Flush:
 		return CloneRefOfFlush(in)
 	case *Force:
@@ -868,6 +870,18 @@ func CloneExprs(n Exprs) Exprs {
 		res = append(res, CloneExpr(x))
 	}
 	return res
+}
+
+// CloneRefOfExtractedSubquery creates a deep clone of the input.
+func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Original = CloneExpr(n.Original)
+	out.Subquery = CloneSelectStatement(n.Subquery)
+	out.OtherSide = CloneExpr(n.OtherSide)
+	return &out
 }
 
 // CloneRefOfFlush creates a deep clone of the input.
@@ -2053,6 +2067,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfDefault(in)
 	case *ExistsExpr:
 		return CloneRefOfExistsExpr(in)
+	case *ExtractedSubquery:
+		return CloneRefOfExtractedSubquery(in)
 	case *FuncExpr:
 		return CloneRefOfFuncExpr(in)
 	case *GroupConcatExpr:

@@ -23,9 +23,9 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/orchestrator/inst"
 	"vitess.io/vitess/go/vt/vtgr/db"
+	"vitess.io/vitess/go/vt/vtgr/log"
 )
 
 var (
@@ -37,6 +37,7 @@ var (
 type SQLGroup struct {
 	views         []*db.GroupView
 	resolvedView  *ResolvedView
+	logger        *log.Logger
 	size          int
 	singlePrimary bool
 	statsTags     []string
@@ -45,13 +46,14 @@ type SQLGroup struct {
 
 // NewSQLGroup creates a new SQLGroup
 func NewSQLGroup(size int, singlePrimary bool, keyspace, shard string) *SQLGroup {
-	return &SQLGroup{size: size, singlePrimary: singlePrimary, statsTags: []string{keyspace, shard}}
+	return &SQLGroup{size: size, singlePrimary: singlePrimary, statsTags: []string{keyspace, shard}, logger: log.NewVTGRLogger(keyspace, shard)}
 }
 
 // ResolvedView is the resolved view
 type ResolvedView struct {
 	groupName string
 	view      map[inst.InstanceKey]db.GroupMember
+	logger    *log.Logger
 }
 
 // recordView adds a view to the group
@@ -164,13 +166,13 @@ func (group *SQLGroup) IsSafeToBootstrap() bool {
 	// for bootstrap we require group at least has quorum number of views
 	// this is to make sure we don't bootstrap a group improperly
 	if len(group.views) < group.size {
-		log.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.size)
+		group.logger.Errorf("[sql_group] cannot bootstrap because we only have %v views | expected %v", len(group.views), group.size)
 		return false
 	}
 	// we think it is safe to bootstrap a group if all the views don't have a primary host
 	host, port, _ := group.getPrimaryLocked()
 	if host != "" || port != 0 {
-		log.Warningf("not safe to bootstrap sql group because %v/%v might already be primary", host, port)
+		group.logger.Warningf("not safe to bootstrap sql group because %v/%v might already be primary", host, port)
 	}
 	return host == "" && port == 0
 }
@@ -201,7 +203,7 @@ func (group *SQLGroup) Resolve() error {
 	return group.resolveLocked()
 }
 func (group *SQLGroup) resolveLocked() error {
-	rv := &ResolvedView{}
+	rv := &ResolvedView{logger: group.logger}
 	group.resolvedView = rv
 	m := make(map[inst.InstanceKey]db.GroupMember)
 	for _, view := range group.views {
@@ -209,7 +211,7 @@ func (group *SQLGroup) resolveLocked() error {
 			rv.groupName = view.GroupName
 		}
 		if view.GroupName != "" && rv.groupName != view.GroupName {
-			log.Errorf("previous group name %v found %v", rv.groupName, view.GroupName)
+			group.logger.Errorf("previous group name %v found %v", rv.groupName, view.GroupName)
 			return db.ErrGroupSplitBrain
 		}
 		for _, member := range view.UnresolvedMembers {
@@ -246,7 +248,7 @@ func (group *SQLGroup) resolveLocked() error {
 
 func (rv *ResolvedView) validate(singlePrimary bool, statsTags []string) error {
 	if !rv.hasGroup() {
-		log.Info("Resolved view does not have a group")
+		rv.logger.Info("Resolved view does not have a group")
 		return nil
 	}
 	hasPrimary := false
@@ -255,13 +257,13 @@ func (rv *ResolvedView) validate(singlePrimary bool, statsTags []string) error {
 	for _, status := range rv.view {
 		if status.Role == db.PRIMARY {
 			if singlePrimary && hasPrimary {
-				log.Errorf("Found more than one primary in the group")
+				rv.logger.Errorf("Found more than one primary in the group")
 				return db.ErrGroupSplitBrain
 			}
 			hasPrimary = true
 			primaryState = status.State
 			if status.State != db.ONLINE {
-				log.Warningf("Found a PRIMARY not ONLINE (%v)", status.State)
+				rv.logger.Warningf("Found a PRIMARY not ONLINE (%v)", status.State)
 			}
 		}
 		switch status.State {
@@ -279,10 +281,10 @@ func (rv *ResolvedView) validate(singlePrimary bool, statsTags []string) error {
 	}
 	groupOnlineSize.Set(statsTags, int64(onlineCount))
 	if unreachableCount > 0 || errorCount > 0 || offlineCount > 0 {
-		log.Warningf("Some of nodes are unconnected in the group. hasPrimary=%v (%v), online_count=%v, recovering_count=%v, unreachable_count=%v, offline_count=%v, error_count=%v", hasPrimary, primaryState, onlineCount, recoveringCount, unreachableCount, offlineCount, errorCount)
+		rv.logger.Warningf("Some of nodes are unconnected in the group. hasPrimary=%v (%v), online_count=%v, recovering_count=%v, unreachable_count=%v, offline_count=%v, error_count=%v", hasPrimary, primaryState, onlineCount, recoveringCount, unreachableCount, offlineCount, errorCount)
 	}
 	if unreachableCount >= len(rv.view)/2+1 {
-		log.Errorf("Backoff error by quorum unreachable: found %v number of UNREACHABLE nodes while quorum is %v", unreachableCount, len(rv.view)/2+1)
+		rv.logger.Errorf("Backoff error by quorum unreachable: found %v number of UNREACHABLE nodes while quorum is %v", unreachableCount, len(rv.view)/2+1)
 		isLostQuorum.Set(statsTags, 1)
 	} else {
 		isLostQuorum.Set(statsTags, 0)
@@ -300,19 +302,19 @@ func (rv *ResolvedView) validate(singlePrimary bool, statsTags []string) error {
 	}
 	// Ongoing bootstrap, we should backoff and wait
 	if recoveringCount == 1 && (offlineCount+recoveringCount == len(rv.view)) {
-		log.Warningf("Group has one recovery node with all others in offline mode")
+		rv.logger.Warningf("Group has one recovery node with all others in offline mode")
 		return db.ErrGroupOngoingBootstrap
 	}
 	// We don't have quorum number of unreachable, but the primary is not online
 	// This most likely means there is a failover in the group we should back off and wait
 	if hasPrimary && primaryState != db.ONLINE {
-		log.Warningf("Found a PRIMARY that is not ONLINE (%v)", primaryState)
+		rv.logger.Warningf("Found a PRIMARY that is not ONLINE (%v)", primaryState)
 		return db.ErrGroupBackoffError
 	}
 	// If all the node in view are OFFLINE or ERROR, it is an inactive group
 	// It is expected to have no primary in this case
 	if !hasPrimary && (offlineCount+errorCount != len(rv.view)) {
-		log.Warningf("Group is NOT all offline or error without a primary node")
+		rv.logger.Warningf("Group is NOT all offline or error without a primary node")
 		return db.ErrGroupBackoffError
 	}
 	return nil

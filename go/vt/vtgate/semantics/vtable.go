@@ -42,20 +42,7 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 		if name != colName {
 			continue
 		}
-		recursiveDeps, qt := org.depsForExpr(v.cols[i])
-
-		var directDeps TableSet
-		/*
-				If we find a match, it means the query looks something like:
-				SELECT 1 as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/0
-				SELECT t1.x as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/1
-				SELECT x FROM t1 ORDER BY/GROUP BY x - d/r: 1/1
-
-			    Now, after figuring out the recursive deps
-		*/
-		if recursiveDeps.NumberOfTables() > 0 {
-			directDeps = recursiveDeps
-		}
+		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
 		newDeps := createCertain(directDeps, recursiveDeps, qt)
 		deps, err = deps.merge(newDeps)

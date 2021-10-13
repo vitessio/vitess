@@ -187,6 +187,10 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -223,6 +227,10 @@ Gen4 error: Column 'col1' in field list is ambiguous
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -243,7 +251,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
+        "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals)",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -549,6 +557,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -583,6 +595,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -604,7 +620,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
         "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by col asc",
+        "Query": "select col, weight_string(col) from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by col asc",
         "ResultColumns": 1,
         "Table": "`user`"
       }
@@ -901,6 +917,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -933,6 +953,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -953,7 +977,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by null",
+        "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by null",
         "Table": "`user`"
       }
     ]
@@ -1072,7 +1096,6 @@ Gen4 plan same as above
   }
 }
 
-
 # ORDER BY RAND() after pull-out subquery
 "select col from user where col in (select col2 from user) order by rand()"
 {
@@ -1081,6 +1104,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1113,6 +1140,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1133,7 +1164,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 order by rand()",
+        "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by rand()",
         "Table": "`user`"
       }
     ]
@@ -1631,6 +1662,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1669,6 +1704,10 @@ Gen4 plan same as above
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1689,7 +1728,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where :__sq_has_values1 = 1 and col in ::__sq1 limit :__upper_limit",
+            "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) limit :__upper_limit",
             "Table": "`user`"
           }
         ]
