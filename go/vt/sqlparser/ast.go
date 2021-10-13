@@ -638,8 +638,6 @@ func (*AlterView) iStatement()         {}
 func (*LockTables) iStatement()        {}
 func (*UnlockTables) iStatement()      {}
 func (*AlterTable) iStatement()        {}
-func (*With) isStatement()             {}
-func (*CommonTableExpr) isStatement()  {}
 func (*AlterVschema) iStatement()      {}
 func (*AlterMigration) iStatement()    {}
 func (*RevertMigration) iStatement()   {}
