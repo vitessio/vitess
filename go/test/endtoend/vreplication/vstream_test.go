@@ -38,13 +38,15 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
-// Validates that a reparent while VStream API is streaming doesn't miss any events
-// We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
-func TestVStreamFailover(t *testing.T) {
+// Validates that we have a working VStream API
+// If Failover is enabled:
+//   - We ensure that this works through active reparents and doesn't miss any events
+//   - We stream only from the primary and while streaming we reparent to a replica and then back to the original primary
+func testVStreamWithFailover(t *testing.T, failover bool) {
 	defaultCellName := "zone1"
 	cells := []string{"zone1"}
 	allCellNames = "zone1"
-	vc = NewVitessCluster(t, "TestVStreamFailover", cells, mainClusterConfig)
+	vc = NewVitessCluster(t, "TestVStreamWithFailover", cells, mainClusterConfig)
 
 	require.NotNil(t, vc)
 	defaultReplicas = 2
@@ -129,37 +131,40 @@ func TestVStreamFailover(t *testing.T) {
 		}
 	}()
 
-	// run two PRS after one second each, wait for events to be received and exit test
-	ticker := time.NewTicker(1 * time.Second)
-	tickCount := 0
-	// this for loop implements a mini state machine that does the two PRSs, waits a bit after the second PRS,
-	// stops the insertions, waits for a bit again for the vstream to catchup and signals the test to stop
-	for {
-		<-ticker.C
-		tickCount++
-		switch tickCount {
-		case 1:
-			insertMu.Lock()
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-101")
-			insertMu.Unlock()
-			log.Infof("output of first PRS is %s", output)
-			require.NoError(t, err)
-		case 2:
-			insertMu.Lock()
-			output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-100")
-			insertMu.Unlock()
-			log.Infof("output of second PRS is %s", output)
-			require.NoError(t, err)
-			time.Sleep(100 * time.Millisecond)
-			stopInserting = true
-			time.Sleep(2 * time.Second)
-			done = true
-		}
+	if failover {
+		// run two PRS after one second each, wait for events to be received and exit test
+		ticker := time.NewTicker(1 * time.Second)
+		tickCount := 0
+		// this for loop implements a mini state machine that does the two PRSs, waits a bit after the second PRS,
+		// stops the insertions, waits for a bit again for the vstream to catchup and signals the test to stop
+		for {
+			<-ticker.C
+			tickCount++
+			switch tickCount {
+			case 1:
+				insertMu.Lock()
+				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-101")
+				insertMu.Unlock()
+				log.Infof("output of first PRS is %s", output)
+				require.NoError(t, err)
+			case 2:
+				insertMu.Lock()
+				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-100")
+				insertMu.Unlock()
+				log.Infof("output of second PRS is %s", output)
+				require.NoError(t, err)
+				time.Sleep(100 * time.Millisecond)
+				stopInserting = true
+				time.Sleep(2 * time.Second)
+				done = true
+			}
 
-		if done {
-			break
+			if done {
+				break
+			}
 		}
 	}
+
 	qr := execVtgateQuery(t, vtgateConn, "product", "select count(*) from customer")
 	require.NotNil(t, qr)
 	// total number of row events found by the VStream API should match the rows inserted
@@ -368,6 +373,10 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	return &ne
 }
 
+func TestVStreamFailover(t *testing.T) {
+	testVStreamWithFailover(t, true)
+}
+
 func TestVStreamStopOnReshardTrue(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, true, 1000)
 	require.Greater(t, ne.numJournalEvents, int64(0))
@@ -386,4 +395,12 @@ func TestVStreamStopOnReshardFalse(t *testing.T) {
 	require.NotZero(t, ne.numGreaterThan80Events)
 	require.NotZero(t, ne.numLessThan40Events)
 	require.NotZero(t, ne.numGreaterThan40Events)
+}
+
+func TestVStreamWithKeyspacesToWatch(t *testing.T) {
+	extraVTGateArgs = append(extraVTGateArgs, []string{
+		"-keyspaces_to_watch", "product",
+	}...)
+
+	testVStreamWithFailover(t, false)
 }
