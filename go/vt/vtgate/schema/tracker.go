@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -52,6 +53,9 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		// we'll only log a failed keyspace loading once
+		failedKeyspaces []string
 	}
 )
 
@@ -128,12 +132,37 @@ func (t *Tracker) newUpdateController() *updateController {
 }
 
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
+	if t.isFailedKeyspace(th) {
+		return false
+	}
+
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
+		t.checkIfWeShouldFailKeyspace(th, err)
 		log.Warningf("Unable to add keyspace to tracker: %v", err)
 		return false
 	}
 	return true
+}
+
+// checkIfWeShouldFailKeyspace inspects an error and
+// will mark a keyspace as failed and won't try to load more information from it
+func (t *Tracker) checkIfWeShouldFailKeyspace(th *discovery.TabletHealth, err error) {
+	errMessage := err.Error()
+	if strings.Contains(errMessage, "Unknown database '") ||
+		strings.Contains(errMessage, "Table '_vt.schemacopy' doesn't exist") {
+		t.failedKeyspaces = append(t.failedKeyspaces, th.Target.Keyspace)
+	}
+}
+
+func (t *Tracker) isFailedKeyspace(th *discovery.TabletHealth) bool {
+	for _, keyspace := range t.failedKeyspaces {
+		if th.Target.Keyspace == keyspace {
+			// this keyspace is marked as failed. we are not going to reload
+			return true
+		}
+	}
+	return false
 }
 
 // Stop stops the schema tracking
