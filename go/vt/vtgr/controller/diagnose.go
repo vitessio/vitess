@@ -31,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/concurrency"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgr/db"
@@ -372,25 +371,15 @@ func (shard *GRShard) instanceReachable(ctx context.Context, instance *grInstanc
 	}
 }
 
-// findShardPrimaryTablet iterates through the replicas stored in grShard and returns
-// the one that's marked as primary
+// findShardPrimaryTablet returns the primary for the shard
+// it is either based on shard info from global topo or based on tablet types
+// from local topo
 func (shard *GRShard) findShardPrimaryTablet() *grInstance {
-	var latestPrimaryTimestamp time.Time
 	var primaryInstance *grInstance
-	foundPrimary := false
 	for _, instance := range shard.instances {
-		if instance.tablet.Type == topodatapb.TabletType_PRIMARY {
-			foundPrimary = true
-			// It is possible that there are more than one primary in topo server
-			// we should compare timestamp to pick the latest one
-			if latestPrimaryTimestamp.Before(instance.primaryTimeStamp) {
-				latestPrimaryTimestamp = instance.primaryTimeStamp
-				primaryInstance = instance
-			}
+		if shard.primaryAlias == instance.alias {
+			return instance
 		}
-	}
-	if !foundPrimary {
-		return nil
 	}
 	return primaryInstance
 }
