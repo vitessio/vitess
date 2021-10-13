@@ -863,8 +863,8 @@ func (m *Workflow) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Workflow != nil {
-		size, err := m.Workflow.MarshalToSizedBufferVT(dAtA[:i])
+	if m.Nope != nil {
+		size, err := m.Nope.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
 			return 0, err
 		}
@@ -2986,8 +2986,8 @@ func (m *Workflow) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	if m.Workflow != nil {
-		l = m.Workflow.SizeVT()
+	if m.Nope != nil {
+		l = m.Nope.SizeVT()
 		n += 1 + l + sov(uint64(l))
 	}
 	if m.unknownFields != nil {
@@ -6093,7 +6093,7 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Workflow", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field Nope", wireType)
 			}
 			var msglen int
 			for shift := uint(0); ; shift += 7 {
@@ -6120,10 +6120,10 @@ func (m *Workflow) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			if m.Workflow == nil {
-				m.Workflow = &vtctldata.Workflow{}
+			if m.Nope == nil {
+				m.Nope = &vtctldata.Workflow{}
 			}
-			if err := m.Workflow.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
+			if err := m.Nope.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex
