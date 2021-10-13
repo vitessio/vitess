@@ -1728,7 +1728,9 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 	switch original := node.Original.(type) {
 	case *ExistsExpr:
-		buf.astPrintf(node, "%v", NewArgument(node.ArgName))
+		buf.formatter(NewArgument(node.ArgName))
+	case *Subquery:
+		buf.formatter(NewArgument(node.ArgName))
 	case *ComparisonExpr:
 		// other_side = :__sq
 		cmp := &ComparisonExpr{
@@ -1749,8 +1751,6 @@ func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
 			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
 			expr = &OrExpr{hasValue, cmp}
 		}
-		buf.astPrintf(node, "%v", expr)
-	case *Subquery:
-		buf.astPrintf(node, "%v", NewArgument(node.ArgName))
+		buf.formatter(expr)
 	}
 }
