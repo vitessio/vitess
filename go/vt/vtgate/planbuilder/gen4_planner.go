@@ -33,6 +33,16 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
+		switch node := selStatement.(type) {
+		case *sqlparser.Select:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			}
+		case *sqlparser.Union:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			}
+		}
 
 		sel, isSel := selStatement.(*sqlparser.Select)
 		if isSel {
