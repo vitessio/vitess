@@ -196,6 +196,28 @@ func TestSubQueries(t *testing.T) {
 	assertMatches(t, conn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
 }
 
+func TestPlannerWarning(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// straight_join query
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+
+	// execute same query again.
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+
+	// random query to reset the warning.
+	_ = checkedExec(t, conn, `select 1 from t1`)
+
+	// execute same query again.
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+}
+
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := checkedExec(t, conn, query)
