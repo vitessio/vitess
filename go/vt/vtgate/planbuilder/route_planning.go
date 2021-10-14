@@ -46,7 +46,7 @@ func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
 		return false
 	}
 	for _, extractedSubq := range c.semTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(&sqlparser.Subquery{Select: extractedSubq.Subquery}, ext) {
+		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(&sqlparser.Subquery{Select: extractedSubq.Subquery.Select}, ext) {
 			return true
 		}
 	}
@@ -267,6 +267,14 @@ func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, 
 		}
 		return true
 	}, nil)
+
+	// update the dependencies for the subquery by removing the dependencies from the otherTree
+	tableSet := ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet.RemoveInPlace(otherTree.tableID())
+	ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	tableSet = ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet.RemoveInPlace(otherTree.tableID())
+	ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
 	return rewriteError

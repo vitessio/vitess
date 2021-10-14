@@ -52,7 +52,7 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	}
 }
 
-func (b *binder) down(cursor *sqlparser.Cursor) error {
+func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
@@ -61,7 +61,7 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		}
 
 		sq := &sqlparser.ExtractedSubquery{
-			Subquery: node.Select,
+			Subquery: node,
 			Original: node,
 			OpCode:   int(engine.PulloutValue),
 		}
@@ -88,6 +88,24 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 
 		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
 		b.subqueryRef[node] = sq
+
+		subqRecursiveDeps := b.recursive.dependencies(node)
+		subqDirectDeps := b.direct.dependencies(node)
+
+		tablesToKeep := EmptyTableSet()
+		sco := currScope
+		for sco != nil {
+			for _, table := range sco.tables {
+				tablesToKeep.MergeInPlace(table.getTableSet(b.org))
+			}
+			sco = sco.parent
+		}
+
+		subqDirectDeps.KeepOnly(tablesToKeep)
+		subqRecursiveDeps.KeepOnly(tablesToKeep)
+		b.recursive[node] = subqRecursiveDeps
+		b.direct[node] = subqDirectDeps
+
 	case *sqlparser.ColName:
 		deps, err := b.resolveColumn(node, b.scoper.currentScope())
 		if err != nil {

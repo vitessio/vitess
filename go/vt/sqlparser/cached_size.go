@@ -944,10 +944,8 @@ func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.ArgName)))
 	// field HasValuesArg string
 	size += hack.RuntimeAllocSize(int64(len(cached.HasValuesArg)))
-	// field Subquery vitess.io/vitess/go/vt/sqlparser.SelectStatement
-	if cc, ok := cached.Subquery.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
+	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
+	size += cached.Subquery.CachedSize(true)
 	// field OtherSide vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.OtherSide.(cachedObject); ok {
 		size += cc.CachedSize(true)

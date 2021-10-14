@@ -1906,8 +1906,8 @@ func (a *application) rewriteRefOfExtractedSubquery(parent SQLNode, node *Extrac
 	}) {
 		return false
 	}
-	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).Subquery = newNode.(SelectStatement)
+	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*ExtractedSubquery).Subquery = newNode.(*Subquery)
 	}) {
 		return false
 	}

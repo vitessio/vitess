@@ -28,28 +28,28 @@ import (
 
 func TestBindingSubquery(t *testing.T) {
 	testcases := []struct {
-		query          string
-		numOfTablesReq int
-		extractor      func(p *sqlparser.Select) sqlparser.Expr
-		rewrite        bool
+		query            string
+		requiredTableSet semantics.TableSet
+		extractor        func(p *sqlparser.Select) sqlparser.Expr
+		rewrite          bool
 	}{
 		{
-			query:          "select (select col from tabl limit 1) as a from foo join tabl order by a + 1",
-			numOfTablesReq: 0,
+			query:            "select (select col from tabl limit 1) as a from foo join tabl order by a + 1",
+			requiredTableSet: semantics.EmptyTableSet(),
 			extractor: func(sel *sqlparser.Select) sqlparser.Expr {
 				return sel.OrderBy[0].Expr
 			},
 			rewrite: true,
 		}, {
-			query:          "select t.a from (select (select col from tabl limit 1) as a from foo join tabl) t",
-			numOfTablesReq: 0,
+			query:            "select t.a from (select (select col from tabl limit 1) as a from foo join tabl) t",
+			requiredTableSet: semantics.EmptyTableSet(),
 			extractor: func(sel *sqlparser.Select) sqlparser.Expr {
 				return extractExpr(sel, 0)
 			},
 			rewrite: true,
 		}, {
-			query:          "select (select col from tabl where foo.id = 4 limit 1) as a from foo join tabl",
-			numOfTablesReq: 1,
+			query:            "select (select col from tabl where foo.id = 4 limit 1) as a from foo",
+			requiredTableSet: semantics.SingleTableSet(0),
 			extractor: func(sel *sqlparser.Select) sqlparser.Expr {
 				return extractExpr(sel, 0)
 			},
@@ -74,7 +74,7 @@ func TestBindingSubquery(t *testing.T) {
 			}
 			expr := testcase.extractor(selStmt)
 			tableset := semTable.RecursiveDeps(expr)
-			require.Equal(t, testcase.numOfTablesReq, tableset.NumberOfTables())
+			require.Equal(t, testcase.requiredTableSet, tableset)
 		})
 	}
 }

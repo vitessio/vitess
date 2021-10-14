@@ -200,7 +200,7 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 			// using the node.subquery which is the rewritten version of our subquery
 			cmp := &sqlparser.ComparisonExpr{
 				Left:     node.OtherSide,
-				Right:    &sqlparser.Subquery{Select: node.Subquery},
+				Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
 				Operator: originalCmp.Operator,
 			}
 			found, exitEarly, err := rp.planComparison(ctx, cmp)
