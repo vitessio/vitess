@@ -17,9 +17,7 @@ limitations under the License.
 package abstract
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -139,7 +137,8 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 	case 1:
 		found := qg.addToSingleTable(deps, predicate)
 		if !found {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %v for predicate %v not found", deps, sqlparser.String(predicate))
+			// this could be a predicate that only has dependencies from outside this QG
+			qg.addJoinPredicates(deps, predicate)
 		}
 	default:
 		qg.addJoinPredicates(deps, predicate)
