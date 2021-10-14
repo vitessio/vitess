@@ -34,7 +34,7 @@ type vTableInfo struct {
 
 var _ TableInfo = (*vTableInfo)(nil)
 
-// Dependencies implements the TableInfo interface
+// dependencies implements the TableInfo interface
 func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	var err error

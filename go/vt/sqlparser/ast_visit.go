@@ -1039,7 +1039,7 @@ func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
 	if err := VisitExpr(in.Original, f); err != nil {
 		return err
 	}
-	if err := VisitSelectStatement(in.Subquery, f); err != nil {
+	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
 		return err
 	}
 	if err := VisitExpr(in.OtherSide, f); err != nil {

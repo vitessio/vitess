@@ -283,6 +283,46 @@ func (ts *TableSet) MergeInPlace(other TableSet) {
 	}
 }
 
+// RemoveInPlace removes all the tables in `other` from this TableSet
+func (ts *TableSet) RemoveInPlace(other TableSet) {
+	switch {
+	case ts.large == nil && other.large == nil:
+		ts.small &= ^other.small
+	case ts.large == nil:
+		ts.small &= ^other.large.tables[0]
+	case other.large == nil:
+		ts.large.tables[0] &= ^other.small
+	default:
+		for idx := range ts.large.tables {
+			if len(other.large.tables) <= idx {
+				break
+			}
+			ts.large.tables[idx] &= ^other.large.tables[idx]
+		}
+	}
+}
+
+// KeepOnly removes all the tables not in `other` from this TableSet
+func (ts *TableSet) KeepOnly(other TableSet) {
+	switch {
+	case ts.large == nil && other.large == nil:
+		ts.small &= other.small
+	case ts.large == nil:
+		ts.small &= other.large.tables[0]
+	case other.large == nil:
+		ts.small = ts.large.tables[0] & other.small
+		ts.large = nil
+	default:
+		for idx := range ts.large.tables {
+			if len(other.large.tables) <= idx {
+				ts.large.tables = ts.large.tables[0:idx]
+				break
+			}
+			ts.large.tables[idx] &= other.large.tables[idx]
+		}
+	}
+}
+
 // AddTable adds the given table to this set
 func (ts *TableSet) AddTable(tableidx int) {
 	switch {
@@ -301,6 +341,11 @@ func SingleTableSet(tableidx int) TableSet {
 		return TableSet{small: 1 << tableidx}
 	}
 	return TableSet{large: newLargeTableSet(0x0, tableidx)}
+}
+
+// EmptyTableSet creates an empty TableSet
+func EmptyTableSet() TableSet {
+	return TableSet{small: 0}
 }
 
 // MergeTableSets merges all the given TableSet into a single one

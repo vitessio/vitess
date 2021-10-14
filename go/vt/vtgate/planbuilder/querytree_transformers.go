@@ -93,7 +93,7 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery)
+	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery.Select)
 	if err != nil {
 		return nil, err
 	}

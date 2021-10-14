@@ -35,7 +35,7 @@ type RealTable struct {
 
 var _ TableInfo = (*RealTable)(nil)
 
-// Dependencies implements the TableInfo interface
+// dependencies implements the TableInfo interface
 func (r *RealTable) dependencies(colName string, org originable) (dependencies, error) {
 	ts := org.tableSetFor(r.ASTNode)
 	for _, info := range r.getColumns() {
