@@ -86,9 +86,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   subquery      *Subquery
   derivedTable  *DerivedTable
   when          *When
-  with			*With
-  cte			*CommonTableExpr
-  ctes			[]*CommonTableExpr
+  with          *With
+  cte           *CommonTableExpr
+  ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
   updateExpr    *UpdateExpr
