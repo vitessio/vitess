@@ -34,11 +34,12 @@ var T0 TableSet
 
 var (
 	// Just here to make outputs more readable
-	T1 = SingleTableSet(0)
-	T2 = SingleTableSet(1)
-	T3 = SingleTableSet(2)
-	T4 = SingleTableSet(3)
-	T5 = SingleTableSet(4)
+	None = EmptyTableSet()
+	T1   = SingleTableSet(0)
+	T2   = SingleTableSet(1)
+	T3   = SingleTableSet(2)
+	T4   = SingleTableSet(3)
+	T5   = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -488,10 +489,10 @@ func TestScopeForSubqueries(t *testing.T) {
 			deps: T2,
 		}, {
 			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
-			deps: T3,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
-			deps: T5,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select id from t) from x as t`,
 			deps: T2,
