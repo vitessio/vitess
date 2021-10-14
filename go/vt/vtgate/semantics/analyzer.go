@@ -75,8 +75,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	semTable.ProjectionErr = analyzer.projErr
-	semTable.Warning = analyzer.warning
 	return semTable, nil
 }
 
@@ -88,6 +86,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
 		ProjectionErr:    a.projErr,
+		Warning:          a.warning,
 		Comments:         statement.GetComments(),
 		SubqueryMap:      a.binder.subqueryMap,
 		SubqueryRef:      a.binder.subqueryRef,
