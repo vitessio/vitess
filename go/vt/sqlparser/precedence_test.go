@@ -79,7 +79,7 @@ func TestNotInSubqueryPrecedence(t *testing.T) {
 		ArgName:      "arg1",
 		HasValuesArg: "has_values1",
 		OpCode:       1,
-		Subquery:     subq.Select,
+		Subquery:     subq,
 		OtherSide:    cmp.Left,
 	}
 	not.Expr = extracted

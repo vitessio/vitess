@@ -192,7 +192,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement, isSel := sq.Subquery.(*sqlparser.Select)
+			subquerySelectStatement, isSel := sq.Subquery.Select.(*sqlparser.Select)
 			if !isSel {
 				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
 			}

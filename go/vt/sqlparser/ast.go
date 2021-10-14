@@ -1971,7 +1971,7 @@ type (
 		ArgName      string
 		HasValuesArg string
 		OpCode       int // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery     SelectStatement
+		Subquery     *Subquery
 		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
 		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
 	}

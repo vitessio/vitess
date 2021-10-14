@@ -126,10 +126,6 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return true
 	}
-	if err := a.binder.down(cursor); err != nil {
-		a.setError(err)
-		return true
-	}
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
@@ -141,6 +137,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
+	}
+
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
 
 	if err := a.scoper.up(cursor); err != nil {
@@ -220,8 +221,8 @@ type originable interface {
 }
 
 func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type) {
-	recursive = a.binder.recursive.Dependencies(expr)
-	direct = a.binder.direct.Dependencies(expr)
+	recursive = a.binder.recursive.dependencies(expr)
+	direct = a.binder.direct.dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return

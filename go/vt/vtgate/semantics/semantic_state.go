@@ -144,17 +144,17 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 
 // RecursiveDeps return the table dependencies of the expression.
 func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
-	return st.Recursive.Dependencies(expr)
+	return st.Recursive.dependencies(expr)
 }
 
 // DirectDeps return the table dependencies of the expression.
 func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
-	return st.Direct.Dependencies(expr)
+	return st.Direct.dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.Direct.Dependencies(colName)
+	ts := st.Direct.dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -179,7 +179,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.Direct.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -205,8 +205,8 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	return nil
 }
 
-// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
+// dependencies return the table dependencies of the expression. This method finds table dependencies recursively
+func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 	if ValidAsMapKey(expr) {
 		// we have something that could live in the cache
 		var found bool
@@ -232,7 +232,7 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
 
 		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
 			if extracted.OtherSide != nil {
-				set := d.Dependencies(extracted.OtherSide)
+				set := d.dependencies(extracted.OtherSide)
 				deps.MergeInPlace(set)
 			}
 			return false, nil
