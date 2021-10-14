@@ -1,4 +1,3 @@
-2021-08-20T15:06:06Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/1151137889
 2021-08-20T15:06:06Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/1151137888
 2021-08-20T15:06:06Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/1151137875
 2021-08-20T15:06:06Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/1151137923
@@ -9998,3 +9997,4 @@
 2021-10-14T13:20:07Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1341958606
 2021-10-14T13:20:07Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/1341958602
 2021-10-14T13:20:07Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1341958635
+2021-10-14T13:22:41Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1341968406
