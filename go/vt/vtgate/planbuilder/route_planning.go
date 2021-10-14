@@ -46,7 +46,7 @@ func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
 		return false
 	}
 	for _, extractedSubq := range c.semTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(&sqlparser.Subquery{Select: extractedSubq.Subquery.Select}, ext) {
+		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(extractedSubq.Subquery, ext) {
 			return true
 		}
 	}
