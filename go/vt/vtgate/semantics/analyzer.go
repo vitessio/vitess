@@ -42,6 +42,7 @@ type analyzer struct {
 	inProjection int
 
 	projErr error
+	warning string
 }
 
 // newAnalyzer create the semantic analyzer
@@ -74,7 +75,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	semTable.ProjectionErr = analyzer.projErr
 	return semTable, nil
 }
 
@@ -86,6 +86,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
 		ProjectionErr:    a.projErr,
+		Warning:          a.warning,
 		Comments:         statement.GetComments(),
 		SubqueryMap:      a.binder.subqueryMap,
 		SubqueryRef:      a.binder.subqueryRef,
@@ -126,6 +127,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return true
 	}
+	// log any warn in rewriting.
+	a.warning = a.rewriter.warning
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children

@@ -784,7 +784,7 @@ Gen4 plan same as above
   }
 }
 
-# Straight-join
+# Straight-join (Gen4 ignores the straight_join hint)
 "select m1.col from unsharded as m1 straight_join unsharded as m2"
 {
   "QueryType": "SELECT",
@@ -798,6 +798,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select m1.col from unsharded as m1 straight_join unsharded as m2 where 1 != 1",
     "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
+    "Table": "unsharded"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from unsharded as m1 straight_join unsharded as m2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1, unsharded as m2",
     "Table": "unsharded"
   }
 }
