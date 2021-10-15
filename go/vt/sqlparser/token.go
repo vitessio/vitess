@@ -160,6 +160,13 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				return tkn.scanBitLiteral()
 			}
 		}
+		if ch == 'N' || ch == 'n' {
+			nxt := tkn.peek(1)
+			if nxt == '\'' || nxt == '"' {
+				tkn.skip(2)
+				return tkn.scanString(nxt, NCHAR_STRING)
+			}
+		}
 		return tkn.scanIdentifier(false)
 	case isDigit(ch):
 		return tkn.scanNumber()
