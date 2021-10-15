@@ -17,10 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-	"runtime/debug"
-	"strings"
-
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -328,17 +324,6 @@ func (a *analyzer) shouldContinue() bool {
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	return a.tables.tableSetFor(t)
-}
-
-// Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
-func Gen4NotSupportedF(format string, args ...interface{}) error {
-	message := fmt.Sprintf("gen4 does not yet support: "+format, args...)
-
-	// add the line that this happens in so it is easy to find it
-	stack := string(debug.Stack())
-	lines := strings.Split(stack, "\n")
-	message += "\n" + lines[6]
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, message)
 }
 
 // ProjError is used to mark an error as something that should only be returned
