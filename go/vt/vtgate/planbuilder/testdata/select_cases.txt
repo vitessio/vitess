@@ -1492,6 +1492,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {

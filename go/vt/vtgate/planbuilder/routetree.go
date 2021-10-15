@@ -452,9 +452,9 @@ func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sql
 			}
 			switch engine.PulloutOpcode(extractedSubquery.OpCode) {
 			case engine.PulloutIn, engine.PulloutNotIn:
-				expr = sqlparser.NewListArg(extractedSubquery.ArgName)
+				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
 			case engine.PulloutValue, engine.PulloutExists:
-				expr = sqlparser.NewArgument(extractedSubquery.ArgName)
+				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
 		pv, err := makePlanValue(expr)
