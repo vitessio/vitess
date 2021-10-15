@@ -1002,6 +1002,8 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarBinary, node.Bytes()).EncodeSQL(buf)
+	case NCharStrVal:
+		buf.astPrintf(node, "N'%s'", node.Val)
 	case IntVal, FloatVal, HexNum:
 		buf.astPrintf(node, "%s", node.Val)
 	case HexVal:
