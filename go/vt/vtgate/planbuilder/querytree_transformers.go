@@ -98,13 +98,41 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), n.extracted.ArgName, n.extracted.HasValuesArg, innerPlan)
+	argName := n.extracted.ArgName
+	hasValuesArg := n.extracted.HasValuesArg
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
+
+	merged := mergeSubQueryPlan(ctx, innerPlan, outerPlan, n)
+	if merged != nil {
+		return merged, nil
+	}
+	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), argName, hasValuesArg, innerPlan)
 	if err != nil {
 		return nil, err
 	}
 	plan.underlying = outerPlan
 	return plan, err
+}
+
+func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subqueryTree) logicalPlan {
+	iroute, ok := inner.(*route)
+	if !ok {
+		return nil
+	}
+	oroute, ok := outer.(*route)
+	if !ok {
+		return nil
+	}
+
+	if canMergeSubqueryPlans(ctx, iroute, oroute) {
+		// n.extracted is an expression that lives in oroute.Select.
+		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
+		n.extracted.NeedsRewrite = true
+		replaceSubQuery(ctx, oroute.Select)
+
+		return oroute
+	}
+	return nil
 }
 
 func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, error) {
@@ -267,7 +295,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 		return nil
 	}
 
-	if canMergePlans(ctx, lroute, rroute) {
+	if canMergeUnionPlans(ctx, lroute, rroute) {
 		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		return lroute
 	}
@@ -522,7 +550,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
+func replaceSubQuery(ctx *planningContext, sel sqlparser.SelectStatement) {
 	extractedSubqueries := ctx.semTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
