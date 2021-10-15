@@ -7580,7 +7580,7 @@ INPUT
 select concat(a, if(b>10, N'x', N'y')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, N as x, N as y)) from t1
+select concat(a, if(b > 10, _utf8 'x', _utf8 'y')) from t1
 END
 INPUT
 select sql_buffer_result max(f1) is null from t1;
@@ -15422,7 +15422,7 @@ INPUT
 select concat(a, if(b>10, N'æ', N'ß')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, N as `æ`, N as `ß`)) from t1
+select concat(a, if(b > 10, _utf8 'æ', _utf8 'ß')) from t1
 END
 INPUT
 select date_format(19980021000000,'%H|%I|%k|%l|%i|%p|%r|%S|%T| %M|%W|%D|%Y|%y|%a|%b|%j|%m|%d|%h|%s|%w');

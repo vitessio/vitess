@@ -176,7 +176,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -3769,6 +3769,10 @@ value_expression:
   value
   {
     $$ = $1
+  }
+| NCHAR_STRING
+  {
+  	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewStrLiteral($1)}
   }
 | boolean_value
   {
