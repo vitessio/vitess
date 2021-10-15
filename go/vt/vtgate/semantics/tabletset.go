@@ -26,7 +26,7 @@ type largeTableSet struct {
 }
 
 func (ts *largeTableSet) overlapsSmall(small uint64) bool {
-	return ts.tables[0]&uint64(small) != 0
+	return ts.tables[0]&small != 0
 }
 
 func minlen(a, b []uint64) int {
@@ -171,6 +171,7 @@ type TableSet struct {
 	large *largeTableSet
 }
 
+// Format formats the TableSet.
 func (ts TableSet) Format(f fmt.State, verb rune) {
 	first := true
 	fmt.Fprintf(f, "TableSet{")
@@ -356,6 +357,7 @@ func MergeTableSets(tss ...TableSet) (result TableSet) {
 	return
 }
 
+// TableSetFromIds returns TableSet for all the id passed in argument.
 func TableSetFromIds(tids ...int) (ts TableSet) {
 	for _, tid := range tids {
 		ts.AddTable(tid)
