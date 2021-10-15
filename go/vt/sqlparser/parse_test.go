@@ -54,8 +54,7 @@ var (
 	}, {
 		input: "select n, d from something",
 	}, {
-		input:  "INSERT INTO `sys_message_assign` (`message_id`,`assign_user_id`,`read_state`,`id`,`is_delete`,`create_time`,`update_time`,`remark`) VALUES(N'3477028275831808',N'4104487936',N'1',N'0',N'0','2021-09-22 14:24:17.922','2021-09-22 14:24:17.922',NULL),(N'3477028275831808',N'3454139190608923',N'1',N'0',N'0','2021-09-22 14:24:17.922','2021-09-22 14:24:17.922',NULL)",
-		output: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (_utf8 '3477028275831808', _utf8 '4104487936', _utf8 '1', _utf8 '0', _utf8 '0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (_utf8 '3477028275831808', _utf8 '3454139190608923', _utf8 '1', _utf8 '0', _utf8 '0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
+		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",

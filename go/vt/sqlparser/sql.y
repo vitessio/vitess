@@ -3770,10 +3770,6 @@ value_expression:
   {
     $$ = $1
   }
-| NCHAR_STRING
-  {
-  	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewStrLiteral($1)}
-  }
 | boolean_value
   {
     $$ = $1
@@ -4260,6 +4256,10 @@ value:
   STRING
   {
     $$ = NewStrLiteral($1)
+  }
+| NCHAR_STRING
+  {
+  	$$ = NewNCharStrLiteral($1)
   }
 | HEX
   {
