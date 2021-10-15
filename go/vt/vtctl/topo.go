@@ -45,16 +45,18 @@ func init() {
 	addCommandGroup(topoGroupName)
 
 	addCommand(topoGroupName, command{
-		"TopoCat",
-		commandTopoCat,
-		"[-cell <cell>] [-decode_proto] [-decode_proto_json] [-long] <path> [<path>...]",
-		"Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data."})
+		name:   "TopoCat",
+		method: commandTopoCat,
+		params: "[-cell <cell>] [-decode_proto] [-decode_proto_json] [-long] <path> [<path>...]",
+		help:   "Retrieves the file(s) at <path> from the topo service, and displays it. It can resolve wildcards, and decode the proto-encoded data.",
+	})
 
 	addCommand(topoGroupName, command{
-		"TopoCp",
-		commandTopoCp,
-		"[-cell <cell>] [-to_topo] <src> <dst>",
-		"Copies a file from topo to local file structure, or the other way around"})
+		name:   "TopoCp",
+		method: commandTopoCp,
+		params: "[-cell <cell>] [-to_topo] <src> <dst>",
+		help:   "Copies a file from topo to local file structure, or the other way around",
+	})
 }
 
 // DecodeContent uses the filename to imply a type, and proto-decodes
