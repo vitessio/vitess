@@ -864,6 +864,7 @@ func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
 	out.Original = CloneExpr(n.Original)
 	out.Subquery = CloneRefOfSubquery(n.Subquery)
 	out.OtherSide = CloneExpr(n.OtherSide)
+	out.alternative = CloneExpr(n.alternative)
 	return &out
 }
 
