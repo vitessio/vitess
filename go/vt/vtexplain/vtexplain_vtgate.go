@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -67,6 +68,13 @@ func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	}
 
 	vtgateSession.TargetString = opts.Target
+
+	if opts.PlannerVersion != querypb.ExecuteOptions_DEFAULT_PLANNER {
+		if vtgateSession.Options == nil {
+			vtgateSession.Options = &querypb.ExecuteOptions{}
+		}
+		vtgateSession.Options.PlannerVersion = opts.PlannerVersion
+	}
 
 	streamSize := 10
 	var schemaTracker vtgate.SchemaInfo // no schema tracker for these tests
