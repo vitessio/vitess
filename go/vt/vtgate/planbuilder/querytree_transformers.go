@@ -98,8 +98,8 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 		return nil, err
 	}
 
-	argName := n.extracted.ArgName
-	hasValuesArg := n.extracted.HasValuesArg
+	argName := n.extracted.GetArgName()
+	hasValuesArg := n.extracted.GetHasValuesArg()
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
 
 	merged := mergeSubQueryPlan(ctx, innerPlan, outerPlan, n)
@@ -345,7 +345,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
 							extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
 							if extractedSubquery != nil {
-								extractedSubquery.ArgName = engine.ListVarName
+								extractedSubquery.SetArgName(engine.ListVarName)
 							}
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
@@ -541,7 +541,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	}
 	for _, replaceByExpr := range sqr.subqueryToReplace {
 		// we are comparing the ArgNames in case the expressions have been cloned
-		if ext.ArgName == replaceByExpr.ArgName {
+		if ext.GetArgName() == replaceByExpr.GetArgName() {
 			cursor.Replace(ext.Original)
 			sqr.replaced = true
 			return false

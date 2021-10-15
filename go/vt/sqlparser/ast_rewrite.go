@@ -1916,6 +1916,11 @@ func (a *application) rewriteRefOfExtractedSubquery(parent SQLNode, node *Extrac
 	}) {
 		return false
 	}
+	if !a.rewriteExpr(node, node.alternative, func(newNode, parent SQLNode) {
+		parent.(*ExtractedSubquery).alternative = newNode.(Expr)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
