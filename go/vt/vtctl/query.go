@@ -17,6 +17,7 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -24,11 +25,8 @@ import (
 	"io"
 	"strconv"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"github.com/olekukonko/tablewriter"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
