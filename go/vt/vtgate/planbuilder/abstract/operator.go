@@ -109,8 +109,6 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				lhs, rhs = rhs, lhs
 			}
 			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
-		case sqlparser.StraightJoinType:
-			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
