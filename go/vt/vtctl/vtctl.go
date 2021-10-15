@@ -82,6 +82,7 @@ COMMAND ARGUMENT DEFINITIONS
 */
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -95,9 +96,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"

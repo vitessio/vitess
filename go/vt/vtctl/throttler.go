@@ -17,17 +17,15 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"github.com/olekukonko/tablewriter"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/throttler"
