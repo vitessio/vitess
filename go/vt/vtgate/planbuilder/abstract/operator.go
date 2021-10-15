@@ -190,17 +190,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement, isSel := sq.Subquery.Select.(*sqlparser.Select)
-			if !isSel {
-				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
-			}
-			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
+			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				Inner:             opInner,
 				ExtractedSubquery: sq,
+				Inner:             opInner,
 			})
 		}
 	}

@@ -1045,6 +1045,9 @@ func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
 	if err := VisitExpr(in.OtherSide, f); err != nil {
 		return err
 	}
+	if err := VisitExpr(in.alternative, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfFlush(in *Flush, f Visit) error {

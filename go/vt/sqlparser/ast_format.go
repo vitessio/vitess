@@ -1726,31 +1726,5 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 // it will be formatted as if the subquery has been extracted, and instead
 // show up like argument comparisons
 func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
-	switch original := node.Original.(type) {
-	case *ExistsExpr:
-		buf.astPrintf(node, "%v", NewArgument(node.ArgName))
-	case *ComparisonExpr:
-		// other_side = :__sq
-		cmp := &ComparisonExpr{
-			Left:     node.OtherSide,
-			Right:    NewArgument(node.ArgName),
-			Operator: original.Operator,
-		}
-		var expr Expr = cmp
-		switch original.Operator {
-		case InOp:
-			// :__sq_has_values = 1 and other_side in ::__sq
-			cmp.Right = NewListArg(node.ArgName)
-			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
-			expr = AndExpressions(hasValue, cmp)
-		case NotInOp:
-			// :__sq_has_values = 0 or other_side not in ::__sq
-			cmp.Right = NewListArg(node.ArgName)
-			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = &OrExpr{hasValue, cmp}
-		}
-		buf.astPrintf(node, "%v", expr)
-	case *Subquery:
-		buf.astPrintf(node, "%v", NewArgument(node.ArgName))
-	}
+	node.alternative.Format(buf)
 }

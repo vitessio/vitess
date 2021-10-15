@@ -1563,13 +1563,14 @@ func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.ArgName == b.ArgName &&
-		a.HasValuesArg == b.HasValuesArg &&
-		a.OpCode == b.OpCode &&
+	return a.OpCode == b.OpCode &&
 		a.NeedsRewrite == b.NeedsRewrite &&
+		a.hasValuesArg == b.hasValuesArg &&
+		a.argName == b.argName &&
 		EqualsExpr(a.Original, b.Original) &&
 		EqualsRefOfSubquery(a.Subquery, b.Subquery) &&
-		EqualsExpr(a.OtherSide, b.OtherSide)
+		EqualsExpr(a.OtherSide, b.OtherSide) &&
+		EqualsExpr(a.alternative, b.alternative)
 }
 
 // EqualsRefOfFlush does deep equals between the two objects.

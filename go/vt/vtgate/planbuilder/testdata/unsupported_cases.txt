@@ -1,6 +1,7 @@
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"

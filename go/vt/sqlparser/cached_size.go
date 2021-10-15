@@ -934,20 +934,24 @@ func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Original.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field ArgName string
-	size += hack.RuntimeAllocSize(int64(len(cached.ArgName)))
-	// field HasValuesArg string
-	size += hack.RuntimeAllocSize(int64(len(cached.HasValuesArg)))
 	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
 	size += cached.Subquery.CachedSize(true)
 	// field OtherSide vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.OtherSide.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field hasValuesArg string
+	size += hack.RuntimeAllocSize(int64(len(cached.hasValuesArg)))
+	// field argName string
+	size += hack.RuntimeAllocSize(int64(len(cached.argName)))
+	// field alternative vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.alternative.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

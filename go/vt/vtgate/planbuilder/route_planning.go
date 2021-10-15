@@ -889,7 +889,7 @@ func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []s
 
 type mergeFunc func(a, b *routeTree) (*routeTree, error)
 
-func canMergePlans(ctx *planningContext, a, b *route) bool {
+func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -916,6 +916,32 @@ func canMergePlans(ctx *planningContext, a, b *route) bool {
 		return b.eroute.Opcode == engine.SelectScatter
 	case engine.SelectNext:
 		return false
+	}
+	return false
+}
+func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return b.eroute.Opcode == engine.SelectDBA &&
+			len(a.eroute.SysTableTableSchema) == 0 &&
+			len(a.eroute.SysTableTableName) == 0 &&
+			len(b.eroute.SysTableTableSchema) == 0 &&
+			len(b.eroute.SysTableTableName) == 0
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
 	}
 	return false
 }
