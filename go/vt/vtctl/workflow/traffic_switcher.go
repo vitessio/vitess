@@ -120,6 +120,7 @@ type ITrafficSwitcher interface {
 
 	ForAllSources(f func(source *MigrationSource) error) error
 	ForAllTargets(f func(target *MigrationTarget) error) error
+	ForAllUIDs(f func(target *MigrationTarget, uid uint32) error) error
 	SourceShards() []*topo.ShardInfo
 	TargetShards() []*topo.ShardInfo
 }

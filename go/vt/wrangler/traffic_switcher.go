@@ -149,6 +149,25 @@ func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
+func (ts *trafficSwitcher) ForAllUIDs(f func(target *workflow.MigrationTarget, uid uint32) error) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range ts.Targets() {
+		for uid := range target.Sources {
+			wg.Add(1)
+			go func(target *workflow.MigrationTarget, uid uint32) {
+				defer wg.Done()
+
+				if err := f(target, uid); err != nil {
+					allErrors.RecordError(err)
+				}
+			}(target, uid)
+		}
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
+}
+
 /* end: implementation of workflow.ITrafficSwitcher */
 
 // For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
@@ -1031,7 +1050,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 	// source writes have been stopped, wait for all streams on targets to catch up
-	if err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
+	if err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
 		ts.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
@@ -1112,7 +1131,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
-	err := ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
+	err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
@@ -1338,25 +1357,6 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 		return err
 	}
 	return ts.wr.refreshPrimaryTablets(ctx, shards)
-}
-
-func (ts *trafficSwitcher) forAllUids(f func(target *workflow.MigrationTarget, uid uint32) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range ts.targets {
-		for uid := range target.Sources {
-			wg.Add(1)
-			go func(target *workflow.MigrationTarget, uid uint32) {
-				defer wg.Done()
-
-				if err := f(target, uid); err != nil {
-					allErrors.RecordError(err)
-				}
-			}(target, uid)
-		}
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (ts *trafficSwitcher) SourceShards() []*topo.ShardInfo {
