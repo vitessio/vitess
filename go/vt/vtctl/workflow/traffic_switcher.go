@@ -42,7 +42,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
+const (
 	// Frozen is the message value of frozen vreplication streams.
 	Frozen = "FROZEN"
 )
