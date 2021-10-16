@@ -52,8 +52,7 @@ func (it *iteratorJA) cacheKana(cp rune) {
 			it.kanas = make(map[rune]byte)
 		}
 		it.kanas[cp] = 0x2
-	}
-	if UnicodeIsKatakana(cp) {
+	} else if UnicodeIsKatakana(cp) {
 		if it.kanas == nil {
 			it.kanas = make(map[rune]byte)
 		}
