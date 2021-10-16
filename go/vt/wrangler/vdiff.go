@@ -773,7 +773,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 	}
 
 	err = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		pos, err := df.ts.TabletManagerClient().MasterPosition(ctx, target.primary.Tablet)
+		pos, err := df.ts.TabletManagerClient().PrimaryPosition(ctx, target.primary.Tablet)
 		if err != nil {
 			return err
 		}

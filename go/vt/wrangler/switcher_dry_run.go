@@ -189,7 +189,7 @@ func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicatio
 func (dr *switcherDryRun) stopSourceWrites(ctx context.Context) error {
 	logs := make([]string, 0)
 	for _, source := range dr.ts.Sources() {
-		position, _ := dr.ts.TabletManagerClient().MasterPosition(ctx, source.GetPrimary().Tablet)
+		position, _ := dr.ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		logs = append(logs, fmt.Sprintf("\tKeyspace %s, Shard %s at Position %s", dr.ts.SourceKeyspaceName(), source.GetShard().ShardName(), position))
 	}
 	if len(logs) > 0 {
