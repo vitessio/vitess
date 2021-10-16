@@ -108,12 +108,18 @@ type ITrafficSwitcher interface {
 	ReverseWorkflowName() string
 	SourceKeyspaceName() string
 	SourceKeyspaceSchema() *vindexes.KeyspaceSchema
+	Sources() map[string]*MigrationSource
+	Tables() []string
+	TargetKeyspaceName() string
+	Targets() map[string]*MigrationTarget
 	WorkflowName() string
 
 	/* Functions that *wrangler.trafficSwitcher implements */
 
 	ForAllSources(f func(source *MigrationSource) error) error
 	ForAllTargets(f func(target *MigrationTarget) error) error
+	SourceShards() []*topo.ShardInfo
+	TargetShards() []*topo.ShardInfo
 }
 
 // TargetInfo contains the metadata for a set of targets involved in a workflow.
