@@ -117,10 +117,37 @@ func (ts *trafficSwitcher) Targets() map[string]*workflow.MigrationTarget  { ret
 func (ts *trafficSwitcher) WorkflowName() string                           { return ts.workflow }
 
 func (ts *trafficSwitcher) ForAllSources(f func(source *workflow.MigrationSource) error) error {
-	return ts.forAllSources(f)
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, source := range ts.sources {
+		wg.Add(1)
+		go func(source *workflow.MigrationSource) {
+			defer wg.Done()
+
+			if err := f(source); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(source)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
+
 func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget) error) error {
-	return ts.forAllTargets(f)
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range ts.targets {
+		wg.Add(1)
+		go func(target *workflow.MigrationTarget) {
+			defer wg.Done()
+
+			if err := f(target); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(target)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 /* end: implementation of workflow.ITrafficSwitcher */
@@ -1312,40 +1339,6 @@ func (ts *trafficSwitcher) changeShardsAccess(ctx context.Context, keyspace stri
 		return err
 	}
 	return ts.wr.refreshPrimaryTablets(ctx, shards)
-}
-
-func (ts *trafficSwitcher) forAllSources(f func(*workflow.MigrationSource) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, source := range ts.sources {
-		wg.Add(1)
-		go func(source *workflow.MigrationSource) {
-			defer wg.Done()
-
-			if err := f(source); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(source)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
-func (ts *trafficSwitcher) forAllTargets(f func(*workflow.MigrationTarget) error) error {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	for _, target := range ts.targets {
-		wg.Add(1)
-		go func(target *workflow.MigrationTarget) {
-			defer wg.Done()
-
-			if err := f(target); err != nil {
-				allErrors.RecordError(err)
-			}
-		}(target)
-	}
-	wg.Wait()
-	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (ts *trafficSwitcher) forAllUids(f func(target *workflow.MigrationTarget, uid uint32) error) error {
