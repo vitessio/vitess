@@ -1006,7 +1006,7 @@ func (ts *trafficSwitcher) stopSourceWrites(ctx context.Context) error {
 	}
 	return ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		var err error
-		source.Position, err = ts.TabletManagerClient().MasterPosition(ctx, source.GetPrimary().Tablet)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		ts.wr.Logger().Infof("Stopped Source Writes. Position for source %v:%v: %v",
 			ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
 		if err != nil {
@@ -1056,7 +1056,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	// all targets have caught up, record their positions for setting up reverse workflows
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
-		target.Position, err = ts.TabletManagerClient().MasterPosition(ctx, target.GetPrimary().Tablet)
+		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
 		ts.Logger().Infof("After catchup, position for target primary %s, %v", target.GetPrimary().AliasString(), target.Position)
 		return err
 	})
@@ -1093,7 +1093,7 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *workflow.Str
 func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
 	err := ts.ForAllSources(func(source *workflow.MigrationSource) error {
 		var err error
-		source.Position, err = ts.TabletManagerClient().MasterPosition(ctx, source.GetPrimary().Tablet)
+		source.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, source.GetPrimary().Tablet)
 		ts.Logger().Infof("Position for source %v:%v: %v", ts.SourceKeyspaceName(), source.GetShard().ShardName(), source.Position)
 		return err
 	})
@@ -1102,7 +1102,7 @@ func (ts *trafficSwitcher) gatherPositions(ctx context.Context) error {
 	}
 	return ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		var err error
-		target.Position, err = ts.TabletManagerClient().MasterPosition(ctx, target.GetPrimary().Tablet)
+		target.Position, err = ts.TabletManagerClient().PrimaryPosition(ctx, target.GetPrimary().Tablet)
 		ts.Logger().Infof("Position for target %v:%v: %v", ts.TargetKeyspaceName(), target.GetShard().ShardName(), target.Position)
 		return err
 	})
