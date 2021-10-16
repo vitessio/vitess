@@ -45,7 +45,7 @@ func (c *Collation900) Iterator(input []byte) WeightIterator {
 
 func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch, reorder []Reorder, contractions []Contraction, upperCaseFirst bool, levels int) *Collation900 {
 	coll := &Collation900{
-		table:        applyTailoring(weights, weightPatches, false),
+		table:        applyTailoring(patcherUCA900{}, weights, weightPatches),
 		implicits:    UnicodeImplicitWeights900,
 		maxLevel:     levels,
 		param:        newParametricTailoring(reorder, upperCaseFirst),
@@ -95,7 +95,7 @@ func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
 func NewCollationLegacy(charset charset.UnicodeCharset, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
 	coll := &CollationLegacy{
 		next:         charset.Iterator(),
-		table:        applyTailoring(weights, weightPatches, true),
+		table:        applyTailoring(patcherUCALegacy{}, weights, weightPatches),
 		maxCodepoint: maxCodepoint,
 		contractions: newContractions(contractions),
 		iterpool:     &sync.Pool{},
