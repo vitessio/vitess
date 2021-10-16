@@ -51,7 +51,6 @@ import (
 )
 
 const (
-	frozenStr      = "FROZEN"
 	errorNoStreams = "no streams found in keyspace %s for: %s"
 	// use pt-osc's naming convention, this format also ensures vstreamer ignores such tables
 	renameTableTemplate = "_%.59s_old" // limit table name to 64 characters
@@ -1502,7 +1501,7 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 	// re-invoked after a freeze, it will skip all the previous steps
 	err := ts.ForAllTargets(func(target *workflow.MigrationTarget) error {
 		ts.Logger().Infof("Marking target streams frozen for workflow %s db_name %s", ts.WorkflowName(), target.GetPrimary().DbName())
-		query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", frozenStr, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
+		query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", workflow.Frozen, encodeString(target.GetPrimary().DbName()), encodeString(ts.WorkflowName()))
 		_, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query)
 		return err
 	})
