@@ -855,10 +855,10 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 			sourceTopo = ts.externalTopo
 		}
 		// All shards must be present.
-		if err := ts.compareShards(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), sourceTopo); err != nil {
+		if err := workflow.CompareShards(ctx, ts.SourceKeyspaceName(), ts.SourceShards(), sourceTopo); err != nil {
 			return err
 		}
-		if err := ts.compareShards(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), ts.wr.ts); err != nil {
+		if err := workflow.CompareShards(ctx, ts.TargetKeyspaceName(), ts.TargetShards(), ts.wr.ts); err != nil {
 			return err
 		}
 		// Wildcard table names not allowed.
@@ -867,23 +867,6 @@ func (ts *trafficSwitcher) validate(ctx context.Context) error {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
 		}
-	}
-	return nil
-}
-
-func (ts *trafficSwitcher) compareShards(ctx context.Context, keyspace string, sis []*topo.ShardInfo, topo *topo.Server) error {
-	var shards []string
-	for _, si := range sis {
-		shards = append(shards, si.ShardName())
-	}
-	topoShards, err := topo.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	sort.Strings(topoShards)
-	sort.Strings(shards)
-	if !reflect.DeepEqual(topoShards, shards) {
-		return fmt.Errorf("mismatched shards for keyspace %s: topo: %v vs switch command: %v", keyspace, topoShards, shards)
 	}
 	return nil
 }

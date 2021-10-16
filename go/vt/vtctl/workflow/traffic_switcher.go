@@ -27,8 +27,10 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -268,6 +270,48 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		OptCells:       optCells,
 		OptTabletTypes: optTabletTypes,
 	}, nil
+}
+
+// CompareShards compares the list of shards in a workflow with the shards in
+// that keyspace according to the topo. It returns an error if they do not match.
+//
+// This function is used to validate MoveTables workflows.
+//
+// (TODO|@ajm188): This function is temporarily-exported until *wrangler.trafficSwitcher
+// has been fully moved over to this package. Once that refactor is finished,
+// this function should be unexported. Consequently, YOU SHOULD NOT DEPEND ON
+// THIS FUNCTION EXTERNALLY.
+func CompareShards(ctx context.Context, keyspace string, shards []*topo.ShardInfo, ts *topo.Server) error {
+	shardSet := sets.NewString()
+	for _, si := range shards {
+		shardSet.Insert(si.ShardName())
+	}
+
+	topoShards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+
+	topoShardSet := sets.NewString(topoShards...)
+	if !shardSet.Equal(topoShardSet) {
+		wfExtra := shardSet.Difference(topoShardSet)
+		topoExtra := topoShardSet.Difference(shardSet)
+
+		var rec concurrency.AllErrorRecorder
+		if wfExtra.Len() > 0 {
+			wfExtraSorted := wfExtra.List()
+			rec.RecordError(fmt.Errorf("switch command shards not in topo: %v", wfExtraSorted))
+		}
+
+		if topoExtra.Len() > 0 {
+			topoExtraSorted := topoExtra.List()
+			rec.RecordError(fmt.Errorf("topo shards not in switch command: %v", topoExtraSorted))
+		}
+
+		return fmt.Errorf("mismatched shards for keyspace %s: %s", keyspace, strings.Join(rec.ErrorStrings(), "; "))
+	}
+
+	return nil
 }
 
 // HashStreams produces a stable hash based on the target keyspace and migration
