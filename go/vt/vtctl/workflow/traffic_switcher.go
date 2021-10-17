@@ -106,6 +106,7 @@ type ITrafficSwitcher interface {
 
 	/* Functions that expose fields on the *wrangler.trafficSwitcher */
 
+	ExternalTopo() *topo.Server
 	MigrationType() binlogdatapb.MigrationType
 	ReverseWorkflowName() string
 	SourceKeyspaceName() string
