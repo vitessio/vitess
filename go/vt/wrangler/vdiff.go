@@ -252,7 +252,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
+		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -912,7 +912,7 @@ func humanInt(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
