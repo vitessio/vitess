@@ -105,6 +105,7 @@ func (ts *trafficSwitcher) VReplicationExec(ctx context.Context, alias *topodata
 	return ts.wr.VReplicationExec(ctx, alias, query)
 }
 
+func (ts *trafficSwitcher) ExternalTopo() *topo.Server                     { return ts.externalTopo }
 func (ts *trafficSwitcher) MigrationType() binlogdatapb.MigrationType      { return ts.migrationType }
 func (ts *trafficSwitcher) ReverseWorkflowName() string                    { return ts.reverseWorkflow }
 func (ts *trafficSwitcher) SourceKeyspaceName() string                     { return ts.sourceKSSchema.Keyspace.Name }
