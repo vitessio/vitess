@@ -78,7 +78,7 @@ var (
 //			...
 //		}, func(ts *topo.Server) vtctlservicepb.VtctldServer { return NewVtctldServer(ts) })
 //
-func NewVtctldServerWithTabletManagerClient(t *testing.T, ts *topo.Server, tmc tmclient.TabletManagerClient, newVtctldServerFn func(ts *topo.Server) vtctlservicepb.VtctldServer) vtctlservicepb.VtctldServer {
+func NewVtctldServerWithTabletManagerClient(t testing.TB, ts *topo.Server, tmc tmclient.TabletManagerClient, newVtctldServerFn func(ts *topo.Server) vtctlservicepb.VtctldServer) vtctlservicepb.VtctldServer {
 	tmclientFactoryLock.Lock()
 	defer tmclientFactoryLock.Unlock()
 
