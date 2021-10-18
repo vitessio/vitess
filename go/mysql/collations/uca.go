@@ -19,7 +19,7 @@ package collations
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/encoding"
 	"vitess.io/vitess/go/mysql/collations/uca"
 )
 
@@ -29,7 +29,7 @@ func init() {
 
 type CollationUCA interface {
 	Collation
-	UnicodeCharset() charset.UnicodeCharset
+	Encoding() encoding.Encoding
 }
 
 type Collation_utf8mb4_uca_0900 struct {
@@ -59,8 +59,8 @@ func (c *Collation_utf8mb4_uca_0900) init() {
 	})
 }
 
-func (c *Collation_utf8mb4_uca_0900) UnicodeCharset() charset.UnicodeCharset {
-	return charset.Charset_utf8mb4
+func (c *Collation_utf8mb4_uca_0900) Encoding() encoding.Encoding {
+	return encoding.Encoding_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_uca_0900) WeightsUCA900() []*[]uint16 {
@@ -159,13 +159,12 @@ func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
 	return weights * 2    // two bytes per weight
 }
 
-type Collation_utf8mb4_0900_bin struct {
-}
+type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) init() {}
 
-func (c *Collation_utf8mb4_0900_bin) UnicodeCharset() charset.UnicodeCharset {
-	return charset.Charset_utf8mb4
+func (c *Collation_utf8mb4_0900_bin) Encoding() encoding.Encoding {
+	return encoding.Encoding_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_0900_bin) Id() uint {
@@ -199,7 +198,7 @@ type Collation_uca_legacy struct {
 	name string
 	id   uint
 
-	charset      charset.UnicodeCharset
+	charset      encoding.Encoding
 	weights      uca.WeightTable
 	tailoring    []uca.WeightPatch
 	contractions []uca.Contraction
@@ -218,7 +217,7 @@ func (c *Collation_uca_legacy) init() {
 	})
 }
 
-func (c *Collation_uca_legacy) UnicodeCharset() charset.UnicodeCharset {
+func (c *Collation_uca_legacy) Encoding() encoding.Encoding {
 	return c.charset
 }
 

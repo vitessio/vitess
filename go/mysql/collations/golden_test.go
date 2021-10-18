@@ -24,7 +24,7 @@ func TestGoldenWeights(t *testing.T) {
 				for coll, expected := range goldenCase.Weights {
 					coll := testcollation(t, coll)
 
-					input, err := coll.(CollationUCA).UnicodeCharset().EncodeFromUTF8(goldenCase.Text)
+					input, err := coll.(CollationUCA).Encoding().EncodeFromUTF8(goldenCase.Text)
 					if err != nil {
 						t.Fatal(err)
 					}

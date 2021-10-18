@@ -1,6 +1,6 @@
 package uca
 
-import "vitess.io/vitess/go/mysql/collations/charset"
+import "vitess.io/vitess/go/mysql/collations/encoding"
 
 type iteratorLegacy struct {
 	// Constant
@@ -54,7 +54,7 @@ func (it *iteratorLegacy) Done() {
 }
 
 func (it *iteratorLegacy) DebugCodepoint() (rune, int) {
-	return it.next(it.input)
+	return it.encoding.DecodeRune(it.input)
 }
 
 func (it *iteratorLegacy) Next() (uint16, bool) {
@@ -63,8 +63,8 @@ func (it *iteratorLegacy) Next() (uint16, bool) {
 			return w, true
 		}
 
-		cp, width := it.next(it.input)
-		if cp == charset.RuneError && width < 3 {
+		cp, width := it.encoding.DecodeRune(it.input)
+		if cp == encoding.RuneError && width < 3 {
 			return 0, false
 		}
 		it.input = it.input[width:]
@@ -72,7 +72,7 @@ func (it *iteratorLegacy) Next() (uint16, bool) {
 		if cp > it.maxCodepoint {
 			return 0xFFFD, true
 		}
-		if weights, remainder := it.contractions.weightForContractionAnyEncoding(cp, it.input, it.next); weights != nil {
+		if weights, remainder := it.contractions.weightForContractionAnyEncoding(cp, it.input, it.encoding); weights != nil {
 			it.codepoint.initContraction(weights)
 			it.input = remainder
 			continue
