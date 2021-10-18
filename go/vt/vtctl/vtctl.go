@@ -2020,7 +2020,16 @@ func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("the <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command")
 	}
 
-	return wr.RemoveKeyspaceCell(ctx, subFlags.Arg(0), subFlags.Arg(1), *force, *recursive)
+	keyspace := subFlags.Arg(0)
+	cell := subFlags.Arg(1)
+
+	_, err := wr.VtctldServer().RemoveKeyspaceCell(ctx, &vtctldatapb.RemoveKeyspaceCellRequest{
+		Keyspace:  keyspace,
+		Cell:      cell,
+		Force:     *force,
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
