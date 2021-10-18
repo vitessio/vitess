@@ -506,32 +506,6 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		}
 	}
 	if ct.Options.Default != nil {
-		doesRequireParens := func(ct *ColumnType) bool {
-			contains := func(tp string) bool {
-				typeOptions := []string{"TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", "JSON", "GEOMETRY", "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION"}
-				for _, t := range typeOptions {
-					if t == tp {
-						return true
-					}
-				}
-
-				return false
-			}
-
-			if contains(ct.Type) {
-				return true
-			}
-
-			_, isLiteral := ct.Options.Default.(*Literal)
-			_, isBool := ct.Options.Default.(BoolVal)
-			_, isNullVal := ct.Options.Default.(*NullVal)
-
-			if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-				return false
-			}
-
-			return true
-		}
 		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
 		if doesRequireParens(ct) {
 			buf.astPrintf(ct, " (%v)", ct.Options.Default)
