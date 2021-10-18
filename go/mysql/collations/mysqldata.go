@@ -3,7 +3,7 @@
 package collations
 
 import (
-	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/encoding"
 	"vitess.io/vitess/go/mysql/collations/uca"
 )
 
@@ -4595,14 +4595,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_unicode_ci",
 		id:           101,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		maxCodepoint: 0xFFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf16_icelandic_ci",
 		id:           102,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_icelandic_ci,
 		maxCodepoint: 0xFFFF,
@@ -4610,7 +4610,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_latvian_ci",
 		id:           103,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_latvian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4618,7 +4618,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_romanian_ci",
 		id:           104,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_romanian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4626,7 +4626,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_slovenian_ci",
 		id:           105,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovenian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4634,7 +4634,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_polish_ci",
 		id:           106,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_polish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4642,7 +4642,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_estonian_ci",
 		id:           107,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_estonian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4650,7 +4650,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_spanish_ci",
 		id:           108,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4658,7 +4658,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_swedish_ci",
 		id:           109,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_swedish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4666,7 +4666,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_turkish_ci",
 		id:           110,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_turkish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4674,7 +4674,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_czech_ci",
 		id:           111,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_czech_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -4683,7 +4683,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_danish_ci",
 		id:           112,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_danish_ci,
 		contractions: contractions_utf16_danish_ci,
@@ -4692,7 +4692,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_lithuanian_ci",
 		id:           113,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_lithuanian_ci,
 		contractions: contractions_utf16_lithuanian_ci,
@@ -4701,7 +4701,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_slovak_ci",
 		id:           114,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovak_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -4710,7 +4710,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_spanish2_ci",
 		id:           115,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		contractions: contractions_utf16_spanish2_ci,
@@ -4719,7 +4719,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_roman_ci",
 		id:           116,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_roman_ci,
 		maxCodepoint: 0xFFFF,
@@ -4727,7 +4727,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_persian_ci",
 		id:           117,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_persian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4735,7 +4735,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_esperanto_ci",
 		id:           118,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_esperanto_ci,
 		maxCodepoint: 0xFFFF,
@@ -4743,7 +4743,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_hungarian_ci",
 		id:           119,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_hungarian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4751,7 +4751,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_sinhala_ci",
 		id:           120,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_sinhala_ci,
 		maxCodepoint: 0xFFFF,
@@ -4759,7 +4759,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_german2_ci",
 		id:           121,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_german2_ci,
 		maxCodepoint: 0xFFFF,
@@ -4767,7 +4767,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_croatian_ci",
 		id:           122,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_croatian_ci,
 		contractions: contractions_utf16_croatian_ci,
@@ -4776,14 +4776,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf16_unicode_520_ci",
 		id:           123,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca520,
 		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf16_vietnamese_ci",
 		id:           124,
-		charset:      charset.Charset_utf16,
+		charset:      encoding.Encoding_utf16{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_vietnamese_ci,
 		maxCodepoint: 0xFFFF,
@@ -4791,14 +4791,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_unicode_ci",
 		id:           128,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		maxCodepoint: 0xFFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "ucs2_icelandic_ci",
 		id:           129,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_icelandic_ci,
 		maxCodepoint: 0xFFFF,
@@ -4806,7 +4806,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_latvian_ci",
 		id:           130,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_latvian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4814,7 +4814,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_romanian_ci",
 		id:           131,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_romanian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4822,7 +4822,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_slovenian_ci",
 		id:           132,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovenian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4830,7 +4830,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_polish_ci",
 		id:           133,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_polish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4838,7 +4838,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_estonian_ci",
 		id:           134,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_estonian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4846,7 +4846,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_spanish_ci",
 		id:           135,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4854,7 +4854,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_swedish_ci",
 		id:           136,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_swedish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4862,7 +4862,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_turkish_ci",
 		id:           137,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_turkish_ci,
 		maxCodepoint: 0xFFFF,
@@ -4870,7 +4870,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_czech_ci",
 		id:           138,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_czech_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -4879,7 +4879,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_danish_ci",
 		id:           139,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_danish_ci,
 		contractions: contractions_utf16_danish_ci,
@@ -4888,7 +4888,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_lithuanian_ci",
 		id:           140,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_lithuanian_ci,
 		contractions: contractions_utf16_lithuanian_ci,
@@ -4897,7 +4897,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_slovak_ci",
 		id:           141,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovak_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -4906,7 +4906,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_spanish2_ci",
 		id:           142,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		contractions: contractions_utf16_spanish2_ci,
@@ -4915,7 +4915,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_roman_ci",
 		id:           143,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_roman_ci,
 		maxCodepoint: 0xFFFF,
@@ -4923,7 +4923,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_persian_ci",
 		id:           144,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_persian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4931,7 +4931,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_esperanto_ci",
 		id:           145,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_esperanto_ci,
 		maxCodepoint: 0xFFFF,
@@ -4939,7 +4939,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_hungarian_ci",
 		id:           146,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_hungarian_ci,
 		maxCodepoint: 0xFFFF,
@@ -4947,7 +4947,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_sinhala_ci",
 		id:           147,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_sinhala_ci,
 		maxCodepoint: 0xFFFF,
@@ -4955,7 +4955,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_german2_ci",
 		id:           148,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_german2_ci,
 		maxCodepoint: 0xFFFF,
@@ -4963,7 +4963,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_croatian_ci",
 		id:           149,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_croatian_ci,
 		contractions: contractions_utf16_croatian_ci,
@@ -4972,14 +4972,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "ucs2_unicode_520_ci",
 		id:           150,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca520,
 		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "ucs2_vietnamese_ci",
 		id:           151,
-		charset:      charset.Charset_ucs2,
+		charset:      encoding.Encoding_ucs2{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_vietnamese_ci,
 		maxCodepoint: 0xFFFF,
@@ -4987,14 +4987,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_unicode_ci",
 		id:           160,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		maxCodepoint: 0xFFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf32_icelandic_ci",
 		id:           161,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_icelandic_ci,
 		maxCodepoint: 0xFFFF,
@@ -5002,7 +5002,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_latvian_ci",
 		id:           162,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_latvian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5010,7 +5010,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_romanian_ci",
 		id:           163,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_romanian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5018,7 +5018,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_slovenian_ci",
 		id:           164,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovenian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5026,7 +5026,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_polish_ci",
 		id:           165,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_polish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5034,7 +5034,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_estonian_ci",
 		id:           166,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_estonian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5042,7 +5042,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_spanish_ci",
 		id:           167,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5050,7 +5050,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_swedish_ci",
 		id:           168,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_swedish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5058,7 +5058,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_turkish_ci",
 		id:           169,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_turkish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5066,7 +5066,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_czech_ci",
 		id:           170,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_czech_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5075,7 +5075,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_danish_ci",
 		id:           171,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_danish_ci,
 		contractions: contractions_utf16_danish_ci,
@@ -5084,7 +5084,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_lithuanian_ci",
 		id:           172,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_lithuanian_ci,
 		contractions: contractions_utf16_lithuanian_ci,
@@ -5093,7 +5093,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_slovak_ci",
 		id:           173,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovak_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5102,7 +5102,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_spanish2_ci",
 		id:           174,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		contractions: contractions_utf16_spanish2_ci,
@@ -5111,7 +5111,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_roman_ci",
 		id:           175,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_roman_ci,
 		maxCodepoint: 0xFFFF,
@@ -5119,7 +5119,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_persian_ci",
 		id:           176,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_persian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5127,7 +5127,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_esperanto_ci",
 		id:           177,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_esperanto_ci,
 		maxCodepoint: 0xFFFF,
@@ -5135,7 +5135,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_hungarian_ci",
 		id:           178,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_hungarian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5143,7 +5143,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_sinhala_ci",
 		id:           179,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_sinhala_ci,
 		maxCodepoint: 0xFFFF,
@@ -5151,7 +5151,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_german2_ci",
 		id:           180,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_german2_ci,
 		maxCodepoint: 0xFFFF,
@@ -5159,7 +5159,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_croatian_ci",
 		id:           181,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_croatian_ci,
 		contractions: contractions_utf16_croatian_ci,
@@ -5168,14 +5168,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf32_unicode_520_ci",
 		id:           182,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca520,
 		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf32_vietnamese_ci",
 		id:           183,
-		charset:      charset.Charset_utf32,
+		charset:      encoding.Encoding_utf32{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_vietnamese_ci,
 		maxCodepoint: 0xFFFF,
@@ -5183,14 +5183,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_unicode_ci",
 		id:           192,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		maxCodepoint: 0xFFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf8_icelandic_ci",
 		id:           193,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_icelandic_ci,
 		maxCodepoint: 0xFFFF,
@@ -5198,7 +5198,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_latvian_ci",
 		id:           194,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_latvian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5206,7 +5206,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_romanian_ci",
 		id:           195,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_romanian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5214,7 +5214,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_slovenian_ci",
 		id:           196,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovenian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5222,7 +5222,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_polish_ci",
 		id:           197,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_polish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5230,7 +5230,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_estonian_ci",
 		id:           198,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_estonian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5238,7 +5238,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_spanish_ci",
 		id:           199,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5246,7 +5246,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_swedish_ci",
 		id:           200,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_swedish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5254,7 +5254,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_turkish_ci",
 		id:           201,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_turkish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5262,7 +5262,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_czech_ci",
 		id:           202,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_czech_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5271,7 +5271,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_danish_ci",
 		id:           203,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_danish_ci,
 		contractions: contractions_utf16_danish_ci,
@@ -5280,7 +5280,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_lithuanian_ci",
 		id:           204,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_lithuanian_ci,
 		contractions: contractions_utf16_lithuanian_ci,
@@ -5289,7 +5289,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_slovak_ci",
 		id:           205,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovak_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5298,7 +5298,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_spanish2_ci",
 		id:           206,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		contractions: contractions_utf16_spanish2_ci,
@@ -5307,7 +5307,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_roman_ci",
 		id:           207,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_roman_ci,
 		maxCodepoint: 0xFFFF,
@@ -5315,7 +5315,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_persian_ci",
 		id:           208,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_persian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5323,7 +5323,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_esperanto_ci",
 		id:           209,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_esperanto_ci,
 		maxCodepoint: 0xFFFF,
@@ -5331,7 +5331,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_hungarian_ci",
 		id:           210,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_hungarian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5339,7 +5339,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_sinhala_ci",
 		id:           211,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_sinhala_ci,
 		maxCodepoint: 0xFFFF,
@@ -5347,7 +5347,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_german2_ci",
 		id:           212,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_german2_ci,
 		maxCodepoint: 0xFFFF,
@@ -5355,7 +5355,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_croatian_ci",
 		id:           213,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_croatian_ci,
 		contractions: contractions_utf16_croatian_ci,
@@ -5364,14 +5364,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8_unicode_520_ci",
 		id:           214,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca520,
 		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf8_vietnamese_ci",
 		id:           215,
-		charset:      charset.Charset_utf8,
+		charset:      encoding.Encoding_utf8{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_vietnamese_ci,
 		maxCodepoint: 0xFFFF,
@@ -5379,14 +5379,14 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_unicode_ci",
 		id:           224,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		maxCodepoint: 0xFFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_icelandic_ci",
 		id:           225,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_icelandic_ci,
 		maxCodepoint: 0xFFFF,
@@ -5394,7 +5394,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_latvian_ci",
 		id:           226,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_latvian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5402,7 +5402,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_romanian_ci",
 		id:           227,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_romanian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5410,7 +5410,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_slovenian_ci",
 		id:           228,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovenian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5418,7 +5418,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_polish_ci",
 		id:           229,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_polish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5426,7 +5426,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_estonian_ci",
 		id:           230,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_estonian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5434,7 +5434,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_spanish_ci",
 		id:           231,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5442,7 +5442,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_swedish_ci",
 		id:           232,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_swedish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5450,7 +5450,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_turkish_ci",
 		id:           233,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_turkish_ci,
 		maxCodepoint: 0xFFFF,
@@ -5458,7 +5458,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_czech_ci",
 		id:           234,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_czech_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5467,7 +5467,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_danish_ci",
 		id:           235,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_danish_ci,
 		contractions: contractions_utf16_danish_ci,
@@ -5476,7 +5476,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_lithuanian_ci",
 		id:           236,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_lithuanian_ci,
 		contractions: contractions_utf16_lithuanian_ci,
@@ -5485,7 +5485,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_slovak_ci",
 		id:           237,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_slovak_ci,
 		contractions: contractions_utf16_czech_ci,
@@ -5494,7 +5494,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_spanish2_ci",
 		id:           238,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_spanish_ci,
 		contractions: contractions_utf16_spanish2_ci,
@@ -5503,7 +5503,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_roman_ci",
 		id:           239,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_roman_ci,
 		maxCodepoint: 0xFFFF,
@@ -5511,7 +5511,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_persian_ci",
 		id:           240,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_persian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5519,7 +5519,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_esperanto_ci",
 		id:           241,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_esperanto_ci,
 		maxCodepoint: 0xFFFF,
@@ -5527,7 +5527,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_hungarian_ci",
 		id:           242,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_hungarian_ci,
 		maxCodepoint: 0xFFFF,
@@ -5535,7 +5535,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_sinhala_ci",
 		id:           243,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_sinhala_ci,
 		maxCodepoint: 0xFFFF,
@@ -5543,7 +5543,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_german2_ci",
 		id:           244,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_german2_ci,
 		maxCodepoint: 0xFFFF,
@@ -5551,7 +5551,7 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_croatian_ci",
 		id:           245,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_croatian_ci,
 		contractions: contractions_utf16_croatian_ci,
@@ -5560,17 +5560,24 @@ func init() {
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_unicode_520_ci",
 		id:           246,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca520,
 		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_uca_legacy{
 		name:         "utf8mb4_vietnamese_ci",
 		id:           247,
-		charset:      charset.Charset_utf8mb4,
+		charset:      encoding.Encoding_utf8mb4{},
 		weights:      uca.WeightTable_uca400,
 		tailoring:    weightTailoring_utf16_vietnamese_ci,
 		maxCodepoint: 0xFFFF,
+	})
+	register(&Collation_uca_legacy{
+		name:         "gb18030_unicode_520_ci",
+		id:           250,
+		charset:      encoding.Encoding_gb18030{},
+		weights:      uca.WeightTable_uca520,
+		maxCodepoint: 0x10FFFF,
 	})
 	register(&Collation_utf8mb4_uca_0900{
 		name:             "utf8mb4_0900_ai_ci",

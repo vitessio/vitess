@@ -218,7 +218,7 @@ func main() {
 			Weights: make(map[string][]byte),
 		}
 		for _, collation := range allcoll {
-			transcoded, err := collation.UnicodeCharset().EncodeFromUTF8([]byte(snippet))
+			transcoded, err := collation.Encoding().EncodeFromUTF8([]byte(snippet))
 			if err != nil {
 				log.Printf("[%s] skip collation %s", lang, collation.Name())
 				continue

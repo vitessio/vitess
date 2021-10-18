@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/encoding"
 )
 
 func init() {
@@ -77,7 +77,7 @@ func (c *Collation_utf8mb4_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
 }
 
-func weightStringUnicode(unicaseInfo *UnicaseInfo, decode charset.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func weightStringUnicode(unicaseInfo *UnicaseInfo, decode encoding.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	adjustPadding := func(dst []byte, numCodepoints int) []byte {
 		if padToMax {
 			for len(dst)+1 < cap(dst) {
@@ -99,7 +99,7 @@ func weightStringUnicode(unicaseInfo *UnicaseInfo, decode charset.CodepointItera
 
 	for len(dst)+1 < cap(dst) && numCodepoints > 0 {
 		r, width := decode(src)
-		if r == charset.RuneError && width < 3 {
+		if r == encoding.RuneError && width < 3 {
 			return adjustPadding(dst, numCodepoints)
 		}
 
@@ -111,7 +111,7 @@ func weightStringUnicode(unicaseInfo *UnicaseInfo, decode charset.CodepointItera
 
 	if len(dst) < cap(dst) && numCodepoints > 0 {
 		r, width := decode(src)
-		if r != charset.RuneError || width == 3 {
+		if r != encoding.RuneError || width == 3 {
 			sorted := unicaseInfo.unicodeSort(r)
 			dst = append(dst, byte(sorted>>8))
 		}
@@ -155,10 +155,10 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 	return len(left) - len(right)
 }
 
-func weightStringUnicodeBin(decode charset.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func weightStringUnicodeBin(decode encoding.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	for len(dst)+2 < cap(dst) && numCodepoints > 0 {
 		r, width := decode(src)
-		if r == charset.RuneError && width < 3 {
+		if r == encoding.RuneError && width < 3 {
 			break
 		}
 
@@ -168,7 +168,7 @@ func weightStringUnicodeBin(decode charset.CodepointIterator, dst []byte, numCod
 	}
 
 	if numCodepoints > 0 {
-		if r, width := decode(src); r != charset.RuneError || width == 3 {
+		if r, width := decode(src); r != encoding.RuneError || width == 3 {
 			numCodepoints--
 			switch cap(dst) - len(dst) {
 			case 0:

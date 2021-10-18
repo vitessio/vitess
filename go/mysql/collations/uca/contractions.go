@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/encoding"
 )
 
 type trie struct {
@@ -41,14 +41,14 @@ func (t *trie) walk(remainder []byte) ([]uint16, []byte) {
 	return t.weights, remainder
 }
 
-func (t *trie) walkAnyEncoding(iter charset.CodepointIterator, remainder []byte) ([]uint16, []byte) {
+func (t *trie) walkAnyEncoding(enc encoding.Encoding, remainder []byte) ([]uint16, []byte) {
 	if len(remainder) > 0 {
-		cp, width := iter(remainder)
-		if cp == charset.RuneError && width < 3 {
+		cp, width := enc.DecodeRune(remainder)
+		if cp == encoding.RuneError && width < 3 {
 			return nil, nil
 		}
 		if ch := t.children[cp]; ch != nil {
-			return ch.walkAnyEncoding(iter, remainder[width:])
+			return ch.walkAnyEncoding(enc, remainder[width:])
 		}
 	}
 	return t.weights, remainder
@@ -101,12 +101,12 @@ func (ctr *contractions) weightForContraction(cp rune, remainder []byte) ([]uint
 	return nil, nil
 }
 
-func (ctr *contractions) weightForContractionAnyEncoding(cp rune, remainder []byte, iter charset.CodepointIterator) ([]uint16, []byte) {
+func (ctr *contractions) weightForContractionAnyEncoding(cp rune, remainder []byte, enc encoding.Encoding) ([]uint16, []byte) {
 	if ctr == nil {
 		return nil, nil
 	}
 	if tr := ctr.tr.children[cp]; tr != nil {
-		return tr.walkAnyEncoding(iter, remainder)
+		return tr.walkAnyEncoding(enc, remainder)
 	}
 	return nil, nil
 }

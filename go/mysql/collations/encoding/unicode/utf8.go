@@ -1,4 +1,6 @@
-package charset
+package unicode
+
+import "unicode/utf8"
 
 const (
 	maskx = 0b00111111
@@ -59,7 +61,13 @@ var acceptRanges = [16]acceptRange{
 	4: {locb, 0x8F},
 }
 
-func iteratorUTF8mb3(p []byte) (rune, int) {
+type Encoding_utf8 struct{}
+
+func (u Encoding_utf8) Name() string {
+	return "utf8mb3"
+}
+
+func (Encoding_utf8) DecodeRune(p []byte) (rune, int) {
 	n := len(p)
 	if n < 1 {
 		return RuneError, 0
@@ -93,4 +101,33 @@ func iteratorUTF8mb3(p []byte) (rune, int) {
 		return rune(p0&mask3)<<12 | rune(b1&maskx)<<6 | rune(b2&maskx), 3
 	}
 	return RuneError, 1
+}
+
+func (Encoding_utf8) SupportsSupplementaryChars() bool {
+	return false
+}
+
+func (Encoding_utf8) EncodeFromUTF8(in []byte) ([]byte, error) {
+	if err := ensureBMPRange(in); err != nil {
+		return nil, err
+	}
+	return in, nil
+}
+
+type Encoding_utf8mb4 struct{}
+
+func (Encoding_utf8mb4) Name() string {
+	return "utf8mb4"
+}
+
+func (Encoding_utf8mb4) DecodeRune(p []byte) (rune, int) {
+	return utf8.DecodeRune(p)
+}
+
+func (Encoding_utf8mb4) SupportsSupplementaryChars() bool {
+	return true
+}
+
+func (Encoding_utf8mb4) EncodeFromUTF8(in []byte) ([]byte, error) {
+	return in, nil
 }

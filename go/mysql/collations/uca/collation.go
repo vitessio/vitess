@@ -19,7 +19,7 @@ package uca
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/encoding"
 )
 
 type WeightTable []*[]uint16
@@ -75,7 +75,7 @@ func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch,
 }
 
 type CollationLegacy struct {
-	next         func([]byte) (rune, int)
+	encoding     encoding.Encoding
 	table        WeightTable
 	maxCodepoint rune
 	contractions *contractions
@@ -92,9 +92,9 @@ func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
 	return iter
 }
 
-func NewCollationLegacy(charset charset.UnicodeCharset, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
+func NewCollationLegacy(enc encoding.Encoding, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
 	coll := &CollationLegacy{
-		next:         charset.Iterator(),
+		encoding:     enc,
 		table:        applyTailoring(patcherUCALegacy{}, weights, weightPatches),
 		maxCodepoint: maxCodepoint,
 		contractions: newContractions(contractions),
