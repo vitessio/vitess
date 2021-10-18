@@ -20,18 +20,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights uca.WeightTable, layout uca.TableLayout) {
 	t.Helper()
 
-	for cp := 0; cp < uca.MaxCodepoint; cp++ {
+	maxCodepoint := int(layout.MaxCodepoint())
+	for cp := 0; cp <= maxCodepoint; cp++ {
 		vitessWeights := layout.DebugWeights(weights, rune(cp))
 		codepoint := fmt.Sprintf("U+%04X", cp)
 		mysqlWeights, mysqlFound := expected[codepoint]
@@ -82,10 +86,39 @@ func TestWeightsForAllCodepoints(t *testing.T) {
 	verifyAllCodepoints(t, testWeightsFromMysql, uca.WeightTable_uca900, uca.TableLayout_uca900{})
 }
 
+func TestWeightTablesAreDeduplicated(t *testing.T) {
+	sliceptr := func(table uca.WeightTable) uintptr {
+		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&table))
+		return hdr.Data
+	}
+
+	uniqueTables := make(map[uintptr]int)
+	for _, col := range collations.All() {
+		if uca, ok := col.(collations.CollationUCA); ok {
+			weights, _ := uca.UnicodeWeightsTable()
+			uniqueTables[sliceptr(weights)]++
+		}
+	}
+
+	var total int
+	for _, count := range uniqueTables {
+		total += count
+	}
+	average := float64(total) / float64(len(uniqueTables))
+	if average < 10.0/3.0 {
+		t.Fatalf("weight tables are not deduplicated, average table reuse: %f", average)
+	}
+}
+
 func TestTailoringPatchApplication(t *testing.T) {
 	for _, col := range collations.All() {
 		uca, ok := col.(collations.CollationUCA)
 		if !ok {
+			continue
+		}
+		switch uca.Encoding().(type) {
+		case encoding.Encoding_utf8mb4:
+		default:
 			continue
 		}
 

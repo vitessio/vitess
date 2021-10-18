@@ -33,8 +33,8 @@ type Collation900 struct {
 	iterpool     *sync.Pool
 }
 
-func (c *Collation900) Weights() WeightTable {
-	return c.table
+func (c *Collation900) Weights() (WeightTable, TableLayout) {
+	return c.table, TableLayout_uca900{}
 }
 
 func (c *Collation900) Iterator(input []byte) WeightIterator {
@@ -82,8 +82,8 @@ type CollationLegacy struct {
 	iterpool     *sync.Pool
 }
 
-func (c *CollationLegacy) Weights() WeightTable {
-	return c.table
+func (c *CollationLegacy) Weights() (WeightTable, TableLayout) {
+	return c.table, TableLayout_uca_legacy{c.maxCodepoint}
 }
 
 func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
