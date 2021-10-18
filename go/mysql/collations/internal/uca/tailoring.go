@@ -16,6 +16,12 @@ limitations under the License.
 
 package uca
 
+import (
+	"reflect"
+	"sync"
+	"unsafe"
+)
+
 type WeightPatch struct {
 	Codepoint rune
 	Patch     []uint16
@@ -32,6 +38,7 @@ const Pages = MaxCodepoint / CodepointsPerPage
 const MaxCollationElementsPerCodepoint = 8
 
 type TableLayout interface {
+	MaxCodepoint() rune
 	DebugWeights(table WeightTable, codepoint rune) []uint16
 
 	allocPage(original *[]uint16, patches []WeightPatch) []uint16
@@ -39,6 +46,10 @@ type TableLayout interface {
 }
 
 type TableLayout_uca900 struct{}
+
+func (TableLayout_uca900) MaxCodepoint() rune {
+	return MaxCodepoint - 1
+}
 
 func (TableLayout_uca900) DebugWeights(table WeightTable, codepoint rune) (result []uint16) {
 	p, offset := pageOffset(codepoint)
@@ -101,13 +112,19 @@ func (TableLayout_uca900) applyPatches(page []uint16, offset int, weights []uint
 	page[offset] = uint16(weightcount)
 }
 
-type TableLayout_uca_legacy struct{}
+type TableLayout_uca_legacy struct {
+	maxCodepoint rune
+}
 
-func (TableLayout_uca_legacy) DebugWeights(table WeightTable, codepoint rune) (result []uint16) {
-	p, offset := pageOffset(codepoint)
-	if p >= len(table) {
+func (l TableLayout_uca_legacy) MaxCodepoint() rune {
+	return l.maxCodepoint
+}
+
+func (l TableLayout_uca_legacy) DebugWeights(table WeightTable, codepoint rune) (result []uint16) {
+	if codepoint > l.maxCodepoint {
 		return nil
 	}
+	p, offset := pageOffset(codepoint)
 	page := table[p]
 	if page == nil {
 		return nil
@@ -172,9 +189,39 @@ func (TableLayout_uca_legacy) applyPatches(page []uint16, offset int, weights []
 	}
 }
 
+type tableWithPatch struct {
+	tableptr uintptr
+	patchptr uintptr
+}
+
+var cachedTables = make(map[tableWithPatch]WeightTable)
+var cachedTablesMu sync.Mutex
+
+func lookupCachedTable(table WeightTable, patch []WeightPatch) (WeightTable, bool) {
+	hdr1 := (*reflect.SliceHeader)(unsafe.Pointer(&table))
+	hdr2 := (*reflect.SliceHeader)(unsafe.Pointer(&patch))
+
+	cachedTablesMu.Lock()
+	defer cachedTablesMu.Unlock()
+	tbl, ok := cachedTables[tableWithPatch{hdr1.Data, hdr2.Data}]
+	return tbl, ok
+}
+
+func storeCachedTable(table WeightTable, patch []WeightPatch, result WeightTable) {
+	hdr1 := (*reflect.SliceHeader)(unsafe.Pointer(&table))
+	hdr2 := (*reflect.SliceHeader)(unsafe.Pointer(&patch))
+
+	cachedTablesMu.Lock()
+	cachedTables[tableWithPatch{hdr1.Data, hdr2.Data}] = result
+	cachedTablesMu.Unlock()
+}
+
 func applyTailoring(layout TableLayout, base WeightTable, patches []WeightPatch) WeightTable {
 	if len(patches) == 0 {
 		return base
+	}
+	if result, ok := lookupCachedTable(base, patches); ok {
+		return result
 	}
 
 	result := make(WeightTable, len(base))
@@ -197,6 +244,7 @@ func applyTailoring(layout TableLayout, base WeightTable, patches []WeightPatch)
 		result[p] = &page
 	}
 
+	storeCachedTable(base, patches, result)
 	return result
 }
 
