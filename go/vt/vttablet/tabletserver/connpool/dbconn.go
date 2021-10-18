@@ -114,6 +114,9 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 		case err == nil:
 			// Success.
 			return r, nil
+		case mysql.IsConnLost(err):
+			// Query probably killed. Don't retry.
+			return nil, err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return nil, err
@@ -214,6 +217,9 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 		case err == nil:
 			// Success.
 			return nil
+		case mysql.IsConnLost(err):
+			// Query probably killed. Don't retry.
+			return err
 		case !mysql.IsConnErr(err):
 			// Not a connection error. Don't retry.
 			return err
