@@ -14,6 +14,9 @@ func (Encoding_gb18030) Name() string {
 
 func (Encoding_gb18030) DecodeRune(src []byte) (rune, int) {
 	const isgb18030 = true
+	if len(src) < 1 {
+		return utf8.RuneError, 0
+	}
 
 	switch c0 := src[0]; {
 	case c0 < utf8.RuneSelf:
