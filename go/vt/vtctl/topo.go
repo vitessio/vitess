@@ -17,6 +17,7 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -25,9 +26,6 @@ import (
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/topo"

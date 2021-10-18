@@ -82,6 +82,7 @@ COMMAND ARGUMENT DEFINITIONS
 */
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -95,9 +96,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
-
-	"context"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
@@ -144,6 +142,9 @@ type command struct {
 	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error
 	params string
 	help   string // if help is empty, won't list the command
+
+	// if set, PrintAllCommands will not show this command
+	hidden bool
 
 	// deprecation support
 	deprecated   bool
@@ -360,12 +361,15 @@ var commands = []commandGroup{
 				name:   "ShardReplicationAdd",
 				method: commandShardReplicationAdd,
 				params: "<keyspace/shard> <tablet alias> <parent tablet alias>",
-				help:   "HIDDEN Adds an entry to the replication graph in the given cell."},
+				help:   "Adds an entry to the replication graph in the given cell.",
+				hidden: true,
+			},
 			{
 				name:   "ShardReplicationRemove",
 				method: commandShardReplicationRemove,
 				params: "<keyspace/shard> <tablet alias>",
-				help:   "HIDDEN Removes an entry from the replication graph in the given cell.",
+				help:   "Removes an entry from the replication graph in the given cell.",
+				hidden: true,
 			},
 			{
 				name:   "ShardReplicationFix",
@@ -599,7 +603,8 @@ var commands = []commandGroup{
 				name:   "Panic",
 				method: commandPanic,
 				params: "",
-				help:   "HIDDEN Triggers a panic on the server side, to test the handling.",
+				help:   "Triggers a panic on the server side, to test the handling.",
+				hidden: true,
 			},
 		},
 	},
@@ -4118,7 +4123,7 @@ func PrintAllCommands(logger logutil.Logger) {
 	for _, group := range commands {
 		logger.Printf("%s:\n", group.name)
 		for _, cmd := range group.commands {
-			if strings.HasPrefix(cmd.help, "HIDDEN") {
+			if cmd.hidden {
 				continue
 			}
 

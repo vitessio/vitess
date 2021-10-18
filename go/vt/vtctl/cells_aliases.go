@@ -17,11 +17,10 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/wrangler"
 
