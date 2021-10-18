@@ -29,7 +29,7 @@ func TestGoldenWeights(t *testing.T) {
 						t.Fatal(err)
 					}
 
-					result := coll.WeightString(nil, input)
+					result := coll.WeightString(nil, input, 0)
 					if !bytes.Equal(expected, result) {
 						t.Errorf("mismatch for collation=%s\noriginal: %s\ninput:    %#v\nexpected: %v\nactual:   %v",
 							coll.Name(), string(goldenCase.Text), input, expected, result)

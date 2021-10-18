@@ -80,7 +80,7 @@ func TestContractions(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 
 			for _, in := range tc.inputs {
-				weightString := coll.WeightString(nil, []byte(in))
+				weightString := coll.WeightString(nil, []byte(in), 0)
 				if !bytes.Equal(weightString, tc.expected) {
 					t.Errorf("weight_string(%q) = %#v (expected %#v)", in, weightString, tc.expected)
 				}
@@ -102,7 +102,7 @@ func TestReplacementCharacter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
 			coll := testcollation(t, tc.collation)
-			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)))
+			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)), 0)
 			if !bytes.Equal(weightString, tc.expected) {
 				t.Errorf("weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
 			}
@@ -674,7 +674,7 @@ func TestUCAWeightStrings(t *testing.T) {
 			collation := testcollation(t, tc.collation)
 			for maxlen := 0; maxlen < len(tc.expected); maxlen += 2 {
 				buf := make([]byte, 0, len(tc.expected))
-				result := collation.WeightStringPad(buf, maxlen, []byte(tc.input), false)
+				result := collation.WeightString(buf, []byte(tc.input), PadToMax)
 				if !bytes.Equal(tc.expected[:maxlen], result[:maxlen]) {
 					t.Errorf("mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
 						maxlen, []byte(tc.input), tc.expected[:maxlen], result[:maxlen])
@@ -695,7 +695,7 @@ func BenchmarkAllUCAWeightStrings(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_ = collation.WeightStringPad(buf, 0, input, false)
+				_ = collation.WeightString(buf, input, 0)
 			}
 		})
 	}
@@ -715,8 +715,8 @@ func TestCompareWithWeightString(t *testing.T) {
 	collation := testcollation(t, "utf8mb4_0900_as_ci")
 
 	for _, tc := range cases {
-		left := collation.WeightString(nil, []byte(tc.left))
-		right := collation.WeightString(nil, []byte(tc.right))
+		left := collation.WeightString(nil, []byte(tc.left), 0)
+		right := collation.WeightString(nil, []byte(tc.right), 0)
 
 		if bytes.Equal(left, right) != tc.equal {
 			t.Errorf("expected %q / %v == %q / %v to be %v", tc.left, left, tc.right, right, tc.equal)

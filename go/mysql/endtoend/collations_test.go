@@ -112,7 +112,7 @@ func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 			continue
 		}
 
-		weightString := coll.WeightStringPad(make([]byte, 0, 128), 0, utf8Input, false)
+		weightString := coll.WeightString(make([]byte, 0, 128), utf8Input, 0)
 		if !bytes.Equal(weightString, expectedWeightString) {
 			t.Errorf("[%s] mismatch for %s (%v): \n\twant: %v\n\tgot:  %v", u.collation, row[2].ToString(), utf8Input, expectedWeightString, weightString)
 			errors++

@@ -129,7 +129,7 @@ nextLevel:
 	return int(l) - int(r)
 }
 
-func (c *Collation_utf8mb4_uca_0900) WeightString(dst []byte, src []byte) []byte {
+func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints int) []byte {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
@@ -140,22 +140,8 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst []byte, src []byte) []byte
 		}
 		dst = append(dst, byte(w>>8), byte(w))
 	}
-	return dst
-}
 
-func (c *Collation_utf8mb4_uca_0900) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
-	it := c.uca.Iterator(src)
-	defer it.Done()
-
-	for len(dst)+1 < cap(dst) {
-		w, ok := it.Next()
-		if !ok {
-			break
-		}
-		dst = append(dst, byte(w>>8), byte(w))
-	}
-
-	if padToMax {
+	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x00)
 		}
@@ -194,14 +180,10 @@ func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) 
 	return collationBinary(left, right, isPrefix)
 }
 
-func (c *Collation_utf8mb4_0900_bin) WeightString(dst []byte, src []byte) []byte {
-	return append(dst, src...)
-}
-
-func (c *Collation_utf8mb4_0900_bin) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
+func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
 	copyCodepoints := minInt(len(src), cap(dst))
 	dst = append(dst, src[:copyCodepoints]...)
-	if padToMax {
+	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x0)
 		}
@@ -279,21 +261,7 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	}
 }
 
-func (c *Collation_uca_legacy) WeightString(dst []byte, src []byte) []byte {
-	it := c.uca.Iterator(src)
-	defer it.Done()
-
-	for {
-		w, ok := it.Next()
-		if !ok {
-			break
-		}
-		dst = append(dst, byte(w>>8), byte(w))
-	}
-	return dst
-}
-
-func (c *Collation_uca_legacy) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
+func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) []byte {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
@@ -307,7 +275,7 @@ func (c *Collation_uca_legacy) WeightStringPad(dst []byte, _ int, src []byte, pa
 
 	// TODO numCodepoints is not handled, uca_legacy is space-padded
 
-	if padToMax {
+	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x00)
 		}

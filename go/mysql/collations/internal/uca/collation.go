@@ -43,6 +43,11 @@ func (c *Collation900) Iterator(input []byte) WeightIterator {
 	return iter
 }
 
+func (c *Collation900) WeightForSpace() uint16 {
+	ascii := *c.table[0]
+	return ascii[CodepointsPerPage+' ']
+}
+
 func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch, reorder []Reorder, contractions []Contraction, upperCaseFirst bool, levels int) *Collation900 {
 	coll := &Collation900{
 		table:        applyTailoring(TableLayout_uca900{}, weights, weightPatches),
@@ -90,6 +95,12 @@ func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
 	iter := c.iterpool.Get().(WeightIteratorLegacy)
 	iter.reset(input)
 	return iter
+}
+
+func (c *CollationLegacy) WeightForSpace() uint16 {
+	ascii := *c.table[0]
+	stride := ascii[0]
+	return ascii[1+' '*stride]
 }
 
 func NewCollationLegacy(enc encoding.Encoding, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
