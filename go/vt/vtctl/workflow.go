@@ -17,10 +17,9 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
