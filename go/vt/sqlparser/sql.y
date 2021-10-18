@@ -3866,6 +3866,10 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: Latin1Op, Expr: $2}
   }
+| NCHAR_STRING
+  {
+	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+  }
 | '+'  value_expression %prec UNARY
   {
     $$ = $2
@@ -4256,10 +4260,6 @@ value:
   STRING
   {
     $$ = NewStrLiteral($1)
-  }
-| NCHAR_STRING
-  {
-  	$$ = NewNCharStrLiteral($1)
   }
 | HEX
   {

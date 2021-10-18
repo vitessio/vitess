@@ -135,7 +135,6 @@ type ValType int
 // context.
 const (
 	StrVal = ValType(iota)
-	NCharStrVal
 	IntVal
 	FloatVal
 	HexNum
@@ -429,11 +428,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 // NewStrLiteral builds a new StrVal.
 func NewStrLiteral(in string) *Literal {
 	return &Literal{Type: StrVal, Val: in}
-}
-
-// NewNCharStrLiteral builds a new NCharStrVal
-func NewNCharStrLiteral(in string) *Literal {
-	return &Literal{Type: NCharStrVal, Val: in}
 }
 
 // NewIntLiteral builds a new IntVal.
@@ -1130,6 +1124,8 @@ func (op UnaryExprOperator) ToString() string {
 		return Utf8Str
 	case Latin1Op:
 		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
