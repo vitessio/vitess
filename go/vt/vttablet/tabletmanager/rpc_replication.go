@@ -787,6 +787,17 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	}
 	defer tm.unlock()
 
+	// If Orchestrator is configured then also tell it we're promoting a tablet so it needs to be in maintenance mode
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if tm.orc == nil {
+			return
+		}
+		if err := tm.orc.BeginMaintenance(tm.Tablet(), "vttablet has been told to PromoteReplica"); err != nil {
+			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+		}
+	}()
+
 	pos, err := tm.MysqlDaemon.Promote(tm.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -804,6 +815,17 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 	// Clear replication sentinel flag for this primary,
 	// or we might block replication the next time we demote it
 	tm.replManager.setReplicationStopped(false)
+
+	// Tell Orchestrator we're no longer in maintenance mode.
+	// Do this in the background, as it's best-effort.
+	go func() {
+		if tm.orc == nil {
+			return
+		}
+		if err := tm.orc.EndMaintenance(tm.Tablet()); err != nil {
+			log.Warningf("Orchestrator EndMaintenance failed: %v", err)
+		}
+	}()
 
 	return mysql.EncodePosition(pos), nil
 }
