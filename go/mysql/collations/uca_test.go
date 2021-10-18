@@ -18,6 +18,7 @@ package collations
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"unicode/utf8"
 
@@ -31,6 +32,29 @@ func testcollation(t testing.TB, name string) Collation {
 		t.Fatalf("missing collation: %s", name)
 	}
 	return coll
+}
+
+func TestWeightsForSpace(t *testing.T) {
+	for _, coll := range All() {
+		var actual, expected uint16
+		switch coll := coll.(type) {
+		case *Collation_uca_legacy:
+			actual = coll.uca.WeightForSpace()
+			if strings.Contains(coll.name, "_520_") {
+				expected = 0x20A
+			} else {
+				expected = 0x209
+			}
+		case *Collation_utf8mb4_uca_0900:
+			actual = coll.uca.WeightForSpace()
+			expected = 0x209
+		default:
+			continue
+		}
+		if actual != expected {
+			t.Errorf("expected Weight(' ') == 0x%X, got 0x%X", expected, actual)
+		}
+	}
 }
 
 func TestKanaSensitivity(t *testing.T) {
