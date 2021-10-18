@@ -28,12 +28,13 @@ import (
 	"path"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/internal/uca/tablebuilder"
 )
 
 var Output = flag.String("out", "internal/uca", "")
 
-func maketable(w io.Writer, table string, filename string, pages *tablebuilder.EmbeddedPageBuilder, layout tablebuilder.TableLayout) {
+func maketable(w io.Writer, table string, filename string, pages *tablebuilder.EmbeddedPageBuilder, layout uca.TableLayout) {
 	var metadata struct {
 		Weights map[string][]uint16
 	}
@@ -77,12 +78,12 @@ func main() {
 	fmt.Fprintf(&buf, "\"unsafe\"\n")
 	fmt.Fprintf(&buf, ")\n\n")
 
-	maketable(&buf, "uca900", "testdata/mysqldata/utf8mb4_0900_ai_ci.json", pages, tablebuilder.TableMySQL900)
-	maketable(&buf, "uca900_ja", "testdata/mysqldata/utf8mb4_ja_0900_as_cs.json", pages, tablebuilder.TableMySQL900)
-	maketable(&buf, "uca900_zh", "testdata/mysqldata/utf8mb4_zh_0900_as_cs.json", pages, tablebuilder.TableMySQL900)
+	maketable(&buf, "uca900", "testdata/mysqldata/utf8mb4_0900_ai_ci.json", pages, uca.TableLayout_uca900{})
+	maketable(&buf, "uca900_ja", "testdata/mysqldata/utf8mb4_ja_0900_as_cs.json", pages, uca.TableLayout_uca900{})
+	maketable(&buf, "uca900_zh", "testdata/mysqldata/utf8mb4_zh_0900_as_cs.json", pages, uca.TableLayout_uca900{})
 
-	maketable(&buf, "uca400", "testdata/mysqldata/utf8mb4_unicode_ci.json", pages, tablebuilder.TableLegacy)
-	maketable(&buf, "uca520", "testdata/mysqldata/utf8mb4_unicode_520_ci.json", pages, tablebuilder.TableLegacy)
+	maketable(&buf, "uca400", "testdata/mysqldata/utf8mb4_unicode_ci.json", pages, uca.TableLayout_uca_legacy{})
+	maketable(&buf, "uca520", "testdata/mysqldata/utf8mb4_unicode_520_ci.json", pages, uca.TableLayout_uca_legacy{})
 
 	pages.WriteTrailer(&buf, "tables_uca.bin")
 

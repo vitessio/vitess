@@ -28,36 +28,15 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
-func weightsForCodepoint(table []*[]uint16, codepoint rune) (result []uint16) {
-	pagePtr := table[codepoint>>8]
-	if pagePtr == nil {
-		return nil
-	}
-
-	page := *pagePtr
-	offset := int(codepoint & 0xFF)
-	ceCount := int(page[offset])
-
-	for ce := 0; ce < ceCount; ce++ {
-		result = append(result,
-			page[256+(ce*3+0)*256+offset],
-			page[256+(ce*3+1)*256+offset],
-			page[256+(ce*3+2)*256+offset],
-		)
-	}
-	return
-}
-
-func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights []*[]uint16) {
+func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights uca.WeightTable, layout uca.TableLayout) {
 	t.Helper()
 
 	for cp := 0; cp < uca.MaxCodepoint; cp++ {
-		vitessWeights := weightsForCodepoint(weights, rune(cp))
+		vitessWeights := layout.DebugWeights(weights, rune(cp))
 		codepoint := fmt.Sprintf("U+%04X", cp)
-
 		mysqlWeights, mysqlFound := expected[codepoint]
 
-		if vitessWeights == nil {
+		if len(vitessWeights) == 0 {
 			if mysqlFound {
 				t.Errorf("missing MySQL weight in Vitess' tables: U+%04X", cp)
 				continue
@@ -100,25 +79,20 @@ func loadExpectedWeights(t *testing.T, weights string) map[string][]uint16 {
 
 func TestWeightsForAllCodepoints(t *testing.T) {
 	testWeightsFromMysql := loadExpectedWeights(t, "utf8mb4_0900_ai_ci")
-	verifyAllCodepoints(t, testWeightsFromMysql, uca.WeightTable_uca900)
+	verifyAllCodepoints(t, testWeightsFromMysql, uca.WeightTable_uca900, uca.TableLayout_uca900{})
 }
 
 func TestTailoringPatchApplication(t *testing.T) {
-	type ucacollation interface {
-		WeightsUCA900() []*[]uint16
-	}
-
 	for _, col := range collations.All() {
-		var tailoredWeights []*[]uint16
-		if uca, ok := col.(ucacollation); ok {
-			tailoredWeights = uca.WeightsUCA900()
-		}
-		if tailoredWeights == nil {
+		uca, ok := col.(collations.CollationUCA)
+		if !ok {
 			continue
 		}
+
+		weightTable, tableLayout := uca.UnicodeWeightsTable()
 		t.Run(col.Name(), func(t *testing.T) {
 			expected := loadExpectedWeights(t, col.Name())
-			verifyAllCodepoints(t, expected, tailoredWeights)
+			verifyAllCodepoints(t, expected, weightTable, tableLayout)
 		})
 	}
 }

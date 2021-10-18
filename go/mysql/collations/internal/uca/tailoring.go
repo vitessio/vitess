@@ -31,14 +31,34 @@ const CodepointsPerPage = 256
 const Pages = MaxCodepoint / CodepointsPerPage
 const MaxCollationElementsPerCodepoint = 8
 
-type patcher interface {
-	alloc(original *[]uint16, patches []WeightPatch) []uint16
-	apply(page []uint16, offset int, weights []uint16)
+type TableLayout interface {
+	DebugWeights(table WeightTable, codepoint rune) []uint16
+
+	allocPage(original *[]uint16, patches []WeightPatch) []uint16
+	applyPatches(page []uint16, offset int, weights []uint16)
 }
 
-type patcherUCA900 struct{}
+type TableLayout_uca900 struct{}
 
-func (patcherUCA900) alloc(original *[]uint16, patches []WeightPatch) []uint16 {
+func (TableLayout_uca900) DebugWeights(table WeightTable, codepoint rune) (result []uint16) {
+	p, offset := pageOffset(codepoint)
+	page := table[p]
+	if page == nil {
+		return nil
+	}
+
+	ceCount := int((*page)[offset])
+	for ce := 0; ce < ceCount; ce++ {
+		result = append(result,
+			(*page)[256+(ce*3+0)*256+offset],
+			(*page)[256+(ce*3+1)*256+offset],
+			(*page)[256+(ce*3+2)*256+offset],
+		)
+	}
+	return
+}
+
+func (TableLayout_uca900) allocPage(original *[]uint16, patches []WeightPatch) []uint16 {
 	var maxWeights int
 	for _, p := range patches {
 		if len(p.Patch)%3 != 0 {
@@ -61,7 +81,7 @@ func (patcherUCA900) alloc(original *[]uint16, patches []WeightPatch) []uint16 {
 	return newPage
 }
 
-func (patcherUCA900) apply(page []uint16, offset int, weights []uint16) {
+func (TableLayout_uca900) applyPatches(page []uint16, offset int, weights []uint16) {
 	var weightcount = len(weights) / 3
 	var ce int
 	for ce < weightcount {
@@ -81,9 +101,32 @@ func (patcherUCA900) apply(page []uint16, offset int, weights []uint16) {
 	page[offset] = uint16(weightcount)
 }
 
-type patcherUCALegacy struct{}
+type TableLayout_uca_legacy struct{}
 
-func (patcherUCALegacy) alloc(original *[]uint16, patches []WeightPatch) []uint16 {
+func (TableLayout_uca_legacy) DebugWeights(table WeightTable, codepoint rune) (result []uint16) {
+	p, offset := pageOffset(codepoint)
+	if p >= len(table) {
+		return nil
+	}
+	page := table[p]
+	if page == nil {
+		return nil
+	}
+
+	stride := int((*page)[0])
+	position := 1 + stride*offset
+	weights := (*page)[position : position+stride]
+
+	for i, w := range weights {
+		if w == 0x0 {
+			weights = weights[:i]
+			break
+		}
+	}
+	return weights
+}
+
+func (TableLayout_uca_legacy) allocPage(original *[]uint16, patches []WeightPatch) []uint16 {
 	var newStride int
 	for _, p := range patches {
 		if len(p.Patch) > newStride {
@@ -116,7 +159,7 @@ func (patcherUCALegacy) alloc(original *[]uint16, patches []WeightPatch) []uint1
 	return newPage
 }
 
-func (patcherUCALegacy) apply(page []uint16, offset int, weights []uint16) {
+func (TableLayout_uca_legacy) applyPatches(page []uint16, offset int, weights []uint16) {
 	stride := int(page[0])
 	var ce int
 	for ce < len(weights) {
@@ -129,7 +172,7 @@ func (patcherUCALegacy) apply(page []uint16, offset int, weights []uint16) {
 	}
 }
 
-func applyTailoring(patcher patcher, base WeightTable, patches []WeightPatch) WeightTable {
+func applyTailoring(layout TableLayout, base WeightTable, patches []WeightPatch) WeightTable {
 	if len(patches) == 0 {
 		return base
 	}
@@ -144,11 +187,11 @@ func applyTailoring(patcher patcher, base WeightTable, patches []WeightPatch) We
 	}
 
 	for p, pps := range groups {
-		page := patcher.alloc(result[p], pps)
+		page := layout.allocPage(result[p], pps)
 
 		for _, patch := range pps {
 			_, off := pageOffset(patch.Codepoint)
-			patcher.apply(page, off, patch.Patch)
+			layout.applyPatches(page, off, patch.Patch)
 		}
 
 		result[p] = &page

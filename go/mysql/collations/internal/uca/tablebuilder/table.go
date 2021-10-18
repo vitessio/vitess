@@ -164,13 +164,13 @@ func (tb *TableBuilder) AddFromAllkeys(lhs []rune, rhs [][]int, vars []int) {
 	tb.Add900(lhs[0], weights)
 }
 
-func (tb *TableBuilder) dumpPage(w io.Writer, p *page, layout TableLayout) string {
+func (tb *TableBuilder) dumpPage(w io.Writer, p *page, layout uca.TableLayout) string {
 	var weights []uint16
 
-	switch layout {
-	case TableMySQL900:
+	switch layout.(type) {
+	case uca.TableLayout_uca900:
 		weights = p.weights900()
-	case TableLegacy:
+	case uca.TableLayout_uca_legacy:
 		weights = p.weightsLegacy()
 	}
 
@@ -180,16 +180,9 @@ func (tb *TableBuilder) dumpPage(w io.Writer, p *page, layout TableLayout) strin
 	return tb.pagebuilder.WritePage(w, p.name(tb.ucav), weights)
 }
 
-type TableLayout int
-
-const (
-	TableMySQL900 TableLayout = iota
-	TableLegacy
-)
-
-func (tb *TableBuilder) DumpTables(w io.Writer, layout TableLayout) {
-	switch layout {
-	case TableMySQL900:
+func (tb *TableBuilder) DumpTables(w io.Writer, layout uca.TableLayout) {
+	switch layout.(type) {
+	case uca.TableLayout_uca900:
 		for n := range tb.pages {
 			tb.pages[n].adjustImplicitWeights(tb)
 		}
