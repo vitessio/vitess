@@ -19,7 +19,7 @@ package uca
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 )
 
 type WeightTable []*[]uint16

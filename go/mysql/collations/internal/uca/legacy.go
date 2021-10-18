@@ -1,6 +1,8 @@
 package uca
 
-import "vitess.io/vitess/go/mysql/collations/encoding"
+import (
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+)
 
 type iteratorLegacy struct {
 	// Constant

@@ -18,11 +18,10 @@ package collations
 
 import (
 	"bytes"
-	"os/exec"
 	"testing"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/uca"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 func testcollation(t testing.TB, name string) Collation {
@@ -81,8 +80,7 @@ func TestContractions(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 
 			for _, in := range tc.inputs {
-				weightString := coll.WeightString(make([]byte, 0, 64), 0, []byte(in), false)
-
+				weightString := coll.WeightString(nil, []byte(in))
 				if !bytes.Equal(weightString, tc.expected) {
 					t.Errorf("weight_string(%q) = %#v (expected %#v)", in, weightString, tc.expected)
 				}
@@ -104,8 +102,7 @@ func TestReplacementCharacter(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
 			coll := testcollation(t, tc.collation)
-			weightString := coll.WeightString(make([]byte, 0, 16), 0, []byte(string(utf8.RuneError)), false)
-
+			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)))
 			if !bytes.Equal(weightString, tc.expected) {
 				t.Errorf("weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
 			}
@@ -671,39 +668,13 @@ var TestCases = []struct {
 	},
 }
 
-const colldumpPath = "/home/vmg/src/mysql-server/bld/runtime_output_directory/colldump"
-
-func colldump(t *testing.T, collation string, input []byte) []byte {
-	cmd := exec.Command(colldumpPath, "--test", collation)
-	cmd.Stdin = bytes.NewReader(input)
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
-func XTestWeightStringAgainstMySQL(t *testing.T) {
-	const Col = "utf8mb4_ja_0900_as_cs"
-	const Input = "サーバ"
-	expected := colldump(t, Col, []byte(Input))
-	collation := testcollation(t, Col)
-	buf := make([]byte, 0, 256)
-	result := collation.WeightString(buf, 0, []byte(Input), false)
-
-	if !bytes.Equal(expected, result) {
-		t.Errorf("mismatch at len=%d\ninput:    %#v\nexpected: %v\nactual:   %v",
-			len(Input), []byte(Input), expected, result)
-	}
-}
-
 func TestUCAWeightStrings(t *testing.T) {
 	for _, tc := range TestCases {
 		t.Run(tc.collation, func(t *testing.T) {
 			collation := testcollation(t, tc.collation)
 			for maxlen := 0; maxlen < len(tc.expected); maxlen += 2 {
 				buf := make([]byte, 0, len(tc.expected))
-				result := collation.WeightString(buf, maxlen, []byte(tc.input), false)
+				result := collation.WeightStringPad(buf, maxlen, []byte(tc.input), false)
 				if !bytes.Equal(tc.expected[:maxlen], result[:maxlen]) {
 					t.Errorf("mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
 						maxlen, []byte(tc.input), tc.expected[:maxlen], result[:maxlen])
@@ -724,7 +695,7 @@ func BenchmarkAllUCAWeightStrings(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_ = collation.WeightString(buf, 0, input, false)
+				_ = collation.WeightStringPad(buf, 0, input, false)
 			}
 		})
 	}
@@ -744,8 +715,8 @@ func TestCompareWithWeightString(t *testing.T) {
 	collation := testcollation(t, "utf8mb4_0900_as_ci")
 
 	for _, tc := range cases {
-		left := collation.WeightString(make([]byte, 0, 256), 0, []byte(tc.left), false)
-		right := collation.WeightString(make([]byte, 0, 256), 0, []byte(tc.right), false)
+		left := collation.WeightString(nil, []byte(tc.left))
+		right := collation.WeightString(nil, []byte(tc.right))
 
 		if bytes.Equal(left, right) != tc.equal {
 			t.Errorf("expected %q / %v == %q / %v to be %v", tc.left, left, tc.right, right, tc.equal)

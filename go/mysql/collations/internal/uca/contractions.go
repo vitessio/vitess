@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 )
 
 type trie struct {
