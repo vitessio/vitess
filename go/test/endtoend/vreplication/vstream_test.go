@@ -131,37 +131,39 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 		}
 	}()
 
-	if failover {
-		// run two PRS after one second each, wait for events to be received and exit test
-		ticker := time.NewTicker(1 * time.Second)
-		tickCount := 0
-		// this for loop implements a mini state machine that does the two PRSs, waits a bit after the second PRS,
-		// stops the insertions, waits for a bit again for the vstream to catchup and signals the test to stop
-		for {
-			<-ticker.C
-			tickCount++
-			switch tickCount {
-			case 1:
+	// run two PRS after one second each, wait for events to be received and exit test
+	ticker := time.NewTicker(1 * time.Second)
+	tickCount := 0
+	// this for loop implements a mini state machine that does the two PRSs, waits a bit after the second PRS,
+	// stops the insertions, waits for a bit again for the vstream to catchup and signals the test to stop
+	for {
+		<-ticker.C
+		tickCount++
+		switch tickCount {
+		case 1:
+			if failover {
 				insertMu.Lock()
 				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-101")
 				insertMu.Unlock()
 				log.Infof("output of first PRS is %s", output)
 				require.NoError(t, err)
-			case 2:
+			}
+		case 2:
+			if failover {
 				insertMu.Lock()
 				output, err := vc.VtctlClient.ExecuteCommandWithOutput("PlannedReparentShard", "-keyspace_shard=product/0", "-new_primary=zone1-100")
 				insertMu.Unlock()
 				log.Infof("output of second PRS is %s", output)
 				require.NoError(t, err)
-				time.Sleep(100 * time.Millisecond)
-				stopInserting = true
-				time.Sleep(2 * time.Second)
-				done = true
 			}
+			time.Sleep(100 * time.Millisecond)
+			stopInserting = true
+			time.Sleep(2 * time.Second)
+			done = true
+		}
 
-			if done {
-				break
-			}
+		if done {
+			break
 		}
 	}
 

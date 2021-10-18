@@ -98,3 +98,9 @@ func (zs *Server) Close() {
 func init() {
 	topo.RegisterFactory("zk2", Factory{})
 }
+
+// SetReadOnly is part of the Conn interface
+func (zs *Server) SetReadOnly(readOnly bool) {}
+
+// IsReadOnly is part of the Conn interface
+func (zs *Server) IsReadOnly() bool { return false }

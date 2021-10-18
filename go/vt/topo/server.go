@@ -353,3 +353,13 @@ func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterNa
 	}
 	return externalTopo, nil
 }
+
+// SetReadOnly is part of the Conn interface
+func (ts *Server) SetReadOnly(readOnly bool) {
+	ts.globalCell.SetReadOnly(readOnly)
+}
+
+// IsReadOnly is part of the Conn interface
+func (ts *Server) IsReadOnly() bool {
+	return ts.globalCell.IsReadOnly()
+}

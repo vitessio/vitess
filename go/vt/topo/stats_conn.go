@@ -175,12 +175,13 @@ func (st *StatsConn) Close() {
 }
 
 // SetReadOnly makes the topo server connection read-only
-// This is initially to support VStream when keyspsaces_to_watch is enabled
+// It is part of the Conn interface
 func (st *StatsConn) SetReadOnly(readOnly bool) {
 	st.readOnly = readOnly
 }
 
 // IsReadOnly allows you to check the access type for the connection
+// It is part of the Conn interface
 func (st *StatsConn) IsReadOnly() bool {
 	return st.readOnly
 }
