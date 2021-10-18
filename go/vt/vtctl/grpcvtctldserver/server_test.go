@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
@@ -64,6 +65,7 @@ func init() {
 	tmclient.RegisterTabletManagerClientFactory("grpcvtctldserver.test", func() tmclient.TabletManagerClient {
 		return nil
 	})
+	_ = reparentutil.SetDurabilityPolicy("none", nil)
 }
 
 func TestAddCellInfo(t *testing.T) {
@@ -2649,6 +2651,12 @@ func TestEmergencyReparentShard(t *testing.T) {
 				PromoteReplicaResults: map[string]struct {
 					Result string
 					Error  error
+				}{
+					"zone1-0000000200": {},
+				},
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
 				}{
 					"zone1-0000000200": {},
 				},

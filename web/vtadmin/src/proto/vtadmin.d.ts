@@ -29351,6 +29351,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** EmergencyReparentShardRequest prevent_cross_cell_promotion */
+        prevent_cross_cell_promotion?: (boolean|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -29376,6 +29379,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** EmergencyReparentShardRequest prevent_cross_cell_promotion. */
+        public prevent_cross_cell_promotion: boolean;
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.

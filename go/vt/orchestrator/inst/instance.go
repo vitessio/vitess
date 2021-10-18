@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/vt/orchestrator/config"
 	"vitess.io/vitess/go/vt/orchestrator/external/golib/math"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 const ReasonableDiscoveryLatency = 500 * time.Millisecond
@@ -110,7 +111,7 @@ type Instance struct {
 	// be picked up from daabase_candidate_instance's value when
 	// reading an instance from the db.
 	IsCandidate          bool
-	PromotionRule        CandidatePromotionRule
+	PromotionRule        promotionrule.CandidatePromotionRule
 	IsDowntimed          bool
 	DowntimeReason       string
 	DowntimeOwner        string

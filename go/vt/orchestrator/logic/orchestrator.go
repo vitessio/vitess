@@ -37,6 +37,7 @@ import (
 	ometrics "vitess.io/vitess/go/vt/orchestrator/metrics"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	"vitess.io/vitess/go/vt/orchestrator/util"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 )
 
 const (
@@ -50,6 +51,8 @@ var discoveryQueue *discovery.Queue
 var snapshotDiscoveryKeys chan inst.InstanceKey
 var snapshotDiscoveryKeysMutex sync.Mutex
 var hasReceivedSIGTERM int32
+var ersInProgressMutex sync.Mutex
+var ersInProgress bool
 
 var discoveriesCounter = metrics.NewCounter()
 var failedDiscoveriesCounter = metrics.NewCounter()
@@ -168,7 +171,7 @@ func handleDiscoveryRequests() {
 					continue
 				}
 
-				DiscoverInstance(instanceKey)
+				DiscoverInstance(instanceKey, false /* forceDiscovery */)
 				discoveryQueue.Release(instanceKey)
 			}
 		}()
@@ -178,7 +181,7 @@ func handleDiscoveryRequests() {
 // DiscoverInstance will attempt to discover (poll) an instance (unless
 // it is already up to date) and will also ensure that its primary and
 // replicas (if any) are also checked.
-func DiscoverInstance(instanceKey inst.InstanceKey) {
+func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	if inst.InstanceIsForgotten(&instanceKey) {
 		log.Debugf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", instanceKey)
 		return
@@ -213,7 +216,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	// Calculate the expiry period each time as InstancePollSeconds
 	// _may_ change during the run of the process (via SIGHUP) and
 	// it is not possible to change the cache's default expiry..
-	if existsInCacheError := recentDiscoveryOperationKeys.Add(instanceKey.DisplayString(), true, instancePollSecondsDuration()); existsInCacheError != nil {
+	if existsInCacheError := recentDiscoveryOperationKeys.Add(instanceKey.DisplayString(), true, instancePollSecondsDuration()); existsInCacheError != nil && !forceDiscovery {
 		// Just recently attempted
 		return
 	}
@@ -221,7 +224,7 @@ func DiscoverInstance(instanceKey inst.InstanceKey) {
 	latency.Start("backend")
 	instance, found, _ := inst.ReadInstance(&instanceKey)
 	latency.Stop("backend")
-	if found && instance.IsUpToDate && instance.IsLastCheckValid {
+	if !forceDiscovery && found && instance.IsUpToDate && instance.IsLastCheckValid {
 		// we've already discovered this one. Skip!
 		return
 	}
@@ -413,7 +416,7 @@ func ContinuousDiscovery() {
 	go ometrics.InitMetrics()
 	go acceptSignals()
 	go kv.InitKVStores()
-	inst.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
+	reparentutil.SetDurabilityPolicy(config.Config.Durability, config.Config.DurabilityParams)
 
 	if *config.RuntimeCLIFlags.GrabElection {
 		process.GrabElection()
@@ -503,7 +506,7 @@ func ContinuousDiscovery() {
 				}
 			}()
 		case <-tabletTopoTick:
-			go RefreshTablets()
+			go RefreshTablets(false /* forceRefresh */)
 		}
 	}
 }

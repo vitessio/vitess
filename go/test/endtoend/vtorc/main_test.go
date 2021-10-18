@@ -324,13 +324,13 @@ func TestMain(m *testing.M) {
 	// setup cellInfos before creating the cluster
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell1,
-		numReplicas: 10,
-		numRdonly:   1,
+		numReplicas: 12,
+		numRdonly:   2,
 		uidBase:     100,
 	})
 	cellInfos = append(cellInfos, &cellInfo{
 		cellName:    cell2,
-		numReplicas: 1,
+		numReplicas: 2,
 		numRdonly:   0,
 		uidBase:     200,
 	})
@@ -345,6 +345,13 @@ func TestMain(m *testing.M) {
 	}()
 
 	cluster.PanicHandler(nil)
+
+	// stop vtorc first otherwise its logs get polluted
+	// with instances being unreachable triggering unnecessary operations
+	if clusterInstance.VtorcProcess != nil {
+		_ = clusterInstance.VtorcProcess.TearDown()
+	}
+
 	for _, cellInfo := range cellInfos {
 		killTablets(cellInfo.replicaTablets)
 		killTablets(cellInfo.rdonlyTablets)
@@ -387,7 +394,7 @@ func shardPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, keys
 }
 
 // Makes sure the tablet type is primary, and its health check agrees.
-func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet) {
+func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, checkServing bool) {
 	start := time.Now()
 	for {
 		now := time.Now()
@@ -405,24 +412,26 @@ func checkPrimaryTablet(t *testing.T, cluster *cluster.LocalProcessCluster, tabl
 			log.Warningf("Tablet %v is not primary yet, sleep for 1 second\n", tablet.Alias)
 			time.Sleep(time.Second)
 			continue
-		} else {
-			// allow time for tablet state to be updated after topo is updated
-			time.Sleep(2 * time.Second)
-			// make sure the health stream is updated
-			result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
-			require.NoError(t, err)
-			var streamHealthResponse querypb.StreamHealthResponse
-
-			err = json2.Unmarshal([]byte(result), &streamHealthResponse)
-			require.NoError(t, err)
-			//if !streamHealthResponse.GetServing() {
-			//	log.Exitf("stream health not updated")
-			//}
-			assert.True(t, streamHealthResponse.GetServing(), "stream health: %v", &streamHealthResponse)
-			tabletType := streamHealthResponse.GetTarget().GetTabletType()
-			require.Equal(t, topodatapb.TabletType_PRIMARY, tabletType)
-			break
 		}
+		// make sure the health stream is updated
+		result, err = cluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", tablet.Alias)
+		require.NoError(t, err)
+		var streamHealthResponse querypb.StreamHealthResponse
+
+		err = json2.Unmarshal([]byte(result), &streamHealthResponse)
+		require.NoError(t, err)
+		if checkServing && !streamHealthResponse.GetServing() {
+			log.Warningf("Tablet %v is not serving in health stream yet, sleep for 1 second\n", tablet.Alias)
+			time.Sleep(time.Second)
+			continue
+		}
+		tabletType := streamHealthResponse.GetTarget().GetTabletType()
+		if tabletType != topodatapb.TabletType_PRIMARY {
+			log.Warningf("Tablet %v is not primary in health stream yet, sleep for 1 second\n", tablet.Alias)
+			time.Sleep(time.Second)
+			continue
+		}
+		break
 	}
 }
 
@@ -459,7 +468,7 @@ func checkReplication(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 
 // call this function only after check replication.
 // it inserts more data into the table vt_insert_test and checks that it is replicated too
-func runAdditionalCommands(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+func verifyWritesSucceed(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	confirmReplication(t, primary, replicas, timeToWait, lastUsedValue)
 	lastUsedValue++
 }
@@ -664,7 +673,7 @@ func permanentlyRemoveVttablet(tablet *cluster.Vttablet) {
 }
 
 func changePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	_, err := runSQL(t, sql, tablet, "")
+	_, err := runSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
 	require.NoError(t, err)
 
 	res, err := runSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
@@ -675,4 +684,18 @@ func changePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user s
 		_, err = runSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
 		require.NoError(t, err)
 	}
+}
+
+func resetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
+	_, err := runSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
+	require.NoError(t, err)
+
+	binLogsOutput, err := runSQL(t, "SHOW BINARY LOGS", curPrimary, "")
+	require.NoError(t, err)
+	require.True(t, len(binLogsOutput.Rows) >= 2, "there should be atlease 2 binlog files")
+
+	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
+
+	_, err = runSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
+	require.NoError(t, err)
 }
