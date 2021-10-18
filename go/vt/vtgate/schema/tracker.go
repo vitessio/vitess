@@ -127,13 +127,13 @@ func (t *Tracker) newUpdateController() *updateController {
 	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
 }
 
-func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
+func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add keyspace to tracker: %v", err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 // Stop stops the schema tracking
@@ -217,8 +217,13 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 
 // AddNewKeyspace adds keyspace to the tracker.
 func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	t.tracked[target.Keyspace] = t.newUpdateController()
-	return t.LoadKeyspace(conn, target)
+	updateController := t.newUpdateController()
+	t.tracked[target.Keyspace] = updateController
+	err := t.LoadKeyspace(conn, target)
+	if err != nil {
+		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))
+	}
+	return err
 }
 
 type tableMap struct {

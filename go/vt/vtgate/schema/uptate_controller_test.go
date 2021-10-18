@@ -128,9 +128,13 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 				update:       update,
 				signal:       signal,
 				consumeDelay: 5 * time.Millisecond,
-				reloadKeyspace: func(th *discovery.TabletHealth) bool {
+				reloadKeyspace: func(th *discovery.TabletHealth) error {
 					initNb++
-					return !test.initFail
+					var err error
+					if test.initFail {
+						err = fmt.Errorf("error")
+					}
+					return err
 				},
 				loaded: !test.init,
 			}
@@ -170,7 +174,6 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 			assert.Equal(t, test.signalExpected, signalNb, "signal required")
 			assert.Equal(t, test.initExpected, initNb, "init required")
 			assert.Equal(t, test.updateTables, updatedTables, "tables to update")
-
 		})
 	}
 }

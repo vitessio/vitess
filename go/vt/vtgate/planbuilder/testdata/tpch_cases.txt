@@ -562,6 +562,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -629,6 +633,10 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Subquery",
     "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -686,6 +694,10 @@ Gen4 plan same as above
           {
             "OperatorType": "Subquery",
             "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values1",
+              "__sq1"
+            ],
             "Inputs": [
               {
                 "OperatorType": "Route",
@@ -768,6 +780,10 @@ Gen4 error: unsupported: cross-shard correlated subquery
       {
         "OperatorType": "Subquery",
         "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
         "Inputs": [
           {
             "OperatorType": "Route",

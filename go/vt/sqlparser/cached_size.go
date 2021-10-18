@@ -928,6 +928,34 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Wild)))
 	return size
 }
+func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(112)
+	}
+	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Original.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Subquery *vitess.io/vitess/go/vt/sqlparser.Subquery
+	size += cached.Subquery.CachedSize(true)
+	// field OtherSide vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.OtherSide.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field hasValuesArg string
+	size += hack.RuntimeAllocSize(int64(len(cached.hasValuesArg)))
+	// field argName string
+	size += hack.RuntimeAllocSize(int64(len(cached.argName)))
+	// field alternative vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.alternative.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Flush) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

@@ -344,6 +344,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsExprs(a, b)
+	case *ExtractedSubquery:
+		b, ok := inB.(*ExtractedSubquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractedSubquery(a, b)
 	case *Flush:
 		b, ok := inB.(*Flush)
 		if !ok {
@@ -1547,6 +1553,24 @@ func EqualsExprs(a, b Exprs) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfExtractedSubquery does deep equals between the two objects.
+func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.OpCode == b.OpCode &&
+		a.NeedsRewrite == b.NeedsRewrite &&
+		a.hasValuesArg == b.hasValuesArg &&
+		a.argName == b.argName &&
+		EqualsExpr(a.Original, b.Original) &&
+		EqualsRefOfSubquery(a.Subquery, b.Subquery) &&
+		EqualsExpr(a.OtherSide, b.OtherSide) &&
+		EqualsExpr(a.alternative, b.alternative)
 }
 
 // EqualsRefOfFlush does deep equals between the two objects.
@@ -3109,6 +3133,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExistsExpr(a, b)
+	case *ExtractedSubquery:
+		b, ok := inB.(*ExtractedSubquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractedSubquery(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {

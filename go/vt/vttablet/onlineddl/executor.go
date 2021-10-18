@@ -611,11 +611,17 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 		return nil
 	}
+	var reenableOnce sync.Once
+	reenableWritesOnce := func() {
+		reenableOnce.Do(func() {
+			toggleWrites(true)
+		})
+	}
 	// stop writes on source:
 	if err := toggleWrites(false); err != nil {
 		return err
 	}
-	defer toggleWrites(true)
+	defer reenableWritesOnce()
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
@@ -702,6 +708,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}()
 
 	// Tables are now swapped! Migration is successful
+	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
 	return nil
 

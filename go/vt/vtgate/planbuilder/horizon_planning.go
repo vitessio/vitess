@@ -259,11 +259,12 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
 	case *vindexFunc:
+		colsBefore := len(node.eVindexFunc.Cols)
 		i, err := node.SupplyProjection(expr, reuseCol)
 		if err != nil {
 			return 0, false, err
 		}
-		return i, true, nil
+		return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 	case *limit:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	case *distinct:
@@ -274,10 +275,9 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 }
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
-	var err error
-	ti, _ := semTable.TableInfoForExpr(expr.Expr)
-	if ti == nil {
-		return nil
+	ti, err := semTable.TableInfoForExpr(expr.Expr)
+	if err != nil && err != semantics.ErrMultipleTables {
+		return err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
@@ -630,9 +630,10 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		plan.input = newUnderlyingPlan
 		return plan, nil
 	case *simpleProjection:
-		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on derived table query")
+		return hp.createMemorySortPlan(ctx, plan, orderExprs, true)
 	case *vindexFunc:
-		return nil, semantics.Gen4NotSupportedF("unsupported: ordering on vindex func")
+		// This is evaluated at VTGate only, so weight_string function cannot be used.
+		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
@@ -761,7 +762,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs [
 		plan.Left = newLeft
 		return plan, nil
 	}
-	sortPlan, err := hp.createMemorySortPlan(ctx, plan, orderExprs)
+	sortPlan, err := hp.createMemorySortPlan(ctx, plan, orderExprs, true)
 	if err != nil {
 		return nil, err
 	}
@@ -808,7 +809,7 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (int,
 	return 0, 0, false
 }
 
-func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logicalPlan, orderExprs []abstract.OrderBy) (logicalPlan, error) {
+func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logicalPlan, orderExprs []abstract.OrderBy, useWeightStr bool) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -820,7 +821,11 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 	}
 
 	for _, order := range orderExprs {
-		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, ctx.semTable)
+		wsExpr := order.WeightStrExpr
+		if !useWeightStr {
+			wsExpr = nil
+		}
+		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, wsExpr, plan, ctx.semTable)
 		if err != nil {
 			return nil, err
 		}

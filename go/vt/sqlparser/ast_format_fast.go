@@ -2250,3 +2250,11 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 		prefix = ", "
 	}
 }
+
+// formatFast formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
+}
