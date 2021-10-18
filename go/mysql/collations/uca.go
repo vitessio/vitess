@@ -265,7 +265,7 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
-	for len(dst)+1 < cap(dst) {
+	for {
 		w, ok := it.Next()
 		if !ok {
 			break
