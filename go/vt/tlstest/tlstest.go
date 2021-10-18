@@ -31,7 +31,15 @@ const (
 	// CA is the name of the CA toplevel cert.
 	CA = "ca"
 
-	caConfig = `
+	caConfigTemplate = `
+[ ca ]
+default_ca = default_ca
+
+[ default_ca ]
+database = %s
+default_md = default
+default_crl_days = 30
+
 [ req ]
  default_bits           = 4096
  default_keyfile        = keyfile.pem
@@ -90,10 +98,28 @@ func openssl(argv ...string) {
 	cmd := exec.Command("openssl", argv...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		if len(output) > 0 {
+			log.Errorf("openssl %v returned:\n%v", argv, string(output))
+		}
 		log.Fatalf("openssl %v failed: %v", argv, err)
 	}
-	if len(output) > 0 {
-		log.Infof("openssl %v returned:\n%v", argv, string(output))
+}
+
+// createKeyDBAndCAConfig creates a key database and ca config file
+// for the passed in CA (possibly an intermediate CA)
+func createKeyDBAndCAConfig(root, parent string) {
+	databasePath := path.Join(root, parent+"-keys.db")
+	if _, err := os.Stat(databasePath); os.IsNotExist(err) {
+		if err := os.WriteFile(databasePath, []byte{}, os.ModePerm); err != nil {
+			log.Fatalf("cannot write file %v: %v", databasePath, err)
+		}
+	}
+
+	config := path.Join(root, parent+"-ca.config")
+	if _, err := os.Stat(config); os.IsNotExist(err) {
+		if err := os.WriteFile(config, []byte(fmt.Sprintf(caConfigTemplate, databasePath)), os.ModePerm); err != nil {
+			log.Fatalf("cannot write file %v: %v", config, err)
+		}
 	}
 }
 
@@ -104,12 +130,11 @@ func CreateCA(root string) {
 	log.Infof("Creating test root CA in %v", root)
 	key := path.Join(root, "ca-key.pem")
 	cert := path.Join(root, "ca-cert.pem")
+	config := path.Join(root, "ca-ca.config")
+	createKeyDBAndCAConfig(root, "ca")
+
 	openssl("genrsa", "-out", key)
 
-	config := path.Join(root, "ca.config")
-	if err := os.WriteFile(config, []byte(caConfig), os.ModePerm); err != nil {
-		log.Fatalf("cannot write file %v: %v", config, err)
-	}
 	openssl("req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
 		"-config", config,
 		"-key", key,
@@ -147,50 +172,139 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 		"-out", cert)
 }
 
+// CreateCRL creates a new empty certificate revocation list
+// for the provided parent
+func CreateCRL(root, parent string) {
+	log.Infof("Creating CRL for root CA in %v", root)
+	caKey := path.Join(root, parent+"-key.pem")
+	caCert := path.Join(root, parent+"-cert.pem")
+	configPath := path.Join(root, parent+"-ca.config")
+	crlPath := path.Join(root, parent+"-crl.pem")
+	createKeyDBAndCAConfig(root, parent)
+
+	openssl("ca", "-gencrl",
+		"-keyfile", caKey,
+		"-cert", caCert,
+		"-config", configPath,
+		"-out",
+		crlPath,
+	)
+}
+
+// RevokeCertAndRegenerateCRL revokes a provided certificate under the
+// provided parent CA and regenerates the CRL file for that parent
+func RevokeCertAndRegenerateCRL(root, parent, name string) {
+	log.Infof("Revoking certificate %s", name)
+	caKey := path.Join(root, parent+"-key.pem")
+	caCert := path.Join(root, parent+"-cert.pem")
+	cert := path.Join(root, name+"-cert.pem")
+	configPath := path.Join(root, parent+"-ca.config")
+	createKeyDBAndCAConfig(root, parent)
+
+	openssl("ca", "-revoke", cert,
+		"-keyfile", caKey,
+		"-cert", caCert,
+		"-config", configPath,
+	)
+
+	CreateCRL(root, parent)
+}
+
+// ClientServerKeyPairs is used in tests
 type ClientServerKeyPairs struct {
-	ServerCert string
-	ServerKey  string
-	ServerCA   string
-	ServerName string
-	ClientCert string
-	ClientKey  string
-	ClientCA   string
+	ServerCert        string
+	ServerKey         string
+	ServerCA          string
+	ServerName        string
+	ServerCRL         string
+	RevokedServerCert string
+	RevokedServerKey  string
+	RevokedServerName string
+	ClientCert        string
+	ClientKey         string
+	ClientCA          string
+	ClientCRL         string
+	RevokedClientCert string
+	RevokedClientKey  string
+	RevokedClientName string
+	CombinedCRL       string
 }
 
 var serialCounter = 0
 
+// CreateClientServerCertPairs creates certificate pairs for use in test
 func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	// Create the certs and configs.
 	CreateCA(root)
 
-	serverSerial := fmt.Sprintf("%03d", serialCounter*2+1)
-	clientSerial := fmt.Sprintf("%03d", serialCounter*2+2)
+	serverCASerial := fmt.Sprintf("%03d", serialCounter*2+1)
+	serverSerial := fmt.Sprintf("%03d", serialCounter*2+3)
+	revokedServerSerial := fmt.Sprintf("%03d", serialCounter*2+5)
+	clientCASerial := fmt.Sprintf("%03d", serialCounter*2+2)
+	clientCertSerial := fmt.Sprintf("%03d", serialCounter*2+4)
+	revokedClientSerial := fmt.Sprintf("%03d", serialCounter*2+6)
 
-	serialCounter = serialCounter + 1
+	serialCounter = serialCounter + 3
 
-	serverName := fmt.Sprintf("server-%s", serverSerial)
-	serverCACommonName := fmt.Sprintf("Server %s CA", serverSerial)
+	serverCAName := fmt.Sprintf("servers-ca-%s", serverCASerial)
+	serverCACommonName := fmt.Sprintf("Servers %s CA", serverCASerial)
 	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
 	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
+	revokedServerCertName := fmt.Sprintf("server-instance-%s", revokedServerSerial)
+	revokedServerCertCommonName := fmt.Sprintf("server%s.example.com", revokedServerSerial)
 
-	clientName := fmt.Sprintf("clients-%s", serverSerial)
-	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
-	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
-	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
+	clientCAName := fmt.Sprintf("clients-ca-%s", clientCASerial)
+	clientCACommonName := fmt.Sprintf("Clients %s CA", clientCASerial)
+	clientCertName := fmt.Sprintf("client-instance-%s", clientCertSerial)
+	clientCertCommonName := fmt.Sprintf("client%s.example.com", clientCertSerial)
+	revokedClientCertName := fmt.Sprintf("client-instance-%s", revokedClientSerial)
+	revokedClientCertCommonName := fmt.Sprintf("client%s.example.com", revokedClientSerial)
 
-	CreateSignedCert(root, CA, serverSerial, serverName, serverCACommonName)
-	CreateSignedCert(root, serverName, serverSerial, serverCertName, serverCertCommonName)
+	CreateSignedCert(root, CA, serverCASerial, serverCAName, serverCACommonName)
+	CreateSignedCert(root, serverCAName, serverSerial, serverCertName, serverCertCommonName)
+	CreateSignedCert(root, serverCAName, revokedServerSerial, revokedServerCertName, revokedServerCertCommonName)
+	RevokeCertAndRegenerateCRL(root, serverCAName, revokedServerCertName)
 
-	CreateSignedCert(root, CA, clientSerial, clientName, clientCACommonName)
-	CreateSignedCert(root, clientName, serverSerial, clientCertName, clientCertCommonName)
+	CreateSignedCert(root, CA, clientCASerial, clientCAName, clientCACommonName)
+	CreateSignedCert(root, clientCAName, clientCertSerial, clientCertName, clientCertCommonName)
+	CreateSignedCert(root, clientCAName, revokedClientSerial, revokedClientCertName, revokedClientCertCommonName)
+	RevokeCertAndRegenerateCRL(root, clientCAName, revokedClientCertName)
+
+	serverCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", serverCAName))
+	clientCRLPath := path.Join(root, fmt.Sprintf("%s-crl.pem", clientCAName))
+	combinedCRLPath := path.Join(root, fmt.Sprintf("%s-%s-combined-crl.pem", serverCAName, clientCAName))
+
+	serverCRLBytes, err := os.ReadFile(serverCRLPath)
+	if err != nil {
+		log.Fatalf("Could not read server CRL file")
+	}
+
+	clientCRLBytes, err := os.ReadFile(clientCRLPath)
+	if err != nil {
+		log.Fatalf("Could not read client CRL file")
+	}
+
+	err = os.WriteFile(combinedCRLPath, append(serverCRLBytes, clientCRLBytes...), 0777)
+	if err != nil {
+		log.Fatalf("Could not write combined CRL file")
+	}
 
 	return ClientServerKeyPairs{
-		ServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
-		ServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
-		ServerCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", serverName)),
-		ClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
-		ClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
-		ClientCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", clientName)),
-		ServerName: serverCertCommonName,
+		ServerCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
+		ServerKey:         path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
+		ServerCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", serverCAName)),
+		ServerCRL:         serverCRLPath,
+		RevokedServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedServerCertName)),
+		RevokedServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedServerCertName)),
+		ClientCert:        path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
+		ClientKey:         path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
+		ClientCA:          path.Join(root, fmt.Sprintf("%s-cert.pem", clientCAName)),
+		ClientCRL:         clientCRLPath,
+		RevokedClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", revokedClientCertName)),
+		RevokedClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", revokedClientCertName)),
+		CombinedCRL:       combinedCRLPath,
+		ServerName:        serverCertCommonName,
+		RevokedServerName: revokedServerCertCommonName,
+		RevokedClientName: revokedClientCertCommonName,
 	}
 }
