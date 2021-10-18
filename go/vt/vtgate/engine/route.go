@@ -820,6 +820,9 @@ func (route *Route) description() PrimitiveDescription {
 	if route.ScatterErrorsAsWarnings {
 		other["ScatterErrorsAsWarnings"] = true
 	}
+	if route.QueryTimeout > 0 {
+		other["QueryTimeout"] = route.QueryTimeout
+	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],
