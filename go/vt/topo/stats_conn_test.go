@@ -21,11 +21,15 @@ import (
 	"testing"
 
 	"context"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // The fakeConn is a wrapper for a Conn that emits stats for every operation
 type fakeConn struct {
-	v Version
+	v        Version
+	readOnly bool
 }
 
 // ListDir is part of the Conn interface
@@ -39,6 +43,9 @@ func (st *fakeConn) ListDir(ctx context.Context, dirPath string, full bool) (res
 
 // Create is part of the Conn interface
 func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte) (ver Version, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "Topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
 
@@ -48,6 +55,9 @@ func (st *fakeConn) Create(ctx context.Context, filePath string, contents []byte
 
 // Update is part of the Conn interface
 func (st *fakeConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (ver Version, err error) {
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, "Topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return ver, fmt.Errorf("Dummy error")
 
@@ -66,6 +76,9 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 
 // Delete is part of the Conn interface
 func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version) (err error) {
+	if st.readOnly {
+		return vterrors.Errorf(vtrpc.Code_READ_ONLY, "Topo server connection is read-only")
+	}
 	if filePath == "error" {
 		return fmt.Errorf("dummy error")
 	}
@@ -97,6 +110,16 @@ func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipat
 
 // Close is part of the Conn interface
 func (st *fakeConn) Close() {
+}
+
+// SetReadOnly is part of the Conn interface
+func (st *fakeConn) SetReadOnly(readOnly bool) {
+	st.readOnly = readOnly
+}
+
+// IsReadOnly is part of the Conn interface
+func (st *fakeConn) IsReadOnly() bool {
+	return st.readOnly
 }
 
 //TestStatsConnTopoListDir emits stats on ListDir

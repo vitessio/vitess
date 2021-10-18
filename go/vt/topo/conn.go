@@ -171,6 +171,11 @@ type Conn interface {
 	// not make the current process a candidate for the election.
 	NewMasterParticipation(name, id string) (MasterParticipation, error)
 
+	// SetReadOnly supports read-only topo server connections
+	SetReadOnly(readOnly bool)
+	// IsReadOnly checks for read-only topo server connections
+	IsReadOnly() bool
+
 	// Close closes the connection to the server.
 	Close()
 }

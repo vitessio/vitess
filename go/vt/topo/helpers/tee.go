@@ -228,3 +228,7 @@ func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
 func (c *TeeConn) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
 	return c.primary.NewMasterParticipation(name, id)
 }
+
+// This is handled within the parent TopoServer implementation
+func (c *TeeConn) SetReadOnly(readOnly bool) {}
+func (c *TeeConn) IsReadOnly() bool          { return false }
