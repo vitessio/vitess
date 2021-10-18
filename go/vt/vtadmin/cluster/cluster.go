@@ -303,6 +303,10 @@ func (c *Cluster) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardR
 		return nil, fmt.Errorf("%w: shard name is required", errors.ErrInvalidRequest)
 	}
 
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateShard(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
 	return c.Vtctld.CreateShard(ctx, req)
 }
 
@@ -354,6 +358,10 @@ func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShard
 	span.Annotate("shards", strings.Join(shards, ", "))
 	span.Annotate("recursive", req.Recursive)
 	span.Annotate("even_if_serving", req.EvenIfServing)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteShards(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
 
 	return c.Vtctld.DeleteShards(ctx, req)
 }
