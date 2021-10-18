@@ -173,6 +173,9 @@ enum Code {
 
   // CLUSTER_EVENT indicates that a cluster operation might be in effect
   CLUSTER_EVENT = 17;
+
+  // Topo server connection is read-only
+  READ_ONLY = 18;
 }
 
 // RPCError is an application-level error structure returned by
