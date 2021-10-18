@@ -177,15 +177,9 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(selStmt).Comments)
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *route:
-				plan.eroute.ScatterErrorsAsWarnings = true
-			}
-			return true, logicalPlan, nil
-		})
+	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil
@@ -278,5 +272,26 @@ func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser
 			return nil, err
 		}
 	}
+	return plan, nil
+}
+
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
+	scatterAsWarns := false
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		scatterAsWarns = true
+	}
+	queryTimeout := queryTimeout(directives)
+	if scatterAsWarns || queryTimeout > 0 {
+		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *route:
+				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+				plan.eroute.QueryTimeout = queryTimeout
+			}
+			return true, logicalPlan, nil
+		})
+	}
+
 	return plan, nil
 }
