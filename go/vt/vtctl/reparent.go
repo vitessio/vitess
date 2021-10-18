@@ -60,7 +60,7 @@ func init() {
 	addCommand("Shards", command{
 		name:   "EmergencyReparentShard",
 		method: commandEmergencyReparentShard,
-		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>]",
+		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>] [-prevent_cross_cell_promotion=<true/false>]",
 		help:   "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
 	})
 	addCommand("Shards", command{
@@ -177,6 +177,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
+	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 
 	// handle deprecated flags
@@ -213,7 +214,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		}
 	}
 	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
-	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas)
+	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
