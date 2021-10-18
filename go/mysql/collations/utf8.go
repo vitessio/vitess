@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 )
 
 func init() {
@@ -69,15 +69,33 @@ func (c *Collation_utf8mb4_general_ci) Collate(left, right []byte, isPrefix bool
 	panic("TODO")
 }
 
-func (c *Collation_utf8mb4_general_ci) WeightString(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
-	return weightStringUnicode(c.unicase, utf8.DecodeRune, dst, numCodepoints, src, pad)
+func (c *Collation_utf8mb4_general_ci) WeightString(dst []byte, src []byte) []byte {
+	return weightStringUnicode(c.unicase, encoding.Encoding_utf8mb4{}, dst, src)
+}
+
+func (c *Collation_utf8mb4_general_ci) WeightStringPad(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
+	return weightStringUnicodePad(c.unicase, encoding.Encoding_utf8mb4{}, dst, numCodepoints, src, pad)
 }
 
 func (c *Collation_utf8mb4_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
 }
 
-func weightStringUnicode(unicaseInfo *UnicaseInfo, decode encoding.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func weightStringUnicode(unicaseInfo *UnicaseInfo, enc encoding.Encoding, dst []byte, src []byte) []byte {
+	for {
+		r, width := enc.DecodeRune(src)
+		if r == encoding.RuneError && width < 3 {
+			break
+		}
+
+		src = src[width:]
+		sorted := unicaseInfo.unicodeSort(r)
+		dst = append(dst, byte(sorted>>8), byte(sorted))
+	}
+	return dst
+}
+
+func weightStringUnicodePad(unicaseInfo *UnicaseInfo, enc encoding.Encoding, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	adjustPadding := func(dst []byte, numCodepoints int) []byte {
 		if padToMax {
 			for len(dst)+1 < cap(dst) {
@@ -98,7 +116,7 @@ func weightStringUnicode(unicaseInfo *UnicaseInfo, decode encoding.CodepointIter
 	}
 
 	for len(dst)+1 < cap(dst) && numCodepoints > 0 {
-		r, width := decode(src)
+		r, width := enc.DecodeRune(src)
 		if r == encoding.RuneError && width < 3 {
 			return adjustPadding(dst, numCodepoints)
 		}
@@ -110,7 +128,7 @@ func weightStringUnicode(unicaseInfo *UnicaseInfo, decode encoding.CodepointIter
 	}
 
 	if len(dst) < cap(dst) && numCodepoints > 0 {
-		r, width := decode(src)
+		r, width := enc.DecodeRune(src)
 		if r != encoding.RuneError || width == 3 {
 			sorted := unicaseInfo.unicodeSort(r)
 			dst = append(dst, byte(sorted>>8))
@@ -119,8 +137,7 @@ func weightStringUnicode(unicaseInfo *UnicaseInfo, decode encoding.CodepointIter
 	return adjustPadding(dst, numCodepoints)
 }
 
-type Collation_utf8mb4_bin struct {
-}
+type Collation_utf8mb4_bin struct{}
 
 func (c *Collation_utf8mb4_bin) init() {}
 
@@ -136,8 +153,12 @@ func (c *Collation_utf8mb4_bin) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
 }
 
-func (c *Collation_utf8mb4_bin) WeightString(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
-	return weightStringUnicodeBin(utf8.DecodeRune, dst, numCodepoints, src, pad)
+func (c *Collation_utf8mb4_bin) WeightString(dst []byte, src []byte) []byte {
+	return weightStringUnicodeBin(encoding.Encoding_utf8mb4{}, dst, src)
+}
+
+func (c *Collation_utf8mb4_bin) WeightStringPad(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
+	return weightStringUnicodeBinPad(encoding.Encoding_utf8mb4{}, dst, numCodepoints, src, pad)
 }
 
 func (c *Collation_utf8mb4_bin) WeightStringLen(numBytes int) int {
@@ -155,9 +176,22 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 	return len(left) - len(right)
 }
 
-func weightStringUnicodeBin(decode encoding.CodepointIterator, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func weightStringUnicodeBin(enc encoding.Encoding, dst []byte, src []byte) []byte {
+	for {
+		r, width := enc.DecodeRune(src)
+		if r == encoding.RuneError && width < 3 {
+			break
+		}
+
+		src = src[width:]
+		dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF), byte(r&0xFF))
+	}
+	return dst
+}
+
+func weightStringUnicodeBinPad(enc encoding.Encoding, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	for len(dst)+2 < cap(dst) && numCodepoints > 0 {
-		r, width := decode(src)
+		r, width := enc.DecodeRune(src)
 		if r == encoding.RuneError && width < 3 {
 			break
 		}
@@ -168,7 +202,7 @@ func weightStringUnicodeBin(decode encoding.CodepointIterator, dst []byte, numCo
 	}
 
 	if numCodepoints > 0 {
-		if r, width := decode(src); r != encoding.RuneError || width == 3 {
+		if r, width := enc.DecodeRune(src); r != encoding.RuneError || width == 3 {
 			numCodepoints--
 			switch cap(dst) - len(dst) {
 			case 0:

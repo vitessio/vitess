@@ -1,8 +1,8 @@
 package encoding
 
 import (
-	"vitess.io/vitess/go/mysql/collations/encoding/simplifiedchinese"
-	"vitess.io/vitess/go/mysql/collations/encoding/unicode"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding/unicode"
 )
 
 type Encoding interface {

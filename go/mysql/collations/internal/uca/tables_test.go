@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/uca"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 func weightsForCodepoint(table []*[]uint16, codepoint rune) (result []uint16) {
@@ -84,7 +84,7 @@ func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights []*
 }
 
 func loadExpectedWeights(t *testing.T, weights string) map[string][]uint16 {
-	fullpath := fmt.Sprintf("../testdata/mysqldata/%s.json", weights)
+	fullpath := fmt.Sprintf("../../testdata/mysqldata/%s.json", weights)
 	weightsMysqlFile, err := os.Open(fullpath)
 	if err != nil {
 		t.Skipf("failed to load %q (did you run 'colldump' locally?)", fullpath)

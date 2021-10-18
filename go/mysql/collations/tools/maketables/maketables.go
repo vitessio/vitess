@@ -28,10 +28,10 @@ import (
 	"path"
 	"strconv"
 
-	"vitess.io/vitess/go/mysql/collations/uca/tablebuilder"
+	"vitess.io/vitess/go/mysql/collations/internal/uca/tablebuilder"
 )
 
-var Output = flag.String("out", "uca", "")
+var Output = flag.String("out", "internal/uca", "")
 
 func maketable(w io.Writer, table string, filename string, pages *tablebuilder.EmbeddedPageBuilder, layout tablebuilder.TableLayout) {
 	var metadata struct {

@@ -47,7 +47,11 @@ func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int
 	return collationBinary(left, right, rightIsPrefix)
 }
 
-func (c *Collation_8bit_bin) WeightString(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func (c *Collation_8bit_bin) WeightString(dst []byte, src []byte) []byte {
+	return append(dst, src...)
+}
+
+func (c *Collation_8bit_bin) WeightStringPad(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	copyCodepoints := minInt(len(src), minInt(cap(dst), numCodepoints))
 	dst = append(dst, src[:copyCodepoints]...)
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
@@ -89,7 +93,15 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 	return len(left) - len(right)
 }
 
-func (c *Collation_8bit_simple_ci) WeightString(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func (c *Collation_8bit_simple_ci) WeightString(dst []byte, src []byte) []byte {
+	sortOrder := c.sort
+	for _, ch := range src {
+		dst = append(dst, sortOrder[int(ch)])
+	}
+	return dst
+}
+
+func (c *Collation_8bit_simple_ci) WeightStringPad(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	sortOrder := c.sort
 	copyCodepoints := minInt(len(src), minInt(cap(dst), numCodepoints))
 	for _, ch := range src[:copyCodepoints] {
@@ -132,7 +144,11 @@ func (c *Collation_binary) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
 }
 
-func (c *Collation_binary) WeightString(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
+func (c *Collation_binary) WeightString(dst []byte, src []byte) []byte {
+	return append(dst, src...)
+}
+
+func (c *Collation_binary) WeightStringPad(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
 	copyCodepoints := minInt(len(src), minInt(cap(dst), numCodepoints))
 	dst = append(dst, src[:copyCodepoints]...)
 	if padToMax {

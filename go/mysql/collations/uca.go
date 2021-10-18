@@ -19,8 +19,8 @@ package collations
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/encoding"
-	"vitess.io/vitess/go/mysql/collations/uca"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 func init() {
@@ -128,7 +128,21 @@ nextLevel:
 	return int(l) - int(r)
 }
 
-func (c *Collation_utf8mb4_uca_0900) WeightString(dst []byte, _ int, src []byte, padToMax bool) []byte {
+func (c *Collation_utf8mb4_uca_0900) WeightString(dst []byte, src []byte) []byte {
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		dst = append(dst, byte(w>>8), byte(w))
+	}
+	return dst
+}
+
+func (c *Collation_utf8mb4_uca_0900) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
@@ -179,7 +193,11 @@ func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) 
 	return collationBinary(left, right, isPrefix)
 }
 
-func (c *Collation_utf8mb4_0900_bin) WeightString(dst []byte, _ int, src []byte, padToMax bool) []byte {
+func (c *Collation_utf8mb4_0900_bin) WeightString(dst []byte, src []byte) []byte {
+	return append(dst, src...)
+}
+
+func (c *Collation_utf8mb4_0900_bin) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
 	copyCodepoints := minInt(len(src), cap(dst))
 	dst = append(dst, src[:copyCodepoints]...)
 	if padToMax {
@@ -256,7 +274,21 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	}
 }
 
-func (c *Collation_uca_legacy) WeightString(dst []byte, _ int, src []byte, padToMax bool) []byte {
+func (c *Collation_uca_legacy) WeightString(dst []byte, src []byte) []byte {
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		dst = append(dst, byte(w>>8), byte(w))
+	}
+	return dst
+}
+
+func (c *Collation_uca_legacy) WeightStringPad(dst []byte, _ int, src []byte, padToMax bool) []byte {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
@@ -267,6 +299,8 @@ func (c *Collation_uca_legacy) WeightString(dst []byte, _ int, src []byte, padTo
 		}
 		dst = append(dst, byte(w>>8), byte(w))
 	}
+
+	// TODO numCodepoints is not handled, uca_legacy is space-padded
 
 	if padToMax {
 		for len(dst) < cap(dst) {

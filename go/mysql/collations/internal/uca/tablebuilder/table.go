@@ -5,7 +5,7 @@ import (
 	"io"
 	"reflect"
 
-	"vitess.io/vitess/go/mysql/collations/uca"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 const MaxColumns = 16

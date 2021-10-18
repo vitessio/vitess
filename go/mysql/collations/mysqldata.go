@@ -3,8 +3,8 @@
 package collations
 
 import (
-	"vitess.io/vitess/go/mysql/collations/encoding"
-	"vitess.io/vitess/go/mysql/collations/uca"
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 var ctype_dec8_swedish_ci = []byte{
