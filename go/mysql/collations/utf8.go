@@ -69,72 +69,54 @@ func (c *Collation_utf8mb4_general_ci) Collate(left, right []byte, isPrefix bool
 	panic("TODO")
 }
 
-func (c *Collation_utf8mb4_general_ci) WeightString(dst []byte, src []byte) []byte {
-	return weightStringUnicode(c.unicase, encoding.Encoding_utf8mb4{}, dst, src)
-}
-
-func (c *Collation_utf8mb4_general_ci) WeightStringPad(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
-	return weightStringUnicodePad(c.unicase, encoding.Encoding_utf8mb4{}, dst, numCodepoints, src, pad)
+func (c *Collation_utf8mb4_general_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
+	return weightStringUnicodePad(c.unicase, encoding.Encoding_utf8mb4{}, dst, src, numCodepoints)
 }
 
 func (c *Collation_utf8mb4_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
 }
 
-func weightStringUnicode(unicaseInfo *UnicaseInfo, enc encoding.Encoding, dst []byte, src []byte) []byte {
-	for {
-		r, width := enc.DecodeRune(src)
-		if r == encoding.RuneError && width < 3 {
-			break
+func weightStringUnicodePad(unicaseInfo *UnicaseInfo, enc encoding.Encoding, dst []byte, src []byte, numCodepoints int) []byte {
+	if numCodepoints == 0 || numCodepoints == PadToMax {
+		for {
+			r, width := enc.DecodeRune(src)
+			if r == encoding.RuneError && width < 3 {
+				break
+			}
+
+			src = src[width:]
+			sorted := unicaseInfo.unicodeSort(r)
+			dst = append(dst, byte(sorted>>8), byte(sorted))
 		}
 
-		src = src[width:]
-		sorted := unicaseInfo.unicodeSort(r)
-		dst = append(dst, byte(sorted>>8), byte(sorted))
-	}
-	return dst
-}
-
-func weightStringUnicodePad(unicaseInfo *UnicaseInfo, enc encoding.Encoding, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
-	adjustPadding := func(dst []byte, numCodepoints int) []byte {
-		if padToMax {
+		if numCodepoints == PadToMax {
 			for len(dst)+1 < cap(dst) {
 				dst = append(dst, 0x00, 0x20)
 			}
 			if len(dst) < cap(dst) {
 				dst = append(dst, 0x00)
 			}
-		} else if numCodepoints > 0 {
-			for len(dst)+1 < cap(dst) && numCodepoints > 0 {
-				dst = append(dst, 0x00, 0x20)
-			}
-			if len(dst) < cap(dst) && numCodepoints > 0 {
-				dst = append(dst, 0x00)
-			}
 		}
-		return dst
-	}
+	} else {
+		for numCodepoints > 0 {
+			r, width := enc.DecodeRune(src)
+			if r == encoding.RuneError && width < 3 {
+				break
+			}
 
-	for len(dst)+1 < cap(dst) && numCodepoints > 0 {
-		r, width := enc.DecodeRune(src)
-		if r == encoding.RuneError && width < 3 {
-			return adjustPadding(dst, numCodepoints)
-		}
-
-		src = src[width:]
-		sorted := unicaseInfo.unicodeSort(r)
-		dst = append(dst, byte(sorted>>8), byte(sorted))
-		numCodepoints--
-	}
-
-	if len(dst) < cap(dst) && numCodepoints > 0 {
-		r, width := enc.DecodeRune(src)
-		if r != encoding.RuneError || width == 3 {
+			src = src[width:]
 			sorted := unicaseInfo.unicodeSort(r)
-			dst = append(dst, byte(sorted>>8))
+			dst = append(dst, byte(sorted>>8), byte(sorted))
+			numCodepoints--
+		}
+		for numCodepoints > 0 {
+			dst = append(dst, 0x00, 0x20)
+			numCodepoints--
 		}
 	}
-	return adjustPadding(dst, numCodepoints)
+
+	return dst
 }
 
 type Collation_utf8mb4_bin struct{}
@@ -153,12 +135,8 @@ func (c *Collation_utf8mb4_bin) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
 }
 
-func (c *Collation_utf8mb4_bin) WeightString(dst []byte, src []byte) []byte {
-	return weightStringUnicodeBin(encoding.Encoding_utf8mb4{}, dst, src)
-}
-
-func (c *Collation_utf8mb4_bin) WeightStringPad(dst []byte, numCodepoints int, src []byte, pad bool) []byte {
-	return weightStringUnicodeBinPad(encoding.Encoding_utf8mb4{}, dst, numCodepoints, src, pad)
+func (c *Collation_utf8mb4_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
+	return weightStringUnicodeBinPad(encoding.Encoding_utf8mb4{}, dst, src, numCodepoints)
 }
 
 func (c *Collation_utf8mb4_bin) WeightStringLen(numBytes int) int {
@@ -176,72 +154,48 @@ func collationBinary(left, right []byte, rightPrefix bool) int {
 	return len(left) - len(right)
 }
 
-func weightStringUnicodeBin(enc encoding.Encoding, dst []byte, src []byte) []byte {
-	for {
-		r, width := enc.DecodeRune(src)
-		if r == encoding.RuneError && width < 3 {
-			break
+func weightStringUnicodeBinPad(enc encoding.Encoding, dst []byte, src []byte, numCodepoints int) []byte {
+	if numCodepoints == 0 || numCodepoints == PadToMax {
+		for {
+			r, width := enc.DecodeRune(src)
+			if r == encoding.RuneError && width < 3 {
+				break
+			}
+
+			src = src[width:]
+			dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF), byte(r&0xFF))
 		}
 
-		src = src[width:]
-		dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF), byte(r&0xFF))
-	}
-	return dst
-}
-
-func weightStringUnicodeBinPad(enc encoding.Encoding, dst []byte, numCodepoints int, src []byte, padToMax bool) []byte {
-	for len(dst)+2 < cap(dst) && numCodepoints > 0 {
-		r, width := enc.DecodeRune(src)
-		if r == encoding.RuneError && width < 3 {
-			break
-		}
-
-		src = src[width:]
-		dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF), byte(r&0xFF))
-		numCodepoints--
-	}
-
-	if numCodepoints > 0 {
-		if r, width := enc.DecodeRune(src); r != encoding.RuneError || width == 3 {
-			numCodepoints--
+		if numCodepoints == PadToMax {
+			for len(dst)+2 < cap(dst) {
+				dst = append(dst, 0x00, 0x00, 0x20)
+			}
 			switch cap(dst) - len(dst) {
 			case 0:
 			case 1:
-				dst = append(dst, byte((r>>16)&0xFF))
+				dst = append(dst, 0x00)
 			case 2:
-				dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF))
+				dst = append(dst, 0x00, 0x00)
 			default:
 				panic("unreachable")
 			}
 		}
-	}
-
-	padWithZero := func(dst []byte) []byte {
-		switch cap(dst) - len(dst) {
-		case 0:
-		case 1:
-			dst = append(dst, 0x00)
-		case 2:
-			dst = append(dst, 0x00, 0x00)
-		default:
-			panic("unreachable")
-		}
-		return dst
-	}
-
-	if padToMax {
-		for len(dst)+2 < cap(dst) {
-			dst = append(dst, 0x00, 0x00, 0x20)
-		}
-		dst = padWithZero(dst)
 	} else {
-		for len(dst)+2 < cap(dst) && numCodepoints > 0 {
+		for numCodepoints > 0 {
+			r, width := enc.DecodeRune(src)
+			if r == encoding.RuneError && width < 3 {
+				break
+			}
+
+			src = src[width:]
+			dst = append(dst, byte((r>>16)&0xFF), byte((r>>8)&0xFF), byte(r&0xFF))
+			numCodepoints--
+		}
+		for numCodepoints > 0 {
 			dst = append(dst, 0x00, 0x00, 0x20)
 			numCodepoints--
 		}
-		if numCodepoints > 0 {
-			dst = padWithZero(dst)
-		}
 	}
+
 	return dst
 }

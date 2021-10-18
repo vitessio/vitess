@@ -18,6 +18,7 @@ package collations
 
 import (
 	"fmt"
+	"math"
 )
 
 // Generate mysqldata.go from the JSON information dumped from MySQL
@@ -48,36 +49,49 @@ type Collation interface {
 	// WeightString returns a weight string for the given `src` string. A weight string
 	// is a binary representation of the weights for the given string, that can be
 	// compared byte-wise to return identical results to collating this string.
+	//
 	// This means:
 	//		bytes.Compare(WeightString(left), WeightString(right)) == Collate(left, right)
+	//
+	// The semantics of this API have been carefully designed to match MySQL's behavior
+	// in its `strnxfrm` API. Most notably, the `numCodepoints` argument implies different
+	// behaviors depending on the collation's padding mode:
+	//
+	// - For collations that pad WITH SPACE (this is, all legacy collations in MySQL except
+	//	for the newly introduced UCA v9.0.0 utf8mb4 collations in MySQL 8.0), `numCodepoints`
+	// 	can have the following values:
+	//
+	//		- if `numCodepoints` is any integer greater than zero, this treats the `src` string
+	//		as if it were in a `CHAR(numCodepoints)` column in MySQL, meaning that the resulting
+	//		weight string will be padded with the weight for the SPACE character until it becomes
+	//		wide enough to fill the `CHAR` column. This is necessary to perform weight comparisons
+	//		in fixed-`CHAR` columns. If `numCodepoints` is smaller than the actual amount of
+	//		codepoints stored in `src`, the result is unspecified.
+	//
+	//		- if `numCodepoints` is zero, this is equivalent to `numCodepoints = RuneCount(src)`,
+	//		meaning that the resulting weight string will have no padding at the end: it'll only have
+	//		the weight values for the exact amount of codepoints contained in `src`. This is the
+	//		behavior required to sort `VARCHAR` columns.
+	//
+	//		- if `numCodepoints` is the special constant PadToMax, then the `dst` slice must be
+	//		pre-allocated to a zero-length slice with enough capacity to hold the complete weight
+	//		string, and any remaining capacity in `dst` will be filled by the weights for the
+	//		padding character, repeatedly. This is a special flag used by MySQL when performing
+	//		filesorts, where all the sorting keys must have identical sizes, even for `VARCHAR`
+	//		columns.
+	//
+	//	- For collations that have NO PAD (this is, the newly introduced UCA v9.0.0 utf8mb4 collations
+	//	in MySQL 8.0), `numCodepoints` can only have the special constant `PadToMax`, which will make
+	//	the weight string padding equivalent to a PAD SPACE collation (as explained in the previous
+	//	section). All other values for `numCodepoints` are ignored, because NO PAD collations always
+	//	return the weights for the codepoints in their strings, with no further padding at the end.
+	//
 	// The resulting weight string is written to `dst`, which can be pre-allocated to
 	// WeightStringLen() bytes to prevent growing the slice. `dst` can also be nil, in which
-	// case it will grow dynamically. The final slice with the exact length for the weight
-	// string is returned by the function.
-	WeightString(dst []byte, src []byte) []byte
-
-	// WeightStringPad returns a weight string for a source string with the same semantics
-	// as MySQL's `strnxfrm` method in the MySQL Public API. It works similarly to WeightString,
-	// with the following differences:
-	//
-	// - `dst` is never grown: it must be a zero-size slice allocated by the caller
-	// 	with enough capacity to hold the whole weight string. If `dst` is not large enough,
-	// 	the resulting weight string will be truncated.
-	// - `numCodepoints` treats the `src` string as if it were in a `CHAR(numCodepoints)` column.
-	// 	This is only relevant for pad collations, where strings with fewer than numCodepoints
-	// 	codepoints will have the weights of the 'space' character for their encoding appended
-	// 	at the end of the weight string, as to ensure that all the weight strings for the column
-	// 	have an equal size.
-	// - if `padToMax` is true, the `numCodepoints` behavior is overriden and instead the resulting
-	// 	weight string is paded with zeroes until the full capacity of the `dst` buffer.
-	//
-	// Compatibility notes:
-	// This is a best-effort implementation of the original `strxfrm` implementation in MySQL. It's
-	// not clear what are the use cases for this API that cannot be handled by the simpler WeightString,
-	// but from perusing the documentation, it appears that this padding behavior must be used when
-	// collating strings from `CHAR(n)` columns with space-padded collations, and all other cases
-	// (VARCHAR columns, non-space padded collations) can be handled by WeightString.
-	WeightStringPad(dst []byte, numCodepoints int, src []byte, padToMax bool) []byte
+	// case it will grow dynamically. If `numCodepoints` has the special PadToMax value explained
+	// earlier, `dst` MUST be pre-allocated to the target size or the function will return an
+	// empty slice.
+	WeightString(dst, src []byte, numCodepoints int) []byte
 
 	// WeightStringLen returns a size (in bytes) that would fit any weight strings for a string
 	// with `numCodepoints` using this collation. Note that this is a higher bound for the size
@@ -85,6 +99,8 @@ type Collation interface {
 	// returned value.
 	WeightStringLen(numCodepoints int) int
 }
+
+const PadToMax = math.MaxInt32
 
 func minInt(i1, i2 int) int {
 	if i1 < i2 {
