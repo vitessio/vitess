@@ -44,6 +44,108 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT 7.0)",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT (7.0))",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
