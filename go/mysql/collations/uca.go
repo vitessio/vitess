@@ -30,6 +30,7 @@ func init() {
 type CollationUCA interface {
 	Collation
 	Encoding() encoding.Encoding
+	UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout)
 }
 
 type Collation_utf8mb4_uca_0900 struct {
@@ -63,8 +64,8 @@ func (c *Collation_utf8mb4_uca_0900) Encoding() encoding.Encoding {
 	return encoding.Encoding_utf8mb4{}
 }
 
-func (c *Collation_utf8mb4_uca_0900) WeightsUCA900() []*[]uint16 {
-	return c.uca.Weights()
+func (c *Collation_utf8mb4_uca_0900) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
+	return c.uca.Weights(), uca.TableLayout_uca900{}
 }
 
 func (c *Collation_utf8mb4_uca_0900) Name() string {
@@ -237,6 +238,10 @@ func (c *Collation_uca_legacy) init() {
 
 func (c *Collation_uca_legacy) Encoding() encoding.Encoding {
 	return c.charset
+}
+
+func (c *Collation_uca_legacy) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
+	return c.uca.Weights(), uca.TableLayout_uca_legacy{}
 }
 
 func (c *Collation_uca_legacy) Id() uint {
