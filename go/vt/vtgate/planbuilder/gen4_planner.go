@@ -78,6 +78,9 @@ func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, que
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
 	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
 	if err != nil {
 		return nil, err
@@ -120,6 +123,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
@@ -178,11 +183,9 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 
 func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
 	ctx := &planningContext{
-		reservedVars:          reservedVars,
-		semTable:              semTable,
-		vschema:               vschema,
-		argToReplaceBySelect:  map[string]*sqlparser.Select{},
-		exprToReplaceBySqExpr: map[sqlparser.Expr]sqlparser.Expr{},
+		reservedVars: reservedVars,
+		semTable:     semTable,
+		vschema:      vschema,
 	}
 	return ctx
 }
@@ -217,7 +220,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 			sel: node,
 		}
 
-		replaceSubQuery(ctx.exprToReplaceBySqExpr, node)
+		replaceSubQuery(ctx, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {

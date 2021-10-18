@@ -22,7 +22,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -85,29 +84,19 @@ type (
 		exprTypes   map[sqlparser.Expr]querypb.Type
 		selectScope map[*sqlparser.Select]*scope
 		Comments    sqlparser.Comments
-		SubqueryMap map[*sqlparser.Select][]*subquery
-		SubqueryRef map[*sqlparser.Subquery]*subquery
+		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
+		SubqueryRef map[*sqlparser.Subquery]*sqlparser.ExtractedSubquery
 
 		// ColumnEqualities is used to enable transitive closures
 		// if a == b and b == c then a == c
 		ColumnEqualities map[columnName][]sqlparser.Expr
+
+		Warning string
 	}
 
 	columnName struct {
 		Table      TableSet
 		ColumnName string
-	}
-
-	subquery struct {
-		ArgName   string
-		HasValues string
-		SubQuery  *sqlparser.Subquery
-		OpCode    engine.PulloutOpcode
-
-		// ExprsNeedReplace list all the expressions that, if the subquery is later rewritten, need to
-		// be removed and replaced by ReplaceBy.
-		ExprsNeedReplace []sqlparser.Expr
-		ReplaceBy        sqlparser.Expr
 	}
 
 	// SchemaInformation is used tp provide table information from Vschema.
@@ -129,7 +118,11 @@ func (st *SemTable) CopyDependencies(from, to sqlparser.Expr) {
 
 // NewSemTable creates a new empty SemTable
 func NewSemTable() *SemTable {
-	return &SemTable{Recursive: map[sqlparser.Expr]TableSet{}, ColumnEqualities: map[columnName][]sqlparser.Expr{}}
+	return &SemTable{
+		Recursive:        map[sqlparser.Expr]TableSet{},
+		Direct:           map[sqlparser.Expr]TableSet{},
+		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+	}
 }
 
 // TableSetFor returns the bitmask for this particular table
@@ -153,17 +146,17 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 
 // RecursiveDeps return the table dependencies of the expression.
 func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
-	return st.Recursive.Dependencies(expr)
+	return st.Recursive.dependencies(expr)
 }
 
 // DirectDeps return the table dependencies of the expression.
 func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
-	return st.Direct.Dependencies(expr)
+	return st.Direct.dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.Direct.Dependencies(colName)
+	ts := st.Direct.dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -188,7 +181,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.Direct.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -214,34 +207,45 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	return nil
 }
 
-// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) TableSet {
-	deps, found := d[expr]
-	if found {
-		return deps
+// dependencies return the table dependencies of the expression. This method finds table dependencies recursively
+func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
+	if ValidAsMapKey(expr) {
+		// we have something that could live in the cache
+		var found bool
+		deps, found = d[expr]
+		if found {
+			return deps
+		}
+		defer func() {
+			d[expr] = deps
+		}()
 	}
 
-	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
-	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
-		if !ok || !validAsMapKey(expr) {
+		if !ok || !ValidAsMapKey(expr) {
 			// if this is not an expression, or it is an expression we can't use as a map-key,
 			// just carry on down the tree
 			return true, nil
 		}
 
-		set, found := d[expr]
-		if found {
-			deps.MergeInPlace(set)
+		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
+			if extracted.OtherSide != nil {
+				set := d.dependencies(extracted.OtherSide)
+				deps.MergeInPlace(set)
+			}
+			return false, nil
 		}
+		set, found := d[expr]
+		deps.MergeInPlace(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil
 	}, expr)
 
-	d[expr] = deps
 	return deps
 }
 
@@ -255,13 +259,38 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
-			if err != nil {
-				return false
+			if err == nil {
+				cursor.Replace(exp)
+			} else {
+				// cloning the expression and removing the qualifier
+				col := *node
+				col.Qualifier = sqlparser.TableName{}
+				cursor.Replace(&col)
 			}
-			cursor.Replace(exp)
 			return false
 		}
 		return true
 	}, nil)
 	return newExpr, nil
+}
+
+// FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
+func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
+	for foundSubq, extractedSubquery := range st.SubqueryRef {
+		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq) {
+			return extractedSubquery
+		}
+	}
+	return nil
+}
+
+// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
+func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
+	var res []*sqlparser.ExtractedSubquery
+	for _, extractedSubquery := range st.SubqueryRef {
+		if extractedSubquery.NeedsRewrite {
+			res = append(res, extractedSubquery)
+		}
+	}
+	return res
 }

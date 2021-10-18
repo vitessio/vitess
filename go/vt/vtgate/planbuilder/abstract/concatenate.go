@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Concatenate represents a UNION ALL.
+// Concatenate represents a UNION ALL/DISTINCT.
 type Concatenate struct {
 	Distinct    bool
 	SelectStmts []*sqlparser.Select
@@ -50,7 +50,7 @@ func (c *Concatenate) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
 
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return nil
 }
 
 // CheckValid implements the Operator interface
