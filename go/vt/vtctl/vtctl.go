@@ -1851,7 +1851,17 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force, *recursive)
+
+	cell := subFlags.Arg(1)
+
+	_, err = wr.VtctldServer().RemoveShardCell(ctx, &vtctldatapb.RemoveShardCellRequest{
+		Keyspace:  keyspace,
+		ShardName: shard,
+		Cell:      cell,
+		Force:     *force,
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
