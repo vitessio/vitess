@@ -4519,8 +4519,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union all select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union all select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 select substring_index('the king of the the hill',' ',-5);
@@ -5239,8 +5239,8 @@ END
 INPUT
 select (with dt as (select t1.a as a, t2.a as b from t2) select dt2.a from dt dt1, dt dt2 where dt1.b=t1.a and dt2.b=dt1.b) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with dt as (select t1.a as a, t2.a as b from t2) select dt2.a from dt as dt1, dt as dt2 where dt1.b = t1.a and dt2.b = dt1.b) as subq from t1
 END
 INPUT
 select count(*), case interval(qty,2,3,4,5,6,7,8) when -1 then NULL when 0 then "zero" when 1 then "one" when 2 then "two" end as category from t1 group by category;
@@ -6187,8 +6187,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union select a+1 from dt where a<10) select dt1.a from dt dt1 where dt1.a=t1.a ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select dt1.a from dt as dt1 where dt1.a = t1.a) as subq from t1
 END
 INPUT
 select from t5 natural join ((t1 natural join t2), (t3 natural join t4));
@@ -8810,7 +8810,7 @@ INPUT
 select (with cte as (select t1.a) select from cte) from t1;
 END
 ERROR
-syntax error at position 13 near 'with'
+syntax error at position 46 near 'from'
 END
 INPUT
 select from v1d;
@@ -9517,8 +9517,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 select from t1 natural left join (t4 natural join t5) where t5.z is not NULL;
@@ -19106,7 +19106,7 @@ INPUT
 select a from t1 where a in (with cte as (select t1.a) select /*+ no_semijoin() node_modules/ a from cte);
 END
 ERROR
-syntax error at position 34 near 'with'
+syntax error at position 107 near '/*+ no_semijoin() node_modules/ a from cte);'
 END
 INPUT
 select from v1a;
