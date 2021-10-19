@@ -1,9 +1,3 @@
-2021-08-26T09:53:28Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1169941166
-2021-08-26T09:53:28Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1169941181
-2021-08-26T09:53:28Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1169941214
-2021-08-26T09:53:28Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/1169941203
-2021-08-26T09:53:28Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/1169941160
-2021-08-26T09:53:28Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/1169941157
 2021-08-26T09:53:28Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/1169941209
 2021-08-26T09:53:28Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1169941172
 2021-08-26T09:53:28Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/1169941204
@@ -9995,6 +9989,12 @@
 2021-10-19T17:46:55Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1360316433
 2021-10-19T17:46:55Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1360316480
 2021-10-19T17:46:55Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1360316434
+2021-10-19T18:02:13Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1360364368
 2021-10-19T18:02:13Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1360364330
+2021-10-19T18:02:13Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1360364312
 2021-10-19T18:02:13Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1360364366
+2021-10-19T18:02:13Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1360364384
+2021-10-19T18:02:13Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1360364324
+2021-10-19T18:02:13Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1360364339
+2021-10-19T18:02:13Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1360364352
 2021-10-19T18:02:13Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1360364310
