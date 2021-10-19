@@ -96,6 +96,11 @@ func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in 
 	return client.s.EmergencyReparentShard(ctx, in)
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
+	return client.s.ExecuteHook(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
