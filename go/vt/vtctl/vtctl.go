@@ -2017,7 +2017,11 @@ func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("must specify the <keyspace> argument for DeleteKeyspace")
 	}
 
-	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
+	_, err := wr.VtctldServer().DeleteKeyspace(ctx, &vtctldatapb.DeleteKeyspaceRequest{
+		Keyspace:  subFlags.Arg(0),
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
