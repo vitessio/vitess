@@ -86,7 +86,7 @@ func TestDistinct(t *testing.T) {
 	utils.Exec(t, conn, "delete from aggr_test")
 }
 
-func TestEqualityFilterOnScatter(t *testing.T) {
+func TestEqualFilterOnScatter(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -111,5 +111,33 @@ func TestEqualityFilterOnScatter(t *testing.T) {
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)  // having clause
 
 	utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) = 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+	// utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 = 1", `[]`) // where clause, still returns one row with a value of 0
+}
+
+func TestNotEqualFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 != 1", `[[INT64(5)]]`)     // where clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 5", `[]`)               // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 != a", `[]`)               // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != a", `[]`)               // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 3+2", `[]`)             // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1+4 != 3+2", `[]`)           // where clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 1", `[[INT64(5)]]`)     // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`) // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)           // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 5.00", `[]`)            // having clause
+
+	utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) != 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
 	// utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 = 1", `[]`) // where clause, still returns one row with a value of 0
 }

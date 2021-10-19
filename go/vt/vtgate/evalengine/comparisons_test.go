@@ -73,7 +73,7 @@ func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
 	})
 }
 
-func TestComparisonEqual(t *testing.T) {
+func TestComparisonEquality(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "All Nulls",
@@ -167,7 +167,22 @@ func TestComparisonEqual(t *testing.T) {
 		},
 	}
 
-	for i, tcase := range tests {
-		tcase.run(t, i+1, &EqualOp{})
-	}
+	t.Run("EqualOp", func(t *testing.T) {
+		for i, tcase := range tests {
+			tcase.run(t, i+1, &EqualOp{})
+		}
+	})
+
+	t.Run("NotEqualOp", func(t *testing.T) {
+		for i, tcase := range tests {
+			// transforming the expected output to its opposite so we can test NotEqualOp
+			switch tcase.out {
+			case &T:
+				tcase.out = &F
+			case &F:
+				tcase.out = &T
+			}
+			tcase.run(t, i+1, &NotEqualOp{})
+		}
+	})
 }
