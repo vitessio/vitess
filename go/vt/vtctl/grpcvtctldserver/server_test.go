@@ -227,8 +227,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: "`t1`",
+							ToTables:  []string{"`t1`", "`t2`"},
 						},
 					},
 				},
@@ -236,8 +236,8 @@ func TestApplyRoutingRules(t *testing.T) {
 			expectedRules: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t1", "t2"},
+						FromTable: "`t1`",
+						ToTables:  []string{"`t1`", "`t2`"},
 					},
 				},
 			},
@@ -249,8 +249,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: "`t1`",
+							ToTables:  []string{"`t1`", "`t2`"},
 						},
 					},
 				},
@@ -268,8 +268,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: "`t1`",
+							ToTables:  []string{"`t1`", "`t2`"},
 						},
 					},
 				},
@@ -279,8 +279,8 @@ func TestApplyRoutingRules(t *testing.T) {
 			expectedRules: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t1", "t2"},
+						FromTable: "`t1`",
+						ToTables:  []string{"`t1`", "`t2`"},
 					},
 				},
 			},
