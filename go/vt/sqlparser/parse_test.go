@@ -44,6 +44,18 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "SELECT EXTRACT(YEAR FROM '2019-07-02')",
+		output: "select extract(year from '2019-07-02') from dual",
+	}, {
+		input:  "SELECT EXTRACT(YEAR_MONTH FROM '2019-07-02 01:02:03')",
+		output: "select extract(year_month from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "SELECT EXTRACT(DAY_MINUTE FROM '2019-07-02 01:02:03')",
+		output: "select extract(day_minute from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "SELECT EXTRACT(MICROSECOND FROM '2003-01-02 10:30:00.000123')",
+		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
+	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
