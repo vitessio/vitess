@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -36,6 +37,17 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
+}
+
+func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	_, err := ExecAllowError(t, conn, query)
+	if err == nil {
+		t.Errorf("Query: %s expected error but got nil", query)
+	}
+	if !strings.Contains(err.Error(), expected) {
+		t.Errorf("Query: %s:\nexpected \n%s \nbut actual \n%s", query, expected, err.Error())
 	}
 }
 
@@ -82,4 +94,9 @@ func Exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	qr, err := conn.ExecuteFetch(query, 1000, true)
 	require.NoError(t, err, "for query: "+query)
 	return qr
+}
+
+func ExecAllowError(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	t.Helper()
+	return conn.ExecuteFetch(query, 1000, true)
 }

@@ -86,7 +86,7 @@ Gen4 error: cannot use column offsets in group statement when using `*`
 # Filtering on scatter aggregates
 "select count(*) a from user having a > 10"
 "unsupported: filtering on results of aggregates"
-Gen4 plan same as above
+Gen4 error: expr cannot be converted, not supported: *sqlparser.ComparisonExpr with >
 
 # group by must reference select list
 "select a from user group by b"
@@ -505,11 +505,11 @@ Gen4 plan same as above
 # TODO this should be planned without using OA and MS
 "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.ComparisonExpr with >
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
@@ -528,7 +528,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Table": "`user`"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by with non-unique vindex filter
 "select 1 from user having count(id) = 10 and name = 'a'"
@@ -551,7 +551,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"

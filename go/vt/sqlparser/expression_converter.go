@@ -22,8 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-// ErrExprNotSupported signals that the expression cannot be handled by expression evaluation engine.
-var ErrExprNotSupported = fmt.Errorf("Expr Not Supported")
+var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
 
 //Convert converts between AST expressions and executable expressions
 func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.Expr, error) {
@@ -39,7 +38,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		return &evalengine.Column{Offset: idx}, nil
 	case *ComparisonExpr:
 		if node.Operator != EqualOp {
-			break
+			return nil, fmt.Errorf("%s: %T with %s", ErrConvertExprNotSupported, node, node.Operator.ToString())
 		}
 		left, err := Convert(node.Left, columnLookup)
 		if err != nil {
@@ -81,7 +80,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		case DivOp:
 			op = &evalengine.Division{}
 		default:
-			return nil, ErrExprNotSupported
+			return nil, fmt.Errorf("%s: %T", ErrConvertExprNotSupported, e)
 		}
 		left, err := Convert(node.Left, columnLookup)
 		if err != nil {
@@ -98,5 +97,5 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		}, nil
 
 	}
-	return nil, ErrExprNotSupported
+	return nil, fmt.Errorf("%s: %T", ErrConvertExprNotSupported, e)
 }

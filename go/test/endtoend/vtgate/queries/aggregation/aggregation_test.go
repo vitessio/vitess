@@ -110,5 +110,6 @@ func TestEqualityFilterOnScatter(t *testing.T) {
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`) // having clause
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)  // having clause
 
+	utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) = 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
 	// utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 = 1", `[]`) // where clause, still returns one row with a value of 0
 }
