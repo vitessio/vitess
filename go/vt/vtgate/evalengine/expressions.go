@@ -50,31 +50,11 @@ type (
 		String() string
 	}
 
-	// BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
-	BinaryExpr interface {
-		Evaluate(left, right EvalResult) (EvalResult, error)
-		Type(left querypb.Type) querypb.Type
-		String() string
-	}
-
 	// Expressions
 	Null         struct{}
 	Literal      struct{ Val EvalResult }
 	BindVariable struct{ Key string }
 	Column       struct{ Offset int }
-	BinaryOp     struct {
-		Expr        BinaryExpr
-		Left, Right Expr
-	}
-	Equals struct {
-		Left, Right Expr
-	}
-
-	// Binary ops
-	Addition       struct{}
-	Subtraction    struct{}
-	Multiplication struct{}
-	Division       struct{}
 )
 
 var _ Expr = (*Null)(nil)
@@ -82,12 +62,7 @@ var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
 var _ Expr = (*BinaryOp)(nil)
-var _ Expr = (*Equals)(nil)
-
-var _ BinaryExpr = (*Addition)(nil)
-var _ BinaryExpr = (*Subtraction)(nil)
-var _ BinaryExpr = (*Multiplication)(nil)
-var _ BinaryExpr = (*Division)(nil)
+var _ Expr = (*Comparison)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
@@ -146,53 +121,6 @@ func NewColumn(offset int) Expr {
 	}
 }
 
-func evaluateSideOfComparison(expr Expr, env ExpressionEnv) (EvalResult, error) {
-	val, err := expr.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if val.typ == sqltypes.Null {
-		return NullEvalResult(), nil
-	}
-	return makeNumeric(val), nil
-}
-
-// Evaluate implements the Expr interface
-func (e *Equals) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := evaluateSideOfComparison(e.Left, env)
-	if lVal.typ == sqltypes.Null || err != nil {
-		return lVal, err
-	}
-
-	rVal, err := evaluateSideOfComparison(e.Right, env)
-	if rVal.typ == sqltypes.Null || err != nil {
-		return rVal, err
-	}
-
-	numeric, err := compareNumeric(lVal, rVal)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	value := int64(0)
-	if numeric == 0 {
-		value = 1
-	}
-	return EvalResult{
-		typ:  sqltypes.Int32,
-		ival: value,
-	}, nil
-}
-
-// Type implements the Expr interface
-func (e *Equals) Type(ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_INT32, nil
-}
-
-// String implements the Expr interface
-func (e *Equals) String() string {
-	return e.Left.String() + " = " + e.Right.String()
-}
-
 // Evaluate implements the Expr interface
 func (n Null) Evaluate(ExpressionEnv) (EvalResult, error) {
 	return EvalResult{}, nil
@@ -206,19 +134,6 @@ func (n Null) Type(ExpressionEnv) (querypb.Type, error) {
 // String implements the Expr interface
 func (n Null) String() string {
 	return "null"
-}
-
-// Evaluate implements the Expr interface
-func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := b.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := b.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return b.Expr.Evaluate(lVal, rVal)
 }
 
 // Evaluate implements the Expr interface
@@ -242,60 +157,6 @@ func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	return numeric, err
 }
 
-// Evaluate implements the BinaryOp interface
-func (a *Addition) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return addNumericWithError(left, right)
-}
-
-// Evaluate implements the BinaryOp interface
-func (s *Subtraction) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return subtractNumericWithError(left, right)
-}
-
-// Evaluate implements the BinaryOp interface
-func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return multiplyNumericWithError(left, right)
-}
-
-// Evaluate implements the BinaryOp interface
-func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return divideNumericWithError(left, right)
-}
-
-// Type implements the BinaryExpr interface
-func (a *Addition) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the BinaryExpr interface
-func (m *Multiplication) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the BinaryExpr interface
-func (d *Division) Type(querypb.Type) querypb.Type {
-	return sqltypes.Float64
-}
-
-// Type implements the BinaryExpr interface
-func (s *Subtraction) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-// Type implements the Expr interface
-func (b *BinaryOp) Type(env ExpressionEnv) (querypb.Type, error) {
-	ltype, err := b.Left.Type(env)
-	if err != nil {
-		return 0, err
-	}
-	rtype, err := b.Right.Type(env)
-	if err != nil {
-		return 0, err
-	}
-	typ := mergeNumericalTypes(ltype, rtype)
-	return b.Expr.Type(typ), nil
-}
-
 // Type implements the Expr interface
 func (b *BindVariable) Type(env ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
@@ -314,31 +175,6 @@ func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
 // Type implements the Expr interface
 func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
 	return sqltypes.Float64, nil
-}
-
-// String implements the BinaryExpr interface
-func (d *Division) String() string {
-	return "/"
-}
-
-// String implements the BinaryExpr interface
-func (m *Multiplication) String() string {
-	return "*"
-}
-
-// String implements the BinaryExpr interface
-func (s *Subtraction) String() string {
-	return "-"
-}
-
-// String implements the BinaryExpr interface
-func (a *Addition) String() string {
-	return "+"
-}
-
-// String implements the Expr interface
-func (b *BinaryOp) String() string {
-	return b.Left.String() + " " + b.Expr.String() + " " + b.Right.String()
 }
 
 // String implements the Expr interface
