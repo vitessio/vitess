@@ -27,15 +27,54 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func TestEquals(t *testing.T) {
-	T := true
-	F := false
-	tests := []struct {
-		name   string
-		v1, v2 Expr
-		out    *bool
-		err    string
-	}{
+type testCase struct {
+	name   string
+	v1, v2 Expr
+	out    *bool
+	err    string
+	bv     map[string]*querypb.BindVariable
+	row    []sqltypes.Value
+}
+
+var (
+	T = true
+	F = false
+)
+
+func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
+	name := fmt.Sprintf("%d_%s_%s%s%s", i, tc.name, tc.v1.String(), cmpOp.String(), tc.v2.String())
+	if tc.bv == nil {
+		tc.bv = map[string]*querypb.BindVariable{}
+	}
+	t.Run(name, func(t *testing.T) {
+		env := ExpressionEnv{
+			BindVars: tc.bv,
+			Row:      tc.row,
+		}
+		cmp := ComparisonExpr{
+			Op:    cmpOp,
+			Left:  tc.v1,
+			Right: tc.v2,
+		}
+		got, err := cmp.Evaluate(env)
+		if tc.err == "" {
+			require.NoError(t, err)
+			if tc.out != nil && *tc.out {
+				require.EqualValues(t, 1, got.ival)
+			} else if tc.out != nil && !*tc.out {
+				require.EqualValues(t, 0, got.ival)
+			} else {
+				require.EqualValues(t, 0, got.ival)
+				require.EqualValues(t, sqltypes.Null, got.typ)
+			}
+		} else {
+			require.EqualError(t, err, tc.err)
+		}
+	})
+}
+
+func TestComparisonEqual(t *testing.T) {
+	tests := []testCase{
 		{
 			name: "All Nulls",
 			v1:   &Null{},
@@ -71,16 +110,19 @@ func TestEquals(t *testing.T) {
 			v1:   NewColumn(0),
 			v2:   NewLiteralString([]byte("1")),
 			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
 		}, {
 			name: "int column with string",
-			v1:   NewColumn(1),
+			v1:   NewColumn(0),
 			v2:   NewLiteralString([]byte("1")),
 			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewInt32(1)},
 		}, {
 			name: "wrong varbinary column with string",
 			v1:   NewColumn(0),
 			v2:   NewLiteralString([]byte("42")),
 			out:  &F,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
 		}, {
 			name: "string with int",
 			v1:   NewLiteralString([]byte("1")),
@@ -119,38 +161,13 @@ func TestEquals(t *testing.T) {
 		}, {
 			name: "float with float column",
 			v1:   NewLiteralFloat(42.21),
-			v2:   NewColumn(2),
+			v2:   NewColumn(0),
 			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
 		},
 	}
 
 	for i, tcase := range tests {
-		name := fmt.Sprintf("%d_%s_%s%s%s", i+1, tcase.name, tcase.v1.String(), "=", tcase.v2.String())
-		t.Run(name, func(t *testing.T) {
-			eq := &ComparisonExpr{
-				Op:    &EqualOp{},
-				Left:  tcase.v1,
-				Right: tcase.v2,
-			}
-
-			env := ExpressionEnv{
-				BindVars: map[string]*querypb.BindVariable{},
-				Row:      []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewInt32(1), sqltypes.NewFloat64(42.21)},
-			}
-			got, err := eq.Evaluate(env)
-			if tcase.err == "" {
-				require.NoError(t, err)
-				if tcase.out != nil && *tcase.out {
-					require.EqualValues(t, 1, got.ival)
-				} else if tcase.out != nil && !*tcase.out {
-					require.EqualValues(t, 0, got.ival)
-				} else {
-					require.EqualValues(t, 0, got.ival)
-					require.EqualValues(t, sqltypes.Null, got.typ)
-				}
-			} else {
-				require.EqualError(t, err, tcase.err)
-			}
-		})
+		tcase.run(t, i+1, &EqualOp{})
 	}
 }
