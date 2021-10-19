@@ -354,7 +354,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 
 		destinationShards[i] = updatedShard
 
-		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -442,7 +442,8 @@ func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard stri
 		refreshShards = destinationShards
 	}
 	for _, si := range refreshShards {
-		rec.RecordError(wr.RefreshTabletsByShard(ctx, si, cells))
+		_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
+		rec.RecordError(err)
 	}
 	return rec.Error()
 }
@@ -791,7 +792,7 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	}
 
 	for _, si := range destinationShards {
-		if err := wr.RefreshTabletsByShard(ctx, si, nil); err != nil {
+		if _, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, nil, wr.Logger()); err != nil {
 			return err
 		}
 	}
@@ -1225,7 +1226,8 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 
 	// Now refresh the source servers so they reload the denylist
 	event.DispatchUpdate(ev, "refreshing sources tablets state so they update their denied tables")
-	return wr.RefreshTabletsByShard(ctx, sourceShard, cells)
+	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, sourceShard, cells, wr.Logger())
+	return err
 }
 
 // masterMigrateServedFrom handles the primary migration. The ordering is
@@ -1309,12 +1311,6 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// replication.
 	event.DispatchUpdate(ev, "setting destination shard primary tablets read-write")
 	return wr.refreshPrimaryTablets(ctx, []*topo.ShardInfo{destinationShard})
-}
-
-// RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
-func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, cells []string) error {
-	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
-	return err
 }
 
 func encodeString(in string) string {
