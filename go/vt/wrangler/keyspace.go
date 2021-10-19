@@ -1311,18 +1311,6 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	return wr.refreshPrimaryTablets(ctx, []*topo.ShardInfo{destinationShard})
 }
 
-// SetKeyspaceServedFrom locks a keyspace and changes its ServerFromMap
-func (wr *Wrangler) SetKeyspaceServedFrom(ctx context.Context, keyspace string, servedType topodatapb.TabletType, cells []string, sourceKeyspace string, remove bool) error {
-	_, err := wr.VtctldServer().SetKeyspaceServedFrom(ctx, &vtctldatapb.SetKeyspaceServedFromRequest{
-		Keyspace:       keyspace,
-		TabletType:     servedType,
-		Cells:          cells,
-		Remove:         remove,
-		SourceKeyspace: sourceKeyspace,
-	})
-	return err
-}
-
 // RefreshTabletsByShard calls RefreshState on all the tablets in a given shard.
 func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInfo, cells []string) error {
 	_, err := topotools.RefreshTabletsByShard(ctx, wr.ts, wr.tmc, si, cells, wr.Logger())
