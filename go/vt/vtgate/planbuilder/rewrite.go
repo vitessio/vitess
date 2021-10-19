@@ -167,26 +167,31 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
 	}
 
-	sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
-		switch x := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			if !x.Qualifier.IsEmpty() {
-				return false
-			}
-			originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-			if isInMap {
-				cursor.Replace(originalExpr)
-				return false
-			}
-			return false
-		}
-		return true
-	}, nil)
-
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		if sqlparser.ContainsAggregation(expr) {
+		var wasInMap, hasAggr bool
+		sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			switch x := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if !x.Qualifier.IsEmpty() {
+					return false
+				}
+				originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
+				if isInMap {
+					if !sqlparser.ContainsAggregation(originalExpr) {
+						cursor.Replace(originalExpr)
+					} else {
+						hasAggr = true
+					}
+					wasInMap = true
+				}
+				return false
+			}
+			return true
+		}, nil)
+
+		if (!wasInMap && sqlparser.ContainsAggregation(expr)) || hasAggr {
 			node.AddHaving(expr)
 		} else {
 			node.AddWhere(expr)
