@@ -1519,7 +1519,7 @@ func (es *ExtractedSubquery) updateAlternative() {
 	}
 }
 
-func doesRequireParens(ct *ColumnType) bool {
+func defaultRequiresParens(ct *ColumnType) bool {
 	switch ct.Type {
 	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", "JSON", "GEOMETRY", "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION":
 		return true

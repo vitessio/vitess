@@ -710,7 +710,7 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		if doesRequireParens(ct) {
+		if defaultRequiresParens(ct) {
 			buf.WriteString(" (")
 			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
