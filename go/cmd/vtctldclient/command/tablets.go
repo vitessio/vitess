@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -52,6 +53,25 @@ NOTE: This command automatically updates the serving graph.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.MinimumNArgs(1),
 		RunE:                  commandDeleteTablets,
+	}
+	// ExecuteHook makes an ExecuteHook gRPC call to a vtctld.
+	ExecuteHook = &cobra.Command{
+		Use:   "ExecuteHook <alias> <hook_name> [<param1=value1> ...]",
+		Short: "Runs the specified hook on the given tablet.",
+		Long: `Runs the specified hook on the given tablet.
+
+A hook is an executable script that resides in the ${VTROOT}/vthook directory.
+For ExecuteHook, this is on the tablet requested, not on the vtctld or the host
+running the vtctldclient.
+
+Any key-value pairs passed after the hook name will be passed as parameters to
+the hook on the tablet.
+
+Note: hook names may not contain slash (/) characters.
+`,
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.MinimumNArgs(2),
+		RunE:                  commandExecuteHook,
 	}
 	// GetTablet makes a GetTablet gRPC call to a vtctld.
 	GetTablet = &cobra.Command{
@@ -225,6 +245,40 @@ func commandDeleteTablets(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Successfully deleted %d tablets\n", len(aliases))
 
+	return nil
+}
+
+func commandExecuteHook(cmd *cobra.Command, args []string) error {
+	tabletAlias, err := topoproto.ParseTabletAlias(cmd.Flags().Arg(0))
+	if err != nil {
+		return err
+	}
+
+	hookName := cmd.Flags().Arg(1)
+	if strings.Contains(hookName, "/") {
+		return fmt.Errorf("cannot execute hook named %s, ExecuteHook does not support hook names with slashes ('/')", hookName)
+	}
+
+	cli.FinishedParsing(cmd)
+
+	hookParams := cmd.Flags().Args()[2:]
+	resp, err := client.ExecuteHook(commandCtx, &vtctldatapb.ExecuteHookRequest{
+		TabletAlias: tabletAlias,
+		TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
+			Name:       hookName,
+			Parameters: hookParams,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 	return nil
 }
 
@@ -482,6 +536,7 @@ func init() {
 	DeleteTablets.Flags().BoolVarP(&deleteTabletsOptions.AllowPrimary, "allow-primary", "p", false, "Allow the primary tablet of a shard to be deleted. Use with caution.")
 	Root.AddCommand(DeleteTablets)
 
+	Root.AddCommand(ExecuteHook)
 	Root.AddCommand(GetTablet)
 
 	GetTablets.Flags().StringSliceVarP(&getTabletsOptions.TabletAliasStrings, "tablet-alias", "t", nil, "List of tablet aliases to filter by")
