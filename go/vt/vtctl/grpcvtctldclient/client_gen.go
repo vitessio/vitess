@@ -154,6 +154,15 @@ func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *
 	return client.c.EmergencyReparentShard(ctx, in, opts...)
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteHook(ctx, in, opts...)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	if client.c == nil {

@@ -643,6 +643,11 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	return resp, err
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
+	panic("unimplemented!")
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.FindAllShardsInKeyspace")
