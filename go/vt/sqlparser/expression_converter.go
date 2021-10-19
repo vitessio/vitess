@@ -69,7 +69,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		}
 		return evalengine.NewLiteralIntFromBytes([]byte("0"))
 	case *BinaryExpr:
-		var op evalengine.BinaryExpr
+		var op evalengine.BinaryOp
 		switch node.Operator {
 		case PlusOp:
 			op = &evalengine.Addition{}
@@ -90,8 +90,8 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		if err != nil {
 			return nil, err
 		}
-		return &evalengine.BinaryOp{
-			Expr:  op,
+		return &evalengine.BinaryExpr{
+			Op:    op,
 			Left:  left,
 			Right: right,
 		}, nil
