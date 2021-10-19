@@ -62,7 +62,7 @@ var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
 var _ Expr = (*BinaryExpr)(nil)
-var _ Expr = (*Comparison)(nil)
+var _ Expr = (*ComparisonExpr)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {

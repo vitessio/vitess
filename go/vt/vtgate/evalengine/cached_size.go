@@ -67,13 +67,17 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *Comparison) CachedSize(alloc bool) int64 {
+func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
+	}
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.ComparisonOp
+	if cc, ok := cached.Op.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.Left.(cachedObject); ok {

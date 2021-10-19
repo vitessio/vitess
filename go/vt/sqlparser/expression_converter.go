@@ -48,7 +48,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		if err != nil {
 			return nil, err
 		}
-		return &evalengine.Comparison{
+		return &evalengine.ComparisonExpr{
 			Left:  left,
 			Right: right,
 		}, nil
