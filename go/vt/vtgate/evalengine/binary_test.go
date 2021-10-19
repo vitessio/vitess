@@ -35,7 +35,7 @@ func TestBinaryOpTypes(t *testing.T) {
 		l, r, e querypb.Type
 	}
 	type ops struct {
-		op        BinaryExpr
+		op        BinaryOp
 		testcases []testcase
 	}
 

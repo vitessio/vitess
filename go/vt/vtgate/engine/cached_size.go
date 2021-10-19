@@ -175,6 +175,24 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Filter) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Predicate vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Predicate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
