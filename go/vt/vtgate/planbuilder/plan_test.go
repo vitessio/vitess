@@ -437,6 +437,9 @@ type vschemaWrapper struct {
 	version       PlannerVersion
 }
 
+func (vw *vschemaWrapper) PlannerWarning(_ string) {
+}
+
 func (vw *vschemaWrapper) ForeignKeyMode() string {
 	return "allow"
 }

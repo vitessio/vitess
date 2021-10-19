@@ -33,6 +33,16 @@ func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
 		}
+		switch node := selStatement.(type) {
+		case *sqlparser.Select:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			}
+		case *sqlparser.Union:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			}
+		}
 
 		sel, isSel := selStatement.(*sqlparser.Select)
 		if isSel {
@@ -78,6 +88,9 @@ func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, que
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
 	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
 	if err != nil {
 		return nil, err
@@ -120,6 +133,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
@@ -162,15 +177,9 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(selStmt).Comments)
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *route:
-				plan.eroute.ScatterErrorsAsWarnings = true
-			}
-			return true, logicalPlan, nil
-		})
+	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil
@@ -263,5 +272,26 @@ func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser
 			return nil, err
 		}
 	}
+	return plan, nil
+}
+
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
+	scatterAsWarns := false
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		scatterAsWarns = true
+	}
+	queryTimeout := queryTimeout(directives)
+	if scatterAsWarns || queryTimeout > 0 {
+		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *route:
+				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+				plan.eroute.QueryTimeout = queryTimeout
+			}
+			return true, logicalPlan, nil
+		})
+	}
+
 	return plan, nil
 }

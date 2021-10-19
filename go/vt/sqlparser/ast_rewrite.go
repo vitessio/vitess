@@ -86,6 +86,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteComments(parent, node, replacer)
 	case *Commit:
 		return a.rewriteRefOfCommit(parent, node, replacer)
+	case *CommonTableExpr:
+		return a.rewriteRefOfCommonTableExpr(parent, node, replacer)
 	case *ComparisonExpr:
 		return a.rewriteRefOfComparisonExpr(parent, node, replacer)
 	case *ConstraintDefinition:
@@ -316,6 +318,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfWhen(parent, node, replacer)
 	case *Where:
 		return a.rewriteRefOfWhere(parent, node, replacer)
+	case *With:
+		return a.rewriteRefOfWith(parent, node, replacer)
 	case *XorExpr:
 		return a.rewriteRefOfXorExpr(parent, node, replacer)
 	default:
@@ -1215,6 +1219,43 @@ func (a *application) rewriteRefOfCommit(parent SQLNode, node *Commit, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfCommonTableExpr(parent SQLNode, node *CommonTableExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteTableIdent(node, node.TableID, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).TableID = newNode.(TableIdent)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.Columns, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Columns = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*CommonTableExpr).Subquery = newNode.(*Subquery)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfComparisonExpr(parent SQLNode, node *ComparisonExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -1553,6 +1594,11 @@ func (a *application) rewriteRefOfDelete(parent SQLNode, node *Delete, replacer 
 		if !a.pre(&a.cur) {
 			return true
 		}
+	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Delete).With = newNode.(*With)
+	}) {
+		return false
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Delete).Comments = newNode.(Comments)
@@ -1906,13 +1952,18 @@ func (a *application) rewriteRefOfExtractedSubquery(parent SQLNode, node *Extrac
 	}) {
 		return false
 	}
-	if !a.rewriteSelectStatement(node, node.Subquery, func(newNode, parent SQLNode) {
-		parent.(*ExtractedSubquery).Subquery = newNode.(SelectStatement)
+	if !a.rewriteRefOfSubquery(node, node.Subquery, func(newNode, parent SQLNode) {
+		parent.(*ExtractedSubquery).Subquery = newNode.(*Subquery)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.OtherSide, func(newNode, parent SQLNode) {
 		parent.(*ExtractedSubquery).OtherSide = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.alternative, func(newNode, parent SQLNode) {
+		parent.(*ExtractedSubquery).alternative = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -3415,6 +3466,11 @@ func (a *application) rewriteRefOfSelect(parent SQLNode, node *Select, replacer 
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Select).With = newNode.(*With)
+	}) {
+		return false
+	}
 	if !a.rewriteGroupBy(node, node.GroupBy, func(newNode, parent SQLNode) {
 		parent.(*Select).GroupBy = newNode.(GroupBy)
 	}) {
@@ -4313,6 +4369,11 @@ func (a *application) rewriteRefOfUnion(parent SQLNode, node *Union, replacer re
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Union).With = newNode.(*With)
+	}) {
+		return false
+	}
 	if !a.rewriteRefOfLimit(node, node.Limit, func(newNode, parent SQLNode) {
 		parent.(*Union).Limit = newNode.(*Limit)
 	}) {
@@ -4368,6 +4429,11 @@ func (a *application) rewriteRefOfUpdate(parent SQLNode, node *Update, replacer 
 		if !a.pre(&a.cur) {
 			return true
 		}
+	}
+	if !a.rewriteRefOfWith(node, node.With, func(newNode, parent SQLNode) {
+		parent.(*Update).With = newNode.(*With)
+	}) {
+		return false
 	}
 	if !a.rewriteComments(node, node.Comments, func(newNode, parent SQLNode) {
 		parent.(*Update).Comments = newNode.(Comments)
@@ -4790,6 +4856,37 @@ func (a *application) rewriteRefOfWhere(parent SQLNode, node *Where, replacer re
 		parent.(*Where).Expr = newNode.(Expr)
 	}) {
 		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfWith(parent SQLNode, node *With, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	for x, el := range node.ctes {
+		if !a.rewriteRefOfCommonTableExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*With).ctes[idx] = newNode.(*CommonTableExpr)
+			}
+		}(x)) {
+			return false
+		}
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

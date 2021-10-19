@@ -50,7 +50,7 @@ func (c *Concatenate) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
 
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return nil
 }
 
 // CheckValid implements the Operator interface
