@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
+	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/topo"
@@ -2785,6 +2786,192 @@ func TestEmergencyReparentShard(t *testing.T) {
 
 			assert.NoError(t, err)
 			testutil.AssertEmergencyReparentShardResponsesEqual(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestExecuteHook(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		tmc       tmclient.TabletManagerClient
+		tablets   []*topodatapb.Tablet
+		req       *vtctldatapb.ExecuteHookRequest
+		shouldErr bool
+	}{
+		{
+			name: "ok",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				ExecuteHookResults: map[string]struct {
+					Response *hk.HookResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &hk.HookResult{},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteHookRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{},
+			},
+		},
+		{
+			name: "nil hook request",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				ExecuteHookResults: map[string]struct {
+					Response *hk.HookResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &hk.HookResult{},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteHookRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TabletHookRequest: nil,
+			},
+			shouldErr: true,
+		},
+		{
+			name: "hook with slash",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				ExecuteHookResults: map[string]struct {
+					Response *hk.HookResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &hk.HookResult{},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteHookRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
+					Name: "hooks/cannot/contain/slashes",
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "no such tablet",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				ExecuteHookResults: map[string]struct {
+					Response *hk.HookResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Response: &hk.HookResult{},
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteHookRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  404,
+				},
+				TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "tablet hook failure",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				ExecuteHookResults: map[string]struct {
+					Response *hk.HookResult
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+				},
+			},
+			req: &vtctldatapb.ExecuteHookRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			testutil.AddTablets(ctx, t, tt.ts, nil, tt.tablets...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+
+			_, err := vtctld.ExecuteHook(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
 		})
 	}
 }
