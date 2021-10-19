@@ -108,6 +108,7 @@ func TestEqualityFilterOnScatter(t *testing.T) {
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 1", `[]`)               // having clause
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"1\"", `[]`)           // having clause
 	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`) // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)  // having clause
 
 	// utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 = 1", `[]`) // where clause, still returns one row with a value of 0
 }
