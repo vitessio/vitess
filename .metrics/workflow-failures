@@ -1,4 +1,3 @@
-2021-08-26T10:03:52Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1169971917
 2021-08-26T10:03:52Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1169971885
 2021-08-26T10:03:52Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1169971935
 2021-08-26T10:03:52Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1169971893
@@ -9980,6 +9979,7 @@
 2021-10-19T20:43:36Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/1360887771
 2021-10-19T20:43:36Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1360887788
 2021-10-19T20:43:36Z,FOSSA License Scanning,https://github.com/vitessio/vitess/actions/runs/1360887840
+2021-10-19T20:43:36Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1360887849
 2021-10-19T20:43:36Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1360887799
 2021-10-19T20:43:36Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1360887831
 2021-10-19T20:43:36Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1360887823
