@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -110,7 +112,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 					return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not supported")
 				})
 				if err != nil {
-					if err == sqlparser.ErrExprNotSupported {
+					if strings.Contains(err.Error(), sqlparser.ErrConvertExprNotSupported) {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
 						return false, "", nil, nil
