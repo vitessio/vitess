@@ -375,7 +375,7 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, string) {
 	origMap := map[string]bool{}
 	for _, oVal := range origArr {
 		// Default is not seen.
-		origMap[oVal] = true
+		origMap[strings.ToUpper(oVal)] = true
 	}
 	uniqOrigVal := len(origMap)
 	origValSeen := 0
@@ -383,6 +383,7 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, string) {
 	changed := false
 	newValArr := strings.Split(newVal, ",")
 	for _, nVal := range newValArr {
+		nVal = strings.ToUpper(nVal)
 		notSeen, exists := origMap[nVal]
 		if !exists {
 			changed = true
