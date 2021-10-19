@@ -24,7 +24,42 @@ import (
 
 var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
 
-//Convert converts between AST expressions and executable expressions
+// translateComparisonOperator takes in a sqlparser.ComparisonExprOperator and
+// returns the corresponding evalengine.ComparisonOp
+func translateComparisonOperator(op ComparisonExprOperator) evalengine.ComparisonOp {
+	switch op {
+	case EqualOp:
+		return &evalengine.EqualOp{}
+	case LessThanOp:
+		return &evalengine.LessThanOp{}
+	case GreaterThanOp:
+		return &evalengine.GreaterThanOp{}
+	case LessEqualOp:
+		return &evalengine.LessEqualOp{}
+	case GreaterEqualOp:
+		return &evalengine.GreaterEqualOp{}
+	case NotEqualOp:
+		return &evalengine.NotEqualOp{}
+	case NullSafeEqualOp:
+		return &evalengine.NullSafeEqualOp{}
+	case InOp:
+		return &evalengine.InOp{}
+	case NotInOp:
+		return &evalengine.NotInOp{}
+	case LikeOp:
+		return &evalengine.LikeOp{}
+	case NotLikeOp:
+		return &evalengine.NotLikeOp{}
+	case RegexpOp:
+		return &evalengine.RegexpOp{}
+	case NotRegexpOp:
+		return &evalengine.NotRegexpOp{}
+	default:
+		return nil
+	}
+}
+
+// Convert converts between AST expressions and executable expressions
 func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.Expr, error) {
 	switch node := e.(type) {
 	case *ColName:
@@ -37,9 +72,6 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		}
 		return &evalengine.Column{Offset: idx}, nil
 	case *ComparisonExpr:
-		if node.Operator != EqualOp {
-			return nil, fmt.Errorf("%s: %T with %s", ErrConvertExprNotSupported, node, node.Operator.ToString())
-		}
 		left, err := Convert(node.Left, columnLookup)
 		if err != nil {
 			return nil, err
@@ -49,7 +81,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 			return nil, err
 		}
 		return &evalengine.ComparisonExpr{
-			Op:    &evalengine.EqualOp{},
+			Op:    translateComparisonOperator(node.Operator),
 			Left:  left,
 			Right: right,
 		}, nil
