@@ -698,9 +698,9 @@ func IsConnErr(err error) bool {
 	return false
 }
 
-// IsConnLost returns true if the error is a CRServerLost error.
-// Happens when a query is killed MySQL server-side.
-func IsConnLost(err error) bool {
+// IsConnLostDuringQuery returns true if the error is a CRServerLost error.
+// Happens most commonly when a query is killed MySQL server-side.
+func IsConnLostDuringQuery(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num == CRServerLost)

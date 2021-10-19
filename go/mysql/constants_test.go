@@ -52,7 +52,7 @@ func TestIsConnErr(t *testing.T) {
 	}
 }
 
-func TestIsConnLost(t *testing.T) {
+func TestIsConnLostDuringQuery(t *testing.T) {
 	testcases := []struct {
 		in   error
 		want bool
@@ -76,9 +76,9 @@ func TestIsConnLost(t *testing.T) {
 		want: false,
 	}}
 	for _, tcase := range testcases {
-		got := IsConnLost(tcase.in)
+		got := IsConnLostDuringQuery(tcase.in)
 		if got != tcase.want {
-			t.Errorf("IsConnLost(%#v): %v, want %v", tcase.in, got, tcase.want)
+			t.Errorf("IsConnLostDuringQuery(%#v): %v, want %v", tcase.in, got, tcase.want)
 		}
 	}
 }
