@@ -87,6 +87,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneComments(in)
 	case *Commit:
 		return CloneRefOfCommit(in)
+	case *CommonTableExpr:
+		return CloneRefOfCommonTableExpr(in)
 	case *ComparisonExpr:
 		return CloneRefOfComparisonExpr(in)
 	case *ConstraintDefinition:
@@ -317,6 +319,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfWhen(in)
 	case *Where:
 		return CloneRefOfWhere(in)
+	case *With:
+		return CloneRefOfWith(in)
 	case *XorExpr:
 		return CloneRefOfXorExpr(in)
 	default:
@@ -623,6 +627,18 @@ func CloneRefOfCommit(n *Commit) *Commit {
 	return &out
 }
 
+// CloneRefOfCommonTableExpr creates a deep clone of the input.
+func CloneRefOfCommonTableExpr(n *CommonTableExpr) *CommonTableExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.TableID = CloneTableIdent(n.TableID)
+	out.Columns = CloneColumns(n.Columns)
+	out.Subquery = CloneRefOfSubquery(n.Subquery)
+	return &out
+}
+
 // CloneRefOfComparisonExpr creates a deep clone of the input.
 func CloneRefOfComparisonExpr(n *ComparisonExpr) *ComparisonExpr {
 	if n == nil {
@@ -741,6 +757,7 @@ func CloneRefOfDelete(n *Delete) *Delete {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneComments(n.Comments)
 	out.Targets = CloneTableNames(n.Targets)
 	out.TableExprs = CloneTableExprs(n.TableExprs)
@@ -862,8 +879,9 @@ func CloneRefOfExtractedSubquery(n *ExtractedSubquery) *ExtractedSubquery {
 	}
 	out := *n
 	out.Original = CloneExpr(n.Original)
-	out.Subquery = CloneSelectStatement(n.Subquery)
+	out.Subquery = CloneRefOfSubquery(n.Subquery)
 	out.OtherSide = CloneExpr(n.OtherSide)
+	out.alternative = CloneExpr(n.alternative)
 	return &out
 }
 
@@ -1382,6 +1400,7 @@ func CloneRefOfSelect(n *Select) *Select {
 	out.Comments = CloneComments(n.Comments)
 	out.SelectExprs = CloneSelectExprs(n.SelectExprs)
 	out.Where = CloneRefOfWhere(n.Where)
+	out.With = CloneRefOfWith(n.With)
 	out.GroupBy = CloneGroupBy(n.GroupBy)
 	out.Having = CloneRefOfWhere(n.Having)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
@@ -1675,6 +1694,7 @@ func CloneRefOfUnion(n *Union) *Union {
 	out.Left = CloneSelectStatement(n.Left)
 	out.Right = CloneSelectStatement(n.Right)
 	out.OrderBy = CloneOrderBy(n.OrderBy)
+	out.With = CloneRefOfWith(n.With)
 	out.Limit = CloneRefOfLimit(n.Limit)
 	out.Into = CloneRefOfSelectInto(n.Into)
 	return &out
@@ -1695,6 +1715,7 @@ func CloneRefOfUpdate(n *Update) *Update {
 		return nil
 	}
 	out := *n
+	out.With = CloneRefOfWith(n.With)
 	out.Comments = CloneComments(n.Comments)
 	out.TableExprs = CloneTableExprs(n.TableExprs)
 	out.Exprs = CloneUpdateExprs(n.Exprs)
@@ -1829,6 +1850,16 @@ func CloneRefOfWhere(n *Where) *Where {
 	}
 	out := *n
 	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
+// CloneRefOfWith creates a deep clone of the input.
+func CloneRefOfWith(n *With) *With {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.ctes = CloneSliceOfRefOfCommonTableExpr(n.ctes)
 	return &out
 }
 
@@ -2564,6 +2595,18 @@ func CloneSliceOfVindexParam(n []VindexParam) []VindexParam {
 	res := make([]VindexParam, 0, len(n))
 	for _, x := range n {
 		res = append(res, CloneVindexParam(x))
+	}
+	return res
+}
+
+// CloneSliceOfRefOfCommonTableExpr creates a deep clone of the input.
+func CloneSliceOfRefOfCommonTableExpr(n []*CommonTableExpr) []*CommonTableExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]*CommonTableExpr, 0, len(n))
+	for _, x := range n {
+		res = append(res, CloneRefOfCommonTableExpr(x))
 	}
 	return res
 }

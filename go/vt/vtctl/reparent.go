@@ -17,51 +17,58 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
-	"context"
-
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func init() {
 	addCommand("Tablets", command{
-		"ReparentTablet",
-		commandReparentTablet,
-		"<tablet alias>",
-		"Reparent a tablet to the current primary in the shard. This only works if the current replication position matches the last known reparent action."})
+		name:   "ReparentTablet",
+		method: commandReparentTablet,
+		params: "<tablet alias>",
+		help:   "Reparent a tablet to the current primary in the shard. This only works if the current replication position matches the last known reparent action.",
+	})
 	addCommand("Shards", command{
-		"InitShardPrimary",
-		commandInitShardPrimary,
-		"[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		"Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead."})
+		name:   "InitShardPrimary",
+		method: commandInitShardPrimary,
+		params: "[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		help:   "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
+	})
 	addCommand("Shards", command{
-		"InitShardMaster",
-		commandInitShardPrimary,
-		"[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		"DEPRECATED. Use InitShardPrimary instead."})
+		name:         "InitShardMaster",
+		method:       commandInitShardPrimary,
+		params:       "[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
+		help:         "DEPRECATED. Use InitShardPrimary instead.",
+		deprecated:   true,
+		deprecatedBy: "InitShardPrimary",
+	})
 	addCommand("Shards", command{
-		"PlannedReparentShard",
-		commandPlannedReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>] [-wait_replicas_timeout=<duration>]",
-		"Reparents the shard to the new primary, or away from old primary. Both old and new primary need to be up and running."})
+		name:   "PlannedReparentShard",
+		method: commandPlannedReparentShard,
+		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>] [-wait_replicas_timeout=<duration>]",
+		help:   "Reparents the shard to the new primary, or away from old primary. Both old and new primary need to be up and running.",
+	})
 	addCommand("Shards", command{
-		"EmergencyReparentShard",
-		commandEmergencyReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>]",
-		"Reparents the shard to the new primary. Assumes the old primary is dead and not responding."})
+		name:   "EmergencyReparentShard",
+		method: commandEmergencyReparentShard,
+		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-wait_replicas_timeout=<duration>] [-ignore_replicas=<tablet alias list>] [-prevent_cross_cell_promotion=<true/false>]",
+		help:   "Reparents the shard to the new primary. Assumes the old primary is dead and not responding.",
+	})
 	addCommand("Shards", command{
-		"TabletExternallyReparented",
-		commandTabletExternallyReparented,
-		"<tablet alias>",
-		"Changes metadata in the topology server to acknowledge a shard primary change performed by an external tool. See the Reparenting guide for more information:" +
-			"https://vitess.io/docs/user-guides/reparenting/#external-reparenting"})
+		name:   "TabletExternallyReparented",
+		method: commandTabletExternallyReparented,
+		params: "<tablet alias>",
+		help: "Changes metadata in the topology server to acknowledge a shard primary change performed by an external tool. See the Reparenting guide for more information:" +
+			"https://vitess.io/docs/user-guides/reparenting/#external-reparenting",
+	})
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -169,6 +176,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up in reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newPrimary := subFlags.String("new_primary", "", "optional alias of a tablet that should be the new primary. If not specified, Vitess will select the best candidate")
+	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 
 	// handle deprecated flags
@@ -205,7 +213,7 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		}
 	}
 	unreachableReplicas := topoproto.ParseTabletSet(*ignoreReplicasList)
-	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas)
+	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitReplicasTimeout, unreachableReplicas, *preventCrossCellPromotion)
 }
 
 func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

@@ -27,40 +27,46 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
 	addCommand("Shards", command{
-		"ListBackups",
-		commandListBackups,
-		"<keyspace/shard>",
-		"Lists all the backups for a shard."})
+		name:   "ListBackups",
+		method: commandListBackups,
+		params: "<keyspace/shard>",
+		help:   "Lists all the backups for a shard.",
+	})
 	addCommand("Shards", command{
-		"BackupShard",
-		commandBackupShard,
-		"[-allow_primary=false] <keyspace/shard>",
-		"Chooses a tablet and creates a backup for a shard."})
+		name:   "BackupShard",
+		method: commandBackupShard,
+		params: "[-allow_primary=false] <keyspace/shard>",
+		help:   "Chooses a tablet and creates a backup for a shard.",
+	})
 	addCommand("Shards", command{
-		"RemoveBackup",
-		commandRemoveBackup,
-		"<keyspace/shard> <backup name>",
-		"Removes a backup for the BackupStorage."})
+		name:   "RemoveBackup",
+		method: commandRemoveBackup,
+		params: "<keyspace/shard> <backup name>",
+		help:   "Removes a backup for the BackupStorage.",
+	})
 
 	addCommand("Tablets", command{
-		"Backup",
-		commandBackup,
-		"[-concurrency=4] [-allow_primary=false] <tablet alias>",
-		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
+		name:   "Backup",
+		method: commandBackup,
+		params: "[-concurrency=4] [-allow_primary=false] <tablet alias>",
+		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
+	})
 	addCommand("Tablets", command{
-		"RestoreFromBackup",
-		commandRestoreFromBackup,
-		"[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
-		"Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time."})
+		name:   "RestoreFromBackup",
+		method: commandRestoreFromBackup,
+		params: "[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
+	})
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

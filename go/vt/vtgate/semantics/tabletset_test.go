@@ -139,3 +139,79 @@ func TestTableSet_LargeOffset(t *testing.T) {
 		assert.Equal(t, tid, ts.TableOffset())
 	}
 }
+
+func TestTableSet_KeepOnly(t *testing.T) {
+	testcases := []struct {
+		name   string
+		ts1    TableSet
+		ts2    TableSet
+		result TableSet
+	}{
+		{
+			name:   "both small",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(1).Merge(SingleTableSet(3)).Merge(SingleTableSet(4)),
+			result: SingleTableSet(1).Merge(SingleTableSet(3)),
+		}, {
+			name:   "both large",
+			ts1:    SingleTableSet(1428).Merge(SingleTableSet(2432)).Merge(SingleTableSet(3412)),
+			ts2:    SingleTableSet(1428).Merge(SingleTableSet(3412)).Merge(SingleTableSet(4342)),
+			result: SingleTableSet(1428).Merge(SingleTableSet(3412)),
+		}, {
+			name:   "ts1 small ts2 large",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(1).Merge(SingleTableSet(3)).Merge(SingleTableSet(4342)),
+			result: SingleTableSet(1).Merge(SingleTableSet(3)),
+		}, {
+			name:   "ts1 large ts2 small",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2771)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(1).Merge(SingleTableSet(3)).Merge(SingleTableSet(4)),
+			result: SingleTableSet(1).Merge(SingleTableSet(3)),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			testcase.ts1.KeepOnly(testcase.ts2)
+			assert.Equal(t, testcase.result, testcase.ts1)
+		})
+	}
+}
+
+func TestTableSet_RemoveInPlace(t *testing.T) {
+	testcases := []struct {
+		name   string
+		ts1    TableSet
+		ts2    TableSet
+		result TableSet
+	}{
+		{
+			name:   "both small",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(1).Merge(SingleTableSet(5)).Merge(SingleTableSet(4)),
+			result: SingleTableSet(2).Merge(SingleTableSet(3)),
+		}, {
+			name:   "both large",
+			ts1:    SingleTableSet(1428).Merge(SingleTableSet(2432)).Merge(SingleTableSet(3412)),
+			ts2:    SingleTableSet(1424).Merge(SingleTableSet(2432)).Merge(SingleTableSet(4342)),
+			result: SingleTableSet(1428).Merge(SingleTableSet(3412)),
+		}, {
+			name:   "ts1 small ts2 large",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(14).Merge(SingleTableSet(2)).Merge(SingleTableSet(4342)),
+			result: SingleTableSet(1).Merge(SingleTableSet(3)),
+		}, {
+			name:   "ts1 large ts2 small",
+			ts1:    SingleTableSet(1).Merge(SingleTableSet(2771)).Merge(SingleTableSet(3)),
+			ts2:    SingleTableSet(1).Merge(SingleTableSet(3)).Merge(SingleTableSet(4)),
+			result: SingleTableSet(2771),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			testcase.ts1.RemoveInPlace(testcase.ts2)
+			assert.Equal(t, testcase.result, testcase.ts1)
+		})
+	}
+}

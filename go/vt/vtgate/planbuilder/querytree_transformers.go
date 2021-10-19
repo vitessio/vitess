@@ -93,18 +93,46 @@ func transformSubqueryTree(ctx *planningContext, n *subqueryTree) (logicalPlan, 
 	if err != nil {
 		return nil, err
 	}
-	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery)
+	innerPlan, err = planHorizon(ctx, innerPlan, n.extracted.Subquery.Select)
 	if err != nil {
 		return nil, err
 	}
 
-	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), n.extracted.ArgName, n.extracted.HasValuesArg, innerPlan)
+	argName := n.extracted.GetArgName()
+	hasValuesArg := n.extracted.GetHasValuesArg()
 	outerPlan, err := transformToLogicalPlan(ctx, n.outer)
+
+	merged := mergeSubQueryPlan(ctx, innerPlan, outerPlan, n)
+	if merged != nil {
+		return merged, nil
+	}
+	plan := newPulloutSubquery(engine.PulloutOpcode(n.extracted.OpCode), argName, hasValuesArg, innerPlan)
 	if err != nil {
 		return nil, err
 	}
 	plan.underlying = outerPlan
 	return plan, err
+}
+
+func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subqueryTree) logicalPlan {
+	iroute, ok := inner.(*route)
+	if !ok {
+		return nil
+	}
+	oroute, ok := outer.(*route)
+	if !ok {
+		return nil
+	}
+
+	if canMergeSubqueryPlans(ctx, iroute, oroute) {
+		// n.extracted is an expression that lives in oroute.Select.
+		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
+		n.extracted.NeedsRewrite = true
+		replaceSubQuery(ctx, oroute.Select)
+
+		return oroute
+	}
+	return nil
 }
 
 func transformDerivedPlan(ctx *planningContext, n *derivedTree) (logicalPlan, error) {
@@ -267,7 +295,7 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 		return nil
 	}
 
-	if canMergePlans(ctx, lroute, rroute) {
+	if canMergeUnionPlans(ctx, lroute, rroute) {
 		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		return lroute
 	}
@@ -317,7 +345,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
 							extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
 							if extractedSubquery != nil {
-								extractedSubquery.ArgName = engine.ListVarName
+								extractedSubquery.SetArgName(engine.ListVarName)
 							}
 						}
 						predicate.Right = sqlparser.ListArg(engine.ListVarName)
@@ -513,7 +541,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	}
 	for _, replaceByExpr := range sqr.subqueryToReplace {
 		// we are comparing the ArgNames in case the expressions have been cloned
-		if ext.ArgName == replaceByExpr.ArgName {
+		if ext.GetArgName() == replaceByExpr.GetArgName() {
 			cursor.Replace(ext.Original)
 			sqr.replaced = true
 			return false
@@ -522,7 +550,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 	return true
 }
 
-func replaceSubQuery(ctx *planningContext, sel *sqlparser.Select) {
+func replaceSubQuery(ctx *planningContext, sel sqlparser.SelectStatement) {
 	extractedSubqueries := ctx.semTable.GetSubqueryNeedingRewrite()
 	if len(extractedSubqueries) == 0 {
 		return
