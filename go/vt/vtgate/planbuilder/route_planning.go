@@ -155,7 +155,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 			// TODO - cleanup if else clauses
 			if len(preds) > 0 {
 				if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
-					correlatedTree, err := createCorrelatedSubqueryTree(ctx, treeInner, outerTree, preds)
+					correlatedTree, err := createCorrelatedSubqueryTree(ctx, treeInner, outerTree, preds, inner.ExtractedSubquery)
 					if err != nil {
 						return nil, err
 					}
@@ -190,7 +190,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 	return outerTree, nil
 }
 
-func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr) (*correlatedSubqueryTree, error) {
+func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
 	vars := map[string]int{}
 	for _, pred := range preds {
 		var rewriteError error
@@ -228,9 +228,10 @@ func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree que
 		}
 	}
 	return &correlatedSubqueryTree{
-		outer: outerTree,
-		inner: innerTree,
-		vars:  vars,
+		outer:     outerTree,
+		inner:     innerTree,
+		extracted: extractedSubquery,
+		vars:      vars,
 	}, nil
 }
 
