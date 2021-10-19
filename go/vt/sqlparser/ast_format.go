@@ -507,7 +507,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.Default != nil {
 		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-		if doesRequireParens(ct) {
+		if defaultRequiresParens(ct) {
 			buf.astPrintf(ct, " (%v)", ct.Options.Default)
 		} else {
 			buf.astPrintf(ct, " %v", ct.Options.Default)
