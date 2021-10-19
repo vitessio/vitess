@@ -80,7 +80,7 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := sqlparser.Convert(astExpr)
+	evalExpr, err := sqlparser.Convert(astExpr, nil)
 	if err != nil {
 		if err != sqlparser.ErrExprNotSupported {
 			return nil, err

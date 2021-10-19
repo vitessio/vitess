@@ -18,7 +18,9 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -104,7 +106,9 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := sqlparser.Convert(other)
+				evalExpr, err := sqlparser.Convert(other, func(col *sqlparser.ColName) (int, error) {
+					return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not supported")
+				})
 				if err != nil {
 					if err == sqlparser.ErrExprNotSupported {
 						// This just means we can't rewrite this particular expression,

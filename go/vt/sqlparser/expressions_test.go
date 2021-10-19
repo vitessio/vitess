@@ -78,7 +78,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr)
+			sqltypesExpr, err := Convert(astExpr, nil)
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := evalengine.ExpressionEnv{

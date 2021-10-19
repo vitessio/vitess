@@ -84,7 +84,7 @@ Gen4 plan same as above
 Gen4 error: cannot use column offsets in group statement when using `*`
 
 # Filtering on scatter aggregates
-"select count(*) a from user having a >10"
+"select count(*) a from user having a > 10"
 "unsupported: filtering on results of aggregates"
 Gen4 plan same as above
 

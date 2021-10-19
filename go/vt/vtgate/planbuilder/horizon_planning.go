@@ -458,7 +458,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		hp.haveToTruncate(added)
 	}
 
-	err := hp.planHaving(ctx, newPlan)
+	newPlan, err := hp.planHaving(ctx, newPlan)
 	if err != nil {
 		return nil, err
 	}
@@ -1082,31 +1082,25 @@ func (hp *horizonPlanning) needDistinctHandling(ctx *planningContext, funcExpr *
 	return true, innerAliased, nil
 }
 
-func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) error {
+func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
 	if hp.sel.Having == nil {
-		return nil
+		return plan, nil
 	}
-	for _, expr := range sqlparser.SplitAndExpression(nil, hp.sel.Having.Expr) {
-		err := pushHaving(expr, plan, ctx.semTable)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return pushHaving(hp.sel.Having.Expr, plan, ctx.semTable)
 }
 
-func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
+func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
-		return nil
+		return plan, nil
 	case *pulloutSubquery:
 		return pushHaving(expr, node.underlying, semTable)
 	case *simpleProjection:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
 	case *orderedAggregate:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of aggregates")
+		return newFilter(semTable, plan, expr)
 	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
 }
