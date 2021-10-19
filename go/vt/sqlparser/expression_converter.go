@@ -26,8 +26,33 @@ import (
 var ErrExprNotSupported = fmt.Errorf("Expr Not Supported")
 
 //Convert converts between AST expressions and executable expressions
-func Convert(e Expr) (evalengine.Expr, error) {
+func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.Expr, error) {
 	switch node := e.(type) {
+	case *ColName:
+		if columnLookup == nil {
+			break
+		}
+		idx, err := columnLookup(node)
+		if err != nil {
+			return nil, err
+		}
+		return &evalengine.Column{Offset: idx}, nil
+	case *ComparisonExpr:
+		if node.Operator != EqualOp {
+			break
+		}
+		left, err := Convert(node.Left, columnLookup)
+		if err != nil {
+			return nil, err
+		}
+		right, err := Convert(node.Right, columnLookup)
+		if err != nil {
+			return nil, err
+		}
+		return &evalengine.Equals{
+			Left:  left,
+			Right: right,
+		}, nil
 	case Argument:
 		return evalengine.NewBindVar(string(node)), nil
 	case *Literal:
@@ -58,11 +83,11 @@ func Convert(e Expr) (evalengine.Expr, error) {
 		default:
 			return nil, ErrExprNotSupported
 		}
-		left, err := Convert(node.Left)
+		left, err := Convert(node.Left, columnLookup)
 		if err != nil {
 			return nil, err
 		}
-		right, err := Convert(node.Right)
+		right, err := Convert(node.Right, columnLookup)
 		if err != nil {
 			return nil, err
 		}

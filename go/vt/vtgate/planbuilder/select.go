@@ -322,7 +322,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 			return buildLockingPrimitive(sel, vschema)
 
 		}
-		exprs[i], err = sqlparser.Convert(expr.Expr)
+		exprs[i], err = sqlparser.Convert(expr.Expr, nil)
 		if err != nil {
 			return nil, nil
 		}
