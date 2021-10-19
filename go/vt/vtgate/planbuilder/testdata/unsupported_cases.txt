@@ -83,11 +83,6 @@ Gen4 plan same as above
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
 
-# Filtering on scatter aggregates
-"select count(*) a from user having a > 10"
-"unsupported: filtering on results of aggregates"
-Gen4 error: expr cannot be converted, not supported: *sqlparser.ComparisonExpr with >
-
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
@@ -509,7 +504,7 @@ Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: expr cannot be converted, not supported: *sqlparser.ComparisonExpr with >
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
