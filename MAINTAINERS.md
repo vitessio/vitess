@@ -18,6 +18,7 @@ The following is the full list, alphabetically ordered.
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
+* Sara Bee ([doeg](https://github.com/doeg)) sarab@slack-corp.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 * Vicent Marti ([vmg](https://github.com/vmg)) vmg@planetscale.com
@@ -49,7 +50,7 @@ mpawliszyn, pH14, harshit-gangal
 derekperkins, dkhenry, enisoc
 
 ### VTAdmin
-ajm188
+ajm188, doeg
 
 ### Messaging
 derekperkins
