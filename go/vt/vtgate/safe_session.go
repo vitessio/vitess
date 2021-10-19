@@ -373,6 +373,15 @@ func (session *SafeSession) SetPreQueries() []string {
 	return result
 }
 
+// SetPreQueriesWithSavepoint returns the prequeries that need to be run when reserving a connection along with savepoint
+func (session *SafeSession) SetPreQueriesWithSavepoint() []string {
+	results := session.SetPreQueries()
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	results = append(results, session.GetSavepoints()...)
+	return results
+}
+
 // SetLockSession sets the lock session.
 func (session *SafeSession) SetLockSession(lockSession *vtgatepb.Session_ShardSession) {
 	session.mu.Lock()
