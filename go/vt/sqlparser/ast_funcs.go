@@ -1518,3 +1518,21 @@ func (es *ExtractedSubquery) updateAlternative() {
 		es.alternative = expr
 	}
 }
+
+func defaultRequiresParens(ct *ColumnType) bool {
+	switch ct.Type {
+	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", "JSON", "GEOMETRY", "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION":
+		return true
+
+	}
+
+	_, isLiteral := ct.Options.Default.(*Literal)
+	_, isBool := ct.Options.Default.(BoolVal)
+	_, isNullVal := ct.Options.Default.(*NullVal)
+
+	if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+		return false
+	}
+
+	return true
+}
