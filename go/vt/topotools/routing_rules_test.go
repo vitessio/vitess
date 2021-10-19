@@ -32,8 +32,8 @@ func TestRoutingRulesRoundTrip(t *testing.T) {
 	ts := memorytopo.NewServer("zone1")
 
 	rules := map[string][]string{
-		"t1": {"t2", "t3"},
-		"t4": {"t5"},
+		"`t1`": {"`t2`", "`t3`"},
+		"`t4`": {"`t5`"},
 	}
 
 	err := SaveRoutingRules(ctx, ts, rules)
@@ -58,8 +58,8 @@ func TestRoutingRulesErrors(t *testing.T) {
 
 	t.Run("SaveRoutingRules error", func(t *testing.T) {
 		rules := map[string][]string{
-			"t1": {"t2", "t3"},
-			"t4": {"t5"},
+			"`t1`": {"`t2`", "`t3`"},
+			"`t4`": {"`t5`"},
 		}
 
 		err := SaveRoutingRules(ctx, ts, rules)
