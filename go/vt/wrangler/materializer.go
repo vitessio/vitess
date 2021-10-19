@@ -37,6 +37,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -165,16 +166,16 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 			return err
 		}
 		for _, table := range tables {
-			toSource := []string{"`" + sourceKeyspace + "`.`" + table + "`"}
-			rules["`"+table+"`"] = toSource
-			rules["`"+table+"`@replica"] = toSource
-			rules["`"+table+"`@rdonly"] = toSource
-			rules["`"+targetKeyspace+"`.`"+table+"`"] = toSource
-			rules["`"+targetKeyspace+"`.`"+table+"`@replica"] = toSource
-			rules["`"+targetKeyspace+"`.`"+table+"`@rdonly"] = toSource
-			rules["`"+targetKeyspace+"`.`"+table+"`"] = toSource
-			rules["`"+sourceKeyspace+"`.`"+table+"`@replica"] = toSource
-			rules["`"+sourceKeyspace+"`.`"+table+"`@rdonly"] = toSource
+			toSource := []string{sqlescape.EscapeID(sourceKeyspace) + "." + sqlescape.EscapeID(table)}
+			rules[sqlescape.EscapeID(table)] = toSource
+			rules[sqlescape.EscapeID(table)+"@replica"] = toSource
+			rules[sqlescape.EscapeID(table)+"@rdonly"] = toSource
+			rules[sqlescape.EscapeID(targetKeyspace)+"."+sqlescape.EscapeID(table)] = toSource
+			rules[sqlescape.EscapeID(targetKeyspace)+"."+sqlescape.EscapeID(table)+"@replica"] = toSource
+			rules[sqlescape.EscapeID(targetKeyspace)+"."+sqlescape.EscapeID(table)+"@rdonly"] = toSource
+			rules[sqlescape.EscapeID(targetKeyspace)+"."+sqlescape.EscapeID(table)] = toSource
+			rules[sqlescape.EscapeID(sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@replica"] = toSource
+			rules[sqlescape.EscapeID(sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@rdonly"] = toSource
 		}
 		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 			return err

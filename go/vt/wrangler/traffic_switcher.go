@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -900,16 +901,16 @@ func (ts *trafficSwitcher) switchTableReads(ctx context.Context, cells []string,
 		for _, table := range ts.tables {
 			if direction == workflow.DirectionForward {
 				log.Infof("Route direction forward")
-				toTarget := []string{"`" + ts.targetKeyspace + "`.`" + table + "`"}
-				rules["`"+table+"`@"+tt] = toTarget
-				rules["`"+ts.targetKeyspace+"`.`"+table+"`@"+tt] = toTarget
-				rules["`"+ts.sourceKeyspace+"`.`"+table+"`@"+tt] = toTarget
+				toTarget := []string{sqlescape.EscapeID(ts.targetKeyspace) + "." + sqlescape.EscapeID(table)}
+				rules[sqlescape.EscapeID(table)+"@"+tt] = toTarget
+				rules[sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table)+"@"+tt] = toTarget
+				rules[sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@"+tt] = toTarget
 			} else {
 				log.Infof("Route direction backwards")
-				toSource := []string{"`" + ts.sourceKeyspace + "`.`" + table + "`"}
-				rules["`"+table+"`@"+tt] = toSource
-				rules["`"+ts.targetKeyspace+"`.`"+table+"`@"+tt] = toSource
-				rules["`"+ts.sourceKeyspace+"`.`"+table+"`@"+tt] = toSource
+				toSource := []string{sqlescape.EscapeID(ts.sourceKeyspace) + "." + sqlescape.EscapeID(table)}
+				rules[sqlescape.EscapeID(table)+"@"+tt] = toSource
+				rules[sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table)+"@"+tt] = toSource
+				rules[sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@"+tt] = toSource
 			}
 		}
 	}
