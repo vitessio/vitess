@@ -85,3 +85,26 @@ func TestDistinct(t *testing.T) {
 	utils.Exec(t, conn, "delete from t7_xxhash")
 	utils.Exec(t, conn, "delete from aggr_test")
 }
+
+func TestEqualityFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)     // where clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)     // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)     // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)     // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)   // having clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`) // where clause
+	utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 1", `[]`)               // having clause
+	// utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 0 = 1", `[]`) // where clause, still returns one row with a value of 0
+}
