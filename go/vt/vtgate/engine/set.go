@@ -343,29 +343,28 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(vcursor VCursor, res evaleng
 		return false, nil
 	}
 
-	var newVal string
+	var value sqltypes.Value
 	if svs.Name == "sql_mode" {
-		changed, newVal = sqlModeChangedValue(qr)
+		changed, value = sqlModeChangedValue(qr)
 		if !changed {
 			return false, nil
 		}
 	} else {
-		buf := new(bytes.Buffer)
-		value := qr.Rows[0][0]
-		value.EncodeSQL(buf)
-		newVal = buf.String()
+		value = qr.Rows[0][0]
 	}
-	vcursor.Session().SetSysVar(svs.Name, newVal)
+	buf := new(bytes.Buffer)
+	value.EncodeSQL(buf)
+	vcursor.Session().SetSysVar(svs.Name, buf.String())
 	vcursor.Session().NeedsReservedConn()
 	return true, nil
 }
 
-func sqlModeChangedValue(qr *sqltypes.Result) (bool, string) {
+func sqlModeChangedValue(qr *sqltypes.Result) (bool, sqltypes.Value) {
 	if len(qr.Fields) != 2 {
-		return false, ""
+		return false, sqltypes.Value{}
 	}
 	if len(qr.Rows[0]) != 2 {
-		return false, ""
+		return false, sqltypes.Value{}
 	}
 	orig := qr.Rows[0][0].ToString()
 	newVal := qr.Rows[0][1].ToString()
@@ -399,7 +398,7 @@ func sqlModeChangedValue(qr *sqltypes.Result) (bool, string) {
 		changed = true
 	}
 
-	return changed, newVal
+	return changed, qr.Rows[0][1]
 }
 
 var _ SetOp = (*SysVarSetAware)(nil)
