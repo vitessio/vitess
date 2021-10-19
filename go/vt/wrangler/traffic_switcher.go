@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/discovery"
 
 	"vitess.io/vitess/go/json2"
@@ -203,7 +204,7 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		for _, table := range ts.tables {
 			rr := rules[table]
 			// if a rule exists for the table and points to the target keyspace, writes have been switched
-			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
+			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", sqlescape.EscapeID(keyspace), sqlescape.EscapeID(table)) {
 				ws.WritesSwitched = true
 			}
 		}
@@ -1446,7 +1447,7 @@ func doValidateWorkflowHasCompleted(ctx context.Context, ts *trafficSwitcher) er
 		for fromTable, toTables := range rules {
 			for _, toTable := range toTables {
 				for _, table := range ts.tables {
-					if toTable == fmt.Sprintf("%s.%s", ts.sourceKeyspace, table) {
+					if toTable == fmt.Sprintf("%s.%s", sqlescape.EscapeID(ts.sourceKeyspace), sqlescape.EscapeID(table)) {
 						rec.RecordError(fmt.Errorf("routing still exists from keyspace %s table %s to %s", ts.sourceKeyspace, table, fromTable))
 					}
 				}
