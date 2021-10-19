@@ -19,7 +19,6 @@ package topotools
 import (
 	"context"
 
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -50,8 +49,8 @@ func SaveRoutingRules(ctx context.Context, ts *topo.Server, rules map[string][]s
 	rrs := &vschemapb.RoutingRules{Rules: make([]*vschemapb.RoutingRule, 0, len(rules))}
 	for from, to := range rules {
 		rrs.Rules = append(rrs.Rules, &vschemapb.RoutingRule{
-			FromTable: sqlescape.EscapeID(from),
-			ToTables:  sqlescape.EscapeIDs(to),
+			FromTable: from,
+			ToTables:  to,
 		})
 	}
 
