@@ -4,13 +4,14 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 )
 
-type iteratorLegacy struct {
+type WeightIteratorLegacy struct {
 	// Constant
 	CollationLegacy
 
 	// Internal state
 	codepoint codepointIteratorLegacy
 	input     []byte
+	length    int
 }
 
 type codepointIteratorLegacy struct {
@@ -45,21 +46,22 @@ func (it *codepointIteratorLegacy) initContraction(weights []uint16) {
 	it.weights = weights
 }
 
-func (it *iteratorLegacy) reset(input []byte) {
+func (it *WeightIteratorLegacy) reset(input []byte) {
 	it.input = input
+	it.length = 0
 	it.codepoint.weights = nil
 }
 
-func (it *iteratorLegacy) Done() {
+func (it *WeightIteratorLegacy) Done() {
 	it.input = nil
 	it.iterpool.Put(it)
 }
 
-func (it *iteratorLegacy) DebugCodepoint() (rune, int) {
+func (it *WeightIteratorLegacy) DebugCodepoint() (rune, int) {
 	return it.encoding.DecodeRune(it.input)
 }
 
-func (it *iteratorLegacy) Next() (uint16, bool) {
+func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 	for {
 		if w, ok := it.codepoint.next(); ok {
 			return w, true
@@ -70,21 +72,21 @@ func (it *iteratorLegacy) Next() (uint16, bool) {
 			return 0, false
 		}
 		it.input = it.input[width:]
+		it.length++
 
 		if cp > it.maxCodepoint {
 			return 0xFFFD, true
 		}
-		if weights, remainder := it.contractions.weightForContractionAnyEncoding(cp, it.input, it.encoding); weights != nil {
+		if weights, remainder, skip := it.contractions.weightForContractionAnyEncoding(cp, it.input, it.encoding); weights != nil {
 			it.codepoint.initContraction(weights)
 			it.input = remainder
+			it.length += skip
 			continue
 		}
 		it.codepoint.init(it.table, cp)
 	}
 }
 
-type WeightIteratorLegacy interface {
-	Next() (uint16, bool)
-	Done()
-	reset(input []byte)
+func (it *WeightIteratorLegacy) Length() int {
+	return it.length
 }

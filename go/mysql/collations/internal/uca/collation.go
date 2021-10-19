@@ -91,8 +91,8 @@ func (c *CollationLegacy) Weights() (WeightTable, TableLayout) {
 	return c.table, TableLayout_uca_legacy{c.maxCodepoint}
 }
 
-func (c *CollationLegacy) Iterator(input []byte) WeightIteratorLegacy {
-	iter := c.iterpool.Get().(WeightIteratorLegacy)
+func (c *CollationLegacy) Iterator(input []byte) *WeightIteratorLegacy {
+	iter := c.iterpool.Get().(*WeightIteratorLegacy)
 	iter.reset(input)
 	return iter
 }
@@ -113,7 +113,7 @@ func NewCollationLegacy(enc encoding.Encoding, weights WeightTable, weightPatche
 	}
 
 	coll.iterpool.New = func() interface{} {
-		return &iteratorLegacy{CollationLegacy: *coll}
+		return &WeightIteratorLegacy{CollationLegacy: *coll}
 	}
 
 	return coll
