@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -645,7 +646,37 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 
 // ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
-	panic("unimplemented!")
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	if req.TabletHookRequest == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletHookRequest cannot be nil")
+	}
+
+	span.Annotate("hook_name", req.TabletHookRequest.Name)
+
+	if strings.Contains(req.TabletHookRequest.Name, "/") {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "hook name cannot contain a '/'; was %v", req.TabletHookRequest.Name)
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	hook := hk.NewHookWithEnv(req.TabletHookRequest.Name, req.TabletHookRequest.Parameters, req.TabletHookRequest.ExtraEnv)
+	hr, err := s.tmc.ExecuteHook(ctx, ti.Tablet, hook)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteHookResponse{HookResult: &tabletmanagerdatapb.ExecuteHookResponse{
+		ExitStatus: int64(hr.ExitStatus),
+		Stdout:     hr.Stdout,
+		Stderr:     hr.Stderr,
+	}}, nil
 }
 
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
