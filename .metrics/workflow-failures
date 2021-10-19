@@ -1,8 +1,3 @@
-2021-08-25T13:45:13Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1166737429
-2021-08-25T13:45:13Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1166737383
-2021-08-25T13:45:13Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1166737424
-2021-08-25T13:45:13Z,docker_test_2,https://github.com/vitessio/vitess/actions/runs/1166737407
-2021-08-25T13:45:13Z,docker_test_3,https://github.com/vitessio/vitess/actions/runs/1166737457
 2021-08-25T13:45:13Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1166737432
 2021-08-25T13:45:13Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1166737371
 2021-08-25T13:45:13Z,local_example,https://github.com/vitessio/vitess/actions/runs/1166737372
@@ -9992,9 +9987,14 @@
 2021-10-19T07:20:55Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1358041137
 2021-10-19T07:20:55Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1358041171
 2021-10-19T07:20:55Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1358041126
+2021-10-19T08:02:25Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1358172486
 2021-10-19T08:02:25Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1358172403
 2021-10-19T08:02:25Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1358172467
 2021-10-19T08:02:25Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1358172449
+2021-10-19T08:02:25Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1358172399
 2021-10-19T08:02:25Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1358172411
 2021-10-19T08:02:25Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1358172459
+2021-10-19T08:02:25Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1358172425
+2021-10-19T08:02:25Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1358172393
 2021-10-19T08:02:25Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1358172430
+2021-10-19T08:13:24Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1358214003
