@@ -544,3 +544,18 @@ func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
 	utils.Exec(t, conn, "insert into t2(id3, id4) values (0,20),(1,19),(2,18),(3,17),(4,16),(5,15)")
 	utils.AssertMatches(t, conn, `SELECT id3 FROM t1 LEFT JOIN t2 ON t1.id1 = t2.id3 WHERE t2.id3 = 10`, `[]`)
 }
+
+func TestSavepointInReservedConn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set session sql_mode = ''")
+	utils.Exec(t, conn, "BEGIN")
+	utils.Exec(t, conn, "SAVEPOINT sp_1")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a')")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_1")
+	utils.Exec(t, conn, "ROLLBACK")
+}
