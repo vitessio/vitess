@@ -24,6 +24,17 @@ func EscapeID(in string) string {
 	return buf.String()
 }
 
+// EscapeIDs returns backticked identifiers given an input string slice.
+func EscapeIDs(in []string) []string {
+	out := make([]string, len(in))
+	for i, str := range in {
+		buf := bytes.Buffer{}
+		WriteEscapeID(&buf, str)
+		out[i] = buf.String()
+	}
+	return out
+}
+
 // WriteEscapeID writes a backticked identifier from an input string into buf.
 func WriteEscapeID(buf *bytes.Buffer, in string) {
 	buf.WriteByte('`')

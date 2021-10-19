@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -210,6 +211,7 @@ func TestAddCellsAlias(t *testing.T) {
 	}
 }
 
+// This also verifies proper case sensitivity and reserved word handling
 func TestApplyRoutingRules(t *testing.T) {
 	t.Parallel()
 
@@ -229,8 +231,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: sqlescape.EscapeID("Table1"),
+							ToTables:  sqlescape.EscapeIDs([]string{"Table1", "select"}),
 						},
 					},
 				},
@@ -238,8 +240,8 @@ func TestApplyRoutingRules(t *testing.T) {
 			expectedRules: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t1", "t2"},
+						FromTable: sqlescape.EscapeID("Table1"),
+						ToTables:  sqlescape.EscapeIDs([]string{"Table1", "select"}),
 					},
 				},
 			},
@@ -251,8 +253,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: sqlescape.EscapeID("Table1"),
+							ToTables:  sqlescape.EscapeIDs([]string{"Table1", "select"}),
 						},
 					},
 				},
@@ -270,8 +272,8 @@ func TestApplyRoutingRules(t *testing.T) {
 				RoutingRules: &vschemapb.RoutingRules{
 					Rules: []*vschemapb.RoutingRule{
 						{
-							FromTable: "t1",
-							ToTables:  []string{"t1", "t2"},
+							FromTable: sqlescape.EscapeID("Table1"),
+							ToTables:  sqlescape.EscapeIDs([]string{"Table1", "select"}),
 						},
 					},
 				},
@@ -281,8 +283,8 @@ func TestApplyRoutingRules(t *testing.T) {
 			expectedRules: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t1", "t2"},
+						FromTable: sqlescape.EscapeID("Table1"),
+						ToTables:  sqlescape.EscapeIDs([]string{"Table1", "select"}),
 					},
 				},
 			},
@@ -3128,16 +3130,16 @@ func TestGetRoutingRules(t *testing.T) {
 			rrIn: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t2", "t3"},
+						FromTable: sqlescape.EscapeID("Table1"),
+						ToTables:  sqlescape.EscapeIDs([]string{"select", "t3"}),
 					},
 				},
 			},
 			expected: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t2", "t3"},
+						FromTable: sqlescape.EscapeID("Table1"),
+						ToTables:  sqlescape.EscapeIDs([]string{"select", "t3"}),
 					},
 				},
 			},
@@ -3222,8 +3224,8 @@ func TestGetSchema(t *testing.T) {
 				DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 					{
-						Name: "t1",
-						Schema: `CREATE TABLE t1 (
+						Name: "Table1",
+						Schema: `CREATE TABLE Table1 (
 	id int(11) not null,
 	PRIMARY KEY (id)
 );`,
@@ -3260,8 +3262,8 @@ func TestGetSchema(t *testing.T) {
 					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
-							Name: "t1",
-							Schema: `CREATE TABLE t1 (
+							Name: "Table1",
+							Schema: `CREATE TABLE Table1 (
 	id int(11) not null,
 	PRIMARY KEY (id)
 );`,
@@ -3292,7 +3294,7 @@ func TestGetSchema(t *testing.T) {
 					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
-							Name: "t1",
+							Name: "Table1",
 						},
 					},
 				},
@@ -3310,7 +3312,7 @@ func TestGetSchema(t *testing.T) {
 					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
-							Name:       "t1",
+							Name:       "Table1",
 							Type:       "BASE",
 							DataLength: 100,
 							RowCount:   50,
@@ -3332,7 +3334,7 @@ func TestGetSchema(t *testing.T) {
 					DatabaseSchema: "CREATE DATABASE vt_testkeyspace",
 					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
 						{
-							Name: "t1",
+							Name: "Table1",
 						},
 					},
 				},
@@ -6813,12 +6815,12 @@ func TestSetShardTabletControl(t *testing.T) {
 							{
 								TabletType:   topodatapb.TabletType_REPLICA,
 								Cells:        []string{"zone1"},
-								DeniedTables: []string{"t1"},
+								DeniedTables: []string{"Table1"},
 							},
 							{
 								TabletType:   topodatapb.TabletType_REPLICA,
 								Cells:        []string{"zone2", "zone3"},
-								DeniedTables: []string{"t2"},
+								DeniedTables: []string{"select"},
 							},
 						},
 					},
@@ -6827,7 +6829,7 @@ func TestSetShardTabletControl(t *testing.T) {
 			req: &vtctldatapb.SetShardTabletControlRequest{
 				Keyspace:     "testkeyspace",
 				Shard:        "-",
-				DeniedTables: []string{"t1"},
+				DeniedTables: []string{"Table1"},
 				Cells:        []string{"zone2", "zone3"},
 				TabletType:   topodatapb.TabletType_REPLICA,
 			},
@@ -6837,12 +6839,12 @@ func TestSetShardTabletControl(t *testing.T) {
 						{
 							TabletType:   topodatapb.TabletType_REPLICA,
 							Cells:        []string{"zone1", "zone2", "zone3"},
-							DeniedTables: []string{"t1"},
+							DeniedTables: []string{"Table1"},
 						},
 						{
 							TabletType:   topodatapb.TabletType_REPLICA,
 							Cells:        []string{"zone2", "zone3"},
-							DeniedTables: []string{"t2"},
+							DeniedTables: []string{"select"},
 						},
 					},
 				},
@@ -6862,12 +6864,12 @@ func TestSetShardTabletControl(t *testing.T) {
 							{
 								TabletType:   topodatapb.TabletType_REPLICA,
 								Cells:        []string{"zone1"},
-								DeniedTables: []string{"t1"},
+								DeniedTables: []string{"Table1"},
 							},
 							{
 								TabletType:   topodatapb.TabletType_REPLICA,
 								Cells:        []string{"zone2", "zone3"},
-								DeniedTables: []string{"t2"},
+								DeniedTables: []string{"select"},
 							},
 						},
 					},
@@ -7001,7 +7003,7 @@ func TestSetShardTabletControl(t *testing.T) {
 			req: &vtctldatapb.SetShardTabletControlRequest{
 				Keyspace:     "testkeyspace",
 				Shard:        "-",
-				DeniedTables: []string{"t1"},
+				DeniedTables: []string{"Table1"},
 				TabletType:   topodatapb.TabletType_REPLICA,
 			},
 			shouldErr: true,
