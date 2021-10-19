@@ -1084,14 +1084,14 @@ func (e *Executor) showVitessReplicationStatus(ctx context.Context, show *sqlpar
 				replLag := int64(-1)
 				sql := "show slave status"
 				results, err := e.txConn.gateway.Execute(ctx, ts.Target, sql, nil, 0, 0, nil)
-				if err != nil {
+				if err != nil || results == nil {
 					log.Warningf("Could not get replication status from %s: %v", tabletHostPort, err)
-				} else if results != nil && len(results.Rows) == 1 {
-					replSourceHost = results.Rows[0][1].ToString()
-					replSourcePort, _ = results.Rows[0][3].ToInt64()
-					replIOThreadHealth = results.Rows[0][10].ToString()
-					replSQLThreadHealth = results.Rows[0][11].ToString()
-					replLastError = results.Rows[0][19].ToString()
+				} else if row := results.Named().Row(); row != nil {
+					replSourceHost = row["Master_Host"].ToString()
+					replSourcePort, _ = row["Master_Port"].ToInt64()
+					replIOThreadHealth = row["Slave_IO_Running"].ToString()
+					replSQLThreadHealth = row["Slave_SQL_Running"].ToString()
+					replLastError = row["Last_Error"].ToString()
 					if ts.Stats != nil {
 						replLag = int64(ts.Stats.ReplicationLagSeconds)
 					}
