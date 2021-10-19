@@ -60,7 +60,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		case IntVal:
 			return evalengine.NewLiteralIntFromBytes(node.Bytes())
 		case FloatVal:
-			return evalengine.NewLiteralFloat(node.Bytes())
+			return evalengine.NewLiteralFloatFromBytes(node.Bytes())
 		case StrVal:
 			return evalengine.NewLiteralString(node.Bytes()), nil
 		}

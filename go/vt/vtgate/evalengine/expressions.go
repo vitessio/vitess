@@ -116,7 +116,12 @@ func NewLiteralInt(i int64) Expr {
 }
 
 // NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val []byte) (Expr, error) {
+func NewLiteralFloat(val float64) Expr {
+	return &Literal{EvalResult{typ: sqltypes.Float64, fval: val}}
+}
+
+// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
 		return nil, err
