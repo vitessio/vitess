@@ -186,3 +186,307 @@ func TestComparisonEquality(t *testing.T) {
 		}
 	})
 }
+
+func TestComparisonLess(t *testing.T) {
+	testsLessDifferentValues := []testCase{
+		{
+			name: "All Nulls",
+			v1:   &Null{},
+			v2:   &Null{},
+			out:  nil,
+		}, {
+			name: "Second value null.",
+			v1:   NewLiteralInt(1),
+			v2:   &Null{},
+			out:  nil,
+		}, {
+			name: "First value null.",
+			v1:   &Null{},
+			v2:   NewLiteralInt(1),
+			out:  nil,
+		}, {
+			name: "int with int",
+			v1:   NewLiteralInt(1),
+			v2:   NewLiteralInt(2),
+			out:  &T,
+		}, {
+			name: "wrong int",
+			v1:   NewLiteralInt(2),
+			v2:   NewLiteralInt(1),
+			out:  &F,
+		}, {
+			name: "int with string",
+			v1:   NewLiteralInt(40),
+			v2:   NewLiteralString([]byte("80")),
+			out:  &T,
+		}, {
+			name: "string with string",
+			v1:   NewLiteralString([]byte("10")),
+			v2:   NewLiteralString([]byte("11")),
+			out:  &T,
+		}, {
+			name: "varbinary column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("10")),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
+		}, {
+			name: "int column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("9")),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewInt32(8)},
+		}, {
+			name: "wrong varbinary column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("4")),
+			out:  &F,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("84")},
+		}, {
+			name: "string with int",
+			v1:   NewLiteralString([]byte("700")),
+			v2:   NewLiteralInt(900),
+			out:  &T,
+		}, {
+			name: "wrong int with string",
+			v1:   NewLiteralInt(99),
+			v2:   NewLiteralString([]byte("7")),
+			out:  &F,
+		}, {
+			name: "wrong string with int",
+			v1:   NewLiteralString([]byte("42")),
+			v2:   NewLiteralInt(1),
+			out:  &F,
+		}, {
+			name: "float with float",
+			v1:   NewLiteralFloat(1.7),
+			v2:   NewLiteralFloat(1.8),
+			out:  &T,
+		}, {
+			name: "wrong float with float",
+			v1:   NewLiteralFloat(3.1),
+			v2:   NewLiteralFloat(1.8),
+			out:  &F,
+		}, {
+			name: "wrong float with int",
+			v1:   NewLiteralFloat(1.7),
+			v2:   NewLiteralInt(1),
+			out:  &F,
+		}, {
+			name: "float with float column",
+			v1:   NewLiteralFloat(21.84),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
+		},
+	}
+
+	testsLessSameValues := []testCase{
+		{
+			name: "equal ints",
+			v1:   NewLiteralInt(42),
+			v2:   NewLiteralInt(42),
+			out:  &F,
+		}, {
+			name: "string equal to string",
+			v1:   NewLiteralString([]byte("11")),
+			v2:   NewLiteralString([]byte("11")),
+			out:  &F,
+		}, {
+			name: "float equal to float",
+			v1:   NewLiteralFloat(4.2),
+			v2:   NewLiteralFloat(4.2),
+			out:  &F,
+		}, {
+			name: "float equal to int",
+			v1:   NewLiteralFloat(1.00),
+			v2:   NewLiteralInt(1),
+			out:  &F,
+		}, {
+			name: "float equal to float column",
+			v1:   NewLiteralFloat(42.21),
+			v2:   NewColumn(0),
+			out:  &F,
+			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
+		},
+	}
+
+	t.Run("LessThanOp", func(t *testing.T) {
+		t.Run("non-equal values", func(t *testing.T) {
+			for i, tcase := range testsLessDifferentValues {
+				tcase.run(t, i+1, &LessThanOp{})
+			}
+		})
+		t.Run("equal values", func(t *testing.T) {
+			for i, tcase := range testsLessSameValues {
+				tcase.run(t, i+1, &LessThanOp{})
+			}
+		})
+	})
+
+	t.Run("LessEqualOp", func(t *testing.T) {
+		t.Run("non-equal values", func(t *testing.T) {
+			for i, tcase := range testsLessDifferentValues {
+				tcase.run(t, i+1, &LessEqualOp{})
+			}
+		})
+		t.Run("equal values", func(t *testing.T) {
+			for i, tcase := range testsLessSameValues {
+				tcase.out = &T
+				tcase.run(t, i+1, &LessEqualOp{})
+			}
+		})
+	})
+}
+
+func TestComparisonGreater(t *testing.T) {
+	testsGreaterDifferentValues := []testCase{
+		{
+			name: "All Nulls",
+			v1:   &Null{},
+			v2:   &Null{},
+			out:  nil,
+		}, {
+			name: "Second value null.",
+			v1:   NewLiteralInt(1),
+			v2:   &Null{},
+			out:  nil,
+		}, {
+			name: "First value null.",
+			v1:   &Null{},
+			v2:   NewLiteralInt(1),
+			out:  nil,
+		}, {
+			name: "int with int",
+			v1:   NewLiteralInt(2),
+			v2:   NewLiteralInt(1),
+			out:  &T,
+		}, {
+			name: "wrong int",
+			v1:   NewLiteralInt(1),
+			v2:   NewLiteralInt(2),
+			out:  &F,
+		}, {
+			name: "int with string",
+			v1:   NewLiteralInt(80),
+			v2:   NewLiteralString([]byte("40")),
+			out:  &T,
+		}, {
+			name: "string with string",
+			v1:   NewLiteralString([]byte("11")),
+			v2:   NewLiteralString([]byte("10")),
+			out:  &T,
+		}, {
+			name: "varbinary column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("1")),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("10")},
+		}, {
+			name: "int column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("8")),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewInt32(9)},
+		}, {
+			name: "wrong varbinary column with string",
+			v1:   NewColumn(0),
+			v2:   NewLiteralString([]byte("84")),
+			out:  &F,
+			row:  []sqltypes.Value{sqltypes.NewVarBinary("4")},
+		}, {
+			name: "string with int",
+			v1:   NewLiteralString([]byte("900")),
+			v2:   NewLiteralInt(700),
+			out:  &T,
+		}, {
+			name: "wrong int with string",
+			v1:   NewLiteralInt(7),
+			v2:   NewLiteralString([]byte("99")),
+			out:  &F,
+		}, {
+			name: "wrong string with int",
+			v1:   NewLiteralString([]byte("1")),
+			v2:   NewLiteralInt(42),
+			out:  &F,
+		}, {
+			name: "float with float",
+			v1:   NewLiteralFloat(1.8),
+			v2:   NewLiteralFloat(1.7),
+			out:  &T,
+		}, {
+			name: "wrong float with float",
+			v1:   NewLiteralFloat(.1),
+			v2:   NewLiteralFloat(.8),
+			out:  &F,
+		}, {
+			name: "wrong float with int",
+			v1:   NewLiteralInt(1),
+			v2:   NewLiteralFloat(1.7),
+			out:  &F,
+		}, {
+			name: "float with float column",
+			v1:   NewLiteralFloat(42.21),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewFloat64(21.42)},
+		},
+	}
+
+	testsGreaterSameValues := []testCase{
+		{
+			name: "equal ints",
+			v1:   NewLiteralInt(42),
+			v2:   NewLiteralInt(42),
+			out:  &F,
+		}, {
+			name: "string equal to string",
+			v1:   NewLiteralString([]byte("11")),
+			v2:   NewLiteralString([]byte("11")),
+			out:  &F,
+		}, {
+			name: "float equal to float",
+			v1:   NewLiteralFloat(4.2),
+			v2:   NewLiteralFloat(4.2),
+			out:  &F,
+		}, {
+			name: "float equal to int",
+			v1:   NewLiteralFloat(1.00),
+			v2:   NewLiteralInt(1),
+			out:  &F,
+		}, {
+			name: "float equal to float column",
+			v1:   NewLiteralFloat(42.21),
+			v2:   NewColumn(0),
+			out:  &F,
+			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
+		},
+	}
+
+	t.Run("GreaterThanOp", func(t *testing.T) {
+		t.Run("non-equal values", func(t *testing.T) {
+			for i, tcase := range testsGreaterDifferentValues {
+				tcase.run(t, i+1, &GreaterThanOp{})
+			}
+		})
+		t.Run("equal values", func(t *testing.T) {
+			for i, tcase := range testsGreaterSameValues {
+				tcase.run(t, i+1, &GreaterThanOp{})
+			}
+		})
+	})
+
+	t.Run("GreaterEqualOp", func(t *testing.T) {
+		t.Run("non-equal values", func(t *testing.T) {
+			for i, tcase := range testsGreaterDifferentValues {
+				tcase.run(t, i+1, &GreaterEqualOp{})
+			}
+		})
+		t.Run("equal values", func(t *testing.T) {
+			for i, tcase := range testsGreaterSameValues {
+				tcase.out = &T
+				tcase.run(t, i+1, &GreaterEqualOp{})
+			}
+		})
+	})
+}
