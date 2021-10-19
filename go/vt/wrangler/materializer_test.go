@@ -69,8 +69,8 @@ func TestMigrateTables(t *testing.T) {
 	got := fmt.Sprintf("%v", vschema)
 	want := []string{
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
-		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
-		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
+		`rules:{from_table:"` + "`" + `t1` + "`" + `" to_tables:"` + "`" + `sourceks` + "`" + `.` + "`" + `t1` + "`" + `"}`,
+		`rules:{from_table:"` + "`" + `targetks` + "`" + `.` + "`" + `t1` + "`" + `" to_tables:"` + "`" + `sourceks` + "`" + `.` + "`" + `t1` + "`" + `"}`,
 	}
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
@@ -230,8 +230,8 @@ func TestMigrateVSchema(t *testing.T) {
 	got := fmt.Sprintf("%v", vschema)
 	want := []string{`keyspaces:{key:"sourceks" value:{}}`,
 		`keyspaces:{key:"sourceks" value:{}} keyspaces:{key:"targetks" value:{tables:{key:"t1" value:{}}}}`,
-		`rules:{from_table:"t1" to_tables:"sourceks.t1"}`,
-		`rules:{from_table:"targetks.t1" to_tables:"sourceks.t1"}`,
+		`rules:{from_table:"` + "`" + `t1` + "`" + `" to_tables:"` + "`" + `sourceks` + "`" + `.` + "`" + `t1` + "`" + `"}`,
+		`rules:{from_table:"` + "`" + `targetks` + "`" + `.` + "`" + `t1` + "`" + `" to_tables:"` + "`" + `sourceks` + "`" + `.` + "`" + `t1` + "`" + `"}`,
 	}
 	for _, wantstr := range want {
 		require.Contains(t, got, wantstr)
