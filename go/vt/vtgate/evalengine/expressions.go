@@ -77,67 +77,28 @@ type (
 	Division       struct{}
 )
 
-func NullEvalResult() EvalResult {
-	return EvalResult{
-		typ: sqltypes.Null,
-	}
-}
+var _ Expr = (*Null)(nil)
+var _ Expr = (*Literal)(nil)
+var _ Expr = (*BindVariable)(nil)
+var _ Expr = (*Column)(nil)
+var _ Expr = (*BinaryOp)(nil)
+var _ Expr = (*Equals)(nil)
 
-func (n Null) Evaluate(ExpressionEnv) (EvalResult, error) {
-	return EvalResult{}, nil
-}
-
-func (n Null) Type(ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_NULL_TYPE, nil
-}
-
-func (n Null) String() string {
-	return "null"
-}
-
-func (e *Equals) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := e.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if lVal.typ == sqltypes.Null {
-		return NullEvalResult(), nil
-	}
-	rVal, err := e.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if rVal.typ == sqltypes.Null {
-		return NullEvalResult(), nil
-	}
-	if !sqltypes.IsNumber(lVal.typ) || !sqltypes.IsNumber(rVal.typ) {
-		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "not a numerical value")
-	}
-	numeric, err := compareNumeric(lVal, rVal)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	value := int64(0)
-	if numeric == 0 {
-		value = 1
-	}
-	return EvalResult{
-		typ:  sqltypes.Int32,
-		ival: value,
-	}, nil
-}
-
-func (e *Equals) Type(ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_INT32, nil
-}
-
-func (e *Equals) String() string {
-	return e.Left.String() + " = " + e.Right.String()
-}
+var _ BinaryExpr = (*Addition)(nil)
+var _ BinaryExpr = (*Subtraction)(nil)
+var _ BinaryExpr = (*Multiplication)(nil)
+var _ BinaryExpr = (*Division)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
+}
+
+// NullEvalResult returns a EvalResult of type sqltypes.Null
+func NullEvalResult() EvalResult {
+	return EvalResult{
+		typ: sqltypes.Null,
+	}
 }
 
 // NewLiteralIntFromBytes returns a literal expression
@@ -180,15 +141,67 @@ func NewColumn(offset int) Expr {
 	}
 }
 
-var _ Expr = (*Literal)(nil)
-var _ Expr = (*BindVariable)(nil)
-var _ Expr = (*BinaryOp)(nil)
-var _ Expr = (*Column)(nil)
+func evaluateSideOfComparison(expr Expr, env ExpressionEnv) (EvalResult, error) {
+	val, err := expr.Evaluate(env)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	if val.typ == sqltypes.Null {
+		return NullEvalResult(), nil
+	}
+	return makeNumeric(val), nil
+}
 
-var _ BinaryExpr = (*Addition)(nil)
-var _ BinaryExpr = (*Subtraction)(nil)
-var _ BinaryExpr = (*Multiplication)(nil)
-var _ BinaryExpr = (*Division)(nil)
+// Evaluate implements the Expr interface
+func (e *Equals) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	lVal, err := evaluateSideOfComparison(e.Left, env)
+	if lVal.typ == sqltypes.Null || err != nil {
+		return lVal, err
+	}
+
+	rVal, err := evaluateSideOfComparison(e.Right, env)
+	if rVal.typ == sqltypes.Null || err != nil {
+		return rVal, err
+	}
+
+	numeric, err := compareNumeric(lVal, rVal)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	value := int64(0)
+	if numeric == 0 {
+		value = 1
+	}
+	return EvalResult{
+		typ:  sqltypes.Int32,
+		ival: value,
+	}, nil
+}
+
+// Type implements the Expr interface
+func (e *Equals) Type(ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_INT32, nil
+}
+
+// String implements the Expr interface
+func (e *Equals) String() string {
+	return e.Left.String() + " = " + e.Right.String()
+}
+
+// Evaluate implements the Expr interface
+func (n Null) Evaluate(ExpressionEnv) (EvalResult, error) {
+	return EvalResult{}, nil
+}
+
+// Type implements the Expr interface
+func (n Null) Type(ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_NULL_TYPE, nil
+}
+
+// String implements the Expr interface
+func (n Null) String() string {
+	return "null"
+}
 
 // Evaluate implements the Expr interface
 func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
