@@ -273,11 +273,23 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 		dst = append(dst, byte(w>>8), byte(w))
 	}
 
-	// TODO numCodepoints is not handled, uca_legacy is space-padded
+	if numCodepoints > 0 {
+		weightForSpace := c.uca.WeightForSpace()
+		w1, w2 := byte(weightForSpace>>8), byte(weightForSpace)
 
-	if numCodepoints == PadToMax {
-		for len(dst) < cap(dst) {
-			dst = append(dst, 0x00)
+		if numCodepoints == PadToMax {
+			for len(dst)+1 < cap(dst) {
+				dst = append(dst, w1, w2)
+			}
+			if len(dst) < cap(dst) {
+				dst = append(dst, w1)
+			}
+		} else {
+			numCodepoints -= it.Length()
+			for numCodepoints > 0 {
+				dst = append(dst, w1, w2)
+				numCodepoints--
+			}
 		}
 	}
 

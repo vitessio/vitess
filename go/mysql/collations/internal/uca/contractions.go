@@ -41,17 +41,17 @@ func (t *trie) walk(remainder []byte) ([]uint16, []byte) {
 	return t.weights, remainder
 }
 
-func (t *trie) walkAnyEncoding(enc encoding.Encoding, remainder []byte) ([]uint16, []byte) {
+func (t *trie) walkAnyEncoding(enc encoding.Encoding, remainder []byte, depth int) ([]uint16, []byte, int) {
 	if len(remainder) > 0 {
 		cp, width := enc.DecodeRune(remainder)
 		if cp == encoding.RuneError && width < 3 {
-			return nil, nil
+			return nil, nil, 0
 		}
 		if ch := t.children[cp]; ch != nil {
-			return ch.walkAnyEncoding(enc, remainder[width:])
+			return ch.walkAnyEncoding(enc, remainder[width:], depth+1)
 		}
 	}
-	return t.weights, remainder
+	return t.weights, remainder, depth
 }
 
 func (t *trie) insert(path []rune, weights []uint16) {
@@ -92,23 +92,21 @@ func (ctr *contractions) insert(c *Contraction) {
 }
 
 func (ctr *contractions) weightForContraction(cp rune, remainder []byte) ([]uint16, []byte) {
-	if ctr == nil {
-		return nil, nil
-	}
-	if tr := ctr.tr.children[cp]; tr != nil {
-		return tr.walk(remainder)
+	if ctr != nil {
+		if tr := ctr.tr.children[cp]; tr != nil {
+			return tr.walk(remainder)
+		}
 	}
 	return nil, nil
 }
 
-func (ctr *contractions) weightForContractionAnyEncoding(cp rune, remainder []byte, enc encoding.Encoding) ([]uint16, []byte) {
-	if ctr == nil {
-		return nil, nil
+func (ctr *contractions) weightForContractionAnyEncoding(cp rune, remainder []byte, enc encoding.Encoding) ([]uint16, []byte, int) {
+	if ctr != nil {
+		if tr := ctr.tr.children[cp]; tr != nil {
+			return tr.walkAnyEncoding(enc, remainder, 0)
+		}
 	}
-	if tr := ctr.tr.children[cp]; tr != nil {
-		return tr.walkAnyEncoding(enc, remainder)
-	}
-	return nil, nil
+	return nil, nil, 0
 }
 
 func (ctr *contractions) weightForContextualContraction(cp, prev rune) []uint16 {

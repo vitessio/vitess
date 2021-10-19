@@ -21,8 +21,6 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
-
-	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 func testcollation(t testing.TB, name string) Collation {
@@ -135,13 +133,8 @@ func TestReplacementCharacter(t *testing.T) {
 }
 
 func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected []byte) {
-	type DebugIterator interface {
-		uca.WeightIteratorLegacy
-		DebugCodepoint() (rune, int)
-	}
-
 	coll := testcollation(t, collname).(*Collation_uca_legacy)
-	iter := coll.uca.Iterator(input).(DebugIterator)
+	iter := coll.uca.Iterator(input)
 	defer iter.Done()
 
 	for {
