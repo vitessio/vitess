@@ -1,4 +1,3 @@
-2021-08-26T09:06:48Z,Cluster (21),https://github.com/vitessio/vitess/actions/runs/1169797114
 2021-08-26T09:06:48Z,Cluster (mysql80),https://github.com/vitessio/vitess/actions/runs/1169797110
 2021-08-26T09:06:48Z,Cluster (onlineddl_vrepl_stress),https://github.com/vitessio/vitess/actions/runs/1169797111
 2021-08-26T09:06:48Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1169797133
@@ -9998,3 +9997,4 @@
 2021-10-19T14:50:28Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/1359683638
 2021-10-19T14:50:28Z,Cluster (resharding_bytes),https://github.com/vitessio/vitess/actions/runs/1359683600
 2021-10-19T14:50:28Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1359683613
+2021-10-19T14:50:28Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1359683666
