@@ -19,6 +19,8 @@ package evalengine
 import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
@@ -26,7 +28,8 @@ type (
 	// when evaluating the whole comparison
 	ComparisonOp interface {
 		Evaluate(left, right EvalResult) (EvalResult, error)
-		Type(left querypb.Type) querypb.Type
+		IsTrue(left, right EvalResult) (bool, error)
+		Type() querypb.Type
 		String() string
 	}
 
@@ -50,6 +53,12 @@ type (
 	NotRegexpOp     struct{}
 )
 
+var (
+	resultTrue  = EvalResult{typ: sqltypes.Int32, ival: 1}
+	resultFalse = EvalResult{typ: sqltypes.Int32, ival: 0}
+	resultNull  = EvalResult{typ: sqltypes.Null}
+)
+
 var _ ComparisonOp = (*EqualOp)(nil)
 var _ ComparisonOp = (*NotEqualOp)(nil)
 var _ ComparisonOp = (*NullSafeEqualOp)(nil)
@@ -70,13 +79,17 @@ func evaluateSideOfComparison(expr Expr, env ExpressionEnv) (EvalResult, error) 
 		return EvalResult{}, err
 	}
 	if val.typ == sqltypes.Null {
-		return NullEvalResult(), nil
+		return resultNull, nil
 	}
 	return makeNumeric(val), nil
 }
 
 // Evaluate implements the Expr interface
 func (e *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	if e.Op == nil {
+		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a comparison expression needs a comparison operator")
+	}
+
 	lVal, err := evaluateSideOfComparison(e.Left, env)
 	if lVal.typ == sqltypes.Null || err != nil {
 		return lVal, err
@@ -87,18 +100,7 @@ func (e *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
 		return rVal, err
 	}
 
-	numeric, err := compareNumeric(lVal, rVal)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	value := int64(0)
-	if numeric == 0 {
-		value = 1
-	}
-	return EvalResult{
-		typ:  sqltypes.Int32,
-		ival: value,
-	}, nil
+	return e.Op.Evaluate(lVal, rVal)
 }
 
 // Type implements the Expr interface
@@ -108,161 +110,307 @@ func (e *ComparisonExpr) Type(ExpressionEnv) (querypb.Type, error) {
 
 // String implements the Expr interface
 func (e *ComparisonExpr) String() string {
-	return e.Left.String() + " = " + e.Right.String()
+	return e.Left.String() + " " + e.Op.String() + " " + e.Right.String()
 }
 
+// Evaluate implements the ComparisonOp interface
 func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := e.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (e *EqualOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (e *EqualOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric == 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (e *EqualOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (e *EqualOp) String() string {
-	panic("implement me")
+	return "="
 }
 
+// Evaluate implements the ComparisonOp interface
 func (n *NotEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := n.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (n *NotEqualOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (n *NotEqualOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric != 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (n *NotEqualOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (n *NotEqualOp) String() string {
-	panic("implement me")
+	return "!="
 }
 
+// Evaluate implements the ComparisonOp interface
 func (n *NullSafeEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (n *NullSafeEqualOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (n *NullSafeEqualOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (n *NullSafeEqualOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (n *NullSafeEqualOp) String() string {
-	panic("implement me")
+	return "<=>"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (l *LessThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := l.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (l *LessThanOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (l *LessThanOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric < 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (l *LessThanOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (l *LessThanOp) String() string {
-	panic("implement me")
+	return "<"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (l *LessEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := l.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (l *LessEqualOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (l *LessEqualOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric <= 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (l *LessEqualOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (l *LessEqualOp) String() string {
-	panic("implement me")
+	return "<="
 }
 
+// Evaluate implements the ComparisonOp interface
 func (g *GreaterThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := g.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (g *GreaterThanOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (g *GreaterThanOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric > 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (g *GreaterThanOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (g *GreaterThanOp) String() string {
-	panic("implement me")
+	return ">"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (g *GreaterEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if out, err := g.IsTrue(left, right); err != nil || !out {
+		return resultFalse, err
+	}
+	return resultTrue, nil
 }
 
-func (g *GreaterEqualOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (g *GreaterEqualOp) IsTrue(left, right EvalResult) (bool, error) {
+	numeric, err := compareNumeric(left, right)
+	if err != nil {
+		return false, err
+	}
+	return numeric >= 0, nil
 }
 
+// Type implements the ComparisonOp interface
+func (g *GreaterEqualOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (g *GreaterEqualOp) String() string {
-	panic("implement me")
+	return ">="
 }
 
+// Evaluate implements the ComparisonOp interface
 func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (i *InOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (i *InOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (i *InOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (i *InOp) String() string {
-	panic("implement me")
+	return "in"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (n *NotInOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (n *NotInOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (n *NotInOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (n *NotInOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (n *NotInOp) String() string {
-	panic("implement me")
+	return "not in"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (l *LikeOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (l *LikeOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (l *LikeOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (l *LikeOp) String() string {
-	panic("implement me")
+	return "like"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (n *NotLikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (n *NotLikeOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (n *NotLikeOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (n *NotLikeOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (n *NotLikeOp) String() string {
-	panic("implement me")
+	return "not like"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (r *RegexpOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (r *RegexpOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (r *RegexpOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (r *RegexpOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (r *RegexpOp) String() string {
-	panic("implement me")
+	return "regexp"
 }
 
+// Evaluate implements the ComparisonOp interface
 func (n *NotRegexpOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
 
-func (n *NotRegexpOp) Type(left querypb.Type) querypb.Type {
-	panic("implement me")
+// IsTrue implements the ComparisonOp interface
+func (n *NotRegexpOp) IsTrue(left, right EvalResult) (bool, error) {
+	return false, nil
 }
 
+// Type implements the ComparisonOp interface
+func (n *NotRegexpOp) Type() querypb.Type {
+	return querypb.Type_INT32
+}
+
+// String implements the ComparisonOp interface
 func (n *NotRegexpOp) String() string {
-	panic("implement me")
+	return "not regexp"
 }

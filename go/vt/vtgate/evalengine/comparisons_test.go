@@ -128,6 +128,7 @@ func TestEquals(t *testing.T) {
 		name := fmt.Sprintf("%d_%s_%s%s%s", i+1, tcase.name, tcase.v1.String(), "=", tcase.v2.String())
 		t.Run(name, func(t *testing.T) {
 			eq := &ComparisonExpr{
+				Op:    &EqualOp{},
 				Left:  tcase.v1,
 				Right: tcase.v2,
 			}

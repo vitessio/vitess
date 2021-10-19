@@ -69,13 +69,6 @@ func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
-// NullEvalResult returns a EvalResult of type sqltypes.Null
-func NullEvalResult() EvalResult {
-	return EvalResult{
-		typ: sqltypes.Null,
-	}
-}
-
 // NewLiteralIntFromBytes returns a literal expression
 func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 	ival, err := strconv.ParseInt(string(val), 10, 64)
