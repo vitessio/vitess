@@ -161,6 +161,10 @@ outer:
 	return idxs, nil
 }
 
+func (rp *routeTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return rp.addPredicate(ctx, expr)
+}
+
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {

@@ -269,6 +269,8 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	case *distinct:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
+	case *semiJoin:
+		return pushProjection(expr, node.lhs, semTable, inner, reuseCol)
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}

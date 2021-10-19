@@ -37,6 +37,9 @@ type (
 		cost() int
 
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
+
+		// pushPredicate pushes a predicate to the closest possible operator
+		pushPredicate(ctx *planningContext, expr sqlparser.Expr) error
 	}
 )
 
