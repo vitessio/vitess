@@ -1329,50 +1329,6 @@ func (wr *Wrangler) RefreshTabletsByShard(ctx context.Context, si *topo.ShardInf
 	return err
 }
 
-// DeleteKeyspace will do all the necessary changes in the topology server
-// to entirely remove a keyspace.
-func (wr *Wrangler) DeleteKeyspace(ctx context.Context, keyspace string, recursive bool) error {
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return err
-	}
-	if recursive {
-		wr.Logger().Infof("Deleting all shards (and their tablets) in keyspace %v", keyspace)
-		for _, shard := range shards {
-			wr.Logger().Infof("Recursively deleting shard %v/%v", keyspace, shard)
-			if err := wr.DeleteShard(ctx, keyspace, shard, true /* recursive */, true /* evenIfServing */); err != nil && !topo.IsErrType(err, topo.NoNode) {
-				// Unlike the errors below in non-recursive steps, we don't want to
-				// continue if a DeleteShard fails. If we continue and delete the
-				// keyspace, the tablet records will be orphaned, since we'll
-				// no longer know how to list out the shard they belong to.
-				//
-				// If the problem is temporary, or resolved externally, re-running
-				// DeleteKeyspace will skip over shards that were already deleted.
-				return fmt.Errorf("can't delete shard %v/%v: %v", keyspace, shard, err)
-			}
-		}
-	} else if len(shards) > 0 {
-		return fmt.Errorf("keyspace %v still has %v shards; use -recursive or remove them manually", keyspace, len(shards))
-	}
-
-	// Delete the cell-local keyspace entries.
-	cells, err := wr.ts.GetKnownCells(ctx)
-	if err != nil {
-		return err
-	}
-	for _, cell := range cells {
-		if err := wr.ts.DeleteKeyspaceReplication(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			wr.Logger().Warningf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, keyspace, err)
-		}
-
-		if err := wr.ts.DeleteSrvKeyspace(ctx, cell, keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			wr.Logger().Warningf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, keyspace, err)
-		}
-	}
-
-	return wr.ts.DeleteKeyspace(ctx, keyspace)
-}
-
 func encodeString(in string) string {
 	buf := bytes.NewBuffer(nil)
 	sqltypes.NewVarChar(in).EncodeSQL(buf)
