@@ -2856,3 +2856,35 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Equality filtering with column and string literal on scatter aggregates
+"select count(*) a from user having a = '1'"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a = '1'",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "column 0 from the input = VARBINARY(\"1\")",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}

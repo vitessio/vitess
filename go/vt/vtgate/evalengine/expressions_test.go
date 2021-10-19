@@ -109,18 +109,14 @@ func TestBinaryOpTypes(t *testing.T) {
 }
 
 func TestEquals(t *testing.T) {
-	type tcase struct {
-		v1, v2 Expr
-		out    *bool
-		err    string
-	}
-
 	T := true
 	F := false
 	tests := []struct {
-		cases []tcase
-	}{{
-		cases: []tcase{{
+		v1, v2 Expr
+		out    *bool
+		err    string
+	}{
+		{
 			// All Nulls
 			v1:  &Null{},
 			v2:  &Null{},
@@ -140,39 +136,74 @@ func TestEquals(t *testing.T) {
 			v2:  NewLiteralInt(1),
 			out: &T,
 		}, {
+			// wrong int
 			v1:  NewLiteralInt(1),
 			v2:  NewLiteralInt(2),
 			out: &F,
-		}},
-	}}
+		}, {
+			// int with string
+			v1:  NewLiteralInt(1),
+			v2:  NewLiteralString([]byte("1")),
+			out: &T,
+		}, {
+			// varbinary column with string
+			v1:  NewColumn(0),
+			v2:  NewLiteralString([]byte("1")),
+			out: &T,
+		}, {
+			// int column with string
+			v1:  NewColumn(1),
+			v2:  NewLiteralString([]byte("1")),
+			out: &T,
+		}, {
+			// wrong varbinary column with string
+			v1:  NewColumn(0),
+			v2:  NewLiteralString([]byte("42")),
+			out: &F,
+		}, {
+			// string with int
+			v1:  NewLiteralString([]byte("1")),
+			v2:  NewLiteralInt(1),
+			out: &T,
+		}, {
+			// wrong int with string
+			v1:  NewLiteralInt(1),
+			v2:  NewLiteralString([]byte("42")),
+			out: &F,
+		}, {
+			// wrong string with int
+			v1:  NewLiteralString([]byte("42")),
+			v2:  NewLiteralInt(1),
+			out: &F,
+		},
+	}
 
-	for _, test := range tests {
-		for _, tcase := range test.cases {
-			name := fmt.Sprintf("%s%s%s", tcase.v1.String(), "=", tcase.v2.String())
-			t.Run(name, func(t *testing.T) {
-				eq := &Equals{
-					Left:  tcase.v1,
-					Right: tcase.v2,
-				}
+	for i, tcase := range tests {
+		name := fmt.Sprintf("%d_%s%s%s", i+1, tcase.v1.String(), "=", tcase.v2.String())
+		t.Run(name, func(t *testing.T) {
+			eq := &Equals{
+				Left:  tcase.v1,
+				Right: tcase.v2,
+			}
 
-				env := ExpressionEnv{
-					BindVars: map[string]*querypb.BindVariable{},
-				}
-				got, err := eq.Evaluate(env)
-				if tcase.err == "" {
-					require.NoError(t, err)
-					if tcase.out != nil && *tcase.out {
-						require.EqualValues(t, 1, got.ival)
-					} else if tcase.out != nil && !*tcase.out {
-						require.EqualValues(t, 0, got.ival)
-					} else {
-						require.EqualValues(t, 0, got.ival)
-						require.EqualValues(t, sqltypes.Null, got.typ)
-					}
+			env := ExpressionEnv{
+				BindVars: map[string]*querypb.BindVariable{},
+				Row:      []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewInt32(1)},
+			}
+			got, err := eq.Evaluate(env)
+			if tcase.err == "" {
+				require.NoError(t, err)
+				if tcase.out != nil && *tcase.out {
+					require.EqualValues(t, 1, got.ival)
+				} else if tcase.out != nil && !*tcase.out {
+					require.EqualValues(t, 0, got.ival)
 				} else {
-					require.EqualError(t, err, tcase.err)
+					require.EqualValues(t, 0, got.ival)
+					require.EqualValues(t, sqltypes.Null, got.typ)
 				}
-			})
-		}
+			} else {
+				require.EqualError(t, err, tcase.err)
+			}
+		})
 	}
 }
