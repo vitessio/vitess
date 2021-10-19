@@ -361,7 +361,7 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'B,a,A,B,b,a,c' new {} false false`,
-			"SysVar set with (sql_mode,B,a,A,B,b,a,c)",
+			"SysVar set with (sql_mode,'B,a,A,B,b,a,c')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a,b|B,a,A,B,b,a,c",
@@ -378,10 +378,60 @@ func TestSetTable(t *testing.T) {
 		expectedQueryLog: []string{
 			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
 			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'B,b,B,b' new {} false false`,
-			"SysVar set with (sql_mode,B,b,B,b)",
+			"SysVar set with (sql_mode,'B,b,B,b')",
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
 			"a,b|B,b,B,b",
+		)},
+	}, {
+		testName: "sql_mode no change - empty list",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "sql_mode",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "''",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|",
+		)},
+	}, {
+		testName: "sql_mode no change - empty orig",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "sql_mode",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "'a'",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, 'a' new {} false false`,
+			"SysVar set with (sql_mode,'a')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"|a",
+		)},
+	}, {
+		testName: "sql_mode no change - empty new",
+		setOps: []SetOp{
+			&SysVarReservedConn{
+				Name:     "sql_mode",
+				Keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true},
+				Expr:     "''",
+			},
+		},
+		expectedQueryLog: []string{
+			`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(00)`,
+			`ExecuteMultiShard ks.-20: select @@sql_mode orig, '' new {} false false`,
+			"SysVar set with (sql_mode,'')",
+		},
+		qr: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"),
+			"a|",
 		)},
 	}}
 
