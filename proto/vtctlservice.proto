@@ -153,8 +153,8 @@ service Vtctld {
   // RefreshStateByShard calls RefreshState on all the tablets in the given shard.
   rpc RefreshStateByShard(vtctldata.RefreshStateByShardRequest) returns (vtctldata.RefreshStateByShardResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
-  // shards in the specified keyspace, as well as from the SrvKeyspace for that
-  // keyspace in that cell.
+  // shards in the specified keyspace (by calling RemoveShardCell on every
+  // shard). It also removes the SrvKeyspace for that keyspace in that cell.
   rpc RemoveKeyspaceCell(vtctldata.RemoveKeyspaceCellRequest) returns (vtctldata.RemoveKeyspaceCellResponse) {};
   // RemoveShardCell removes the specified cell from the specified shard's Cells
   // list.

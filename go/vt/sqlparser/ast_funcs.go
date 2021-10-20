@@ -1134,6 +1134,8 @@ func (op UnaryExprOperator) ToString() string {
 		return Utf8Str
 	case Latin1Op:
 		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
@@ -1568,10 +1570,12 @@ func (es *ExtractedSubquery) updateAlternative() {
 }
 
 func defaultRequiresParens(ct *ColumnType) bool {
-	switch ct.Type {
-	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB", "LONGBLOB", "JSON", "GEOMETRY", "POINT", "LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING", "MULTIPOLYGON", "GEOMETRYCOLLECTION":
+	switch strings.ToUpper(ct.Type) {
+	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
+		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
+		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
+		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
 		return true
-
 	}
 
 	_, isLiteral := ct.Options.Default.(*Literal)

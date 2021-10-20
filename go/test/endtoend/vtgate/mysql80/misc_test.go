@@ -93,6 +93,20 @@ func TestCheckConstraint(t *testing.T) {
 	exec(t, conn, cleanup)
 }
 
+func TestValueDefault(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	exec(t, conn, `create table test_float_default (pos_f float default 2.1, neg_f float default -2.1,b blob default ('abc'));`)
+	defer exec(t, conn, `drop table test_float_default`)
+	assertMatches(t, conn, "select table_name, column_name, column_default from information_schema.columns where table_name = 'test_float_default' order by column_name", `[[VARBINARY("test_float_default") VARCHAR("b") BLOB("_utf8mb3\\'abc\\'")] [VARBINARY("test_float_default") VARCHAR("neg_f") BLOB("-2.1")] [VARBINARY("test_float_default") VARCHAR("pos_f") BLOB("2.1")]]`)
+}
+
 func TestVersionCommentWorks(t *testing.T) {
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
