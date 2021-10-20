@@ -101,8 +101,8 @@ func checkRoutingRules(t *testing.T, ts *topo.Server) {
 
 	want := &vschemapb.RoutingRules{
 		Rules: []*vschemapb.RoutingRule{{
-			FromTable: "t1",
-			ToTables:  []string{"t2", "t3"},
+			FromTable: "`t1`",
+			ToTables:  []string{"`t2`", "`t3`"},
 		}},
 	}
 	if err := ts.SaveRoutingRules(ctx, want); err != nil {

@@ -89,8 +89,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 
 	rr := &vschemapb.RoutingRules{
 		Rules: []*vschemapb.RoutingRule{{
-			FromTable: "t1",
-			ToTables:  []string{"t2", "t3"},
+			FromTable: "`t1`",
+			ToTables:  []string{"`t2`", "`t3`"},
 		}},
 	}
 	if err := fromTS.SaveRoutingRules(ctx, rr); err != nil {
