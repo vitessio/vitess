@@ -30,20 +30,3 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-  eslint:
-    runs-on: ubuntu-latest
-    uses: install
-    steps:
-      - run: npm run lint:eslint
-
-  prettier:
-    runs-on: ubuntu-latest
-    uses: install
-    steps:
-      - run: npm run lint:prettier
-
-  stylelint:
-    runs-on: ubuntu-latest
-    uses: install
-    steps:
-      - run: npm run lint:stylelint
