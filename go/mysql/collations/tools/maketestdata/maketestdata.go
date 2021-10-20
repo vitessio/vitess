@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
 func wikiRequest(lang string, args map[string]string, output interface{}) error {
@@ -144,31 +145,6 @@ func getAllLanguages(article string) (map[string]string, error) {
 	return allLanguages, nil
 }
 
-var wantLanguages = map[string]bool{
-	"ja": true,
-	"vi": true,
-	"zh": true,
-	"ru": true,
-	"hr": true,
-	"hu": true,
-	"eo": true,
-	"la": true,
-	"es": true,
-	"sk": true,
-	"lt": true,
-	"da": true,
-	"cs": true,
-	"tr": true,
-	"sv": true,
-	"et": true,
-	"pl": true,
-	"sl": true,
-	"ro": true,
-	"lv": true,
-	"is": true,
-	"de": true,
-}
-
 func colldump(colldumpPath, collation string, input []byte) []byte {
 	cmd := exec.Command(colldumpPath, "--test", collation)
 	cmd.Stdin = bytes.NewReader(input)
@@ -197,10 +173,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var tdata = &collations.GoldenTest{Name: os.Args[1]}
+	var tdata = &testutil.GoldenTest{Name: os.Args[1]}
 
 	for lang, article := range articles {
-		if !wantLanguages[lang] {
+		if _, want := testutil.KnownLanguages[testutil.Lang(lang)]; !want {
 			continue
 		}
 		start := time.Now()
@@ -212,7 +188,7 @@ func main() {
 		}
 		log.Printf("[%s] %v", lang, time.Since(start))
 
-		gcase := collations.GoldenCase{
+		gcase := testutil.GoldenCase{
 			Lang:    lang,
 			Text:    []byte(snippet),
 			Weights: make(map[string][]byte),
