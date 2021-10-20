@@ -18,7 +18,7 @@
 
 source ./env.sh
 
-vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic main.main2regions
+vtctlclient Reshard -tablet_types=primary SwitchTraffic main.main2regions
 
 # to go back to unsharded
 # call SwitchTraffic with workflow main.main2regions_reverse
