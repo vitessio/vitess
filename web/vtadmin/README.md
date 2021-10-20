@@ -32,9 +32,9 @@ We use three libraries for consistent formatting and linting across the front-en
 
 | Library | Commands | What it's for |
 |---------|----------|---------------|
-| [eslint](https://eslint.org/) | `npm run lint:eslint` <br/> `npm run lint:eslint:fix` | ESLint identifies potential bugs and other issues. vtadmin-web uses the default ESLint configuration [built in to create-react-app](https://create-react-app.dev/docs/setting-up-your-editor/#extending-or-replacing-the-default-eslint-config). |
-| [prettier](https://prettier.io/) | `npm run lint:prettier` <br/> `npm run lint:prettier:fix` | Prettier is an "opinionated code formatter" run against our JavaScript, TypeScript, and (S)CSS code to ensure a consistent style. Prettier is not a linter, and so it complements (rather than replaces) eslint/stylelint. | 
-| [stylelint](https://stylelint.io/) | `npm run lint:stylelint` <br/> `npm run lint:stylelint:fix` | Stylelint is a linter for CSS/SCSS. Whereas prettier's CSS/SCSS support is largely focused on formatting (newlines, spaces vs. tabs), stylelint is able to flag possible errors, limit language features, and surface stylistic issues that prettier isn't intended to catch. |
+| [eslint](https://eslint.org/) | `npm run lint:eslint`<br/><br/>`npm run lint:eslint:fix` | ESLint identifies potential bugs and other issues. vtadmin-web uses the default ESLint configuration [built in to create-react-app](https://create-react-app.dev/docs/setting-up-your-editor/#extending-or-replacing-the-default-eslint-config). |
+| [prettier](https://prettier.io/) | `npm run lint:prettier`<br/><br/>`npm run lint:prettier:fix` | Prettier is an "opinionated code formatter" run against our JavaScript, TypeScript, and (S)CSS code to ensure a consistent style. Prettier is not a linter, and so it complements (rather than replaces) eslint/stylelint. | 
+| [stylelint](https://stylelint.io/) | `npm run lint:stylelint`<br/><br/>`npm run lint:stylelint:fix` | Stylelint is a linter for CSS/SCSS. Whereas prettier's CSS/SCSS support is largely focused on formatting (newlines, spaces vs. tabs), stylelint is able to flag possible errors, limit language features, and surface stylistic issues that prettier isn't intended to catch. |
 
 ## Configuring your editor
 
