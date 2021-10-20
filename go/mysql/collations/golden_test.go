@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+
+	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
 func TestGoldenWeights(t *testing.T) {
@@ -30,7 +32,7 @@ func TestGoldenWeights(t *testing.T) {
 	}
 
 	for _, goldenPath := range gllGoldenTests {
-		golden := &GoldenTest{}
+		golden := &testutil.GoldenTest{}
 		if err := golden.DecodeFromFile(goldenPath); err != nil {
 			t.Fatal(err)
 		}
@@ -52,6 +54,28 @@ func TestGoldenWeights(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestCollationsForLanguage(t *testing.T) {
+	allCollations := All()
+	langCounts := make(map[testutil.Lang]int)
+
+	for lang := range testutil.KnownLanguages {
+		var matched []string
+		for _, coll := range allCollations {
+			name := coll.Name()
+			if lang.MatchesCollation(name) {
+				matched = append(matched, name)
+			}
+		}
+		langCounts[lang] = len(matched)
+	}
+
+	for lang := range testutil.KnownLanguages {
+		if langCounts[lang] == 0 {
+			t.Errorf("no collations found for %q", lang)
 		}
 	}
 }
