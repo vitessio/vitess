@@ -63,11 +63,15 @@ spec:
               extraFlags:
                 db_charset: utf8mb4
               resources:
+                limits:
+                  memory: 256Mi
                 requests:
                   cpu: 100m
                   memory: 256Mi
             mysqld:
               resources:
+                limits:
+                  memory: 256Mi
                 requests:
                   cpu: 100m
                   memory: 256Mi
