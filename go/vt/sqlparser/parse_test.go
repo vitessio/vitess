@@ -44,8 +44,8 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
-		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
-		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
+		output: "create table t2 (\n\tb blob default ('abc')\n)",
 	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
