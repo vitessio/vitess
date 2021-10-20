@@ -2476,3 +2476,22 @@ Gen4 plan same as above
 "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra"
 "unsupported: cross-shard correlated subquery"
 Gen4 plan same as above
+
+# plan test for a natural character set string
+"select N'string' from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select N'string' from dual",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select N'string' from dual where 1 != 1",
+    "Query": "select N'string' from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
