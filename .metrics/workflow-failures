@@ -1,5 +1,3 @@
-2021-08-26T15:55:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1171116078
-2021-08-26T15:55:33Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1171116081
 2021-08-26T15:55:33Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1171116040
 2021-08-26T15:55:33Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1171116043
 2021-08-26T15:55:33Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1171116030
@@ -9998,3 +9996,5 @@
 2021-10-20T10:25:35Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1363096877
 2021-10-20T10:25:35Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1363096876
 2021-10-20T10:25:35Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1363096835
+2021-10-20T10:25:35Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1363096811
+2021-10-20T10:25:35Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1363096823
