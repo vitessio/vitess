@@ -245,18 +245,18 @@ func (stc *ScatterConn) ExecuteMultiShard(
 					})
 				}
 			case begin:
-				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.Savepoints, queries[i].Sql, queries[i].BindVariables, reservedID, opts)
+				innerqr, transactionID, alias, err = qs.BeginExecute(ctx, rs.Target, session.GetSavepoints(), queries[i].Sql, queries[i].BindVariables, reservedID, opts)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
 						info.actionNeeded = reserveBegin
-						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueriesWithSavepoint(), nil, queries[i].Sql, queries[i].BindVariables, opts)
+						innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.GetSavepoints(), queries[i].Sql, queries[i].BindVariables, opts)
 					})
 				}
 			case reserve:
 				innerqr, reservedID, alias, err = qs.ReserveExecute(ctx, rs.Target, session.SetPreQueries(), queries[i].Sql, queries[i].BindVariables, transactionID, opts)
 			case reserveBegin:
-				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueriesWithSavepoint(), nil, queries[i].Sql, queries[i].BindVariables, opts)
+				innerqr, transactionID, reservedID, alias, err = qs.ReserveBeginExecute(ctx, rs.Target, session.SetPreQueries(), session.GetSavepoints(), queries[i].Sql, queries[i].BindVariables, opts)
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
