@@ -1,0 +1,49 @@
+name: Format + lint vtadmin-web
+
+# In specifying the 'paths' property, we need to include the path to this workflow .yml file. 
+# See https://github.community/t/trigger-a-workflow-on-change-to-the-yml-file-itself/17792/4)
+on:
+  push:
+    paths:
+      - '.github/workflows/vtadmin_web_format.yml'
+      - 'web/vtadmin/**'
+  pull_request:
+    paths:
+      - '.github/workflows/vtadmin_web_format.yml'
+      - 'web/vtadmin/**'
+
+defaults:
+  run:
+    working-directory: ./web/vtadmin
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-node@v2
+        with:
+          # node-version should match package.json
+          node-version: '14.15'
+
+      - name: Install dependencies
+        run: npm install
+
+  eslint:
+    runs-on: ubuntu-latest
+    uses: install
+    steps:
+      - run: npm run lint:eslint
+
+  prettier:
+    runs-on: ubuntu-latest
+    uses: install
+    steps:
+      - run: npm run lint:prettier
+
+  stylelint:
+    runs-on: ubuntu-latest
+    uses: install
+    steps:
+      - run: npm run lint:stylelint
