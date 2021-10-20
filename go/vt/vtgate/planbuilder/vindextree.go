@@ -69,3 +69,7 @@ outer:
 func (v *vindexTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
 	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "pushPredicate does not work on vindexTrees")
 }
+
+func (v *vindexTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "removePredicate does not work on vindexTrees")
+}

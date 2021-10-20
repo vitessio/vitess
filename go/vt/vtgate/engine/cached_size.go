@@ -694,6 +694,40 @@ func (cached *SQLCalcFoundRows) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+
+//go:nocheckptr
+func (cached *SemiJoin) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Vars map[string]int
+	if cached.Vars != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.Vars)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+		if len(cached.Vars) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
+		}
+		for k := range cached.Vars {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+		}
+	}
+	return size
+}
 func (cached *Send) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

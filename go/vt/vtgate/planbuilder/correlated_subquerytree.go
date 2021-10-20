@@ -55,3 +55,7 @@ func (s *correlatedSubqueryTree) pushOutputColumns(colnames []*sqlparser.ColName
 func (s *correlatedSubqueryTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
 	return s.outer.pushPredicate(ctx, expr)
 }
+
+func (s *correlatedSubqueryTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return s.outer.removePredicate(ctx, expr)
+}

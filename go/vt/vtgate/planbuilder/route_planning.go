@@ -151,27 +151,31 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 			return nil, err
 		}
 
-		if merged == nil {
-			// TODO - cleanup if else clauses
-			if len(preds) > 0 {
-				if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
-					correlatedTree, err := createCorrelatedSubqueryTree(ctx, treeInner, outerTree, preds, inner.ExtractedSubquery)
-					if err != nil {
-						return nil, err
-					}
-					outerTree = correlatedTree
-				} else {
-					return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
-				}
-			} else {
-				unmerged = append(unmerged, &subqueryTree{
-					extracted: inner.ExtractedSubquery,
-					inner:     treeInner,
-				})
-			}
-		} else {
+		if merged != nil {
 			outerTree = merged
+			continue
 		}
+
+		if len(preds) == 0 {
+			// uncorrelated queries
+			sq := &subqueryTree{
+				extracted: inner.ExtractedSubquery,
+				inner:     treeInner,
+			}
+			unmerged = append(unmerged, sq)
+			continue
+		}
+
+		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
+			correlatedTree, err := createCorrelatedSubqueryTree(ctx, treeInner, outerTree, preds, inner.ExtractedSubquery)
+			if err != nil {
+				return nil, err
+			}
+			outerTree = correlatedTree
+			continue
+		}
+
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
 	/*
@@ -191,6 +195,11 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 }
 
 func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
+	err := outerTree.removePredicate(ctx, extractedSubquery)
+	if err != nil {
+		return nil, err
+	}
+
 	vars := map[string]int{}
 	for _, pred := range preds {
 		var rewriteError error

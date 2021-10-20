@@ -270,7 +270,24 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	case *distinct:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	case *semiJoin:
-		return pushProjection(expr, node.lhs, semTable, inner, reuseCol)
+		passDownReuseCol := reuseCol
+		if !reuseCol {
+			passDownReuseCol = expr.As.IsEmpty()
+		}
+		offset, added, err := pushProjection(expr, node.lhs, semTable, inner, passDownReuseCol)
+		if err != nil {
+			return 0, false, err
+		}
+		column := -(offset + 1)
+		if reuseCol && !added {
+			for idx, col := range node.cols {
+				if column == col {
+					return idx, false, nil
+				}
+			}
+		}
+		node.cols = append(node.cols, column)
+		return len(node.cols) - 1, true, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}

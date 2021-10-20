@@ -165,6 +165,16 @@ func (rp *routeTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) er
 	return rp.addPredicate(ctx, expr)
 }
 
+func (rp *routeTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	for i, predicate := range rp.predicates {
+		if sqlparser.EqualsExpr(predicate, expr) {
+			rp.predicates = append(rp.predicates[0:i], rp.predicates[i+1:]...)
+			break
+		}
+	}
+	return rp.resetRoutingSelections(ctx)
+}
+
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {

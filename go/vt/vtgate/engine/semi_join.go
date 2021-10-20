@@ -17,6 +17,9 @@ limitations under the License.
 package engine
 
 import (
+	"fmt"
+	"strings"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -28,6 +31,14 @@ type SemiJoin struct {
 	// Left and Right are the LHS and RHS primitives
 	// of the SemiJoin. They can be any primitive.
 	Left, Right Primitive `json:",omitempty"`
+
+	// Cols defines which columns from the left
+	// results should be used to build the
+	// return result. For results coming from the
+	// left query, the index values go as -1, -2, etc.
+	// If Cols is {-1, -2}, it means that
+	// the returned result will be {Left0, Left1}.
+	Cols []int `json:",omitempty"`
 
 	// Vars defines the list of SemiJoinVars that need to
 	// be built from the LHS result before invoking
@@ -42,7 +53,7 @@ func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	if err != nil {
 		return nil, err
 	}
-	result := &sqltypes.Result{Fields: lresult.Fields}
+	result := &sqltypes.Result{Fields: projectFields(lresult.Fields, jn.Cols)}
 	for _, lrow := range lresult.Rows {
 		for k, col := range jn.Vars {
 			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
@@ -52,7 +63,7 @@ func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 			return nil, err
 		}
 		if len(rresult.Rows) > 0 {
-			result.Rows = append(result.Rows, lrow)
+			result.Rows = append(result.Rows, projectRows(lrow, jn.Cols))
 		}
 	}
 	return result, nil
@@ -62,7 +73,7 @@ func (jn *SemiJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := vcursor.StreamExecutePrimitive(jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
-		result := &sqltypes.Result{Fields: lresult.Fields}
+		result := &sqltypes.Result{Fields: projectFields(lresult.Fields, jn.Cols)}
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
@@ -70,7 +81,7 @@ func (jn *SemiJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			rowAdded := false
 			err := vcursor.StreamExecutePrimitive(jn.Right, combineVars(bindVars, joinVars), false, func(rresult *sqltypes.Result) error {
 				if len(rresult.Rows) > 0 && !rowAdded {
-					result.Rows = append(result.Rows, lrow)
+					result.Rows = append(result.Rows, projectRows(lrow, jn.Cols))
 					rowAdded = true
 				}
 				return nil
@@ -119,7 +130,8 @@ func (jn *SemiJoin) NeedsTransaction() bool {
 
 func (jn *SemiJoin) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"TableName": jn.GetTableName(),
+		"TableName":        jn.GetTableName(),
+		"ProjectedIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
 	}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)
@@ -128,4 +140,22 @@ func (jn *SemiJoin) description() PrimitiveDescription {
 		OperatorType: "SemiJoin",
 		Other:        other,
 	}
+}
+
+func projectFields(lfields []*querypb.Field, cols []int) []*querypb.Field {
+	fields := make([]*querypb.Field, len(cols))
+	for i, index := range cols {
+		fields[i] = lfields[-index-1]
+	}
+	return fields
+}
+
+func projectRows(lrow []sqltypes.Value, cols []int) []sqltypes.Value {
+	row := make([]sqltypes.Value, len(cols))
+	for i, index := range cols {
+		if index < 0 {
+			row[i] = lrow[-index-1]
+		}
+	}
+	return row
 }

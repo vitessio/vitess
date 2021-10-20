@@ -33,6 +33,7 @@ type semiJoin struct {
 	rhs  logicalPlan
 	lhs  logicalPlan
 	vars map[string]int
+	cols []int
 }
 
 // newSemiJoin builds a new semiJoin.
@@ -60,6 +61,7 @@ func (ps *semiJoin) Primitive() engine.Primitive {
 		Left:  ps.lhs.Primitive(),
 		Right: ps.rhs.Primitive(),
 		Vars:  ps.vars,
+		Cols:  ps.cols,
 	}
 }
 

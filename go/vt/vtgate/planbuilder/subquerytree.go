@@ -55,3 +55,7 @@ func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTab
 func (s *subqueryTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
 	return s.outer.pushPredicate(ctx, expr)
 }
+
+func (s *subqueryTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return s.outer.removePredicate(ctx, expr)
+}

@@ -101,3 +101,12 @@ func (jp *joinTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) err
 	}
 	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "pushPredicate does not work on joinTrees with predicates having dependencies from both the sides")
 }
+
+func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
+		return jp.lhs.removePredicate(ctx, expr)
+	} else if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
+		return jp.rhs.removePredicate(ctx, expr)
+	}
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "removePredicate does not work on joinTrees with predicates having dependencies from both the sides")
+}
