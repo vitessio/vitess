@@ -1,6 +1,3 @@
-2021-08-26T15:50:53Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1171102645
-2021-08-26T15:50:53Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1171102628
-2021-08-26T15:50:53Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1171102603
 2021-08-26T15:50:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1171102588
 2021-08-26T15:55:33Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/1171116080
 2021-08-26T15:55:33Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1171116097
@@ -9998,3 +9995,6 @@
 2021-10-20T01:32:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1361640118
 2021-10-20T05:00:57Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1362096040
 2021-10-20T05:00:57Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1362096041
+2021-10-20T05:32:50Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/1362177612
+2021-10-20T05:36:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1362185547
+2021-10-20T05:36:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1362185519
