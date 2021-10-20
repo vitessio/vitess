@@ -1,15 +1,15 @@
-name: vtadmin-web formatting
+name: vtadmin-web linting + formatting
 
 # In specifying the 'paths' property, we need to include the path to this workflow .yml file. 
 # See https://github.community/t/trigger-a-workflow-on-change-to-the-yml-file-itself/17792/4)
 on:
   push:
     paths:
-      - '.github/workflows/vtadmin_web_format.yml'
+      - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
   pull_request:
     paths:
-      - '.github/workflows/vtadmin_web_format.yml'
+      - '.github/workflows/vtadmin_web_lint.yml'
       - 'web/vtadmin/**'
 
 defaults:
@@ -17,7 +17,7 @@ defaults:
     working-directory: ./web/vtadmin
 
 jobs:
-  format:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
