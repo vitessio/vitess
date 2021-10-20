@@ -17,19 +17,18 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/wrangler"
@@ -140,10 +139,10 @@ func TestVerticalSplitDiff(t *testing.T) {
 	wi.wr.SetSourceShards(ctx, "destination_ks", "0", []*topodatapb.TabletAlias{sourceRdonly1.Tablet.Alias}, []string{"moving.*", "view1"})
 
 	// add the topo and schema data we'll need
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "source_ks", nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, wi.wr.Logger(), wi.wr.TopoServer(), "source_ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
-	if err := wi.wr.RebuildKeyspaceGraph(ctx, "destination_ks", nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, wi.wr.Logger(), wi.wr.TopoServer(), "destination_ks", nil, false); err != nil {
 		t.Fatalf("RebuildKeyspaceGraph failed: %v", err)
 	}
 
