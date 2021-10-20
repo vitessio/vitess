@@ -34,7 +34,7 @@ type Collation_utf8mb4_general_ci struct {
 
 func (c *Collation_utf8mb4_general_ci) init() {}
 
-func (c *Collation_utf8mb4_general_ci) Id() uint {
+func (c *Collation_utf8mb4_general_ci) Id() ID {
 	return 45
 }
 
@@ -123,7 +123,7 @@ type Collation_utf8mb4_bin struct{}
 
 func (c *Collation_utf8mb4_bin) init() {}
 
-func (c *Collation_utf8mb4_bin) Id() uint {
+func (c *Collation_utf8mb4_bin) Id() ID {
 	return 46
 }
 

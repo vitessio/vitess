@@ -35,7 +35,7 @@ type CollationUCA interface {
 
 type Collation_utf8mb4_uca_0900 struct {
 	name string
-	id   uint
+	id   ID
 
 	weights          uca.WeightTable
 	tailoring        []uca.WeightPatch
@@ -72,7 +72,7 @@ func (c *Collation_utf8mb4_uca_0900) Name() string {
 	return c.name
 }
 
-func (c *Collation_utf8mb4_uca_0900) Id() uint {
+func (c *Collation_utf8mb4_uca_0900) Id() ID {
 	return c.id
 }
 
@@ -168,7 +168,7 @@ func (c *Collation_utf8mb4_0900_bin) Encoding() encoding.Encoding {
 	return encoding.Encoding_utf8mb4{}
 }
 
-func (c *Collation_utf8mb4_0900_bin) Id() uint {
+func (c *Collation_utf8mb4_0900_bin) Id() ID {
 	return 309
 }
 
@@ -197,7 +197,7 @@ func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
 
 type Collation_uca_legacy struct {
 	name string
-	id   uint
+	id   ID
 
 	charset      encoding.Encoding
 	weights      uca.WeightTable
@@ -226,7 +226,7 @@ func (c *Collation_uca_legacy) UnicodeWeightsTable() (uca.WeightTable, uca.Table
 	return c.uca.Weights()
 }
 
-func (c *Collation_uca_legacy) Id() uint {
+func (c *Collation_uca_legacy) Id() ID {
 	return c.id
 }
 

@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,8 +32,8 @@ type typer struct {
 
 // Type is the normal querypb.Type with collation
 type Type struct {
-	typ           querypb.Type
-	collationName string
+	Type      querypb.Type
+	Collation collations.ID
 }
 
 func newTyper() *typer {
@@ -41,8 +42,8 @@ func newTyper() *typer {
 	}
 }
 
-var typeInt32 = Type{typ: sqltypes.Int32}
-var decimal = Type{typ: sqltypes.Decimal}
+var typeInt32 = Type{Type: sqltypes.Int32}
+var decimal = Type{Type: sqltypes.Decimal}
 
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
@@ -51,7 +52,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		case sqlparser.IntVal:
 			t.exprTypes[node] = typeInt32
 		case sqlparser.StrVal:
-			t.exprTypes[node] = Type{typ: sqltypes.VarChar} // TODO - add system default collation name
+			t.exprTypes[node] = Type{Type: sqltypes.VarChar} // TODO - add system default collation name
 		case sqlparser.FloatVal:
 			t.exprTypes[node] = decimal
 		}
@@ -60,7 +61,7 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 		if ok {
 			typ, ok := engine.OpcodeType[code]
 			if ok {
-				t.exprTypes[node] = Type{typ: typ}
+				t.exprTypes[node] = Type{Type: typ}
 			}
 		}
 	}
