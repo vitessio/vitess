@@ -21,7 +21,7 @@ import (
 // used as a fallback or as a way to test our native implementations.
 type RemoteCollation struct {
 	name string
-	id   uint
+	id   ID
 
 	prefix string
 	suffix string
@@ -33,7 +33,7 @@ type RemoteCollation struct {
 	err  error
 }
 
-func makeRemoteCollation(conn *mysql.Conn, collid uint, collname string) *RemoteCollation {
+func makeRemoteCollation(conn *mysql.Conn, collid ID, collname string) *RemoteCollation {
 	coll := &RemoteCollation{
 		name: collname,
 		id:   collid,
@@ -52,7 +52,7 @@ func makeRemoteCollation(conn *mysql.Conn, collid uint, collname string) *Remote
 }
 
 func RemoteByName(conn *mysql.Conn, collname string) *RemoteCollation {
-	var collid uint
+	var collid ID
 	if known, ok := collationsByName[collname]; ok {
 		collid = known.Id()
 	}
@@ -67,7 +67,7 @@ func (c *RemoteCollation) LastError() error {
 
 func (c *RemoteCollation) init() {}
 
-func (c *RemoteCollation) Id() uint {
+func (c *RemoteCollation) Id() ID {
 	return c.id
 }
 

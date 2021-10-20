@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -202,18 +203,18 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	typ, found := st.exprTypes[e]
 	if found {
-		return &typ.typ
+		return &typ.Type
 	}
 	return nil
 }
 
 // CollationFor returns the collation name of expressions in the query
-func (st *SemTable) CollationFor(e sqlparser.Expr) string {
+func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
 	typ, found := st.exprTypes[e]
 	if found {
-		return typ.collationName
+		return typ.Collation
 	}
-	return ""
+	return collations.Unknown
 }
 
 // dependencies return the table dependencies of the expression. This method finds table dependencies recursively
