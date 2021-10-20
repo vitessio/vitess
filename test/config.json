@@ -831,6 +831,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_v3": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/v3"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_v3",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_watchkeyspace": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/keyspace_watches"],

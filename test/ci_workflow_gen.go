@@ -77,6 +77,7 @@ var (
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_gen4",
+		"vtgate_v3",
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
