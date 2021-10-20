@@ -1,5 +1,3 @@
-2021-08-26T15:55:33Z,Cluster (tabletmanager_throttler),https://github.com/vitessio/vitess/actions/runs/1171116075
-2021-08-26T15:55:33Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1171116046
 2021-08-26T15:55:33Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1171116078
 2021-08-26T15:55:33Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1171116081
 2021-08-26T15:55:33Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1171116040
@@ -9997,4 +9995,6 @@
 2021-10-20T09:21:22Z,Cluster (20),https://github.com/vitessio/vitess/actions/runs/1362873844
 2021-10-20T09:21:22Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1362873850
 2021-10-20T10:25:35Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1363096833
+2021-10-20T10:25:35Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1363096877
+2021-10-20T10:25:35Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1363096876
 2021-10-20T10:25:35Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1363096835
