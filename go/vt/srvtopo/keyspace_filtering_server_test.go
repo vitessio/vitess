@@ -79,6 +79,10 @@ func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
 	if !got.IsReadOnly() {
 		t.Errorf("Got read-write topo.Server from FilteringServer -- must be read-only")
 	}
+	gotErr = got.CreateCellsAlias(stockCtx, "should_fail", &topodatapb.CellsAlias{Cells: []string{stockCell}})
+	if gotErr == nil {
+		t.Errorf("Were able to perform a write against the topo.Server from a FilteringServer -- it must be read-only")
+	}
 }
 
 func doTestGetSrvKeyspaceNames(
