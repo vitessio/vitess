@@ -339,6 +339,25 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		er.unnestSubQueries(cursor, node)
 	case *JoinCondition:
 		er.rewriteJoinCondition(cursor, node)
+	case *NotExpr:
+		switch inner := node.Expr.(type) {
+		case *ComparisonExpr:
+			// not col = 42 => col != 42
+			// not col > 42 => col <= 42
+			// etc
+			canChange, inverse := inverseOp(inner.Operator)
+			if canChange {
+				inner.Operator = inverse
+				cursor.Replace(inner)
+			}
+		case *NotExpr:
+			// not not true => true
+			cursor.Replace(inner.Expr)
+		case BoolVal:
+			// not true => false
+			inner = !inner
+			cursor.Replace(inner)
+		}
 	case *AliasedTableExpr:
 		if !SystemSchema(er.keyspace) {
 			break
@@ -365,6 +384,37 @@ func (er *expressionRewriter) rewrite(cursor *Cursor) bool {
 		}
 	}
 	return true
+}
+
+func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
+	switch i {
+	case EqualOp:
+		return true, NotEqualOp
+	case LessThanOp:
+		return true, GreaterEqualOp
+	case GreaterThanOp:
+		return true, LessEqualOp
+	case LessEqualOp:
+		return true, GreaterThanOp
+	case GreaterEqualOp:
+		return true, LessThanOp
+	case NotEqualOp:
+		return true, EqualOp
+	case InOp:
+		return true, NotInOp
+	case NotInOp:
+		return true, InOp
+	case LikeOp:
+		return true, NotLikeOp
+	case NotLikeOp:
+		return true, LikeOp
+	case RegexpOp:
+		return true, NotRegexpOp
+	case NotRegexpOp:
+		return true, RegexpOp
+	}
+
+	return false, i
 }
 
 func (er *expressionRewriter) rewriteJoinCondition(cursor *Cursor, node *JoinCondition) {

@@ -2675,3 +2675,36 @@ func TestSelectScatterFails(t *testing.T) {
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
 }
+
+func TestGen4SelectStraightJoin(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4SelectStraightJoin",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select u.id from `user` as u, user2 as u2 where u.id = u2.id",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	wantWarnings := []*querypb.QueryWarning{
+		{
+			Code:    1235,
+			Message: "straight join is converted to normal join",
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, wantWarnings, session.Warnings)
+}

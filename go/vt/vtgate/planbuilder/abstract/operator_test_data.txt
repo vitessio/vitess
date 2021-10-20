@@ -303,9 +303,7 @@ SubQuery: {
 	}]
 	Outer: 	QueryGraph: {
 	Tables:
-		TableSet{0}:`user` AS u
-	JoinPredicates:
-		TableSet{0,1} - u.id = (select id from user_extra where id = u.id)
+		TableSet{0}:`user` AS u where u.id = (select id from user_extra where id = u.id)
 	}
 }
 

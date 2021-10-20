@@ -655,8 +655,7 @@ Gen4 plan same as above
       "Sharded": false
     },
     "FieldQuery": "select table_name from (select * from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
-    "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname and _subquery.table_type = 'table_type' and _subquery.table_name = :_subquery_table_name) as _subquery",
-    "SysTableTableName": "[_subquery_table_name:VARBINARY(\"table_name\")]",
+    "Query": "select table_name from (select * from information_schema.`tables` where table_schema = :__vtschemaname and table_type = 'table_type' and table_name = 'table_name') as _subquery",
     "SysTableTableSchema": "[VARBINARY(\"table_schema\")]",
     "Table": "information_schema.`tables`"
   }

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package reparent
+package plannedreparent
 
 import (
 	"context"
@@ -29,13 +29,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -250,7 +249,7 @@ func ers(t *testing.T, tab *cluster.Vttablet, timeout string) (string, error) {
 	return ersIgnoreTablet(t, tab, timeout, nil)
 }
 
-func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabToIgnore *cluster.Vttablet) (string, error) {
+func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabletsToIgnore []*cluster.Vttablet) (string, error) {
 	args := []string{"EmergencyReparentShard", "-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shardName)}
 	if tab != nil {
 		args = append(args, "-new_primary", tab.Alias)
@@ -258,8 +257,16 @@ func ersIgnoreTablet(t *testing.T, tab *cluster.Vttablet, timeout string, tabToI
 	if timeout != "" {
 		args = append(args, "-wait_replicas_timeout", "30s")
 	}
-	if tabToIgnore != nil {
-		args = append(args, "-ignore_replicas", tabToIgnore.Alias)
+	if len(tabletsToIgnore) != 0 {
+		tabsString := ""
+		for _, vttablet := range tabletsToIgnore {
+			if tabsString == "" {
+				tabsString = vttablet.Alias
+			} else {
+				tabsString = tabsString + "," + vttablet.Alias
+			}
+		}
+		args = append(args, "-ignore_replicas", tabsString)
 	}
 	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }
@@ -469,14 +476,6 @@ func stopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 		err = tab.MysqlctlProcess.Stop()
 		require.NoError(t, err)
 	}
-}
-
-func restartTablet(t *testing.T, tab *cluster.Vttablet) {
-	tab.MysqlctlProcess.InitMysql = false
-	err := tab.MysqlctlProcess.Start()
-	require.NoError(t, err)
-	err = clusterInstance.VtctlclientProcess.InitTablet(tab, tab.Cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
 }
 
 func resurrectTablet(ctx context.Context, t *testing.T, tab *cluster.Vttablet) {

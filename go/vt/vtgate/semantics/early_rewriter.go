@@ -25,8 +25,9 @@ import (
 )
 
 type earlyRewriter struct {
-	scoper *scoper
-	clause string
+	scoper  *scoper
+	clause  string
+	warning string
 }
 
 func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
@@ -58,6 +59,11 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 		if changed {
 			cursor.ReplaceAndRevisit(selExprs)
+		}
+	case *sqlparser.JoinTableExpr:
+		if node.Join == sqlparser.StraightJoinType {
+			node.Join = sqlparser.NormalJoinType
+			r.warning = "straight join is converted to normal join"
 		}
 	case *sqlparser.Order:
 		r.clause = "order clause"

@@ -32,6 +32,9 @@ import (
 func buildUnionPlan(string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		union := stmt.(*sqlparser.Union)
+		if union.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+		}
 		// For unions, create a pb with anonymous scope.
 		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 		if err := pb.processUnion(union, reservedVars, nil); err != nil {

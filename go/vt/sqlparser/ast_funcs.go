@@ -765,6 +765,11 @@ func (node *Select) SetInto(into *SelectInto) {
 	node.Into = into
 }
 
+// SetWith sets the with clause to a select statement
+func (node *Select) SetWith(with *With) {
+	node.With = with
+}
+
 // MakeDistinct makes the statement distinct
 func (node *Select) MakeDistinct() {
 	node.Distinct = true
@@ -856,6 +861,11 @@ func (node *Union) SetLock(lock Lock) {
 // SetInto sets the into clause
 func (node *Union) SetInto(into *SelectInto) {
 	node.Into = into
+}
+
+// SetWith sets the with clause to a union statement
+func (node *Union) SetWith(with *With) {
+	node.With = with
 }
 
 // MakeDistinct implements the SelectStatement interface
@@ -1124,6 +1134,8 @@ func (op UnaryExprOperator) ToString() string {
 		return Utf8Str
 	case Latin1Op:
 		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
@@ -1454,4 +1466,77 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
 	}
 	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// SetArgName sets argument name.
+func (es *ExtractedSubquery) SetArgName(n string) {
+	es.argName = n
+	es.updateAlternative()
+}
+
+// SetHasValuesArg sets has_values argument.
+func (es *ExtractedSubquery) SetHasValuesArg(n string) {
+	es.hasValuesArg = n
+	es.updateAlternative()
+}
+
+// GetArgName returns argument name.
+func (es *ExtractedSubquery) GetArgName() string {
+	return es.argName
+}
+
+// GetHasValuesArg returns has values argument.
+func (es *ExtractedSubquery) GetHasValuesArg() string {
+	return es.hasValuesArg
+
+}
+
+func (es *ExtractedSubquery) updateAlternative() {
+	switch original := es.Original.(type) {
+	case *ExistsExpr:
+		es.alternative = NewArgument(es.argName)
+	case *Subquery:
+		es.alternative = NewArgument(es.argName)
+	case *ComparisonExpr:
+		// other_side = :__sq
+		cmp := &ComparisonExpr{
+			Left:     es.OtherSide,
+			Right:    NewArgument(es.argName),
+			Operator: original.Operator,
+		}
+		var expr Expr = cmp
+		switch original.Operator {
+		case InOp:
+			// :__sq_has_values = 1 and other_side in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
+			expr = AndExpressions(hasValue, cmp)
+		case NotInOp:
+			// :__sq_has_values = 0 or other_side not in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
+			expr = &OrExpr{hasValue, cmp}
+		}
+		es.alternative = expr
+	}
+}
+
+func defaultRequiresParens(ct *ColumnType) bool {
+	switch strings.ToUpper(ct.Type) {
+	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
+		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
+		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
+		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
+		return true
+	}
+
+	_, isLiteral := ct.Options.Default.(*Literal)
+	_, isBool := ct.Options.Default.(BoolVal)
+	_, isNullVal := ct.Options.Default.(*NullVal)
+
+	if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+		return false
+	}
+
+	return true
 }
