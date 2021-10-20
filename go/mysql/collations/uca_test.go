@@ -132,6 +132,31 @@ func TestReplacementCharacter(t *testing.T) {
 	}
 }
 
+func TestIsPrefix(t *testing.T) {
+	var collations = []string{
+		"utf8mb4_0900_ai_ci",
+		"utf8mb4_0900_as_ci",
+		"utf8mb4_unicode_ci",
+		"utf8mb4_unicode_520_ci",
+		"utf8mb4_general_ci",
+	}
+
+	for _, collName := range collations {
+		coll := testcollation(t, collName)
+		input := []rune(strings.ToUpper(ExampleStringLong))
+
+		for size := 0; size < len(input); size++ {
+			left := ExampleStringLong
+			right := string(input[:size])
+
+			cmp := coll.Collate([]byte(left), []byte(right), true)
+			if cmp != 0 {
+				t.Errorf("IsPrefix(%q, %q) = %d (expected 0)", left, right, cmp)
+			}
+		}
+	}
+}
+
 func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected []byte) {
 	coll := testcollation(t, collname).(*Collation_uca_legacy)
 	iter := coll.uca.Iterator(input)

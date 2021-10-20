@@ -112,11 +112,11 @@ func (it *iterator) Level() int {
 	return it.level
 }
 
-func (it *iterator) SkipLevel() bool {
+func (it *iterator) SkipLevel() int {
 	it.codepoint.ce = 0
 	it.input = it.original
 	it.level++
-	return it.level < it.maxLevel
+	return it.level
 }
 
 func (it *iterator) reset(input []byte) {
@@ -129,7 +129,7 @@ func (it *iterator) reset(input []byte) {
 type WeightIterator interface {
 	Next() (uint16, bool)
 	Level() int
-	SkipLevel() bool
+	SkipLevel() int
 	Done()
 	reset(input []byte)
 }

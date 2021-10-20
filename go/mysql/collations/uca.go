@@ -105,7 +105,7 @@ nextLevel:
 	switch {
 	case itleft.Level() == itright.Level():
 		if l == r && lok && rok {
-			level = itleft.Level()
+			level++
 			if level < levelsToCompare {
 				goto nextLevel
 			}
@@ -113,15 +113,12 @@ nextLevel:
 	case itleft.Level() > level:
 		return -1
 	case itright.Level() > level:
-		// TODO@vmg: this is not fully correct
 		if rightIsPrefix {
-			if itleft.SkipLevel() {
-				level = itleft.Level()
-				if level < levelsToCompare {
-					goto nextLevel
-				}
+			level = itleft.SkipLevel()
+			if level < levelsToCompare {
+				goto nextLevel
 			}
-			break
+			return -int(r)
 		}
 		return 1
 	}
@@ -245,10 +242,6 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	defer itleft.Done()
 	defer itright.Done()
 
-	if isPrefix {
-		panic("unimplemented: isPrefix")
-	}
-
 	for {
 		l, lok = itleft.Next()
 		r, rok = itright.Next()
@@ -256,7 +249,9 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 		if l == r && lok && rok {
 			continue
 		}
-
+		if !rok && isPrefix {
+			return 0
+		}
 		return int(l) - int(r)
 	}
 }
