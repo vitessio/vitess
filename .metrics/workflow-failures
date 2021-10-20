@@ -1,25 +1,3 @@
-2021-08-27T15:40:05Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1174800510
-2021-08-27T15:40:05Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1174800501
-2021-08-27T15:40:05Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1174800482
-2021-08-27T15:40:05Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1174800522
-2021-08-27T15:40:05Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1174800475
-2021-08-27T15:40:05Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1174800526
-2021-08-27T15:40:05Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1174800505
-2021-08-27T16:03:55Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1174868113
-2021-08-27T16:03:55Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1174868131
-2021-08-27T16:03:55Z,Cluster (tabletmanager_throttler_custom_config),https://github.com/vitessio/vitess/actions/runs/1174868127
-2021-08-27T16:03:55Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1174868130
-2021-08-27T16:23:49Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1174924784
-2021-08-27T16:23:49Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1174924783
-2021-08-27T16:23:49Z,Cluster (24),https://github.com/vitessio/vitess/actions/runs/1174924799
-2021-08-27T16:23:49Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1174924774
-2021-08-27T16:23:49Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1174924792
-2021-08-27T17:02:45Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1175022805
-2021-08-27T17:02:45Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1175022816
-2021-08-27T17:02:45Z,Cluster (onlineddl_vrepl),https://github.com/vitessio/vitess/actions/runs/1175022786
-2021-08-27T17:02:45Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1175022789
-2021-08-27T17:02:45Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1175022803
-2021-08-27T17:02:45Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1175022814
 2021-08-27T17:02:45Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1175022780
 2021-08-27T17:02:45Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1175022810
 2021-08-27T17:02:45Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1175022828
@@ -9987,14 +9965,36 @@
 2021-10-20T16:58:48Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1364534242
 2021-10-20T16:58:48Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1364534227
 2021-10-20T16:58:48Z,vtadmin-web formatting,https://github.com/vitessio/vitess/actions/runs/1364534293
+2021-10-20T17:00:22Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1364539735
 2021-10-20T17:00:22Z,region_example,https://github.com/vitessio/vitess/actions/runs/1364539724
+2021-10-20T17:00:24Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1364539868
 2021-10-20T17:00:24Z,Cluster (tabletmanager_consul),https://github.com/vitessio/vitess/actions/runs/1364539844
+2021-10-20T17:00:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1364539857
 2021-10-20T17:00:24Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1364539825
 2021-10-20T17:00:24Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1364539859
 2021-10-20T17:00:24Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1364539899
+2021-10-20T17:00:24Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1364539846
 2021-10-20T17:00:24Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1364539824
 2021-10-20T17:00:24Z,region_example,https://github.com/vitessio/vitess/actions/runs/1364539880
 2021-10-20T17:04:14Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1364554502
 2021-10-20T17:04:14Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1364554503
 2021-10-20T17:04:14Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1364554499
 2021-10-20T17:04:14Z,vtadmin-web formatting,https://github.com/vitessio/vitess/actions/runs/1364554507
+2021-10-20T17:24:56Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1364629465
+2021-10-20T17:26:50Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1364636246
+2021-10-20T17:26:50Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1364636205
+2021-10-20T17:26:50Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1364636168
+2021-10-20T17:26:50Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1364636175
+2021-10-20T17:26:50Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1364636174
+2021-10-20T17:26:50Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1364636184
+2021-10-20T17:26:50Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1364636236
+2021-10-20T17:26:50Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1364636222
+2021-10-20T17:26:50Z,check_formatting,https://github.com/vitessio/vitess/actions/runs/1364636190
+2021-10-20T17:26:50Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1364636203
+2021-10-20T17:26:50Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1364636199
+2021-10-20T17:26:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1364636166
+2021-10-20T17:27:23Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1364637995
+2021-10-20T17:27:23Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1364637975
+2021-10-20T17:42:50Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1364686857
+2021-10-20T17:42:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1364686907
+2021-10-20T18:01:48Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1364747865
