@@ -429,6 +429,19 @@ func makeNumericAndprioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
 	return v1, v2
 }
 
+func makeNumericPanic(v EvalResult) EvalResult {
+	if sqltypes.IsNumber(v.typ) {
+		return v
+	}
+	if ival, err := strconv.ParseInt(string(v.bytes), 10, 64); err == nil {
+		return EvalResult{ival: ival, typ: sqltypes.Int64}
+	}
+	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
+		return EvalResult{fval: fval, typ: sqltypes.Float64}
+	}
+	panic("cannot transform the value to a numeric")
+}
+
 func makeNumeric(v EvalResult) EvalResult {
 	if sqltypes.IsNumber(v.typ) {
 		return v

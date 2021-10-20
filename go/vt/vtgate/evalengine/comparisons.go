@@ -81,7 +81,7 @@ func evaluateSideOfComparison(expr Expr, env ExpressionEnv) (EvalResult, error) 
 	if val.typ == sqltypes.Null {
 		return resultNull, nil
 	}
-	return makeNumeric(val), nil
+	return makeNumericPanic(val), nil
 }
 
 // Evaluate implements the Expr interface
