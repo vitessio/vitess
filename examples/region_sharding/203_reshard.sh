@@ -16,4 +16,4 @@
 
 source ./env.sh
 
-vtctlclient Reshard -source_shards '0' -target_shards '-40,40-80,80-c0,c0-' -tablet_types=PRIMARY CREATE main.main2regions
+vtctlclient Reshard -source_shards '0' -target_shards '-40,40-80,80-c0,c0-' -tablet_types=PRIMARY Create main.main2regions
