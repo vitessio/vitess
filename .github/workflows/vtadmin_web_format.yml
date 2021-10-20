@@ -30,9 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Using "if: always()" means each step will run
-      # even if a step action fails. Parallelizing these
-      # steps into jobs would be a nice enhancement.
+      # Using "if: always()" means each step will run, even if a previous
+      # step fails. An undesirable secondary effect of this is these steps
+      # will run even if the install, etc. steps fail, which is... weird.
+      # A nice enhancement is to parallelize these steps into jobs, with the
+      # trade-off of more complexity around sharing npm install artifacts. 
       - name: Run eslint
         if: always()
         run: npm run lint:eslint
