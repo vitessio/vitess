@@ -44,6 +44,114 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
+		output: "create table t2 (\n\tb blob default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT 7.0)",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT (7.0))",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
+		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
+	}, {
+		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
+		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",
@@ -51,6 +159,10 @@ var (
 	}, {
 		input:  "select user from (select id from users ) as x(user)",
 		output: "select `user` from (select id from users) as x(`user`)",
+	}, {
+		input: "select n, d from something",
+	}, {
+		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",

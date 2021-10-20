@@ -357,6 +357,7 @@ func FuzzTLSServer(data []byte) int {
 		path.Join(root, "server-key.pem"),
 		path.Join(root, "ca-cert.pem"),
 		"",
+		"",
 		tls.VersionTLS12)
 	if err != nil {
 		return -1

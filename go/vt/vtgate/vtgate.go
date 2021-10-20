@@ -306,11 +306,12 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 		log.Warningf("Unable to resolve destination: %v", err)
 		return
 	}
+
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			log.Warningf("Unable to get initial schema reload")
+			log.Warningf("Unable to get initial schema reload for keyspace: %s", keyspace)
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
@@ -318,7 +319,6 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 				if err == nil {
 					return
 				}
-				log.Warningf("Unable to add keyspace to tracker: %v", err)
 			}
 		}
 	}

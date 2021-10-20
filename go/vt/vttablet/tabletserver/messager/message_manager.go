@@ -18,15 +18,12 @@ package messager
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -34,12 +31,12 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 var (
@@ -331,10 +328,10 @@ func (mm *messageManager) Open() {
 		return
 	}
 	mm.isOpen = true
-	mm.wg.Add(1)
 	mm.curReceiver = -1
 
-	go mm.runSend()
+	mm.wg.Add(1)
+	go mm.runSend() // calls the offsetting mm.wg.Done()
 	// TODO(sougou): improve ticks to add randomness.
 	mm.pollerTicks.Start(mm.runPoller)
 	mm.purgeTicks.Start(mm.runPurge)
@@ -359,9 +356,8 @@ func (mm *messageManager) Close() {
 	mm.cache.Clear()
 	// This broadcast will cause runSend to exit.
 	mm.cond.Broadcast()
-	mm.mu.Unlock()
-
 	mm.stopVStream()
+	mm.mu.Unlock()
 
 	mm.wg.Wait()
 }
@@ -463,7 +459,7 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 	// If cache is empty, we have to broadcast that we're not empty
 	// any more.
 	if mm.cache.IsEmpty() {
-		mm.cond.Broadcast()
+		defer mm.cond.Broadcast()
 	}
 	if !mm.cache.Add(mr) {
 		// Cache is full. Enter "messagesPending" mode.
@@ -542,7 +538,7 @@ func (mm *messageManager) runSend() {
 
 		// Send the message asynchronously.
 		mm.wg.Add(1)
-		go mm.send(receiver, &sqltypes.Result{Rows: rows})
+		go mm.send(receiver, &sqltypes.Result{Rows: rows}) // calls the offsetting mm.wg.Done()
 	}
 }
 

@@ -218,6 +218,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfCommit(a, b)
+	case *CommonTableExpr:
+		b, ok := inB.(*CommonTableExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfCommonTableExpr(a, b)
 	case *ComparisonExpr:
 		b, ok := inB.(*ComparisonExpr)
 		if !ok {
@@ -344,6 +350,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsExprs(a, b)
+	case *ExtractedSubquery:
+		b, ok := inB.(*ExtractedSubquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractedSubquery(a, b)
 	case *Flush:
 		b, ok := inB.(*Flush)
 		if !ok {
@@ -902,6 +914,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfWhere(a, b)
+	case *With:
+		b, ok := inB.(*With)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfWith(a, b)
 	case *XorExpr:
 		b, ok := inB.(*XorExpr)
 		if !ok {
@@ -1272,6 +1290,19 @@ func EqualsRefOfCommit(a, b *Commit) bool {
 	return true
 }
 
+// EqualsRefOfCommonTableExpr does deep equals between the two objects.
+func EqualsRefOfCommonTableExpr(a, b *CommonTableExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return EqualsTableIdent(a.TableID, b.TableID) &&
+		EqualsColumns(a.Columns, b.Columns) &&
+		EqualsRefOfSubquery(a.Subquery, b.Subquery)
+}
+
 // EqualsRefOfComparisonExpr does deep equals between the two objects.
 func EqualsRefOfComparisonExpr(a, b *ComparisonExpr) bool {
 	if a == b {
@@ -1418,7 +1449,8 @@ func EqualsRefOfDelete(a, b *Delete) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Ignore == b.Ignore &&
+	return EqualsRefOfWith(a.With, b.With) &&
+		a.Ignore == b.Ignore &&
 		EqualsComments(a.Comments, b.Comments) &&
 		EqualsTableNames(a.Targets, b.Targets) &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
@@ -1547,6 +1579,24 @@ func EqualsExprs(a, b Exprs) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfExtractedSubquery does deep equals between the two objects.
+func EqualsRefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.OpCode == b.OpCode &&
+		a.NeedsRewrite == b.NeedsRewrite &&
+		a.hasValuesArg == b.hasValuesArg &&
+		a.argName == b.argName &&
+		EqualsExpr(a.Original, b.Original) &&
+		EqualsRefOfSubquery(a.Subquery, b.Subquery) &&
+		EqualsExpr(a.OtherSide, b.OtherSide) &&
+		EqualsExpr(a.alternative, b.alternative)
 }
 
 // EqualsRefOfFlush does deep equals between the two objects.
@@ -2154,6 +2204,7 @@ func EqualsRefOfSelect(a, b *Select) bool {
 		EqualsComments(a.Comments, b.Comments) &&
 		EqualsSelectExprs(a.SelectExprs, b.SelectExprs) &&
 		EqualsRefOfWhere(a.Where, b.Where) &&
+		EqualsRefOfWith(a.With, b.With) &&
 		EqualsGroupBy(a.GroupBy, b.GroupBy) &&
 		EqualsRefOfWhere(a.Having, b.Having) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
@@ -2496,6 +2547,7 @@ func EqualsRefOfUnion(a, b *Union) bool {
 		EqualsSelectStatement(a.Left, b.Left) &&
 		EqualsSelectStatement(a.Right, b.Right) &&
 		EqualsOrderBy(a.OrderBy, b.OrderBy) &&
+		EqualsRefOfWith(a.With, b.With) &&
 		EqualsRefOfLimit(a.Limit, b.Limit) &&
 		a.Lock == b.Lock &&
 		EqualsRefOfSelectInto(a.Into, b.Into)
@@ -2520,7 +2572,8 @@ func EqualsRefOfUpdate(a, b *Update) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsComments(a.Comments, b.Comments) &&
+	return EqualsRefOfWith(a.With, b.With) &&
+		EqualsComments(a.Comments, b.Comments) &&
 		a.Ignore == b.Ignore &&
 		EqualsTableExprs(a.TableExprs, b.TableExprs) &&
 		EqualsUpdateExprs(a.Exprs, b.Exprs) &&
@@ -2669,6 +2722,18 @@ func EqualsRefOfWhere(a, b *Where) bool {
 	}
 	return a.Type == b.Type &&
 		EqualsExpr(a.Expr, b.Expr)
+}
+
+// EqualsRefOfWith does deep equals between the two objects.
+func EqualsRefOfWith(a, b *With) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Recursive == b.Recursive &&
+		EqualsSliceOfRefOfCommonTableExpr(a.ctes, b.ctes)
 }
 
 // EqualsRefOfXorExpr does deep equals between the two objects.
@@ -3109,6 +3174,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExistsExpr(a, b)
+	case *ExtractedSubquery:
+		b, ok := inB.(*ExtractedSubquery)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractedSubquery(a, b)
 	case *FuncExpr:
 		b, ok := inB.(*FuncExpr)
 		if !ok {
@@ -4001,6 +4072,19 @@ func EqualsSliceOfVindexParam(a, b []VindexParam) bool {
 	}
 	for i := 0; i < len(a); i++ {
 		if !EqualsVindexParam(a[i], b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+// EqualsSliceOfRefOfCommonTableExpr does deep equals between the two objects.
+func EqualsSliceOfRefOfCommonTableExpr(a, b []*CommonTableExpr) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if !EqualsRefOfCommonTableExpr(a[i], b[i]) {
 			return false
 		}
 	}

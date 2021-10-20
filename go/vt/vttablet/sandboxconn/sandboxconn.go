@@ -513,9 +513,9 @@ func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
 //ReserveBeginExecute implements the QueryService interface
-func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, nil, sql, bindVariables, reservedID, options)
+	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}

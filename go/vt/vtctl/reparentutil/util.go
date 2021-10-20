@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -143,4 +144,105 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 	}
 
 	return currentPrimary
+}
+
+// getValidCandidatesAndPositionsAsList converts the valid candidates from a map to a list of tablets, making it easier to sort
+func getValidCandidatesAndPositionsAsList(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) ([]*topodatapb.Tablet, []mysql.Position, error) {
+	var validTablets []*topodatapb.Tablet
+	var tabletPositions []mysql.Position
+	for tabletAlias, position := range validCandidates {
+		tablet, isFound := tabletMap[tabletAlias]
+		if !isFound {
+			return nil, nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", tabletAlias)
+		}
+		validTablets = append(validTablets, tablet.Tablet)
+		tabletPositions = append(tabletPositions, position)
+	}
+	return validTablets, tabletPositions, nil
+}
+
+// restrictValidCandidates is used to restrict some candidates from being considered eligible for becoming the intermediate source or the final promotion candidate
+func restrictValidCandidates(validCandidates map[string]mysql.Position, tabletMap map[string]*topo.TabletInfo) (map[string]mysql.Position, error) {
+	restrictedValidCandidates := make(map[string]mysql.Position)
+	for candidate, position := range validCandidates {
+		candidateInfo, ok := tabletMap[candidate]
+		if !ok {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", candidate)
+		}
+		// We do not allow BACKUP, DRAINED or RESTORE type of tablets to be considered for being the replication source or the candidate for primary
+		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
+			continue
+		}
+		restrictedValidCandidates[candidate] = position
+	}
+	return restrictedValidCandidates, nil
+}
+
+func findCandidateSameCell(
+	newPrimary *topodatapb.Tablet,
+	prevPrimary *topodatapb.Tablet,
+	possibleCandidates []*topodatapb.Tablet,
+) *topodatapb.Tablet {
+	// check whether the one we have selected as the source is in the same cell and belongs to the candidate list provided
+	for _, candidate := range possibleCandidates {
+		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
+			continue
+		}
+		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
+			continue
+		}
+		return candidate
+	}
+	// check whether there is some other tablet in the same cell belonging to the candidate list provided
+	for _, candidate := range possibleCandidates {
+		if prevPrimary != nil && !(prevPrimary.Alias.Cell == candidate.Alias.Cell) {
+			continue
+		}
+		return candidate
+	}
+	return nil
+}
+
+func findCandidateAnyCell(
+	newPrimary *topodatapb.Tablet,
+	possibleCandidates []*topodatapb.Tablet,
+) *topodatapb.Tablet {
+	// check whether the one we have selected as the source belongs to the candidate list provided
+	for _, candidate := range possibleCandidates {
+		if !(topoproto.TabletAliasEqual(newPrimary.Alias, candidate.Alias)) {
+			continue
+		}
+		return candidate
+	}
+	// return the first candidate from this list, if it isn't empty
+	if len(possibleCandidates) > 0 {
+		return possibleCandidates[0]
+	}
+	return nil
+}
+
+// waitForCatchUp is used to wait for the given tablet until it has caught up to the source
+func waitForCatchUp(
+	ctx context.Context,
+	tmc tmclient.TabletManagerClient,
+	logger logutil.Logger,
+	newPrimary *topodatapb.Tablet,
+	source *topodatapb.Tablet,
+	waitTime time.Duration,
+) error {
+	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, source.Alias)
+	// Find the primary position of the previous primary
+	pos, err := tmc.MasterPosition(ctx, source)
+	if err != nil {
+		return err
+	}
+
+	// Wait until the new primary has caught upto that position
+	waitForPosCtx, cancelFunc := context.WithTimeout(ctx, waitTime)
+	defer cancelFunc()
+	err = tmc.WaitForPosition(waitForPosCtx, newPrimary, pos)
+	if err != nil {
+		return err
+	}
+	return nil
 }

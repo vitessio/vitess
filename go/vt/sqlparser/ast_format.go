@@ -24,6 +24,9 @@ import (
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "select %v", node.Comments)
 
 	if node.Distinct {
@@ -117,7 +120,29 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *With) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "with ")
+
+	if node.Recursive {
+		buf.astPrintf(node, "recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		buf.astPrintf(node, "%v, ", node.ctes[i])
+	}
+	buf.astPrintf(node, "%v", node.ctes[ctesLength-1])
+}
+
+// Format formats the node.
+func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v%v as %v ", node.TableID, node.Columns, node.Subquery)
+}
+
+// Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
 		node.Comments, node.Ignore.ToString(), node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
@@ -125,6 +150,9 @@ func (node *Update) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "delete %v", node.Comments)
 	if node.Ignore {
 		buf.WriteString("ignore ")
@@ -479,13 +507,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.Default != nil {
 		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.astPrintf(ct, " %v", ct.Options.Default)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.astPrintf(ct, " (%v)", ct.Options.Default)
+		} else {
+			buf.astPrintf(ct, " %v", ct.Options.Default)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -1719,4 +1744,12 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
 		prefix = ", "
 	}
+}
+
+// Format formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
 }

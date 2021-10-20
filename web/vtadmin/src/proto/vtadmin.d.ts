@@ -22929,6 +22929,9 @@ export namespace query {
 
         /** ReserveBeginExecuteRequest pre_queries */
         pre_queries?: (string[]|null);
+
+        /** ReserveBeginExecuteRequest post_begin_queries */
+        post_begin_queries?: (string[]|null);
     }
 
     /** Represents a ReserveBeginExecuteRequest. */
@@ -22957,6 +22960,9 @@ export namespace query {
 
         /** ReserveBeginExecuteRequest pre_queries. */
         public pre_queries: string[];
+
+        /** ReserveBeginExecuteRequest post_begin_queries. */
+        public post_begin_queries: string[];
 
         /**
          * Creates a new ReserveBeginExecuteRequest instance using the specified properties.
@@ -29351,6 +29357,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_replicas_timeout */
         wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** EmergencyReparentShardRequest prevent_cross_cell_promotion */
+        prevent_cross_cell_promotion?: (boolean|null);
     }
 
     /** Represents an EmergencyReparentShardRequest. */
@@ -29376,6 +29385,9 @@ export namespace vtctldata {
 
         /** EmergencyReparentShardRequest wait_replicas_timeout. */
         public wait_replicas_timeout?: (vttime.IDuration|null);
+
+        /** EmergencyReparentShardRequest prevent_cross_cell_promotion. */
+        public prevent_cross_cell_promotion: boolean;
 
         /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.

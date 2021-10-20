@@ -54,6 +54,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -370,7 +371,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	if IsServingType(tsv.sm.Target().TabletType) {
+	if topoproto.IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -383,17 +384,6 @@ func (tsv *TabletServer) IsHealthy() error {
 		return err
 	}
 	return nil
-}
-
-// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
-// should not be serving in it's healthy state.
-func IsServingType(tabletType topodatapb.TabletType) bool {
-	switch tabletType {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
-		return true
-	default:
-		return false
-	}
 }
 
 // ReloadSchema reloads the schema.
@@ -1146,7 +1136,7 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 }
 
 //ReserveBeginExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 
 	var connID int64
 	var err error
@@ -1157,7 +1147,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
+			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
 			}
