@@ -1,10 +1,3 @@
-2021-08-26T15:50:53Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1171102588
-2021-08-26T15:55:33Z,Cluster (11),https://github.com/vitessio/vitess/actions/runs/1171116080
-2021-08-26T15:55:33Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1171116097
-2021-08-26T15:55:33Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1171116031
-2021-08-26T15:55:33Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1171116087
-2021-08-26T15:55:33Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/1171116071
-2021-08-26T15:55:33Z,Cluster (16),https://github.com/vitessio/vitess/actions/runs/1171116082
 2021-08-26T15:55:33Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1171116076
 2021-08-26T15:55:33Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1171116042
 2021-08-26T15:55:33Z,Cluster (19),https://github.com/vitessio/vitess/actions/runs/1171116055
@@ -9996,5 +9989,12 @@
 2021-10-20T05:00:57Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1362096040
 2021-10-20T05:00:57Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1362096041
 2021-10-20T05:32:50Z,.github/workflows/check_runs_analysis.yaml,https://github.com/vitessio/vitess/actions/runs/1362177612
+2021-10-20T05:36:03Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1362185553
+2021-10-20T05:36:03Z,Cluster (vtgate_schema_tracker),https://github.com/vitessio/vitess/actions/runs/1362185576
+2021-10-20T05:36:03Z,Cluster (vtgate_topo_etcd),https://github.com/vitessio/vitess/actions/runs/1362185598
+2021-10-20T05:36:03Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1362185575
 2021-10-20T05:36:03Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1362185547
+2021-10-20T05:36:03Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1362185571
+2021-10-20T05:36:03Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1362185569
+2021-10-20T05:36:03Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1362185537
 2021-10-20T05:36:03Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1362185519
