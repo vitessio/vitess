@@ -1263,11 +1263,11 @@ func (ts *trafficSwitcher) changeWriteRoute(ctx context.Context) error {
 		return err
 	}
 	for _, table := range ts.tables {
-		delete(rules, ts.targetKeyspace+"."+table)
+		delete(rules, sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table))
 		ts.wr.Logger().Infof("Delete routing: %v", ts.targetKeyspace+"."+table)
-		rules[table] = []string{ts.targetKeyspace + "." + table}
-		rules[ts.sourceKeyspace+"."+table] = []string{ts.targetKeyspace + "." + table}
-		ts.wr.Logger().Infof("Add routing: %v %v", table, ts.sourceKeyspace+"."+table)
+		rules[sqlescape.EscapeID(table)] = []string{sqlescape.EscapeID(ts.targetKeyspace) + "." + sqlescape.EscapeID(table)}
+		rules[sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table)] = []string{sqlescape.EscapeID(ts.targetKeyspace) + "." + sqlescape.EscapeID(table)}
+		ts.wr.Logger().Infof("Add routing: %v %v", sqlescape.EscapeID(table), sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table))
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
@@ -1595,15 +1595,15 @@ func (ts *trafficSwitcher) deleteRoutingRules(ctx context.Context) error {
 		return err
 	}
 	for _, table := range ts.tables {
-		delete(rules, table)
-		delete(rules, table+"@replica")
-		delete(rules, table+"@rdonly")
-		delete(rules, ts.targetKeyspace+"."+table)
-		delete(rules, ts.targetKeyspace+"."+table+"@replica")
-		delete(rules, ts.targetKeyspace+"."+table+"@rdonly")
-		delete(rules, ts.sourceKeyspace+"."+table)
-		delete(rules, ts.sourceKeyspace+"."+table+"@replica")
-		delete(rules, ts.sourceKeyspace+"."+table+"@rdonly")
+		delete(rules, sqlescape.EscapeID(table))
+		delete(rules, sqlescape.EscapeID(table)+"@replica")
+		delete(rules, sqlescape.EscapeID(table)+"@rdonly")
+		delete(rules, sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table))
+		delete(rules, sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table)+"@replica")
+		delete(rules, sqlescape.EscapeID(ts.targetKeyspace)+"."+sqlescape.EscapeID(table)+"@rdonly")
+		delete(rules, sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table))
+		delete(rules, sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@replica")
+		delete(rules, sqlescape.EscapeID(ts.sourceKeyspace)+"."+sqlescape.EscapeID(table)+"@rdonly")
 	}
 	if err := topotools.SaveRoutingRules(ctx, ts.wr.ts, rules); err != nil {
 		return err
