@@ -17,7 +17,7 @@ defaults:
     working-directory: ./web/vtadmin
 
 jobs:
-  install:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
