@@ -1595,8 +1595,7 @@ func EqualsRefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Name == b.Name &&
-		a.IntervalTypes == b.IntervalTypes &&
+	return a.IntervalTypes == b.IntervalTypes &&
 		EqualsExpr(a.Expr, b.Expr)
 }
 

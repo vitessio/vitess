@@ -4130,7 +4130,7 @@ function_call_nonkeyword:
   }
 | EXTRACT openb interval FROM expression closeb
   {
-	$$ = &ExtractFuncExpr{Name: string("extract"), IntervalTypes: $3, Expr: $5}
+	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
   }
 
 interval:

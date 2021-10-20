@@ -957,10 +957,8 @@ func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(24)
 	}
-	// field Name string
-	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
