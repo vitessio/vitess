@@ -28,7 +28,7 @@ All of our environment variables are enumerated and commented in [react-app-env.
 
 ## Linters and Formatters
 
-We use three libraries for consistent formatting and linting across the front-end codebase. These can be run individually, as noted below, or all in sequence with `npm run lint`.
+We use three libraries for consistent formatting and linting across the front-end codebase. (Not quite as streamlined as Go, alas!) These can be run individually, as noted below, or all in sequence with `npm run lint`.
 
 | Library | Commands | What it's for |
 |---------|----------|---------------|
@@ -75,12 +75,16 @@ To set up automatic formatting on save:
 		},
 
 		"[css]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
 			"editor.codeActionsOnSave": {
 				"source.fixAll.stylelint": true
 			}
 		},
 
 		"[scss]": {
+			"editor.defaultFormatter": "esbenp.prettier-vscode",
+			"editor.formatOnSave": true,
 			"editor.codeActionsOnSave": {
 				"source.fixAll.stylelint": true
 			}
