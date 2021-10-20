@@ -61,18 +61,18 @@ func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch,
 	switch {
 	case coll.param == nil && coll.contractions == nil && len(weightPatches) == 0:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorFast{iterator: iterator{Collation900: *coll}}
+			return &FastIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_ja_0900_as_cs_ks" || name == "utf8mb4_ja_0900_as_cs":
 		coll.iterpool.New = func() interface{} {
-			return &iteratorJA{iterator: iterator{Collation900: *coll}}
+			return &jaIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_zh_0900_as_cs":
 		coll.implicits = unicodeImplicitChineseWeights
 		fallthrough
 	default:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorSlow{iterator: iterator{Collation900: *coll}}
+			return &slowIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	}
 
