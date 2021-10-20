@@ -410,7 +410,7 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
+	result, transactionID, reservedID, alias, err := q.server.ReserveBeginExecute(ctx, request.Target, request.PreQueries, nil, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
 		if reservedID != 0 {
