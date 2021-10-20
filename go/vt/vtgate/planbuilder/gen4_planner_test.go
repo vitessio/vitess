@@ -98,7 +98,7 @@ func TestOptimizeQuery(t *testing.T) {
 	Outer:	RouteTree{
 		Opcode: SelectUnsharded,
 		Tables: unsharded,
-		Predicates: :__sq_has_values1,
+		Predicates: <nil>,
 		ColNames: unsharded.id,
 		LeftJoins: 
 	}
@@ -200,6 +200,25 @@ func TestOptimizeQuery(t *testing.T) {
 		LeftJoins: 
 	},
 	order by id asc
+}`,
+		}, {
+			query: "select unsharded_a.col from unsharded_a join unsharded_b on unsharded_a.col+(select col from user_extra)",
+			result: `SubqueryTree: {
+	Outer:	RouteTree{
+		Opcode: SelectUnsharded,
+		Tables: unsharded_a,unsharded_b,
+		Predicates: unsharded_a.col + :__sq1,
+		ColNames: ,
+		LeftJoins: 
+	}
+	Inner:	RouteTree{
+		Opcode: SelectScatter,
+		Tables: user_extra,
+		Predicates: <nil>,
+		ColNames: ,
+		LeftJoins: 
+	}
+	ExtractedSubQuery::__sq1
 }`,
 		},
 	}
