@@ -90,7 +90,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 		env: env,
 		// We need three connections: one for the reloader, one for
 		// the historian, and one for the tracker.
-		conns: connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
+		conns: connpool.NewPool(env, "SchemaEnginePool", tabletenv.ConnPoolConfig{
 			Size:               3,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		}),

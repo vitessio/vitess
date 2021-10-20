@@ -87,7 +87,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		reloadTime := env.Config().SignalSchemaChangeReloadIntervalSeconds.Get()
 		newTimer = timer.NewTimer(reloadTime)
 		// We need one connection for the reloader.
-		pool = connpool.NewPool(env, "", tabletenv.ConnPoolConfig{
+		pool = connpool.NewPool(env, "SchemaReloadPool", tabletenv.ConnPoolConfig{
 			Size:               1,
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		})
