@@ -30,3 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run eslint
+        run: npm run lint:eslint
+
+      - name: Run prettier
+        run: npm run lint:prettier
+
+      - name: Run stylelint
+        run: npm run lint:stylelint
