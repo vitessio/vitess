@@ -1134,6 +1134,8 @@ func (op UnaryExprOperator) ToString() string {
 		return Utf8Str
 	case Latin1Op:
 		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
