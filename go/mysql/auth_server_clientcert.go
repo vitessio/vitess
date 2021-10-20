@@ -96,7 +96,7 @@ func (asl *AuthServerClientCert) UserEntryWithPassword(userCerts []*x509.Certifi
 	}
 
 	return &StaticUserData{
-		username: commonName,
-		groups:   userCerts[0].DNSNames,
+		Username: commonName,
+		Groups:   userCerts[0].DNSNames,
 	}, nil
 }

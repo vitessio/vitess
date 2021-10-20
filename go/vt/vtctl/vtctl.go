@@ -1856,7 +1856,17 @@ func commandRemoveShardCell(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	if err != nil {
 		return err
 	}
-	return wr.RemoveShardCell(ctx, keyspace, shard, subFlags.Arg(1), *force, *recursive)
+
+	cell := subFlags.Arg(1)
+
+	_, err = wr.VtctldServer().RemoveShardCell(ctx, &vtctldatapb.RemoveShardCellRequest{
+		Keyspace:  keyspace,
+		ShardName: shard,
+		Cell:      cell,
+		Force:     *force,
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandDeleteShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2012,7 +2022,11 @@ func commandDeleteKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		return fmt.Errorf("must specify the <keyspace> argument for DeleteKeyspace")
 	}
 
-	return wr.DeleteKeyspace(ctx, subFlags.Arg(0), *recursive)
+	_, err := wr.VtctldServer().DeleteKeyspace(ctx, &vtctldatapb.DeleteKeyspaceRequest{
+		Keyspace:  subFlags.Arg(0),
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2025,7 +2039,16 @@ func commandRemoveKeyspaceCell(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return fmt.Errorf("the <keyspace> and <cell> arguments are required for the RemoveKeyspaceCell command")
 	}
 
-	return wr.RemoveKeyspaceCell(ctx, subFlags.Arg(0), subFlags.Arg(1), *force, *recursive)
+	keyspace := subFlags.Arg(0)
+	cell := subFlags.Arg(1)
+
+	_, err := wr.VtctldServer().RemoveKeyspaceCell(ctx, &vtctldatapb.RemoveKeyspaceCellRequest{
+		Keyspace:  keyspace,
+		Cell:      cell,
+		Force:     *force,
+		Recursive: *recursive,
+	})
+	return err
 }
 
 func commandGetKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2115,7 +2138,14 @@ func commandSetKeyspaceServedFrom(ctx context.Context, wr *wrangler.Wrangler, su
 		cells = strings.Split(*cellsStr, ",")
 	}
 
-	return wr.SetKeyspaceServedFrom(ctx, keyspace, servedType, cells, *source, *remove)
+	_, err = wr.VtctldServer().SetKeyspaceServedFrom(ctx, &vtctldatapb.SetKeyspaceServedFromRequest{
+		Keyspace:       keyspace,
+		TabletType:     servedType,
+		Cells:          cells,
+		Remove:         *remove,
+		SourceKeyspace: *source,
+	})
+	return err
 }
 
 func commandRebuildKeyspaceGraph(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

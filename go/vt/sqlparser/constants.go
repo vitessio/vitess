@@ -159,6 +159,7 @@ const (
 	Utf8mb4Str = "_utf8mb4 "
 	Utf8Str    = "_utf8 "
 	Latin1Str  = "_latin1 "
+	NStringStr = "N"
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
@@ -387,6 +388,7 @@ const (
 	Utf8mb4Op
 	Utf8Op
 	Latin1Op
+	NStringOp
 )
 
 // Constant for Enum Type - MatchExprOption
