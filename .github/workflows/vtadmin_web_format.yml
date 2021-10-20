@@ -39,10 +39,10 @@ jobs:
         if: always()
         run: npm run lint:eslint
 
-      - name: Run prettier
-        if: always()
-        run: npm run lint:prettier
-
       - name: Run stylelint
         if: always()
         run: npm run lint:stylelint
+        
+      - name: Run prettier
+        if: always()
+        run: npm run lint:prettier
