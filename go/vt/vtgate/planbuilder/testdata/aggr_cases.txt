@@ -2833,7 +2833,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a = 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input = INT64(10)",
+    "Predicate": "a = 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -2865,7 +2865,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a = '1'",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input = VARBINARY(\"1\")",
+    "Predicate": "a = '1'",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -2897,7 +2897,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a != 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input != INT64(10)",
+    "Predicate": "a != 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -2929,7 +2929,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a != '1'",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input != VARBINARY(\"1\")",
+    "Predicate": "a != '1'",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -2961,7 +2961,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003e 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input \u003e INT64(10)",
+    "Predicate": "a \u003e 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -2993,7 +2993,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003e= 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input \u003e= INT64(10)",
+    "Predicate": "a \u003e= 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3025,7 +3025,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003c 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input \u003c INT64(10)",
+    "Predicate": "a \u003c 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",
@@ -3057,7 +3057,7 @@ Gen4 plan same as above
   "Original": "select count(*) a from user having a \u003c= 10",
   "Instructions": {
     "OperatorType": "Filter",
-    "Predicate": "column 0 from the input \u003c= INT64(10)",
+    "Predicate": "a \u003c= 10",
     "Inputs": [
       {
         "OperatorType": "Aggregate",

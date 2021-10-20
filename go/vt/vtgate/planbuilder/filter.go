@@ -45,7 +45,8 @@ func newFilter(semTable *semantics.SemTable, plan logicalPlan, expr sqlparser.Ex
 	return &filter{
 		logicalPlanCommon: newBuilderCommon(plan),
 		efilter: &engine.Filter{
-			Predicate: predicate,
+			Predicate:    predicate,
+			ASTPredicate: expr,
 		},
 	}, nil
 }

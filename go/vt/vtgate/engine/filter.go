@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -28,8 +29,9 @@ var _ Primitive = (*Filter)(nil)
 
 // Filter is a primitive that performs the FILTER operation.
 type Filter struct {
-	Predicate evalengine.Expr
-	Input     Primitive
+	Predicate    evalengine.Expr
+	ASTPredicate sqlparser.Expr
+	Input        Primitive
 
 	noTxNeeded
 }
@@ -116,7 +118,7 @@ func (f *Filter) Inputs() []Primitive {
 
 func (f *Filter) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Predicate": f.Predicate.String(),
+		"Predicate": sqlparser.String(f.ASTPredicate),
 	}
 
 	return PrimitiveDescription{
