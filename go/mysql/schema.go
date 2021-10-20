@@ -97,15 +97,18 @@ select table_schema, table_name, column_name, ordinal_position, character_set_na
 from information_schema.columns 
 where table_schema = database()`
 
+	// fetchColumns are the columns we fetch
+	fetchColumns = "table_name, column_name, data_type, collation_name"
+
 	// FetchUpdatedTables queries fetches all information about updated tables
-	FetchUpdatedTables = `select table_name, column_name, data_type 
+	FetchUpdatedTables = `select  ` + fetchColumns + `
 from _vt.schemacopy 
 where table_schema = database() and 
 	table_name in ::tableNames 
 order by table_name, ordinal_position`
 
 	// FetchTables queries fetches all information about tables
-	FetchTables = `select table_name, column_name, data_type 
+	FetchTables = `select ` + fetchColumns + ` 
 from _vt.schemacopy 
 where table_schema = database() 
 order by table_name, ordinal_position`
