@@ -65,8 +65,10 @@ func (c *Collation_utf8mb4_general_ci) Collate(left, right []byte, isPrefix bool
 		left = left[lWidth:]
 		right = right[rWidth:]
 	}
-
-	panic("TODO")
+	if isPrefix {
+		return len(right)
+	}
+	return len(left) - len(right)
 }
 
 func (c *Collation_utf8mb4_general_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
