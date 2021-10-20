@@ -61,6 +61,9 @@ func maketable(w io.Writer, table string, filename string, pages *tablebuilder.E
 	}
 
 	tb.DumpTables(w, layout)
+	if table == "uca900" {
+		tb.DumpFastTables(w, layout)
+	}
 }
 
 func main() {

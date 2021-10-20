@@ -130,14 +130,33 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
-	for {
-		w, ok := it.Next()
-		if !ok {
-			break
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		for {
+			for cap(dst)-len(dst) >= 16 {
+				n := fast.NextChunk(dst[len(dst) : len(dst)+16])
+				if n <= 0 {
+					goto performPadding
+				}
+				dst = dst[:len(dst)+n]
+			}
+			n := fast.NextChunk(chunk[:16])
+			if n <= 0 {
+				goto performPadding
+			}
+			dst = append(dst, chunk[:n]...)
 		}
-		dst = append(dst, byte(w>>8), byte(w))
+	} else {
+		for {
+			w, ok := it.Next()
+			if !ok {
+				break
+			}
+			dst = append(dst, byte(w>>8), byte(w))
+		}
 	}
 
+performPadding:
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x00)

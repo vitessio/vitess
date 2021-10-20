@@ -52,6 +52,26 @@ func (pb *EmbeddedPageBuilder) WritePage(w io.Writer, varname string, values []u
 	return "&" + varname
 }
 
+func (pb *EmbeddedPageBuilder) WriteFastPage(w io.Writer, varname string, values []uint16) {
+	if len(values) != 256 {
+		panic("WriteFastPage: page does not have 256 values")
+	}
+
+	var min uint16 = 0xFFFF
+	fmt.Fprintf(w, "var fast%s = [...]uint16{", varname)
+	for col, val := range values {
+		if col%8 == 0 {
+			fmt.Fprintf(w, "\n")
+		}
+		fmt.Fprintf(w, "0x%04x, ", val)
+		if val != 0 && val < min {
+			min = val
+		}
+	}
+	fmt.Fprintf(w, "\n}\n\n")
+	fmt.Fprintf(w, "const fast%s_min = 0x%04x\n\n", varname, min)
+}
+
 func (pb *EmbeddedPageBuilder) WriteTrailer(w io.Writer, embedfile string) {
 	fmt.Fprintf(w, "\n\n")
 	fmt.Fprintf(w, "//go:embed %s\n", embedfile)
