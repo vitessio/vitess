@@ -17,13 +17,12 @@ limitations under the License.
 package vtcombo
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"path"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -36,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -367,7 +367,7 @@ func CreateKs(ctx context.Context, ts *topo.Server, tpb *vttestpb.VTTestTopology
 
 	// Rebuild the SrvKeyspace object, so we can support
 	// range-based sharding queries, and export the redirects.
-	if err := wr.RebuildKeyspaceGraph(ctx, keyspace, nil, false); err != nil {
+	if err := topotools.RebuildKeyspace(ctx, wr.Logger(), wr.TopoServer(), keyspace, nil, false); err != nil {
 		return 0, fmt.Errorf("cannot rebuild %v: %v", keyspace, err)
 	}
 	return uid, nil

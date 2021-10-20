@@ -1010,7 +1010,8 @@ func (ts *trafficSwitcher) changeTableSourceWrites(ctx context.Context, access a
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.GetShard(), nil)
+		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		return err
 	})
 }
 
@@ -1245,7 +1246,8 @@ func (ts *trafficSwitcher) allowTableTargetWrites(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, target.GetShard(), nil)
+		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
+		return err
 	})
 }
 
@@ -1403,7 +1405,8 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		return ts.wr.RefreshTabletsByShard(ctx, source.GetShard(), nil)
+		_, err := topotools.RefreshTabletsByShard(ctx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
+		return err
 	})
 }
 

@@ -254,8 +254,8 @@ type VtctldClient interface {
 	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
 	RefreshStateByShard(ctx context.Context, in *vtctldata.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateByShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
-	// shards in the specified keyspace, as well as from the SrvKeyspace for that
-	// keyspace in that cell.
+	// shards in the specified keyspace (by calling RemoveShardCell on every
+	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error)
 	// RemoveShardCell removes the specified cell from the specified shard's Cells
 	// list.
@@ -984,8 +984,8 @@ type VtctldServer interface {
 	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
 	RefreshStateByShard(context.Context, *vtctldata.RefreshStateByShardRequest) (*vtctldata.RefreshStateByShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
-	// shards in the specified keyspace, as well as from the SrvKeyspace for that
-	// keyspace in that cell.
+	// shards in the specified keyspace (by calling RemoveShardCell on every
+	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error)
 	// RemoveShardCell removes the specified cell from the specified shard's Cells
 	// list.
