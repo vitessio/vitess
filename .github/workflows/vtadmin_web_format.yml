@@ -41,7 +41,7 @@ jobs:
 
       - name: Run stylelint
         if: always()
-        run: npm run lint:stylelint
+        run: npm run lint:stylelint -- -f verbose
         
       - name: Run prettier
         if: always()
