@@ -778,7 +778,7 @@ var commands = []commandGroup{
 				method: commandWorkflow,
 				params: "<ks.workflow> <action> --dry-run",
 				help:   "Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
-      },
+			},
 		},
 	},
 }
