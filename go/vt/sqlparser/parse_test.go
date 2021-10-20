@@ -59,6 +59,9 @@ var (
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
+		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
+		output: "create table t2 (\n\tb blob default ('abc')\n)",
+	}, {
 		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
 	}, {
@@ -171,6 +174,10 @@ var (
 	}, {
 		input:  "select user from (select id from users ) as x(user)",
 		output: "select `user` from (select id from users) as x(`user`)",
+	}, {
+		input: "select n, d from something",
+	}, {
+		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",

@@ -49,7 +49,7 @@ import (
 
 	{{ range .Imports -}}
 	{{ if ne .Alias "" }}{{ .Alias }} {{ end }}"{{ .Path }}"
-	{{- end }}
+	{{ end -}}
 )
 {{ range .Methods }}
 // {{ .Name }} is part of the vtctlservicepb.VtctldClient interface.

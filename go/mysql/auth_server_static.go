@@ -172,7 +172,7 @@ func (a *AuthServerStatic) UserEntryWithPassword(userCerts []*x509.Certificate, 
 
 	for _, entry := range entries {
 		// Validate the password.
-		if matchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare([]byte(password), []byte(entry.Password)) == 1 {
+		if MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare([]byte(password), []byte(entry.Password)) == 1 {
 			return &StaticUserData{entry.UserData, entry.Groups}, nil
 		}
 	}
@@ -198,13 +198,13 @@ func (a *AuthServerStatic) UserEntryWithHash(userCerts []*x509.Certificate, salt
 			}
 
 			isPass := VerifyHashedMysqlNativePassword(authResponse, salt, hash)
-			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
+			if MatchSourceHost(remoteAddr, entry.SourceHost) && isPass {
 				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		} else {
 			computedAuthResponse := ScrambleMysqlNativePassword(salt, []byte(entry.Password))
 			// Validate the password.
-			if matchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
+			if MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
 				return &StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		}
@@ -227,7 +227,7 @@ func (a *AuthServerStatic) UserEntryWithCacheHash(userCerts []*x509.Certificate,
 		computedAuthResponse := ScrambleCachingSha2Password(salt, []byte(entry.Password))
 
 		// Validate the password.
-		if matchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
+		if MatchSourceHost(remoteAddr, entry.SourceHost) && subtle.ConstantTimeCompare(authResponse, computedAuthResponse) == 1 {
 			return &StaticUserData{entry.UserData, entry.Groups}, AuthAccepted, nil
 		}
 	}
@@ -257,7 +257,7 @@ func (a *AuthServerStatic) reload() {
 	}
 
 	entries := make(map[string][]*AuthServerStaticEntry)
-	if err := parseConfig(jsonBytes, &entries); err != nil {
+	if err := ParseConfig(jsonBytes, &entries); err != nil {
 		log.Errorf("Error parsing auth server config: %v", err)
 		return
 	}
@@ -300,7 +300,8 @@ func (a *AuthServerStatic) close() {
 	}
 }
 
-func parseConfig(jsonBytes []byte, config *map[string][]*AuthServerStaticEntry) error {
+// ParseConfig takes a JSON MySQL static config and converts to a validated map
+func ParseConfig(jsonBytes []byte, config *map[string][]*AuthServerStaticEntry) error {
 	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(config); err != nil {
@@ -336,7 +337,8 @@ func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 	return nil
 }
 
-func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
+// MatchSourceHost validates host entry in auth configuration
+func MatchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
 	// Legacy support, there was not matcher defined default to true
 	if targetSourceHost == "" {
 		return true
@@ -352,11 +354,11 @@ func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
 
 // StaticUserData holds the username and groups
 type StaticUserData struct {
-	username string
-	groups   []string
+	Username string
+	Groups   []string
 }
 
 // Get returns the wrapped username and groups
 func (sud *StaticUserData) Get() *querypb.VTGateCallerID {
-	return &querypb.VTGateCallerID{Username: sud.username, Groups: sud.groups}
+	return &querypb.VTGateCallerID{Username: sud.Username, Groups: sud.Groups}
 }
