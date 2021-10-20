@@ -14,38 +14,38 @@
  * limitations under the License.
  */
 .links {
-  display: flex;
-  list-style-type: none;
-  margin: 0;
-  padding: 0;
+    display: flex;
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
 }
 
 .placeholder,
 a.link {
-  border: solid 1px var(--backgroundPrimaryHighlight);
-  border-radius: 6px;
-  color: var(--textColorSecondary);
-  display: block;
-  line-height: 36px;
-  margin-right: 8px;
-  text-align: center;
-  width: 36px;
+    border: solid 1px var(--backgroundPrimaryHighlight);
+    border-radius: 6px;
+    color: var(--textColorSecondary);
+    display: block;
+    line-height: 36px;
+    margin-right: 8px;
+    text-align: center;
+    width: 36px;
 }
 
 a.link {
-  cursor: pointer;
-  text-decoration: none;
+    cursor: pointer;
+    text-decoration: none;
 
-  &:hover {
-    border-color: var(--colorPrimary);
-  }
+    &:hover {
+        border-color: var(--colorPrimary);
+    }
 
-  &.activeLink {
-    border-color: var(--colorPrimary);
-    color: var(--colorPrimary);
-  }
+    &.activeLink {
+        border-color: var(--colorPrimary);
+        color: var(--colorPrimary);
+    }
 }
 
 .placeholder::before {
-  content: '...';
+    content: '...';
 }
