@@ -104,7 +104,10 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 	for _, col := range tbl.Columns {
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
-			Type: col.Type,
+			Type: Type{
+				typ:           col.Type,
+				collationName: col.CollationName,
+			},
 		})
 		nameMap[col.Name.String()] = nil
 	}
