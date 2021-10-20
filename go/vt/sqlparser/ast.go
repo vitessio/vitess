@@ -1897,7 +1897,6 @@ type (
 
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
-		Name          string
 		IntervalTypes IntervalTypes
 		Expr          Expr
 	}

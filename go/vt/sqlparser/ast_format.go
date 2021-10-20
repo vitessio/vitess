@@ -1112,7 +1112,7 @@ func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(%s from %v)", node.Name, node.IntervalTypes.ToString(), node.Expr)
+	buf.astPrintf(node, "extract(%s from %v)", node.IntervalTypes.ToString(), node.Expr)
 }
 
 // Format formats the node.

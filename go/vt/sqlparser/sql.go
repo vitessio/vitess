@@ -12168,7 +12168,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4132
 		{
-			yyLOCAL = &ExtractFuncExpr{Name: string("extract"), IntervalTypes: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[5].exprUnion()}
+			yyLOCAL = &ExtractFuncExpr{IntervalTypes: yyDollar[3].intervalTypeUnion(), Expr: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 813:
