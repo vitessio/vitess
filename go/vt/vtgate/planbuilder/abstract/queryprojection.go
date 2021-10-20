@@ -18,6 +18,7 @@ package abstract
 
 import (
 	"encoding/json"
+	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -64,14 +65,11 @@ type (
 // GetExpr returns the underlying sqlparser.Expr of our SelectExpr
 func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	switch sel := s.Col.(type) {
-	case *sqlparser.StarExpr:
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "starExpr does not have expr")
 	case *sqlparser.AliasedExpr:
 		return sel.Expr, nil
-	case *sqlparser.Nextval:
-		return sel.Expr, nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T does not have expr", s.Col)
 	}
-	return nil, nil
 }
 
 // GetAliasedExpr returns the SelectExpr as a *sqlparser.AliasedExpr if its type allows it,
@@ -102,9 +100,11 @@ func CreateQPFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (*Q
 		if err != nil {
 			return nil, err
 		}
-		if sqlparser.ContainsAggregation(weightStrExpr) {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+		err = checkForInvalidGroupingExpressions(weightStrExpr)
+		if err != nil {
+			return nil, err
 		}
+
 		qp.GroupByExprs = append(qp.GroupByExprs, GroupBy{Inner: expr, WeightStrExpr: weightStrExpr})
 	}
 
@@ -156,7 +156,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
-			return semantics.Gen4NotSupportedF("%T in select list", selExp)
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in select list", selExp)
 		}
 	}
 	return nil
@@ -253,14 +253,37 @@ func (qp *QueryProjection) getNonAggrExprNotMatchingGroupByExprs() sqlparser.Sel
 	return nil
 }
 
-// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, which can reference both aliased columns and
-// column offsets, and returns an expression that is simpler to evaluate
+// getSimplifiedExpr takes an expression used in ORDER BY or GROUP BY, and returns an expression that is simpler to evaluate
 func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semantics.SemTable) (expr sqlparser.Expr, weightStrExpr sqlparser.Expr, err error) {
 	// If the ORDER BY is against a column alias, we need to remember the expression
 	// behind the alias. The weightstring(.) calls needs to be done against that expression and not the alias.
 	// Eg - select music.foo as bar, weightstring(music.foo) from music order by bar
+
 	colExpr, isColName := e.(*sqlparser.ColName)
-	if isColName && colExpr.Qualifier.IsEmpty() {
+	if !isColName {
+		return e, e, nil
+	}
+
+	if sqlparser.IsNull(e) {
+		return e, nil, nil
+	}
+
+	tblInfo, err := semTable.TableInfoForExpr(e)
+	if err != nil && err != semantics.ErrMultipleTables {
+		// we can live with ErrMultipleTables and just ignore it. anything else should fail this method
+		return nil, nil, err
+	}
+	if tblInfo != nil {
+		if dTablInfo, ok := tblInfo.(*semantics.DerivedTable); ok {
+			weightStrExpr, err = semantics.RewriteDerivedExpression(colExpr, dTablInfo)
+			if err != nil {
+				return nil, nil, err
+			}
+			return e, weightStrExpr, nil
+		}
+	}
+
+	if colExpr.Qualifier.IsEmpty() {
 		for _, selectExpr := range qp.SelectExprs {
 			aliasedExpr, isAliasedExpr := selectExpr.Col.(*sqlparser.AliasedExpr)
 			if !isAliasedExpr {
@@ -271,10 +294,6 @@ func (qp *QueryProjection) getSimplifiedExpr(e sqlparser.Expr, semTable *semanti
 				return e, aliasedExpr.Expr, nil
 			}
 		}
-	}
-
-	if sqlparser.IsNull(e) {
-		return e, nil, nil
 	}
 
 	return e, e, nil
@@ -341,4 +360,18 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 		return false
 	}
 	return true
+}
+
+func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if sqlparser.IsAggregation(node) {
+			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+		}
+		_, isSubQ := node.(*sqlparser.Subquery)
+		arg, isArg := node.(sqlparser.Argument)
+		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
+			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
+		}
+		return true, nil
+	}, expr)
 }

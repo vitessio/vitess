@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"reflect"
@@ -167,7 +166,7 @@ func testWithAutoSchemaFromChangeDir(t *testing.T) {
 	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName), 0700)
 	_ = os.Mkdir(path.Join(schemaChangeDirectory, keyspaceName, "input"), 0700)
 	sqlFile := path.Join(schemaChangeDirectory, keyspaceName, "input/create_test_table_x.sql")
-	err := ioutil.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0644)
+	err := os.WriteFile(sqlFile, []byte("create table test_table_x (id int)"), 0644)
 	require.Nil(t, err)
 	timeout := time.Now().Add(10 * time.Second)
 	matchFoundAfterAutoSchemaApply := false

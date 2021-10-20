@@ -509,6 +509,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select * from music where user_id = 1"
   }
 }
+Gen4 plan same as above
 
 # DDL
 "create index a on user(id)"

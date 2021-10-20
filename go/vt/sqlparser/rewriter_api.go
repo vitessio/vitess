@@ -52,7 +52,7 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	return parent.SQLNode
 }
 
-// RootNode is the root node of the AST. It is the first element of the tree.
+// RootNode is the root node of the AST when rewriting. It is the first element of the tree.
 type RootNode struct {
 	SQLNode
 }
@@ -72,6 +72,9 @@ type Cursor struct {
 	parent   SQLNode
 	replacer replacerFunc
 	node     SQLNode
+
+	// marks that the node has been replaced, and the new node should be visited
+	revisit bool
 }
 
 // Node returns the current Node.
@@ -85,6 +88,23 @@ func (c *Cursor) Parent() SQLNode { return c.parent }
 func (c *Cursor) Replace(newNode SQLNode) {
 	c.replacer(newNode, c.parent)
 	c.node = newNode
+}
+
+// ReplaceAndRevisit replaces the current node in the parent field with this new object.
+// When used, this will abort the visitation of the current node - no post or children visited,
+// and the new node visited.
+func (c *Cursor) ReplaceAndRevisit(newNode SQLNode) {
+	switch newNode.(type) {
+	case SelectExprs:
+	default:
+		// We need to add support to the generated code for when to look at the revisit flag. At the moment it is only
+		// there for slices of SQLNode implementations
+		panic("no support added for this type yet")
+	}
+
+	c.replacer(newNode, c.parent)
+	c.node = newNode
+	c.revisit = true
 }
 
 type replacerFunc func(newNode, parent SQLNode)

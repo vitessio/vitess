@@ -20,7 +20,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -34,10 +33,13 @@ var _ Operator = (*SubQuery)(nil)
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner           Operator
-	Type            engine.PulloutOpcode
-	SelectStatement *sqlparser.Select
-	ArgName         string
+	// Inner is the Operator inside the parenthesis of the subquery.
+	// i.e: select (select 1 union select 1), the Inner here would be
+	// of type Concatenate since we have a Union.
+	Inner Operator
+
+	// ExtractedSubquery contains all information we need about this subquery
+	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
 // TableID implements the Operator interface
@@ -85,4 +87,9 @@ func (s *SubQuery) CheckValid() error {
 		}
 	}
 	return s.Outer.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (s *SubQuery) Compact(*semantics.SemTable) (Operator, error) {
+	return s, nil
 }

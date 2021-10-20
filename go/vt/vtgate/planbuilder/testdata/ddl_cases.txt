@@ -264,6 +264,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select id, `name` from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)"
   }
 }
+Gen4 plan same as above
 
 # create view with subquery in unsharded keyspace with UNION clause
 "create view view_a as (select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
@@ -311,6 +312,7 @@ Gen4 plan same as above
     "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded"
   }
 }
+Gen4 error: nesting of unions at the right-hand side is not yet supported
 
 # Alter View
 "alter view user.user_extra as select* from user.user"

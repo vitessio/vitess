@@ -25,6 +25,9 @@ import (
 
 // formatFast formats the node.
 func (node *Select) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("select ")
 	node.Comments.formatFast(buf)
 
@@ -71,24 +74,14 @@ func (node *Select) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Union) formatFast(buf *TrackedBuffer) {
-	if requiresParen(node.FirstStatement) {
+	if requiresParen(node.Left) {
 		buf.WriteByte('(')
-		node.FirstStatement.formatFast(buf)
+		node.Left.formatFast(buf)
 		buf.WriteByte(')')
 	} else {
-		node.FirstStatement.formatFast(buf)
+		node.Left.formatFast(buf)
 	}
 
-	for _, us := range node.UnionSelects {
-		us.formatFast(buf)
-	}
-	node.OrderBy.formatFast(buf)
-	node.Limit.formatFast(buf)
-	buf.WriteString(node.Lock.ToString())
-}
-
-// formatFast formats the node.
-func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(" ")
 	if node.Distinct {
 		buf.WriteString(UnionStr)
@@ -97,13 +90,17 @@ func (node *UnionSelect) formatFast(buf *TrackedBuffer) {
 	}
 	buf.WriteString(" ")
 
-	if requiresParen(node.Statement) {
+	if requiresParen(node.Right) {
 		buf.WriteByte('(')
-		node.Statement.formatFast(buf)
+		node.Right.formatFast(buf)
 		buf.WriteByte(')')
 	} else {
-		node.Statement.formatFast(buf)
+		node.Right.formatFast(buf)
 	}
+
+	node.OrderBy.formatFast(buf)
+	node.Limit.formatFast(buf)
+	buf.WriteString(node.Lock.ToString())
 }
 
 // formatFast formats the node.
@@ -191,7 +188,34 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *With) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("with ")
+
+	if node.Recursive {
+		buf.WriteString("recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		node.ctes[i].formatFast(buf)
+		buf.WriteString(", ")
+	}
+	node.ctes[ctesLength-1].formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *CommonTableExpr) formatFast(buf *TrackedBuffer) {
+	node.TableID.formatFast(buf)
+	node.Columns.formatFast(buf)
+	buf.WriteString(" as ")
+	node.Subquery.formatFast(buf)
+	buf.WriteByte(' ')
+}
+
+// formatFast formats the node.
 func (node *Update) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("update ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
@@ -210,6 +234,9 @@ func (node *Update) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Delete) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("delete ")
 	node.Comments.formatFast(buf)
 	if node.Ignore {
@@ -683,16 +710,13 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.WriteByte(' ')
-			ct.Options.Default.formatFast(buf)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.WriteString(" (")
 			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -934,7 +958,8 @@ func (node *Show) formatFast(buf *TrackedBuffer) {
 func (node *ShowLegacy) formatFast(buf *TrackedBuffer) {
 	nodeType := strings.ToLower(node.Type)
 	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys" || nodeType == "indexes" ||
-		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
+		nodeType == "databases" || nodeType == "schemas" || nodeType == "keyspaces" || nodeType == "vitess_keyspaces" || nodeType == "vitess_replication_status" ||
+		nodeType == "vitess_shards" || nodeType == "vitess_tablets") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
 		if node.Extended != "" {
 			buf.WriteString("show ")
@@ -1175,6 +1200,9 @@ func (node *AliasedTableExpr) formatFast(buf *TrackedBuffer) {
 	if !node.As.IsEmpty() {
 		buf.WriteString(" as ")
 		node.As.formatFast(buf)
+		if len(node.Columns) != 0 {
+			node.Columns.formatFast(buf)
+		}
 	}
 	if node.Hints != nil {
 		// Hint node provides the space padding.
@@ -2251,4 +2279,12 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 		pair.ToTable.formatFast(buf)
 		prefix = ", "
 	}
+}
+
+// formatFast formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
 }

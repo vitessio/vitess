@@ -20,7 +20,7 @@ import (
 	"flag"
 	"os"
 
-	"vitess.io/vitess/go/cmd/vtctldclient/internal/command"
+	"vitess.io/vitess/go/cmd/vtctldclient/command"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 )

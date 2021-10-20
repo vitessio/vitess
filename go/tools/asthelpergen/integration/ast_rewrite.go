@@ -59,7 +59,13 @@ func (a *application) rewriteBytes(parent AST, node Bytes, replacer replacerFunc
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(Bytes)
+			a.cur.revisit = false
+			return a.rewriteBytes(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -104,7 +110,13 @@ func (a *application) rewriteInterfaceSlice(parent AST, node InterfaceSlice, rep
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(InterfaceSlice)
+			a.cur.revisit = false
+			return a.rewriteInterfaceSlice(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}
@@ -159,7 +171,13 @@ func (a *application) rewriteLeafSlice(parent AST, node LeafSlice, replacer repl
 		a.cur.replacer = replacer
 		a.cur.parent = parent
 		a.cur.node = node
-		if !a.pre(&a.cur) {
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			node = a.cur.node.(LeafSlice)
+			a.cur.revisit = false
+			return a.rewriteLeafSlice(parent, node, replacer)
+		}
+		if kontinue {
 			return true
 		}
 	}

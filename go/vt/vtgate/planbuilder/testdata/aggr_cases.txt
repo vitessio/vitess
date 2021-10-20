@@ -1432,7 +1432,7 @@ Gen4 plan same as above
 # scatter aggregate group by aggregate function
 "select count(*) b from user group by b"
 "Can't group on 'b'"
-Gen4 plan same as above
+Gen4 error: Can't group on 'count(*)'
 
 # scatter aggregate multiple group by (columns)
 "select a, b, count(*) from user group by b, a"
@@ -1699,6 +1699,7 @@ Gen4 plan same as above
 # scatter aggregate with complex select list (can't build order by)
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"

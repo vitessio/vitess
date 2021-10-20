@@ -313,6 +313,57 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
     ]
   }
 }
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select user.id, user.col from user join user_extra) as t order by id",
+  "Instructions": {
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(0|1) ASC",
+    "ResultColumns": 1,
+    "Inputs": [
+      {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          2
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1,-2,-3",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+                "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
 # order by on a cross-shard query. Note: this happens only when an order by column is from the second table
 "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
@@ -655,6 +706,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # unary expression
 "select a from user order by binary a desc"
@@ -671,6 +723,23 @@ Gen4 plan same as above
     "FieldQuery": "select a, weight_string(a) from `user` where 1 != 1",
     "OrderBy": "(0|1) DESC",
     "Query": "select a, weight_string(a) from `user` order by binary a desc",
+    "ResultColumns": 1,
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select a from user order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select a, binary a, weight_string(binary a) from `user` where 1 != 1",
+    "OrderBy": "(1|2) DESC",
+    "Query": "select a, binary a, weight_string(binary a) from `user` order by binary a desc",
     "ResultColumns": 1,
     "Table": "`user`"
   }
@@ -701,6 +770,44 @@ Gen4 plan same as above
         "OrderBy": "(0|1) DESC",
         "Query": "select u.a, weight_string(u.a) from `user` as u order by binary a desc",
         "ResultColumns": 1,
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from music as m where 1 != 1",
+        "Query": "select 1 from music as m where m.a = :u_a",
+        "Table": "music"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_a": 0
+    },
+    "TableName": "`user`_music",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.a, binary a, weight_string(binary a) from `user` as u where 1 != 1",
+        "OrderBy": "(1|2) DESC",
+        "Query": "select u.a, binary a, weight_string(binary a) from `user` as u order by binary a desc",
         "Table": "`user`"
       },
       {

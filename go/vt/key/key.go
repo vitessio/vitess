@@ -242,6 +242,18 @@ func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
 	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
 }
 
+// KeyRangeContiguous returns true if the end of the left key range exactly
+// matches the start of the right key range (i.e they are contigious)
+func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
+	if left == nil {
+		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
+	}
+	if right == nil {
+		return len(left.Start) == 0 && len(left.End) == 0
+	}
+	return bytes.Equal(addPadding(left.End), addPadding(right.Start))
+}
+
 // KeyRangeEndEqual returns true if both key ranges have the same end
 func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
 	if left == nil {

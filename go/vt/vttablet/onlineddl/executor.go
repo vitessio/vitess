@@ -25,7 +25,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"os"
 	"path"
@@ -612,11 +611,17 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		}
 		return nil
 	}
+	var reenableOnce sync.Once
+	reenableWritesOnce := func() {
+		reenableOnce.Do(func() {
+			toggleWrites(true)
+		})
+	}
 	// stop writes on source:
 	if err := toggleWrites(false); err != nil {
 		return err
 	}
-	defer toggleWrites(true)
+	defer reenableWritesOnce()
 
 	if isVreplicationTestSuite {
 		// The testing suite may inject queries internally from the server via a recurring EVENT.
@@ -703,6 +708,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}()
 
 	// Tables are now swapped! Migration is successful
+	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied)
 	return nil
 
@@ -1023,7 +1029,7 @@ exit $exit_code
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executed gh-ost --execute=%v, err=%v", execute, err))
 		if err != nil {
 			// See if we can get more info from the failure file
-			if content, ferr := ioutil.ReadFile(path.Join(tempDir, migrationFailureFileName)); ferr == nil {
+			if content, ferr := os.ReadFile(path.Join(tempDir, migrationFailureFileName)); ferr == nil {
 				failureMessage := strings.TrimSpace(string(content))
 				if failureMessage != "" {
 					// This message was produced by gh-ost itself. It is more informative than the default "migration failed..." message. Overwrite.
@@ -2055,7 +2061,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 // by examining its PID file
 func (e *Executor) isPTOSCMigrationRunning(ctx context.Context, uuid string) (isRunning bool, pid int, err error) {
 	// Try and read its PID file:
-	content, err := ioutil.ReadFile(e.ptPidFileName(uuid))
+	content, err := os.ReadFile(e.ptPidFileName(uuid))
 	if err != nil {
 		// file probably does not exist (migration not running)
 		// or any other issue --> we can't confirm that the migration is actually running
@@ -2899,7 +2905,7 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 	if logFile == "" {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "No log file for migration %v", stmt.UUID)
 	}
-	content, err := ioutil.ReadFile(logFile)
+	content, err := os.ReadFile(logFile)
 	if err != nil {
 		return nil, err
 	}

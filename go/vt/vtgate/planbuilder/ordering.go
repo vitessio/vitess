@@ -16,7 +16,7 @@ package planbuilder
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -55,14 +55,14 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy v3OrderBy) (l
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of ORDER BY")
 	case *concatenate:
 		if len(orderBy) == 0 {
 			return input, nil
 		}
-		return nil, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.ordering", input)
 }
 
 func planOAOrdering(pb *primitiveBuilder, orderBy v3OrderBy, oa *orderedAggregate) (logicalPlan, error) {
@@ -213,11 +213,11 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy v3OrderBy, node *join) (logi
 				switch e := in.(type) {
 				case *sqlparser.ColName:
 					if e.Metadata.(*column).Origin().Order() > node.Left.Order() {
-						return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: order by spans across shards")
+						return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: order by spans across shards")
 					}
 				case *sqlparser.Subquery:
 					// Unreachable because ResolveSymbols perfoms this check up above.
-					return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: order by has subquery")
+					return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: order by has subquery")
 				}
 				return true, nil
 			}, order.Expr)
@@ -320,8 +320,8 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 						} else {
 							tableMeta = tableMap[tableName]
 						}
-						if tableMeta == nil {
-							break
+						if tableMeta == nil || !tableMeta.isAuthoritative {
+							return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list")
 						}
 						starColFixedIndex += len(tableMeta.columnNames) - 1
 					}

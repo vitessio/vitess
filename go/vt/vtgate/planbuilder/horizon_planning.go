@@ -39,10 +39,6 @@ type horizonPlanning struct {
 }
 
 func (hp *horizonPlanning) planHorizon(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
-	if err := checkUnsupportedConstructs(hp.sel); err != nil {
-		return nil, err
-	}
-
 	rb, isRoute := plan.(*route)
 	if !isRoute && ctx.semTable.ProjectionErr != nil {
 		return nil, ctx.semTable.ProjectionErr
@@ -184,6 +180,14 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
 		}
 
+		// if we are trying to push a projection that belongs to a DerivedTable
+		// we rewrite that expression, so it matches the column name used inside
+		// that derived table.
+		err = rewriteProjectionOfDerivedTable(expr, semTable)
+		if err != nil {
+			return 0, false, err
+		}
+
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, true, nil
@@ -234,6 +238,13 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		if err != nil {
 			return 0, false, err
 		}
+		for i, value := range node.eSimpleProj.Cols {
+			// we return early if we already have the column in the simple projection's
+			// output list so we do not add it again.
+			if reuseCol && value == offset {
+				return i, false, nil
+			}
+		}
 		node.eSimpleProj.Cols = append(node.eSimpleProj.Cols, offset)
 		return len(node.eSimpleProj.Cols) - 1, true, nil
 	case *orderedAggregate:
@@ -248,11 +259,12 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot push projections in ordered aggregates")
 	case *vindexFunc:
+		colsBefore := len(node.eVindexFunc.Cols)
 		i, err := node.SupplyProjection(expr, reuseCol)
 		if err != nil {
 			return 0, false, err
 		}
-		return i, true, nil
+		return i /* col added */, len(node.eVindexFunc.Cols) > colsBefore, nil
 	case *limit:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol)
 	case *distinct:
@@ -260,6 +272,21 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
+}
+
+func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
+	ti, err := semTable.TableInfoForExpr(expr.Expr)
+	if err != nil && err != semantics.ErrMultipleTables {
+		return err
+	}
+	_, isDerivedTable := ti.(*semantics.DerivedTable)
+	if isDerivedTable {
+		expr.Expr, err = semantics.RewriteDerivedExpression(expr.Expr, ti)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
@@ -514,6 +541,8 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		return colAdded || colAddedRecursively, nil
+	case *pulloutSubquery:
+		return planGroupByGen4(groupExpr, node.underlying, semTable, wsAdded)
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
@@ -600,9 +629,22 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		}
 		plan.input = newUnderlyingPlan
 		return plan, nil
+	case *simpleProjection:
+		return hp.createMemorySortPlan(ctx, plan, orderExprs, true)
+	case *vindexFunc:
+		// This is evaluated at VTGate only, so weight_string function cannot be used.
+		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
 	default:
-		return nil, semantics.Gen4NotSupportedF("ordering on complex query %T", plan)
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}
+}
+
+func isSpecialOrderBy(o abstract.OrderBy) bool {
+	if sqlparser.IsNull(o.Inner.Expr) {
+		return true
+	}
+	f, isFunction := o.Inner.Expr.(*sqlparser.FuncExpr)
+	return isFunction && f.Name.Lowered() == "rand"
 }
 
 func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *semantics.SemTable, hasStar bool) (logicalPlan, bool, error) {
@@ -613,7 +655,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			return nil, false, err
 		}
 		plan.Select.AddOrder(order.Inner)
-		if sqlparser.IsNull(order.Inner.Expr) {
+		if isSpecialOrderBy(order) {
 			continue
 		}
 		offset, weightStringOffset, _, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, semTable)
@@ -661,9 +703,13 @@ func wrapAndPushExpr(expr sqlparser.Expr, weightStrExpr sqlparser.Expr, plan log
 	if weightStrExpr == nil {
 		return offset, -1, added, nil
 	}
-	_, ok := expr.(*sqlparser.ColName)
-	if !ok {
-		return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+	if !sqlparser.IsColName(expr) {
+		unary, ok := expr.(*sqlparser.UnaryExpr)
+		if ok && sqlparser.IsColName(unary.Expr) {
+			expr = unary.Expr
+		} else {
+			return 0, 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+		}
 	}
 	qt := semTable.TypeFor(expr)
 	wsNeeded := true
@@ -695,6 +741,19 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 }
 
 func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
+	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
+		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
+		if err != nil {
+			return nil, err
+		}
+		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Left = lhs
+		plan.Right = rhs
+		return plan, nil
+	}
 	if allLeft(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
@@ -703,7 +762,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs [
 		plan.Left = newLeft
 		return plan, nil
 	}
-	sortPlan, err := hp.createMemorySortPlan(ctx, plan, orderExprs)
+	sortPlan, err := hp.createMemorySortPlan(ctx, plan, orderExprs, true)
 	if err != nil {
 		return nil, err
 	}
@@ -750,7 +809,7 @@ func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (int,
 	return 0, 0, false
 }
 
-func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logicalPlan, orderExprs []abstract.OrderBy) (logicalPlan, error) {
+func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logicalPlan, orderExprs []abstract.OrderBy, useWeightStr bool) (logicalPlan, error) {
 	primitive := &engine.MemorySort{}
 	ms := &memorySort{
 		resultsBuilder: resultsBuilder{
@@ -762,7 +821,11 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 	}
 
 	for _, order := range orderExprs {
-		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, order.WeightStrExpr, plan, ctx.semTable)
+		wsExpr := order.WeightStrExpr
+		if !useWeightStr {
+			wsExpr = nil
+		}
+		offset, weightStringOffset, added, err := wrapAndPushExpr(order.Inner.Expr, wsExpr, plan, ctx.semTable)
 		if err != nil {
 			return nil, err
 		}
@@ -801,7 +864,7 @@ func (hp *horizonPlanning) planDistinct(ctx *planningContext, plan logicalPlan) 
 		}
 
 		return hp.addDistinct(ctx, plan)
-	case *joinGen4:
+	case *joinGen4, *pulloutSubquery:
 		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
 		return hp.planDistinctOA(p)

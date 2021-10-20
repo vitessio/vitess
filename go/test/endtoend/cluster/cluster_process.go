@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -31,6 +30,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -88,7 +89,8 @@ type LocalProcessCluster struct {
 	VtTabletExtraArgs []string
 
 	//Extra arguments for vtGate
-	VtGateExtraArgs []string
+	VtGateExtraArgs      []string
+	VtGatePlannerVersion planbuilder.PlannerVersion
 
 	VtctldExtraArgs []string
 
@@ -444,11 +446,11 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 // NewVtgateInstance returns an instance of vtgateprocess
 func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
-	vtgateGrpcPort := cluster.GetAndReservePort()
+	cluster.VtgateGrpcPort = cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
-		vtgateGrpcPort,
+		cluster.VtgateGrpcPort,
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
@@ -459,7 +461,8 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 		"MASTER,REPLICA",
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
-		cluster.VtGateExtraArgs)
+		cluster.VtGateExtraArgs,
+		cluster.VtGatePlannerVersion)
 	return vtgateProcInstance
 }
 
@@ -469,6 +472,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	cluster.VtGatePlannerVersion = defaultVtGatePlannerVersion
 	if *forceVTDATAROOT != "" {
 		cluster.CurrentVTDATAROOT = *forceVTDATAROOT
 	}
@@ -665,14 +669,14 @@ func getPort() int {
 	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
 		port = getVtStartPort()
 	} else {
-		result, _ := ioutil.ReadFile(tmpPortFileName)
+		result, _ := os.ReadFile(tmpPortFileName)
 		cport, err := strconv.Atoi(string(result))
 		if err != nil || cport > 60000 || cport == 0 {
 			cport = getVtStartPort()
 		}
 		port = cport
 	}
-	ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+	os.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
 	return port
 }
 

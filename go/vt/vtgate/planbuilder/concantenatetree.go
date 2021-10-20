@@ -25,6 +25,9 @@ import (
 
 type (
 	concatenateTree struct {
+		distinct    bool
+		ordering    sqlparser.OrderBy
+		limit       *sqlparser.Limit
 		selectStmts []*sqlparser.Select
 		sources     []queryTree
 	}
@@ -35,7 +38,7 @@ var _ queryTree = (*concatenateTree)(nil)
 func (c *concatenateTree) tableID() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.sources {
-		tableSet |= source.tableID()
+		tableSet.MergeInPlace(source.tableID())
 	}
 	return tableSet
 }

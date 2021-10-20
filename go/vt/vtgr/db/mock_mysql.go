@@ -63,6 +63,20 @@ func (mr *MockAgentMockRecorder) BootstrapGroupLocked(instanceKey interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BootstrapGroupLocked", reflect.TypeOf((*MockAgent)(nil).BootstrapGroupLocked), instanceKey)
 }
 
+// RebootstrapGroupLocked mocks base method
+func (m *MockAgent) RebootstrapGroupLocked(instanceKey *inst.InstanceKey, name string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RebootstrapGroupLocked", instanceKey, name)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RebootstrapGroupLocked indicates an expected call of RebootstrapGroupLocked
+func (mr *MockAgentMockRecorder) RebootstrapGroupLocked(instanceKey, name interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RebootstrapGroupLocked", reflect.TypeOf((*MockAgent)(nil).RebootstrapGroupLocked), instanceKey, name)
+}
+
 // StopGroupLocked mocks base method
 func (m *MockAgent) StopGroupLocked(instanceKey *inst.InstanceKey) error {
 	m.ctrl.T.Helper()
@@ -99,8 +113,8 @@ func (m *MockAgent) SetReadOnly(instanceKey *inst.InstanceKey, readOnly bool) er
 	return ret0
 }
 
-// SetSuperReadOnly indicates an expected call of SetSuperReadOnly
-func (mr *MockAgentMockRecorder) SetSuperReadOnly(instanceKey, readOnly interface{}) *gomock.Call {
+// SetReadOnly indicates an expected call of SetReadOnly
+func (mr *MockAgentMockRecorder) SetReadOnly(instanceKey, readOnly interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetReadOnly", reflect.TypeOf((*MockAgent)(nil).SetReadOnly), instanceKey, readOnly)
 }

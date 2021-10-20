@@ -18,7 +18,6 @@ package mysql
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"syscall"
@@ -37,7 +36,7 @@ func TestJsonConfigParser(t *testing.T) {
 	// works with legacy format
 	config := make(map[string][]*AuthServerStaticEntry)
 	jsonConfig := "{\"mysql_user\":{\"Password\":\"123\", \"UserData\":\"dummy\"}, \"mysql_user_2\": {\"Password\": \"123\", \"UserData\": \"mysql_user_2\"}}"
-	err := parseConfig([]byte(jsonConfig), &config)
+	err := ParseConfig([]byte(jsonConfig), &config)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
@@ -54,7 +53,7 @@ func TestJsonConfigParser(t *testing.T) {
 		{"Password": "123", "UserData": "mysql_user_all"},
 		{"Password": "456", "UserData": "mysql_user_with_groups", "Groups": ["user_group"]}
 	]}`
-	err = parseConfig([]byte(jsonConfig), &config)
+	err = ParseConfig([]byte(jsonConfig), &config)
 	if err != nil {
 		t.Fatalf("should not get an error, but got: %v", err)
 	}
@@ -73,7 +72,7 @@ func TestJsonConfigParser(t *testing.T) {
 	jsonConfig = `{
 		"mysql_user": [{"Password": "123", "UserData": "mysql_user_all", "InvalidKey": "oops"}]
 	}`
-	err = parseConfig([]byte(jsonConfig), &config)
+	err = ParseConfig([]byte(jsonConfig), &config)
 	if err == nil {
 		t.Fatalf("Invalid config should have errored, but didn't")
 	}
@@ -110,25 +109,25 @@ func TestValidateHashGetter(t *testing.T) {
 func TestHostMatcher(t *testing.T) {
 	ip := net.ParseIP("192.168.0.1")
 	addr := &net.TCPAddr{IP: ip, Port: 9999}
-	match := matchSourceHost(net.Addr(addr), "")
+	match := MatchSourceHost(net.Addr(addr), "")
 	if !match {
 		t.Fatalf("Should match any address when target is empty")
 	}
 
-	match = matchSourceHost(net.Addr(addr), "localhost")
+	match = MatchSourceHost(net.Addr(addr), "localhost")
 	if match {
 		t.Fatalf("Should not match address when target is localhost")
 	}
 
 	socket := &net.UnixAddr{Name: "unixSocket", Net: "1"}
-	match = matchSourceHost(net.Addr(socket), "localhost")
+	match = MatchSourceHost(net.Addr(socket), "localhost")
 	if !match {
 		t.Fatalf("Should match socket when target is localhost")
 	}
 }
 
 func TestStaticConfigHUP(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -136,7 +135,7 @@ func TestStaticConfigHUP(t *testing.T) {
 
 	oldStr := "str5"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -159,7 +158,7 @@ func TestStaticConfigHUP(t *testing.T) {
 }
 
 func TestStaticConfigHUPWithRotation(t *testing.T) {
-	tmpFile, err := ioutil.TempFile("", "mysql_auth_server_static_file.json")
+	tmpFile, err := os.CreateTemp("", "mysql_auth_server_static_file.json")
 	if err != nil {
 		t.Fatalf("couldn't create temp file: %v", err)
 	}
@@ -167,7 +166,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 	oldStr := "str1"
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", oldStr, oldStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't write temp file: %v", err)
 	}
 
@@ -184,7 +183,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 
 func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 
@@ -205,7 +204,7 @@ func hupTest(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, 
 
 func hupTestWithRotation(t *testing.T, aStatic *AuthServerStatic, tmpFile *os.File, oldStr, newStr string) {
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
-	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
+	if err := os.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
 		t.Fatalf("couldn't overwrite temp file: %v", err)
 	}
 

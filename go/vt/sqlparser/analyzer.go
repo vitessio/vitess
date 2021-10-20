@@ -132,16 +132,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union,
-		*Insert, *Update, *Delete, *Stream:
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
 //MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -151,6 +161,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -326,7 +338,7 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
-// AndExpressions ands together two expression, minimising the expr when possible
+// AndExpressions ands together two or more expressions, minimising the expr when possible
 func AndExpressions(exprs ...Expr) Expr {
 	switch len(exprs) {
 	case 0:
@@ -335,21 +347,23 @@ func AndExpressions(exprs ...Expr) Expr {
 		return exprs[0]
 	default:
 		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
 			if result == nil {
 				result = expr
-			} else {
-				found := false
-				for j := 0; j < i; j++ {
-					if EqualsExpr(expr, exprs[j]) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					result = &AndExpr{Left: result, Right: expr}
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j]) {
+					continue outer
 				}
 			}
+			result = &AndExpr{Left: result, Right: expr}
 		}
 		return result
 	}
@@ -483,7 +497,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	case *UnaryExpr:
 		switch node.Operator {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
+		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op, NStringOp: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}

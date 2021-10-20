@@ -126,8 +126,8 @@ install-testing: build
 	mkdir -p "$${PREFIX}/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
-grpcvtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
-	make -C go/vt/vtctl/grpcvtctldclient
+vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
+	make -C go/vt/vtctl/vtctldclient
 
 parser:
 	make -C go/vt/sqlparser
@@ -470,4 +470,4 @@ generate_ci_workflows:
 	cd test && go run ci_workflow_gen.go && cd ..
 
 release-notes:
-	go run ./go/tools/release-notes -from $(FROM) -to $(TO) -release-branch $(RELEASE_BRANCH)
+	go run ./go/tools/release-notes -from "$(FROM)" -to "$(TO)" -version "$(VERSION)" -summary "$(SUMMARY)"

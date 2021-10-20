@@ -191,43 +191,29 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
-		case *sqlparser.ComparisonExpr:
-			if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
-				// we are looking at ANDed predicates in the WHERE clause.
-				// since we know that nothing returns true when compared to NULL,
-				// so we can safely bail out here
-				rp.routeOpCode = engine.SelectNone
-				return false, nil
+		case *sqlparser.ExtractedSubquery:
+			originalCmp, ok := node.Original.(*sqlparser.ComparisonExpr)
+			if !ok {
+				break
 			}
 
-			switch node.Operator {
-			case sqlparser.EqualOp:
-				found, err := rp.planEqualOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.InOp:
-				if rp.isImpossibleIN(node) {
-					return false, nil
-				}
-				found, err := rp.planInOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.NotInOp:
-				// NOT IN is always a scatter, except when we can be sure it would return nothing
-				if rp.isImpossibleNotIN(node) {
-					return false, nil
-				}
-			case sqlparser.LikeOp:
-				found, err := rp.planLikeOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
+			// using the node.subquery which is the rewritten version of our subquery
+			cmp := &sqlparser.ComparisonExpr{
+				Left:     node.OtherSide,
+				Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
+				Operator: originalCmp.Operator,
 			}
+			found, exitEarly, err := rp.planComparison(ctx, cmp)
+			if err != nil || exitEarly {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
+		case *sqlparser.ComparisonExpr:
+			found, exitEarly, err := rp.planComparison(ctx, node)
+			if err != nil || exitEarly {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
 		case *sqlparser.IsExpr:
 			found, err := rp.planIsExpr(ctx, node)
 			if err != nil {
@@ -237,6 +223,46 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 		}
 	}
 	return newVindexFound, nil
+}
+
+func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
+		// we are looking at ANDed predicates in the WHERE clause.
+		// since we know that nothing returns true when compared to NULL,
+		// so we can safely bail out here
+		rp.routeOpCode = engine.SelectNone
+		return false, true, nil
+	}
+
+	switch node.Operator {
+	case sqlparser.EqualOp:
+		found, err := rp.planEqualOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	case sqlparser.InOp:
+		if rp.isImpossibleIN(node) {
+			return false, true, nil
+		}
+		found, err := rp.planInOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	case sqlparser.NotInOp:
+		// NOT IN is always a scatter, except when we can be sure it would return nothing
+		if rp.isImpossibleNotIN(node) {
+			return false, true, nil
+		}
+	case sqlparser.LikeOp:
+		found, err := rp.planLikeOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	}
+	return false, false, nil
 }
 
 func (rp *routeTree) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
@@ -409,16 +435,28 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
-// If the given sqlparser.Expr is an argument and can be found in the rp.sqToReplace then the
+// If the given sqlparser.Expr is an argument and can be found in the rp.argToReplaceBySelect then the
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
 func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	if ctx.isSubQueryToReplace(argumentName(n)) {
+	if ctx.isSubQueryToReplace(n) {
 		return nil, nil
 	}
 
 	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
+		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
+			extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+			if extractedSubquery == nil {
+				continue
+			}
+			switch engine.PulloutOpcode(extractedSubquery.OpCode) {
+			case engine.PulloutIn, engine.PulloutNotIn:
+				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
+			case engine.PulloutValue, engine.PulloutExists:
+				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
+			}
+		}
 		pv, err := makePlanValue(expr)
 		if err != nil {
 			return nil, err
@@ -627,17 +665,6 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 		return nil, err
 	}
 	return &value, nil
-}
-
-func argumentName(node sqlparser.SQLNode) string {
-	var argName string
-	switch node := node.(type) {
-	case sqlparser.ListArg:
-		argName = string(node)
-	case sqlparser.Argument:
-		argName = string(node)
-	}
-	return argName
 }
 
 // costFor returns a cost struct to make route choices easier to compare

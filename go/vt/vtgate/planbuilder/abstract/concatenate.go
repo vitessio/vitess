@@ -23,27 +23,22 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-// Concatenate represents a UNION ALL.
+// Concatenate represents a UNION ALL/DISTINCT.
 type Concatenate struct {
+	Distinct    bool
 	SelectStmts []*sqlparser.Select
 	Sources     []Operator
+	OrderBy     sqlparser.OrderBy
+	Limit       *sqlparser.Limit
 }
 
 var _ Operator = (*Concatenate)(nil)
-
-// createConcatenateIfRequired creates a Concatenate operator on top of the sources if it is required
-func createConcatenateIfRequired(sources []Operator, selStmts []*sqlparser.Select) Operator {
-	if len(sources) == 1 {
-		return sources[0]
-	}
-	return &Concatenate{Sources: sources, SelectStmts: selStmts}
-}
 
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.Sources {
-		tableSet |= source.TableID()
+		tableSet.MergeInPlace(source.TableID())
 	}
 	return tableSet
 }
@@ -55,7 +50,7 @@ func (c *Concatenate) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
 
 // UnsolvedPredicates implements the Operator interface
 func (c *Concatenate) UnsolvedPredicates(*semantics.SemTable) []sqlparser.Expr {
-	panic("implement me")
+	return nil
 }
 
 // CheckValid implements the Operator interface
@@ -67,4 +62,33 @@ func (c *Concatenate) CheckValid() error {
 		}
 	}
 	return nil
+}
+
+// Compact implements the Operator interface
+func (c *Concatenate) Compact(*semantics.SemTable) (Operator, error) {
+	var newSources []Operator
+	var newSels []*sqlparser.Select
+	for i, source := range c.Sources {
+		other, isConcat := source.(*Concatenate)
+		if !isConcat {
+			newSources = append(newSources, source)
+			newSels = append(newSels, c.SelectStmts[i])
+			continue
+		}
+		switch {
+		case other.Limit == nil && len(other.OrderBy) == 0 && !other.Distinct:
+			fallthrough
+		case c.Distinct && other.Limit == nil:
+			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
+			newSources = append(newSources, other.Sources...)
+			newSels = append(newSels, other.SelectStmts...)
+
+		default:
+			newSources = append(newSources, other)
+			newSels = append(newSels, nil)
+		}
+	}
+	c.Sources = newSources
+	c.SelectStmts = newSels
+	return c, nil
 }

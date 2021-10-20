@@ -20,22 +20,19 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type subqueryTree struct {
-	subquery *sqlparser.Select
-	outer    queryTree
-	inner    queryTree
-	opcode   engine.PulloutOpcode
-	argName  string
+	outer     queryTree
+	inner     queryTree
+	extracted *sqlparser.ExtractedSubquery
 }
 
 var _ queryTree = (*subqueryTree)(nil)
 
 func (s *subqueryTree) tableID() semantics.TableSet {
-	return s.inner.tableID() | s.outer.tableID()
+	return s.inner.tableID().Merge(s.outer.tableID())
 }
 
 func (s *subqueryTree) cost() int {
@@ -44,11 +41,9 @@ func (s *subqueryTree) cost() int {
 
 func (s *subqueryTree) clone() queryTree {
 	result := &subqueryTree{
-		subquery: s.subquery,
-		outer:    s.outer.clone(),
-		inner:    s.inner.clone(),
-		opcode:   s.opcode,
-		argName:  s.argName,
+		outer:     s.outer.clone(),
+		inner:     s.inner.clone(),
+		extracted: s.extracted,
 	}
 	return result
 }
