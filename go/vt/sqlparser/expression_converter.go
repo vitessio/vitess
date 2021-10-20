@@ -17,7 +17,8 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -113,7 +114,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		case DivOp:
 			op = &evalengine.Division{}
 		default:
-			return nil, fmt.Errorf("%s: %T", ErrConvertExprNotSupported, e)
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 		}
 		left, err := Convert(node.Left, columnLookup)
 		if err != nil {
@@ -130,5 +131,5 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		}, nil
 
 	}
-	return nil, fmt.Errorf("%s: %T", ErrConvertExprNotSupported, e)
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }
