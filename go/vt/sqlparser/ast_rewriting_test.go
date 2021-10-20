@@ -258,7 +258,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset) // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -330,7 +330,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys")
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
