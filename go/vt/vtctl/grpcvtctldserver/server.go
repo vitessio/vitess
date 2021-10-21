@@ -315,6 +315,11 @@ func (s *VtctldServer) ApplyVSchema(ctx context.Context, req *vtctldatapb.ApplyV
 	return &vtctldatapb.ApplyVSchemaResponse{VSchema: updatedVS}, nil
 }
 
+// Backup is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
+	panic("unimplemented!")
+}
+
 // ChangeTabletType is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.ChangeTabletTypeRequest) (*vtctldatapb.ChangeTabletTypeResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ChangeTabletType")

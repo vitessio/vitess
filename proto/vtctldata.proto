@@ -236,6 +236,26 @@ message ApplyVSchemaResponse {
   vschema.Keyspace v_schema = 1;
 }
 
+message BackupRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  // AllowPrimary allows the backup to proceed if TabletAlias is a PRIMARY.
+  //
+  // WARNING: If using the builtin backup engine, this will shutdown mysqld on
+  // the primary for the duration of the backup, and no writes will be possible.
+  bool allow_primary = 2;
+  // Concurrency specifies the number of compression/checksum jobs to run
+  // simultaneously.
+  uint64 concurrency = 3;
+}
+
+message BackupResponse {
+  // TabletAlias is the alias being used for the backup.
+  topodata.TabletAlias tablet_alias = 1;
+  string keyspace = 2;
+  string shard = 3;
+  logutil.Event event = 4;
+}
+
 message ChangeTabletTypeRequest {
   topodata.TabletAlias tablet_alias = 1;
   topodata.TabletType db_type = 2;

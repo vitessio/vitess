@@ -148,6 +148,9 @@ type VtctldClient interface {
 	ApplySchema(ctx context.Context, in *vtctldata.ApplySchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ApplyVSchemaResponse, error)
+	// Backup uses the BackupEngine and BackupStorage services on the specified
+	// tablet to create and store a new backup.
+	Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error)
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -402,6 +405,38 @@ func (c *vtctldClient) ApplyVSchema(ctx context.Context, in *vtctldata.ApplyVSch
 		return nil, err
 	}
 	return out, nil
+}
+
+func (c *vtctldClient) Backup(ctx context.Context, in *vtctldata.BackupRequest, opts ...grpc.CallOption) (Vtctld_BackupClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Vtctld_ServiceDesc.Streams[0], "/vtctlservice.Vtctld/Backup", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &vtctldBackupClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Vtctld_BackupClient interface {
+	Recv() (*vtctldata.BackupResponse, error)
+	grpc.ClientStream
+}
+
+type vtctldBackupClient struct {
+	grpc.ClientStream
+}
+
+func (x *vtctldBackupClient) Recv() (*vtctldata.BackupResponse, error) {
+	m := new(vtctldata.BackupResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *vtctldClient) ChangeTabletType(ctx context.Context, in *vtctldata.ChangeTabletTypeRequest, opts ...grpc.CallOption) (*vtctldata.ChangeTabletTypeResponse, error) {
@@ -982,6 +1017,9 @@ type VtctldServer interface {
 	ApplySchema(context.Context, *vtctldata.ApplySchemaRequest) (*vtctldata.ApplySchemaResponse, error)
 	// ApplyVSchema applies a vschema to a keyspace.
 	ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error)
+	// Backup uses the BackupEngine and BackupStorage services on the specified
+	// tablet to create and store a new backup.
+	Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error
 	// ChangeTabletType changes the db type for the specified tablet, if possible.
 	// This is used primarily to arrange replicas, and it will not convert a
 	// primary. For that, use InitShardPrimary.
@@ -1204,6 +1242,9 @@ func (UnimplementedVtctldServer) ApplySchema(context.Context, *vtctldata.ApplySc
 }
 func (UnimplementedVtctldServer) ApplyVSchema(context.Context, *vtctldata.ApplyVSchemaRequest) (*vtctldata.ApplyVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ApplyVSchema not implemented")
+}
+func (UnimplementedVtctldServer) Backup(*vtctldata.BackupRequest, Vtctld_BackupServer) error {
+	return status.Errorf(codes.Unimplemented, "method Backup not implemented")
 }
 func (UnimplementedVtctldServer) ChangeTabletType(context.Context, *vtctldata.ChangeTabletTypeRequest) (*vtctldata.ChangeTabletTypeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ChangeTabletType not implemented")
@@ -1492,6 +1533,27 @@ func _Vtctld_ApplyVSchema_Handler(srv interface{}, ctx context.Context, dec func
 		return srv.(VtctldServer).ApplyVSchema(ctx, req.(*vtctldata.ApplyVSchemaRequest))
 	}
 	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_Backup_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(vtctldata.BackupRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(VtctldServer).Backup(m, &vtctldBackupServer{stream})
+}
+
+type Vtctld_BackupServer interface {
+	Send(*vtctldata.BackupResponse) error
+	grpc.ServerStream
+}
+
+type vtctldBackupServer struct {
+	grpc.ServerStream
+}
+
+func (x *vtctldBackupServer) Send(m *vtctldata.BackupResponse) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Vtctld_ChangeTabletType_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -2886,6 +2948,12 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_ValidateVSchema_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "Backup",
+			Handler:       _Vtctld_Backup_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "vtctlservice.proto",
 }
