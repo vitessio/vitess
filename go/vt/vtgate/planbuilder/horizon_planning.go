@@ -529,7 +529,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: semTable.CollationFor(groupExpr.WeightStrExpr)})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: semTable.CollationFor(groupExpr.Inner)})
 		} else {
 			if wsOffset != -1 {
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
