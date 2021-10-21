@@ -357,9 +357,20 @@ func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterNa
 // SetReadOnly is part of the Conn interface
 func (ts *Server) SetReadOnly(readOnly bool) {
 	ts.globalCell.SetReadOnly(readOnly)
+	for _, conn := range ts.cells {
+		conn.SetReadOnly(true)
+	}
 }
 
 // IsReadOnly is part of the Conn interface
 func (ts *Server) IsReadOnly() bool {
-	return ts.globalCell.IsReadOnly()
+	if !ts.globalCell.IsReadOnly() {
+		return false
+	}
+	for _, conn := range ts.cells {
+		if !conn.IsReadOnly() {
+			return false
+		}
+	}
+	return true
 }
