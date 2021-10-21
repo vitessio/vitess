@@ -3266,6 +3266,15 @@ func (m *ReserveBeginExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, e
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.PostBeginQueries) > 0 {
+		for iNdEx := len(m.PostBeginQueries) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.PostBeginQueries[iNdEx])
+			copy(dAtA[i:], m.PostBeginQueries[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.PostBeginQueries[iNdEx])))
+			i--
+			dAtA[i] = 0x3a
+		}
+	}
 	if len(m.PreQueries) > 0 {
 		for iNdEx := len(m.PreQueries) - 1; iNdEx >= 0; iNdEx-- {
 			i -= len(m.PreQueries[iNdEx])
@@ -5184,6 +5193,12 @@ func (m *ReserveBeginExecuteRequest) SizeVT() (n int) {
 	}
 	if len(m.PreQueries) > 0 {
 		for _, s := range m.PreQueries {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
+	}
+	if len(m.PostBeginQueries) > 0 {
+		for _, s := range m.PostBeginQueries {
 			l = len(s)
 			n += 1 + l + sov(uint64(l))
 		}
@@ -13786,6 +13801,38 @@ func (m *ReserveBeginExecuteRequest) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.PreQueries = append(m.PreQueries, string(dAtA[iNdEx:postIndex]))
+			iNdEx = postIndex
+		case 7:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field PostBeginQueries", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.PostBeginQueries = append(m.PostBeginQueries, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
