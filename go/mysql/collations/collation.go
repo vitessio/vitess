@@ -24,8 +24,10 @@ import (
 // Generate mysqldata.go from the JSON information dumped from MySQL
 //go:generate go run ./tools/makemysqldata/
 
+// ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
+// Unknown is the default ID for an unknown collation.
 const Unknown ID = 0
 
 // Collation implements a MySQL-compatible collation. It defines how to compare
@@ -144,12 +146,13 @@ func LookupByName(name string) Collation {
 
 // LookupIDByName returns the collation ID for the given name
 func LookupIDByName(name string) ID {
-	csi := collationsByName[name]
-	if csi == nil {
-		return Unknown
+	if supported, ok := collationsByName[name]; ok {
+		return supported.Id()
 	}
-
-	return csi.Id()
+	if unsupported, ok := collationsUnsupportedByName[name]; ok {
+		return unsupported
+	}
+	return Unknown
 }
 
 // LookupById returns the collation with the given numerical identifier. The collation
