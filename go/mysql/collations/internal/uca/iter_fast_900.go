@@ -24,8 +24,7 @@ import (
 
 type FastIterator900 struct {
 	iterator900
-	fastTable []uint16
-	fastLimit uint32
+	fastTable []uint32
 }
 
 func (it *FastIterator900) Done() {
@@ -36,7 +35,6 @@ func (it *FastIterator900) Done() {
 
 func (it *FastIterator900) reset(input []byte) {
 	it.fastTable = fastweightTable_uca900_page000L0[:256]
-	it.fastLimit = fastweightTable_uca900_page000L0_min * 8
 	it.iterator900.reset(input)
 }
 
@@ -47,36 +45,91 @@ func (it *FastIterator900) NextChunk(srcbytes []byte) int {
 	if it.codepoint.ce == 0 && len(p) >= 8 {
 		dword := *(*uint64)(unsafe.Pointer(&p[0]))
 		if dword&0x8080808080808080 == 0 {
-			limit := uint32(0)
-			table := it.fastTable[:256]
-			weight := table[p[0]]
-			limit += uint32(weight)
-			chunk[0] = weight
-			weight = table[p[1]]
-			limit += uint32(weight)
-			chunk[1] = weight
-			weight = table[p[2]]
-			limit += uint32(weight)
-			chunk[2] = weight
-			weight = table[p[3]]
-			limit += uint32(weight)
-			chunk[3] = weight
-			weight = table[p[4]]
-			limit += uint32(weight)
-			chunk[4] = weight
-			weight = table[p[5]]
-			limit += uint32(weight)
-			chunk[5] = weight
-			weight = table[p[6]]
-			limit += uint32(weight)
-			chunk[6] = weight
-			weight = table[p[7]]
-			limit += uint32(weight)
-			chunk[7] = weight
+			const optimisticFastWrites = true
 
-			if limit >= it.fastLimit {
-				it.input = it.input[8:]
-				return 16
+			table := it.fastTable[:256]
+
+			if optimisticFastWrites {
+				var mask uint32 = 0x20000
+				weight := table[p[0]]
+				mask &= weight
+				chunk[0] = uint16(weight)
+
+				weight = table[p[1]]
+				mask &= weight
+				chunk[1] = uint16(weight)
+
+				weight = table[p[2]]
+				mask &= weight
+				chunk[2] = uint16(weight)
+
+				weight = table[p[2]]
+				mask &= weight
+				chunk[2] = uint16(weight)
+
+				weight = table[p[3]]
+				mask &= weight
+				chunk[3] = uint16(weight)
+
+				weight = table[p[4]]
+				mask &= weight
+				chunk[4] = uint16(weight)
+
+				weight = table[p[5]]
+				mask &= weight
+				chunk[5] = uint16(weight)
+
+				weight = table[p[6]]
+				mask &= weight
+				chunk[6] = uint16(weight)
+
+				weight = table[p[7]]
+				mask &= weight
+				chunk[7] = uint16(weight)
+
+				if mask != 0 {
+					it.input = it.input[8:]
+					return 16
+				}
+			} else {
+				dst := (*uint16)(unsafe.Pointer(&srcbytes[0]))
+				weight := table[p[0]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[1]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[2]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[3]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[4]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[5]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[6]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				weight = table[p[7]]
+				*dst = uint16(weight)
+				dst = (*uint16)(unsafe.Add(unsafe.Pointer(dst), weight>>16))
+
+				written := uintptr(unsafe.Pointer(dst)) - uintptr(unsafe.Pointer(&srcbytes[0]))
+				if written != 0 {
+					it.input = it.input[written>>1:]
+					return int(written)
+				}
 			}
 		}
 	}
@@ -96,10 +149,8 @@ func (it *FastIterator900) resetForNextLevel() {
 	switch it.level {
 	case 1:
 		it.fastTable = fastweightTable_uca900_page000L1[:256]
-		it.fastLimit = fastweightTable_uca900_page000L1_min * 8
 	case 2:
 		it.fastTable = fastweightTable_uca900_page000L2[:256]
-		it.fastLimit = fastweightTable_uca900_page000L2_min * 8
 	}
 }
 

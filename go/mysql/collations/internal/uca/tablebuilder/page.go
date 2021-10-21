@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/bits"
 )
 
 type EmbeddedPageBuilder struct {
@@ -57,19 +58,18 @@ func (pb *EmbeddedPageBuilder) WriteFastPage(w io.Writer, varname string, values
 		panic("WriteFastPage: page does not have 256 values")
 	}
 
-	var min uint16 = 0xFFFF
-	fmt.Fprintf(w, "var fast%s = [...]uint16{", varname)
+	fmt.Fprintf(w, "var fast%s = [...]uint32{", varname)
 	for col, val := range values {
 		if col%8 == 0 {
 			fmt.Fprintf(w, "\n")
 		}
-		fmt.Fprintf(w, "0x%04x, ", val)
-		if val != 0 && val < min {
-			min = val
+		if val != 0 {
+			fmt.Fprintf(w, "0x2%04x, ", bits.ReverseBytes16(val))
+		} else {
+			fmt.Fprintf(w, "0x0000, ")
 		}
 	}
 	fmt.Fprintf(w, "\n}\n\n")
-	fmt.Fprintf(w, "const fast%s_min = 0x%04x\n\n", varname, min)
 }
 
 func (pb *EmbeddedPageBuilder) WriteTrailer(w io.Writer, embedfile string) {

@@ -19,7 +19,6 @@ package tablebuilder
 import (
 	"fmt"
 	"io"
-	"math/bits"
 	"reflect"
 
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
@@ -101,7 +100,7 @@ func (p *page) weights900Fast(level int) (w []uint16) {
 		if level < len(entry.weights) {
 			weight = entry.weights[level]
 		}
-		w = append(w, bits.ReverseBytes16(weight))
+		w = append(w, weight)
 	}
 	for i := 0; i < 128; i++ {
 		w = append(w, 0x0)
