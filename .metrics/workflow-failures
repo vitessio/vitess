@@ -1,7 +1,3 @@
-2021-09-02T14:56:09Z,docker_test_1,https://github.com/vitessio/vitess/actions/runs/1194667091
-2021-09-02T14:56:09Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1194667047
-2021-09-02T15:05:24Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1194700976
-2021-09-02T15:05:24Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1194700980
 2021-09-02T15:05:24Z,Unit Test Self Hosted (mariadb),https://github.com/vitessio/vitess/actions/runs/1194700984
 2021-09-02T15:05:24Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1194700949
 2021-09-02T15:29:36Z,Cluster (14),https://github.com/vitessio/vitess/actions/runs/1194788534
@@ -9989,10 +9985,14 @@
 2021-10-21T14:50:20Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1368451147
 2021-10-21T14:50:20Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1368451114
 2021-10-21T14:50:20Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1368451120
+2021-10-21T14:50:20Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1368451155
 2021-10-21T14:50:20Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1368451111
 2021-10-21T14:50:20Z,Unit Test (mysql57),https://github.com/vitessio/vitess/actions/runs/1368451133
+2021-10-21T14:50:20Z,Unit Test (mysql80),https://github.com/vitessio/vitess/actions/runs/1368451159
+2021-10-21T14:50:20Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1368451117
 2021-10-21T14:50:20Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1368451130
 2021-10-21T14:50:20Z,docker_test_cluster_10,https://github.com/vitessio/vitess/actions/runs/1368451115
+2021-10-21T14:50:20Z,docker_test_cluster_25,https://github.com/vitessio/vitess/actions/runs/1368451136
 2021-10-21T14:50:20Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1368451162
 2021-10-21T14:50:20Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1368451164
 2021-10-21T14:50:20Z,local_example,https://github.com/vitessio/vitess/actions/runs/1368451129
