@@ -18,7 +18,6 @@ package utils
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -43,12 +42,8 @@ func AssertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
 func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
-	if err == nil {
-		t.Errorf("Query: %s expected error but got nil", query)
-	}
-	if !strings.Contains(err.Error(), expected) {
-		t.Errorf("Query: %s:\nexpected \n%s \nbut actual \n%s", query, expected, err.Error())
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), expected)
 }
 
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
