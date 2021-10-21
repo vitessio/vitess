@@ -155,7 +155,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 }
 
 // pushProjection pushes a projection to the plan.
-func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner bool, reuseCol bool, hasAggregation bool) (offset int, added bool, err error) {
+func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *route:
 		value, err := makePlanValue(expr.Expr)
