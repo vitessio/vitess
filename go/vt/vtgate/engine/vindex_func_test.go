@@ -124,6 +124,32 @@ func TestVindexFuncMap(t *testing.T) {
 		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
 	}
 
+	// Unique Vindex returning 3 rows
+	vf = &VindexFunc{
+		Fields: sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
+		Cols:   []int{0, 1, 2, 3, 4},
+		Opcode: VindexMap,
+		Vindex: &uvindex{matchid: true},
+		Value:  evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2), evalengine.NewLiteralInt(3)},
+	}
+	got, err = vf.TryExecute(nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|keyspace_id|hex(keyspace_id)|range_start|range_end", "varbinary|varbinary|varbinary|varbinary|varbinary"),
+		"1|foo|||666f6f",
+		"2|foo|||666f6f",
+		"3|foo|||666f6f",
+	)
+	for _, row := range want.Rows {
+		row[2] = sqltypes.NULL
+		row[3] = sqltypes.NULL
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Execute(Map, uvindex(none)):\n%v, want\n%v", got, want)
+	}
+
 	// Unique Vindex returning keyrange.
 	vf = testVindexFunc(&uvindex{matchkr: true})
 	got, err = vf.TryExecute(nil, nil, false)
