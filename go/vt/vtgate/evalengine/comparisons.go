@@ -73,44 +73,105 @@ var _ ComparisonOp = (*NotLikeOp)(nil)
 var _ ComparisonOp = (*RegexpOp)(nil)
 var _ ComparisonOp = (*NotRegexpOp)(nil)
 
-func evaluateSideOfComparison(expr Expr, env ExpressionEnv) (EvalResult, error) {
-	val, err := expr.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
+func (c *ComparisonExpr) evaluateComparisonExprs(env ExpressionEnv) (EvalResult, EvalResult, error) {
+	var lVal, rVal EvalResult
+	var err error
+	if lVal, err = c.Left.Evaluate(env); err != nil {
+		return EvalResult{}, EvalResult{}, err
 	}
-	if val.typ == sqltypes.Null {
-		return resultNull, nil
+	if rVal, err = c.Right.Evaluate(env); err != nil {
+		return EvalResult{}, EvalResult{}, err
 	}
-	return makeNumericPanic(val), nil
+	return lVal, rVal, nil
+}
+
+func hasNullEvalResult(l, r EvalResult) bool {
+	return l.typ == sqltypes.Null || r.typ == sqltypes.Null
+}
+
+func evalResultsAreString(l, r EvalResult) bool {
+	return sqltypes.IsText(l.typ) && sqltypes.IsText(r.typ)
+}
+
+func evalResultsAreInteger(l, r EvalResult) bool {
+	return sqltypes.IsIntegral(l.typ) && sqltypes.IsIntegral(r.typ)
+}
+
+func needsDecimalHandling(l, r EvalResult) bool {
+	// we need to evaluate these two arguments as decimal if one of the argument is a decimal
+	// and the other one is a decimal or an integer
+	return l.typ == sqltypes.Decimal && (r.typ == sqltypes.Decimal || sqltypes.IsIntegral(r.typ)) ||
+		r.typ == sqltypes.Decimal && (l.typ == sqltypes.Decimal || sqltypes.IsIntegral(l.typ))
+}
+
+func needsFloatHandling(l, r EvalResult) bool {
+	// we need to evaluate these two arguments as decimal if one of the argument is a decimal
+	// and the other one is a decimal or an integer
+	return l.typ == sqltypes.Decimal && sqltypes.IsFloat(r.typ) || r.typ == sqltypes.Decimal && sqltypes.IsFloat(l.typ)
+}
+
+func executeComparison(lVal, rVal EvalResult) (int, error) {
+	switch {
+	case evalResultsAreString(lVal, rVal):
+		// Comparing as strings if both sides are strings
+		panic("not implemented yet")
+
+	case evalResultsAreInteger(lVal, rVal), needsFloatHandling(lVal, rVal):
+		return compareNumeric(lVal, rVal)
+
+	case needsDecimalHandling(lVal, rVal):
+		panic("not implemented yet")
+
+	// TODO: case for binary strings
+
+	// TODO: case for dates
+
+	// TODO: case for hexadecimal values
+
+	default:
+		// TODO: handle default case
+		// Quoting MySQL Docs:
+		//
+		// 		"In all other cases, the arguments are compared as floating-point (real) numbers.
+		// 		For example, a comparison of string and numeric operands takes place as a
+		// 		comparison of floating-point numbers."
+		//
+		//		https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+		return compareNumeric(makeNumeric(lVal), makeNumeric(rVal))
+	}
 }
 
 // Evaluate implements the Expr interface
-func (e *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	if e.Op == nil {
+// For more details on comparison expression evaluation and type conversion:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+func (c *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	if c.Op == nil {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a comparison expression needs a comparison operator")
 	}
 
-	lVal, err := evaluateSideOfComparison(e.Left, env)
-	if lVal.typ == sqltypes.Null || err != nil {
-		return lVal, err
+	lVal, rVal, err := c.evaluateComparisonExprs(env)
+	if err != nil {
+		return EvalResult{}, err
 	}
 
-	rVal, err := evaluateSideOfComparison(e.Right, env)
-	if rVal.typ == sqltypes.Null || err != nil {
-		return rVal, err
+	if hasNullEvalResult(lVal, rVal) {
+		// Comparison operation NullSafeEqual (<=>) does not care if one or two sides are NULL
+		if _, isNullsafe := c.Op.(*NullSafeEqualOp); !isNullsafe {
+			// If a side of the comparison is NULL, result will always be NULL
+			return resultNull, nil
+		}
 	}
-
-	return e.Op.Evaluate(lVal, rVal)
+	return c.Op.Evaluate(lVal, rVal)
 }
 
 // Type implements the Expr interface
-func (e *ComparisonExpr) Type(ExpressionEnv) (querypb.Type, error) {
+func (c *ComparisonExpr) Type(ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_INT32, nil
 }
 
 // String implements the Expr interface
-func (e *ComparisonExpr) String() string {
-	return e.Left.String() + " " + e.Op.String() + " " + e.Right.String()
+func (c *ComparisonExpr) String() string {
+	return c.Left.String() + " " + c.Op.String() + " " + c.Right.String()
 }
 
 // Evaluate implements the ComparisonOp interface
@@ -123,7 +184,7 @@ func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (e *EqualOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
@@ -150,7 +211,7 @@ func (n *NotEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (n *NotEqualOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
@@ -197,7 +258,7 @@ func (l *LessThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (l *LessThanOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
@@ -224,7 +285,7 @@ func (l *LessEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (l *LessEqualOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
@@ -251,7 +312,7 @@ func (g *GreaterThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (g *GreaterThanOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
@@ -278,7 +339,7 @@ func (g *GreaterEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // IsTrue implements the ComparisonOp interface
 func (g *GreaterEqualOp) IsTrue(left, right EvalResult) (bool, error) {
-	numeric, err := compareNumeric(left, right)
+	numeric, err := executeComparison(left, right)
 	if err != nil {
 		return false, err
 	}
