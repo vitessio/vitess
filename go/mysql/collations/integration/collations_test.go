@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -196,47 +197,6 @@ func TestCollationWithSpace(t *testing.T) {
 	}
 }
 
-func normalizecmp(res int) int {
-	if res < 0 {
-		return -1
-	}
-	if res > 0 {
-		return 1
-	}
-	return 0
-}
-
-func TestRemoteKanaSensitivity(t *testing.T) {
-	const Kana1 = "の東京ノ"
-	const Kana2 = "ノ東京の"
-
-	var JapaneseCollations = []string{
-		"utf8mb4_0900_as_cs",
-		"utf8mb4_ja_0900_as_cs",
-		"utf8mb4_ja_0900_as_cs_ks",
-	}
-
-	conn := mysqlconn(t)
-	defer conn.Close()
-
-	for _, collName := range JapaneseCollations {
-		t.Run(collName, func(t *testing.T) {
-			local := collations.LookupByName(collName)
-			remote := collations.RemoteByName(conn, collName)
-			localResult := normalizecmp(local.Collate([]byte(Kana1), []byte(Kana2), false))
-			remoteResult := remote.Collate([]byte(Kana1), []byte(Kana2), false)
-
-			if err := remote.LastError(); err != nil {
-				t.Fatalf("remote collation failed: %v", err)
-			}
-
-			if localResult != remoteResult {
-				t.Errorf("expected STRCMP(%q, %q) to be %d (got %d)", Kana1, Kana2, remoteResult, localResult)
-			}
-		})
-	}
-}
-
 var testOneCollation = flag.String("test-one-collation", "", "")
 
 func TestCollationsOnMysqld(t *testing.T) {
@@ -254,4 +214,100 @@ func TestCollationsOnMysqld(t *testing.T) {
 			processSQLTest(t, testfile, conn)
 		})
 	}
+}
+
+type testweight struct {
+	collation string
+	input     []byte
+}
+
+type testcmp struct {
+	collation   string
+	left, right []byte
+}
+
+func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	for _, tc := range cases {
+		t.Run(tc.collation, func(t *testing.T) {
+			local := collations.LookupByName(tc.collation)
+			remote := collations.RemoteByName(conn, tc.collation)
+			localResult := local.WeightString(nil, tc.input, 0)
+			remoteResult := remote.WeightString(nil, tc.input, 0)
+
+			if err := remote.LastError(); err != nil {
+				t.Fatalf("remote collation failed: %v", err)
+			}
+
+			if !bytes.Equal(localResult, remoteResult) {
+				t.Errorf("expected WEIGHT_STRING(%#v) = %#v (got %#v)", tc.input, remoteResult, localResult)
+			}
+
+			if golden != nil {
+				fmt.Fprintf(golden, "{\n\tcollation: %q,\n\texpected: %#v,\n},\n", tc.collation, remoteResult)
+			}
+		})
+	}
+}
+
+func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
+	normalizecmp := func(res int) int {
+		if res < 0 {
+			return -1
+		}
+		if res > 0 {
+			return 1
+		}
+		return 0
+	}
+
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	for _, tc := range cases {
+		t.Run(tc.collation, func(t *testing.T) {
+			local := collations.LookupByName(tc.collation)
+			remote := collations.RemoteByName(conn, tc.collation)
+			localResult := normalizecmp(local.Collate(tc.left, tc.right, false))
+			remoteResult := remote.Collate(tc.left, tc.right, false)
+
+			if err := remote.LastError(); err != nil {
+				t.Fatalf("remote collation failed: %v", err)
+			}
+			if localResult != remoteResult {
+				t.Errorf("expected STRCMP(%q, %q) = %d (got %d)", string(tc.left), string(tc.right), remoteResult, localResult)
+			}
+			if golden != nil {
+				fmt.Fprintf(golden, "{\n\tcollation: %q,\n\tleft: %#v,\n\tright: %#v,\n\texpected: %d,\n},\n",
+					tc.collation, tc.left, tc.right, remoteResult)
+			}
+		})
+	}
+}
+
+func TestFastIterators(t *testing.T) {
+	input := make([]byte, 128)
+	for n := range input {
+		input[n] = byte(n)
+	}
+	input[0] = 'A'
+
+	testRemoteWeights(t, nil, []testweight{
+		{"utf8mb4_0900_as_cs", input},
+		{"utf8mb4_0900_as_ci", input},
+		{"utf8mb4_0900_ai_ci", input},
+	})
+}
+
+func TestRemoteKanaSensitivity(t *testing.T) {
+	var Kana1 = []byte("の東京ノ")
+	var Kana2 = []byte("ノ東京の")
+
+	testRemoteComparison(t, nil, []testcmp{
+		{"utf8mb4_0900_as_cs", Kana1, Kana2},
+		{"utf8mb4_ja_0900_as_cs", Kana1, Kana2},
+		{"utf8mb4_ja_0900_as_cs_ks", Kana1, Kana2},
+	})
 }
