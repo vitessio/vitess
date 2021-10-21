@@ -22929,6 +22929,9 @@ export namespace query {
 
         /** ReserveBeginExecuteRequest pre_queries */
         pre_queries?: (string[]|null);
+
+        /** ReserveBeginExecuteRequest post_begin_queries */
+        post_begin_queries?: (string[]|null);
     }
 
     /** Represents a ReserveBeginExecuteRequest. */
@@ -22957,6 +22960,9 @@ export namespace query {
 
         /** ReserveBeginExecuteRequest pre_queries. */
         public pre_queries: string[];
+
+        /** ReserveBeginExecuteRequest post_begin_queries. */
+        public post_begin_queries: string[];
 
         /**
          * Creates a new ReserveBeginExecuteRequest instance using the specified properties.

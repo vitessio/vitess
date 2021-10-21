@@ -721,6 +721,7 @@ message ReserveBeginExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
