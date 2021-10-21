@@ -24,7 +24,7 @@ import (
 )
 
 type GoldenCase struct {
-	Lang    string
+	Lang    Lang
 	Text    []byte
 	Weights map[string][]byte
 }

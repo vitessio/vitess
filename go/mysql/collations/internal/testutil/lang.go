@@ -38,6 +38,11 @@ var KnownLanguages = map[Lang]string{
 
 type Lang string
 
+func (l Lang) Known() bool {
+	_, valid := KnownLanguages[l]
+	return valid
+}
+
 func (l Lang) Long() string {
 	long, ok := KnownLanguages[l]
 	if !ok {
@@ -47,7 +52,7 @@ func (l Lang) Long() string {
 }
 
 func (l Lang) MatchesCollation(collation string) bool {
-	regex := fmt.Sprintf(`(\A|_)(%s\d?|%s)_`, l.Long(), l)
+	regex := fmt.Sprintf(`(\A|_)(%s\d?|%s_0900)_`, l.Long(), l)
 	match, _ := regexp.MatchString(regex, collation)
 	return match
 }

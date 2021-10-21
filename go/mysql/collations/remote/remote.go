@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package remote
 
 import (
 	"encoding/hex"
@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -37,7 +38,7 @@ import (
 // used as a fallback or as a way to test our native implementations.
 type RemoteCollation struct {
 	name string
-	id   ID
+	id   collations.ID
 
 	prefix string
 	suffix string
@@ -49,7 +50,7 @@ type RemoteCollation struct {
 	err  error
 }
 
-func makeRemoteCollation(conn *mysql.Conn, collid ID, collname string) *RemoteCollation {
+func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string) *RemoteCollation {
 	coll := &RemoteCollation{
 		name: collname,
 		id:   collid,
@@ -68,11 +69,7 @@ func makeRemoteCollation(conn *mysql.Conn, collid ID, collname string) *RemoteCo
 }
 
 func RemoteByName(conn *mysql.Conn, collname string) *RemoteCollation {
-	var collid ID
-	if known, ok := collationsByName[collname]; ok {
-		collid = known.Id()
-	}
-	return makeRemoteCollation(conn, collid, collname)
+	return makeRemoteCollation(conn, collations.LookupIDByName(collname), collname)
 }
 
 func (c *RemoteCollation) LastError() error {
@@ -83,7 +80,7 @@ func (c *RemoteCollation) LastError() error {
 
 func (c *RemoteCollation) init() {}
 
-func (c *RemoteCollation) Id() ID {
+func (c *RemoteCollation) Id() collations.ID {
 	return c.id
 }
 

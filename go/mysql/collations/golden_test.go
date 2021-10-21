@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -42,7 +43,7 @@ func TestGoldenWeights(t *testing.T) {
 				for coll, expected := range goldenCase.Weights {
 					coll := testcollation(t, coll)
 
-					input, err := coll.(CollationUCA).Encoding().EncodeFromUTF8(goldenCase.Text)
+					input, err := coll.(encoding.EncodingAware).Encoding().EncodeFromUTF8(goldenCase.Text)
 					if err != nil {
 						t.Fatal(err)
 					}

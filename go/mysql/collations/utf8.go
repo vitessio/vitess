@@ -34,6 +34,10 @@ type Collation_utf8mb4_general_ci struct {
 
 func (c *Collation_utf8mb4_general_ci) init() {}
 
+func (c *Collation_utf8mb4_general_ci) Encoding() encoding.Encoding {
+	return encoding.Encoding_utf8mb4{}
+}
+
 func (c *Collation_utf8mb4_general_ci) Id() ID {
 	return 45
 }
@@ -131,6 +135,10 @@ func (c *Collation_utf8mb4_bin) Id() ID {
 
 func (c *Collation_utf8mb4_bin) Name() string {
 	return "utf8mb4_bin"
+}
+
+func (c *Collation_utf8mb4_bin) Encoding() encoding.Encoding {
+	return encoding.Encoding_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_bin) Collate(left, right []byte, isPrefix bool) int {
