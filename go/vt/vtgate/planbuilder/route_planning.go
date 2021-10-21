@@ -543,7 +543,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 			continue
 		}
 
-		bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
+		bvName, cols, predicate, err := breakExpressionInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
 		if err != nil {
 			return nil, err
 		}
@@ -578,13 +578,13 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	}, nil
 }
 
-func breakPredicateInLHSandRHS(
+func breakExpressionInLHSandRHS(
 	expr sqlparser.Expr,
 	semTable *semantics.SemTable,
 	lhs semantics.TableSet,
-) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
-	predicate = sqlparser.CloneExpr(expr)
-	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
+) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
+	rewrittenExpr = sqlparser.CloneExpr(expr)
+	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := semTable.RecursiveDeps(node)

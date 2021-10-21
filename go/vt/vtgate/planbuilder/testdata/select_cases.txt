@@ -2496,6 +2496,47 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# select expression having dependencies on both sides of a join
+"select user.id * user_id as amount from user, user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id * user_id as amount from user, user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
+        "Query": "select :user_id * user_id as amount from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
 # correlated subquery in exists clause
 "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)"
 "unsupported: cross-shard correlated subquery"

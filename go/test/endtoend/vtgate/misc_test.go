@@ -611,3 +611,29 @@ func TestSQLSelectLimitWithPlanCache(t *testing.T) {
 		}
 	}
 }
+
+func TestSavepointInReservedConn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set session sql_mode = ''")
+	utils.Exec(t, conn, "BEGIN")
+	utils.Exec(t, conn, "SAVEPOINT sp_1")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a')")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_1")
+	utils.Exec(t, conn, "ROLLBACK")
+
+	utils.Exec(t, conn, "set session sql_mode = ''")
+	utils.Exec(t, conn, "BEGIN")
+	utils.Exec(t, conn, "SAVEPOINT sp_1")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_1")
+	utils.Exec(t, conn, "SAVEPOINT sp_2")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(2, 'a')")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_2")
+	utils.Exec(t, conn, "COMMIT")
+	defer utils.Exec(t, conn, `delete from t7_xxhash`)
+	utils.AssertMatches(t, conn, "select uid from t7_xxhash", `[[VARCHAR("2")]]`)
+}
