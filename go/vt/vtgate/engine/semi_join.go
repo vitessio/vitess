@@ -143,6 +143,9 @@ func (jn *SemiJoin) description() PrimitiveDescription {
 }
 
 func projectFields(lfields []*querypb.Field, cols []int) []*querypb.Field {
+	if lfields == nil {
+		return nil
+	}
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {
 		fields[i] = lfields[-index-1]

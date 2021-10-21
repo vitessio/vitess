@@ -73,6 +73,7 @@ func TestSemiJoinExecute(t *testing.T) {
 		Vars: map[string]int{
 			"bv": 1,
 		},
+		Cols: []int{-1, -2, -3},
 	}
 	r, err := jn.TryExecute(&noopVCursor{}, bv, true)
 	require.NoError(t, err)
@@ -147,6 +148,7 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		Vars: map[string]int{
 			"bv": 1,
 		},
+		Cols: []int{-1, -2, -3},
 	}
 	r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	require.NoError(t, err)
