@@ -47,12 +47,12 @@ func (it *jaIterator900) adjustJapaneseWeights(weight uint16) uint16 {
 }
 
 func (it *jaIterator900) cacheKana(cp rune) {
-	if UnicodeIsHiragana(cp) {
+	if unicodeIsHiragana(cp) {
 		if it.kanas == nil {
 			it.kanas = make(map[rune]byte)
 		}
 		it.kanas[cp] = 0x2
-	} else if UnicodeIsKatakana(cp) {
+	} else if unicodeIsKatakana(cp) {
 		if it.kanas == nil {
 			it.kanas = make(map[rune]byte)
 		}
