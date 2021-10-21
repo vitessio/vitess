@@ -30,10 +30,12 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations/internal/encoding"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 var Output = flag.String("out", "mysqldata.go", "")
+var Print8BitData = flag.Bool("full8bit", false, "")
 
 type tailoringWeights map[string][]uint16
 
@@ -48,6 +50,7 @@ type collationMetadata struct {
 	ToUpper        []byte
 	SortOrder      []byte
 	TabToUni       []uint16
+	TabFromUni     []encoding.UnicodeMapping
 	UCAVersion     int
 	Weights        tailoringWeights
 	Contractions   []uca.Contraction
@@ -299,17 +302,34 @@ func printUnsignedSlice(f io.Writer, name, coll string, a []uint16, seenTables m
 	return tableName
 }
 
-func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[string]string) {
-	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUni string
+func printUnicodeMappings(f io.Writer, name, coll string, mappings []encoding.UnicodeMapping, seenTables map[string]string) string {
+	tableName, dedup := dedupTable(name, coll, mappings, seenTables)
+	if !dedup {
+		fmt.Fprintf(f, "var %s = []encoding.UnicodeMapping{\n", tableName)
+		for _, m := range mappings {
+			fmt.Fprintf(f, "%#v,\n", m)
+		}
+		fmt.Fprintf(f, "}")
+	}
+	return tableName
+}
 
-	tableCtype = printByteSlice(tables, "ctype", meta.Name, meta.CType, seenTables)
-	tableToLower = printByteSlice(tables, "tolower", meta.Name, meta.ToLower, seenTables)
-	tableToUpper = printByteSlice(tables, "toupper", meta.Name, meta.ToUpper, seenTables)
+func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[string]string) {
+	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUnicode, tableFromUnicode string
+
+	if *Print8BitData {
+		tableCtype = printByteSlice(tables, "ctype", meta.Name, meta.CType, seenTables)
+		tableToLower = printByteSlice(tables, "tolower", meta.Name, meta.ToLower, seenTables)
+		tableToUpper = printByteSlice(tables, "toupper", meta.Name, meta.ToUpper, seenTables)
+	}
 	if meta.SortOrder != nil {
 		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.ToUpper, seenTables)
 	}
 	if meta.TabToUni != nil {
-		tableToUni = printUnsignedSlice(tables, "tabtouni", meta.Name, meta.TabToUni, seenTables)
+		tableToUnicode = printUnsignedSlice(tables, "tounicode", meta.Name, meta.TabToUni, seenTables)
+	}
+	if meta.TabFromUni != nil {
+		tableFromUnicode = printUnicodeMappings(tables, "fromunicode", meta.Name, meta.TabFromUni, seenTables)
 	}
 	fmt.Fprintf(tables, "\n")
 
@@ -323,17 +343,28 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 	fmt.Fprintf(init, "register(&%s{\n", collation)
 	fmt.Fprintf(init, "id: %d,\n", meta.Number)
 	fmt.Fprintf(init, "name: %q,\n", meta.Name)
+
 	fmt.Fprintf(init, "simpletables: simpletables{\n")
-	fmt.Fprintf(init, "ctype: %s,\n", tableCtype)
-	fmt.Fprintf(init, "tolower: %s,\n", tableToLower)
-	fmt.Fprintf(init, "toupper: %s,\n", tableToUpper)
+	if *Print8BitData {
+		fmt.Fprintf(init, "ctype: %s,\n", tableCtype)
+		fmt.Fprintf(init, "tolower: %s,\n", tableToLower)
+		fmt.Fprintf(init, "toupper: %s,\n", tableToUpper)
+	}
 	if tableSortOrder != "" {
 		fmt.Fprintf(init, "sort: %s,\n", tableSortOrder)
 	}
-	if tableToUni != "" {
-		fmt.Fprintf(init, "tounicode: %s,\n", tableToUni)
+	fmt.Fprintf(init, "},\n")
+
+	fmt.Fprintf(init, "charset: &encoding.Encoding_8bit{\n")
+	if tableToUnicode != "" {
+		fmt.Fprintf(init, "ToUnicode: %s,\n", tableToUnicode)
 	}
-	fmt.Fprintf(init, "},\n})\n")
+	if tableFromUnicode != "" {
+		fmt.Fprintf(init, "FromUnicode: %s,\n", tableFromUnicode)
+	}
+	fmt.Fprintf(init, "},\n")
+
+	fmt.Fprintf(init, "})\n")
 }
 
 func loadMysqlMetadata() (all []*collationMetadata) {
