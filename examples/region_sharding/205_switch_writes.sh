@@ -18,10 +18,10 @@
 
 source ./env.sh
 
-vtctlclient SwitchWrites main.main2regions
+vtctlclient Reshard -tablet_types=primary SwitchTraffic main.main2regions
 
 # to go back to unsharded
-# call SwitchReads and SwitchWrites with workflow main.main2regions_reverse
+# call SwitchTraffic with workflow main.main2regions_reverse
 # delete vreplication rows from sharded tablets
 # drop all the tables
 # change vschema back to unsharded
