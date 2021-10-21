@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	m      sync.RWMutex
-	server vtctlservicepb.VtctldServer
+	m               sync.RWMutex
+	server          vtctlservicepb.VtctldServer
+	errStreamClosed = errors.New("stream is closed for sending")
 )
 
 type localVtctldClient struct {
