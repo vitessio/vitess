@@ -2196,6 +2196,70 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
 }
 
+func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
+	})
+	_, err := exec(executor, session, "set sql_mode = ''")
+	require.NoError(t, err)
+
+	_, err = exec(executor, session, "begin")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "commit")
+	require.NoError(t, err)
+	emptyBV := map[string]*querypb.BindVariable{}
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
+	}, {
+		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "select id from `user` where id = 1", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint b", BindVariables: emptyBV,
+	}, {
+		Sql: "release savepoint a", BindVariables: emptyBV,
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint b", BindVariables: emptyBV,
+	}, {
+		Sql: "release savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "select id from `user` where id = 3", BindVariables: emptyBV,
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SET", "set session sql_mode = ''", 1)
+	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
+}
+
 func TestExecutorSavepointWithoutTx(t *testing.T) {
 	executor, sbc1, sbc2, _ := createLegacyExecutorEnv()
 	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")

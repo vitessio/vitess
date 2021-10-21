@@ -27,3 +27,9 @@ zone1-0000000101 sourcekeyspace 0 rdonly 192.168.0.134:15101 192.168.0.134:17101
 zone1-0000000102 sourcekeyspace 0 replica 192.168.0.134:15102 192.168.0.134:17102 [] <null>
 zone1-0000000103 sourcekeyspace 0 rdonly 192.168.0.134:15103 192.168.0.134:17103 [] <null>
 ```
+
+## Deprecations
+
+The command `vtctl VExec` is deprecated and removed. All Online DDL commands should run through `vtctl OnlineDDL`.
+
+The command `vtctl OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `vtctl ApplySchema` or via `vtgate`.

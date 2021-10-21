@@ -41,6 +41,8 @@ const (
 )
 
 var (
+	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
+	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"11",
 		"12",
