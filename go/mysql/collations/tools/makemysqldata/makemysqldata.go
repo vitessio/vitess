@@ -388,7 +388,8 @@ var baseWeightsUca520 tailoringWeights
 var baseWeightsUca900 tailoringWeights
 
 func main() {
-	var unhandled = make(map[string][]string)
+	var unsupportedByCharset = make(map[string][]string)
+	var unsupported []*collationMetadata
 	var deduplicated = make(map[string]string)
 	var tables, init bytes.Buffer
 
@@ -414,7 +415,8 @@ func main() {
 			case "gb18030_unicode_520_ci":
 				meta.writeUcaLegacy(&tables, &init, deduplicated)
 			default:
-				unhandled[meta.Charset] = append(unhandled[meta.Charset], meta.Name)
+				unsupported = append(unsupported, meta)
+				unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
 			}
 		}
 	}
@@ -427,6 +429,13 @@ func main() {
 	fmt.Fprintf(&file, "\"vitess.io/vitess/go/mysql/collations/internal/uca\"\n")
 	fmt.Fprintf(&file, ")\n\n")
 	tables.WriteTo(&file)
+
+	fmt.Fprintf(&file, "var collationsUnsupportedByName = map[string]ID{\n")
+	for _, meta := range unsupported {
+		fmt.Fprintf(&file, "%q: %d,\n", meta.Name, meta.Number)
+	}
+	fmt.Fprintf(&file, "}\n\n")
+
 	fmt.Fprintf(&file, "func init() {\n")
 	init.WriteTo(&file)
 
@@ -453,7 +462,7 @@ func main() {
 	}
 
 	var unhandledCount int
-	for impl, collations := range unhandled {
+	for impl, collations := range unsupportedByCharset {
 		log.Printf("unhandled implementation %q: %s", impl, strings.Join(collations, ", "))
 		unhandledCount += len(collations)
 	}
