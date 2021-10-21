@@ -65,7 +65,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 	switch node := e.(type) {
 	case *ColName:
 		if columnLookup == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot lookup column when converting from AST expression to EvalEngine expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: cannot lookup column", ErrConvertExprNotSupported)
 		}
 		idx, err := columnLookup(node)
 		if err != nil {
