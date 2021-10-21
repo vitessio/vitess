@@ -2496,6 +2496,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# correlated subquery in exists clause
 "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)"
 "unsupported: cross-shard correlated subquery"
 {
