@@ -529,7 +529,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			return false, err
 		}
 		if groupExpr.DistinctAggrIndex == 0 {
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: keyCol, WeightStringCol: wsOffset, Expr: groupExpr.WeightStrExpr, CollationID: semTable.CollationFor(groupExpr.WeightStrExpr)})
 		} else {
 			if wsOffset != -1 {
 				node.eaggr.Aggregates[groupExpr.DistinctAggrIndex-1].WAssigned = true
@@ -867,13 +867,13 @@ func (hp *horizonPlanning) planDistinct(ctx *planningContext, plan logicalPlan) 
 	case *joinGen4, *pulloutSubquery:
 		return hp.addDistinct(ctx, plan)
 	case *orderedAggregate:
-		return hp.planDistinctOA(p)
+		return hp.planDistinctOA(ctx.semTable, p)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
 	}
 }
 
-func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) (logicalPlan, error) {
+func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan *orderedAggregate) (logicalPlan, error) {
 	eaggr := &engine.OrderedAggregate{}
 	oa := &orderedAggregate{
 		resultsBuilder: resultsBuilder{
@@ -902,7 +902,7 @@ func (hp *horizonPlanning) planDistinctOA(currPlan *orderedAggregate) (logicalPl
 		for _, aggrParam := range currPlan.eaggr.Aggregates {
 			if sqlparser.EqualsExpr(expr, aggrParam.Expr) {
 				found = true
-				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1})
+				eaggr.GroupByKeys = append(eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: aggrParam.Col, WeightStringCol: -1, CollationID: semTable.CollationFor(expr)})
 				break
 			}
 		}
@@ -924,7 +924,14 @@ func (hp *horizonPlanning) addDistinct(ctx *planningContext, plan logicalPlan) (
 		if isAmbiguousOrderBy(index, aliasExpr.As, hp.qp.SelectExprs) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As))
 		}
-		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1}
+		var inner sqlparser.Expr
+		if !aliasExpr.As.IsEmpty() {
+			inner = sqlparser.NewColName(aliasExpr.As.String())
+			ctx.semTable.CopyDependencies(aliasExpr.Expr, inner)
+		} else {
+			inner = aliasExpr.Expr
+		}
+		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.semTable.CollationFor(inner)}
 		_, wOffset, added, err := wrapAndPushExpr(aliasExpr.Expr, aliasExpr.Expr, plan, ctx.semTable)
 		if err != nil {
 			return nil, err
@@ -933,13 +940,6 @@ func (hp *horizonPlanning) addDistinct(ctx *planningContext, plan logicalPlan) (
 		grpParam.WeightStringCol = wOffset
 		eaggr.GroupByKeys = append(eaggr.GroupByKeys, grpParam)
 
-		var inner sqlparser.Expr
-		if !aliasExpr.As.IsEmpty() {
-			inner = sqlparser.NewColName(aliasExpr.As.String())
-			ctx.semTable.CopyDependencies(aliasExpr.Expr, inner)
-		} else {
-			inner = aliasExpr.Expr
-		}
 		orderExprs = append(orderExprs, abstract.OrderBy{
 			Inner:         &sqlparser.Order{Expr: inner},
 			WeightStrExpr: aliasExpr.Expr},
