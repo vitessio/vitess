@@ -28,7 +28,7 @@ import (
 
 	"testing"
 
-	extensionsv1beta1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	extensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiextensionsclient "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubeyaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -107,11 +107,11 @@ func TestKubernetesTopo(t *testing.T) {
 			defer crdFile.Close()
 		}
 
-		crd := &extensionsv1beta1.CustomResourceDefinition{}
+		crd := &extensionsv1.CustomResourceDefinition{}
 
 		kubeyaml.NewYAMLOrJSONDecoder(crdFile, 2048).Decode(crd)
 
-		_, err = apiextensionsClientSet.ApiextensionsV1beta1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
+		_, err = apiextensionsClientSet.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatal(err)
 		}
