@@ -17,6 +17,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -164,7 +165,7 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func GoldenWeightString(t *testing.T, conn *mysql.Conn, collation string, input []byte) []byte {
-	coll := collations.RemoteByName(conn, collation)
+	coll := remote.RemoteByName(conn, collation)
 	weightString := coll.WeightString(nil, input, 0)
 	if weightString == nil {
 		t.Fatal(coll.LastError())
@@ -183,7 +184,7 @@ func TestCollationWithSpace(t *testing.T) {
 	for _, collName := range []string{"utf8mb4_0900_ai_ci", "utf8mb4_unicode_ci", "utf8mb4_unicode_520_ci"} {
 		t.Run(collName, func(t *testing.T) {
 			local := collations.LookupByName(collName)
-			remote := collations.RemoteByName(conn, collName)
+			remote := remote.RemoteByName(conn, collName)
 
 			for _, size := range []int{0, codepoints, codepoints + 1, codepoints + 2, 20, 32} {
 				localWeight := local.WeightString(nil, []byte(ExampleString), size)
@@ -233,7 +234,7 @@ func testRemoteWeights(t *testing.T, golden io.Writer, cases []testweight) {
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
 			local := collations.LookupByName(tc.collation)
-			remote := collations.RemoteByName(conn, tc.collation)
+			remote := remote.RemoteByName(conn, tc.collation)
 			localResult := local.WeightString(nil, tc.input, 0)
 			remoteResult := remote.WeightString(nil, tc.input, 0)
 
@@ -269,7 +270,7 @@ func testRemoteComparison(t *testing.T, golden io.Writer, cases []testcmp) {
 	for _, tc := range cases {
 		t.Run(tc.collation, func(t *testing.T) {
 			local := collations.LookupByName(tc.collation)
-			remote := collations.RemoteByName(conn, tc.collation)
+			remote := remote.RemoteByName(conn, tc.collation)
 			localResult := normalizecmp(local.Collate(tc.left, tc.right, false))
 			remoteResult := remote.Collate(tc.left, tc.right, false)
 

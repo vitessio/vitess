@@ -36,3 +36,7 @@ type Encoding_utf32 = unicode.Encoding_utf32
 type Encoding_gb18030 = simplifiedchinese.Encoding_gb18030
 
 const RuneError = unicode.RuneError
+
+type EncodingAware interface {
+	Encoding() Encoding
+}
