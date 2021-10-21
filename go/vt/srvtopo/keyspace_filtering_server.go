@@ -35,7 +35,7 @@ var (
 // implementation that prevents the specified keyspaces from being exposed
 // to consumers of the new Server.
 //
-// A filtering server will not allow access to the topo.Server to prevent
+// A filtering server will only allow read-only access to the topo.Server to prevent
 // updates that may corrupt the global VSchema keyspace.
 func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (Server, error) {
 	if underlying == nil {
@@ -47,27 +47,25 @@ func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (
 		keyspaces[ks] = true
 	}
 
-	// The topo server connection must be read-only when doing Keyspace filtering
-	topoServer, err := underlying.GetTopoServer()
+	readOnlyServer, err := NewReadOnlyServer(underlying)
 	if err != nil {
-		return nil, topo.NewError(topo.NoImplementation, fmt.Sprintf("Could not get underlying topo server: %v", err))
+		return nil, err
 	}
-	topoServer.SetReadOnly(true)
 
 	return keyspaceFilteringServer{
-		server:          underlying,
+		roServer:        readOnlyServer,
 		selectKeyspaces: keyspaces,
 	}, nil
 }
 
 type keyspaceFilteringServer struct {
-	server          Server
+	roServer        ReadOnlyServer
 	selectKeyspaces map[string]bool
 }
 
 // GetTopoServer returns a read-only topo server
 func (ksf keyspaceFilteringServer) GetTopoServer() (*topo.Server, error) {
-	return ksf.server.GetTopoServer()
+	return ksf.roServer.GetTopoServer()
 }
 
 func (ksf keyspaceFilteringServer) GetSrvKeyspaceNames(
@@ -75,7 +73,7 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspaceNames(
 	cell string,
 	staleOK bool,
 ) ([]string, error) {
-	keyspaces, err := ksf.server.GetSrvKeyspaceNames(ctx, cell, staleOK)
+	keyspaces, err := ksf.roServer.underlying.GetSrvKeyspaceNames(ctx, cell, staleOK)
 	ret := make([]string, 0, len(keyspaces))
 	for _, ks := range keyspaces {
 		if ksf.selectKeyspaces[ks] {
@@ -94,7 +92,7 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspace(
 		return nil, topo.NewError(topo.NoNode, keyspace)
 	}
 
-	return ksf.server.GetSrvKeyspace(ctx, cell, keyspace)
+	return ksf.roServer.underlying.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
 func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
@@ -111,7 +109,7 @@ func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
 		return callback(ks, err)
 	}
 
-	ksf.server.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
+	ksf.roServer.underlying.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
 }
 
 func (ksf keyspaceFilteringServer) WatchSrvVSchema(
@@ -131,5 +129,5 @@ func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 		return callback(schema, err)
 	}
 
-	ksf.server.WatchSrvVSchema(ctx, cell, filteringCallback)
+	ksf.roServer.underlying.WatchSrvVSchema(ctx, cell, filteringCallback)
 }

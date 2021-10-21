@@ -134,8 +134,11 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 
 // Lock is part of the Conn interface
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
-	startTime := time.Now()
 	statsKey := []string{"Lock", st.cell}
+	if st.readOnly {
+		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
+	}
+	startTime := time.Now()
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.Lock(ctx, dirPath, contents)
 	if err != nil {
