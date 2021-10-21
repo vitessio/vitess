@@ -81,6 +81,7 @@
     "prettier": "^2.2.1",
     "protobufjs": "^6.10.2",
     "stylelint": "^13.8.0",
+    "stylelint-config-prettier": "^9.0.3",
     "stylelint-config-standard": "^20.0.0"
   }
 }

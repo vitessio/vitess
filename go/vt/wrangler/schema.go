@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
@@ -300,7 +301,11 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 			}
 			for _, tableDef := range primarySchema.TableDefinitions {
 				if _, ok := vschm.Tables[tableDef.Name]; !ok {
-					notFoundTables = append(notFoundTables, tableDef.Name)
+					if schema.IsInternalOperationTableName(tableDef.Name) {
+						log.Infof("found internal table %s, ignoring in vschema validation", tableDef.Name)
+					} else {
+						notFoundTables = append(notFoundTables, tableDef.Name)
+					}
 				}
 			}
 			if len(notFoundTables) > 0 {

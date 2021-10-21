@@ -313,14 +313,14 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 }
 
 // ReserveBeginExecute performs a ReserveBeginExecute.
-func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, postBeginQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = transactionID
 	client.reservedID = reservedID
 	if err != nil {
