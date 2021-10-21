@@ -16,22 +16,29 @@ limitations under the License.
 
 package collations
 
+import "vitess.io/vitess/go/mysql/collations/internal/encoding"
+
 func init() {
 	register(&Collation_binary{})
 }
 
 type simpletables struct {
-	tounicode []uint16
-	tolower   []byte
-	toupper   []byte
-	ctype     []byte
-	sort      []byte
+	// By default we're not building in the tables for lower/upper-casing and
+	// character classes, because we're not using them for collation and they
+	// take up a lot of binary space.
+	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
+	// these tables.
+	// tolower   []byte
+	// toupper   []byte
+	// ctype     []byte
+	sort []byte
 }
 
 type Collation_8bit_bin struct {
 	id   ID
 	name string
 	simpletables
+	charset encoding.Encoding
 }
 
 func (c *Collation_8bit_bin) init() {}
@@ -39,8 +46,13 @@ func (c *Collation_8bit_bin) init() {}
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
 }
+
 func (c *Collation_8bit_bin) Id() ID {
 	return c.id
+}
+
+func (c *Collation_8bit_bin) Encoding() encoding.Encoding {
+	return c.charset
 }
 
 func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -72,6 +84,7 @@ type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
 	simpletables
+	charset encoding.Encoding
 }
 
 func (c *Collation_8bit_simple_ci) init() {}
@@ -82,6 +95,10 @@ func (c *Collation_8bit_simple_ci) Name() string {
 
 func (c *Collation_8bit_simple_ci) Id() ID {
 	return c.id
+}
+
+func (c *Collation_8bit_simple_ci) Encoding() encoding.Encoding {
+	return c.charset
 }
 
 func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix bool) int {
