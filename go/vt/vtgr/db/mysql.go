@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -34,9 +35,10 @@ import (
 )
 
 var (
-	configFilePath = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
-	dbFlavor       = flag.String("db_flavor", "MySQL56", "mysql flavor override")
-	mysqlGroupPort = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
+	configFilePath       = flag.String("db_config", "", "full path to db config file that will be used by VTGR")
+	dbFlavor             = flag.String("db_flavor", "MySQL56", "mysql flavor override")
+	mysqlGroupPort       = flag.Int("gr_port", 33061, "port to bootstrap a mysql group")
+	enableHeartbeatCheck = flag.Bool("enable_heartbeat_check", false, "enable heartbeat checking, set together with -group_heartbeat_threshold")
 
 	// ErrGroupSplitBrain is the error when mysql group is split-brain
 	ErrGroupSplitBrain = errors.New("group has split brain")
@@ -112,17 +114,19 @@ type GroupMember struct {
 
 // GroupView is an instance's view for the group
 type GroupView struct {
-	TabletAlias       string
-	MySQLHost         string
-	MySQLPort         int
-	GroupName         string
-	UnresolvedMembers []*GroupMember
+	TabletAlias        string
+	MySQLHost          string
+	MySQLPort          int
+	GroupName          string
+	HeartbeatStaleness int
+	UnresolvedMembers  []*GroupMember
 }
 
 // SQLAgentImpl implements Agent
 type SQLAgentImpl struct {
-	config   *config.Configuration
-	dbFlavor string
+	config          *config.Configuration
+	dbFlavor        string
+	enableHeartbeat bool
 }
 
 // NewGroupView creates a new GroupView
@@ -152,8 +156,9 @@ func NewVTGRSqlAgent() *SQLAgentImpl {
 		conf = config.Config
 	}
 	agent := &SQLAgentImpl{
-		config:   conf,
-		dbFlavor: *dbFlavor,
+		config:          conf,
+		dbFlavor:        *dbFlavor,
+		enableHeartbeat: *enableHeartbeatCheck,
 	}
 	return agent
 }
@@ -308,6 +313,17 @@ func (agent *SQLAgentImpl) Failover(instance *inst.InstanceKey) error {
 	return nil
 }
 
+// heartbeatCheck returns heartbeat check freshness result
+func (agent *SQLAgentImpl) heartbeatCheck(instanceKey *inst.InstanceKey) (int, error) {
+	query := `select timestampdiff(SECOND, from_unixtime(truncate(ts * 0.000000001, 0)), NOW()) as diff from _vt.heartbeat;`
+	var result int
+	err := fetchInstance(instanceKey, query, func(m sqlutils.RowMap) error {
+		result = m.GetInt("diff")
+		return nil
+	})
+	return result, err
+}
+
 // FetchGroupView implements Agent interface
 func (agent *SQLAgentImpl) FetchGroupView(alias string, instanceKey *inst.InstanceKey) (*GroupView, error) {
 	view := NewGroupView(alias, instanceKey.Hostname, instanceKey.Port)
@@ -344,6 +360,14 @@ func (agent *SQLAgentImpl) FetchGroupView(alias string, instanceKey *inst.Instan
 	view.GroupName = groupName
 	if err != nil {
 		return nil, err
+	}
+	view.HeartbeatStaleness = math.MaxInt32
+	if agent.enableHeartbeat {
+		heartbeatStaleness, err := agent.heartbeatCheck(instanceKey)
+		if err != nil {
+			return nil, err
+		}
+		view.HeartbeatStaleness = heartbeatStaleness
 	}
 	return view, nil
 }

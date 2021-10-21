@@ -121,7 +121,7 @@ func (shard *GRShard) Diagnose(ctx context.Context) (DiagnoseType, error) {
 	shard.shardStatusCollector.recordDiagnoseResult(diagnoseResult)
 	shard.populateVTGRStatusLocked()
 	if diagnoseResult != DiagnoseTypeHealthy {
-		shard.logger.Warningf(`VTGR diagnose shard as unhealthy for %s/%s: result=%v | last_result=%v | instances=%v | primary=%v | primary_tablet=%v | problematics=%v | unreachables=%v | SQL group=%v`,
+		shard.logger.Warningf(`VTGR diagnose shard as unhealthy for %s/%s: result=%v, last_result=%v, instances=%v, primary=%v, primary_tablet=%v, problematics=%v, unreachables=%v,\n%v`,
 			shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard,
 			shard.shardStatusCollector.status.DiagnoseResult,
 			shard.lastDiagnoseResult,
