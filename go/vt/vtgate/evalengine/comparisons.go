@@ -93,25 +93,26 @@ func evalResultsAreString(l, r EvalResult) bool {
 	return sqltypes.IsText(l.typ) && sqltypes.IsText(r.typ) || sqltypes.IsBinary(l.typ) && sqltypes.IsBinary(r.typ)
 }
 
-func evalResultsAreInteger(l, r EvalResult) bool {
-	return sqltypes.IsIntegral(l.typ) && sqltypes.IsIntegral(r.typ)
+func evalResultsAreSameNumericType(l, r EvalResult) bool {
+	if sqltypes.IsIntegral(l.typ) && sqltypes.IsIntegral(r.typ) {
+		return true
+	}
+	if sqltypes.IsFloat(l.typ) && sqltypes.IsFloat(r.typ) {
+		return true
+	}
+	if l.typ == sqltypes.Decimal && r.typ == sqltypes.Decimal {
+		return true
+	}
+	return false
+}
+
+func needsDecimalHandling(l, r EvalResult) bool {
+	return l.typ == sqltypes.Decimal && (sqltypes.IsIntegral(r.typ) || sqltypes.IsFloat(r.typ)) ||
+		r.typ == sqltypes.Decimal && (sqltypes.IsIntegral(l.typ) || sqltypes.IsFloat(l.typ))
 }
 
 func evalResultsAreDates(l, r EvalResult) bool {
 	return sqltypes.IsDate(l.typ) && sqltypes.IsDate(r.typ)
-}
-
-func needsDecimalHandling(l, r EvalResult) bool {
-	// we need to evaluate these two arguments as decimal if one of the argument is a decimal
-	// and the other one is a decimal or an integer
-	return l.typ == sqltypes.Decimal && (r.typ == sqltypes.Decimal || sqltypes.IsIntegral(r.typ) || sqltypes.IsFloat(r.typ)) ||
-		r.typ == sqltypes.Decimal && (l.typ == sqltypes.Decimal || sqltypes.IsIntegral(l.typ) || sqltypes.IsFloat(l.typ))
-}
-
-func needsFloatHandling(l, r EvalResult) bool {
-	// we need to evaluate these two arguments as decimal if one of the argument is a decimal
-	// and the other one is a decimal or an integer
-	return l.typ == sqltypes.Decimal && sqltypes.IsFloat(r.typ) || r.typ == sqltypes.Decimal && sqltypes.IsFloat(l.typ)
 }
 
 // For more details on comparison expression evaluation and type conversion:
@@ -122,10 +123,7 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		// Comparing as strings if both sides are strings
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing strings")
 
-	case evalResultsAreInteger(lVal, rVal), needsFloatHandling(lVal, rVal):
-		return compareNumeric(lVal, rVal)
-
-	case needsDecimalHandling(lVal, rVal):
+	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)
 
 	case evalResultsAreDates(lVal, rVal):
