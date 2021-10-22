@@ -87,13 +87,13 @@ service TabletManager {
   // ReplicationStatus returns the current replication status.
   rpc ReplicationStatus(tabletmanagerdata.ReplicationStatusRequest) returns (tabletmanagerdata.ReplicationStatusResponse) {};
 
-  // MasterStatus returns the current primary status.
+  // Deprecated, use PrimaryStatus instead
   rpc MasterStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
   // PrimaryStatus returns the current primary status.
   rpc PrimaryStatus(tabletmanagerdata.PrimaryStatusRequest) returns (tabletmanagerdata.PrimaryStatusResponse) {};
 
-  // MasterPosition returns the current primary position
+  // Deprecated, use PrimaryPosition instead
   rpc MasterPosition(tabletmanagerdata.PrimaryPositionRequest) returns (tabletmanagerdata.PrimaryPositionResponse) {};
 
   // PrimaryPosition returns the current primary position
@@ -158,7 +158,7 @@ service TabletManager {
   // ReplicaWasPromoted tells the remote tablet it is now the primary
   rpc ReplicaWasPromoted(tabletmanagerdata.ReplicaWasPromotedRequest) returns (tabletmanagerdata.ReplicaWasPromotedResponse) {};
 
-  // SetMaster tells the replica to reparent
+  // Deprecated, use SetReplicationSource instead
   rpc SetMaster(tabletmanagerdata.SetReplicationSourceRequest) returns (tabletmanagerdata.SetReplicationSourceResponse) {};
 
   // SetReplicationSource tells the replica to reparent

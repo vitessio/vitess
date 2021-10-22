@@ -1383,7 +1383,7 @@ func TestServerFlush(t *testing.T) {
 	flds, err := c.Fields()
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 20*time.Millisecond; duration < *mysqlServerFlushDelay || duration > want {
-		assert.Fail(t, "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
+		assert.Fail(t, "duration out of expected range", "duration: %v, want between %v and %v", duration.String(), (*mysqlServerFlushDelay).String(), want.String())
 	}
 	want1 := []*querypb.Field{{
 		Name: "result",
@@ -1394,7 +1394,7 @@ func TestServerFlush(t *testing.T) {
 	row, err := c.FetchNext(nil)
 	require.NoError(t, err)
 	if duration, want := time.Since(start), 50*time.Millisecond; duration < want {
-		assert.Fail(t, "duration: %v, want > %v", duration, want)
+		assert.Fail(t, "duration is too low", "duration: %v, want > %v", duration, want)
 	}
 	want2 := []sqltypes.Value{sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("delayed"))}
 	assert.Equal(t, want2, row)
