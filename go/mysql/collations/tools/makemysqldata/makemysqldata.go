@@ -27,7 +27,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
@@ -79,11 +78,7 @@ func diffMaps(orgWeights, modWeights tailoringWeights) (diff []uca.WeightPatch) 
 	}
 
 	for key, val := range diffMap {
-		r, err := strconv.ParseInt(key[2:], 16, 32)
-		if err != nil {
-			panic(err)
-		}
-		diff = append(diff, uca.WeightPatch{Codepoint: rune(r), Patch: val})
+		diff = append(diff, uca.WeightPatch{Codepoint: []rune(key)[0], Patch: val})
 	}
 
 	sort.Slice(diff, func(i, j int) bool {
