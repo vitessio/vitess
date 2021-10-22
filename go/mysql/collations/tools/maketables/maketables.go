@@ -26,6 +26,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/internal/uca/tablebuilder"
@@ -52,7 +53,11 @@ func maketable(w io.Writer, table string, filename string, pages *tablebuilder.E
 	tb := tablebuilder.NewTableBuilder(table, pages)
 
 	for key, weights := range metadata.Weights {
-		tb.Add([]rune(key)[0], weights)
+		cp, err := strconv.ParseInt(key[2:], 16, 32)
+		if err != nil {
+			panic(err)
+		}
+		tb.Add(rune(cp), weights)
 	}
 
 	tb.DumpTables(w, layout)
