@@ -99,10 +99,8 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 	{{- else -}}
 	{{- if .IsStreaming -}}
 	stream := &{{ streamAdapterName .Name }}{
-		bidiStream: &bidiStream{
-			ctx: ctx,
-		},
-		ch: make(chan {{ .StreamMessage.Type }}),
+		bidiStream: newBidiStream(ctx),
+		ch:         make(chan {{ .StreamMessage.Type }}, 1),
 	}
 	go func() {
 		err := client.s.{{ .Name }}(in, stream)
