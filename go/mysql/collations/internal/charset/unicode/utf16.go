@@ -18,25 +18,26 @@ package unicode
 
 import "golang.org/x/text/encoding/unicode"
 
-var defaultUTF16 = unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
+var defaultUTF16be = unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
+var defaultUTF16le = unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
 
-type Charset_utf16 struct{}
+// 0xd800-0xdc00 encodes the high 10 bits of a pair.
+// 0xdc00-0xe000 encodes the low 10 bits of a pair.
+// the value is those 20 bits plus 0x10000.
+const (
+	surr1    = 0xd800
+	surr2    = 0xdc00
+	surr3    = 0xe000
+	surrSelf = 0x10000
+)
 
-func (Charset_utf16) Name() string {
+type Charset_utf16be struct{}
+
+func (Charset_utf16be) Name() string {
 	return "utf16be"
 }
 
-func (Charset_utf16) DecodeRune(b []byte) (rune, int) {
-	// 0xd800-0xdc00 encodes the high 10 bits of a pair.
-	// 0xdc00-0xe000 encodes the low 10 bits of a pair.
-	// the value is those 20 bits plus 0x10000.
-	const (
-		surr1    = 0xd800
-		surr2    = 0xdc00
-		surr3    = 0xe000
-		surrSelf = 0x10000
-	)
-
+func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
 		return RuneError, 0
 	}
@@ -58,12 +59,48 @@ func (Charset_utf16) DecodeRune(b []byte) (rune, int) {
 	return RuneError, 1
 }
 
-func (Charset_utf16) SupportsSupplementaryChars() bool {
+func (Charset_utf16be) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (Charset_utf16) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return defaultUTF16.NewEncoder().Bytes(in)
+func (Charset_utf16be) EncodeFromUTF8(in []byte) ([]byte, error) {
+	return defaultUTF16be.NewEncoder().Bytes(in)
+}
+
+type Charset_utf16le struct{}
+
+func (Charset_utf16le) Name() string {
+	return "utf16le"
+}
+
+func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
+	if len(b) < 2 {
+		return RuneError, 0
+	}
+
+	r1 := uint16(b[0]) | uint16(b[1])<<8
+	if r1 < surr1 || surr3 <= r1 {
+		return rune(r1), 2
+	}
+
+	if len(b) < 4 {
+		return RuneError, 0
+	}
+
+	r2 := uint16(b[2]) | uint16(b[3])<<8
+	if surr1 <= r1 && r1 < surr2 && surr2 <= r2 && r2 < surr3 {
+		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
+	}
+
+	return RuneError, 1
+}
+
+func (Charset_utf16le) SupportsSupplementaryChars() bool {
+	return true
+}
+
+func (Charset_utf16le) EncodeFromUTF8(in []byte) ([]byte, error) {
+	return defaultUTF16le.NewEncoder().Bytes(in)
 }
 
 type Charset_ucs2 struct{}
@@ -87,5 +124,5 @@ func (Charset_ucs2) EncodeFromUTF8(in []byte) ([]byte, error) {
 	if err := ensureBMPRange(in); err != nil {
 		return nil, err
 	}
-	return defaultUTF16.NewEncoder().Bytes(in)
+	return defaultUTF16be.NewEncoder().Bytes(in)
 }

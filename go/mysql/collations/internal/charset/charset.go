@@ -30,7 +30,8 @@ type Charset interface {
 
 type Charset_utf8 = unicode.Charset_utf8mb3
 type Charset_utf8mb4 = unicode.Charset_utf8mb4
-type Charset_utf16 = unicode.Charset_utf16
+type Charset_utf16 = unicode.Charset_utf16be
+type Charset_utf16le = unicode.Charset_utf16le
 type Charset_ucs2 = unicode.Charset_ucs2
 type Charset_utf32 = unicode.Charset_utf32
 type Charset_gb18030 = simplifiedchinese.Charset_gb18030
@@ -39,4 +40,13 @@ const RuneError = unicode.RuneError
 
 type CharsetAware interface {
 	Charset() Charset
+}
+
+func IsUnicode(csname string) bool {
+	switch csname {
+	case "utf8", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":
+		return true
+	default:
+		return false
+	}
 }
