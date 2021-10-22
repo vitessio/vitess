@@ -3268,3 +3268,109 @@ Gen4 plan same as above
     ]
   }
 }
+
+"select * from multicolvin where column_b = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+"select * from multicolvin where column_b = 1 and column_c = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1 and column_c = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1 and column_c = 2",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+"select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}
+Gen4 plan same as above
+
+"select * from multicolvin where column_a = 3 and column_b = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      3
+    ],
+    "Vindex": "cola_map"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicolvin where column_a = 3 and column_b = 1",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicolvin where 1 != 1",
+    "Query": "select * from multicolvin where column_a = 3 and column_b = 1",
+    "Table": "multicolvin",
+    "Values": [
+      1
+    ],
+    "Vindex": "colb_colc_map"
+  }
+}

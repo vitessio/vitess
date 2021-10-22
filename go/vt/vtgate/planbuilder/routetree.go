@@ -466,10 +466,15 @@ func (rp *routeTree) haveMatchingVindex(
 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		cols := len(v.colVindex.Columns)
-		for idx, col := range v.colVindex.Columns {
+		cols := v.colVindex.Columns
+		if _, isSingleCol := v.colVindex.Vindex.(vindexes.SingleColumn); isSingleCol {
+			cols = v.colVindex.Columns[:1]
+		}
+
+		numCols := len(cols)
+		for idx, col := range cols {
 			if column.Name.Equal(col) {
-				if cols == 1 {
+				if numCols == 1 {
 					// single column vindex - just add the option
 					routeOpcode := opcode(v.colVindex)
 					vindex := vfunc(v.colVindex)
@@ -501,9 +506,9 @@ func (rp *routeTree) haveMatchingVindex(
 					}
 
 					newOption := &vindexOption{
-						values:     make([]sqltypes.PlanValue, cols),
-						valueExprs: make([]sqlparser.Expr, cols),
-						predicates: make([]sqlparser.Expr, cols),
+						values:     make([]sqltypes.PlanValue, numCols),
+						valueExprs: make([]sqlparser.Expr, numCols),
+						predicates: make([]sqlparser.Expr, numCols),
 					}
 					newOption.values[idx] = value
 					newOption.predicates[idx] = node
