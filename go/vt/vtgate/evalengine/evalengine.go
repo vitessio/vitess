@@ -266,8 +266,8 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return -1, nil
 			}
 			v1 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v1.ival)}
-		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.ival)}
+		case sqltypes.Float64, sqltypes.Decimal:
+			v1 = EvalResult{typ: v2.typ, fval: float64(v1.ival)}
 		}
 	case sqltypes.Uint64:
 		switch v2.typ {
@@ -276,15 +276,32 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return 1, nil
 			}
 			v2 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v2.ival)}
-		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.uval)}
+		case sqltypes.Float64, sqltypes.Decimal:
+			v1 = EvalResult{typ: v2.typ, fval: float64(v1.uval)}
 		}
 	case sqltypes.Float64:
 		switch v2.typ {
 		case sqltypes.Int64:
 			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.ival)}
 		case sqltypes.Uint64:
+			if v1.fval < 0 {
+				return -1, nil
+			}
 			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.uval)}
+		case sqltypes.Decimal:
+			v2.typ = sqltypes.Float64
+		}
+	case sqltypes.Decimal:
+		switch v2.typ {
+		case sqltypes.Int64:
+			v2 = EvalResult{typ: sqltypes.Decimal, fval: float64(v2.ival)}
+		case sqltypes.Uint64:
+			if v1.fval < 0 {
+				return -1, nil
+			}
+			v2 = EvalResult{typ: sqltypes.Decimal, fval: float64(v2.uval)}
+		case sqltypes.Float64:
+			v1.typ = sqltypes.Float64
 		}
 	}
 
@@ -304,7 +321,7 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1.uval < v2.uval:
 			return -1, nil
 		}
-	case sqltypes.Float64:
+	case sqltypes.Float64, sqltypes.Decimal:
 		switch {
 		case v1.fval == v2.fval:
 			return 0, nil

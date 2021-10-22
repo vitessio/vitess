@@ -32,6 +32,7 @@ type testCase struct {
 	v1, v2 Expr
 	out    *bool
 	err    string
+	op     ComparisonOp
 	bv     map[string]*querypb.BindVariable
 	row    []sqltypes.Value
 }
@@ -70,10 +71,72 @@ func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
 	}
 }
 
+func TestDecimalType(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "equal decimal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019")},
+		},
+		{
+			name: "not equal decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019"), sqltypes.NewDecimal("489.156849")},
+		},
+		{
+			name: "equal decimal and float",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(189.6), sqltypes.NewDecimal("189.6")},
+		},
+		{
+			name: "equal decimal and float with negative values",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(-98.1839), sqltypes.NewDecimal("-98.1839")},
+		},
+		{
+			name: "equal decimal and int (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewInt64(8979), sqltypes.NewDecimal("8979")},
+		},
+		{
+			name: "equal decimal and int (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("8979.0000"), sqltypes.NewInt64(8979)},
+		},
+		{
+			name: "equal decimal and uint (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewUint64(901), sqltypes.NewDecimal("901")},
+		},
+		{
+			name: "equal decimal and uint (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("901.00"), sqltypes.NewUint64(901)},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t, i+1, tcase.op)
+		})
+	}
+}
+
 func TestComparisonEquality(t *testing.T) {
 	tests := []testCase{
 		{
-			out: nil,
+			name: "All Nulls",
+			v1:   &Null{},
+			v2:   &Null{},
+			out:  nil,
 		}, {
 			name: "Second value null.",
 			v1:   NewLiteralInt(1),
@@ -187,12 +250,6 @@ func TestComparisonEquality(t *testing.T) {
 			v2:   NewColumn(0),
 			out:  &T,
 			row:  []sqltypes.Value{sqltypes.NewTime("12:00:00")},
-		}, {
-			name: "column decimal with column decimal",
-			v1:   NewColumn(0),
-			v2:   NewColumn(1),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewDecimal("12.9012"), sqltypes.NewDecimal("12.9012")},
 		},
 	}
 

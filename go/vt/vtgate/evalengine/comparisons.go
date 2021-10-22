@@ -104,8 +104,8 @@ func evalResultsAreDates(l, r EvalResult) bool {
 func needsDecimalHandling(l, r EvalResult) bool {
 	// we need to evaluate these two arguments as decimal if one of the argument is a decimal
 	// and the other one is a decimal or an integer
-	return l.typ == sqltypes.Decimal && (r.typ == sqltypes.Decimal || sqltypes.IsIntegral(r.typ)) ||
-		r.typ == sqltypes.Decimal && (l.typ == sqltypes.Decimal || sqltypes.IsIntegral(l.typ))
+	return l.typ == sqltypes.Decimal && (r.typ == sqltypes.Decimal || sqltypes.IsIntegral(r.typ) || sqltypes.IsFloat(r.typ)) ||
+		r.typ == sqltypes.Decimal && (l.typ == sqltypes.Decimal || sqltypes.IsIntegral(l.typ) || sqltypes.IsFloat(l.typ))
 }
 
 func needsFloatHandling(l, r EvalResult) bool {
@@ -126,7 +126,7 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		return compareNumeric(lVal, rVal)
 
 	case needsDecimalHandling(lVal, rVal):
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing decimals")
+		return compareNumeric(lVal, rVal)
 
 	case evalResultsAreDates(lVal, rVal):
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing dates")
