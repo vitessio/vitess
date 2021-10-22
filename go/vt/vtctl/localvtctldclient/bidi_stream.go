@@ -32,7 +32,7 @@ type bidiStream struct {
 	sendClosed bool
 }
 
-func newBidiStream(ctx context.Context) *bidiStream {
+func newBidiStream(ctx context.Context) *bidiStream { // nolint (TODO:@ajm188) this will be used in a future PR, and the codegen will produce invalid code for streaming rpcs without this
 	return &bidiStream{
 		ctx:   ctx,
 		errch: make(chan error, 1),

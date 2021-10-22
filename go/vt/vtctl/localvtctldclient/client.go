@@ -28,7 +28,7 @@ import (
 var (
 	m               sync.RWMutex
 	server          vtctlservicepb.VtctldServer
-	errStreamClosed = errors.New("stream is closed for sending")
+	errStreamClosed = errors.New("stream is closed for sending") // nolint (TODO:@ajm188) this will be used in a future PR, and the codegen will produce invalid code for streaming rpcs without this
 )
 
 type localVtctldClient struct {
