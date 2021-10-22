@@ -380,6 +380,22 @@ func (meta *collationMetadata) writeUnicode(_, init io.Writer, _ map[string]stri
 	fmt.Fprintf(init, "})\n")
 }
 
+func (meta *collationMetadata) writeMultibyte(tables, init io.Writer, seenTables map[string]string) {
+	var tableSortOrder string
+	if meta.SortOrder != nil {
+		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.SortOrder, seenTables)
+	}
+
+	fmt.Fprintf(init, "register(&Collation_multibyte{\n")
+	fmt.Fprintf(init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(init, "name: %q,\n", meta.Name)
+	if tableSortOrder != "" {
+		fmt.Fprintf(init, "sort: %s,\n", tableSortOrder)
+	}
+	fmt.Fprintf(init, "charset: charset.Charset_%s{},\n", meta.Charset)
+	fmt.Fprintf(init, "})\n")
+}
+
 func loadMysqlMetadata() (all []*collationMetadata) {
 	mysqdata, err := filepath.Glob("testdata/mysqldata/*.json")
 	if err != nil {
@@ -454,6 +470,9 @@ func main() {
 
 		case meta.Name == "gb18030_unicode_520_ci":
 			meta.writeUcaLegacy(&tables, &init, deduplicated)
+
+		case charset.IsMultibyte(meta.Charset):
+			meta.writeMultibyte(&tables, &init, deduplicated)
 
 		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicode(meta.Charset):
 			meta.writeUnicode(&tables, &init, deduplicated)

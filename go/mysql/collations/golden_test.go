@@ -60,7 +60,7 @@ func TestGoldenWeights(t *testing.T) {
 
 func TestCollationsForLanguage(t *testing.T) {
 	allCollations := All()
-	langCounts := make(map[testutil.Lang]int)
+	langCounts := make(map[testutil.Lang][]string)
 
 	for lang := range testutil.KnownLanguages {
 		var matched []string
@@ -70,12 +70,13 @@ func TestCollationsForLanguage(t *testing.T) {
 				matched = append(matched, name)
 			}
 		}
-		langCounts[lang] = len(matched)
+		langCounts[lang] = matched
 	}
 
 	for lang := range testutil.KnownLanguages {
-		if langCounts[lang] == 0 {
+		if len(langCounts[lang]) == 0 {
 			t.Errorf("no collations found for %q", lang)
 		}
+		t.Logf("%s: %v", lang, langCounts[lang])
 	}
 }

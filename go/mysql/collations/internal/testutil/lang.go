@@ -50,6 +50,7 @@ var KnownLanguages = map[Lang]string{
 	"he": "hebrew",
 	"rm": "roman",
 	"el": "greek",
+	"ko": "korean",
 }
 
 type Lang string
