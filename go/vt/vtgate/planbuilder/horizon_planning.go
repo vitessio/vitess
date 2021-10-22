@@ -925,11 +925,14 @@ func (hp *horizonPlanning) addDistinct(ctx *planningContext, plan logicalPlan) (
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As))
 		}
 		var inner sqlparser.Expr
-		if !aliasExpr.As.IsEmpty() {
+		if aliasExpr.As.IsEmpty() {
+			inner = aliasExpr.Expr
+		} else {
+			// If we have an alias, we need to use the alias and not the original expression
+			// to make sure dependencies work correctly,
+			// we simply copy the dependencies of the original expression here
 			inner = sqlparser.NewColName(aliasExpr.As.String())
 			ctx.semTable.CopyDependencies(aliasExpr.Expr, inner)
-		} else {
-			inner = aliasExpr.Expr
 		}
 		grpParam := &engine.GroupByParams{KeyCol: index, WeightStringCol: -1, CollationID: ctx.semTable.CollationFor(inner)}
 		_, wOffset, added, err := wrapAndPushExpr(aliasExpr.Expr, aliasExpr.Expr, plan, ctx.semTable)

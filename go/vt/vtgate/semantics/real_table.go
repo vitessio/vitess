@@ -21,8 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -109,14 +107,6 @@ func vindexTableToColumnInfo(tbl *vindexes.Table) []ColumnInfo {
 		var collation collations.ID
 		if sqltypes.IsText(col.Type) {
 			collation = collations.LookupIDByName(col.CollationName)
-			if collation == collations.Unknown {
-				log.Warningf(
-					"Unknown collation name %s on table %s column %s",
-					col.CollationName,
-					tbl.Name.String(),
-					col.Name.String(),
-				)
-			}
 		}
 		cols = append(cols, ColumnInfo{
 			Name: col.Name.String(),
