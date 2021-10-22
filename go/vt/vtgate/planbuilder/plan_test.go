@@ -142,11 +142,43 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
+// multiColIndex satisfies multi column vindex.
+type multiColIndex struct {
+	name string
+}
+
+func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &multiColIndex{name: name}, nil
+}
+
+var _ vindexes.MultiColumn = (*multiColIndex)(nil)
+
+func (m *multiColIndex) String() string { return m.name }
+
+func (m *multiColIndex) Cost() int { return 1 }
+
+func (m *multiColIndex) IsUnique() bool {
+	panic("implement me")
+}
+
+func (m *multiColIndex) NeedsVCursor() bool {
+	panic("implement me")
+}
+
+func (m *multiColIndex) Map(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	panic("implement me")
+}
+
+func (m *multiColIndex) Verify(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	panic("implement me")
+}
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)
 	vindexes.Register("name_lkp_test", newNameLkpIndex)
 	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("multiCol", newMultiColIndex)
 }
 
 const (
