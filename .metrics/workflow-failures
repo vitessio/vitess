@@ -1,6 +1,3 @@
-2021-09-06T09:57:46Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/1205534908
-2021-09-06T09:57:46Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/1205534948
-2021-09-06T09:57:46Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/1205534955
 2021-09-06T09:57:46Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1205534972
 2021-09-06T09:57:46Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1205534924
 2021-09-06T09:57:46Z,Cluster Self Hosted (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1205534945
@@ -9997,4 +9994,7 @@
 2021-10-22T07:13:13Z,Cluster (12),https://github.com/vitessio/vitess/actions/runs/1371151015
 2021-10-22T07:13:13Z,Cluster (vstream_failover),https://github.com/vitessio/vitess/actions/runs/1371151024
 2021-10-22T07:13:13Z,Unit Test (mariadb103),https://github.com/vitessio/vitess/actions/runs/1371150953
+2021-10-22T07:36:12Z,Cluster (upgrade),https://github.com/vitessio/vitess/actions/runs/1371218813
 2021-10-22T07:36:12Z,Cluster (vstream_failover),https://github.com/vitessio/vitess/actions/runs/1371218817
+2021-10-22T07:36:12Z,Unit Test (percona56),https://github.com/vitessio/vitess/actions/runs/1371218796
+2021-10-22T07:36:12Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1371218842
