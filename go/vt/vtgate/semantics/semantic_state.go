@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -59,7 +60,7 @@ type (
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
-		Type querypb.Type
+		Type Type
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map
@@ -81,7 +82,7 @@ type (
 		// It does not recurse inside derived tables and the like to find the original dependencies
 		Direct ExprDependencies
 
-		exprTypes   map[sqlparser.Expr]querypb.Type
+		exprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
 		Comments    sqlparser.Comments
 		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
@@ -202,9 +203,18 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	typ, found := st.exprTypes[e]
 	if found {
-		return &typ
+		return &typ.Type
 	}
 	return nil
+}
+
+// CollationFor returns the collation name of expressions in the query
+func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
+	typ, found := st.exprTypes[e]
+	if found {
+		return typ.Collation
+	}
+	return collations.Unknown
 }
 
 // dependencies return the table dependencies of the expression. This method finds table dependencies recursively
