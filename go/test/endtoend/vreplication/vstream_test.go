@@ -173,9 +173,6 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	insertedRows, err := evalengine.ToInt64(qr.Rows[0][0])
 	require.NoError(t, err)
 	require.Equal(t, insertedRows, numRowEvents)
-
-	// TODO (mattlord): How can you modify the topo server via a vtgate?
-	// Confirm that the underlying topo server is read-only
 }
 
 const schemaUnsharded = `
