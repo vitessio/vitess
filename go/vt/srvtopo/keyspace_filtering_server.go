@@ -53,19 +53,19 @@ func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (
 	}
 
 	return keyspaceFilteringServer{
-		roServer:        readOnlyServer,
+		server:          readOnlyServer,
 		selectKeyspaces: keyspaces,
 	}, nil
 }
 
 type keyspaceFilteringServer struct {
-	roServer        ReadOnlyServer
+	server          Server
 	selectKeyspaces map[string]bool
 }
 
 // GetTopoServer returns a read-only topo server
 func (ksf keyspaceFilteringServer) GetTopoServer() (*topo.Server, error) {
-	return ksf.roServer.GetTopoServer()
+	return ksf.server.GetTopoServer()
 }
 
 func (ksf keyspaceFilteringServer) GetSrvKeyspaceNames(
@@ -73,7 +73,7 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspaceNames(
 	cell string,
 	staleOK bool,
 ) ([]string, error) {
-	keyspaces, err := ksf.roServer.underlying.GetSrvKeyspaceNames(ctx, cell, staleOK)
+	keyspaces, err := ksf.server.GetSrvKeyspaceNames(ctx, cell, staleOK)
 	ret := make([]string, 0, len(keyspaces))
 	for _, ks := range keyspaces {
 		if ksf.selectKeyspaces[ks] {
@@ -92,7 +92,7 @@ func (ksf keyspaceFilteringServer) GetSrvKeyspace(
 		return nil, topo.NewError(topo.NoNode, keyspace)
 	}
 
-	return ksf.roServer.underlying.GetSrvKeyspace(ctx, cell, keyspace)
+	return ksf.server.GetSrvKeyspace(ctx, cell, keyspace)
 }
 
 func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
@@ -109,7 +109,7 @@ func (ksf keyspaceFilteringServer) WatchSrvKeyspace(
 		return callback(ks, err)
 	}
 
-	ksf.roServer.underlying.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
+	ksf.server.WatchSrvKeyspace(ctx, cell, keyspace, filteringCallback)
 }
 
 func (ksf keyspaceFilteringServer) WatchSrvVSchema(
@@ -129,5 +129,5 @@ func (ksf keyspaceFilteringServer) WatchSrvVSchema(
 		return callback(schema, err)
 	}
 
-	ksf.roServer.underlying.WatchSrvVSchema(ctx, cell, filteringCallback)
+	ksf.server.WatchSrvVSchema(ctx, cell, filteringCallback)
 }
