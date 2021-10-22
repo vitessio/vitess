@@ -71,6 +71,183 @@ func (tc testCase) run(t *testing.T) {
 	}
 }
 
+// This test tests the comparison of two integers
+func TestCompareIntegers(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "integers are equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewInt64(18)},
+		},
+		{
+			name: "integers are equal (2)",
+			v1:   NewLiteralInt(56), v2: NewLiteralInt(56),
+			out: &T, op: &EqualOp{},
+		},
+		{
+			name: "integers are not equal (1)",
+			v1:   NewLiteralInt(56), v2: NewLiteralInt(10),
+			out: &F, op: &EqualOp{},
+		},
+		{
+			name: "integers are not equal (2)",
+			v1:   NewLiteralInt(56), v2: NewLiteralInt(10),
+			out: &T, op: &NotEqualOp{},
+		},
+		{
+			name: "integers are not equal (3)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewInt64(18), sqltypes.NewInt64(98)},
+		},
+		{
+			name: "unsigned integers are equal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewUint64(18)},
+		},
+		{
+			name: "unsigned integer and integer are equal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewUint64(18), sqltypes.NewInt64(18)},
+		},
+		{
+			name: "unsigned integer and integer are not equal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewUint64(18), sqltypes.NewInt64(42)},
+		},
+		{
+			name: "integer is less than integer",
+			v1:   NewLiteralInt(3549), v2: NewLiteralInt(8072),
+			out: &T, op: &LessThanOp{},
+		},
+		{
+			name: "integer is not less than integer",
+			v1:   NewLiteralInt(3549), v2: NewLiteralInt(21),
+			out: &F, op: &LessThanOp{},
+		},
+		{
+			name: "integer is less-equal to integer (1)",
+			v1:   NewLiteralInt(3549), v2: NewLiteralInt(9863),
+			out: &T, op: &LessEqualOp{},
+		},
+		{
+			name: "integer is less-equal to integer (2)",
+			v1:   NewLiteralInt(3549), v2: NewLiteralInt(3549),
+			out: &T, op: &LessEqualOp{},
+		},
+		{
+			name: "integer is greater than integer",
+			v1:   NewLiteralInt(9809), v2: NewLiteralInt(9800),
+			out: &T, op: &GreaterThanOp{},
+		},
+		{
+			name: "integer is not greater than integer",
+			v1:   NewLiteralInt(549), v2: NewLiteralInt(21579),
+			out: &F, op: &GreaterThanOp{},
+		},
+		{
+			name: "integer is greater-equal to integer (1)",
+			v1:   NewLiteralInt(987), v2: NewLiteralInt(15),
+			out: &T, op: &GreaterEqualOp{},
+		},
+		{
+			name: "integer is greater-equal to integer (2)",
+			v1:   NewLiteralInt(3549), v2: NewLiteralInt(3549),
+			out: &T, op: &GreaterEqualOp{},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two floats
+func TestCompareFloats(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "floats are equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(18)},
+		},
+		{
+			name: "floats are equal (2)",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(3549.9),
+			out: &T, op: &EqualOp{},
+		},
+		{
+			name: "floats are not equal (1)",
+			v1:   NewLiteralFloat(7858.016), v2: NewLiteralFloat(8943298.56),
+			out: &F, op: &EqualOp{},
+		},
+		{
+			name: "floats are not equal (2)",
+			v1:   NewLiteralFloat(351049.65), v2: NewLiteralFloat(62508.99),
+			out: &T, op: &NotEqualOp{},
+		},
+		{
+			name: "floats are not equal (3)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(16516.84), sqltypes.NewFloat64(219541.01)},
+		},
+		{
+			name: "float is less than float",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(8072),
+			out: &T, op: &LessThanOp{},
+		},
+		{
+			name: "float is not less than float",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(21.564),
+			out: &F, op: &LessThanOp{},
+		},
+		{
+			name: "float is less-equal to float (1)",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(9863),
+			out: &T, op: &LessEqualOp{},
+		},
+		{
+			name: "float is less-equal to float (2)",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(3549.9),
+			out: &T, op: &LessEqualOp{},
+		},
+		{
+			name: "float is greater than float",
+			v1:   NewLiteralFloat(9808.549), v2: NewLiteralFloat(9808.540),
+			out: &T, op: &GreaterThanOp{},
+		},
+		{
+			name: "float is not greater than float",
+			v1:   NewLiteralFloat(549.02), v2: NewLiteralFloat(21579.64),
+			out: &F, op: &GreaterThanOp{},
+		},
+		{
+			name: "float is greater-equal to float (1)",
+			v1:   NewLiteralFloat(987.30), v2: NewLiteralFloat(15.5),
+			out: &T, op: &GreaterEqualOp{},
+		},
+		{
+			name: "float is greater-equal to float (2)",
+			v1:   NewLiteralFloat(3549.9), v2: NewLiteralFloat(3549.9),
+			out: &T, op: &GreaterEqualOp{},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two decimals
 func TestCompareDecimals(t *testing.T) {
 	tests := []testCase{
 		{
@@ -85,6 +262,42 @@ func TestCompareDecimals(t *testing.T) {
 			out: &T, op: &NotEqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019"), sqltypes.NewDecimal("489.156849")},
 		},
+		{
+			name: "decimal is greater than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
+		},
+		{
+			name: "decimal is not greater than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
+		},
+		{
+			name: "decimal is less than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
+		},
+		{
+			name: "decimal is not less than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of numerical values (float, decimal, integer)
+func TestCompareNumerics(t *testing.T) {
+	tests := []testCase{
 		{
 			name: "decimal and float are equal",
 			v1:   NewColumn(0), v2: NewColumn(1),
@@ -146,18 +359,6 @@ func TestCompareDecimals(t *testing.T) {
 			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewUint64(192)},
 		},
 		{
-			name: "decimal is greater than decimal",
-			v1:   NewColumn(0), v2: NewColumn(1),
-			out: &T, op: &GreaterThanOp{},
-			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
-		},
-		{
-			name: "decimal is not greater than decimal",
-			v1:   NewColumn(0), v2: NewColumn(1),
-			out: &F, op: &GreaterThanOp{},
-			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
-		},
-		{
 			name: "decimal is greater than integer",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &GreaterThanOp{},
@@ -168,18 +369,6 @@ func TestCompareDecimals(t *testing.T) {
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &GreaterEqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.00"), sqltypes.NewInt64(1)},
-		},
-		{
-			name: "decimal is less than decimal",
-			v1:   NewColumn(0), v2: NewColumn(1),
-			out: &T, op: &LessThanOp{},
-			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
-		},
-		{
-			name: "decimal is not less than decimal",
-			v1:   NewColumn(0), v2: NewColumn(1),
-			out: &F, op: &LessThanOp{},
-			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
 		},
 		{
 			name: "decimal is less than integer",
