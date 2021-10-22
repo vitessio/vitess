@@ -32,7 +32,7 @@ func NewReadOnlyServer(underlying Server) (ReadOnlyServer, error) {
 	}
 
 	topoServer, err := underlying.GetTopoServer()
-	if err != nil {
+	if err != nil || topoServer == nil {
 		return ros, topo.NewError(topo.NoImplementation, fmt.Sprintf("Could not get underlying topo server: %v", err))
 	}
 	topoServer.SetReadOnly(true)
@@ -49,8 +49,12 @@ type ReadOnlyServer struct {
 func (ros *ReadOnlyServer) GetTopoServer() (*topo.Server, error) {
 	// Let's ensure it's read-only
 	topoServer, err := ros.underlying.GetTopoServer()
-	if topoServer != nil {
-		topoServer.SetReadOnly(true)
+	if err != nil || topoServer == nil {
+		return nil, topo.NewError(topo.NoImplementation, fmt.Sprintf("Could not get underlying topo server: %v", err))
+	}
+	topoServer.SetReadOnly(true)
+	if !topoServer.IsReadOnly() {
+		return nil, topo.NewError(topo.NoReadOnlyImplementation, fmt.Sprintf("Could not provide read-only topo server: %v", err))
 	}
 	return topoServer, err
 }
