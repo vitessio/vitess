@@ -143,6 +143,31 @@ func NewVarBinary(v string) Value {
 	return MakeTrusted(VarBinary, []byte(v))
 }
 
+// NewDate builds a Date value.
+func NewDate(v string) Value {
+	return MakeTrusted(Date, []byte(v))
+}
+
+// NewTime builds a Time value.
+func NewTime(v string) Value {
+	return MakeTrusted(Time, []byte(v))
+}
+
+// NewTimestamp builds a Timestamp value.
+func NewTimestamp(v string) Value {
+	return MakeTrusted(Timestamp, []byte(v))
+}
+
+// NewDatetime builds a Datetime value.
+func NewDatetime(v string) Value {
+	return MakeTrusted(Datetime, []byte(v))
+}
+
+// NewDecimal builds a Decimal value.
+func NewDecimal(v string) Value {
+	return MakeTrusted(Decimal, []byte(v))
+}
+
 // NewIntegral builds an integral type from a string representation.
 // The type will be Int64 or Uint64. Int64 will be preferred where possible.
 func NewIntegral(val string) (n Value, err error) {

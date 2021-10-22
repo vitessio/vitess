@@ -42,44 +42,38 @@ var (
 )
 
 func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
-	name := fmt.Sprintf("%d_%s_%s%s%s", i, tc.name, tc.v1.String(), cmpOp.String(), tc.v2.String())
 	if tc.bv == nil {
 		tc.bv = map[string]*querypb.BindVariable{}
 	}
-	t.Run(name, func(t *testing.T) {
-		env := ExpressionEnv{
-			BindVars: tc.bv,
-			Row:      tc.row,
-		}
-		cmp := ComparisonExpr{
-			Op:    cmpOp,
-			Left:  tc.v1,
-			Right: tc.v2,
-		}
-		got, err := cmp.Evaluate(env)
-		if tc.err == "" {
-			require.NoError(t, err)
-			if tc.out != nil && *tc.out {
-				require.EqualValues(t, 1, got.ival)
-			} else if tc.out != nil && !*tc.out {
-				require.EqualValues(t, 0, got.ival)
-			} else {
-				require.EqualValues(t, 0, got.ival)
-				require.EqualValues(t, sqltypes.Null, got.typ)
-			}
+	env := ExpressionEnv{
+		BindVars: tc.bv,
+		Row:      tc.row,
+	}
+	cmp := ComparisonExpr{
+		Op:    cmpOp,
+		Left:  tc.v1,
+		Right: tc.v2,
+	}
+	got, err := cmp.Evaluate(env)
+	if tc.err == "" {
+		require.NoError(t, err)
+		if tc.out != nil && *tc.out {
+			require.EqualValues(t, 1, got.ival)
+		} else if tc.out != nil && !*tc.out {
+			require.EqualValues(t, 0, got.ival)
 		} else {
-			require.EqualError(t, err, tc.err)
+			require.EqualValues(t, 0, got.ival)
+			require.EqualValues(t, sqltypes.Null, got.typ)
 		}
-	})
+	} else {
+		require.EqualError(t, err, tc.err)
+	}
 }
 
 func TestComparisonEquality(t *testing.T) {
 	tests := []testCase{
 		{
-			name: "All Nulls",
-			v1:   &Null{},
-			v2:   &Null{},
-			out:  nil,
+			out: nil,
 		}, {
 			name: "Second value null.",
 			v1:   NewLiteralInt(1),
@@ -164,27 +158,50 @@ func TestComparisonEquality(t *testing.T) {
 			v2:   NewColumn(0),
 			out:  &T,
 			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
+		}, {
+			name: "string with string",
+			v1:   NewLiteralString([]byte(";")),
+			v2:   NewLiteralString([]byte(";")),
+			out:  &T,
+		}, {
+			name: "column date with column date",
+			v1:   NewColumn(0),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewDate("2012-01-01")},
+		}, {
+			name: "column datetime with column datetime",
+			v1:   NewColumn(0),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewDatetime("2012-01-01 12:00:00")},
+		}, {
+			name: "column timestamp with column timestamp",
+			v1:   NewColumn(0),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewTimestamp("2012-01-01 12:00:00")},
+		}, {
+			name: "column time with column time",
+			v1:   NewColumn(0),
+			v2:   NewColumn(0),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewTime("12:00:00")},
+		}, {
+			name: "column decimal with column decimal",
+			v1:   NewColumn(0),
+			v2:   NewColumn(1),
+			out:  &T,
+			row:  []sqltypes.Value{sqltypes.NewDecimal("12.9012"), sqltypes.NewDecimal("12.9012")},
 		},
 	}
 
-	t.Run("EqualOp", func(t *testing.T) {
-		for i, tcase := range tests {
-			tcase.run(t, i+1, &EqualOp{})
-		}
-	})
-
-	t.Run("NotEqualOp", func(t *testing.T) {
-		for i, tcase := range tests {
-			// transforming the expected output to its opposite so we can test NotEqualOp
-			switch tcase.out {
-			case &T:
-				tcase.out = &F
-			case &F:
-				tcase.out = &T
-			}
-			tcase.run(t, i+1, &NotEqualOp{})
-		}
-	})
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			cmpOp := &EqualOp{}
+			tcase.run(t, i+1, cmpOp)
+		})
+	}
 }
 
 func TestComparisonLess(t *testing.T) {

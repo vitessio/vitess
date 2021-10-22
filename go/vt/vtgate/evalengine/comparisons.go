@@ -90,11 +90,15 @@ func hasNullEvalResult(l, r EvalResult) bool {
 }
 
 func evalResultsAreString(l, r EvalResult) bool {
-	return sqltypes.IsText(l.typ) && sqltypes.IsText(r.typ)
+	return sqltypes.IsText(l.typ) && sqltypes.IsText(r.typ) || sqltypes.IsBinary(l.typ) && sqltypes.IsBinary(r.typ)
 }
 
 func evalResultsAreInteger(l, r EvalResult) bool {
 	return sqltypes.IsIntegral(l.typ) && sqltypes.IsIntegral(r.typ)
+}
+
+func evalResultsAreDates(l, r EvalResult) bool {
+	return sqltypes.IsDate(l.typ) && sqltypes.IsDate(r.typ)
 }
 
 func needsDecimalHandling(l, r EvalResult) bool {
@@ -110,26 +114,24 @@ func needsFloatHandling(l, r EvalResult) bool {
 	return l.typ == sqltypes.Decimal && sqltypes.IsFloat(r.typ) || r.typ == sqltypes.Decimal && sqltypes.IsFloat(l.typ)
 }
 
+// For more details on comparison expression evaluation and type conversion:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func executeComparison(lVal, rVal EvalResult) (int, error) {
 	switch {
 	case evalResultsAreString(lVal, rVal):
 		// Comparing as strings if both sides are strings
-		panic("not implemented yet")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing strings")
 
 	case evalResultsAreInteger(lVal, rVal), needsFloatHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)
 
 	case needsDecimalHandling(lVal, rVal):
-		panic("not implemented yet")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing decimals")
 
-	// TODO: case for binary strings
-
-	// TODO: case for dates
-
-	// TODO: case for hexadecimal values
+	case evalResultsAreDates(lVal, rVal):
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing dates")
 
 	default:
-		// TODO: handle default case
 		// Quoting MySQL Docs:
 		//
 		// 		"In all other cases, the arguments are compared as floating-point (real) numbers.
@@ -137,13 +139,11 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		// 		comparison of floating-point numbers."
 		//
 		//		https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-		return compareNumeric(makeNumeric(lVal), makeNumeric(rVal))
+		return compareNumeric(makeFloat(lVal), makeFloat(rVal))
 	}
 }
 
 // Evaluate implements the Expr interface
-// For more details on comparison expression evaluation and type conversion:
-// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func (c *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	if c.Op == nil {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a comparison expression needs a comparison operator")

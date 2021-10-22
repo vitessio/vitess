@@ -162,7 +162,11 @@ func newEvalResult(v sqltypes.Value) (EvalResult, error) {
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		typ := sqltypes.Float64
+		if v.Type() == sqltypes.Decimal {
+			typ = sqltypes.Decimal
+		}
+		return EvalResult{fval: fval, typ: typ}, nil
 	default:
 		return EvalResult{typ: v.Type(), bytes: raw}, nil
 	}
