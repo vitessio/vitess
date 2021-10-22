@@ -16,7 +16,7 @@ limitations under the License.
 
 package collations
 
-import "vitess.io/vitess/go/mysql/collations/internal/encoding"
+import "vitess.io/vitess/go/mysql/collations/internal/charset"
 
 func init() {
 	register(&Collation_binary{})
@@ -38,7 +38,7 @@ type Collation_8bit_bin struct {
 	id   ID
 	name string
 	simpletables
-	charset encoding.Encoding
+	charset charset.Charset
 }
 
 func (c *Collation_8bit_bin) init() {}
@@ -51,7 +51,7 @@ func (c *Collation_8bit_bin) Id() ID {
 	return c.id
 }
 
-func (c *Collation_8bit_bin) Encoding() encoding.Encoding {
+func (c *Collation_8bit_bin) Charset() charset.Charset {
 	return c.charset
 }
 
@@ -84,7 +84,7 @@ type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
 	simpletables
-	charset encoding.Encoding
+	charset charset.Charset
 }
 
 func (c *Collation_8bit_simple_ci) init() {}
@@ -97,7 +97,7 @@ func (c *Collation_8bit_simple_ci) Id() ID {
 	return c.id
 }
 
-func (c *Collation_8bit_simple_ci) Encoding() encoding.Encoding {
+func (c *Collation_8bit_simple_ci) Charset() charset.Charset {
 	return c.charset
 }
 

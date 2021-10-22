@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encoding
+package charset
 
 import (
 	"errors"
@@ -25,20 +25,20 @@ type UnicodeMapping struct {
 	Range    []byte `json:"Tab"`
 }
 
-type Encoding_8bit struct {
+type Charset_8bit struct {
 	ToUnicode   []uint16
 	FromUnicode []UnicodeMapping
 }
 
-func (e *Encoding_8bit) Name() string {
-	return "generic_8bit_encoding"
+func (e *Charset_8bit) Name() string {
+	return "generic_8bit_charset"
 }
 
-func (e *Encoding_8bit) SupportsSupplementaryChars() bool {
+func (e *Charset_8bit) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (e *Encoding_8bit) DecodeRune(bytes []byte) (rune, int) {
+func (e *Charset_8bit) DecodeRune(bytes []byte) (rune, int) {
 	if len(bytes) < 1 {
 		return RuneError, 0
 	}
@@ -47,7 +47,7 @@ func (e *Encoding_8bit) DecodeRune(bytes []byte) (rune, int) {
 
 var ErrNoMapping = errors.New("cannot encode all codepoints in this encoding")
 
-func (e *Encoding_8bit) encodeRune(r rune) byte {
+func (e *Charset_8bit) encodeRune(r rune) byte {
 	if r > 0xFFFF {
 		return 0
 	}
@@ -60,7 +60,7 @@ func (e *Encoding_8bit) encodeRune(r rune) byte {
 	return 0
 }
 
-func (e *Encoding_8bit) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (e *Charset_8bit) EncodeFromUTF8(in []byte) ([]byte, error) {
 	var output = make([]byte, 0, len(in))
 	var b byte
 	for _, cp := range string(in) {

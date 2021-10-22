@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -160,7 +160,7 @@ func colldump(collation string, input []byte) []byte {
 
 type CollationWithEncoding interface {
 	collations.Collation
-	encoding.EncodingAware
+	charset.CharsetAware
 }
 
 func main() {
@@ -216,7 +216,7 @@ func main() {
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 
 		for _, collation := range interestingCollations {
-			transcoded, err := collation.Encoding().EncodeFromUTF8([]byte(snippet))
+			transcoded, err := collation.Charset().EncodeFromUTF8([]byte(snippet))
 			if err != nil {
 				log.Printf("[%s] skip collation %s", lang, collation.Name())
 				continue
