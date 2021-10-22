@@ -3285,23 +3285,13 @@ var collationsUnsupportedByName = map[string]ID{
 	"gb2312_chinese_ci":        24,
 	"gbk_chinese_ci":           28,
 	"latin1_german2_ci":        31,
-	"utf8_general_ci":          33,
 	"cp1250_czech_cs":          34,
-	"ucs2_general_ci":          35,
-	"utf16_general_ci":         54,
-	"utf16_bin":                55,
-	"utf16le_general_ci":       56,
-	"utf32_general_ci":         60,
-	"utf32_bin":                61,
-	"utf16le_bin":              62,
 	"utf8_tolower_ci":          76,
-	"utf8_bin":                 83,
 	"big5_bin":                 84,
 	"euckr_bin":                85,
 	"gb2312_bin":               86,
 	"gbk_bin":                  87,
 	"sjis_bin":                 88,
-	"ucs2_bin":                 90,
 	"ujis_bin":                 91,
 	"cp932_japanese_ci":        95,
 	"cp932_bin":                96,
@@ -3555,6 +3545,18 @@ func init() {
 			FromUnicode: fromunicode_armscii8_general_ci,
 		},
 	})
+	register(&Collation_unicode_general_ci{
+		id:      33,
+		name:    "utf8_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_utf8{},
+	})
+	register(&Collation_unicode_general_ci{
+		id:      35,
+		name:    "ucs2_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_ucs2{},
+	})
 	register(&Collation_8bit_simple_ci{
 		id:   36,
 		name: "cp866_general_ci",
@@ -3652,6 +3654,17 @@ func init() {
 			FromUnicode: fromunicode_cp1250_general_ci,
 		},
 	})
+	register(&Collation_unicode_general_ci{
+		id:      45,
+		name:    "utf8mb4_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_utf8mb4{},
+	})
+	register(&Collation_unicode_bin{
+		id:      46,
+		name:    "utf8mb4_bin",
+		charset: charset.Charset_utf8mb4{},
+	})
 	register(&Collation_8bit_bin{
 		id:           47,
 		name:         "latin1_bin",
@@ -3722,6 +3735,23 @@ func init() {
 			FromUnicode: fromunicode_macroman_general_ci,
 		},
 	})
+	register(&Collation_unicode_general_ci{
+		id:      54,
+		name:    "utf16_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_utf16{},
+	})
+	register(&Collation_unicode_bin{
+		id:      55,
+		name:    "utf16_bin",
+		charset: charset.Charset_utf16{},
+	})
+	register(&Collation_unicode_general_ci{
+		id:      56,
+		name:    "utf16le_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_utf16le{},
+	})
 	register(&Collation_8bit_simple_ci{
 		id:   57,
 		name: "cp1256_general_ci",
@@ -3752,6 +3782,22 @@ func init() {
 			ToUnicode:   tounicode_cp1257_lithuanian_ci,
 			FromUnicode: fromunicode_cp1257_lithuanian_ci,
 		},
+	})
+	register(&Collation_unicode_general_ci{
+		id:      60,
+		name:    "utf32_general_ci",
+		unicase: unicaseInfo_default,
+		charset: charset.Charset_utf32{},
+	})
+	register(&Collation_unicode_bin{
+		id:      61,
+		name:    "utf32_bin",
+		charset: charset.Charset_utf32{},
+	})
+	register(&Collation_unicode_bin{
+		id:      62,
+		name:    "utf16le_bin",
+		charset: charset.Charset_utf16le{},
 	})
 	register(&Collation_8bit_bin{
 		id:           64,
@@ -3915,11 +3961,21 @@ func init() {
 			FromUnicode: fromunicode_swe7_swedish_ci,
 		},
 	})
+	register(&Collation_unicode_bin{
+		id:      83,
+		name:    "utf8_bin",
+		charset: charset.Charset_utf8{},
+	})
 	register(&Collation_8bit_bin{
 		id:           89,
 		name:         "tis620_bin",
 		simpletables: simpletables{},
 		charset:      &charset.Charset_8bit{},
+	})
+	register(&Collation_unicode_bin{
+		id:      90,
+		name:    "ucs2_bin",
+		charset: charset.Charset_ucs2{},
 	})
 	register(&Collation_8bit_simple_ci{
 		id:   92,

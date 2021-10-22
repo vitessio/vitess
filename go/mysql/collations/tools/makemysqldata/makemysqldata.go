@@ -367,6 +367,23 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 	fmt.Fprintf(init, "})\n")
 }
 
+func (meta *collationMetadata) writeUnicode(_, init io.Writer, _ map[string]string) {
+	var collation string
+	if meta.Binary {
+		collation = "Collation_unicode_bin"
+	} else {
+		collation = "Collation_unicode_general_ci"
+	}
+	fmt.Fprintf(init, "register(&%s{\n", collation)
+	fmt.Fprintf(init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(init, "name: %q,\n", meta.Name)
+	if !meta.Binary {
+		fmt.Fprintf(init, "unicase: unicaseInfo_default,\n")
+	}
+	fmt.Fprintf(init, "charset: charset.Charset_%s{},\n", meta.Charset)
+	fmt.Fprintf(init, "})\n")
+}
+
 func loadMysqlMetadata() (all []*collationMetadata) {
 	mysqdata, err := filepath.Glob("testdata/mysqldata/*.json")
 	if err != nil {
@@ -398,13 +415,6 @@ func loadMysqlMetadata() (all []*collationMetadata) {
 	return
 }
 
-var hardcodedCollations = map[string]bool{
-	"utf8mb4_general_ci": true,
-	"utf8mb4_bin":        true,
-	"utf8mb4_0900_bin":   true,
-	"binary":             true,
-}
-
 func findCollation(all []*collationMetadata, name string) *collationMetadata {
 	for _, meta := range all {
 		if meta.Name == name {
@@ -430,25 +440,34 @@ func main() {
 	baseWeightsUca900 = findCollation(allMetadata, "utf8mb4_0900_ai_ci").Weights
 
 	for _, meta := range allMetadata {
-		if hardcodedCollations[meta.Name] {
-			continue
-		}
+		switch {
+		case meta.Name == "utf8mb4_0900_bin" || meta.Name == "binary":
+			// hardcoded collations; nothing to export here
 
-		switch meta.CollationImpl {
-		case "any_uca", "utf16_uca", "utf32_uca", "ucs2_uca":
+		case meta.CollationImpl == "any_uca" ||
+			meta.CollationImpl == "utf16_uca" ||
+			meta.CollationImpl == "utf32_uca" ||
+			meta.CollationImpl == "ucs2_uca":
 			meta.writeUcaLegacy(&tables, &init, deduplicated)
-		case "uca_900":
+
+		case meta.CollationImpl == "uca_900":
 			meta.writeUca900(&tables, &init, deduplicated)
-		case "8bit_bin", "8bit_simple_ci":
+
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci":
 			meta.write8bit(&tables, &init, deduplicated)
+
+		case meta.Name == "gb18030_unicode_520_ci":
+			meta.writeUcaLegacy(&tables, &init, deduplicated)
+
+		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicode(meta.Charset):
+			meta.writeUnicode(&tables, &init, deduplicated)
+
+		case strings.HasSuffix(meta.Name, "_general_ci"):
+			meta.writeUnicode(&tables, &init, deduplicated)
+
 		default:
-			switch meta.Name {
-			case "gb18030_unicode_520_ci":
-				meta.writeUcaLegacy(&tables, &init, deduplicated)
-			default:
-				unsupported = append(unsupported, meta)
-				unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
-			}
+			unsupported = append(unsupported, meta)
+			unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
 		}
 	}
 
