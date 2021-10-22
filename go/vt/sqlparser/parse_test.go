@@ -50,6 +50,9 @@ var (
 		input:  "SELECT EXTRACT(YEAR_MONTH FROM '2019-07-02 01:02:03')",
 		output: "select extract(year_month from '2019-07-02 01:02:03') from dual",
 	}, {
+		input:  "select extract(year from \"21-10-22 12:00:00\")",
+		output: "select extract(year from '21-10-22 12:00:00') from dual",
+	}, {
 		input:  "SELECT EXTRACT(DAY_MINUTE FROM '2019-07-02 01:02:03')",
 		output: "select extract(day_minute from '2019-07-02 01:02:03') from dual",
 	}, {
