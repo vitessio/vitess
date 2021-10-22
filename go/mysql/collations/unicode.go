@@ -147,6 +147,52 @@ func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {
 }
 
 func (c *Collation_unicode_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
+	if c.charset.SupportsSupplementaryChars() {
+		return c.weightStringUnicode(dst, src, numCodepoints)
+	}
+	return c.weightStringBMP(dst, src, numCodepoints)
+}
+
+func (c *Collation_unicode_bin) weightStringBMP(dst, src []byte, numCodepoints int) []byte {
+	cs := c.charset
+	if numCodepoints == 0 || numCodepoints == PadToMax {
+		for {
+			r, width := cs.DecodeRune(src)
+			if r == charset.RuneError && width < 3 {
+				break
+			}
+			src = src[width:]
+			dst = append(dst, byte(r>>8), byte(r))
+		}
+
+		if numCodepoints == PadToMax {
+			for len(dst)+1 < cap(dst) {
+				dst = append(dst, 0x00, 0x20)
+			}
+			if len(dst) < cap(dst) {
+				dst = append(dst, 0x00)
+			}
+		}
+	} else {
+		for numCodepoints > 0 {
+			r, width := cs.DecodeRune(src)
+			if r == charset.RuneError && width < 3 {
+				break
+			}
+			src = src[width:]
+			dst = append(dst, byte(r>>8), byte(r))
+			numCodepoints--
+		}
+		for numCodepoints > 0 {
+			dst = append(dst, 0x00, 0x20)
+			numCodepoints--
+		}
+	}
+
+	return dst
+}
+
+func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoints int) []byte {
 	cs := c.charset
 	if numCodepoints == 0 || numCodepoints == PadToMax {
 		for {

@@ -17,7 +17,7 @@ limitations under the License.
 package charset
 
 import (
-	"errors"
+	"fmt"
 )
 
 type UnicodeMapping struct {
@@ -26,12 +26,13 @@ type UnicodeMapping struct {
 }
 
 type Charset_8bit struct {
+	Name_       string
 	ToUnicode   []uint16
 	FromUnicode []UnicodeMapping
 }
 
 func (e *Charset_8bit) Name() string {
-	return "generic_8bit_charset"
+	return e.Name_
 }
 
 func (e *Charset_8bit) SupportsSupplementaryChars() bool {
@@ -44,8 +45,6 @@ func (e *Charset_8bit) DecodeRune(bytes []byte) (rune, int) {
 	}
 	return rune(e.ToUnicode[bytes[0]]), 1
 }
-
-var ErrNoMapping = errors.New("cannot encode all codepoints in this encoding")
 
 func (e *Charset_8bit) encodeRune(r rune) byte {
 	if r > 0xFFFF {
@@ -60,14 +59,39 @@ func (e *Charset_8bit) encodeRune(r rune) byte {
 	return 0
 }
 
+func (e *Charset_8bit) encodingError(cp rune) error {
+	return fmt.Errorf("charset %s cannot encode %q (U+%04x)", e.Name_, string(cp), cp)
+}
+
 func (e *Charset_8bit) EncodeFromUTF8(in []byte) ([]byte, error) {
 	var output = make([]byte, 0, len(in))
 	var b byte
 	for _, cp := range string(in) {
 		if b = e.encodeRune(cp); b == 0 {
-			return nil, ErrNoMapping
+			return nil, e.encodingError(cp)
 		}
 		output = append(output, b)
 	}
 	return output, nil
+}
+
+type Charset_binary struct{}
+
+func (Charset_binary) Name() string {
+	return "binary"
+}
+
+func (Charset_binary) SupportsSupplementaryChars() bool {
+	return true
+}
+
+func (c Charset_binary) DecodeRune(bytes []byte) (rune, int) {
+	if len(bytes) < 1 {
+		return RuneError, 0
+	}
+	return rune(bytes[0]), 1
+}
+
+func (c Charset_binary) EncodeFromUTF8(in []byte) ([]byte, error) {
+	return in, nil
 }

@@ -197,8 +197,7 @@ func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) 
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
-	copyCodepoints := minInt(len(src), cap(dst))
-	dst = append(dst, src[:copyCodepoints]...)
+	dst = append(dst, src...)
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x0)
