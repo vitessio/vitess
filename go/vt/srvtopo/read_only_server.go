@@ -17,15 +17,18 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"fmt"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// NewReadOnlyServer wraps the server passed by the provided implementation
-// and prevents any changes from being made to its associated topo server.
-func NewReadOnlyServer(underlying Server) (ReadOnlyServer, error) {
-	ros := ReadOnlyServer{underlying: underlying}
+// NewReadOnlyServer wraps the topo server passed by the provided implementation
+// and prevents any changes from being made to it.
+func NewReadOnlyServer(underlying Server) (Server, error) {
+	ros := readOnlyServer{underlying: underlying}
 
 	if underlying == nil {
 		return ros, ErrNilUnderlyingServer
@@ -41,13 +44,14 @@ func NewReadOnlyServer(underlying Server) (ReadOnlyServer, error) {
 }
 
 // ReadOnlyServer wraps an underlying Server to ensure the topo server access is read-only
-type ReadOnlyServer struct {
+type readOnlyServer struct {
 	underlying Server
 }
 
 // GetTopoServer returns a read-only topo server
-func (ros *ReadOnlyServer) GetTopoServer() (*topo.Server, error) {
-	// Let's ensure it's read-only
+func (ros readOnlyServer) GetTopoServer() (*topo.Server, error) {
+	// The topo server should already be read-only, from the constructor, but as an extra
+	// safety precaution and guardrail let's ensure that it is before handing it out
 	topoServer, err := ros.underlying.GetTopoServer()
 	if err != nil || topoServer == nil {
 		return nil, topo.NewError(topo.NoImplementation, fmt.Sprintf("Could not get underlying topo server: %v", err))
@@ -57,4 +61,25 @@ func (ros *ReadOnlyServer) GetTopoServer() (*topo.Server, error) {
 		return nil, topo.NewError(topo.NoReadOnlyImplementation, fmt.Sprintf("Could not provide read-only topo server: %v", err))
 	}
 	return topoServer, err
+}
+
+// GetSrvKeyspaceNames returns the list of keyspaces served in the provided cell from the underlying server
+func (ros readOnlyServer) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
+	return ros.underlying.GetSrvKeyspaceNames(ctx, cell, staleOK)
+}
+
+// GetSrvKeyspace returns the SrvKeyspace for a cell/keyspace from the underlying server
+func (ros readOnlyServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	return ros.underlying.GetSrvKeyspace(ctx, cell, keyspace)
+}
+
+func (ros readOnlyServer) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	ros.underlying.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+// WatchSrvVSchema starts watching the SrvVSchema object for
+// the provided cell.  It will call the callback when
+// a new value or an error occurs.
+func (ros readOnlyServer) WatchSrvVSchema(ctx context.Context, cell string, callback func(*vschemapb.SrvVSchema, error) bool) {
+	ros.underlying.WatchSrvVSchema(ctx, cell, callback)
 }

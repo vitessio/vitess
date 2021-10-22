@@ -99,7 +99,7 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 
 	vtGateArgs := []string{
 		"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + "/" + mysqlAuthServerStatic,
-		"-keyspaces_to_watch", "ks1",
+		"-keyspaces_to_watch", keyspaceUnshardedName,
 	}
 
 	if extraVTGateArgs != nil {
