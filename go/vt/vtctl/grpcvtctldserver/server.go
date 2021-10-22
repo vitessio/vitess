@@ -1428,7 +1428,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	// position
 	logger.Infof("initializing primary on %v", topoproto.TabletAliasString(req.PrimaryElectTabletAlias))
 	event.DispatchUpdate(ev, "initializing primary")
-	rp, err := tmc.InitPrimary(ctx, primaryElectTabletInfo.Tablet)
+	rp, err := tmc.InitMaster(ctx, primaryElectTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}
