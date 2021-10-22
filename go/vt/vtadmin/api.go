@@ -262,7 +262,7 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 	}, nil
 }
 
-// CreateShard is part of the vtadminpb.VTAdminServver interface.
+// CreateShard is part of the vtadminpb.VTAdminServer interface.
 func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.CreateShard")
 	defer span.Finish()
