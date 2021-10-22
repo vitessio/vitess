@@ -157,20 +157,16 @@ func (m *multiColIndex) String() string { return m.name }
 
 func (m *multiColIndex) Cost() int { return 1 }
 
-func (m *multiColIndex) IsUnique() bool {
-	panic("implement me")
-}
+func (m *multiColIndex) IsUnique() bool { return true }
 
-func (m *multiColIndex) NeedsVCursor() bool {
-	panic("implement me")
-}
+func (m *multiColIndex) NeedsVCursor() bool { return false }
 
 func (m *multiColIndex) Map(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (m *multiColIndex) Verify(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	panic("implement me")
+	return []bool{}, nil
 }
 
 func init() {
@@ -178,7 +174,7 @@ func init() {
 	vindexes.Register("lookup_test", newLookupIndex)
 	vindexes.Register("name_lkp_test", newNameLkpIndex)
 	vindexes.Register("costly", newCostlyIndex)
-	vindexes.Register("multiCol", newMultiColIndex)
+	vindexes.Register("multiCol_test", newMultiColIndex)
 }
 
 const (

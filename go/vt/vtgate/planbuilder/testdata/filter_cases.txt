@@ -3269,6 +3269,7 @@ Gen4 plan same as above
   }
 }
 
+# should use colb_colc_map as first column of the vindex is present in predicate
 "select * from multicolvin where column_b = 1"
 {
   "QueryType": "SELECT",
@@ -3291,6 +3292,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# should only use first column of the vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2"
 {
   "QueryType": "SELECT",
@@ -3313,6 +3315,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# uses vindex colb_colc_map
 "select * from multicolvin where column_b = 1 and column_c = 2 and column_a = 3"
 {
   "QueryType": "SELECT",
@@ -3335,6 +3338,7 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# v3 takes cola_map, gen4 takes colb_colc_map, may be based on map key ordering
 "select * from multicolvin where column_a = 3 and column_b = 1"
 {
   "QueryType": "SELECT",
@@ -3374,3 +3378,22 @@ Gen4 plan same as above
     "Vindex": "colb_colc_map"
   }
 }
+
+# multi column vindexes are not allowed to be selected as vindex option. This will be Scatter
+"select * from multicol_tbl where cola = 1 and colb = 2"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from multicol_tbl where cola = 1 and colb = 2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select * from multicol_tbl where 1 != 1",
+    "Query": "select * from multicol_tbl where cola = 1 and colb = 2",
+    "Table": "multicol_tbl"
+  }
+}
+Gen4 plan same as above
