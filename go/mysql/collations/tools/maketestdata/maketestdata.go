@@ -162,10 +162,8 @@ func main() {
 	var allcollations = collations.All()
 	for lang := range testutil.KnownLanguages {
 		for _, coll := range allcollations {
-			if encc, ok := coll.(collations.Collation); ok {
-				if lang.MatchesCollation(coll.Name()) {
-					collationsForLanguage[lang] = append(collationsForLanguage[lang], encc)
-				}
+			if lang.MatchesCollation(coll.Name()) {
+				collationsForLanguage[lang] = append(collationsForLanguage[lang], coll)
 			}
 		}
 	}

@@ -302,7 +302,7 @@ func printUnicodeMappings(f io.Writer, name, coll string, mappings []charset.Uni
 	if !dedup {
 		fmt.Fprintf(f, "var %s = []charset.UnicodeMapping{\n", tableName)
 		for _, m := range mappings {
-			fmt.Fprintf(f, "%#v,\n", m)
+			fmt.Fprintf(f, "{From: 0x%x, To: 0x%x, Range: %#v},\n", m.From, m.To, m.Range)
 		}
 		fmt.Fprintf(f, "}")
 	}
