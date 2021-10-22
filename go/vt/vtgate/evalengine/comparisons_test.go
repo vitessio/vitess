@@ -42,7 +42,7 @@ var (
 	F = false
 )
 
-func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
+func (tc testCase) run(t *testing.T) {
 	if tc.bv == nil {
 		tc.bv = map[string]*querypb.BindVariable{}
 	}
@@ -51,7 +51,7 @@ func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
 		Row:      tc.row,
 	}
 	cmp := ComparisonExpr{
-		Op:    cmpOp,
+		Op:    tc.op,
 		Left:  tc.v1,
 		Right: tc.v2,
 	}
@@ -71,496 +71,169 @@ func (tc testCase) run(t *testing.T, i int, cmpOp ComparisonOp) {
 	}
 }
 
-func TestDecimalType(t *testing.T) {
+func TestCompareDecimals(t *testing.T) {
 	tests := []testCase{
 		{
-			name: "equal decimal",
+			name: "decimals are equal",
 			v1:   NewColumn(0), v2: NewColumn(0),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019")},
 		},
 		{
-			name: "not equal decimal",
+			name: "decimals are not equal",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &NotEqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("12.9019"), sqltypes.NewDecimal("489.156849")},
 		},
 		{
-			name: "equal decimal and float",
+			name: "decimal and float are equal",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewFloat64(189.6), sqltypes.NewDecimal("189.6")},
 		},
 		{
-			name: "equal decimal and float with negative values",
+			name: "decimal and float with negative values are equal",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewFloat64(-98.1839), sqltypes.NewDecimal("-98.1839")},
 		},
 		{
-			name: "equal decimal and int (1)",
+			name: "decimal and float with negative values are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(-98.9381), sqltypes.NewDecimal("-98.1839")},
+		},
+		{
+			name: "decimal and float with negative values are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewFloat64(-98.9381), sqltypes.NewDecimal("-98.1839")},
+		},
+		{
+			name: "decimal and integer are equal (1)",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewInt64(8979), sqltypes.NewDecimal("8979")},
 		},
 		{
-			name: "equal decimal and int (2)",
+			name: "decimal and integer are equal (2)",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("8979.0000"), sqltypes.NewInt64(8979)},
 		},
 		{
-			name: "equal decimal and uint (1)",
+			name: "decimal and unsigned integer are equal (1)",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewUint64(901), sqltypes.NewDecimal("901")},
 		},
 		{
-			name: "equal decimal and uint (2)",
+			name: "decimal and unsigned integer are equal (2)",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("901.00"), sqltypes.NewUint64(901)},
 		},
-	}
-
-	for i, tcase := range tests {
-		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
-			tcase.run(t, i+1, tcase.op)
-		})
-	}
-}
-
-func TestComparisonEquality(t *testing.T) {
-	tests := []testCase{
 		{
-			name: "All Nulls",
-			v1:   &Null{},
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "Second value null.",
-			v1:   NewLiteralInt(1),
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "First value null.",
-			v1:   &Null{},
-			v2:   NewLiteralInt(1),
-			out:  nil,
-		}, {
-			name: "int with int",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralInt(1),
-			out:  &T,
-		}, {
-			name: "wrong int",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralInt(2),
-			out:  &F,
-		}, {
-			name: "int with string",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralString([]byte("1")),
-			out:  &T,
-		}, {
-			name: "varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("1")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
-		}, {
-			name: "int column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("1")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewInt32(1)},
-		}, {
-			name: "wrong varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("42")),
-			out:  &F,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
-		}, {
-			name: "string with int",
-			v1:   NewLiteralString([]byte("1")),
-			v2:   NewLiteralInt(1),
-			out:  &T,
-		}, {
-			name: "wrong int with string",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralString([]byte("42")),
-			out:  &F,
-		}, {
-			name: "wrong string with int",
-			v1:   NewLiteralString([]byte("42")),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float with float",
-			v1:   NewLiteralFloat(1.7),
-			v2:   NewLiteralFloat(1.7),
-			out:  &T,
-		}, {
-			name: "wrong float with float",
-			v1:   NewLiteralFloat(1.7),
-			v2:   NewLiteralFloat(9.1),
-			out:  &F,
-		}, {
-			name: "wrong float with int",
-			v1:   NewLiteralFloat(1.7),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float with int",
-			v1:   NewLiteralFloat(1.00),
-			v2:   NewLiteralInt(1),
-			out:  &T,
-		}, {
-			name: "float with float column",
-			v1:   NewLiteralFloat(42.21),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
-		}, {
-			name: "string with string",
-			v1:   NewLiteralString([]byte(";")),
-			v2:   NewLiteralString([]byte(";")),
-			out:  &T,
-		}, {
-			name: "column date with column date",
-			v1:   NewColumn(0),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewDate("2012-01-01")},
-		}, {
-			name: "column datetime with column datetime",
-			v1:   NewColumn(0),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewDatetime("2012-01-01 12:00:00")},
-		}, {
-			name: "column timestamp with column timestamp",
-			v1:   NewColumn(0),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewTimestamp("2012-01-01 12:00:00")},
-		}, {
-			name: "column time with column time",
-			v1:   NewColumn(0),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewTime("12:00:00")},
+			name: "decimal and unsigned integer are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewUint64(192)},
+		},
+		{
+			name: "decimal and unsigned integer are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewUint64(192)},
+		},
+		{
+			name: "decimal is greater than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
+		},
+		{
+			name: "decimal is not greater than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
+		},
+		{
+			name: "decimal is greater than integer",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("1.01"), sqltypes.NewInt64(1)},
+		},
+		{
+			name: "decimal is greater-equal to integer",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("1.00"), sqltypes.NewInt64(1)},
+		},
+		{
+			name: "decimal is less than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.128"), sqltypes.NewDecimal("192.129")},
+		},
+		{
+			name: "decimal is not less than decimal",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("192.129"), sqltypes.NewDecimal("192.128")},
+		},
+		{
+			name: "decimal is less than integer",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal(".99"), sqltypes.NewInt64(1)},
+		},
+		{
+			name: "decimal is less-equal to integer",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("1.00"), sqltypes.NewInt64(1)},
+		},
+		{
+			name: "decimal is greater than float",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("849.896"), sqltypes.NewFloat64(86.568)},
+		},
+		{
+			name: "decimal is not greater than float",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("15.23"), sqltypes.NewFloat64(8689.5)},
+		},
+		{
+			name: "decimal is greater-equal to float (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("65"), sqltypes.NewFloat64(65)},
+		},
+		{
+			name: "decimal is greater-equal to float (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("65"), sqltypes.NewFloat64(60)},
+		},
+		{
+			name: "decimal is less than float",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("0.998"), sqltypes.NewFloat64(0.999)},
+		},
+		{
+			name: "decimal is less-equal to float",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDecimal("1.000101"), sqltypes.NewFloat64(1.00101)},
 		},
 	}
 
 	for i, tcase := range tests {
 		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
-			cmpOp := &EqualOp{}
-			tcase.run(t, i+1, cmpOp)
+			tcase.run(t)
 		})
 	}
-}
-
-func TestComparisonLess(t *testing.T) {
-	testsLessDifferentValues := []testCase{
-		{
-			name: "All Nulls",
-			v1:   &Null{},
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "Second value null.",
-			v1:   NewLiteralInt(1),
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "First value null.",
-			v1:   &Null{},
-			v2:   NewLiteralInt(1),
-			out:  nil,
-		}, {
-			name: "int with int",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralInt(2),
-			out:  &T,
-		}, {
-			name: "wrong int",
-			v1:   NewLiteralInt(2),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "int with string",
-			v1:   NewLiteralInt(40),
-			v2:   NewLiteralString([]byte("80")),
-			out:  &T,
-		}, {
-			name: "string with string",
-			v1:   NewLiteralString([]byte("10")),
-			v2:   NewLiteralString([]byte("11")),
-			out:  &T,
-		}, {
-			name: "varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("10")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("1")},
-		}, {
-			name: "int column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("9")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewInt32(8)},
-		}, {
-			name: "wrong varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("4")),
-			out:  &F,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("84")},
-		}, {
-			name: "string with int",
-			v1:   NewLiteralString([]byte("700")),
-			v2:   NewLiteralInt(900),
-			out:  &T,
-		}, {
-			name: "wrong int with string",
-			v1:   NewLiteralInt(99),
-			v2:   NewLiteralString([]byte("7")),
-			out:  &F,
-		}, {
-			name: "wrong string with int",
-			v1:   NewLiteralString([]byte("42")),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float with float",
-			v1:   NewLiteralFloat(1.7),
-			v2:   NewLiteralFloat(1.8),
-			out:  &T,
-		}, {
-			name: "wrong float with float",
-			v1:   NewLiteralFloat(3.1),
-			v2:   NewLiteralFloat(1.8),
-			out:  &F,
-		}, {
-			name: "wrong float with int",
-			v1:   NewLiteralFloat(1.7),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float with float column",
-			v1:   NewLiteralFloat(21.84),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
-		},
-	}
-
-	testsLessSameValues := []testCase{
-		{
-			name: "equal ints",
-			v1:   NewLiteralInt(42),
-			v2:   NewLiteralInt(42),
-			out:  &F,
-		}, {
-			name: "string equal to string",
-			v1:   NewLiteralString([]byte("11")),
-			v2:   NewLiteralString([]byte("11")),
-			out:  &F,
-		}, {
-			name: "float equal to float",
-			v1:   NewLiteralFloat(4.2),
-			v2:   NewLiteralFloat(4.2),
-			out:  &F,
-		}, {
-			name: "float equal to int",
-			v1:   NewLiteralFloat(1.00),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float equal to float column",
-			v1:   NewLiteralFloat(42.21),
-			v2:   NewColumn(0),
-			out:  &F,
-			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
-		},
-	}
-
-	t.Run("LessThanOp", func(t *testing.T) {
-		t.Run("non-equal values", func(t *testing.T) {
-			for i, tcase := range testsLessDifferentValues {
-				tcase.run(t, i+1, &LessThanOp{})
-			}
-		})
-		t.Run("equal values", func(t *testing.T) {
-			for i, tcase := range testsLessSameValues {
-				tcase.run(t, i+1, &LessThanOp{})
-			}
-		})
-	})
-
-	t.Run("LessEqualOp", func(t *testing.T) {
-		t.Run("non-equal values", func(t *testing.T) {
-			for i, tcase := range testsLessDifferentValues {
-				tcase.run(t, i+1, &LessEqualOp{})
-			}
-		})
-		t.Run("equal values", func(t *testing.T) {
-			for i, tcase := range testsLessSameValues {
-				tcase.out = &T
-				tcase.run(t, i+1, &LessEqualOp{})
-			}
-		})
-	})
-}
-
-func TestComparisonGreater(t *testing.T) {
-	testsGreaterDifferentValues := []testCase{
-		{
-			name: "All Nulls",
-			v1:   &Null{},
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "Second value null.",
-			v1:   NewLiteralInt(1),
-			v2:   &Null{},
-			out:  nil,
-		}, {
-			name: "First value null.",
-			v1:   &Null{},
-			v2:   NewLiteralInt(1),
-			out:  nil,
-		}, {
-			name: "int with int",
-			v1:   NewLiteralInt(2),
-			v2:   NewLiteralInt(1),
-			out:  &T,
-		}, {
-			name: "wrong int",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralInt(2),
-			out:  &F,
-		}, {
-			name: "int with string",
-			v1:   NewLiteralInt(80),
-			v2:   NewLiteralString([]byte("40")),
-			out:  &T,
-		}, {
-			name: "string with string",
-			v1:   NewLiteralString([]byte("11")),
-			v2:   NewLiteralString([]byte("10")),
-			out:  &T,
-		}, {
-			name: "varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("1")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("10")},
-		}, {
-			name: "int column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("8")),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewInt32(9)},
-		}, {
-			name: "wrong varbinary column with string",
-			v1:   NewColumn(0),
-			v2:   NewLiteralString([]byte("84")),
-			out:  &F,
-			row:  []sqltypes.Value{sqltypes.NewVarBinary("4")},
-		}, {
-			name: "string with int",
-			v1:   NewLiteralString([]byte("900")),
-			v2:   NewLiteralInt(700),
-			out:  &T,
-		}, {
-			name: "wrong int with string",
-			v1:   NewLiteralInt(7),
-			v2:   NewLiteralString([]byte("99")),
-			out:  &F,
-		}, {
-			name: "wrong string with int",
-			v1:   NewLiteralString([]byte("1")),
-			v2:   NewLiteralInt(42),
-			out:  &F,
-		}, {
-			name: "float with float",
-			v1:   NewLiteralFloat(1.8),
-			v2:   NewLiteralFloat(1.7),
-			out:  &T,
-		}, {
-			name: "wrong float with float",
-			v1:   NewLiteralFloat(.1),
-			v2:   NewLiteralFloat(.8),
-			out:  &F,
-		}, {
-			name: "wrong float with int",
-			v1:   NewLiteralInt(1),
-			v2:   NewLiteralFloat(1.7),
-			out:  &F,
-		}, {
-			name: "float with float column",
-			v1:   NewLiteralFloat(42.21),
-			v2:   NewColumn(0),
-			out:  &T,
-			row:  []sqltypes.Value{sqltypes.NewFloat64(21.42)},
-		},
-	}
-
-	testsGreaterSameValues := []testCase{
-		{
-			name: "equal ints",
-			v1:   NewLiteralInt(42),
-			v2:   NewLiteralInt(42),
-			out:  &F,
-		}, {
-			name: "string equal to string",
-			v1:   NewLiteralString([]byte("11")),
-			v2:   NewLiteralString([]byte("11")),
-			out:  &F,
-		}, {
-			name: "float equal to float",
-			v1:   NewLiteralFloat(4.2),
-			v2:   NewLiteralFloat(4.2),
-			out:  &F,
-		}, {
-			name: "float equal to int",
-			v1:   NewLiteralFloat(1.00),
-			v2:   NewLiteralInt(1),
-			out:  &F,
-		}, {
-			name: "float equal to float column",
-			v1:   NewLiteralFloat(42.21),
-			v2:   NewColumn(0),
-			out:  &F,
-			row:  []sqltypes.Value{sqltypes.NewFloat64(42.21)},
-		},
-	}
-
-	t.Run("GreaterThanOp", func(t *testing.T) {
-		t.Run("non-equal values", func(t *testing.T) {
-			for i, tcase := range testsGreaterDifferentValues {
-				tcase.run(t, i+1, &GreaterThanOp{})
-			}
-		})
-		t.Run("equal values", func(t *testing.T) {
-			for i, tcase := range testsGreaterSameValues {
-				tcase.run(t, i+1, &GreaterThanOp{})
-			}
-		})
-	})
-
-	t.Run("GreaterEqualOp", func(t *testing.T) {
-		t.Run("non-equal values", func(t *testing.T) {
-			for i, tcase := range testsGreaterDifferentValues {
-				tcase.run(t, i+1, &GreaterEqualOp{})
-			}
-		})
-		t.Run("equal values", func(t *testing.T) {
-			for i, tcase := range testsGreaterSameValues {
-				tcase.out = &T
-				tcase.run(t, i+1, &GreaterEqualOp{})
-			}
-		})
-	})
 }
