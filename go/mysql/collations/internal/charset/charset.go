@@ -38,10 +38,6 @@ type Charset_gb18030 = simplifiedchinese.Charset_gb18030
 
 const RuneError = unicode.RuneError
 
-type CharsetAware interface {
-	Charset() Charset
-}
-
 func IsUnicode(csname string) bool {
 	switch csname {
 	case "utf8", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":

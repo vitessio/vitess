@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -17,6 +18,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 	"vitess.io/vitess/go/mysql/collations/remote"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -311,4 +314,106 @@ func TestRemoteKanaSensitivity(t *testing.T) {
 		{"utf8mb4_ja_0900_as_cs", Kana1, Kana2},
 		{"utf8mb4_ja_0900_as_cs_ks", Kana1, Kana2},
 	})
+}
+
+var flagDumpBadCases = flag.Bool("dump-bad-cases", false, "dump strings that fail a test to a tmpfile")
+
+func TestWeightStringsComprehensive(t *testing.T) {
+	type collationsForCharset struct {
+		charset charset.Charset
+		locals  []collations.Collation
+		remotes []*remote.Collation
+	}
+	var charsetMap = make(map[string]*collationsForCharset)
+
+	golden := &testutil.GoldenTest{}
+	if err := golden.DecodeFromFile("../testdata/wiki_416c626572742045696e737465696e.gob.gz"); err != nil {
+		t.Fatal(err)
+	}
+
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	allCollations := collations.All()
+	sort.Slice(allCollations, func(i, j int) bool {
+		return allCollations[i].Id() < allCollations[j].Id()
+	})
+	for _, coll := range allCollations {
+		cs := coll.Charset()
+		c4cs := charsetMap[cs.Name()]
+		if c4cs == nil {
+			c4cs = &collationsForCharset{charset: cs}
+			charsetMap[cs.Name()] = c4cs
+		}
+
+		c4cs.locals = append(c4cs.locals, coll)
+		c4cs.remotes = append(c4cs.remotes, remote.RemoteByName(conn, coll.Name()))
+	}
+
+	var allCharsets []*collationsForCharset
+	for _, c4cs := range charsetMap {
+		allCharsets = append(allCharsets, c4cs)
+	}
+	sort.Slice(allCharsets, func(i, j int) bool {
+		return allCharsets[i].charset.Name() < allCharsets[j].charset.Name()
+	})
+
+	for _, c4cs := range allCharsets {
+		var tested int
+		for _, goldencase := range golden.Cases {
+			text := goldencase.Text //[]byte(string([]rune(string(goldencase.Text))[:64]))
+
+			transLocal, err := c4cs.charset.EncodeFromUTF8(text)
+			if err != nil {
+				continue
+			}
+
+			transRemote, err := c4cs.remotes[0].Charset().EncodeFromUTF8(text)
+			if err != nil {
+				t.Fatalf("remote transcoding failed: %v", err)
+			}
+
+			if !bytes.Equal(transLocal, transRemote) {
+				t.Fatalf("transcoding mismatch for %q with charset %s\ninput:\n%s\nremote:\n%s\nlocal:\n%s\n",
+					goldencase.Lang, c4cs.charset.Name(), hex.Dump(text), hex.Dump(transRemote), hex.Dump(transLocal))
+			}
+
+			for i := range c4cs.locals {
+				local := c4cs.locals[i]
+				remote := c4cs.remotes[i]
+
+				localResult := local.WeightString(nil, transLocal, 0)
+				remoteResult := remote.WeightString(nil, transLocal, 0)
+
+				if err := remote.LastError(); err != nil {
+					t.Fatalf("remote collation failed: %v", err)
+				}
+
+				if len(remoteResult) == 0 {
+					t.Logf("remote collation %s returned empty string", remote.Name())
+					continue
+				}
+
+				if !bytes.Equal(localResult, remoteResult) {
+					var colldumpDebug string
+					if *flagDumpBadCases {
+						bad, err := os.CreateTemp("", "vitess_collation_example")
+						if err != nil {
+							t.Fatal(err)
+						}
+						bad.Write(transLocal)
+						bad.Close()
+
+						colldumpDebug = fmt.Sprintf("manual debugging:\n\tcolldump --test %s < %s\n\n", local.Name(), bad.Name())
+					}
+					t.Fatalf("WEIGHT_STRING mismatch for %q with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n\n%s",
+						goldencase.Lang, local.Name(), c4cs.charset.Name(), hex.Dump(transLocal), hex.Dump(remoteResult), hex.Dump(localResult), transLocal, colldumpDebug)
+				}
+			}
+
+			tested++
+		}
+		t.Logf("%q: %d collations, %d test strings = %d tests",
+			c4cs.charset.Name(), len(c4cs.locals), tested, len(c4cs.locals)*tested)
+	}
 }

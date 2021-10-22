@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -158,17 +157,12 @@ func colldump(collation string, input []byte) []byte {
 	return out
 }
 
-type CollationWithEncoding interface {
-	collations.Collation
-	charset.CharsetAware
-}
-
 func main() {
-	var collationsForLanguage = make(map[testutil.Lang][]CollationWithEncoding)
+	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
 	var allcollations = collations.All()
 	for lang := range testutil.KnownLanguages {
 		for _, coll := range allcollations {
-			if encc, ok := coll.(CollationWithEncoding); ok {
+			if encc, ok := coll.(collations.Collation); ok {
 				if lang.MatchesCollation(coll.Name()) {
 					collationsForLanguage[lang] = append(collationsForLanguage[lang], encc)
 				}
@@ -176,14 +170,14 @@ func main() {
 		}
 	}
 
-	var rootCollations = []CollationWithEncoding{
-		collations.LookupByName("utf8mb4_0900_as_cs").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_0900_as_ci").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_0900_ai_ci").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_general_ci").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_bin").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_unicode_ci").(CollationWithEncoding),
-		collations.LookupByName("utf8mb4_unicode_520_ci").(CollationWithEncoding),
+	var rootCollations = []collations.Collation{
+		collations.LookupByName("utf8mb4_0900_as_cs"),
+		collations.LookupByName("utf8mb4_0900_as_ci"),
+		collations.LookupByName("utf8mb4_0900_ai_ci"),
+		collations.LookupByName("utf8mb4_general_ci"),
+		collations.LookupByName("utf8mb4_bin"),
+		collations.LookupByName("utf8mb4_unicode_ci"),
+		collations.LookupByName("utf8mb4_unicode_520_ci"),
 	}
 
 	articles, err := getAllLanguages(os.Args[1])
@@ -211,7 +205,7 @@ func main() {
 
 		var total int
 		var collationNames []string
-		var interestingCollations []CollationWithEncoding
+		var interestingCollations []collations.Collation
 		interestingCollations = append(interestingCollations, rootCollations...)
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 

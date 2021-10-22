@@ -318,7 +318,7 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 		tableToUpper = printByteSlice(tables, "toupper", meta.Name, meta.ToUpper, seenTables)
 	}
 	if meta.SortOrder != nil {
-		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.ToUpper, seenTables)
+		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.SortOrder, seenTables)
 	}
 	if meta.TabToUni != nil {
 		tableToUnicode = printUnsignedSlice(tables, "tounicode", meta.Name, meta.TabToUni, seenTables)
@@ -351,6 +351,7 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 	fmt.Fprintf(init, "},\n")
 
 	fmt.Fprintf(init, "charset: &charset.Charset_8bit{\n")
+	fmt.Fprintf(init, "Name_: %q,\n", meta.Charset)
 	if tableToUnicode != "" {
 		fmt.Fprintf(init, "ToUnicode: %s,\n", tableToUnicode)
 	}

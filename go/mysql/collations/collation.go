@@ -19,6 +19,8 @@ package collations
 import (
 	"fmt"
 	"math"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 // Generate mysqldata.go from the JSON information dumped from MySQL
@@ -104,6 +106,8 @@ type Collation interface {
 	// of the string, and in practice weight strings can be significantly smaller than the
 	// returned value.
 	WeightStringLen(numCodepoints int) int
+
+	Charset() charset.Charset
 }
 
 const PadToMax = math.MaxInt32
