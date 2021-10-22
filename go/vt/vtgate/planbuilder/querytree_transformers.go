@@ -44,9 +44,23 @@ func transformToLogicalPlan(ctx *planningContext, tree queryTree) (logicalPlan, 
 		return transformConcatenatePlan(ctx, n)
 	case *vindexTree:
 		return transformVindexTree(n)
+	case *correlatedSubqueryTree:
+		return transformCorrelatedSubquery(ctx, n)
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown query tree encountered: %T", tree)
+}
+
+func transformCorrelatedSubquery(ctx *planningContext, tree *correlatedSubqueryTree) (logicalPlan, error) {
+	outer, err := transformToLogicalPlan(ctx, tree.outer)
+	if err != nil {
+		return nil, err
+	}
+	inner, err := transformToLogicalPlan(ctx, tree.inner)
+	if err != nil {
+		return nil, err
+	}
+	return newSemiJoin(outer, inner, tree.vars), nil
 }
 
 func pushDistinct(plan logicalPlan) {

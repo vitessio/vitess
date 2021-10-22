@@ -17,30 +17,30 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-type subqueryTree struct {
+type correlatedSubqueryTree struct {
 	outer     queryTree
 	inner     queryTree
 	extracted *sqlparser.ExtractedSubquery
+	// arguments that need to be copied from the uter to inner
+	vars map[string]int
 }
 
-var _ queryTree = (*subqueryTree)(nil)
+var _ queryTree = (*correlatedSubqueryTree)(nil)
 
-func (s *subqueryTree) tableID() semantics.TableSet {
+func (s *correlatedSubqueryTree) tableID() semantics.TableSet {
 	return s.inner.tableID().Merge(s.outer.tableID())
 }
 
-func (s *subqueryTree) cost() int {
+func (s *correlatedSubqueryTree) cost() int {
 	return s.inner.cost() + s.outer.cost()
 }
 
-func (s *subqueryTree) clone() queryTree {
-	result := &subqueryTree{
+func (s *correlatedSubqueryTree) clone() queryTree {
+	result := &correlatedSubqueryTree{
 		outer:     s.outer.clone(),
 		inner:     s.inner.clone(),
 		extracted: s.extracted,
@@ -48,14 +48,14 @@ func (s *subqueryTree) clone() queryTree {
 	return result
 }
 
-func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error) {
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push output columns on subquery")
+func (s *correlatedSubqueryTree) pushOutputColumns(colnames []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
+	return s.outer.pushOutputColumns(colnames, semTable)
 }
 
-func (s *subqueryTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (s *correlatedSubqueryTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
 	return s.outer.pushPredicate(ctx, expr)
 }
 
-func (s *subqueryTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+func (s *correlatedSubqueryTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
 	return s.outer.removePredicate(ctx, expr)
 }
