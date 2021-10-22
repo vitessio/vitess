@@ -115,6 +115,15 @@ func evalResultsAreDates(l, r EvalResult) bool {
 	return sqltypes.IsDate(l.typ) && sqltypes.IsDate(r.typ)
 }
 
+func evalResultsAreDateAndString(l, r EvalResult) bool {
+	return sqltypes.IsDate(l.typ) && (sqltypes.IsText(r.typ) || sqltypes.IsBinary(r.typ)) ||
+		(sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ)) && sqltypes.IsDate(r.typ)
+}
+
+func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
+	return sqltypes.IsDate(l.typ) && sqltypes.IsNumber(r.typ) || sqltypes.IsNumber(l.typ) && sqltypes.IsDate(r.typ)
+}
+
 // For more details on comparison expression evaluation and type conversion:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func executeComparison(lVal, rVal EvalResult) (int, error) {
@@ -127,8 +136,19 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		return compareNumeric(lVal, rVal)
 
 	case evalResultsAreDates(lVal, rVal):
-		// TODO: handle date comparison with a string or integer
 		return compareDates(lVal, rVal)
+
+	case evalResultsAreDateAndString(lVal, rVal):
+		// TODO: handle date comparison with a string
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a string value")
+
+	case evalResultsAreDateAndNumeric(lVal, rVal):
+		// TODO: support comparison between a date and a numeric value
+		// 		queries like the ones below should be supported:
+		// 			- select 1 where 20210101 = cast("2021-01-01" as date)
+		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
+		// 			- select 1 where 104200 = cast("10:42:00" as time)
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
 
 	default:
 		// Quoting MySQL Docs:
