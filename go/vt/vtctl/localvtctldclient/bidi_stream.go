@@ -32,6 +32,13 @@ type bidiStream struct {
 	sendClosed bool
 }
 
+func newBidiStream(ctx context.Context) *bidiStream {
+	return &bidiStream{
+		ctx:   ctx,
+		errch: make(chan error, 1),
+	}
+}
+
 func (bs *bidiStream) close(err error) {
 	if err == nil {
 		err = io.EOF
