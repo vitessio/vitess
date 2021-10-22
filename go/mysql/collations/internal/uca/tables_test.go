@@ -34,11 +34,10 @@ import (
 func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights uca.WeightTable, layout uca.TableLayout) {
 	t.Helper()
 
-	maxCodepoint := int(layout.MaxCodepoint())
-	for cp := 0; cp <= maxCodepoint; cp++ {
-		vitessWeights := layout.DebugWeights(weights, rune(cp))
-		codepoint := fmt.Sprintf("U+%04X", cp)
-		mysqlWeights, mysqlFound := expected[codepoint]
+	maxCodepoint := layout.MaxCodepoint()
+	for cp := rune(0); cp <= maxCodepoint; cp++ {
+		vitessWeights := layout.DebugWeights(weights, cp)
+		mysqlWeights, mysqlFound := expected[fmt.Sprintf("U+%04X", cp)]
 
 		if len(vitessWeights) == 0 {
 			if mysqlFound {
