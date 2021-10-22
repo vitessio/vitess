@@ -88,7 +88,7 @@ func IsNumber(t querypb.Type) bool {
 
 // IsDate returns true if the type represents a date and/or time.
 func IsDate(t querypb.Type) bool {
-	return IsQuoted(t) && !IsBinary(t) && !IsText(t)
+	return t == Datetime || t == Date || t == Timestamp || t == Time
 }
 
 // Vitess data types. These are idiomatically

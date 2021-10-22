@@ -19,6 +19,7 @@ package evalengine
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -417,6 +418,378 @@ func TestCompareNumerics(t *testing.T) {
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &LessEqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDecimal("1.000101"), sqltypes.NewFloat64(1.00101)},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two datetimes
+func TestCompareDatetime(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "datetimes are equal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00")},
+		},
+		{
+			name: "datetimes are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00"), sqltypes.NewDatetime("2020-10-22 12:00:00")},
+		},
+		{
+			name: "datetimes are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-22 12:00:00"), sqltypes.NewDatetime("2021-10-22 10:23:56")},
+		},
+		{
+			name: "datetimes are not equal (3)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 00:00:00"), sqltypes.NewDatetime("2021-02-01 00:00:00")},
+		},
+		{
+			name: "datetime is greater than datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
+		},
+		{
+			name: "datetime is not greater than datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
+		},
+		{
+			name: "datetime is less than datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
+		},
+		{
+			name: "datetime is not less than datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
+		},
+		{
+			name: "datetime is greater-equal to datetime (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
+		},
+		{
+			name: "datetime is greater-equal to datetime (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-01 13:10:02")},
+		},
+		{
+			name: "datetime is less-equal to datetime (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-30 10:42:50"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
+		},
+		{
+			name: "datetime is less-equal to datetime (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDatetime("2021-10-01 13:10:02"), sqltypes.NewDatetime("2021-10-30 10:42:50")},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two timestamps
+func TestCompareTimestamp(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "timestamps are equal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00")},
+		},
+		{
+			name: "timestamps are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00"), sqltypes.NewTimestamp("2020-10-22 12:00:00")},
+		},
+		{
+			name: "timestamps are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-22 12:00:00"), sqltypes.NewTimestamp("2021-10-22 10:23:56")},
+		},
+		{
+			name: "timestamps are not equal (3)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 00:00:00"), sqltypes.NewTimestamp("2021-02-01 00:00:00")},
+		},
+		{
+			name: "timestamp is greater than timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
+		},
+		{
+			name: "timestamp is not greater than timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
+		},
+		{
+			name: "timestamp is less than timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
+		},
+		{
+			name: "timestamp is not less than timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
+		},
+		{
+			name: "timestamp is greater-equal to timestamp (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
+		},
+		{
+			name: "timestamp is greater-equal to timestamp (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-01 13:10:02")},
+		},
+		{
+			name: "timestamp is less-equal to timestamp (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-30 10:42:50"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
+		},
+		{
+			name: "timestamp is less-equal to timestamp (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTimestamp("2021-10-01 13:10:02"), sqltypes.NewTimestamp("2021-10-30 10:42:50")},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two dates
+func TestCompareDate(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "dates are equal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22")},
+		},
+		{
+			name: "dates are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDate("2020-10-21")},
+		},
+		{
+			name: "dates are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-02-01")},
+		},
+		{
+			name: "date is greater than date",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
+		},
+		{
+			name: "date is not greater than date",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
+		},
+		{
+			name: "date is less than date",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
+		},
+		{
+			name: "date is not less than date",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
+		},
+		{
+			name: "date is greater-equal to date (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-30")},
+		},
+		{
+			name: "date is greater-equal to date (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-01")},
+		},
+		{
+			name: "date is less-equal to date (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-30"), sqltypes.NewDate("2021-10-30")},
+		},
+		{
+			name: "date is less-equal to date (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-01"), sqltypes.NewDate("2021-10-30")},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two times
+func TestCompareTime(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "times are equal",
+			v1:   NewColumn(0), v2: NewColumn(0),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("12:00:00")},
+		},
+		{
+			name: "times are not equal (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("12:00:00"), sqltypes.NewTime("10:23:56")},
+		},
+		{
+			name: "times are not equal (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("00:00:00"), sqltypes.NewTime("10:15:00")},
+		},
+		{
+			name: "time is greater than time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("18:14:35"), sqltypes.NewTime("13:01:38")},
+		},
+		{
+			name: "time is not greater than time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &GreaterThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("02:46:02"), sqltypes.NewTime("10:42:50")},
+		},
+		{
+			name: "time is less than time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("04:30:00"), sqltypes.NewTime("09:23:48")},
+		},
+		{
+			name: "time is not less than time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &F, op: &LessThanOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("15:21:00"), sqltypes.NewTime("10:00:00")},
+		},
+		{
+			name: "time is greater-equal to time (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("10:42:50"), sqltypes.NewTime("10:42:50")},
+		},
+		{
+			name: "time is greater-equal to time (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &GreaterEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("19:42:50"), sqltypes.NewTime("13:10:02")},
+		},
+		{
+			name: "time is less-equal to time (1)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("10:42:50"), sqltypes.NewTime("10:42:50")},
+		},
+		{
+			name: "time is less-equal to time (2)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &LessEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewTime("10:10:02"), sqltypes.NewTime("10:42:50")},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// This test tests the comparison of two dates (datetime, date, timestamp, time)
+func TestCompareDates(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "date equal datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
+		},
+		{
+			name: "date not equal datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDatetime("2021-10-20 00:06:00")},
+		},
+		{
+			name: "date equal timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewTimestamp("2021-10-22 00:00:00")},
+		},
+		{
+			name: "date not equal timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewTimestamp("2021-10-22 16:00:00")},
+		},
+		{
+			name: "date equal time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("00:00:00")},
+		},
+		{
+			name: "date not equal time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("12:00:00")},
 		},
 	}
 

@@ -127,7 +127,8 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		return compareNumeric(lVal, rVal)
 
 	case evalResultsAreDates(lVal, rVal):
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing dates")
+		// TODO: handle date comparison with a string or integer
+		return compareDates(lVal, rVal)
 
 	default:
 		// Quoting MySQL Docs:
