@@ -86,6 +86,11 @@ func IsNumber(t querypb.Type) bool {
 	return IsIntegral(t) || IsFloat(t) || t == Decimal
 }
 
+// IsDate returns true if the type represents a date and/or time.
+func IsDate(t querypb.Type) bool {
+	return IsQuoted(t) && !IsBinary(t) && !IsText(t)
+}
+
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
 // Although these constants are interchangeable,

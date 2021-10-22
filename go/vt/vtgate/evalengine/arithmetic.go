@@ -429,6 +429,19 @@ func makeNumericAndprioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
 	return v1, v2
 }
 
+func makeFloat(v EvalResult) EvalResult {
+	if sqltypes.IsIntegral(v.typ) {
+		return EvalResult{fval: float64(v.ival), typ: sqltypes.Float64}
+	}
+	if sqltypes.IsFloat(v.typ) {
+		return v
+	}
+	if fval, err := strconv.ParseFloat(string(v.bytes), 64); err == nil {
+		return EvalResult{fval: fval, typ: sqltypes.Float64}
+	}
+	return EvalResult{ival: 0, typ: sqltypes.Int64}
+}
+
 func makeNumeric(v EvalResult) EvalResult {
 	if sqltypes.IsNumber(v.typ) {
 		return v
