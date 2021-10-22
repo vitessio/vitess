@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"time"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"strconv"
@@ -257,7 +259,8 @@ func hashCode(v EvalResult) int64 {
 }
 
 func compareNumeric(v1, v2 EvalResult) (int, error) {
-	// Equalize the types.
+	// Equalize the types the same way MySQL does
+	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typ {
 	case sqltypes.Int64:
 		switch v2.typ {
@@ -332,4 +335,45 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 
 	// v1>v2
 	return 1, nil
+}
+
+func parseDate(expr EvalResult) (t time.Time, err error) {
+	switch expr.typ {
+	case sqltypes.Date:
+		t, err = time.Parse("2006-01-02", string(expr.bytes))
+	case sqltypes.Timestamp, sqltypes.Datetime:
+		t, err = time.Parse("2006-01-02 15:04:05", string(expr.bytes))
+	case sqltypes.Time:
+		t, err = time.Parse("15:04:05", string(expr.bytes))
+		if err == nil {
+			now := time.Now()
+			// setting the date to today's date, because we use AddDate on t
+			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+			// and day to take into account the 01 in both month and day of t
+			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
+		}
+	}
+	return
+}
+
+// Date comparison based on:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+func compareDates(l, r EvalResult) (int, error) {
+	lTime, err := parseDate(l)
+	if err != nil {
+		return 0, err
+	}
+	rTime, err := parseDate(r)
+	if err != nil {
+		return 0, err
+	}
+
+	if lTime.Before(rTime) {
+		return -1, nil
+	}
+	if lTime.After(rTime) {
+		return 1, nil
+	}
+	return 0, nil
 }
