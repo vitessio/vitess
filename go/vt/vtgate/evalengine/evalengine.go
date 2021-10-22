@@ -196,6 +196,10 @@ func newIntegralNumeric(v sqltypes.Value) (EvalResult, error) {
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
+func SQLValue(v EvalResult) sqltypes.Value {
+	return v.toSQLValue(v.typ)
+}
+
 func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 	switch {
 	case sqltypes.IsSigned(resultType):
