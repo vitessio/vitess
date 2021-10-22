@@ -422,6 +422,17 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 		if ks.Error != nil {
 			t.Fatal(ks.Error)
 		}
+
+		// setting a default value to all the text columns in the tables of this keyspace
+		// so that we can "simulate" a real case scenario where the vschema is aware of
+		// columns' collations.
+		for _, table := range ks.Tables {
+			for i, col := range table.Columns {
+				if sqltypes.IsText(col.Type) {
+					table.Columns[i].CollationName = "latin1_swedish_ci"
+				}
+			}
+		}
 	}
 	return vschema
 }
