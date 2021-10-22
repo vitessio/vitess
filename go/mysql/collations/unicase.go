@@ -17,7 +17,7 @@ limitations under the License.
 package collations
 
 import (
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type UnicaseChar struct {
@@ -32,7 +32,7 @@ type UnicaseInfo struct {
 
 func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 	if codepoint > info.MaxChar {
-		return encoding.RuneError
+		return charset.RuneError
 	}
 	if page := info.Page[int(codepoint)>>8]; page != nil {
 		unicaseChar := page[int(codepoint)&0xFF]

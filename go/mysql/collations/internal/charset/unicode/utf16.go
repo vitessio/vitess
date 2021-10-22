@@ -20,13 +20,13 @@ import "golang.org/x/text/encoding/unicode"
 
 var defaultUTF16 = unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
 
-type Encoding_utf16 struct{}
+type Charset_utf16 struct{}
 
-func (Encoding_utf16) Name() string {
+func (Charset_utf16) Name() string {
 	return "utf16be"
 }
 
-func (Encoding_utf16) DecodeRune(b []byte) (rune, int) {
+func (Charset_utf16) DecodeRune(b []byte) (rune, int) {
 	// 0xd800-0xdc00 encodes the high 10 bits of a pair.
 	// 0xdc00-0xe000 encodes the low 10 bits of a pair.
 	// the value is those 20 bits plus 0x10000.
@@ -58,32 +58,32 @@ func (Encoding_utf16) DecodeRune(b []byte) (rune, int) {
 	return RuneError, 1
 }
 
-func (Encoding_utf16) SupportsSupplementaryChars() bool {
+func (Charset_utf16) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (Encoding_utf16) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_utf16) EncodeFromUTF8(in []byte) ([]byte, error) {
 	return defaultUTF16.NewEncoder().Bytes(in)
 }
 
-type Encoding_ucs2 struct{}
+type Charset_ucs2 struct{}
 
-func (Encoding_ucs2) Name() string {
+func (Charset_ucs2) Name() string {
 	return "ucs2"
 }
 
-func (Encoding_ucs2) DecodeRune(p []byte) (rune, int) {
+func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 	if len(p) < 2 {
 		return RuneError, 0
 	}
 	return rune(p[0])<<8 | rune(p[1]), 2
 }
 
-func (Encoding_ucs2) SupportsSupplementaryChars() bool {
+func (Charset_ucs2) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (Encoding_ucs2) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_ucs2) EncodeFromUTF8(in []byte) ([]byte, error) {
 	if err := ensureBMPRange(in); err != nil {
 		return nil, err
 	}

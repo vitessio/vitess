@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -116,8 +116,8 @@ func TestTailoringPatchApplication(t *testing.T) {
 		if !ok {
 			continue
 		}
-		switch uca.Encoding().(type) {
-		case encoding.Encoding_utf8mb4:
+		switch uca.Charset().(type) {
+		case charset.Charset_utf8mb4:
 		default:
 			continue
 		}

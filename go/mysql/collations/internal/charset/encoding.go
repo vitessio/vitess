@@ -14,29 +14,29 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encoding
+package charset
 
 import (
-	"vitess.io/vitess/go/mysql/collations/internal/encoding/simplifiedchinese"
-	"vitess.io/vitess/go/mysql/collations/internal/encoding/unicode"
+	"vitess.io/vitess/go/mysql/collations/internal/charset/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/internal/charset/unicode"
 )
 
-type Encoding interface {
+type Charset interface {
 	Name() string
 	SupportsSupplementaryChars() bool
 	DecodeRune([]byte) (rune, int)
 	EncodeFromUTF8(in []byte) ([]byte, error)
 }
 
-type Encoding_utf8 = unicode.Encoding_utf8
-type Encoding_utf8mb4 = unicode.Encoding_utf8mb4
-type Encoding_utf16 = unicode.Encoding_utf16
-type Encoding_ucs2 = unicode.Encoding_ucs2
-type Encoding_utf32 = unicode.Encoding_utf32
-type Encoding_gb18030 = simplifiedchinese.Encoding_gb18030
+type Charset_utf8 = unicode.Charset_utf8mb3
+type Charset_utf8mb4 = unicode.Charset_utf8mb4
+type Charset_utf16 = unicode.Charset_utf16
+type Charset_ucs2 = unicode.Charset_ucs2
+type Charset_utf32 = unicode.Charset_utf32
+type Charset_gb18030 = simplifiedchinese.Charset_gb18030
 
 const RuneError = unicode.RuneError
 
-type EncodingAware interface {
-	Encoding() Encoding
+type CharsetAware interface {
+	Charset() Charset
 }

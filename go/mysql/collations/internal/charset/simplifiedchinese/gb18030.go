@@ -22,13 +22,13 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-type Encoding_gb18030 struct{}
+type Charset_gb18030 struct{}
 
-func (Encoding_gb18030) Name() string {
+func (Charset_gb18030) Name() string {
 	return "gb18030"
 }
 
-func (Encoding_gb18030) DecodeRune(src []byte) (rune, int) {
+func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 	const isgb18030 = true
 	if len(src) < 1 {
 		return utf8.RuneError, 0
@@ -108,10 +108,10 @@ func (Encoding_gb18030) DecodeRune(src []byte) (rune, int) {
 	}
 }
 
-func (c Encoding_gb18030) SupportsSupplementaryChars() bool {
+func (c Charset_gb18030) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (c Encoding_gb18030) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (c Charset_gb18030) EncodeFromUTF8(in []byte) ([]byte, error) {
 	return simplifiedchinese.GB18030.NewEncoder().Bytes(in)
 }

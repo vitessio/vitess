@@ -77,13 +77,13 @@ var acceptRanges = [16]acceptRange{
 	4: {locb, 0x8F},
 }
 
-type Encoding_utf8 struct{}
+type Charset_utf8mb3 struct{}
 
-func (u Encoding_utf8) Name() string {
+func (u Charset_utf8mb3) Name() string {
 	return "utf8mb3"
 }
 
-func (Encoding_utf8) DecodeRune(p []byte) (rune, int) {
+func (Charset_utf8mb3) DecodeRune(p []byte) (rune, int) {
 	n := len(p)
 	if n < 1 {
 		return RuneError, 0
@@ -119,31 +119,31 @@ func (Encoding_utf8) DecodeRune(p []byte) (rune, int) {
 	return RuneError, 1
 }
 
-func (Encoding_utf8) SupportsSupplementaryChars() bool {
+func (Charset_utf8mb3) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (Encoding_utf8) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_utf8mb3) EncodeFromUTF8(in []byte) ([]byte, error) {
 	if err := ensureBMPRange(in); err != nil {
 		return nil, err
 	}
 	return in, nil
 }
 
-type Encoding_utf8mb4 struct{}
+type Charset_utf8mb4 struct{}
 
-func (Encoding_utf8mb4) Name() string {
+func (Charset_utf8mb4) Name() string {
 	return "utf8mb4"
 }
 
-func (Encoding_utf8mb4) DecodeRune(p []byte) (rune, int) {
+func (Charset_utf8mb4) DecodeRune(p []byte) (rune, int) {
 	return utf8.DecodeRune(p)
 }
 
-func (Encoding_utf8mb4) SupportsSupplementaryChars() bool {
+func (Charset_utf8mb4) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (Encoding_utf8mb4) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_utf8mb4) EncodeFromUTF8(in []byte) ([]byte, error) {
 	return in, nil
 }
