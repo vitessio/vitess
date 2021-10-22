@@ -110,7 +110,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 
 	t.Run("order by weight string", func(t *testing.T) {
 
-		err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -135,7 +135,7 @@ func TestMemorySortStreamExecuteWeightString(t *testing.T) {
 		bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 		results = nil
-		err = ms.TryStreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+		err = ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 			results = append(results, qr)
 			return nil
 		})
@@ -231,7 +231,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -254,7 +254,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
-	err = ms.TryStreamExecute(&noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+	err = ms.TryStreamExecute(&noopVCursor{}, bv, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -350,7 +350,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.TryStreamExecute(&noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.TryStreamExecute(&noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

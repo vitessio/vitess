@@ -38,22 +38,22 @@ type joinGen4 struct {
 
 // Order implements the logicalPlan interface
 func (j *joinGen4) Order() int {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // ResultColumns implements the logicalPlan interface
 func (j *joinGen4) ResultColumns() []*resultColumn {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // Reorder implements the logicalPlan interface
 func (j *joinGen4) Reorder(i int) {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // Wireup implements the logicalPlan interface
 func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // WireupGen4 implements the logicalPlan interface
@@ -67,17 +67,17 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 
 // SupplyVar implements the logicalPlan interface
 func (j *joinGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // SupplyCol implements the logicalPlan interface
 func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // SupplyWeightString implements the logicalPlan interface
 func (j *joinGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	panic("implement me")
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
 }
 
 // Primitive implements the logicalPlan interface

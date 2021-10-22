@@ -139,7 +139,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	switch p := plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
-	case *joinGen4:
+	case *joinGen4, *semiJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
@@ -295,6 +295,25 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		return pushProjection(expr, node.input, semTable, inner, reuseCol, hasAggregation)
 	case *distinct:
 		return pushProjection(expr, node.input, semTable, inner, reuseCol, hasAggregation)
+	case *semiJoin:
+		passDownReuseCol := reuseCol
+		if !reuseCol {
+			passDownReuseCol = expr.As.IsEmpty()
+		}
+		offset, added, err := pushProjection(expr, node.lhs, semTable, inner, passDownReuseCol, hasAggregation)
+		if err != nil {
+			return 0, false, err
+		}
+		column := -(offset + 1)
+		if reuseCol && !added {
+			for idx, col := range node.cols {
+				if column == col {
+					return idx, false, nil
+				}
+			}
+		}
+		node.cols = append(node.cols, column)
+		return len(node.cols) - 1, true, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
@@ -408,9 +427,10 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		if !isFunc {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
 		}
-		opcode, found := engine.SupportedAggregates[fExpr.Name.Lowered()]
+		funcName := fExpr.Name.Lowered()
+		opcode, found := engine.SupportedAggregates[funcName]
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", funcName)
 		}
 		handleDistinct, innerAliased, err := hp.needDistinctHandling(ctx, fExpr, opcode, plan)
 		if err != nil {
@@ -566,6 +586,8 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 		return colAdded || colAddedRecursively, nil
 	case *pulloutSubquery:
 		return planGroupByGen4(groupExpr, node.underlying, semTable, wsAdded)
+	case *semiJoin:
+		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by in a query having a correlated subquery")
 	default:
 		return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
 	}
@@ -644,6 +666,13 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 			return nil, err
 		}
 		plan.underlying = newUnderlyingPlan
+		return plan, nil
+	case *semiJoin:
+		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.lhs)
+		if err != nil {
+			return nil, err
+		}
+		plan.lhs = newUnderlyingPlan
 		return plan, nil
 	case *limit:
 		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.input)
