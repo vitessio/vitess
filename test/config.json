@@ -413,9 +413,18 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"reparent": {
+		"emergencyreparent": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/reparent"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/emergencyreparent"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "14",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"plannedreparent": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/plannedreparent"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "14",

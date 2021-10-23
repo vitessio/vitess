@@ -1,6 +1,7 @@
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
@@ -489,7 +490,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # avg function on scatter query
 "select avg(id) from user"
 "unsupported: in scatter query: complex aggregate expression"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: aggregation function 'avg'
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -596,3 +597,23 @@ Gen4 error: Column 'id' in field list is ambiguous
     "Table": "`user`"
   }
 }
+
+# unsupported with clause in delete statement
+"with x as (select * from user) delete from x"
+"unsupported: with expression in delete statement"
+Gen4 plan same as above
+
+# unsupported with clause in update statement
+"with x as (select * from user) update x set name = 'f'"
+"unsupported: with expression in update statement"
+Gen4 plan same as above
+
+# unsupported with clause in select statement
+"with x as (select * from user) select * from x"
+"unsupported: with expression in select statement"
+Gen4 plan same as above
+
+# unsupported with clause in union statement
+"with x as (select * from user) select * from x union select * from x"
+"unsupported: with expression in union statement"
+Gen4 plan same as above

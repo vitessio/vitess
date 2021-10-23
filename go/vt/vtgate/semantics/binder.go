@@ -52,42 +52,20 @@ func newBinder(scoper *scoper, org originable, tc *tableCollector, typer *typer)
 	}
 }
 
-func (b *binder) down(cursor *sqlparser.Cursor) error {
+func (b *binder) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Subquery:
 		currScope := b.scoper.currentScope()
-		if currScope.selectStmt == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
-		}
-
-		sq := &sqlparser.ExtractedSubquery{
-			Subquery: node.Select,
-			Original: node,
-			OpCode:   int(engine.PulloutValue),
-		}
-
-		switch par := cursor.Parent().(type) {
-		case *sqlparser.ComparisonExpr:
-			switch par.Operator {
-			case sqlparser.InOp:
-				sq.OpCode = int(engine.PulloutIn)
-			case sqlparser.NotInOp:
-				sq.OpCode = int(engine.PulloutNotIn)
-			}
-			subq, exp := GetSubqueryAndOtherSide(par)
-			sq.Original = &sqlparser.ComparisonExpr{
-				Left:     exp,
-				Operator: par.Operator,
-				Right:    subq,
-			}
-			sq.OtherSide = exp
-		case *sqlparser.ExistsExpr:
-			sq.OpCode = int(engine.PulloutExists)
-			sq.Original = par
+		sq, err := b.createExtractedSubquery(cursor, currScope, node)
+		if err != nil {
+			return err
 		}
 
 		b.subqueryMap[currScope.selectStmt] = append(b.subqueryMap[currScope.selectStmt], sq)
 		b.subqueryRef[node] = sq
+
+		b.setSubQueryDependencies(node, currScope)
+
 	case *sqlparser.ColName:
 		deps, err := b.resolveColumn(node, b.scoper.currentScope())
 		if err != nil {
@@ -118,6 +96,62 @@ func (b *binder) down(cursor *sqlparser.Cursor) error {
 		b.direct[node] = ts
 	}
 	return nil
+}
+
+// setSubQueryDependencies sets the correct dependencies for the subquery
+// the binder usually only sets the dependencies of ColNames, but we need to
+// handle the subquery dependencies differently, so they are set manually here
+// this method will only keep dependencies to tables outside the subquery
+func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *scope) {
+	subqRecursiveDeps := b.recursive.dependencies(subq)
+	subqDirectDeps := b.direct.dependencies(subq)
+
+	tablesToKeep := EmptyTableSet()
+	sco := currScope
+	for sco != nil {
+		for _, table := range sco.tables {
+			tablesToKeep.MergeInPlace(table.getTableSet(b.org))
+		}
+		sco = sco.parent
+	}
+
+	subqDirectDeps.KeepOnly(tablesToKeep)
+	subqRecursiveDeps.KeepOnly(tablesToKeep)
+	b.recursive[subq] = subqRecursiveDeps
+	b.direct[subq] = subqDirectDeps
+}
+
+func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
+	if currScope.selectStmt == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to bind subquery to select statement")
+	}
+
+	sq := &sqlparser.ExtractedSubquery{
+		Subquery: subq,
+		Original: subq,
+		OpCode:   int(engine.PulloutValue),
+	}
+
+	switch par := cursor.Parent().(type) {
+	case *sqlparser.ComparisonExpr:
+		switch par.Operator {
+		case sqlparser.InOp:
+			sq.OpCode = int(engine.PulloutIn)
+		case sqlparser.NotInOp:
+			sq.OpCode = int(engine.PulloutNotIn)
+		}
+		subq, exp := GetSubqueryAndOtherSide(par)
+		sq.Original = &sqlparser.ComparisonExpr{
+			Left:     exp,
+			Operator: par.Operator,
+			Right:    subq,
+		}
+		sq.OtherSide = exp
+	case *sqlparser.ExistsExpr:
+		sq.OpCode = int(engine.PulloutExists)
+		sq.Original = par
+	}
+	return sq, nil
 }
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope) (deps dependency, err error) {
@@ -169,6 +203,7 @@ func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
 	return err
 }
 
+// GetSubqueryAndOtherSide returns the subquery and other side of a comparison, iff one of the sides is a SubQuery
 func GetSubqueryAndOtherSide(node *sqlparser.ComparisonExpr) (*sqlparser.Subquery, sqlparser.Expr) {
 	var subq *sqlparser.Subquery
 	var exp sqlparser.Expr

@@ -17,9 +17,8 @@ limitations under the License.
 package messager
 
 import (
-	"sync"
-
 	"context"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -78,12 +77,12 @@ func (me *Engine) Open() {
 		me.mu.Unlock()
 		return
 	}
+	me.isOpen = true
 	me.mu.Unlock()
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged)
-	me.isOpen = true
 }
 
 // Close closes the Engine service.

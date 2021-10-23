@@ -29,10 +29,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -68,7 +69,7 @@ type heartbeatWriter struct {
 
 	mu     sync.Mutex
 	isOpen bool
-	pool   *connpool.Pool
+	pool   *dbconnpool.ConnectionPool
 	ticks  *timer.Timer
 }
 
@@ -89,10 +90,9 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		interval:    heartbeatInterval,
 		ticks:       timer.NewTimer(heartbeatInterval),
 		errorLog:    logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
-		pool: connpool.NewPool(env, "HeartbeatWritePool", tabletenv.ConnPoolConfig{
-			Size:               1,
-			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
-		}),
+		// We make this pool size 2; to prevent pool exhausted
+		// stats from incrementing continually, and causing concern
+		pool: dbconnpool.NewConnectionPool("HeartbeatWritePool", 2, *mysqlctl.DbaIdleTimeout),
 	}
 }
 
@@ -114,7 +114,7 @@ func (w *heartbeatWriter) Open() {
 	}
 	log.Info("Hearbeat Writer: opening")
 
-	w.pool.Open(w.env.Config().DB.AppWithDB(), w.env.Config().DB.DbaWithDB(), w.env.Config().DB.AppDebugWithDB())
+	w.pool.Open(w.env.Config().DB.DbaWithDB())
 	w.enableWrites(true)
 	w.isOpen = true
 }
@@ -175,7 +175,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer conn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, conn.Exec)
+	_, err = withDDL.Exec(ctx, upsert, conn.ExecuteFetch)
 	if err != nil {
 		return err
 	}

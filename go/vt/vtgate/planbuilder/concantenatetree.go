@@ -62,3 +62,11 @@ func (c *concatenateTree) cost() int {
 func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	return nil, vterrors.New(vtrpc.Code_INTERNAL, "pushOutputColumns should not be called on this struct")
 }
+
+func (c *concatenateTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "pushPredicate does not work on concatenate trees")
+}
+
+func (c *concatenateTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "removePredicate does not work on concatenate trees")
+}

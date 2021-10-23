@@ -1,7 +1,7 @@
 # TPC-H query 1
 "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice * (1 - l_discount)) as sum_disc_price, sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= '1998-12-01' - interval '108' day group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus"
 "unsupported: in scatter query: complex aggregate expression"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: aggregation function 'avg'
 
 # TPC-H query 2
 "select s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment from part, supplier, partsupp, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and p_size = 15 and p_type like '%BRASS' and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' and ps_supplycost = ( select min(ps_supplycost) from partsupp, supplier, nation, region where p_partkey = ps_partkey and s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'EUROPE' ) order by s_acctbal desc, n_name, s_name, p_partkey limit 10"
@@ -111,7 +111,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
 # TPC-H query 4
 "select o_orderpriority, count(*) as order_count from orders where o_orderdate >= date('1993-07-01') and o_orderdate < date('1993-07-01') + interval '3' month and exists ( select * from lineitem where l_orderkey = o_orderkey and l_commitdate < l_receiptdate ) group by o_orderpriority order by o_orderpriority"
 "symbol o_orderkey not found in table or subquery"
-Gen4 error: unsupported: cross-shard correlated subquery
+Gen4 error: unsupported: group by in a query having a correlated subquery
 
 # TPC-H query 5 - Gen4 produces plan but the plan output is flaky
 "select n_name, sum(l_extendedprice * (1 - l_discount)) as revenue from customer, orders, lineitem, supplier, nation, region where c_custkey = o_custkey and l_orderkey = o_orderkey and l_suppkey = s_suppkey and c_nationkey = s_nationkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey and r_name = 'ASIA' and o_orderdate >= date('1994-01-01') and o_orderdate < date('1994-01-01') + interval '1' year group by n_name order by revenue desc"
@@ -550,9 +550,9 @@ Gen4 error: unsupported: cross-shard left join and column expressions
 Gen4 error: unsupported: in scatter query: complex aggregate expression
 
 # TPC-H query 15 view
-"with revenue0(supplier_no, total_revenue) as (select l_suppkey, sum(l_extendedprice * (1 - l_discount))  from lineitem where l_shipdate >= date('1996-01-01') and l_shipdate < date('1996-01-01') + interval '3' month group by l_suppkey )"
-"syntax error at position 5 near 'with'"
-Gen4 plan same as above
+#"with revenue0(supplier_no, total_revenue) as (select l_suppkey, sum(l_extendedprice * (1 - l_discount))  from lineitem where l_shipdate >= date('1996-01-01') and l_shipdate < date('1996-01-01') + interval '3' month group by l_suppkey )"
+#"syntax error at position 236"
+#Gen4 plan same as above
 
 # TPC-H query 15
 "select s_suppkey, s_name, s_address, s_phone, total_revenue from supplier, revenue0 where s_suppkey = supplier_no and total_revenue = ( select max(total_revenue) from revenue0 ) order by s_suppkey"
@@ -823,7 +823,7 @@ Gen4 error: unsupported: cross-shard correlated subquery
                     },
                     "FieldQuery": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where 1 != 1",
                     "OrderBy": "(3|6) DESC, (2|5) ASC",
-                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where (:__sq_has_values1 = 1 and o_orderkey in ::__vals) order by o_totalprice desc, o_orderdate asc",
+                    "Query": "select o_custkey, o_orderkey, o_orderdate, o_totalprice, weight_string(o_orderkey), weight_string(o_orderdate), weight_string(o_totalprice) from orders where :__sq_has_values1 = 1 and o_orderkey in ::__vals order by o_totalprice desc, o_orderdate asc",
                     "Table": "orders",
                     "Values": [
                       "::__sq1"
@@ -934,4 +934,4 @@ Gen4 plan same as above
 # TPC-H query 22
 "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone from 1 for 2) as cntrycode, c_acctbal from customer where substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone from 1 for 2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode"
 "symbol c_custkey not found in table or subquery"
-Gen4 error: unsupported: cross-shard correlated subquery
+Gen4 error: unsupported: in scatter query: aggregation function 'avg'

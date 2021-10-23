@@ -133,8 +133,8 @@ func testString(op Operator) string {
 		var inners []string
 		for _, sqOp := range op.Inner {
 			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
-			if sqOp.ExtractedSubquery.ArgName != "" {
-				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.ArgName)
+			if sqOp.ExtractedSubquery.GetArgName() != "" {
+				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.GetArgName())
 			}
 			subquery += fmt.Sprintf("\n\tQuery: %s\n}", indent(testString(sqOp.Inner)))
 			subquery = indent(subquery)

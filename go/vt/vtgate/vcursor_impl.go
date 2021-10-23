@@ -371,6 +371,7 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+// MaxBufferingRetries is to represent max retries on buffering.
 const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -746,7 +747,18 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	}
 }
 
-// ForeignKey implements the VCursor interface
+// PlannerWarning implements the VCursor interface
+func (vc *vcursorImpl) PlannerWarning(message string) {
+	if message == "" {
+		return
+	}
+	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
+		Code:    mysql.ERNotSupportedYet,
+		Message: message,
+	})
+}
+
+// ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
 	if foreignKeyMode == nil {
 		return ""

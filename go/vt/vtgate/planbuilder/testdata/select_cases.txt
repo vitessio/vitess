@@ -69,6 +69,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from `user` where 1 != 1",
     "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user`",
+    "QueryTimeout": 1000,
     "Table": "`user`"
   }
 }
@@ -93,6 +94,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
+        "QueryTimeout": 1000,
         "Table": "`user`"
       }
     ]
@@ -115,6 +117,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select count(*) from `user` where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from `user`",
+        "QueryTimeout": 1000,
         "Table": "`user`"
       }
     ]
@@ -139,6 +142,7 @@ Gen4 plan same as above
         },
         "FieldQuery": "select * from `user` where 1 != 1",
         "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from `user` limit :__upper_limit",
+        "QueryTimeout": 1000,
         "Table": "`user`"
       }
     ]
@@ -1492,6 +1496,7 @@ Gen4 plan same as above
     "Table": "unsharded"
   }
 }
+Gen4 plan same as above
 
 "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5"
 {
@@ -1596,6 +1601,7 @@ Gen4 plan same as above
     },
     "FieldQuery": "select * from unsharded as route2 where 1 != 1",
     "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
+    "QueryTimeout": 1000,
     "Table": "unsharded"
   }
 }
@@ -2201,3 +2207,376 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+"select (select col from user limit 1) as a from user join user_extra order by a"
+{
+  "QueryType": "SELECT",
+  "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
+            "ResultColumns": 1,
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select (select col from user limit 1) as a from user join user_extra order by a",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutValue",
+    "PulloutVars": [
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Limit",
+        "Count": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` limit :__upper_limit",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select :__sq1 as a, weight_string(:__sq1) from `user` where 1 != 1",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select :__sq1 as a, weight_string(:__sq1) from `user` order by a asc",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+"select t.a from (select (select col from user limit 1) as a from user join user_extra) t"
+{
+  "QueryType": "SELECT",
+  "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user` limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+                "Query": "select :__sq1 as a from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user` limit :__upper_limit",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "-1",
+            "TableName": "`user`_user_extra",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :__sq1 as a from `user` where 1 != 1",
+                "Query": "select :__sq1 as a from `user`",
+                "Table": "`user`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectScatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra",
+                "Table": "user_extra"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+
+"select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra"
+"unsupported: cross-shard correlated subquery"
+Gen4 plan same as above
+
+# plan test for a natural character set string
+"select N'string' from dual"
+{
+  "QueryType": "SELECT",
+  "Original": "select N'string' from dual",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select N'string' from dual where 1 != 1",
+    "Query": "select N'string' from dual",
+    "Table": "dual"
+  }
+}
+Gen4 plan same as above
+
+# select expression having dependencies on both sides of a join
+"select user.id * user_id as amount from user, user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id * user_id as amount from user, user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
+        "Query": "select :user_id * user_id as amount from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# correlated subquery in exists clause
+"select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id)",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
+        "Query": "select `user`.id, col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+        "Table": "user_extra",
+        "Values": [
+          3
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}

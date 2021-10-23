@@ -46,7 +46,7 @@ func (c planningContext) isSubQueryToReplace(e sqlparser.Expr) bool {
 		return false
 	}
 	for _, extractedSubq := range c.semTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(&sqlparser.Subquery{Select: extractedSubq.Subquery}, ext) {
+		if extractedSubq.NeedsRewrite && sqlparser.EqualsRefOfSubquery(extractedSubq.Subquery, ext) {
 			return true
 		}
 	}
@@ -151,17 +151,31 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 			return nil, err
 		}
 
-		if merged == nil {
-			if len(preds) > 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
-			}
-			unmerged = append(unmerged, &subqueryTree{
+		if merged != nil {
+			outerTree = merged
+			continue
+		}
+
+		if len(preds) == 0 {
+			// uncorrelated queries
+			sq := &subqueryTree{
 				extracted: inner.ExtractedSubquery,
 				inner:     treeInner,
-			})
-		} else {
-			outerTree = merged
+			}
+			unmerged = append(unmerged, sq)
+			continue
 		}
+
+		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
+			correlatedTree, err := createCorrelatedSubqueryTree(ctx, treeInner, outerTree, preds, inner.ExtractedSubquery)
+			if err != nil {
+				return nil, err
+			}
+			outerTree = correlatedTree
+			continue
+		}
+
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
 	/*
@@ -178,6 +192,56 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 		outerTree = tree
 	}
 	return outerTree, nil
+}
+
+func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
+	err := outerTree.removePredicate(ctx, extractedSubquery)
+	if err != nil {
+		return nil, err
+	}
+
+	vars := map[string]int{}
+	for _, pred := range preds {
+		var rewriteError error
+		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
+			switch node := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if ctx.semTable.RecursiveDeps(node).IsSolvedBy(outerTree.tableID()) {
+					// get the bindVariable for that column name and replace it in the predicate
+					bindVar := ctx.reservedVars.ReserveColName(node)
+					cursor.Replace(sqlparser.NewArgument(bindVar))
+					// check whether the bindVariable already exists in the map
+					_, alreadyExists := vars[bindVar]
+					if alreadyExists {
+						return false
+					}
+					// if it does not exist, then push this as an output column in the outerTree and add it to the joinVars
+					columnIndexes, err := outerTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
+					if err != nil {
+						rewriteError = err
+						return false
+					}
+					columnIndex := columnIndexes[0]
+					vars[bindVar] = columnIndex
+					return false
+				}
+			}
+			return true
+		}, nil)
+		if rewriteError != nil {
+			return nil, rewriteError
+		}
+		err := innerTree.pushPredicate(ctx, pred)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &correlatedSubqueryTree{
+		outer:     outerTree,
+		inner:     innerTree,
+		extracted: extractedSubquery,
+		vars:      vars,
+	}, nil
 }
 
 func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner *abstract.SubQueryInner, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
@@ -199,7 +263,7 @@ func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner
 			if err != nil {
 				return nil, err
 			}
-			return rt, rewriteSubqueryDependenciesForJoin(ctx, outerTree.rhs, outerTree, subQueryInner)
+			return rt, rewriteColumnsInSubqueryForJoin(ctx, outerTree.rhs, outerTree, subQueryInner)
 		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.lhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
@@ -215,7 +279,7 @@ func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner
 			if err != nil {
 				return nil, err
 			}
-			return rt, rewriteSubqueryDependenciesForJoin(ctx, outerTree.lhs, outerTree, subQueryInner)
+			return rt, rewriteColumnsInSubqueryForJoin(ctx, outerTree.lhs, outerTree, subQueryInner)
 		}
 		merged, err = tryMergeSubQuery(ctx, outerTree.rhs, subq, subQueryInner, joinPredicates, newMergefunc)
 		if err != nil {
@@ -231,21 +295,23 @@ func tryMergeSubQuery(ctx *planningContext, outer, subq queryTree, subQueryInner
 	}
 }
 
+// rewriteColumnsInSubqueryForJoin rewrites the columns that appear from the other side
+// of the join. For example, let's say we merged a subquery on the right side of a join tree
+// If it was using any columns from the left side then they need to be replaced by bind variables supplied
+// from that side.
 // outerTree is the joinTree within whose children the subquery lives in
 // the child of joinTree which does not contain the subquery is the otherTree
-func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner) error {
-	// first we find the other side of the tree by comparing the tableIDs
-	// other side is RHS if the subquery is in the LHS, otherwise it is LHS
+func rewriteColumnsInSubqueryForJoin(ctx *planningContext, otherTree queryTree, outerTree *joinTree, subQueryInner *abstract.SubQueryInner) error {
 	var rewriteError error
-	// go over the entire where expression in the subquery
+	// go over the entire expression in the subquery
 	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.Cursor) bool {
 		sqlNode := cursor.Node()
 		switch node := sqlNode.(type) {
 		case *sqlparser.ColName:
 			// check whether the column name belongs to the other side of the join tree
-			if ctx.semTable.DirectDeps(node).IsSolvedBy(otherTree.tableID()) {
+			if ctx.semTable.RecursiveDeps(node).IsSolvedBy(otherTree.tableID()) {
 				// get the bindVariable for that column name and replace it in the subquery
-				bindVar := node.CompliantName()
+				bindVar := ctx.reservedVars.ReserveColName(node)
 				cursor.Replace(sqlparser.NewArgument(bindVar))
 				// check whether the bindVariable already exists in the joinVars of the other tree
 				_, alreadyExists := outerTree.vars[bindVar]
@@ -265,6 +331,14 @@ func rewriteSubqueryDependenciesForJoin(ctx *planningContext, otherTree queryTre
 		}
 		return true
 	}, nil)
+
+	// update the dependencies for the subquery by removing the dependencies from the otherTree
+	tableSet := ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet.RemoveInPlace(otherTree.tableID())
+	ctx.semTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	tableSet = ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
+	tableSet.RemoveInPlace(otherTree.tableID())
+	ctx.semTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
 
 	// return any error while rewriting
 	return rewriteError
@@ -469,7 +543,7 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 			continue
 		}
 
-		bvName, cols, predicate, err := breakPredicateInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
+		bvName, cols, predicate, err := breakExpressionInLHSandRHS(expr, ctx.semTable, node.lhs.tableID())
 		if err != nil {
 			return nil, err
 		}
@@ -504,13 +578,13 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	}, nil
 }
 
-func breakPredicateInLHSandRHS(
+func breakExpressionInLHSandRHS(
 	expr sqlparser.Expr,
 	semTable *semantics.SemTable,
 	lhs semantics.TableSet,
-) (bvNames []string, columns []*sqlparser.ColName, predicate sqlparser.Expr, err error) {
-	predicate = sqlparser.CloneExpr(expr)
-	_ = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
+) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
+	rewrittenExpr = sqlparser.CloneExpr(expr)
+	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			deps := semTable.RecursiveDeps(node)
@@ -879,7 +953,7 @@ func canMergeOnFilters(ctx *planningContext, a, b *routeTree, joinPredicates []s
 
 type mergeFunc func(a, b *routeTree) (*routeTree, error)
 
-func canMergePlans(ctx *planningContext, a, b *route) bool {
+func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
 		return false
@@ -906,6 +980,32 @@ func canMergePlans(ctx *planningContext, a, b *route) bool {
 		return b.eroute.Opcode == engine.SelectScatter
 	case engine.SelectNext:
 		return false
+	}
+	return false
+}
+func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
+	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
+	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
+		return false
+	}
+	switch a.eroute.Opcode {
+	case engine.SelectUnsharded, engine.SelectReference:
+		return a.eroute.Opcode == b.eroute.Opcode
+	case engine.SelectDBA:
+		return b.eroute.Opcode == engine.SelectDBA &&
+			len(a.eroute.SysTableTableSchema) == 0 &&
+			len(a.eroute.SysTableTableName) == 0 &&
+			len(b.eroute.SysTableTableSchema) == 0 &&
+			len(b.eroute.SysTableTableName) == 0
+	case engine.SelectEqualUnique:
+		// Check if they target the same shard.
+		if b.eroute.Opcode == engine.SelectEqualUnique &&
+			a.eroute.Vindex == b.eroute.Vindex &&
+			a.condition != nil &&
+			b.condition != nil &&
+			gen4ValuesEqual(ctx, []sqlparser.Expr{a.condition}, []sqlparser.Expr{b.condition}) {
+			return true
+		}
 	}
 	return false
 }

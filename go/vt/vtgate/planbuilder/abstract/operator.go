@@ -109,8 +109,6 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 				lhs, rhs = rhs, lhs
 			}
 			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
-		case sqlparser.StraightJoinType:
-			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
@@ -192,17 +190,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement, isSel := sq.Subquery.(*sqlparser.Select)
-			if !isSel {
-				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
-			}
-			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
+			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				Inner:             opInner,
 				ExtractedSubquery: sq,
+				Inner:             opInner,
 			})
 		}
 	}

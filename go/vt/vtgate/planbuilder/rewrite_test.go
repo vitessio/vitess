@@ -41,7 +41,7 @@ func TestSubqueryRewrite(t *testing.T) {
 		output: "select 1 from t1 where :__sq_has_values1",
 	}, {
 		input:  "select id from t1 where id in (select 1)",
-		output: "select id from t1 where (:__sq_has_values1 = 1 and id in ::__sq1)",
+		output: "select id from t1 where :__sq_has_values1 = 1 and id in ::__sq1",
 	}, {
 		input:  "select id from t1 where id not in (select 1)",
 		output: "select id from t1 where :__sq_has_values1 = 0 or id not in ::__sq1",
@@ -65,7 +65,7 @@ func TestSubqueryRewrite(t *testing.T) {
 		output: "select id from t1 where not :__sq_has_values1 and :__sq_has_values2",
 	}, {
 		input:  "select (select 1), (select 2) from t1 join t2 on t1.id = (select 1) where t1.id in (select 1)",
-		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where (:__sq_has_values4 = 1 and t1.id in ::__sq4)",
+		output: "select :__sq2, :__sq3 from t1 join t2 on t1.id = :__sq1 where :__sq_has_values4 = 1 and t1.id in ::__sq4",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -123,7 +123,7 @@ func TestHavingRewrite(t *testing.T) {
 		output: "select count(*) as k from t1 where (x = 1 or y = 2) and a = 1 having count(*) = 1",
 	}, {
 		input:  "select 1 from t1 where x in (select 1 from t2 having a = 1)",
-		output: "select 1 from t1 where (:__sq_has_values1 = 1 and x in ::__sq1)",
+		output: "select 1 from t1 where :__sq_has_values1 = 1 and x in ::__sq1",
 		sqs:    map[string]string{"__sq1": "select 1 from t2 where a = 1"},
 	}, {input: "select 1 from t1 group by a having a = 1 and count(*) > 1",
 		output: "select 1 from t1 where a = 1 group by a having count(*) > 1",
@@ -140,7 +140,7 @@ func TestHavingRewrite(t *testing.T) {
 				assert.Equal(t, len(tcase.sqs), len(squeries), "number of subqueries not matched")
 			}
 			for _, sq := range squeries {
-				assert.Equal(t, tcase.sqs[sq.ArgName], sqlparser.String(sq.Subquery))
+				assert.Equal(t, tcase.sqs[sq.GetArgName()], sqlparser.String(sq.Subquery.Select))
 			}
 		})
 	}

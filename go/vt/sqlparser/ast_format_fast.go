@@ -25,6 +25,9 @@ import (
 
 // formatFast formats the node.
 func (node *Select) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("select ")
 	node.Comments.formatFast(buf)
 
@@ -185,7 +188,34 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *With) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("with ")
+
+	if node.Recursive {
+		buf.WriteString("recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		node.ctes[i].formatFast(buf)
+		buf.WriteString(", ")
+	}
+	node.ctes[ctesLength-1].formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *CommonTableExpr) formatFast(buf *TrackedBuffer) {
+	node.TableID.formatFast(buf)
+	node.Columns.formatFast(buf)
+	buf.WriteString(" as ")
+	node.Subquery.formatFast(buf)
+	buf.WriteByte(' ')
+}
+
+// formatFast formats the node.
 func (node *Update) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("update ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
@@ -204,6 +234,9 @@ func (node *Update) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Delete) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("delete ")
 	node.Comments.formatFast(buf)
 	if node.Ignore {
@@ -677,16 +710,13 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.WriteByte(' ')
-			ct.Options.Default.formatFast(buf)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.WriteString(" (")
 			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -2256,31 +2286,5 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 // it will be formatted as if the subquery has been extracted, and instead
 // show up like argument comparisons
 func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
-	switch original := node.Original.(type) {
-	case *ExistsExpr:
-		buf.printExpr(node, NewArgument(node.ArgName), true)
-	case *ComparisonExpr:
-		// other_side = :__sq
-		cmp := &ComparisonExpr{
-			Left:     node.OtherSide,
-			Right:    NewArgument(node.ArgName),
-			Operator: original.Operator,
-		}
-		var expr Expr = cmp
-		switch original.Operator {
-		case InOp:
-			// :__sq_has_values = 1 and other_side in ::__sq
-			cmp.Right = NewListArg(node.ArgName)
-			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
-			expr = AndExpressions(hasValue, cmp)
-		case NotInOp:
-			// :__sq_has_values = 0 or other_side not in ::__sq
-			cmp.Right = NewListArg(node.ArgName)
-			hasValue := &ComparisonExpr{Left: NewArgument(node.HasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
-			expr = &OrExpr{hasValue, cmp}
-		}
-		buf.printExpr(node, expr, true)
-	case *Subquery:
-		buf.printExpr(node, NewArgument(node.ArgName), true)
-	}
+	node.alternative.Format(buf)
 }

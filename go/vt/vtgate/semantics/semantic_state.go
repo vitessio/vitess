@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -59,7 +60,7 @@ type (
 	// ColumnInfo contains information about columns
 	ColumnInfo struct {
 		Name string
-		Type querypb.Type
+		Type Type
 	}
 
 	// ExprDependencies stores the tables that an expression depends on as a map
@@ -81,7 +82,7 @@ type (
 		// It does not recurse inside derived tables and the like to find the original dependencies
 		Direct ExprDependencies
 
-		exprTypes   map[sqlparser.Expr]querypb.Type
+		exprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
 		Comments    sqlparser.Comments
 		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
@@ -90,6 +91,8 @@ type (
 		// ColumnEqualities is used to enable transitive closures
 		// if a == b and b == c then a == c
 		ColumnEqualities map[columnName][]sqlparser.Expr
+
+		Warning string
 	}
 
 	columnName struct {
@@ -144,17 +147,17 @@ func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 
 // RecursiveDeps return the table dependencies of the expression.
 func (st *SemTable) RecursiveDeps(expr sqlparser.Expr) TableSet {
-	return st.Recursive.Dependencies(expr)
+	return st.Recursive.dependencies(expr)
 }
 
 // DirectDeps return the table dependencies of the expression.
 func (st *SemTable) DirectDeps(expr sqlparser.Expr) TableSet {
-	return st.Direct.Dependencies(expr)
+	return st.Direct.dependencies(expr)
 }
 
 // AddColumnEquality adds a relation of the given colName to the ColumnEqualities map
 func (st *SemTable) AddColumnEquality(colName *sqlparser.ColName, expr sqlparser.Expr) {
-	ts := st.Direct.Dependencies(colName)
+	ts := st.Direct.dependencies(colName)
 	columnName := columnName{
 		Table:      ts,
 		ColumnName: colName.Name.String(),
@@ -179,7 +182,7 @@ func (st *SemTable) GetExprAndEqualities(expr sqlparser.Expr) []sqlparser.Expr {
 // TableInfoForExpr returns the table info of the table that this expression depends on.
 // Careful: this only works for expressions that have a single table dependency
 func (st *SemTable) TableInfoForExpr(expr sqlparser.Expr) (TableInfo, error) {
-	return st.TableInfoFor(st.Direct.Dependencies(expr))
+	return st.TableInfoFor(st.Direct.dependencies(expr))
 }
 
 // GetSelectTables returns the table in the select.
@@ -200,13 +203,22 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 	typ, found := st.exprTypes[e]
 	if found {
-		return &typ
+		return &typ.Type
 	}
 	return nil
 }
 
-// Dependencies return the table dependencies of the expression. This method finds table dependencies recursively
-func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
+// CollationFor returns the collation name of expressions in the query
+func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
+	typ, found := st.exprTypes[e]
+	if found {
+		return typ.Collation
+	}
+	return collations.Unknown
+}
+
+// dependencies return the table dependencies of the expression. This method finds table dependencies recursively
+func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 	if ValidAsMapKey(expr) {
 		// we have something that could live in the cache
 		var found bool
@@ -219,8 +231,8 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
 		}()
 	}
 
-	// During the original semantic analysis, all ColName:s were found and bound the the corresponding tables
-	// Here, we'll walk the expression tree and look to see if we can found any sub-expressions
+	// During the original semantic analysis, all ColNames were found and bound to the corresponding tables
+	// Here, we'll walk the expression tree and look to see if we can find any sub-expressions
 	// that have already set dependencies.
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		expr, ok := node.(sqlparser.Expr)
@@ -232,7 +244,7 @@ func (d ExprDependencies) Dependencies(expr sqlparser.Expr) (deps TableSet) {
 
 		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
 			if extracted.OtherSide != nil {
-				set := d.Dependencies(extracted.OtherSide)
+				set := d.dependencies(extracted.OtherSide)
 				deps.MergeInPlace(set)
 			}
 			return false, nil
@@ -282,6 +294,7 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 	return nil
 }
 
+// GetSubqueryNeedingRewrite returns a list of sub-queries that need to be rewritten
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {

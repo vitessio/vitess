@@ -30,7 +30,9 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -54,6 +56,7 @@ const (
 	StreamTypeReference
 )
 
+// StreamMigrator contains information needed to migrate a stream
 type StreamMigrator struct {
 	streams   map[string][]*VReplicationStream
 	workflows []string
@@ -146,6 +149,7 @@ func (sm *StreamMigrator) Templates() []*VReplicationStream {
 	return VReplicationStreams(sm.templates).Copy().ToSlice()
 }
 
+// CancelMigration cancels a migration
 func (sm *StreamMigrator) CancelMigration(ctx context.Context) {
 	if sm.streams == nil {
 		return
@@ -163,6 +167,7 @@ func (sm *StreamMigrator) CancelMigration(ctx context.Context) {
 	}
 }
 
+// MigrateStreams migrates N streams
 func (sm *StreamMigrator) MigrateStreams(ctx context.Context) error {
 	if sm.streams == nil {
 		return nil
@@ -175,6 +180,7 @@ func (sm *StreamMigrator) MigrateStreams(ctx context.Context) error {
 	return sm.createTargetStreams(ctx, sm.templates)
 }
 
+// StopStreams stops streams
 func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 	if sm.streams == nil {
 		return nil, nil
@@ -624,7 +630,11 @@ func (sm *StreamMigrator) templatize(ctx context.Context, tabletStreams []*VRepl
 func (sm *StreamMigrator) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	if !ok {
-		return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
+		if schema.IsInternalOperationTableName(rule.Match) {
+			log.Infof("found internal table %s, ignoring in rule templatizing", rule.Match)
+		} else {
+			return StreamTypeUnknown, fmt.Errorf("table %v not found in vschema", rule.Match)
+		}
 	}
 
 	if vtable.Type == vindexes.TypeReference {
@@ -747,7 +757,11 @@ func (sm *StreamMigrator) blsIsReference(bls *binlogdatapb.BinlogSource) (bool, 
 func (sm *StreamMigrator) identifyRuleType(rule *binlogdatapb.Rule) (StreamType, error) {
 	vtable, ok := sm.ts.SourceKeyspaceSchema().Tables[rule.Match]
 	if !ok {
-		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+		if schema.IsInternalOperationTableName(rule.Match) {
+			log.Infof("found internal table %s, ignoring in rule identification", rule.Match)
+		} else {
+			return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+		}
 	}
 
 	if vtable.Type == vindexes.TypeReference {
