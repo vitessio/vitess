@@ -17,11 +17,8 @@ limitations under the License.
 package connpool
 
 import (
-	"net"
 	"sync"
 	"time"
-
-	"vitess.io/vitess/go/netutil"
 
 	"context"
 
@@ -32,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -75,7 +71,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 		timeout:            cfg.TimeoutSeconds.Get(),
 		idleTimeout:        idleTimeout,
 		waiterCap:          int64(cfg.MaxWaiters),
-		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
+		dbaPool:            dbconnpool.NewConnectionPool(name+"_dbaPool", 1, idleTimeout),
 	}
 	if name == "" {
 		return cp
@@ -114,12 +110,8 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 		return NewDBConn(ctx, cp, appParams)
 	}
 
-	var refreshCheck pools.RefreshCheck
-	if net.ParseIP(appParams.Host()) == nil {
-		refreshCheck = netutil.DNSTracker(appParams.Host())
-	}
-
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, *mysqlctl.PoolDynamicHostnameResolution)
+	refreshCheck, refreshInterval := dbconnpool.GetRefreshCheck(appParams, cp.name)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback(), refreshCheck, refreshInterval)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams)

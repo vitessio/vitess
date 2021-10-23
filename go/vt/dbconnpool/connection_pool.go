@@ -23,6 +23,8 @@ package dbconnpool
 
 import (
 	"errors"
+	"flag"
+	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -45,16 +47,20 @@ var (
 	// TODO(sougou): Find a way to still crash if this happened
 	// through non-test code.
 	usedNames = make(map[string]bool)
+
+	// poolDynamicHostnameResolution is whether we should retry DNS resolution of hostname targets
+	// and reconnect if necessary
+	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set, force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+	poolReadWriteTrackingInterval = flag.Duration("pool_rw_tracking_interval", 0, "if set, check all pools at this interval, and reconnect if a backend is seen transitioning from read-write to read-only or vice versa. This setting will override -pool_hostname_resolve_interval. Defaults to 0 (disabled)")
 )
 
 // ConnectionPool re-exposes ResourcePool as a pool of
 // PooledDBConnection objects.
 type ConnectionPool struct {
-	mu                  sync.Mutex
-	connections         *pools.ResourcePool
-	capacity            int
-	idleTimeout         time.Duration
-	resolutionFrequency time.Duration
+	mu          sync.Mutex
+	connections *pools.ResourcePool
+	capacity    int
+	idleTimeout time.Duration
 
 	// info is set at Open() time
 	info dbconfigs.Connector
@@ -63,8 +69,8 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -98,16 +104,24 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 // conn, err := pool.Get()
 // ...
 func (cp *ConnectionPool) Open(info dbconfigs.Connector) {
-	var refreshCheck pools.RefreshCheck
-	if net.ParseIP(info.Host()) == nil {
-		refreshCheck = netutil.DNSTracker(info.Host())
-	} else {
-		refreshCheck = nil
-	}
+	refreshCheck, refreshInterval := GetRefreshCheck(info, cp.name)
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil, refreshCheck, cp.resolutionFrequency)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, nil, refreshCheck, refreshInterval)
+}
+
+// GetRefreshCheck determines what (if any) refreshCheck function should be used for this pool
+// returns: function to use as reference check, and interval at which it should be checked
+// returns: nil for the refresh check if no function to be used
+func GetRefreshCheck(info dbconfigs.Connector, poolName string) (pools.RefreshCheck, time.Duration) {
+	if *poolReadWriteTrackingInterval != 0 {
+		return ReadWriteRefreshTracker(info, poolName), *poolReadWriteTrackingInterval
+	}
+	if *poolDynamicHostnameResolution != 0 && net.ParseIP(info.Host()) == nil {
+		return netutil.DNSTracker(info.Host()), *poolDynamicHostnameResolution
+	}
+	return nil, 0
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -289,4 +303,44 @@ func (cp *ConnectionPool) Exhausted() int64 {
 		return 0
 	}
 	return p.Exhausted()
+}
+
+// ReadWriteRefreshTracker implements a closure and returns a pool refresh check
+// We keep track of whether the backend database is writable via the closure
+// dbState variable. If the state transitions from RW -> RO or RO -> RW, we
+// signal a refresh/reopen of the connection pool
+func ReadWriteRefreshTracker(dbCfg dbconfigs.Connector, poolName string) func() (bool, error) {
+	dbState := ""
+
+	return func() (bool, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		conn, err := NewDBConnection(ctx, dbCfg)
+		if err != nil {
+			return false, nil
+		}
+		rs, err := conn.ExecuteFetch("select @@read_only, @@innodb_read_only;", 1, false)
+		if err != nil {
+			// Fail silently, by design. No point in clogging logs.
+			return false, nil
+		}
+		readOnly, _ := rs.Rows[0][0].ToInt64()
+		innodbReadOnly, _ := rs.Rows[0][1].ToInt64()
+
+		switch {
+		case dbState == "" && (readOnly == 1 || innodbReadOnly == 1):
+			dbState = "read-only"
+			return false, fmt.Errorf("ReadWriteRefreshTracker: initial pool %v state is %v", poolName, dbState)
+		case dbState == "" && (readOnly == 0 && innodbReadOnly == 0):
+			dbState = "read-write"
+			return false, fmt.Errorf("ReadWriteRefreshTracker: initial pool %v state is %v", poolName, dbState)
+		case dbState == "read-only" && (readOnly == 0 && innodbReadOnly == 0):
+			dbState = "read-write"
+			return true, fmt.Errorf("ReadWriteRefreshTracker: pool %v state transitioning to %v", poolName, dbState)
+		case dbState == "read-write" && (readOnly == 1 || innodbReadOnly == 1):
+			dbState = "read-only"
+			return true, fmt.Errorf("ReadWriteRefreshTracker: pool %v state transitioning to %v", poolName, dbState)
+		}
+		return false, nil
+	}
 }
