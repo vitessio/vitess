@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 
 	"strconv"
@@ -184,7 +185,7 @@ func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value 
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
 // a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
+func NullsafeCompare(v1, v2 sqltypes.Value, collation collations.ID) (int, error) {
 	// Based on the categorization defined for the types,
 	// we're going to allow comparison of the following:
 	// Null, isNumber, IsBinary. This will exclude IsQuoted
@@ -211,6 +212,10 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 	}
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+	}
+	if v1.IsText() && v2.IsText() && collation != collations.Unknown {
+		collation := collations.LookupById(collation)
+		return collation.Collate(v1.ToBytes(), v2.ToBytes(), false), nil
 	}
 	return 0, UnsupportedComparisonError{
 		Type1: v1.Type(),
@@ -271,7 +276,7 @@ func minmax(v1, v2 sqltypes.Value, min bool) (sqltypes.Value, error) {
 		return v1, nil
 	}
 
-	n, err := NullsafeCompare(v1, v2)
+	n, err := NullsafeCompare(v1, v2, collation)
 	if err != nil {
 		return sqltypes.NULL, err
 	}
