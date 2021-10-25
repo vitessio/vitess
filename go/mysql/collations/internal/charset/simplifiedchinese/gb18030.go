@@ -18,6 +18,7 @@ package simplifiedchinese
 
 import (
 	"unicode/utf8"
+	_ "unsafe"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
@@ -27,6 +28,12 @@ type Charset_gb18030 struct{}
 func (Charset_gb18030) Name() string {
 	return "gb18030"
 }
+
+//go:linkname gb18030 golang.org/x/text/encoding/simplifiedchinese.gb18030
+var gb18030 [206][2]uint16
+
+//go:linkname decode golang.org/x/text/encoding/simplifiedchinese.decode
+var decode [23845]uint16
 
 func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 	const isgb18030 = true
