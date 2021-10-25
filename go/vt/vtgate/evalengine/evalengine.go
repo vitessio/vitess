@@ -356,6 +356,26 @@ func parseDate(expr EvalResult) (t time.Time, err error) {
 	return
 }
 
+// matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
+// that does not return an error.
+func matchExprWithAnyDateFormat(expr EvalResult) (t time.Time, err error) {
+	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
+	for _, layout := range layouts {
+		t, err = time.Parse(layout, string(expr.bytes))
+		if err == nil {
+			if layout == "15:04:05" {
+				now := time.Now()
+				// setting the date to today's date, because we use AddDate on t
+				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+				// and day to take into account the 01 in both month and day of t
+				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
+			}
+			return
+		}
+	}
+	return
+}
+
 // Date comparison based on:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 // 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
@@ -369,6 +389,36 @@ func compareDates(l, r EvalResult) (int, error) {
 		return 0, err
 	}
 
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareDateAndString(l, r EvalResult) (int, error) {
+	var lTime, rTime time.Time
+	var err error
+	switch {
+	case sqltypes.IsDate(l.typ):
+		lTime, err = parseDate(l)
+		if err != nil {
+			return 0, err
+		}
+		rTime, err = matchExprWithAnyDateFormat(r)
+		if err != nil {
+			return 0, err
+		}
+	case sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ):
+		rTime, err = parseDate(r)
+		if err != nil {
+			return 0, err
+		}
+		lTime, err = matchExprWithAnyDateFormat(l)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	if lTime.Before(rTime) {
 		return -1, nil
 	}
