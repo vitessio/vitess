@@ -724,7 +724,7 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -733,6 +733,10 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
 	}
 	// field Vars map[string]int
 	if cached.Vars != nil {
