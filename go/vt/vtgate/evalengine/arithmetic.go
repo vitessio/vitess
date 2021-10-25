@@ -257,18 +257,18 @@ func isByteComparable(v sqltypes.Value) bool {
 // Min returns the minimum of v1 and v2. If one of the
 // values is NULL, it returns the other value. If both
 // are NULL, it returns NULL.
-func Min(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
-	return minmax(v1, v2, true)
+func Min(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
+	return minmax(v1, v2, true, collation)
 }
 
 // Max returns the maximum of v1 and v2. If one of the
 // values is NULL, it returns the other value. If both
 // are NULL, it returns NULL.
-func Max(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
-	return minmax(v1, v2, false)
+func Max(v1, v2 sqltypes.Value, collation collations.ID) (sqltypes.Value, error) {
+	return minmax(v1, v2, false, collation)
 }
 
-func minmax(v1, v2 sqltypes.Value, min bool) (sqltypes.Value, error) {
+func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.Value, error) {
 	if v1.IsNull() {
 		return v2, nil
 	}
