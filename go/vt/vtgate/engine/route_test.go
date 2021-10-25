@@ -159,7 +159,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	}}
 	for _, tc := range tests {
 		t.Run(tc.testName, func(t *testing.T) {
-			sel := &Route{
+			sel := &RouteLegacy{
 				Opcode: SelectDBA,
 				Keyspace: &vindexes.Keyspace{
 					Name:    "ks",

@@ -19,8 +19,7 @@ package planbuilder
 import (
 	"sort"
 	"strings"
-
-	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -319,7 +318,7 @@ func createLogicalPlan(ctx *planningContext, source queryTree, selStmt *sqlparse
 	return plan, nil
 }
 
-func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
+func transformRoutePlan(ctx *planningContext, n *routeTree) (logicalPlan, error) {
 	var tablesForSelect sqlparser.TableExprs
 	tableNameMap := map[string]interface{}{}
 
@@ -388,10 +387,14 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 	}
 
 	var singleColumn vindexes.SingleColumn
-	var values []sqltypes.PlanValue
+	var values evalengine.Expr
 	if n.selectedVindex() != nil {
 		singleColumn = n.selected.foundVindex.(vindexes.SingleColumn)
-		values = n.selected.values
+		convert, err := sqlparser.Convert(n.selected.valueExprs[0])
+		if err != nil {
+			return nil, err
+		}
+		values = convert
 	}
 
 	var expressions sqlparser.SelectExprs
@@ -428,7 +431,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 			TableName:           strings.Join(tableNames, ", "),
 			Keyspace:            n.keyspace,
 			Vindex:              singleColumn,
-			Values:              values,
+			Value:               values,
 			SysTableTableName:   n.SysTableTableName,
 			SysTableTableSchema: n.SysTableTableSchema,
 		},

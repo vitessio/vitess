@@ -47,7 +47,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			return nil, err
 		}
 		return node, nil
-	case *route:
+	case *routeV3:
 		node.Select.(*sqlparser.Select).GroupBy = groupBy
 		return node, nil
 	case *orderedAggregate:
@@ -98,7 +98,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 // planDistinct makes the output distinct
 func planDistinct(input logicalPlan) (logicalPlan, error) {
 	switch node := input.(type) {
-	case *route:
+	case *routeV3:
 		node.Select.MakeDistinct()
 		return node, nil
 	case *orderedAggregate:

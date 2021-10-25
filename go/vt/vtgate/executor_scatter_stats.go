@@ -59,7 +59,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 
 	var err error
 	plans := make([]*engine.Plan, 0)
-	routes := make([]*engine.Route, 0)
+	routes := make([]*engine.RouteLegacy, 0) // TODO 2021-10-22 systay: need to do the same for new routes
 	// First we go over all plans and collect statistics and all query plans for scatter queries
 	e.plans.ForEach(func(value interface{}) bool {
 		plan := value.(*engine.Plan)
@@ -68,7 +68,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		isScatter := scatter != nil
 
 		if isScatter {
-			route, isRoute := scatter.(*engine.Route)
+			route, isRoute := scatter.(*engine.RouteLegacy)
 			if !isRoute {
 				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "expected a route, but found a %v", scatter)
 				return false
@@ -180,7 +180,7 @@ const statsHTML = `
 
 func findScatter(p engine.Primitive) bool {
 	switch v := p.(type) {
-	case *engine.Route:
+	case *engine.RouteLegacy:
 		return v.Opcode == engine.SelectScatter
 	default:
 		return false

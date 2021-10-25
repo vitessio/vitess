@@ -62,7 +62,7 @@ type symtab struct {
 
 	// singleRoute is set only if all the symbols in
 	// the symbol table are part of the same route.
-	singleRoute *route
+	singleRoute *routeV3
 
 	ResultColumns []*resultColumn
 	Outer         *symtab
@@ -79,7 +79,7 @@ func newSymtab() *symtab {
 
 // newSymtab creates a new symtab initialized
 // to contain just one route.
-func newSymtabWithRoute(rb *route) *symtab {
+func newSymtabWithRoute(rb *routeV3) *symtab {
 	return &symtab{
 		tables:        make(map[sqlparser.TableName]*table),
 		uniqueColumns: make(map[string]*column),
@@ -88,7 +88,7 @@ func newSymtabWithRoute(rb *route) *symtab {
 }
 
 // AddVSchemaTable adds a vschema table to symtab.
-func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *route) error {
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTable *vindexes.Table, rb *routeV3) error {
 	t := &table{
 		alias:        alias,
 		origin:       rb,
@@ -168,7 +168,7 @@ func (st *symtab) Merge(newsyms *symtab) error {
 
 // AddTable adds a table to symtab.
 func (st *symtab) AddTable(t *table) error {
-	if rb, ok := t.origin.(*route); !ok || rb.Resolve() != st.singleRoute {
+	if rb, ok := t.origin.(*routeV3); !ok || rb.Resolve() != st.singleRoute {
 		st.singleRoute = nil
 	}
 	if _, ok := st.tables[t.alias]; ok {
@@ -395,7 +395,7 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string
 
 // Vindex returns the vindex if the expression is a plain column reference
 // that is part of the specified route, and has an associated vindex.
-func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColumn {
+func (st *symtab) Vindex(expr sqlparser.Expr, scope *routeV3) vindexes.SingleColumn {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
@@ -502,7 +502,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 // Origin returns the route that originates the table.
 func (t *table) Origin() logicalPlan {
 	// If it's a route, we have to resolve it.
-	if rb, ok := t.origin.(*route); ok {
+	if rb, ok := t.origin.(*routeV3); ok {
 		return rb.Resolve()
 	}
 	return t.origin
@@ -529,7 +529,7 @@ type column struct {
 // Origin returns the route that originates the column.
 func (c *column) Origin() logicalPlan {
 	// If it's a route, we have to resolve it.
-	if rb, ok := c.origin.(*route); ok {
+	if rb, ok := c.origin.(*routeV3); ok {
 		return rb.Resolve()
 	}
 	return c.origin

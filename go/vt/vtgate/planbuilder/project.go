@@ -94,7 +94,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		node.input = newInput
 		node.resultColumns = append(node.resultColumns, innerRC)
 		return node, innerRC, len(node.resultColumns) - 1, nil
-	case *route:
+	case *routeV3:
 		sel := node.Select.(*sqlparser.Select)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 

@@ -25,7 +25,7 @@ import (
 
 var _ StreamExecutor = (*shardRoute)(nil)
 
-// shardRoute is an internal primitive used by Route
+// shardRoute is an internal primitive used by RouteLegacy
 // for performing merge sorts.
 type shardRoute struct {
 	query string

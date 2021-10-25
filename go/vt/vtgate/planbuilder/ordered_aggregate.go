@@ -69,7 +69,7 @@ type orderedAggregate struct {
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
 func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
-	rb, isRoute := pb.plan.(*route)
+	rb, isRoute := pb.plan.(*routeV3)
 	if isRoute && rb.isSingleShard() {
 		// since we can push down all of the aggregation to the route,
 		// we don't need to do anything else here
@@ -156,7 +156,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 // we don't search the ResultColumns because they're not created yet. Also,
 // error conditions are treated as no match for simplicity; They will be
 // subsequently caught downstream.
-func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
+func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *routeV3) bool {
 	for _, expr := range sel.GroupBy {
 		var matchedExpr sqlparser.Expr
 		switch node := expr.(type) {
@@ -294,7 +294,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr 
 	if !ok {
 		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
 	}
-	rb, ok := oa.input.(*route)
+	rb, ok := oa.input.(*routeV3)
 	if !ok {
 		// Unreachable
 		return true, innerAliased, nil

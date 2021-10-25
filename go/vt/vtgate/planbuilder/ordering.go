@@ -48,7 +48,7 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy v3OrderBy) (l
 		}
 		node.underlying = plan
 		return node, nil
-	case *route:
+	case *routeV3:
 		return planRouteOrdering(orderBy, node)
 	case *join:
 		return planJoinOrdering(pb, orderBy, node)
@@ -242,7 +242,7 @@ func planJoinOrdering(pb *primitiveBuilder, orderBy v3OrderBy, node *join) (logi
 	return node, nil
 }
 
-func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
+func planRouteOrdering(orderBy v3OrderBy, node *routeV3) (logicalPlan, error) {
 	switch len(orderBy) {
 	case 0:
 		return node, nil

@@ -213,7 +213,7 @@ func execRouteSelectDBA(query, field, tablename, schema, shards string) {
 		return schema
 	}
 
-	sel := &Route{
+	sel := &RouteLegacy{
 		Opcode: SelectDBA,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",

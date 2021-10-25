@@ -1677,7 +1677,11 @@ func (e *Executor) checkThatPlanIsValid(stmt sqlparser.Statement, plan *engine.P
 	badPrimitive := engine.Find(func(node engine.Primitive) bool {
 		router, ok := node.(*engine.Route)
 		if !ok {
-			return false
+			router, ok := node.(*engine.RouteLegacy)
+			if !ok {
+				return false
+			}
+			return router.Opcode == engine.SelectScatter
 		}
 		return router.Opcode == engine.SelectScatter
 	}, plan.Instructions)

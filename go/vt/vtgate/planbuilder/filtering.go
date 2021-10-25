@@ -53,7 +53,7 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 		}
 		return node, nil
 
-	case *route:
+	case *routeV3:
 		sel := node.Select.(*sqlparser.Select)
 		switch whereType {
 		case sqlparser.WhereStr:

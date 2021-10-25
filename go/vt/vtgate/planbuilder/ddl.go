@@ -363,8 +363,8 @@ func buildRenameTable(vschema ContextVSchema, renameTable *sqlparser.RenameTable
 	return destination, keyspace, nil
 }
 
-func tryToGetRoutePlan(selectPlan engine.Primitive) *engine.Route {
-	routePlan, isRoute := selectPlan.(*engine.Route)
+func tryToGetRoutePlan(selectPlan engine.Primitive) *engine.RouteLegacy {
+	routePlan, isRoute := selectPlan.(*engine.RouteLegacy)
 	if !isRoute {
 		comparer, isComparer := selectPlan.(engine.Gen4Comparer)
 		if isComparer {

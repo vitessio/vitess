@@ -584,7 +584,7 @@ func (cached *RevertMigration) CachedSize(alloc bool) int64 {
 }
 
 //go:nocheckptr
-func (cached *Route) CachedSize(alloc bool) int64 {
+func (cached *RouteLegacy) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

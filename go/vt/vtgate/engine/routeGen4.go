@@ -39,11 +39,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var _ Primitive = (*RouteGen4)(nil)
+var _ Primitive = (*Route)(nil)
 
-// RouteGen4 represents the instructions to route a read query to
+// Route represents the instructions to route a read query to
 // one or many vttablets.
-type RouteGen4 struct {
+type Route struct {
 	// the fields are described in the RouteOpcode values comments.
 	// Opcode is the execution opcode.
 	Opcode RouteOpcode
@@ -102,16 +102,16 @@ type RouteGen4 struct {
 }
 
 // NewSimpleRouteGen4 creates a Route with the bare minimum of parameters.
-func NewSimpleRouteGen4(opcode RouteOpcode, keyspace *vindexes.Keyspace) *RouteGen4 {
-	return &RouteGen4{
+func NewSimpleRouteGen4(opcode RouteOpcode, keyspace *vindexes.Keyspace) *Route {
+	return &Route{
 		Opcode:   opcode,
 		Keyspace: keyspace,
 	}
 }
 
 // NewRouteGen4 creates a Route.
-func NewRouteGen4(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *RouteGen4 {
-	return &RouteGen4{
+func NewRouteGen4(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQuery string) *Route {
+	return &Route{
 		Opcode:     opcode,
 		Keyspace:   keyspace,
 		Query:      query,
@@ -120,27 +120,27 @@ func NewRouteGen4(opcode RouteOpcode, keyspace *vindexes.Keyspace, query, fieldQ
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (route *RouteGen4) RouteType() string {
+func (route *Route) RouteType() string {
 	return route.Opcode.String()
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (route *RouteGen4) GetKeyspaceName() string {
+func (route *Route) GetKeyspaceName() string {
 	return route.Keyspace.Name
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (route *RouteGen4) GetTableName() string {
+func (route *Route) GetTableName() string {
 	return route.TableName
 }
 
 // SetTruncateColumnCount sets the truncate column count.
-func (route *RouteGen4) SetTruncateColumnCount(count int) {
+func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count
 }
 
 // TryExecute performs a non-streaming exec.
-func (route *RouteGen4) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -152,7 +152,7 @@ func (route *RouteGen4) TryExecute(vcursor VCursor, bindVars map[string]*querypb
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *RouteGen4) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) executeInternal(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -212,7 +212,7 @@ func (route *RouteGen4) executeInternal(vcursor VCursor, bindVars map[string]*qu
 }
 
 // TryStreamExecute performs a streaming exec.
-func (route *RouteGen4) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -275,7 +275,7 @@ func (route *RouteGen4) TryStreamExecute(vcursor VCursor, bindVars map[string]*q
 	return route.mergeSort(vcursor, bindVars, wantfields, callback, rss, bvs)
 }
 
-func (route *RouteGen4) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
+func (route *Route) mergeSort(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) error {
 	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -295,7 +295,7 @@ func (route *RouteGen4) mergeSort(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // GetFields fetches the field info.
-func (route *RouteGen4) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, err
@@ -311,7 +311,7 @@ func (route *RouteGen4) GetFields(vcursor VCursor, bindVars map[string]*querypb.
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *RouteGen4) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
 		return nil, nil, err
@@ -323,7 +323,7 @@ func (route *RouteGen4) paramsAllShards(vcursor VCursor, bindVars map[string]*qu
 	return rss, multiBindVars, nil
 }
 
-func (route *RouteGen4) paramsSystemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsSystemQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	destinations, err := route.routeInfoSchemaQuery(vcursor, bindVars)
 	if err != nil {
 		return nil, nil, err
@@ -332,7 +332,7 @@ func (route *RouteGen4) paramsSystemQuery(vcursor VCursor, bindVars map[string]*
 	return destinations, []map[string]*querypb.BindVariable{bindVars}, nil
 }
 
-func (route *RouteGen4) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
+func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, error) {
 	defaultRoute := func() ([]*srvtopo.ResolvedShard, error) {
 		ks := route.Keyspace.Name
 		destinations, _, err := vcursor.ResolveDestinations(ks, nil, []key.Destination{key.DestinationAnyShard{}})
@@ -414,7 +414,7 @@ func (route *RouteGen4) routeInfoSchemaQuery(vcursor VCursor, bindVars map[strin
 	return destinations, nil
 }
 
-func (route *RouteGen4) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
+func (route *Route) paramsRoutedTable(vcursor VCursor, bindVars map[string]*querypb.BindVariable, tableSchema string, tableNames map[string]string) ([]*srvtopo.ResolvedShard, error) {
 	var routedKs *vindexes.Keyspace
 	for tblBvName, tableName := range tableNames {
 		tbl := sqlparser.TableName{
@@ -450,7 +450,7 @@ func (route *RouteGen4) paramsRoutedTable(vcursor VCursor, bindVars map[string]*
 	return nil, nil
 }
 
-func (route *RouteGen4) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsAnyShard(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, nil, err
@@ -462,7 +462,7 @@ func (route *RouteGen4) paramsAnyShard(vcursor VCursor, bindVars map[string]*que
 	return rss, multiBindVars, nil
 }
 
-func (route *RouteGen4) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	result, err := route.Value.Evaluate(evalengine.ExpressionEnv{
 		BindVars: bindVars,
 		Row:      nil,
@@ -482,7 +482,7 @@ func (route *RouteGen4) paramsSelectEqual(vcursor VCursor, bindVars map[string]*
 	return rss, multiBindVars, nil
 }
 
-func (route *RouteGen4) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	panic("todo")
 	// keys, err := route.Values[0].ResolveList(bindVars)
 	// if err != nil {
@@ -495,7 +495,7 @@ func (route *RouteGen4) paramsSelectIn(vcursor VCursor, bindVars map[string]*que
 	// return rss, shardVars(bindVars, values), nil
 }
 
-func (route *RouteGen4) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
+func (route *Route) paramsSelectMultiEqual(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	panic("todo")
 	//
 	// keys, err := route.Values[0].ResolveList(bindVars)
@@ -513,7 +513,7 @@ func (route *RouteGen4) paramsSelectMultiEqual(vcursor VCursor, bindVars map[str
 	// return rss, multiBindVars, nil
 }
 
-func (route *RouteGen4) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
+func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	var err error
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
@@ -553,7 +553,7 @@ func (route *RouteGen4) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func (route *RouteGen4) description() PrimitiveDescription {
+func (route *Route) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"Query":      route.Query,
 		"Table":      route.TableName,

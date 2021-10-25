@@ -90,7 +90,7 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 }
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
-	routePlan, isRoute := plan.(*route)
+	routePlan, isRoute := plan.(*routeV3)
 	if !isRoute {
 		return false
 	}
@@ -174,7 +174,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		return err
 	}
 
-	if rb, ok := pb.plan.(*route); ok {
+	if rb, ok := pb.plan.(*routeV3); ok {
 		// TODO(sougou): this can probably be improved.
 		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 		rb.eroute.QueryTimeout = queryTimeout(directives)
@@ -219,7 +219,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
-		case *route:
+		case *routeV3:
 			query := sqlparser.GetFirstSelect(node.Select)
 			query.Comments = sel.Comments
 			query.Lock = sel.Lock
@@ -379,7 +379,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 		if err != nil {
 			return err
 		}
-		rut, isRoute := origin.(*route)
+		rut, isRoute := origin.(*routeV3)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
 			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
@@ -468,7 +468,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 				continue
 			}
 			// We'll allow select * for simple routes.
-			rb, ok := pb.plan.(*route)
+			rb, ok := pb.plan.(*routeV3)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
@@ -480,7 +480,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		case *sqlparser.Nextval:
-			rb, ok := pb.plan.(*route)
+			rb, ok := pb.plan.(*routeV3)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")

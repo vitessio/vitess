@@ -49,9 +49,9 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 	utils.MustMatch(t, expected, planDescription, "descriptions did not match")
 }
 
-func createRoute() *Route {
+func createRoute() *RouteLegacy {
 	hash, _ := vindexes.NewHash("vindex name", nil)
-	return &Route{
+	return &RouteLegacy{
 		Opcode:            SelectScatter,
 		Keyspace:          &vindexes.Keyspace{Name: "ks"},
 		TargetDestination: key.DestinationAllShards{},
@@ -89,7 +89,7 @@ func TestPlanDescriptionWithInputs(t *testing.T) {
 	utils.MustMatch(t, expected, planDescription, "descriptions did not match")
 }
 
-func getDescriptionFor(route *Route) PrimitiveDescription {
+func getDescriptionFor(route *RouteLegacy) PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType:      "Route",
 		Variant:           routeName[route.Opcode],

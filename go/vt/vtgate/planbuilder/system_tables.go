@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
+func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *routeV3, reservedVars *sqlparser.ReservedVars) error {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
 	if err != nil {
 		return err
