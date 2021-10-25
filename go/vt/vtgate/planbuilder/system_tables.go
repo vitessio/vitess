@@ -19,10 +19,23 @@ package planbuilder
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
+
+type fakeConverterSchemaTable struct{}
+
+func (f *fakeConverterSchemaTable) ColumnLookup(*sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not supported")
+}
+
+func (f *fakeConverterSchemaTable) CollationIDLookup(sqlparser.Expr) int {
+	return 0
+}
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
@@ -106,9 +119,9 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := sqlparser.Convert(other, &sqlparser.FakeConverter{})
+				evalExpr, err := evalengine.Convert(other, &fakeConverterSchemaTable{})
 				if err != nil {
-					if strings.Contains(err.Error(), sqlparser.ErrConvertExprNotSupported) {
+					if strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
 						return false, "", nil, nil

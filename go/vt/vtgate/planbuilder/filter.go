@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -36,7 +37,7 @@ type (
 )
 
 var _ logicalPlan = (*filter)(nil)
-var _ sqlparser.ConverterLookup = (*simpleConverterLookup)(nil)
+var _ evalengine.ConverterLookup = (*simpleConverterLookup)(nil)
 
 func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, s.plan, s.semTable, true, true, false)
@@ -56,7 +57,7 @@ func newFilter(semTable *semantics.SemTable, plan logicalPlan, expr sqlparser.Ex
 		semTable: semTable,
 		plan:     plan,
 	}
-	predicate, err := sqlparser.Convert(expr, scl)
+	predicate, err := evalengine.Convert(expr, scl)
 	if err != nil {
 		return nil, err
 	}

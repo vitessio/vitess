@@ -19,6 +19,8 @@ package evalengine
 import (
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"strconv"
@@ -429,5 +431,15 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 }
 
 func compareStrings(l, r EvalResult) (int, error) {
-	return 0, nil
+	if l.collation == 0 {
+		l.collation = int(collations.LookupIDByName("utf8mb4_bin"))
+	}
+	if r.collation == 0 {
+		r.collation = int(collations.LookupIDByName("utf8mb4_bin"))
+	}
+	if r.collation != l.collation {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
+	}
+	collation := collations.LookupById(collations.ID(l.collation))
+	return collation.Collate(l.bytes, r.bytes, false), nil
 }

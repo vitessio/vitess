@@ -29,11 +29,12 @@ import (
 
 type (
 	EvalResult struct {
-		typ   querypb.Type
-		ival  int64
-		uval  uint64
-		fval  float64
-		bytes []byte
+		typ       querypb.Type
+		ival      int64
+		uval      uint64
+		fval      float64
+		bytes     []byte
+		collation int
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -144,7 +145,9 @@ func (n Null) String() string {
 
 // Evaluate implements the Expr interface
 func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
-	return l.Val, nil
+	eval := l.Val
+	eval.collation = l.Collation
+	return eval, nil
 }
 
 // Evaluate implements the Expr interface
@@ -153,13 +156,19 @@ func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	if !ok {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
-	return evaluateByType(val)
+	eval, err := evaluateByType(val)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	eval.collation = b.Collation
+	return eval, nil
 }
 
 // Evaluate implements the Expr interface
 func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	value := env.Row[c.Offset]
 	numeric, err := newEvalResult(value)
+	numeric.collation = c.Collation
 	return numeric, err
 }
 
