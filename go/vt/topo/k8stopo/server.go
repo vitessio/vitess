@@ -232,9 +232,3 @@ func NewServer(_, root string) (*Server, error) {
 func init() {
 	topo.RegisterFactory("k8s", Factory{})
 }
-
-// SetReadOnly is part of the Conn interface
-func (s *Server) SetReadOnly(readOnly bool) {}
-
-// IsReadOnly is part of the Conn interface
-func (s *Server) IsReadOnly() bool { return false }

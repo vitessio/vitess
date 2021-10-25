@@ -40,7 +40,7 @@ var (
 		[]string{"Operation", "Cell"})
 )
 
-const readOnlyErrorStrFormat = "Cannot perform %s on %s as the topology server connection is read-only"
+const readOnlyErrorStrFormat = "cannot perform %s on %s as the topology server connection is read-only"
 
 // The StatsConn is a wrapper for a Conn that emits stats for every operation
 type StatsConn struct {
@@ -177,14 +177,12 @@ func (st *StatsConn) Close() {
 	st.conn.Close()
 }
 
-// SetReadOnly makes the topo server connection read-only
-// It is part of the Conn interface
+// SetReadOnly with true prevents any write operations from being made on the topo connection
 func (st *StatsConn) SetReadOnly(readOnly bool) {
 	st.readOnly = readOnly
 }
 
-// IsReadOnly allows you to check the access type for the connection
-// It is part of the Conn interface
+// IsReadOnly allows you to check the access type for the topo connection
 func (st *StatsConn) IsReadOnly() bool {
 	return st.readOnly
 }
