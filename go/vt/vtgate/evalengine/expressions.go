@@ -227,13 +227,15 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 		return EvalResult{typ: sqltypes.Float64, fval: fval}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
+		return EvalResult{typ: val.Type, bytes: val.Value}, nil
 	case sqltypes.Null:
 		return EvalResult{typ: sqltypes.Null}, nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
 
-// debugString is
+// debugString prints the entire EvalResult in a debug format
 func (e *EvalResult) debugString() string {
 	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
 }

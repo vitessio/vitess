@@ -762,6 +762,24 @@ func TestCompareDates(t *testing.T) {
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
 		},
 		{
+			name: "date equal datetime through bind variables",
+			v1:   NewBindVar("k1"), v2: NewBindVar("k2"),
+			out: &T, op: &EqualOp{},
+			bv: map[string]*querypb.BindVariable{
+				"k1": {Type: sqltypes.Date, Value: []byte("2021-10-22")},
+				"k2": {Type: sqltypes.Datetime, Value: []byte("2021-10-22 00:00:00")},
+			},
+		},
+		{
+			name: "date not equal datetime through bind variables",
+			v1:   NewBindVar("k1"), v2: NewBindVar("k2"),
+			out: &T, op: &NotEqualOp{},
+			bv: map[string]*querypb.BindVariable{
+				"k1": {Type: sqltypes.Date, Value: []byte("2021-02-20")},
+				"k2": {Type: sqltypes.Datetime, Value: []byte("2021-10-22 00:00:00")},
+			},
+		},
+		{
 			name: "date not equal datetime",
 			v1:   NewColumn(0), v2: NewColumn(1),
 			out: &T, op: &NotEqualOp{},

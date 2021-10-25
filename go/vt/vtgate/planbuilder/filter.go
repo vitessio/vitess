@@ -33,7 +33,7 @@ type filter struct {
 // newFilter builds a new filter.
 func newFilter(semTable *semantics.SemTable, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
 	predicate, err := sqlparser.Convert(expr, func(col *sqlparser.ColName) (int, error) {
-		offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, plan, semTable, true, true)
+		offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, plan, semTable, true, true, false)
 		if err != nil {
 			return 0, err
 		}
