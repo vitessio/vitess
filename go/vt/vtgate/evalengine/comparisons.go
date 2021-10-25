@@ -139,8 +139,7 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 		return compareDates(lVal, rVal)
 
 	case evalResultsAreDateAndString(lVal, rVal):
-		// TODO: handle date comparison with a string
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a string value")
+		return compareDateAndString(lVal, rVal)
 
 	case evalResultsAreDateAndNumeric(lVal, rVal):
 		// TODO: support comparison between a date and a numeric value

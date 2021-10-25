@@ -791,6 +791,48 @@ func TestCompareDates(t *testing.T) {
 			out: &T, op: &NotEqualOp{},
 			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("12:00:00")},
 		},
+		{
+			name: "string equal datetime",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22"), sqltypes.NewDatetime("2021-10-22 00:00:00")},
+		},
+		{
+			name: "string equal timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 00:00:00"), sqltypes.NewTimestamp("2021-10-22 00:00:00")},
+		},
+		{
+			name: "string not equal timestamp",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("2021-10-22 06:00:30"), sqltypes.NewTimestamp("2021-10-20 15:02:10")},
+		},
+		{
+			name: "string equal time",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("00:05:12"), sqltypes.NewTime("00:05:12")},
+		},
+		{
+			name: "string equal date",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-22"), sqltypes.NewDate("2021-02-22")},
+		},
+		{
+			name: "string not equal date (1, date on the RHS)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("2021-02-20"), sqltypes.NewDate("2021-03-30")},
+		},
+		{
+			name: "string not equal date (2, date on the LHS)",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &NotEqualOp{},
+			row: []sqltypes.Value{sqltypes.NewDate("2021-03-30"), sqltypes.NewVarChar("2021-02-20")},
+		},
 	}
 
 	for i, tcase := range tests {
