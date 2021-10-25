@@ -3080,3 +3080,8 @@ Gen4 plan same as above
     ]
   }
 }
+
+# Equal filter with hexadecimal value
+"select count(*) a from user having a = 0x01"
+"unsupported: filtering on results of aggregates"
+Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
