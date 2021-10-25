@@ -859,3 +859,27 @@ func TestCompareDates(t *testing.T) {
 		})
 	}
 }
+
+// This test tests the comparison of strings
+func TestCompareStrings(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "string equal string",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("toto"), sqltypes.NewVarChar("toto")},
+		},
+		{
+			name: "string equal number",
+			v1:   NewColumn(0), v2: NewColumn(1),
+			out: &T, op: &EqualOp{},
+			row: []sqltypes.Value{sqltypes.NewVarChar("1"), sqltypes.NewInt64(1)},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}

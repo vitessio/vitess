@@ -96,6 +96,8 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 			return evalengine.NewLiteralFloatFromBytes(node.Bytes())
 		case StrVal:
 			return evalengine.NewLiteralString(node.Bytes()), nil
+		case HexNum:
+			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: hexadecimal value: %s", ErrConvertExprNotSupported, node.Val)
 		}
 	case BoolVal:
 		if node {
