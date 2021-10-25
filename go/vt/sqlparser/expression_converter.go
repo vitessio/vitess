@@ -23,6 +23,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
+type ConverterLookup interface {
+	ColumnLookup(col *ColName) (int, error)
+	CollationIDLookup(expr Expr) int
+}
+
 var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
 
 // translateComparisonOperator takes in a sqlparser.ComparisonExprOperator and
@@ -61,23 +66,23 @@ func translateComparisonOperator(op ComparisonExprOperator) evalengine.Compariso
 }
 
 // Convert converts between AST expressions and executable expressions
-func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.Expr, error) {
+func Convert(e Expr, lookup ConverterLookup) (evalengine.Expr, error) {
 	switch node := e.(type) {
 	case *ColName:
-		if columnLookup == nil {
+		if lookup == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: cannot lookup column", ErrConvertExprNotSupported)
 		}
-		idx, err := columnLookup(node)
+		idx, err := lookup.ColumnLookup(node)
 		if err != nil {
 			return nil, err
 		}
-		return &evalengine.Column{Offset: idx}, nil
+		return evalengine.NewColumn(idx, lookup.CollationIDLookup(node)), nil
 	case *ComparisonExpr:
-		left, err := Convert(node.Left, columnLookup)
+		left, err := Convert(node.Left, lookup)
 		if err != nil {
 			return nil, err
 		}
-		right, err := Convert(node.Right, columnLookup)
+		right, err := Convert(node.Right, lookup)
 		if err != nil {
 			return nil, err
 		}
@@ -87,7 +92,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 			Right: right,
 		}, nil
 	case Argument:
-		return evalengine.NewBindVar(string(node)), nil
+		return evalengine.NewBindVar(string(node), lookup.CollationIDLookup(node)), nil
 	case *Literal:
 		switch node.Type {
 		case IntVal:
@@ -95,7 +100,7 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		case FloatVal:
 			return evalengine.NewLiteralFloatFromBytes(node.Bytes())
 		case StrVal:
-			return evalengine.NewLiteralString(node.Bytes()), nil
+			return evalengine.NewLiteralString(node.Bytes(), lookup.CollationIDLookup(node)), nil
 		case HexNum:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: hexadecimal value: %s", ErrConvertExprNotSupported, node.Val)
 		}
@@ -118,11 +123,11 @@ func Convert(e Expr, columnLookup func(col *ColName) (int, error)) (evalengine.E
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 		}
-		left, err := Convert(node.Left, columnLookup)
+		left, err := Convert(node.Left, lookup)
 		if err != nil {
 			return nil, err
 		}
-		right, err := Convert(node.Right, columnLookup)
+		right, err := Convert(node.Right, lookup)
 		if err != nil {
 			return nil, err
 		}

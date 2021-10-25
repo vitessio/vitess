@@ -129,8 +129,7 @@ func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
 func executeComparison(lVal, rVal EvalResult) (int, error) {
 	switch {
 	case evalResultsAreString(lVal, rVal):
-		// Comparing as strings if both sides are strings
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing strings requires collation")
+		return compareStrings(lVal, rVal)
 
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)

@@ -427,3 +427,7 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	}
 	return 0, nil
 }
+
+func compareStrings(l, r EvalResult) (int, error) {
+	return 0, nil
+}
