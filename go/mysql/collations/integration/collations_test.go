@@ -316,7 +316,55 @@ func TestRemoteKanaSensitivity(t *testing.T) {
 	})
 }
 
+func verifyTranscoding(t *testing.T, local collations.Collation, remote *remote.Collation, text []byte) []byte {
+	transLocal, err := local.Charset().EncodeFromUTF8(text)
+	if err != nil {
+		return nil
+	}
+
+	transRemote, err := remote.Charset().EncodeFromUTF8(text)
+	if err != nil {
+		t.Fatalf("remote transcoding failed: %v", err)
+	}
+
+	if !bytes.Equal(transLocal, transRemote) {
+		t.Fatalf("transcoding mismatch with charset %s\ninput:\n%s\nremote:\n%s\nlocal:\n%s\n",
+			local.Charset().Name(), hex.Dump(text), hex.Dump(transRemote), hex.Dump(transLocal))
+	}
+	return transLocal
+}
+
 var flagDumpBadCases = flag.Bool("dump-bad-cases", false, "dump strings that fail a test to a tmpfile")
+
+func verifyWeightString(t *testing.T, local collations.Collation, remote *remote.Collation, text []byte) {
+	localResult := local.WeightString(nil, text, 0)
+	remoteResult := remote.WeightString(nil, text, 0)
+
+	if err := remote.LastError(); err != nil {
+		t.Fatalf("remote collation failed: %v", err)
+	}
+
+	if len(remoteResult) == 0 {
+		t.Logf("remote collation %s returned empty string", remote.Name())
+		return
+	}
+
+	if !bytes.Equal(localResult, remoteResult) {
+		var colldumpDebug string
+		if *flagDumpBadCases {
+			bad, err := os.CreateTemp("", "vitess_collation_example")
+			if err != nil {
+				t.Fatal(err)
+			}
+			bad.Write(text)
+			bad.Close()
+
+			colldumpDebug = fmt.Sprintf("manual debugging:\n\tcolldump --test %s < %s\n\n", local.Name(), bad.Name())
+		}
+		t.Fatalf("WEIGHT_STRING mismatch with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n\n%s",
+			local.Name(), local.Charset().Name(), hex.Dump(text), hex.Dump(remoteResult), hex.Dump(localResult), text, colldumpDebug)
+	}
+}
 
 func TestWeightStringsComprehensive(t *testing.T) {
 	type collationsForCharset struct {
@@ -362,58 +410,46 @@ func TestWeightStringsComprehensive(t *testing.T) {
 		var tested int
 		for _, goldencase := range golden.Cases {
 			text := goldencase.Text //[]byte(string([]rune(string(goldencase.Text))[:64]))
-
-			transLocal, err := c4cs.charset.EncodeFromUTF8(text)
-			if err != nil {
-				continue
-			}
-
-			transRemote, err := c4cs.remotes[0].Charset().EncodeFromUTF8(text)
-			if err != nil {
-				t.Fatalf("remote transcoding failed: %v", err)
-			}
-
-			if !bytes.Equal(transLocal, transRemote) {
-				t.Fatalf("transcoding mismatch for %q with charset %s\ninput:\n%s\nremote:\n%s\nlocal:\n%s\n",
-					goldencase.Lang, c4cs.charset.Name(), hex.Dump(text), hex.Dump(transRemote), hex.Dump(transLocal))
-			}
-
-			for i := range c4cs.locals {
-				local := c4cs.locals[i]
-				remote := c4cs.remotes[i]
-
-				localResult := local.WeightString(nil, transLocal, 0)
-				remoteResult := remote.WeightString(nil, transLocal, 0)
-
-				if err := remote.LastError(); err != nil {
-					t.Fatalf("remote collation failed: %v", err)
-				}
-
-				if len(remoteResult) == 0 {
-					t.Logf("remote collation %s returned empty string", remote.Name())
-					continue
-				}
-
-				if !bytes.Equal(localResult, remoteResult) {
-					var colldumpDebug string
-					if *flagDumpBadCases {
-						bad, err := os.CreateTemp("", "vitess_collation_example")
-						if err != nil {
-							t.Fatal(err)
-						}
-						bad.Write(transLocal)
-						bad.Close()
-
-						colldumpDebug = fmt.Sprintf("manual debugging:\n\tcolldump --test %s < %s\n\n", local.Name(), bad.Name())
-					}
-					t.Fatalf("WEIGHT_STRING mismatch for %q with collation %s (charset %s)\ninput:\n%s\nremote:\n%s\nlocal:\n%s\ngolden:\n%#v\n\n%s",
-						goldencase.Lang, local.Name(), c4cs.charset.Name(), hex.Dump(transLocal), hex.Dump(remoteResult), hex.Dump(localResult), transLocal, colldumpDebug)
+			if trans := verifyTranscoding(t, c4cs.locals[0], c4cs.remotes[0], text); trans != nil {
+				for i := range c4cs.locals {
+					verifyWeightString(t, c4cs.locals[i], c4cs.remotes[i], trans)
+					tested++
 				}
 			}
-
-			tested++
 		}
 		t.Logf("%q: %d collations, %d test strings = %d tests",
 			c4cs.charset.Name(), len(c4cs.locals), tested, len(c4cs.locals)*tested)
+	}
+}
+
+func TestCJKEncodings(t *testing.T) {
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	allCollations := collations.All()
+
+	testdata, _ := filepath.Glob("../internal/charset/testdata/*.txt")
+	for _, testfile := range testdata {
+		charset := filepath.Base(testfile)
+		charset = strings.TrimSuffix(charset, ".txt")
+		charset = charset[strings.LastIndexByte(charset, '-')+1:]
+
+		var valid []collations.Collation
+		for _, coll := range allCollations {
+			if coll.Charset().Name() == charset {
+				valid = append(valid, coll)
+				t.Logf("%s -> %s", testfile, coll.Name())
+			}
+		}
+		if len(valid) == 0 {
+			continue
+		}
+		text, err := os.ReadFile(testfile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, coll := range valid {
+			verifyWeightString(t, coll, remote.RemoteByName(conn, coll.Name()), text)
+		}
 	}
 }
