@@ -593,6 +593,8 @@ type (
 		Table TableName
 		Wild  string
 	}
+	// IntervalTypes is an enum to get types of intervals
+	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -1893,6 +1895,12 @@ type (
 		Unit  string
 	}
 
+	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
+	ExtractFuncExpr struct {
+		IntervalTypes IntervalTypes
+		Expr          Expr
+	}
+
 	// CollateExpr represents dynamic collate operator.
 	CollateExpr struct {
 		Expr    Expr
@@ -2020,6 +2028,7 @@ func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
+func (*ExtractFuncExpr) iExpr()   {}
 func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}

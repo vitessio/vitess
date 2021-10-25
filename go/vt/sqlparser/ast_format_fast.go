@@ -1484,6 +1484,15 @@ func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("extract(")
+	buf.WriteString(node.IntervalTypes.ToString())
+	buf.WriteString(" from ")
+	buf.printExpr(node, node.Expr, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
 func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(node.Name.String())
 	buf.WriteByte('(')
