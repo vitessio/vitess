@@ -106,7 +106,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := sqlparser.Convert(other, nil)
+				evalExpr, err := sqlparser.Convert(other, &sqlparser.FakeConverter{})
 				if err != nil {
 					if strings.Contains(err.Error(), sqlparser.ErrConvertExprNotSupported) {
 						// This just means we can't rewrite this particular expression,

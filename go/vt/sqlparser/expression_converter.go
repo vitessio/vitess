@@ -23,11 +23,24 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type ConverterLookup interface {
-	ColumnLookup(col *ColName) (int, error)
-	CollationIDLookup(expr Expr) int
+type (
+	ConverterLookup interface {
+		ColumnLookup(col *ColName) (int, error)
+		CollationIDLookup(expr Expr) int
+	}
+
+	FakeConverter struct{}
+)
+
+func (f FakeConverter) ColumnLookup(*ColName) (int, error) {
+	return 0, nil
 }
 
+func (f FakeConverter) CollationIDLookup(Expr) int {
+	return 0
+}
+
+var _ ConverterLookup = (*FakeConverter)(nil)
 var ErrConvertExprNotSupported = "expr cannot be converted, not supported"
 
 // translateComparisonOperator takes in a sqlparser.ComparisonExprOperator and
