@@ -90,7 +90,7 @@ func hasNullEvalResult(l, r EvalResult) bool {
 }
 
 func evalResultsAreString(l, r EvalResult) bool {
-	return sqltypes.IsText(l.typ) && sqltypes.IsText(r.typ) || sqltypes.IsBinary(l.typ) && sqltypes.IsBinary(r.typ)
+	return (sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ)) && (sqltypes.IsText(r.typ) || sqltypes.IsBinary(r.typ))
 }
 
 func evalResultsAreSameNumericType(l, r EvalResult) bool {
@@ -130,7 +130,7 @@ func executeComparison(lVal, rVal EvalResult) (int, error) {
 	switch {
 	case evalResultsAreString(lVal, rVal):
 		// Comparing as strings if both sides are strings
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing strings")
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "comparing strings requires collation")
 
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		return compareNumeric(lVal, rVal)
