@@ -190,7 +190,9 @@ func (oa *OrderedAggregate) GetTableName() string {
 func (oa *OrderedAggregate) getCollations() map[int]collations.ID {
 	colls := make(map[int]collations.ID)
 	for _, key := range oa.GroupByKeys {
-		colls[key.KeyCol] = key.CollationID
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
+		}
 	}
 	return colls
 }
