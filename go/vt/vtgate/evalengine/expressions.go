@@ -51,10 +51,19 @@ type (
 	}
 
 	// Expressions
-	Null         struct{}
-	Literal      struct{ Val EvalResult }
-	BindVariable struct{ Key string }
-	Column       struct{ Offset int }
+	Null    struct{}
+	Literal struct {
+		Val       EvalResult
+		Collation int
+	}
+	BindVariable struct {
+		Key       string
+		Collation int
+	}
+	Column struct {
+		Offset    int
+		Collation int
+	}
 )
 
 var _ Expr = (*Null)(nil)
@@ -80,12 +89,12 @@ func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{EvalResult{typ: sqltypes.Int64, ival: i}}
+	return &Literal{Val: EvalResult{typ: sqltypes.Int64, ival: i}}
 }
 
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
-	return &Literal{EvalResult{typ: sqltypes.Float64, fval: val}}
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: val}}
 }
 
 // NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
@@ -94,23 +103,27 @@ func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
 // NewLiteralString returns a literal expression
-func NewLiteralString(val []byte) Expr {
-	return &Literal{EvalResult{typ: sqltypes.VarBinary, bytes: val}}
+func NewLiteralString(val []byte, collation int) Expr {
+	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val}, Collation: collation}
 }
 
 // NewBindVar returns a bind variable
-func NewBindVar(key string) Expr {
-	return &BindVariable{Key: key}
+func NewBindVar(key string, collation int) Expr {
+	return &BindVariable{
+		Key:       key,
+		Collation: collation,
+	}
 }
 
 // NewColumn returns a bind variable
-func NewColumn(offset int) Expr {
+func NewColumn(offset, collation int) Expr {
 	return &Column{
-		Offset: offset,
+		Offset:    offset,
+		Collation: collation,
 	}
 }
 

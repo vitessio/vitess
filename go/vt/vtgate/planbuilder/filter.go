@@ -22,23 +22,41 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-var _ logicalPlan = (*filter)(nil)
+type (
+	// filter is the logicalPlan for engine.Filter.
+	filter struct {
+		logicalPlanCommon
+		efilter *engine.Filter
+	}
 
-// filter is the logicalPlan for engine.Filter.
-type filter struct {
-	logicalPlanCommon
-	efilter *engine.Filter
+	simpleConverterLookup struct {
+		semTable *semantics.SemTable
+		plan     logicalPlan
+	}
+)
+
+var _ logicalPlan = (*filter)(nil)
+var _ sqlparser.ConverterLookup = (*simpleConverterLookup)(nil)
+
+func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
+	offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, s.plan, s.semTable, true, true, false)
+	if err != nil {
+		return 0, err
+	}
+	return offset, nil
+}
+
+func (s *simpleConverterLookup) CollationIDLookup(expr sqlparser.Expr) int {
+	return int(s.semTable.CollationFor(expr))
 }
 
 // newFilter builds a new filter.
 func newFilter(semTable *semantics.SemTable, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
-	predicate, err := sqlparser.Convert(expr, func(col *sqlparser.ColName) (int, error) {
-		offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, plan, semTable, true, true, false)
-		if err != nil {
-			return 0, err
-		}
-		return offset, nil
-	})
+	scl := &simpleConverterLookup{
+		semTable: semTable,
+		plan:     plan,
+	}
+	predicate, err := sqlparser.Convert(expr, scl)
 	if err != nil {
 		return nil, err
 	}
