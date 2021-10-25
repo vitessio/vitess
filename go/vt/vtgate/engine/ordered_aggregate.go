@@ -451,9 +451,9 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			v2 := row2[aggr.Col]
 			result[aggr.Col] = evalengine.NullsafeAdd(value, v2, fields[aggr.Col].Type)
 		case AggregateMin:
-			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col], colls[aggr.Col])
 		case AggregateMax:
-			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], colls[aggr.Col])
 		case AggregateCountDistinct:
 			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
