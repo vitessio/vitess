@@ -18,6 +18,7 @@ package japanese
 
 import (
 	"unicode/utf8"
+	_ "unsafe"
 
 	"golang.org/x/text/encoding/japanese"
 )
@@ -31,6 +32,12 @@ func (Charset_ujis) Name() string {
 func (Charset_ujis) SupportsSupplementaryChars() bool {
 	return false
 }
+
+//go:linkname jis0212Decode golang.org/x/text/encoding/japanese.jis0212Decode
+var jis0212Decode [7211]uint16
+
+//go:linkname jis0208Decode golang.org/x/text/encoding/japanese.jis0208Decode
+var jis0208Decode [7211]uint16
 
 func (Charset_ujis) DecodeRune(src []byte) (rune, int) {
 	if len(src) < 1 {
