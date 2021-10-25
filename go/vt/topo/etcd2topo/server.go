@@ -67,12 +67,6 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	return NewServer(serverAddr, root)
 }
 
-// SetReadOnly is part of the Conn interface
-func (s *Server) SetReadOnly(readOnly bool) {}
-
-// IsReadOnly is part of the Conn interface
-func (s *Server) IsReadOnly() bool { return false }
-
 // Server is the implementation of topo.Server for etcd.
 type Server struct {
 	// cli is the v3 client.

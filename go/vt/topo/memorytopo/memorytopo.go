@@ -288,9 +288,3 @@ func (f *Factory) recursiveDelete(n *node) {
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
-
-// SetReadOnly is part of the Conn interface
-func (c *Conn) SetReadOnly(readOnly bool) {}
-
-// IsReadOnly is part of the Conn interface
-func (c *Conn) IsReadOnly() bool { return false }

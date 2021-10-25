@@ -76,7 +76,9 @@ func TestFilteringServerReturnsUnderlyingServer(t *testing.T) {
 	if gotErr != nil {
 		t.Errorf("Got error getting topo.Server from FilteringServer")
 	}
-	if !got.IsReadOnly() {
+
+	readOnly, err := got.IsReadOnly()
+	if err != nil || !readOnly {
 		t.Errorf("Got read-write topo.Server from FilteringServer -- must be read-only")
 	}
 	gotErr = got.CreateCellsAlias(stockCtx, "should_fail", &topodatapb.CellsAlias{Cells: []string{stockCell}})
