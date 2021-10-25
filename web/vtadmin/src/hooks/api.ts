@@ -19,6 +19,7 @@ import {
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
+    fetchKeyspace,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
@@ -53,6 +54,25 @@ export const useClusters = (options?: UseQueryOptions<pb.Cluster[], Error> | und
  */
 export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefined) =>
     useQuery(['gates'], fetchGates, options);
+
+/**
+ * useKeyspace is a query hook that fetches a single keyspace by name.
+ */
+export const useKeyspace = (
+    params: Parameters<typeof fetchKeyspace>[0],
+    options?: UseQueryOptions<pb.Keyspace, Error>
+) => {
+    const queryClient = useQueryClient();
+    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+        initialData: () => {
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            return (keyspaces || []).find(
+                (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
+            );
+        },
+        ...options,
+    });
+};
 
 /**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
