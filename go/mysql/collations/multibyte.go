@@ -17,8 +17,6 @@ limitations under the License.
 package collations
 
 import (
-	"bytes"
-
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
@@ -40,49 +38,50 @@ func (c *Collation_multibyte) Name() string {
 }
 
 func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
+	if c.sort == nil {
+		return collationBinary(left, right, isPrefix)
+	}
+
 	cmpLen := minInt(len(left), len(right))
 	cs := c.charset
-
-	if c.sort == nil {
-		for i := 0; i < cmpLen; {
-			sortL, sortR := left[i], right[i]
+	sortOrder := c.sort[:256]
+	for i := 0; i < cmpLen; i++ {
+		sortL, sortR := left[i], right[i]
+		if sortL > 127 {
 			if sortL != sortR {
 				return int(sortL) - int(sortR)
 			}
-			if sortL <= 127 {
-				_, widthL := cs.DecodeRune(left[i:])
-				_, widthR := cs.DecodeRune(right[i:])
-				if cmp := bytes.Compare(left[i:i+widthL], right[i:i+widthR]); cmp != 0 {
-					return cmp
-				}
-				i += widthL
-			} else {
+			_, widthL := cs.DecodeRune(left[i:])
+			_, widthR := cs.DecodeRune(right[i:])
+			switch minInt(widthL, widthR) {
+			case 4:
 				i++
+				if left[i] != right[i] {
+					return int(left[i]) - int(right[i])
+				}
+				fallthrough
+			case 3:
+				i++
+				if left[i] != right[i] {
+					return int(left[i]) - int(right[i])
+				}
+				fallthrough
+			case 2:
+				i++
+				if left[i] != right[i] {
+					return int(left[i]) - int(right[i])
+				}
+				fallthrough
+			case 1:
 			}
-		}
-	} else {
-		sortOrder := c.sort[:256]
-		for i := 0; i < cmpLen; {
-			sortL, sortR := left[i], right[i]
-			if sortL > 127 {
-				if sortL != sortR {
-					return int(sortL) - int(sortR)
-				}
-				_, widthL := cs.DecodeRune(left[i:])
-				_, widthR := cs.DecodeRune(right[i:])
-				if cmp := bytes.Compare(left[i:i+widthL], right[i:i+widthR]); cmp != 0 {
-					return cmp
-				}
-				i += widthL
-			} else {
-				sortL, sortR = sortOrder[sortL], sortOrder[sortR]
-				if sortL != sortR {
-					return int(sortL) - int(sortR)
-				}
-				i++
+		} else {
+			sortL, sortR = sortOrder[sortL], sortOrder[sortR]
+			if sortL != sortR {
+				return int(sortL) - int(sortR)
 			}
 		}
 	}
+
 	if isPrefix {
 		left = left[:cmpLen]
 	}
