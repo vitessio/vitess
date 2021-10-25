@@ -1,4 +1,3 @@
-2021-09-13T07:49:45Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1228638056
 2021-09-13T07:49:45Z,Cluster (vtgate_schema),https://github.com/vitessio/vitess/actions/runs/1228638011
 2021-09-13T07:49:45Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1228638003
 2021-09-13T07:49:45Z,Cluster Self Hosted (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1228637994
@@ -9981,6 +9980,7 @@
 2021-10-25T13:31:28Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1381291253
 2021-10-25T13:53:11Z,Cluster (13),https://github.com/vitessio/vitess/actions/runs/1381375505
 2021-10-25T13:53:11Z,Cluster (17),https://github.com/vitessio/vitess/actions/runs/1381375457
+2021-10-25T13:53:11Z,Cluster (22),https://github.com/vitessio/vitess/actions/runs/1381375511
 2021-10-25T13:53:11Z,Cluster (23),https://github.com/vitessio/vitess/actions/runs/1381375485
 2021-10-25T13:53:11Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1381375527
 2021-10-25T13:53:11Z,Cluster (vreplication_cellalias),https://github.com/vitessio/vitess/actions/runs/1381375456
