@@ -9,6 +9,7 @@ concurrency:
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
   build:
@@ -56,31 +57,29 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
+    - name: Setup launchable dependencies
+      run: |
+        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
+        pip3 install --user launchable~=1.0 > /dev/null
+
+        # verify that launchable setup is all correct.
+        launchable verify || true
+
+        # Tell Launchable about the build you are producing and testing
+        launchable record build --name "Cluster (onlineddl_vrepl_suite)-$GITHUB_RUN_ID" --source .
+
     - name: Run cluster endtoend test
       timeout-minutes: 30
       run: |
         source build.env
 
-        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        pip3 install --user launchable~=1.0 > /dev/null
-        export PATH=~/.local/bin:$PATH
-        set -x
-
-        # verify that launchable setup is all correct.
-        launchable verify
-
-        # Tell Launchable about the build you are producing and testing
-        launchable record build --name $BUILD_NAME --source ..
-
-        # Find 25% of the relevant tests to run for this change
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_vrepl_suite | go-junit-report > report.xml
+        eatmydata -- go run test.go -docker=false -print-log -follow -shard onlineddl_vrepl_suite | go-junit-report -set-exit-code > report.xml
 
-        function record() {
-          # Record test results
-          launchable record test --build $GITHUB_RUN_ID go-test .
-        }
+    - name: Record test result in launchable
+      run: |
 
-        trap record EXIT
-      env:
-        GITHUB_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # send recorded tests to launchable
+        launchable record tests --build "Cluster (onlineddl_vrepl_suite)-$GITHUB_RUN_ID" go-test . || true
+
+      if: always()
