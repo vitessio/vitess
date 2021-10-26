@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -67,9 +69,9 @@ outer:
 }
 
 func (v *vindexTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "pushPredicate does not work on vindexTrees")
+	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("add '%s' predicate not supported on vindex trees", sqlparser.String(expr)))
 }
 
 func (v *vindexTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "removePredicate does not work on vindexTrees")
+	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("remove '%s' predicate not supported on vindex trees", sqlparser.String(expr)))
 }

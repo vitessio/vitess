@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -81,7 +83,7 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 	outputColumns := make([]int, len(toTheLeft))
 	var l, r int
 	for i, isLeft := range toTheLeft {
-		outputColumns[i] = i
+		outputColumns[i] = len(jp.columns)
 		if isLeft {
 			jp.columns = append(jp.columns, -lhsOffset[l]-1)
 			l++
@@ -94,19 +96,41 @@ func (jp *joinTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *se
 }
 
 func (jp *joinTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	isPushed := false
 	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
-		return jp.lhs.pushPredicate(ctx, expr)
-	} else if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
-		return jp.rhs.pushPredicate(ctx, expr)
+		if err := jp.lhs.pushPredicate(ctx, expr); err != nil {
+			return err
+		}
+		isPushed = true
 	}
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "pushPredicate does not work on joinTrees with predicates having dependencies from both the sides")
+	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
+		if err := jp.rhs.pushPredicate(ctx, expr); err != nil {
+			return err
+		}
+		isPushed = true
+	}
+	if isPushed {
+		return nil
+	}
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, fmt.Sprintf("add '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 }
 
 func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	isRemoved := false
 	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.lhs.tableID()) {
-		return jp.lhs.removePredicate(ctx, expr)
-	} else if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
-		return jp.rhs.removePredicate(ctx, expr)
+		if err := jp.lhs.removePredicate(ctx, expr); err != nil {
+			return err
+		}
+		isRemoved = true
 	}
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "removePredicate does not work on joinTrees with predicates having dependencies from both the sides")
+	if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
+		if err := jp.rhs.removePredicate(ctx, expr); err != nil {
+			return err
+		}
+		isRemoved = true
+	}
+	if isRemoved {
+		return nil
+	}
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, fmt.Sprintf("remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 }
