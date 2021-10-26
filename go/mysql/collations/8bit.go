@@ -16,10 +16,12 @@ limitations under the License.
 
 package collations
 
-import "vitess.io/vitess/go/mysql/collations/internal/charset"
+import (
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
+)
 
 func init() {
-	register(&Collation_binary{})
+	register(&Collation_binary{}, true)
 }
 
 type simpletables struct {
@@ -47,12 +49,16 @@ func (c *Collation_8bit_bin) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_bin) Id() ID {
+func (c *Collation_8bit_bin) ID() ID {
 	return c.id
 }
 
 func (c *Collation_8bit_bin) Charset() charset.Charset {
 	return c.charset
+}
+
+func (c *Collation_8bit_bin) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -93,12 +99,16 @@ func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_simple_ci) Id() ID {
+func (c *Collation_8bit_simple_ci) ID() ID {
 	return c.id
 }
 
 func (c *Collation_8bit_simple_ci) Charset() charset.Charset {
 	return c.charset
+}
+
+func (c *Collation_8bit_simple_ci) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -159,7 +169,7 @@ type Collation_binary struct{}
 
 func (c *Collation_binary) init() {}
 
-func (c *Collation_binary) Id() ID {
+func (c *Collation_binary) ID() ID {
 	return 63
 }
 
@@ -169,6 +179,10 @@ func (c *Collation_binary) Name() string {
 
 func (c *Collation_binary) Charset() charset.Charset {
 	return charset.Charset_binary{}
+}
+
+func (c *Collation_binary) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_binary) Collate(left, right []byte, isPrefix bool) int {

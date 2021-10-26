@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -42,7 +43,7 @@ func TestGoldenWeights(t *testing.T) {
 				for coll, expected := range goldenCase.Weights {
 					coll := testcollation(t, coll)
 
-					input, err := coll.Charset().EncodeFromUTF8(goldenCase.Text)
+					input, err := charset.ConvertFromUTF8(nil, coll.Charset(), goldenCase.Text)
 					if err != nil {
 						t.Fatal(err)
 					}
