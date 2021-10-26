@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -25,7 +26,7 @@ import (
 type (
 	ConverterLookup interface {
 		ColumnLookup(col *sqlparser.ColName) (int, error)
-		CollationIDLookup(expr sqlparser.Expr) int
+		CollationIDLookup(expr sqlparser.Expr) collations.ID
 	}
 )
 
@@ -77,7 +78,7 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		collation := 0
+		collation := collations.Unknown
 		if lookup != nil {
 			collation = lookup.CollationIDLookup(e)
 		}
@@ -97,7 +98,7 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Right: right,
 		}, nil
 	case sqlparser.Argument:
-		collation := 0
+		collation := collations.Unknown
 		if lookup != nil {
 			collation = lookup.CollationIDLookup(e)
 		}
@@ -109,7 +110,7 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.FloatVal:
 			return NewLiteralFloatFromBytes(node.Bytes())
 		case sqlparser.StrVal:
-			collation := 0
+			collation := collations.Unknown
 			if lookup != nil {
 				collation = lookup.CollationIDLookup(e)
 			}

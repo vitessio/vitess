@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -47,8 +48,8 @@ func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error
 	return offset, nil
 }
 
-func (s *simpleConverterLookup) CollationIDLookup(expr sqlparser.Expr) int {
-	return int(s.semTable.CollationFor(expr))
+func (s *simpleConverterLookup) CollationIDLookup(expr sqlparser.Expr) collations.ID {
+	return s.semTable.CollationFor(expr)
 }
 
 // newFilter builds a new filter.
