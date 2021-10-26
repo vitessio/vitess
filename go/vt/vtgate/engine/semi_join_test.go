@@ -120,26 +120,16 @@ func TestSemiJoinStreamExecute(t *testing.T) {
 		"col4|col5|col6",
 		"int64|varchar|varchar",
 	)
-	rightPrim := &fakePrimitive{ // we'll return non-empty results for rows 2 and 4
-		results: []*sqltypes.Result{
-			// First right query will always be a GetFields.
-			sqltypes.MakeTestResultNoFields(
-				rightFields,
-			),
-			sqltypes.MakeTestResultNoFields(
-				rightFields,
-				"4|d|dd",
-			),
-			sqltypes.MakeTestResultNoFields(
-				rightFields,
-			),
-			sqltypes.MakeTestResultNoFields(
-				rightFields,
-				"5|e|ee",
-				"6|f|ff",
-				"7|g|gg",
-			),
-		},
+	rightPrim := &fakePrimitive{
+		// we'll return non-empty results for rows 2 and 4
+		results: sqltypes.MakeTestStreamingResults(rightFields,
+			"4|d|dd",
+			"---",
+			"---",
+			"5|e|ee",
+			"6|f|ff",
+			"7|g|gg",
+		),
 	}
 
 	jn := &SemiJoin{
