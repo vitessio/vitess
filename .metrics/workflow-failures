@@ -1,4 +1,3 @@
-2021-09-16T11:07:50Z,cluster_initial_sharding_multi,https://github.com/vitessio/vitess/actions/runs/1241311246
 2021-09-16T11:07:50Z,gomod-tidy,https://github.com/vitessio/vitess/actions/runs/1241311254
 2021-09-16T11:07:50Z,region_example,https://github.com/vitessio/vitess/actions/runs/1241311270
 2021-09-16T11:07:50Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1241311320
@@ -9997,4 +9996,5 @@
 2021-10-26T14:41:41Z,check_imports,https://github.com/vitessio/vitess/actions/runs/1386147620
 2021-10-26T14:41:41Z,golangci-lint,https://github.com/vitessio/vitess/actions/runs/1386147588
 2021-10-26T14:41:41Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1386147579
+2021-10-26T14:47:40Z,Cluster (vstream_failover),https://github.com/vitessio/vitess/actions/runs/1386171329
 2021-10-26T14:47:40Z,pr-labels,https://github.com/vitessio/vitess/actions/runs/1386171378
