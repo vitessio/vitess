@@ -201,20 +201,29 @@ func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree que
 	}
 
 	vars := map[string]int{}
+	bindVars := map[*sqlparser.ColName]string{}
 	for _, pred := range preds {
 		var rewriteError error
 		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				if ctx.semTable.RecursiveDeps(node).IsSolvedBy(outerTree.tableID()) {
+					// check whether the bindVariable already exists in the map
+					// we do so by checking that the column names are the same and their recursive dependencies are the same
+					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					for colName, bindVar := range bindVars {
+						if node.Name.Equal(colName.Name) && ctx.semTable.RecursiveDeps(node).Equals(ctx.semTable.RecursiveDeps(colName)) {
+							cursor.Replace(sqlparser.NewArgument(bindVar))
+							return false
+						}
+					}
+
 					// get the bindVariable for that column name and replace it in the predicate
 					bindVar := ctx.reservedVars.ReserveColName(node)
 					cursor.Replace(sqlparser.NewArgument(bindVar))
-					// check whether the bindVariable already exists in the map
-					_, alreadyExists := vars[bindVar]
-					if alreadyExists {
-						return false
-					}
+					// store it in the map for future comparisons
+					bindVars[node] = bindVar
+
 					// if it does not exist, then push this as an output column in the outerTree and add it to the joinVars
 					columnIndexes, err := outerTree.pushOutputColumns([]*sqlparser.ColName{node}, ctx.semTable)
 					if err != nil {
