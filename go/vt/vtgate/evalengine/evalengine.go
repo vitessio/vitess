@@ -430,16 +430,21 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	return 0, nil
 }
 
+// More on string collations coercibility on MySQL documentation:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
 func compareStrings(l, r EvalResult) (int, error) {
-	if l.collation == 0 {
-		l.collation = collations.LookupIDByName("utf8mb4_bin")
+	// If one of the strings has an unknown collation we fail, though such error should
+	// already be handled before the execution by the planner.
+	if l.collation == collations.Unknown || r.collation == collations.Unknown {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with an unknown collation")
 	}
-	if r.collation == 0 {
-		r.collation = collations.LookupIDByName("utf8mb4_bin")
-	}
+
+	// We cannot compare different collations for now, so we fail
+	// TODO: support multiple collations comparison
 	if r.collation != l.collation {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
 	}
+
 	collation := collations.LookupById(l.collation)
 	return collation.Collate(l.bytes, r.bytes, false), nil
 }
