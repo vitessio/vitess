@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -99,7 +101,7 @@ func (jp *joinTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) err
 	} else if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
 		return jp.rhs.pushPredicate(ctx, expr)
 	}
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "pushPredicate does not work on joinTrees with predicates having dependencies from both the sides")
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, fmt.Sprintf("add '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 }
 
 func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
@@ -108,5 +110,5 @@ func (jp *joinTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) e
 	} else if ctx.semTable.RecursiveDeps(expr).IsSolvedBy(jp.rhs.tableID()) {
 		return jp.rhs.removePredicate(ctx, expr)
 	}
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "removePredicate does not work on joinTrees with predicates having dependencies from both the sides")
+	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, fmt.Sprintf("remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 }
