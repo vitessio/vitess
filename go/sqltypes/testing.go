@@ -76,6 +76,31 @@ func MakeTestResult(fields []*querypb.Field, rows ...string) *Result {
 	return result
 }
 
+// MakeTestResultNoFields builds a *sqltypes.Result object for testing.
+//   result := sqltypes.MakeTestResult(
+//     fields,
+//     " 1|a",
+//     "10|abcd",
+//   )
+// The field type values are set as the types for the rows built.
+// Spaces are trimmed from row values. "null" is treated as NULL.
+func MakeTestResultNoFields(fields []*querypb.Field, rows ...string) *Result {
+	result := &Result{}
+	if len(rows) > 0 {
+		result.Rows = make([][]Value, len(rows))
+	}
+	for i, row := range rows {
+		result.Rows[i] = make([]Value, len(fields))
+		for j, col := range split(row) {
+			if col == "null" {
+				continue
+			}
+			result.Rows[i][j] = MakeTrusted(fields[j].Type, []byte(col))
+		}
+	}
+	return result
+}
+
 // MakeTestStreamingResults builds a list of results for streaming.
 //   results := sqltypes.MakeStreamingResults(
 //     fields,

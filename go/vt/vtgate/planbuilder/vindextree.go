@@ -18,7 +18,9 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -62,4 +64,12 @@ outer:
 		v.columns = append(v.columns, newCol)
 	}
 	return idxs, nil
+}
+
+func (v *vindexTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "pushPredicate does not work on vindexTrees")
+}
+
+func (v *vindexTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "removePredicate does not work on vindexTrees")
 }

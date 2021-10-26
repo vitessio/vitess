@@ -29,7 +29,7 @@ type simpletables struct {
 }
 
 type Collation_8bit_bin struct {
-	id   uint
+	id   ID
 	name string
 	simpletables
 }
@@ -39,7 +39,7 @@ func (c *Collation_8bit_bin) init() {}
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
 }
-func (c *Collation_8bit_bin) Id() uint {
+func (c *Collation_8bit_bin) Id() ID {
 	return c.id
 }
 
@@ -69,7 +69,7 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 }
 
 type Collation_8bit_simple_ci struct {
-	id   uint
+	id   ID
 	name string
 	simpletables
 }
@@ -80,7 +80,7 @@ func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_simple_ci) Id() uint {
+func (c *Collation_8bit_simple_ci) Id() ID {
 	return c.id
 }
 
@@ -142,7 +142,7 @@ type Collation_binary struct{}
 
 func (c *Collation_binary) init() {}
 
-func (c *Collation_binary) Id() uint {
+func (c *Collation_binary) Id() ID {
 	return 63
 }
 

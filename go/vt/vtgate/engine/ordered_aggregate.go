@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
@@ -66,6 +68,7 @@ type GroupByParams struct {
 	WeightStringCol int
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
+	CollationID     collations.ID
 }
 
 // String returns a string. Used for plan descriptions
