@@ -2640,3 +2640,43 @@ Gen4 plan same as above
     ]
   }
 }
+
+# correlated subquery using a column twice
+"select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "u_col": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, 1 from `user` as u where 1 != 1",
+        "Query": "select u.col, 1 from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+        "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
