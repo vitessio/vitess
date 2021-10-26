@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -584,7 +585,8 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2)
+		// TODO(king-11) separate test for collation awareness
+		got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1268,7 +1270,8 @@ func TestMin(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Min(tcase.v1, tcase.v2)
+		// TODO(king-11) separate test for collation awareness
+		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1317,7 +1320,8 @@ func TestMax(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Max(tcase.v1, tcase.v2)
+		// TODO(king-11) separate test for collation awareness
+		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}

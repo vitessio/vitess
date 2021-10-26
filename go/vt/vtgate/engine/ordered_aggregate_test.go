@@ -652,13 +652,13 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil)
+	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil, nil)
 	assert.NoError(err)
 	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry
-	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil)
+	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil, nil)
 	assert.NoError(err)
 	assert.Equal(want, merged)
 }
