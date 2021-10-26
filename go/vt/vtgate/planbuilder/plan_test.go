@@ -476,6 +476,10 @@ type vschemaWrapper struct {
 	version       PlannerVersion
 }
 
+func (vw *vschemaWrapper) GetCharset() string {
+	return ""
+}
+
 func (vw *vschemaWrapper) PlannerWarning(_ string) {
 }
 

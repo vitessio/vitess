@@ -319,6 +319,10 @@ func (vc *vcursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
 }
 
+func (vc *vcursorImpl) GetCharset() string {
+	return vc.safeSession.Charset
+}
+
 // KeyspaceExists provides whether the keyspace exists or not.
 func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 	return vc.vschema.Keyspaces[ks] != nil
