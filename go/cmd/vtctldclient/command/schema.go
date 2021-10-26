@@ -33,9 +33,11 @@ import (
 var (
 	// GetSchema makes a GetSchema gRPC call to a vtctld.
 	GetSchema = &cobra.Command{
-		Use:  "GetSchema [--tables TABLES ...] [--exclude-tables EXCLUDE_TABLES ...] [{--table-names-only | --table-sizes-only}] [--include-views] alias",
-		Args: cobra.ExactArgs(1),
-		RunE: commandGetSchema,
+		Use:                   "GetSchema [--tables TABLES ...] [--exclude-tables EXCLUDE_TABLES ...] [{--table-names-only | --table-sizes-only}] [--include-views] alias",
+		Short:                 "Displays the full schema for a tablet, optionally restricted to the specified tables/views.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(1),
+		RunE:                  commandGetSchema,
 	}
 	// ReloadSchema makes a ReloadSchema gRPC call to a vtctld.
 	ReloadSchema = &cobra.Command{
@@ -192,11 +194,11 @@ func commandReloadSchemaShard(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	GetSchema.Flags().StringSliceVar(&getSchemaOptions.Tables, "tables", nil, "TODO")
-	GetSchema.Flags().StringSliceVar(&getSchemaOptions.ExcludeTables, "exclude-tables", nil, "TODO")
-	GetSchema.Flags().BoolVar(&getSchemaOptions.IncludeViews, "include-views", false, "TODO")
-	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "TODO")
-	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "TODO")
+	GetSchema.Flags().StringSliceVar(&getSchemaOptions.Tables, "tables", nil, "List of tables to display the schema for. Each is either an exact match, or a regular expression of the form `/regexp/`.")
+	GetSchema.Flags().StringSliceVar(&getSchemaOptions.ExcludeTables, "exclude-tables", nil, "List of tables to exclude from the result. Each is either an exact match, or a regular expression of the form `/regexp/`.")
+	GetSchema.Flags().BoolVar(&getSchemaOptions.IncludeViews, "include-views", false, "Includes views in the output in addition to base tables.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableNamesOnly, "table-names-only", "n", false, "Display only table names in the result.")
+	GetSchema.Flags().BoolVarP(&getSchemaOptions.TableSizesOnly, "table-sizes-only", "s", false, "Display only size information for matching tables. Ignored if --table-names-only is set.")
 
 	Root.AddCommand(GetSchema)
 
