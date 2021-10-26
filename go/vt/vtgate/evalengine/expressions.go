@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,7 +36,7 @@ type (
 		uval      uint64
 		fval      float64
 		bytes     []byte
-		collation int
+		collation collations.ID
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -55,15 +57,15 @@ type (
 	Null    struct{}
 	Literal struct {
 		Val       EvalResult
-		Collation int
+		Collation collations.ID
 	}
 	BindVariable struct {
 		Key       string
-		Collation int
+		Collation collations.ID
 	}
 	Column struct {
 		Offset    int
-		Collation int
+		Collation collations.ID
 	}
 )
 
@@ -108,12 +110,12 @@ func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 }
 
 // NewLiteralString returns a literal expression
-func NewLiteralString(val []byte, collation int) Expr {
+func NewLiteralString(val []byte, collation collations.ID) Expr {
 	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val}, Collation: collation}
 }
 
 // NewBindVar returns a bind variable
-func NewBindVar(key string, collation int) Expr {
+func NewBindVar(key string, collation collations.ID) Expr {
 	return &BindVariable{
 		Key:       key,
 		Collation: collation,
@@ -121,7 +123,7 @@ func NewBindVar(key string, collation int) Expr {
 }
 
 // NewColumn returns a bind variable
-func NewColumn(offset, collation int) Expr {
+func NewColumn(offset int, collation collations.ID) Expr {
 	return &Column{
 		Offset:    offset,
 		Collation: collation,

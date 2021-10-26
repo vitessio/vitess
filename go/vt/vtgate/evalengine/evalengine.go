@@ -432,14 +432,14 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 
 func compareStrings(l, r EvalResult) (int, error) {
 	if l.collation == 0 {
-		l.collation = int(collations.LookupIDByName("utf8mb4_bin"))
+		l.collation = collations.LookupIDByName("utf8mb4_bin")
 	}
 	if r.collation == 0 {
-		r.collation = int(collations.LookupIDByName("utf8mb4_bin"))
+		r.collation = collations.LookupIDByName("utf8mb4_bin")
 	}
 	if r.collation != l.collation {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
 	}
-	collation := collations.LookupById(collations.ID(l.collation))
+	collation := collations.LookupById(l.collation)
 	return collation.Collate(l.bytes, r.bytes, false), nil
 }

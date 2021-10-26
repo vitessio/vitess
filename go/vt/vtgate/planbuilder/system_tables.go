@@ -19,6 +19,8 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -33,7 +35,7 @@ func (f *fakeConverterSchemaTable) ColumnLookup(*sqlparser.ColName) (int, error)
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not supported")
 }
 
-func (f *fakeConverterSchemaTable) CollationIDLookup(sqlparser.Expr) int {
+func (f *fakeConverterSchemaTable) CollationIDLookup(sqlparser.Expr) collations.ID {
 	return 0
 }
 
