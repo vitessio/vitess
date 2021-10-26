@@ -585,7 +585,6 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		// TODO(king-11) separate test for collation awareness
 		got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
@@ -596,6 +595,77 @@ func TestNullsafeCompare(t *testing.T) {
 
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+		}
+	}
+}
+
+func TestNullsafeCompareCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       int
+		err       error
+	}{
+		{
+			// case insensitive
+			v1:        "abCd",
+			v2:        "aBcd",
+			out:       0,
+			collation: collations.LookupIDByName("utf8mb4_0900_as_ci"),
+		},
+		{
+			// accent sensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       1,
+			collation: collations.LookupIDByName("utf8mb4_0900_as_ci"),
+		},
+		{
+			// hangul decomposition
+			v1:        "\uAC00",
+			v2:        "\u326E",
+			out:       0,
+			collation: collations.LookupIDByName("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       -1,
+			collation: collations.LookupIDByName("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       -1,
+			collation: collations.LookupIDByName("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       -1,
+			collation: collations.LookupIDByName("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 0,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := NullsafeCompare(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1270,7 +1340,6 @@ func TestMin(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		// TODO(king-11) separate test for collation awareness
 		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
@@ -1281,6 +1350,64 @@ func TestMin(t *testing.T) {
 
 		if !reflect.DeepEqual(v, tcase.min) {
 			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
+		}
+	}
+}
+
+func TestMinCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: collations.LookupIDByName("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: collations.LookupIDByName("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: collations.LookupIDByName("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: collations.LookupIDByName("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: collations.LookupIDByName("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Min(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got.ToString() == tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1320,7 +1447,6 @@ func TestMax(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		// TODO(king-11) separate test for collation awareness
 		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
@@ -1331,6 +1457,64 @@ func TestMax(t *testing.T) {
 
 		if !reflect.DeepEqual(v, tcase.max) {
 			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
+		}
+	}
+}
+
+func TestMaxCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: collations.LookupIDByName("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: collations.LookupIDByName("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: collations.LookupIDByName("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: collations.LookupIDByName("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: collations.LookupIDByName("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Max(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got.ToString() != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
