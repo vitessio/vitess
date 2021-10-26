@@ -76,7 +76,7 @@ jobs:
         launchable verify || true
 
         # Tell Launchable about the build you are producing and testing
-        launchable record build --name "{{.Name}}-$GITHUB_RUN_ID" --source .
+        launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run cluster endtoend test
       timeout-minutes: 30
@@ -90,7 +90,7 @@ jobs:
       run: |
 
         # send recorded tests to launchable
-        launchable record tests --build "{{.Name}}-$GITHUB_RUN_ID" go-test . || true
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
       if: always()
 
