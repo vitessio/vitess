@@ -215,7 +215,14 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collation collations.ID) (int, error
 	}
 	if v1.IsText() && v2.IsText() && collation != collations.Unknown {
 		collation := collations.LookupById(collation)
-		return collation.Collate(v1.ToBytes(), v2.ToBytes(), false), nil
+		switch result := collation.Collate(v1.ToBytes(), v2.ToBytes(), false); {
+		case result < 0:
+			return -1, nil
+		case result > 0:
+			return 1, nil
+		default:
+			return 0, nil
+		}
 	}
 	return 0, UnsupportedComparisonError{
 		Type1: v1.Type(),
