@@ -71,8 +71,9 @@ func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string
 	return coll
 }
 
-func RemoteByName(conn *mysql.Conn, collname string) *Collation {
-	return makeRemoteCollation(conn, collations.LookupIDByName(collname), collname)
+func ForName(conn *mysql.Conn, collname string) *Collation {
+	id, _ := collations.IDFromName(collname)
+	return makeRemoteCollation(conn, id, collname)
 }
 
 func (c *Collation) LastError() error {
@@ -92,11 +93,13 @@ func (c *Collation) Name() string {
 }
 
 func (c *Collation) Charset() charset.Charset {
-	return &Charset{
+	cs := &Charset{
 		name: c.charset,
 		mu:   &c.mu,
 		conn: c.conn,
 	}
+	cs.hex = hex.NewEncoder(&cs.sql)
+	return cs
 }
 
 func (c *Collation) Collate(left, right []byte, isPrefix bool) int {
