@@ -54,6 +54,24 @@ func TestOrderBy(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCorrelatedExistsSubquery(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer func() {
+		_, _ = exec(t, conn, `delete from t1`)
+		_, _ = exec(t, conn, `delete from t2`)
+	}()
+	// insert some data.
+	checkedExec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12), (1, 13), (4, 13),(1000, 1234)`)
+	checkedExec(t, conn, `insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+
+	assertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`, `[[INT64(100)]]`)
+	assertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`, `[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+}
+
 func TestGroupBy(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)

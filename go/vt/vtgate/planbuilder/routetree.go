@@ -161,6 +161,20 @@ outer:
 	return idxs, nil
 }
 
+func (rp *routeTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return rp.addPredicate(ctx, expr)
+}
+
+func (rp *routeTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	for i, predicate := range rp.predicates {
+		if sqlparser.EqualsExpr(predicate, expr) {
+			rp.predicates = append(rp.predicates[0:i], rp.predicates[i+1:]...)
+			break
+		}
+	}
+	return rp.resetRoutingSelections(ctx)
+}
+
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {
@@ -480,15 +494,6 @@ func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-func allNotNil(s []sqlparser.Expr) bool {
-	for _, expr := range s {
-		if expr == nil {
-			return false
-		}
-	}
-	return true
-}
-
 func (rp *routeTree) haveMatchingVindex(
 	ctx *planningContext,
 	node sqlparser.Expr,
@@ -504,51 +509,26 @@ func (rp *routeTree) haveMatchingVindex(
 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		cols := len(v.colVindex.Columns)
-		for idx, col := range v.colVindex.Columns {
-			if column.Name.Equal(col) {
-				if cols == 1 {
-					// single column vindex - just add the option
-					routeOpcode := opcode(v.colVindex)
-					vindex := vfunc(v.colVindex)
-					v.options = append(v.options, &vindexOption{
-						values:      []sqltypes.PlanValue{value},
-						valueExprs:  []sqlparser.Expr{valueExpr},
-						predicates:  []sqlparser.Expr{node},
-						opcode:      routeOpcode,
-						foundVindex: vindex,
-						cost:        costFor(vindex, routeOpcode),
-						ready:       true,
-					})
-					newVindexFound = true
-				} else {
-					// let's first see if we can improve any of the existing options
-					for _, option := range v.options {
-						if option.predicates[idx] == nil {
-							option.values[idx] = value
-							option.predicates[idx] = node
-							option.valueExprs[idx] = valueExpr
-						}
-						if allNotNil(option.predicates) {
-							option.opcode = opcode(v.colVindex)
-							option.foundVindex = vfunc(v.colVindex)
-							option.cost = costFor(option.foundVindex, option.opcode)
-							option.ready = true
-							newVindexFound = true
-						}
-					}
+		// Ignore MultiColumn vindexes for finding matching Vindex.
+		if _, isSingleCol := v.colVindex.Vindex.(vindexes.SingleColumn); !isSingleCol {
+			continue
+		}
 
-					newOption := &vindexOption{
-						values:     make([]sqltypes.PlanValue, cols),
-						valueExprs: make([]sqlparser.Expr, cols),
-						predicates: make([]sqlparser.Expr, cols),
-					}
-					newOption.values[idx] = value
-					newOption.predicates[idx] = node
-					newOption.valueExprs[idx] = valueExpr
-					v.options = append(v.options, newOption)
-				}
-			}
+		col := v.colVindex.Columns[0]
+		if column.Name.Equal(col) {
+			// single column vindex - just add the option
+			routeOpcode := opcode(v.colVindex)
+			vindex := vfunc(v.colVindex)
+			v.options = append(v.options, &vindexOption{
+				values:      []sqltypes.PlanValue{value},
+				valueExprs:  []sqlparser.Expr{valueExpr},
+				predicates:  []sqlparser.Expr{node},
+				opcode:      routeOpcode,
+				foundVindex: vindex,
+				cost:        costFor(vindex, routeOpcode),
+				ready:       true,
+			})
+			newVindexFound = true
 		}
 	}
 	return newVindexFound

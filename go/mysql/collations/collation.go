@@ -24,6 +24,10 @@ import (
 // Generate mysqldata.go from the JSON information dumped from MySQL
 //go:generate go run ./tools/makemysqldata/
 
+type ID uint16
+
+const Unknown ID = 0
+
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
@@ -33,7 +37,7 @@ type Collation interface {
 	// Id returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
-	Id() uint
+	Id() ID
 
 	// Name is the full name of this collation, in the form of "ENCODING_LANG_SENSITIVITY"
 	Name() string
@@ -110,7 +114,7 @@ func minInt(i1, i2 int) int {
 }
 
 var collationsByName = make(map[string]Collation)
-var collationsById = make(map[uint]Collation)
+var collationsById = make(map[ID]Collation)
 
 func register(c Collation) {
 	duplicatedCharset := func(old Collation) {
@@ -138,9 +142,19 @@ func LookupByName(name string) Collation {
 	return csi
 }
 
+// LookupIDByName returns the collation ID for the given name
+func LookupIDByName(name string) ID {
+	csi := collationsByName[name]
+	if csi == nil {
+		return Unknown
+	}
+
+	return csi.Id()
+}
+
 // LookupById returns the collation with the given numerical identifier. The collation
 // is initialized if it's the first time being accessed.
-func LookupById(id uint) Collation {
+func LookupById(id ID) Collation {
 	csi := collationsById[id]
 	if csi != nil {
 		csi.init()

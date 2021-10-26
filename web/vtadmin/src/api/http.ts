@@ -149,6 +149,20 @@ export const fetchGates = async () =>
         },
     });
 
+export interface FetchKeyspaceParams {
+    clusterID: string;
+    name: string;
+}
+
+export const fetchKeyspace = async ({ clusterID, name }: FetchKeyspaceParams) => {
+    const { result } = await vtfetch(`/api/keyspace/${clusterID}/${name}`);
+
+    const err = pb.Keyspace.verify(result);
+    if (err) throw Error(err);
+
+    return pb.Keyspace.create(result);
+};
+
 export const fetchKeyspaces = async () =>
     vtfetchEntities({
         endpoint: '/api/keyspaces',
