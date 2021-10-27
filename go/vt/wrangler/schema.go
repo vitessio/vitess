@@ -26,7 +26,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -34,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -284,7 +284,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data", destKeyspace, destShard)
 	}
 
-	err = wr.copyShardMetadata(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias)
+	err = schematools.CopyShardMetadata(ctx, wr.ts, wr.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias)
 	if err != nil {
 		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, err)
 	}
@@ -355,49 +355,6 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 	return err
-}
-
-// copyShardMetadata copies contents of _vt.shard_metadata table from the source
-// tablet to the destination tablet. It's assumed that destination tablet is a
-// primary and binlogging is not turned off when INSERT statements are executed.
-func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topodatapb.TabletAlias, destTabletAlias *topodatapb.TabletAlias) error {
-	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
-	presenceResult, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 1, false, false)
-	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 1, false, false) failed: %v", srcTabletAlias, sql, err)
-	}
-	if len(presenceResult.Rows) == 0 {
-		log.Infof("_vt.shard_metadata doesn't exist on the source tablet %v, skipping its copy.", topoproto.TabletAliasString(srcTabletAlias))
-		return nil
-	}
-
-	// TODO: 100 may be too low here for row limit
-	sql = "SELECT db_name, name, value FROM _vt.shard_metadata"
-	dataProto, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 100, false, false)
-	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 100, false, false) failed: %v", srcTabletAlias, sql, err)
-	}
-	data := sqltypes.Proto3ToResult(dataProto)
-	for _, row := range data.Rows {
-		dbName := row[0]
-		name := row[1]
-		value := row[2]
-		queryBuf := bytes.Buffer{}
-		queryBuf.WriteString("INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES (")
-		dbName.EncodeSQL(&queryBuf)
-		queryBuf.WriteByte(',')
-		name.EncodeSQL(&queryBuf)
-		queryBuf.WriteByte(',')
-		value.EncodeSQL(&queryBuf)
-		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
-		value.EncodeSQL(&queryBuf)
-
-		_, err := wr.ExecuteFetchAsDba(ctx, destTabletAlias, queryBuf.String(), 0, false, false)
-		if err != nil {
-			return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 0, false, false) failed: %v", destTabletAlias, queryBuf.String(), err)
-		}
-	}
-	return nil
 }
 
 // compareSchemas returns nil if the schema of the two tablets referenced by
