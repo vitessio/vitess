@@ -37,6 +37,20 @@ export namespace vtadmin {
         public createKeyspace(request: vtadmin.ICreateKeyspaceRequest): Promise<vtadmin.CreateKeyspaceResponse>;
 
         /**
+         * Calls CreateShard.
+         * @param request CreateShardRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and CreateShardResponse
+         */
+        public createShard(request: vtadmin.ICreateShardRequest, callback: vtadmin.VTAdmin.CreateShardCallback): void;
+
+        /**
+         * Calls CreateShard.
+         * @param request CreateShardRequest message or plain object
+         * @returns Promise
+         */
+        public createShard(request: vtadmin.ICreateShardRequest): Promise<vtctldata.CreateShardResponse>;
+
+        /**
          * Calls DeleteKeyspace.
          * @param request DeleteKeyspaceRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and DeleteKeyspaceResponse
@@ -49,6 +63,20 @@ export namespace vtadmin {
          * @returns Promise
          */
         public deleteKeyspace(request: vtadmin.IDeleteKeyspaceRequest): Promise<vtctldata.DeleteKeyspaceResponse>;
+
+        /**
+         * Calls DeleteShards.
+         * @param request DeleteShardsRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and DeleteShardsResponse
+         */
+        public deleteShards(request: vtadmin.IDeleteShardsRequest, callback: vtadmin.VTAdmin.DeleteShardsCallback): void;
+
+        /**
+         * Calls DeleteShards.
+         * @param request DeleteShardsRequest message or plain object
+         * @returns Promise
+         */
+        public deleteShards(request: vtadmin.IDeleteShardsRequest): Promise<vtctldata.DeleteShardsResponse>;
 
         /**
          * Calls FindSchema.
@@ -327,11 +355,25 @@ export namespace vtadmin {
         type CreateKeyspaceCallback = (error: (Error|null), response?: vtadmin.CreateKeyspaceResponse) => void;
 
         /**
+         * Callback as used by {@link vtadmin.VTAdmin#createShard}.
+         * @param error Error, if any
+         * @param [response] CreateShardResponse
+         */
+        type CreateShardCallback = (error: (Error|null), response?: vtctldata.CreateShardResponse) => void;
+
+        /**
          * Callback as used by {@link vtadmin.VTAdmin#deleteKeyspace}.
          * @param error Error, if any
          * @param [response] DeleteKeyspaceResponse
          */
         type DeleteKeyspaceCallback = (error: (Error|null), response?: vtctldata.DeleteKeyspaceResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#deleteShards}.
+         * @param error Error, if any
+         * @param [response] DeleteShardsResponse
+         */
+        type DeleteShardsCallback = (error: (Error|null), response?: vtctldata.DeleteShardsResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#findSchema}.
@@ -2106,6 +2148,102 @@ export namespace vtadmin {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a CreateShardRequest. */
+    interface ICreateShardRequest {
+
+        /** CreateShardRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** CreateShardRequest options */
+        options?: (vtctldata.ICreateShardRequest|null);
+    }
+
+    /** Represents a CreateShardRequest. */
+    class CreateShardRequest implements ICreateShardRequest {
+
+        /**
+         * Constructs a new CreateShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.ICreateShardRequest);
+
+        /** CreateShardRequest cluster_id. */
+        public cluster_id: string;
+
+        /** CreateShardRequest options. */
+        public options?: (vtctldata.ICreateShardRequest|null);
+
+        /**
+         * Creates a new CreateShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns CreateShardRequest instance
+         */
+        public static create(properties?: vtadmin.ICreateShardRequest): vtadmin.CreateShardRequest;
+
+        /**
+         * Encodes the specified CreateShardRequest message. Does not implicitly {@link vtadmin.CreateShardRequest.verify|verify} messages.
+         * @param message CreateShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.ICreateShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified CreateShardRequest message, length delimited. Does not implicitly {@link vtadmin.CreateShardRequest.verify|verify} messages.
+         * @param message CreateShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.ICreateShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a CreateShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns CreateShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.CreateShardRequest;
+
+        /**
+         * Decodes a CreateShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns CreateShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.CreateShardRequest;
+
+        /**
+         * Verifies a CreateShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a CreateShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns CreateShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.CreateShardRequest;
+
+        /**
+         * Creates a plain object from a CreateShardRequest message. Also converts values to other types if specified.
+         * @param message CreateShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.CreateShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this CreateShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a DeleteKeyspaceRequest. */
     interface IDeleteKeyspaceRequest {
 
@@ -2197,6 +2335,102 @@ export namespace vtadmin {
 
         /**
          * Converts this DeleteKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a DeleteShardsRequest. */
+    interface IDeleteShardsRequest {
+
+        /** DeleteShardsRequest cluster_id */
+        cluster_id?: (string|null);
+
+        /** DeleteShardsRequest options */
+        options?: (vtctldata.IDeleteShardsRequest|null);
+    }
+
+    /** Represents a DeleteShardsRequest. */
+    class DeleteShardsRequest implements IDeleteShardsRequest {
+
+        /**
+         * Constructs a new DeleteShardsRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IDeleteShardsRequest);
+
+        /** DeleteShardsRequest cluster_id. */
+        public cluster_id: string;
+
+        /** DeleteShardsRequest options. */
+        public options?: (vtctldata.IDeleteShardsRequest|null);
+
+        /**
+         * Creates a new DeleteShardsRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns DeleteShardsRequest instance
+         */
+        public static create(properties?: vtadmin.IDeleteShardsRequest): vtadmin.DeleteShardsRequest;
+
+        /**
+         * Encodes the specified DeleteShardsRequest message. Does not implicitly {@link vtadmin.DeleteShardsRequest.verify|verify} messages.
+         * @param message DeleteShardsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IDeleteShardsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified DeleteShardsRequest message, length delimited. Does not implicitly {@link vtadmin.DeleteShardsRequest.verify|verify} messages.
+         * @param message DeleteShardsRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IDeleteShardsRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a DeleteShardsRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns DeleteShardsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.DeleteShardsRequest;
+
+        /**
+         * Decodes a DeleteShardsRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns DeleteShardsRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.DeleteShardsRequest;
+
+        /**
+         * Verifies a DeleteShardsRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a DeleteShardsRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns DeleteShardsRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.DeleteShardsRequest;
+
+        /**
+         * Creates a plain object from a DeleteShardsRequest message. Also converts values to other types if specified.
+         * @param message DeleteShardsRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.DeleteShardsRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this DeleteShardsRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

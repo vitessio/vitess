@@ -29,9 +29,10 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
-func wikiRequest(lang string, args map[string]string, output interface{}) error {
+func wikiRequest(lang testutil.Lang, args map[string]string, output interface{}) error {
 	wikipedia := fmt.Sprintf("https://%s.wikipedia.org/w/api.php", lang)
 	req, err := http.NewRequest("GET", wikipedia, nil)
 	if err != nil {
@@ -61,7 +62,7 @@ func wikiRequest(lang string, args map[string]string, output interface{}) error 
 	return nil
 }
 
-func getTextFromWikipedia(lang string, article string) (string, error) {
+func getTextFromWikipedia(lang testutil.Lang, article string) (string, error) {
 	const MaxChars = 750
 	options := map[string]string{
 		"action":        "query",
@@ -95,8 +96,8 @@ func getTextFromWikipedia(lang string, article string) (string, error) {
 	return strings.Join(chunks, "\n"), nil
 }
 
-func getAllLanguages(article string) (map[string]string, error) {
-	allLanguages := make(map[string]string)
+func getAllLanguages(article string) (map[testutil.Lang]string, error) {
+	allLanguages := make(map[testutil.Lang]string)
 	options := map[string]string{
 		"action": "query",
 		"format": "json",
@@ -112,8 +113,8 @@ func getAllLanguages(article string) (map[string]string, error) {
 				Pages map[string]struct {
 					Title     string `json:"titles"`
 					LangLinks []struct {
-						Lang string `json:"lang"`
-						Path string `json:"*"`
+						Lang testutil.Lang `json:"lang"`
+						Path string        `json:"*"`
 					} `json:"langlinks"`
 				} `json:"pages"`
 			} `json:"query"`
@@ -129,7 +130,9 @@ func getAllLanguages(article string) (map[string]string, error) {
 
 		for _, firstPage := range response.Query.Pages {
 			for _, langlink := range firstPage.LangLinks {
-				allLanguages[langlink.Lang] = langlink.Path
+				if langlink.Lang.Known() {
+					allLanguages[langlink.Lang] = langlink.Path
+				}
 			}
 		}
 
@@ -144,33 +147,8 @@ func getAllLanguages(article string) (map[string]string, error) {
 	return allLanguages, nil
 }
 
-var wantLanguages = map[string]bool{
-	"ja": true,
-	"vi": true,
-	"zh": true,
-	"ru": true,
-	"hr": true,
-	"hu": true,
-	"eo": true,
-	"la": true,
-	"es": true,
-	"sk": true,
-	"lt": true,
-	"da": true,
-	"cs": true,
-	"tr": true,
-	"sv": true,
-	"et": true,
-	"pl": true,
-	"sl": true,
-	"ro": true,
-	"lv": true,
-	"is": true,
-	"de": true,
-}
-
-func colldump(colldumpPath, collation string, input []byte) []byte {
-	cmd := exec.Command(colldumpPath, "--test", collation)
+func colldump(collation string, input []byte) []byte {
+	cmd := exec.Command("colldump", "--test", collation)
 	cmd.Stdin = bytes.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
@@ -180,16 +158,24 @@ func colldump(colldumpPath, collation string, input []byte) []byte {
 }
 
 func main() {
-	colldumpPath, err := exec.LookPath("colldump")
-	if err != nil {
-		log.Fatal(err)
+	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
+	var allcollations = collations.All()
+	for lang := range testutil.KnownLanguages {
+		for _, coll := range allcollations {
+			if lang.MatchesCollation(coll.Name()) {
+				collationsForLanguage[lang] = append(collationsForLanguage[lang], coll)
+			}
+		}
 	}
 
-	var allcoll []collations.CollationUCA
-	for _, collation := range collations.All() {
-		if tc, ok := collation.(collations.CollationUCA); ok {
-			allcoll = append(allcoll, tc)
-		}
+	var rootCollations = []collations.Collation{
+		collations.LookupByName("utf8mb4_0900_as_cs"),
+		collations.LookupByName("utf8mb4_0900_as_ci"),
+		collations.LookupByName("utf8mb4_0900_ai_ci"),
+		collations.LookupByName("utf8mb4_general_ci"),
+		collations.LookupByName("utf8mb4_bin"),
+		collations.LookupByName("utf8mb4_unicode_ci"),
+		collations.LookupByName("utf8mb4_unicode_520_ci"),
 	}
 
 	articles, err := getAllLanguages(os.Args[1])
@@ -197,12 +183,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var tdata = &collations.GoldenTest{Name: os.Args[1]}
+	var tdata = &testutil.GoldenTest{Name: os.Args[1]}
 
 	for lang, article := range articles {
-		if !wantLanguages[lang] {
-			continue
-		}
 		start := time.Now()
 		log.Printf("[%s] %q", lang, article)
 		snippet, err := getTextFromWikipedia(lang, article)
@@ -212,21 +195,33 @@ func main() {
 		}
 		log.Printf("[%s] %v", lang, time.Since(start))
 
-		gcase := collations.GoldenCase{
+		gcase := testutil.GoldenCase{
 			Lang:    lang,
 			Text:    []byte(snippet),
 			Weights: make(map[string][]byte),
 		}
-		for _, collation := range allcoll {
-			transcoded, err := collation.Encoding().EncodeFromUTF8([]byte(snippet))
+
+		var total int
+		var collationNames []string
+		var interestingCollations []collations.Collation
+		interestingCollations = append(interestingCollations, rootCollations...)
+		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
+
+		for _, collation := range interestingCollations {
+			transcoded, err := collation.Charset().EncodeFromUTF8([]byte(snippet))
 			if err != nil {
 				log.Printf("[%s] skip collation %s", lang, collation.Name())
 				continue
 			}
 
-			weights := colldump(colldumpPath, collation.Name(), transcoded)
+			weights := colldump(collation.Name(), transcoded)
 			gcase.Weights[collation.Name()] = weights
+			total += len(weights)
+			collationNames = append(collationNames, collation.Name())
 		}
+
+		log.Printf("[%s] written samples for %d collations (%.02fkb): %s",
+			lang, len(gcase.Weights), float64(total)/1024.0, strings.Join(collationNames, ", "))
 
 		tdata.Cases = append(tdata.Cases, gcase)
 	}

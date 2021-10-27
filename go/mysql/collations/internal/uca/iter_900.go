@@ -20,7 +20,7 @@ import (
 	"unicode/utf8"
 )
 
-type iterator struct {
+type iterator900 struct {
 	// Constant
 	Collation900
 	original []byte
@@ -60,7 +60,7 @@ func (it *codepointIterator) next() (uint16, bool) {
 	return weight, true
 }
 
-func (it *codepointIterator) init(parent *iterator, cp rune) {
+func (it *codepointIterator) init(parent *iterator900, cp rune) {
 	p, offset := pageOffset(cp)
 	page := parent.table[p]
 	if page == nil {
@@ -83,7 +83,7 @@ func (it *codepointIterator) initContraction(weights []uint16, level int) {
 	it.stride = 3
 }
 
-func (it *codepointIterator) initImplicit(parent *iterator, cp rune) {
+func (it *codepointIterator) initImplicit(parent *iterator900, cp rune) {
 	if jamos := UnicodeDecomposeHangulSyllable(cp); jamos != nil {
 		jweight := it.scratch[:0]
 		for _, jamo := range jamos {
@@ -108,18 +108,18 @@ func (it *codepointIterator) initImplicit(parent *iterator, cp rune) {
 	it.stride = 3
 }
 
-func (it *iterator) Level() int {
+func (it *iterator900) Level() int {
 	return it.level
 }
 
-func (it *iterator) SkipLevel() bool {
+func (it *iterator900) SkipLevel() int {
 	it.codepoint.ce = 0
 	it.input = it.original
 	it.level++
-	return it.level < it.maxLevel
+	return it.level
 }
 
-func (it *iterator) reset(input []byte) {
+func (it *iterator900) reset(input []byte) {
 	it.input = input
 	it.original = input
 	it.level = 0
@@ -129,54 +129,22 @@ func (it *iterator) reset(input []byte) {
 type WeightIterator interface {
 	Next() (uint16, bool)
 	Level() int
-	SkipLevel() bool
+	SkipLevel() int
 	Done()
 	reset(input []byte)
 }
 
-type iteratorFast struct {
-	iterator
+type slowIterator900 struct {
+	iterator900
 }
 
-func (it *iteratorFast) Done() {
+func (it *slowIterator900) Done() {
 	it.original = nil
 	it.input = nil
 	it.iterpool.Put(it)
 }
 
-func (it *iteratorFast) Next() (uint16, bool) {
-	for {
-		if w, ok := it.codepoint.next(); ok {
-			return w, true
-		}
-
-		cp, width := utf8.DecodeRune(it.input)
-		if cp == utf8.RuneError && width < 3 {
-			it.level++
-
-			if it.level < it.maxLevel {
-				it.input = it.original
-				return 0, true
-			}
-			return 0, false
-		}
-
-		it.input = it.input[width:]
-		it.codepoint.init(&it.iterator, cp)
-	}
-}
-
-type iteratorSlow struct {
-	iterator
-}
-
-func (it *iteratorSlow) Done() {
-	it.original = nil
-	it.input = nil
-	it.iterpool.Put(it)
-}
-
-func (it *iteratorSlow) Next() (uint16, bool) {
+func (it *slowIterator900) Next() (uint16, bool) {
 	for {
 		if w, ok := it.codepoint.next(); ok {
 			return it.param.adjust(it.level, w), true
@@ -199,6 +167,6 @@ func (it *iteratorSlow) Next() (uint16, bool) {
 			it.input = remainder
 			continue
 		}
-		it.codepoint.init(&it.iterator, cp)
+		it.codepoint.init(&it.iterator900, cp)
 	}
 }
