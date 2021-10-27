@@ -45,21 +45,11 @@ const (
 	DefaultWaitReplicasTimeout = 10 * time.Second
 )
 
-// GetSchema uses an RPC to get the schema from a remote tablet
-func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return nil, fmt.Errorf("GetTablet(%v) failed: %v", tabletAlias, err)
-	}
-
-	return wr.tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews)
-}
-
 // helper method to asynchronously diff a schema
 func (wr *Wrangler) diffSchema(ctx context.Context, primarySchema *tabletmanagerdatapb.SchemaDefinition, primaryTabletAlias, alias *topodatapb.TabletAlias, excludeTables []string, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", topoproto.TabletAliasString(alias))
-	replicaSchema, err := wr.GetSchema(ctx, alias, nil, excludeTables, includeViews)
+	replicaSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, alias, nil, excludeTables, includeViews)
 	if err != nil {
 		er.RecordError(fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", alias, excludeTables, includeViews, err))
 		return
@@ -81,7 +71,7 @@ func (wr *Wrangler) ValidateSchemaShard(ctx context.Context, keyspace, shard str
 		return fmt.Errorf("no primary in shard %v/%v", keyspace, shard)
 	}
 	log.Infof("Gathering schema for primary %v", topoproto.TabletAliasString(si.PrimaryAlias))
-	primarySchema, err := wr.GetSchema(ctx, si.PrimaryAlias, nil, excludeTables, includeViews)
+	primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", si.PrimaryAlias, excludeTables, includeViews, err)
 	}
@@ -170,7 +160,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(ctx context.Context, keyspace string,
 		if referenceSchema == nil {
 			referenceAlias = si.PrimaryAlias
 			log.Infof("Gathering schema for reference primary %v", topoproto.TabletAliasString(referenceAlias))
-			referenceSchema, err = wr.GetSchema(ctx, referenceAlias, nil, excludeTables, includeViews)
+			referenceSchema, err = schematools.GetSchema(ctx, wr.ts, wr.tmc, referenceAlias, nil, excludeTables, includeViews)
 			if err != nil {
 				return fmt.Errorf("GetSchema(%v, nil, %v, %v) failed: %v", referenceAlias, excludeTables, includeViews, err)
 			}
@@ -218,7 +208,7 @@ func (wr *Wrangler) ValidateVSchema(ctx context.Context, keyspace string, shards
 				shardFailures.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 				return
 			}
-			primarySchema, err := wr.GetSchema(ctx, si.PrimaryAlias, nil, excludeTables, includeViews)
+			primarySchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, si.PrimaryAlias, nil, excludeTables, includeViews)
 			if err != nil {
 				shardFailures.RecordError(fmt.Errorf("GetSchema(%s, nil, %v, %v) (%v/%v) failed: %v", si.PrimaryAlias.String(),
 					excludeTables, includeViews, keyspace, shard, err,
@@ -298,7 +288,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return nil
 	}
 
-	sourceSd, err := wr.GetSchema(ctx, sourceTabletAlias, tables, excludeTables, includeViews)
+	sourceSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, sourceTabletAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %v", sourceTabletAlias, tables, excludeTables, includeViews, err)
 	}
@@ -361,11 +351,11 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 // "sourceAlias" and "destAlias" are identical. Otherwise, the difference is
 // returned as []string.
 func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) ([]string, error) {
-	sourceSd, err := wr.GetSchema(ctx, sourceAlias, tables, excludeTables, includeViews)
+	sourceSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, sourceAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", sourceAlias, err)
 	}
-	destSd, err := wr.GetSchema(ctx, destAlias, tables, excludeTables, includeViews)
+	destSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, destAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", destAlias, err)
 	}

@@ -32,6 +32,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -525,7 +526,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if onesource.PrimaryAlias == nil {
 		return nil, nil, nil, fmt.Errorf("source shard has no primary: %v", onesource.ShardName())
 	}
-	tableSchema, err := wr.GetSchema(ctx, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
+	tableSchema, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, onesource.PrimaryAlias, []string{sourceTableName}, nil, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -922,7 +923,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 		allTables := []string{"/.*/"}
 
 		hasTargetTable := map[string]bool{}
-		targetSchema, err := mz.wr.GetSchema(ctx, target.PrimaryAlias, allTables, nil, false)
+		targetSchema, err := schematools.GetSchema(ctx, mz.wr.ts, mz.wr.tmc, target.PrimaryAlias, allTables, nil, false)
 		if err != nil {
 			return err
 		}

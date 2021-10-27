@@ -846,21 +846,15 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	defer span.Finish()
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
-
-	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
-	if err != nil {
-		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
-	}
-
 	span.Annotate("tables", strings.Join(req.Tables, ","))
 	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
 	span.Annotate("include_views", req.IncludeViews)
 	span.Annotate("table_names_only", req.TableNamesOnly)
 	span.Annotate("table_sizes_only", req.TableSizesOnly)
 
-	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
+	sd, err := schematools.GetSchema(ctx, s.ts, s.tmc, req.TabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews)
 	if err != nil {
-		return nil, fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %w", tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews, err)
+		return nil, err
 	}
 
 	if req.TableNamesOnly {

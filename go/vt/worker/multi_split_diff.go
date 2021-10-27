@@ -26,6 +26,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -761,8 +762,8 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		go func(i int, destinationAlias *topodatapb.TabletAlias) {
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			destinationSchemaDefinition, err := msdw.wr.GetSchema(
-				shortCtx, destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+			destinationSchemaDefinition, err := schematools.GetSchema(
+				shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 			cancel()
 			if err != nil {
 				msdw.markAsWillFail(rec, err)
@@ -776,8 +777,8 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sourceSchemaDefinition, err = msdw.wr.GetSchema(
-			shortCtx, msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+		sourceSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			msdw.markAsWillFail(rec, err)
