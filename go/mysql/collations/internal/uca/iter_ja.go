@@ -18,14 +18,14 @@ package uca
 
 import "unicode/utf8"
 
-type iteratorJA struct {
-	iterator
+type jaIterator900 struct {
+	iterator900
 	queuedWeight  uint16
 	prevCodepoint rune
 	kanas         map[rune]byte
 }
 
-func (it *iteratorJA) adjustJapaneseWeights(weight uint16) uint16 {
+func (it *jaIterator900) adjustJapaneseWeights(weight uint16) uint16 {
 	// based on the following weights dumped from MySQL:
 	// {0x1C47, 0x1FB5, 0x1C47, 0x1FB5}, // ?? this is a no-op
 	// {0x3D5A, 0x3D8B, 0x1FB6, 0x1FE7},
@@ -46,13 +46,13 @@ func (it *iteratorJA) adjustJapaneseWeights(weight uint16) uint16 {
 	return weight
 }
 
-func (it *iteratorJA) cacheKana(cp rune) {
-	if UnicodeIsHiragana(cp) {
+func (it *jaIterator900) cacheKana(cp rune) {
+	if unicodeIsHiragana(cp) {
 		if it.kanas == nil {
 			it.kanas = make(map[rune]byte)
 		}
 		it.kanas[cp] = 0x2
-	} else if UnicodeIsKatakana(cp) {
+	} else if unicodeIsKatakana(cp) {
 		if it.kanas == nil {
 			it.kanas = make(map[rune]byte)
 		}
@@ -60,7 +60,7 @@ func (it *iteratorJA) cacheKana(cp rune) {
 	}
 }
 
-func (it *iteratorJA) Done() {
+func (it *jaIterator900) Done() {
 	it.queuedWeight = 0x0
 	it.prevCodepoint = 0
 	it.kanas = nil
@@ -69,7 +69,7 @@ func (it *iteratorJA) Done() {
 	it.iterpool.Put(it)
 }
 
-func (it *iteratorJA) Next() (uint16, bool) {
+func (it *jaIterator900) Next() (uint16, bool) {
 	for {
 		if it.queuedWeight != 0x0 {
 			var w uint16
@@ -131,6 +131,6 @@ func (it *iteratorJA) Next() (uint16, bool) {
 			}
 		}
 
-		it.codepoint.init(&it.iterator, cp)
+		it.codepoint.init(&it.iterator900, cp)
 	}
 }

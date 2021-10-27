@@ -1,4 +1,20 @@
-package collations
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package remote
 
 import (
 	"encoding/hex"
@@ -10,21 +26,24 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// RemoteCollation is a generic implementation of the Collation interface
+// Collation is a generic implementation of the Collation interface
 // that supports any collation in MySQL by performing the collation
 // operation directly on a remote `mysqld` instance. It is not particularly
 // efficient compared to the native Collation implementations in Vitess,
 // but it offers authoritative results for all collation types and can be
 // used as a fallback or as a way to test our native implementations.
-type RemoteCollation struct {
+type Collation struct {
 	name string
-	id   ID
+	id   collations.ID
 
-	prefix string
-	suffix string
+	charset string
+	prefix  string
+	suffix  string
 
 	mu   sync.Mutex
 	conn *mysql.Conn
@@ -33,16 +52,17 @@ type RemoteCollation struct {
 	err  error
 }
 
-func makeRemoteCollation(conn *mysql.Conn, collid ID, collname string) *RemoteCollation {
-	coll := &RemoteCollation{
-		name: collname,
-		id:   collid,
-		conn: conn,
-	}
-
+func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string) *Collation {
 	charset := collname
 	if idx := strings.IndexByte(collname, '_'); idx >= 0 {
 		charset = collname[:idx]
+	}
+
+	coll := &Collation{
+		name:    collname,
+		id:      collid,
+		conn:    conn,
+		charset: charset,
 	}
 
 	coll.prefix = fmt.Sprintf("_%s X'", charset)
@@ -51,33 +71,37 @@ func makeRemoteCollation(conn *mysql.Conn, collid ID, collname string) *RemoteCo
 	return coll
 }
 
-func RemoteByName(conn *mysql.Conn, collname string) *RemoteCollation {
-	var collid ID
-	if known, ok := collationsByName[collname]; ok {
-		collid = known.Id()
-	}
-	return makeRemoteCollation(conn, collid, collname)
+func RemoteByName(conn *mysql.Conn, collname string) *Collation {
+	return makeRemoteCollation(conn, collations.LookupIDByName(collname), collname)
 }
 
-func (c *RemoteCollation) LastError() error {
+func (c *Collation) LastError() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.err
 }
 
-func (c *RemoteCollation) init() {}
+func (c *Collation) init() {}
 
-func (c *RemoteCollation) Id() ID {
+func (c *Collation) Id() collations.ID {
 	return c.id
 }
 
-func (c *RemoteCollation) Name() string {
+func (c *Collation) Name() string {
 	return c.name
 }
 
-func (c *RemoteCollation) Collate(left, right []byte, isPrefix bool) int {
+func (c *Collation) Charset() charset.Charset {
+	return &Charset{
+		name: c.charset,
+		mu:   &c.mu,
+		conn: c.conn,
+	}
+}
+
+func (c *Collation) Collate(left, right []byte, isPrefix bool) int {
 	if isPrefix {
-		panic("unsupported: isPrefix with remote.RemoteCollation")
+		panic("unsupported: isPrefix with remote.Collation")
 	}
 
 	c.mu.Lock()
@@ -104,7 +128,7 @@ func (c *RemoteCollation) Collate(left, right []byte, isPrefix bool) int {
 	return int(cmp)
 }
 
-func (c *RemoteCollation) performRemoteQuery() []sqltypes.Value {
+func (c *Collation) performRemoteQuery() []sqltypes.Value {
 	res, err := c.conn.ExecuteFetch(c.sql.StringUnsafe(), 1, false)
 	if err != nil {
 		c.err = err
@@ -118,9 +142,9 @@ func (c *RemoteCollation) performRemoteQuery() []sqltypes.Value {
 	return res.Rows[0]
 }
 
-func (c *RemoteCollation) WeightString(dst, src []byte, numCodepoints int) []byte {
+func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	if numCodepoints == math.MaxInt32 {
-		panic("unsupported: PadToMax with remote.RemoteCollation")
+		panic("unsupported: PadToMax with remote.Collation")
 	}
 
 	c.mu.Lock()
@@ -146,6 +170,6 @@ func (c *RemoteCollation) WeightString(dst, src []byte, numCodepoints int) []byt
 	return append(dst, result[0].ToBytes()...)
 }
 
-func (c *RemoteCollation) WeightStringLen(_ int) int {
+func (c *Collation) WeightStringLen(_ int) int {
 	return 0
 }

@@ -16,7 +16,7 @@
 import { Switch, useLocation, useParams, useRouteMatch } from 'react-router';
 import { Link, Redirect, Route } from 'react-router-dom';
 
-import { useKeyspaces } from '../../../hooks/api';
+import { useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
@@ -36,10 +36,7 @@ export const Keyspace = () => {
 
     useDocumentTitle(`${name} (${clusterID})`);
 
-    // TODO(doeg): add a vtadmin-api endpoint to fetch a single keyspace
-    // See https://github.com/vitessio/vitess/projects/12#card-59980087
-    const { data: keyspaces = [], ...kq } = useKeyspaces();
-    const keyspace = keyspaces.find((k) => k.cluster?.id === clusterID && k.keyspace?.name === name);
+    const { data: keyspace, ...kq } = useKeyspace({ clusterID, name });
 
     if (kq.error) {
         return (
