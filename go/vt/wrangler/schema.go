@@ -18,13 +18,12 @@ package wrangler
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html/template"
 	"sort"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
