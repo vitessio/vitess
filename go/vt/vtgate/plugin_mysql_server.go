@@ -345,13 +345,12 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
+				Charset:        strings.Trim(*charset, "'"),
 			},
 			Autocommit:           true,
 			DDLStrategy:          *defaultDDLStrategy,
 			SessionUUID:          u.String(),
 			EnableSystemSettings: *sysVarSetEnabled,
-			Charset:              *charset,
-			Names:                *names,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true

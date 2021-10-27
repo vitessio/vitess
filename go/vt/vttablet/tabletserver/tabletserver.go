@@ -1243,6 +1243,11 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
+
+	if tsv.config.DB.Charset != options.Charset {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", options.Charset, tsv.config.DB.Charset)
+	}
+
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
 	}

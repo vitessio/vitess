@@ -39,15 +39,15 @@ type SystemVariable struct {
 
 // System Settings
 var (
-	on   = "1"
-	off  = "0"
-	utf8 = "'utf8'"
+	on      = "1"
+	off     = "0"
+	utf8mb4 = "'utf8mb4'"
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
-	Charset                     = SystemVariable{Name: "charset", Default: utf8, IdentifierAsString: true}
+	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
-	Names                       = SystemVariable{Name: "names", Default: utf8, IdentifierAsString: true}
+	Names                       = SystemVariable{Name: "names", Default: utf8mb4, IdentifierAsString: true}
 	SessionUUID                 = SystemVariable{Name: "session_uuid", IdentifierAsString: true}
 	SkipQueryPlanCache          = SystemVariable{Name: "skip_query_plan_cache", IsBoolean: true, Default: off}
 	Socket                      = SystemVariable{Name: "socket", Default: off}

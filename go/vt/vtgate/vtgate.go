@@ -99,7 +99,6 @@ var (
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
 	charset = flag.String("charset", sysvars.Charset.Default, "Character set to use by default between the client and VTGate")
-	names   = flag.String("names", sysvars.Names.Default, "Collation name to use by default between the client and VTGate")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
