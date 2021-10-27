@@ -1,18 +1,41 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package simplifiedchinese
 
 import (
 	"unicode/utf8"
+	_ "unsafe"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
-type Encoding_gb18030 struct{}
+type Charset_gb18030 struct{}
 
-func (Encoding_gb18030) Name() string {
+func (Charset_gb18030) Name() string {
 	return "gb18030"
 }
 
-func (Encoding_gb18030) DecodeRune(src []byte) (rune, int) {
+//go:linkname gb18030 golang.org/x/text/encoding/simplifiedchinese.gb18030
+var gb18030 [206][2]uint16
+
+//go:linkname decode golang.org/x/text/encoding/simplifiedchinese.decode
+var decode [23845]uint16
+
+func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 	const isgb18030 = true
 	if len(src) < 1 {
 		return utf8.RuneError, 0
@@ -92,10 +115,10 @@ func (Encoding_gb18030) DecodeRune(src []byte) (rune, int) {
 	}
 }
 
-func (c Encoding_gb18030) SupportsSupplementaryChars() bool {
+func (c Charset_gb18030) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (c Encoding_gb18030) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (c Charset_gb18030) EncodeFromUTF8(in []byte) ([]byte, error) {
 	return simplifiedchinese.GB18030.NewEncoder().Bytes(in)
 }

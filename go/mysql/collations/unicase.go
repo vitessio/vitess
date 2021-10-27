@@ -17,7 +17,7 @@ limitations under the License.
 package collations
 
 import (
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type UnicaseChar struct {
@@ -26,16 +26,16 @@ type UnicaseChar struct {
 
 type UnicaseInfo struct {
 	MaxChar   rune
-	Page      [][]UnicaseChar
+	Page      []*[]UnicaseChar
 	LowerSort bool
 }
 
 func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 	if codepoint > info.MaxChar {
-		return encoding.RuneError
+		return charset.RuneError
 	}
 	if page := info.Page[int(codepoint)>>8]; page != nil {
-		unicaseChar := page[int(codepoint)&0xFF]
+		unicaseChar := (*page)[int(codepoint)&0xFF]
 		if info.LowerSort {
 			return unicaseChar.ToLower
 		}
@@ -1484,15 +1484,12 @@ var planeFF = []UnicaseChar{
 	{0xFFFE, 0xFFFE, 0xFFFE}, {0xFFFF, 0xFFFF, 0xFFFF},
 }
 
-var unicasePages_default = [][]UnicaseChar{
-	plane00, plane01, plane02, plane03, plane04, plane05, nil, nil,
+var unicasePages_default = []*[]UnicaseChar{
+	&plane00, &plane01, &plane02, &plane03, &plane04, &plane05, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
-	nil, nil, nil, nil, nil, nil, plane1E, plane1F,
-	nil, plane21, nil, nil, plane24, nil, nil, nil,
-	nil, nil, nil, nil, nil, nil, nil, nil,
-	nil, nil, nil, nil, nil, nil, nil, nil,
-	nil, nil, nil, nil, nil, nil, nil, nil,
+	nil, nil, nil, nil, nil, nil, &plane1E, &plane1F,
+	nil, &plane21, nil, nil, &plane24, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
@@ -1516,7 +1513,10 @@ var unicasePages_default = [][]UnicaseChar{
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
 	nil, nil, nil, nil, nil, nil, nil, nil,
-	nil, nil, nil, nil, nil, nil, nil, planeFF,
+	nil, nil, nil, nil, nil, nil, nil, nil,
+	nil, nil, nil, nil, nil, nil, nil, nil,
+	nil, nil, nil, nil, nil, nil, nil, nil,
+	nil, nil, nil, nil, nil, nil, nil, &planeFF,
 }
 
 var unicaseInfo_default = &UnicaseInfo{

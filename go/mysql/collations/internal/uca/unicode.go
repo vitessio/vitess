@@ -118,7 +118,7 @@ func UnicodeImplicitWeightsLegacy(weights []uint16, codepoint rune) {
 	weights[1] = uint16(codepoint&0x7FFF) | 0x8000
 }
 
-func UnicodeIsKatakana(cp rune) bool {
+func unicodeIsKatakana(cp rune) bool {
 	switch {
 	case cp == 0x30FD || cp == 0x30FE || cp == 0x30FC:
 		return true
@@ -129,7 +129,7 @@ func UnicodeIsKatakana(cp rune) bool {
 	}
 }
 
-func UnicodeIsHiragana(cp rune) bool {
+func unicodeIsHiragana(cp rune) bool {
 	switch {
 	case cp >= 0x3041 && cp <= 0x3096:
 		return true

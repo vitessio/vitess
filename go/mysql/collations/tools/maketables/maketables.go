@@ -53,14 +53,17 @@ func maketable(w io.Writer, table string, filename string, pages *tablebuilder.E
 	tb := tablebuilder.NewTableBuilder(table, pages)
 
 	for key, weights := range metadata.Weights {
-		r, err := strconv.ParseInt(key[2:], 16, 32)
+		cp, err := strconv.ParseInt(key[2:], 16, 32)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
-		tb.Add(rune(r), weights)
+		tb.Add(rune(cp), weights)
 	}
 
 	tb.DumpTables(w, layout)
+	if table == "uca900" {
+		tb.DumpFastTables(w, layout)
+	}
 }
 
 func main() {

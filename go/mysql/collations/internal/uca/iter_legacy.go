@@ -1,7 +1,23 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package uca
 
 import (
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type WeightIteratorLegacy struct {
@@ -58,7 +74,7 @@ func (it *WeightIteratorLegacy) Done() {
 }
 
 func (it *WeightIteratorLegacy) DebugCodepoint() (rune, int) {
-	return it.encoding.DecodeRune(it.input)
+	return it.charset.DecodeRune(it.input)
 }
 
 func (it *WeightIteratorLegacy) Next() (uint16, bool) {
@@ -67,8 +83,8 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 			return w, true
 		}
 
-		cp, width := it.encoding.DecodeRune(it.input)
-		if cp == encoding.RuneError && width < 3 {
+		cp, width := it.charset.DecodeRune(it.input)
+		if cp == charset.RuneError && width < 3 {
 			return 0, false
 		}
 		it.input = it.input[width:]
@@ -77,7 +93,7 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 		if cp > it.maxCodepoint {
 			return 0xFFFD, true
 		}
-		if weights, remainder, skip := it.contractions.weightForContractionAnyEncoding(cp, it.input, it.encoding); weights != nil {
+		if weights, remainder, skip := it.contractions.weightForContractionCharset(cp, it.input, it.charset); weights != nil {
 			it.codepoint.initContraction(weights)
 			it.input = remainder
 			it.length += skip
