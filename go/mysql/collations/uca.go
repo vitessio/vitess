@@ -19,7 +19,7 @@ package collations
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -29,7 +29,7 @@ func init() {
 
 type CollationUCA interface {
 	Collation
-	Encoding() encoding.Encoding
+	Charset() charset.Charset
 	UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout)
 }
 
@@ -60,8 +60,8 @@ func (c *Collation_utf8mb4_uca_0900) init() {
 	})
 }
 
-func (c *Collation_utf8mb4_uca_0900) Encoding() encoding.Encoding {
-	return encoding.Encoding_utf8mb4{}
+func (c *Collation_utf8mb4_uca_0900) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_uca_0900) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
@@ -105,7 +105,7 @@ nextLevel:
 	switch {
 	case itleft.Level() == itright.Level():
 		if l == r && lok && rok {
-			level = itleft.Level()
+			level++
 			if level < levelsToCompare {
 				goto nextLevel
 			}
@@ -113,15 +113,12 @@ nextLevel:
 	case itleft.Level() > level:
 		return -1
 	case itright.Level() > level:
-		// TODO@vmg: this is not fully correct
 		if rightIsPrefix {
-			if itleft.SkipLevel() {
-				level = itleft.Level()
-				if level < levelsToCompare {
-					goto nextLevel
-				}
+			level = itleft.SkipLevel()
+			if level < levelsToCompare {
+				goto nextLevel
 			}
-			break
+			return -int(r)
 		}
 		return 1
 	}
@@ -133,14 +130,33 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
-	for {
-		w, ok := it.Next()
-		if !ok {
-			break
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		for {
+			for cap(dst)-len(dst) >= 16 {
+				n := fast.NextChunk(dst[len(dst) : len(dst)+16])
+				if n <= 0 {
+					goto performPadding
+				}
+				dst = dst[:len(dst)+n]
+			}
+			n := fast.NextChunk(chunk[:16])
+			if n <= 0 {
+				goto performPadding
+			}
+			dst = append(dst, chunk[:n]...)
 		}
-		dst = append(dst, byte(w>>8), byte(w))
+	} else {
+		for {
+			w, ok := it.Next()
+			if !ok {
+				break
+			}
+			dst = append(dst, byte(w>>8), byte(w))
+		}
 	}
 
+performPadding:
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x00)
@@ -164,8 +180,8 @@ type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) init() {}
 
-func (c *Collation_utf8mb4_0900_bin) Encoding() encoding.Encoding {
-	return encoding.Encoding_utf8mb4{}
+func (c *Collation_utf8mb4_0900_bin) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_0900_bin) Id() ID {
@@ -181,8 +197,7 @@ func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) 
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
-	copyCodepoints := minInt(len(src), cap(dst))
-	dst = append(dst, src[:copyCodepoints]...)
+	dst = append(dst, src...)
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x0)
@@ -199,7 +214,7 @@ type Collation_uca_legacy struct {
 	name string
 	id   ID
 
-	charset      encoding.Encoding
+	charset      charset.Charset
 	weights      uca.WeightTable
 	tailoring    []uca.WeightPatch
 	contractions []uca.Contraction
@@ -218,7 +233,7 @@ func (c *Collation_uca_legacy) init() {
 	})
 }
 
-func (c *Collation_uca_legacy) Encoding() encoding.Encoding {
+func (c *Collation_uca_legacy) Charset() charset.Charset {
 	return c.charset
 }
 
@@ -245,10 +260,6 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	defer itleft.Done()
 	defer itright.Done()
 
-	if isPrefix {
-		panic("unimplemented: isPrefix")
-	}
-
 	for {
 		l, lok = itleft.Next()
 		r, rok = itright.Next()
@@ -256,7 +267,9 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 		if l == r && lok && rok {
 			continue
 		}
-
+		if !rok && isPrefix {
+			return 0
+		}
 		return int(l) - int(r)
 	}
 }

@@ -425,7 +425,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 		return "", err
 	}
 	if len(output.Rows) > 0 {
-		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
+		return output.Rows[0][1].ToString(), nil
 	}
 	return "", nil
 }
