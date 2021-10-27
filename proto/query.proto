@@ -322,6 +322,9 @@ message ExecuteOptions {
   // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
   // The current session can still use other sessions cached plans.
   bool has_created_temp_tables = 12;
+
+  // charset defines the charset that will be used between VTGate <=> VTTablet <=> MySQL to execute this query
+  string charset = 13;
 }
 
 // Field describes a single column returned by a query

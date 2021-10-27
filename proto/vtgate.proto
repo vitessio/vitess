@@ -146,12 +146,6 @@ message Session {
 
   // enable_system_settings defines if we can use reserved connections.
   bool enable_system_settings = 23;
-
-  // charset defines the charset used
-  string charset = 24;
-
-  // names defines the collation used
-  string names = 25;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout

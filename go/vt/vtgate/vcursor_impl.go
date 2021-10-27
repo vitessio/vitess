@@ -320,7 +320,7 @@ func (vc *vcursorImpl) SysVarSetEnabled() bool {
 }
 
 func (vc *vcursorImpl) GetCharset() string {
-	return vc.safeSession.Charset
+	return vc.safeSession.Options.Charset
 }
 
 // KeyspaceExists provides whether the keyspace exists or not.

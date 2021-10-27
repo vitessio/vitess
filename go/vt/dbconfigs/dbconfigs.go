@@ -127,7 +127,7 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	flag.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&GlobalDBConfigs.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
 	flag.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
