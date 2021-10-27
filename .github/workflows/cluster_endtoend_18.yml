@@ -84,10 +84,9 @@ jobs:
 
     - name: Print test output and Record test result in launchable
       run: |
-        # print test output
-        cat output.txt
-
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
+        # print test output
+        cat output.txt
       if: always()
