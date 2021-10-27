@@ -73,11 +73,15 @@ jobs:
       run: |
         source build.env
 
-        # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -print-log -follow -shard 19 | go-junit-report -set-exit-code > report.xml
+        set -x
 
-    - name: Record test result in launchable
+        # run the tests however you normally do, then produce a JUnit XML file
+        eatmydata -- go run test.go -docker=false -follow -shard 19 | tee -a output.txt | go-junit-report -set-exit-code > report.xml
+
+    - name: Print test output and Record test result in launchable
       run: |
+        # print test output
+        cat output.txt
 
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
