@@ -15,7 +15,7 @@ bootstrap.sh @deepthi
 /go/protoutil @ajm188
 /go/test/endtoend/onlineddl @shlomi-noach
 /go/test/endtoend/orchestrator @deepthi @shlomi-noach
-/go/test/endtoend/vtgate @harshit-gangal @systay
+/go/test/endtoend/vtgate @harshit-gangal @systay @frouioui
 /go/vt/discovery @deepthi
 /go/vt/mysqlctl @deepthi
 /go/vt/orchestrator @deepthi @shlomi-noach
@@ -32,7 +32,7 @@ bootstrap.sh @deepthi
 /go/vt/vtctl/grpcvtctldserver @ajm188 @doeg
 /go/vt/vtctl/vtctldclient @ajm188 @doeg
 /go/vt/vtctld @ajm188 @doeg @rohit-nayak-ps @deepthi
-/go/vt/vtgate @harshit-gangal @systay
+/go/vt/vtgate @harshit-gangal @systay @frouioui
 /go/vt/vttablet/tabletmanager @deepthi @shlomi-noach
 /go/vt/vttablet/tabletmanager/vreplication @rohit-nayak-ps
 /go/vt/vttablet/tabletmanager/vstreamer @rohit-nayak-ps
