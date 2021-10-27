@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -66,9 +64,9 @@ func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTab
 }
 
 func (c *concatenateTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpc.Code_INTERNAL, fmt.Sprintf("add '%s' predicate not supported on concatenate trees", sqlparser.String(expr)))
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "add '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
 
 func (c *concatenateTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpc.Code_INTERNAL, fmt.Sprintf("remove '%s' predicate not supported on concatenate trees", sqlparser.String(expr)))
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "remove '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
