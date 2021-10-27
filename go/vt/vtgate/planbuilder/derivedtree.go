@@ -17,8 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -77,11 +75,11 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *se
 }
 
 func (d *derivedTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("add '%s' predicate not supported on derived trees", sqlparser.String(expr)))
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on derived trees", sqlparser.String(expr))
 }
 
 func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_INTERNAL, fmt.Sprintf("remove '%s' predicate not supported on derived trees", sqlparser.String(expr)))
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "remove '%s' predicate not supported on derived trees", sqlparser.String(expr))
 }
 
 // findOutputColumn returns the index on which the given name is found in the slice of

@@ -197,7 +197,7 @@ func optimizeSubQuery(ctx *planningContext, op *abstract.SubQuery) (queryTree, e
 func createCorrelatedSubqueryTree(ctx *planningContext, innerTree, outerTree queryTree, preds []sqlparser.Expr, extractedSubquery *sqlparser.ExtractedSubquery) (*correlatedSubqueryTree, error) {
 	err := outerTree.removePredicate(ctx, extractedSubquery)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
 	}
 
 	vars := map[string]int{}
