@@ -1,17 +1,3 @@
-2021-09-16T15:33:35Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1242211617
-2021-09-16T15:33:35Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1242211623
-2021-09-16T15:33:35Z,Cluster (vreplication_v2),https://github.com/vitessio/vitess/actions/runs/1242211597
-2021-09-16T15:33:35Z,Cluster (vstream_failover),https://github.com/vitessio/vitess/actions/runs/1242211591
-2021-09-16T15:33:35Z,Cluster (vstream_stoponreshard_false),https://github.com/vitessio/vitess/actions/runs/1242211616
-2021-09-16T15:33:35Z,Cluster (vstream_stoponreshard_true),https://github.com/vitessio/vitess/actions/runs/1242211571
-2021-09-16T15:33:35Z,Cluster (vtgate_buffer),https://github.com/vitessio/vitess/actions/runs/1242211631
-2021-09-16T15:33:35Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/1242211622
-2021-09-16T15:33:35Z,Cluster (vtgate_gen4),https://github.com/vitessio/vitess/actions/runs/1242211577
-2021-09-16T15:33:35Z,Cluster (vtgate_readafterwrite),https://github.com/vitessio/vitess/actions/runs/1242211565
-2021-09-16T15:33:35Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1242211560
-2021-09-16T15:33:35Z,Cluster (vtgate_schema),https://github.com/vitessio/vitess/actions/runs/1242211592
-2021-09-16T15:33:35Z,Cluster (vtgate_topo),https://github.com/vitessio/vitess/actions/runs/1242211579
-2021-09-16T15:33:35Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/1242211603
 2021-09-16T15:33:35Z,Cluster (vtgate_unsharded),https://github.com/vitessio/vitess/actions/runs/1242211589
 2021-09-16T15:33:35Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/1242211612
 2021-09-16T15:33:35Z,Cluster (vtgate_vschema),https://github.com/vitessio/vitess/actions/runs/1242211648
@@ -9998,3 +9984,17 @@
 2021-10-27T05:50:16Z,Cluster (vtorc),https://github.com/vitessio/vitess/actions/runs/1388793626
 2021-10-27T05:50:16Z,Unit Test (mariadb102),https://github.com/vitessio/vitess/actions/runs/1388793598
 2021-10-27T05:50:16Z,unit_race,https://github.com/vitessio/vitess/actions/runs/1388793651
+2021-10-27T09:47:57Z,Cluster (15),https://github.com/vitessio/vitess/actions/runs/1389555596
+2021-10-27T09:47:57Z,Cluster (18),https://github.com/vitessio/vitess/actions/runs/1389555578
+2021-10-27T09:47:57Z,Cluster (onlineddl_ghost),https://github.com/vitessio/vitess/actions/runs/1389555632
+2021-10-27T09:47:57Z,Cluster (vreplication_basic),https://github.com/vitessio/vitess/actions/runs/1389555575
+2021-10-27T09:47:57Z,Cluster (vreplication_migrate),https://github.com/vitessio/vitess/actions/runs/1389555568
+2021-10-27T09:47:57Z,Cluster (vreplication_multicell),https://github.com/vitessio/vitess/actions/runs/1389555581
+2021-10-27T09:47:57Z,Cluster (vstream_stoponreshard_true),https://github.com/vitessio/vitess/actions/runs/1389555570
+2021-10-27T09:47:57Z,Cluster (vtgate_reservedconn),https://github.com/vitessio/vitess/actions/runs/1389555620
+2021-10-27T09:47:57Z,Cluster (vtgate_transaction),https://github.com/vitessio/vitess/actions/runs/1389555605
+2021-10-27T09:47:57Z,Cluster (vtgate_vindex),https://github.com/vitessio/vitess/actions/runs/1389555617
+2021-10-27T09:47:57Z,Cluster (xb_recovery),https://github.com/vitessio/vitess/actions/runs/1389555616
+2021-10-27T09:47:57Z,endtoend,https://github.com/vitessio/vitess/actions/runs/1389555607
+2021-10-27T09:47:58Z,Cluster (vstream_stoponreshard_false),https://github.com/vitessio/vitess/actions/runs/1389555653
+2021-10-27T09:47:58Z,Cluster (vtgate_concurrentdml),https://github.com/vitessio/vitess/actions/runs/1389555649
