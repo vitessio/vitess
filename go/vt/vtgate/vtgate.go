@@ -131,6 +131,12 @@ var (
 
 	vstreamSkewDelayCount *stats.Counter
 
+	// coll is the default collation ID that will be used for this VTGate instance.
+	// Its value is set through the --collation flag, and is readable by selecting
+	// the @@collation variable.
+	// The collation linked to this ID is expected to match with the one the VTTablets
+	// use. If they do not match, queries will fail.
+	// String literals will be treated as if they were using this collation.
 	coll collations.ID
 )
 

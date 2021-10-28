@@ -1247,7 +1247,9 @@ func (tsv *TabletServer) execRequest(
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 
 	coll := collations.LookupById(collations.ID(options.Collation))
-	if tsv.config.DB.Collation != coll.Name() {
+	if coll == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", options.Collation)
+	} else if tsv.config.DB.Collation != coll.Name() {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), tsv.config.DB.Collation)
 	}
 
