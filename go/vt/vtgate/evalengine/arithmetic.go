@@ -46,6 +46,16 @@ func (err UnsupportedComparisonError) Error() string {
 	return fmt.Sprintf("types are not comparable: %v vs %v", err.Type1, err.Type2)
 }
 
+// UnsupportedCollationError represents the error where the comparison using provided collation is unsupported on vitess
+type UnsupportedCollationError struct {
+	ID collations.ID
+}
+
+// Error function implements the error interface
+func (err UnsupportedCollationError) Error() string {
+	return fmt.Sprintf("comparison using collation %d isn't possible", err.ID)
+}
+
 // Add adds two values together
 // if v1 or v2 is null, then it returns null
 func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
@@ -185,7 +195,7 @@ func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value 
 // numeric, then a numeric comparison is performed after
 // necessary conversions. If none are numeric, then it's
 // a simple binary comparison. Uncomparable values return an error.
-func NullsafeCompare(v1, v2 sqltypes.Value, collation collations.ID) (int, error) {
+func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, error) {
 	// Based on the categorization defined for the types,
 	// we're going to allow comparison of the following:
 	// Null, isNumber, IsBinary. This will exclude IsQuoted
@@ -213,8 +223,13 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collation collations.ID) (int, error
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
-	if v1.IsText() && v2.IsText() && collation != collations.Unknown {
-		collation := collations.LookupById(collation)
+	if v1.IsText() && v2.IsText() && collationID != collations.Unknown {
+		collation := collations.LookupById(collationID)
+		if collation == nil {
+			return 0, UnsupportedCollationError{
+				ID: collationID,
+			}
+		}
 		switch result := collation.Collate(v1.ToBytes(), v2.ToBytes(), false); {
 		case result < 0:
 			return -1, nil
