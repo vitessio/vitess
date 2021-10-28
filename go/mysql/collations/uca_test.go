@@ -25,7 +25,7 @@ import (
 
 func testcollation(t testing.TB, name string) Collation {
 	t.Helper()
-	coll := LookupByName(name)
+	coll := FromName(name)
 	if coll == nil {
 		t.Fatalf("missing collation: %s", name)
 	}

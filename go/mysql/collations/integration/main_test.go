@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"testing"
 
@@ -93,5 +94,12 @@ func TestMain(m *testing.M) {
 func debugMysql() {
 	fmt.Fprintf(os.Stderr, "Connect to MySQL using parameters: mysql -u %s -D %s -S %s\n",
 		connParams.Uname, connParams.DbName, connParams.UnixSocket)
-	select {}
+	fmt.Fprintf(os.Stderr, "Press ^C to resume testing...\n")
+
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, os.Interrupt)
+	<-sigchan
+	signal.Stop(sigchan)
+
+	fmt.Fprintf(os.Stderr, "Resuming!\n")
 }
