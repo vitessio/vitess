@@ -289,7 +289,9 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 		if err != nil {
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
-			if strings.Contains(err.Error(), "health stats mismatch") {
+			// We have reason to suspect the tablet healthcheck record is corrupted or invalid so let's remove the tablet's record
+			// from the healthcheck cache and it will get re-added again if healthy
+			if strings.Contains(err.Error(), "health stats mismatch") || strings.HasSuffix(err.Error(), context.Canceled.Error()) {
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
