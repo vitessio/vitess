@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unicode
+package eightbit
 
 import (
 	"unicode/utf8"
@@ -22,38 +22,35 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
 )
 
-type Charset_utf32 struct{}
+type Charset_binary struct{}
 
-func (Charset_utf32) Name() string {
-	return "utf32"
+func (Charset_binary) Name() string {
+	return "binary"
 }
 
-func (Charset_utf32) IsSuperset(other types.Charset) bool {
-	switch other.(type) {
-	case Charset_utf32:
-		return true
-	default:
-		return false
+func (Charset_binary) IsSuperset(_ types.Charset) bool {
+	return true
+}
+
+func (Charset_binary) SupportsSupplementaryChars() bool {
+	return true
+}
+
+func (c Charset_binary) EncodeRune(dst []byte, r rune) int {
+	if r > 0xFF {
+		return -1
 	}
+	dst[0] = byte(r)
+	return 1
 }
 
-func (Charset_utf32) EncodeRune(dst []byte, r rune) int {
-	_ = dst[3]
-
-	dst[0] = uint8(r >> 24)
-	dst[1] = uint8(r >> 16)
-	dst[2] = uint8(r >> 8)
-	dst[3] = uint8(r)
-	return 4
-}
-
-func (Charset_utf32) DecodeRune(p []byte) (rune, int) {
-	if len(p) < 4 {
+func (c Charset_binary) DecodeRune(bytes []byte) (rune, int) {
+	if len(bytes) < 1 {
 		return utf8.RuneError, 0
 	}
-	return (rune(p[0]) << 24) | (rune(p[1]) << 16) | (rune(p[2]) << 8) | rune(p[3]), 4
+	return rune(bytes[0]), 1
 }
 
-func (Charset_utf32) SupportsSupplementaryChars() bool {
-	return true
+func (c Charset_binary) Convert(_, in []byte, _ types.Charset) ([]byte, error) {
+	return in, nil
 }

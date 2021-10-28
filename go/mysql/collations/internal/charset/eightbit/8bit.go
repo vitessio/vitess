@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package charset
+package eightbit
 
 import (
-	"fmt"
+	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
 )
 
 type UnicodeMapping struct {
@@ -35,63 +37,39 @@ func (e *Charset_8bit) Name() string {
 	return e.Name_
 }
 
+func (e *Charset_8bit) IsSuperset(other types.Charset) bool {
+	switch other := other.(type) {
+	case *Charset_8bit:
+		return e.Name_ == other.Name_
+	default:
+		return false
+	}
+}
+
 func (e *Charset_8bit) SupportsSupplementaryChars() bool {
 	return false
 }
 
 func (e *Charset_8bit) DecodeRune(bytes []byte) (rune, int) {
 	if len(bytes) < 1 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 	return rune(e.ToUnicode[bytes[0]]), 1
 }
 
-func (e *Charset_8bit) encodeRune(r rune) byte {
+func (e *Charset_8bit) EncodeRune(dst []byte, r rune) int {
 	if r > 0xFFFF {
-		return 0
+		return -1
 	}
 	cp := uint16(r)
 	for _, mapping := range e.FromUnicode {
 		if cp >= mapping.From && cp <= mapping.To {
-			return mapping.Range[cp-mapping.From]
+			dst[0] = mapping.Range[cp-mapping.From]
+			if dst[0] == 0 && cp != 0 {
+				return -1
+			}
+			return 1
 		}
 	}
-	return 0
-}
-
-func (e *Charset_8bit) encodingError(cp rune) error {
-	return fmt.Errorf("charset %s cannot encode %q (U+%04x)", e.Name_, string(cp), cp)
-}
-
-func (e *Charset_8bit) EncodeFromUTF8(in []byte) ([]byte, error) {
-	var output = make([]byte, 0, len(in))
-	var b byte
-	for _, cp := range string(in) {
-		if b = e.encodeRune(cp); b == 0 {
-			return nil, e.encodingError(cp)
-		}
-		output = append(output, b)
-	}
-	return output, nil
-}
-
-type Charset_binary struct{}
-
-func (Charset_binary) Name() string {
-	return "binary"
-}
-
-func (Charset_binary) SupportsSupplementaryChars() bool {
-	return true
-}
-
-func (c Charset_binary) DecodeRune(bytes []byte) (rune, int) {
-	if len(bytes) < 1 {
-		return RuneError, 0
-	}
-	return rune(bytes[0]), 1
-}
-
-func (c Charset_binary) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return in, nil
+	return -1
 }

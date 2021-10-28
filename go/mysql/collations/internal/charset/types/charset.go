@@ -14,22 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unicode
+package types
 
-import (
-	"errors"
-	"unicode/utf8"
-)
+type Charset interface {
+	Name() string
+	SupportsSupplementaryChars() bool
+	IsSuperset(other Charset) bool
 
-const RuneError = utf8.RuneError
-
-var ErrBMPRange = errors.New("input string contains characters outside of BMP range (cp > 0xFFFF)")
-
-func ensureBMPRange(in []byte) error {
-	for _, cp := range string(in) {
-		if cp > 0xFFFF {
-			return ErrBMPRange
-		}
-	}
-	return nil
+	EncodeRune([]byte, rune) int
+	DecodeRune([]byte) (rune, int)
 }
