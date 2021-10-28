@@ -48,7 +48,7 @@ type Collation_utf8mb4_uca_0900 struct {
 	ucainit sync.Once
 }
 
-func (c *Collation_utf8mb4_uca_0900) init() {
+func (c *Collation_utf8mb4_uca_0900) Init() {
 	c.ucainit.Do(func() {
 		c.uca = uca.NewCollation(c.name, c.weights, c.tailoring, c.reorder, c.contractions, c.upperCaseFirst, c.levelsForCompare)
 
@@ -182,7 +182,7 @@ func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
 
 type Collation_utf8mb4_0900_bin struct{}
 
-func (c *Collation_utf8mb4_0900_bin) init() {}
+func (c *Collation_utf8mb4_0900_bin) Init() {}
 
 func (c *Collation_utf8mb4_0900_bin) ID() ID {
 	return 309
@@ -232,7 +232,7 @@ type Collation_uca_legacy struct {
 	ucainit sync.Once
 }
 
-func (c *Collation_uca_legacy) init() {
+func (c *Collation_uca_legacy) Init() {
 	c.ucainit.Do(func() {
 		c.uca = uca.NewCollationLegacy(c.charset, c.weights, c.tailoring, c.contractions, c.maxCodepoint)
 		c.weights = nil
