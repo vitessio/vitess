@@ -117,7 +117,7 @@ func TestComparisonSemantics(t *testing.T) {
 	defer conn.Close()
 
 	for _, coll := range collations.All() {
-		text := verifyTranscoding(t, coll, remote.ForName(conn, coll.Name()), []byte(BaseString))
+		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll})
 	}
 	sort.Slice(testInputs, func(i, j int) bool {

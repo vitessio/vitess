@@ -35,8 +35,8 @@ const Unknown ID = 0
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
-	// init initializes the internal state for the collation the first time it is used
-	init()
+	// Init initializes the internal state for the collation the first time it is used
+	Init()
 
 	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
@@ -166,7 +166,7 @@ func register(c Collation, isDefault bool) {
 func FromName(name string) Collation {
 	coll := collationsByName[name]
 	if coll != nil {
-		coll.init()
+		coll.Init()
 	}
 	return coll
 }
@@ -188,7 +188,7 @@ func IDFromName(name string) (ID, bool) {
 func FromID(id ID) Collation {
 	coll := collationsById[id]
 	if coll != nil {
-		coll.init()
+		coll.Init()
 	}
 	return coll
 }
@@ -197,7 +197,7 @@ func FromID(id ID) Collation {
 func DefaultForCharset(charset string) Collation {
 	coll := defaultCollationByCharset[charset]
 	if coll != nil {
-		coll.init()
+		coll.Init()
 	}
 	return coll
 }
@@ -208,7 +208,7 @@ func DefaultForCharset(charset string) Collation {
 func All() (all []Collation) {
 	all = make([]Collation, 0, len(collationsById))
 	for _, col := range collationsById {
-		col.init()
+		col.Init()
 		all = append(all, col)
 	}
 	return

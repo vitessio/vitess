@@ -17,7 +17,10 @@ limitations under the License.
 package integration
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -69,7 +72,7 @@ func TestWeightStringsComprehensive(t *testing.T) {
 		}
 
 		c4cs.locals = append(c4cs.locals, coll)
-		c4cs.remotes = append(c4cs.remotes, remote.ForName(conn, coll.Name()))
+		c4cs.remotes = append(c4cs.remotes, remote.NewCollation(conn, coll.Name()))
 	}
 
 	var allCharsets []*collationsForCharset
@@ -93,5 +96,37 @@ func TestWeightStringsComprehensive(t *testing.T) {
 		}
 		t.Logf("%q: %d collations, %d test strings = %d tests",
 			c4cs.charset.Name(), len(c4cs.locals), tested, len(c4cs.locals)*tested)
+	}
+}
+
+func TestCJKWeightStrings(t *testing.T) {
+	conn := mysqlconn(t)
+	defer conn.Close()
+
+	allCollations := collations.All()
+
+	testdata, _ := filepath.Glob("../internal/charset/testdata/*.txt")
+	for _, testfile := range testdata {
+		charset := filepath.Base(testfile)
+		charset = strings.TrimSuffix(charset, ".txt")
+		charset = charset[strings.LastIndexByte(charset, '-')+1:]
+
+		var valid []collations.Collation
+		for _, coll := range allCollations {
+			if coll.Charset().Name() == charset {
+				valid = append(valid, coll)
+				t.Logf("%s -> %s", testfile, coll.Name())
+			}
+		}
+		if len(valid) == 0 {
+			continue
+		}
+		text, err := os.ReadFile(testfile)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, coll := range valid {
+			verifyWeightString(t, coll, remote.NewCollation(conn, coll.Name()), text)
+		}
 	}
 }

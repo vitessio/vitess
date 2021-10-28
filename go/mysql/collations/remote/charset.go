@@ -17,6 +17,7 @@ limitations under the License.
 package remote
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"sync"
@@ -33,6 +34,22 @@ type Charset struct {
 	conn *mysql.Conn
 	sql  bytes2.Buffer
 	hex  io.Writer
+}
+
+var _ charset.Charset = (*Charset)(nil)
+
+func makeRemoteCharset(conn *mysql.Conn, mu *sync.Mutex, csname string) *Charset {
+	cs := &Charset{
+		name: csname,
+		mu:   mu,
+		conn: conn,
+	}
+	cs.hex = hex.NewEncoder(&cs.sql)
+	return cs
+}
+
+func NewCharset(conn *mysql.Conn, csname string) *Charset {
+	return makeRemoteCharset(conn, &sync.Mutex{}, csname)
 }
 
 func (c *Charset) Name() string {

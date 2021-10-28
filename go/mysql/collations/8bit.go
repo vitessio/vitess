@@ -43,7 +43,7 @@ type Collation_8bit_bin struct {
 	charset charset.Charset
 }
 
-func (c *Collation_8bit_bin) init() {}
+func (c *Collation_8bit_bin) Init() {}
 
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
@@ -93,7 +93,7 @@ type Collation_8bit_simple_ci struct {
 	charset charset.Charset
 }
 
-func (c *Collation_8bit_simple_ci) init() {}
+func (c *Collation_8bit_simple_ci) Init() {}
 
 func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
@@ -167,7 +167,7 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 
 type Collation_binary struct{}
 
-func (c *Collation_binary) init() {}
+func (c *Collation_binary) Init() {}
 
 func (c *Collation_binary) ID() ID {
 	return 63
