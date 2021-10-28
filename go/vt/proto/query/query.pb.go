@@ -1173,7 +1173,9 @@ type ExecuteOptions struct {
 	// if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
 	// The current session can still use other sessions cached plans.
 	HasCreatedTempTables bool `protobuf:"varint,12,opt,name=has_created_temp_tables,json=hasCreatedTempTables,proto3" json:"has_created_temp_tables,omitempty"`
-	// collation defines the collation that will be used between VTGate <=> VTTablet <=> MySQL to execute this query
+	// collation defines the collation that will be used between VTGate <=> VTTablet <=> MySQL to execute this query.
+	// since collations.ID takes 2 bytes, this field uses the smallest integer (4 bytes) where only the first 2 bytes
+	// will be used.
 	Collation int32 `protobuf:"varint,13,opt,name=collation,proto3" json:"collation,omitempty"`
 }
 
