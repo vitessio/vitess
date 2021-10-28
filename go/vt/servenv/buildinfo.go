@@ -61,16 +61,15 @@ type versionInfo struct {
 // in the topo).
 func (v *versionInfo) ToStringMap() map[string]string {
 	return map[string]string{
-		"build_host":           v.buildHost,
-		"build_user":           v.buildUser,
-		"build_time":           v.buildTimePretty,
-		"build_git_rev":        v.buildGitRev,
-		"build_git_branch":     v.buildGitBranch,
-		"jenkins_build_number": fmt.Sprintf("%d", v.jenkinsBuildNumber),
-		"go_version":           v.goVersion,
-		"goos":                 v.goOS,
-		"goarch":               v.goArch,
-		"version":              v.version,
+		"build_host":       v.buildHost,
+		"build_user":       v.buildUser,
+		"build_time":       v.buildTimePretty,
+		"build_git_rev":    v.buildGitRev,
+		"build_git_branch": v.buildGitBranch,
+		"go_version":       v.goVersion,
+		"goos":             v.goOS,
+		"goarch":           v.goArch,
+		"version":          v.version,
 	}
 }
 
