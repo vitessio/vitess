@@ -61,6 +61,7 @@ const (
 	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableContextIndex       = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -247,6 +248,17 @@ const (
 			AND mysql_table=%a
 		ORDER BY
 			completed_timestamp DESC
+		LIMIT 1
+	`
+	sqlSelectCompleteMigrationsByContextAndSQL = `SELECT
+			migration_uuid,
+			strategy
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='complete'
+			AND keyspace=%a
+			AND migration_context=%a
+			AND migration_statement=%a
 		LIMIT 1
 	`
 	sqlSelectCountReadyMigrations = `SELECT
@@ -523,4 +535,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableAddedUniqueKeys,
 	alterSchemaMigrationsTableRemovedUniqueKeys,
 	alterSchemaMigrationsTableLogFile,
+	alterSchemaMigrationsTableContextIndex,
 }
