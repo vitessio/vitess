@@ -19,10 +19,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"os"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
