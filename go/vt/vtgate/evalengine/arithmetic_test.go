@@ -654,6 +654,19 @@ func TestNullsafeCompareCollate(t *testing.T) {
 			collation: 0,
 			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 1111,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 1111 isn't possible"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			// unsupported collation gb18030_bin
+			collation: 249,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 249 isn't possible"),
+		},
 	}
 	for _, tcase := range tcases {
 		got, err := NullsafeCompare(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
