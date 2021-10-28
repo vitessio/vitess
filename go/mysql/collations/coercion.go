@@ -260,13 +260,10 @@ func MergeCollations(left, right *TypedCollation, opt CoercionOptions) (*TypedCo
 			return right, noCoercion, nil
 		}
 
-		binCollation, ok := binaryCollationByCharset[leftCS.Name()]
-		if !ok {
-			return nil, nil, fmt.Errorf("cannot find a binary collation for charset %s", leftCS.Name())
-		}
-		binCollation.Init()
+		colls4Charset := collationsByCharset[leftCS.Name()]
+		colls4Charset.Binary.Init()
 		return &TypedCollation{
-			Collation:    binCollation,
+			Collation:    colls4Charset.Binary,
 			Coercibility: CoerceNone,
 			Repertoire:   left.Repertoire | right.Repertoire,
 		}, noCoercion, nil

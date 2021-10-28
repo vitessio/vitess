@@ -81,3 +81,19 @@ func TestCollationsForLanguage(t *testing.T) {
 		t.Logf("%s: %v", lang, langCounts[lang])
 	}
 }
+
+func TestAllCollationsByCharset(t *testing.T) {
+	for csname, cset := range collationsByCharset {
+		switch csname {
+		case "gb18030":
+			// this doesn't work yet
+			continue
+		}
+		if cset.Default == nil {
+			t.Errorf("charset %s has %d collations but no default", csname, len(cset.All))
+		}
+		if cset.Binary == nil {
+			t.Errorf("charset %s has %d collations but no binary", csname, len(cset.All))
+		}
+	}
+}
