@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package unicode
 
 import "unicode/utf8"
@@ -61,13 +77,13 @@ var acceptRanges = [16]acceptRange{
 	4: {locb, 0x8F},
 }
 
-type Encoding_utf8 struct{}
+type Charset_utf8mb3 struct{}
 
-func (u Encoding_utf8) Name() string {
+func (u Charset_utf8mb3) Name() string {
 	return "utf8mb3"
 }
 
-func (Encoding_utf8) DecodeRune(p []byte) (rune, int) {
+func (Charset_utf8mb3) DecodeRune(p []byte) (rune, int) {
 	n := len(p)
 	if n < 1 {
 		return RuneError, 0
@@ -103,31 +119,31 @@ func (Encoding_utf8) DecodeRune(p []byte) (rune, int) {
 	return RuneError, 1
 }
 
-func (Encoding_utf8) SupportsSupplementaryChars() bool {
+func (Charset_utf8mb3) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (Encoding_utf8) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_utf8mb3) EncodeFromUTF8(in []byte) ([]byte, error) {
 	if err := ensureBMPRange(in); err != nil {
 		return nil, err
 	}
 	return in, nil
 }
 
-type Encoding_utf8mb4 struct{}
+type Charset_utf8mb4 struct{}
 
-func (Encoding_utf8mb4) Name() string {
+func (Charset_utf8mb4) Name() string {
 	return "utf8mb4"
 }
 
-func (Encoding_utf8mb4) DecodeRune(p []byte) (rune, int) {
+func (Charset_utf8mb4) DecodeRune(p []byte) (rune, int) {
 	return utf8.DecodeRune(p)
 }
 
-func (Encoding_utf8mb4) SupportsSupplementaryChars() bool {
+func (Charset_utf8mb4) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (Encoding_utf8mb4) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (Charset_utf8mb4) EncodeFromUTF8(in []byte) ([]byte, error) {
 	return in, nil
 }

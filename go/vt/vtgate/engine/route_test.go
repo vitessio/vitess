@@ -599,7 +599,7 @@ func TestSelectLike(t *testing.T) {
 		"dummy_select_field",
 	)
 
-	sel.Vindex = vindex.(vindexes.SingleColumn)
+	sel.Vindex = vindex
 	sel.Values = []sqltypes.PlanValue{
 		{Value: sqltypes.NewVarBinary("a%")},
 	}

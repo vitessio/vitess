@@ -64,9 +64,9 @@ func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTab
 }
 
 func (c *concatenateTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "pushPredicate does not work on concatenate trees")
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "add '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
 
 func (c *concatenateTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "removePredicate does not work on concatenate trees")
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "remove '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }
