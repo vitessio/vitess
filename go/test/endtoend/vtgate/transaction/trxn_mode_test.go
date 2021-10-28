@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/mysql"
@@ -227,4 +229,22 @@ func TestTransactionModes(t *testing.T) {
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = `[]`
 	assert.Equal(t, want, got)
+}
+
+func TestTransactionsInStreamingMode(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	exec(t, conn, "set workload = olap")
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
+	exec(t, conn, "commit")
+	want := "multi-db transaction attempted"
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 }

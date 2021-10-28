@@ -182,6 +182,51 @@ func TestStreamBigData(t *testing.T) {
 	}
 }
 
+func TestStreamBigDataInTx(t *testing.T) {
+	client := framework.NewClient()
+	err := populateBigData(client)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer client.Execute("delete from vitess_big", nil)
+
+	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	row10 := framework.RowsToStrings(qr)[10]
+	want := []string{
+		"0",
+		"AAAAAAAAAAAAAAAAAA 0",
+		"BBBBBBBBBBBBBBBBBB 0",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 0",
+		"EEEEEEEEEEEEEEEEEE 0",
+		"FF 0",
+		"GGGGGGGGGGGGGGGGGG 0",
+		"0",
+		"0",
+		"0",
+		"0",
+		"10",
+		"AAAAAAAAAAAAAAAAAA 10",
+		"BBBBBBBBBBBBBBBBBB 10",
+		"C",
+		"DDDDDDDDDDDDDDDDDD 10",
+		"EEEEEEEEEEEEEEEEEE 10",
+		"FF 10",
+		"GGGGGGGGGGGGGGGGGG 10",
+		"10",
+		"10",
+		"10",
+		"10"}
+	if !reflect.DeepEqual(row10, want) {
+		t.Errorf("Row10: \n%#v, want \n%#v", row10, want)
+	}
+}
+
 func TestStreamTerminate(t *testing.T) {
 	client := framework.NewClient()
 	err := populateBigData(client)
