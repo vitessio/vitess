@@ -144,7 +144,7 @@ func TestStreamBigData(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	defer client.Execute("delete from vitess_big", nil)
+	//defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
 	if err != nil {
@@ -267,7 +267,6 @@ func populateBigData(client *framework.QueryClient) error {
 	if err != nil {
 		return err
 	}
-	defer client.Rollback()
 
 	for i := 0; i < 100; i++ {
 		stri := strconv.Itoa(i)
@@ -286,6 +285,7 @@ func populateBigData(client *framework.QueryClient) error {
 			stri + ")"
 		_, err := client.Execute(query, nil)
 		if err != nil {
+			client.Rollback()
 			return err
 		}
 	}

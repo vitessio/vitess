@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -235,16 +237,23 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "set workload = olap")
 	exec(t, conn, "begin")
 	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
+	assertMatches(t, conn, "select * from twopc_user", ``)
 	exec(t, conn, "commit")
-	want := "multi-db transaction attempted"
-	require.Error(t, err)
-	require.Contains(t, err.Error(), want)
+	require.NoError(t, err)
+}
+
+func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	diff := cmp.Diff(expected, got)
+	if diff != "" {
+		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
+	}
 }
