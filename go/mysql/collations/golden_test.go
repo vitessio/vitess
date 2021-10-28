@@ -90,10 +90,15 @@ func TestAllCollationsByCharset(t *testing.T) {
 			continue
 		}
 		if cset.Default == nil {
-			t.Errorf("charset %s has %d collations but no default", csname, len(cset.All))
+			t.Fatalf("charset %s has %d collations but no default", csname, len(cset.All))
 		}
 		if cset.Binary == nil {
-			t.Errorf("charset %s has %d collations but no binary", csname, len(cset.All))
+			t.Fatalf("charset %s has %d collations but no binary", csname, len(cset.All))
 		}
+		t.Logf("%s: default=%s, binary=%s", csname, cset.Default.Name(), cset.Binary.Name())
+	}
+
+	if def := DefaultForCharset("utf8mb4"); def.Name() != "utf8mb4_0900_ai_ci" {
+		t.Fatalf("bad default for utf8mb4: %s", def.Name())
 	}
 }
