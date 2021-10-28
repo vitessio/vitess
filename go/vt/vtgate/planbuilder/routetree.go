@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -169,10 +172,10 @@ func (rp *routeTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) 
 	for i, predicate := range rp.predicates {
 		if sqlparser.EqualsExpr(predicate, expr) {
 			rp.predicates = append(rp.predicates[0:i], rp.predicates[i+1:]...)
-			break
+			return rp.resetRoutingSelections(ctx)
 		}
 	}
-	return rp.resetRoutingSelections(ctx)
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s not found in predicates", sqlparser.String(expr))
 }
 
 // addPredicate adds these predicates added to it. if the predicates can help,
