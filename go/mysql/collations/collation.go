@@ -29,6 +29,23 @@ import (
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
+// WireByte encodes this collation ID as a single byte, if possible
+func (id ID) WireByte() (byte, error) {
+	if id <= 255 {
+		return byte(id), nil
+	}
+	if coll, ok := collationsById[id]; ok {
+		cset := collationsByCharset[coll.Charset().Name()]
+		for _, c := range cset.All {
+			if c.ID() <= 255 {
+				return byte(c.ID()), nil
+			}
+		}
+		return 0, fmt.Errorf("collation %s (0x%02x) cannot be encoded as a single byte", coll.Name(), id)
+	}
+	return 0, fmt.Errorf("collation 0x%02x cannot be encoded as a single byte", id)
+}
+
 // Unknown is the default ID for an unknown collation.
 const Unknown ID = 0
 
@@ -125,8 +142,13 @@ func minInt(i1, i2 int) int {
 
 var collationsByName = make(map[string]Collation)
 var collationsById = make(map[ID]Collation)
-var binaryCollationByCharset = make(map[string]Collation)
-var defaultCollationByCharset = make(map[string]Collation)
+var collationsByCharset = make(map[string]*collationset)
+
+type collationset struct {
+	Default Collation
+	Binary  Collation
+	All     []Collation
+}
 
 func register(c Collation, isDefault bool) {
 	duplicatedCharset := func(old Collation) {
@@ -144,20 +166,28 @@ func register(c Collation, isDefault bool) {
 	collationsById[c.ID()] = c
 
 	csname := c.Charset().Name()
+	cset := collationsByCharset[csname]
+	if cset == nil {
+		cset = &collationset{}
+		collationsByCharset[csname] = cset
+	}
+
+	cset.All = append(cset.All, c)
 	if c.IsBinary() && c.Name() != "utf8mb4_bin" {
-		if old, found := binaryCollationByCharset[csname]; found {
+		if cset.Binary != nil {
 			panic(fmt.Sprintf("charset %s has more than one binary collation: %s and %s",
-				csname, c.Name(), old.Name(),
+				csname, c.Name(), cset.Binary.Name(),
 			))
 		}
-		binaryCollationByCharset[csname] = c
+		cset.Binary = c
 	}
 	if isDefault {
-		if old, found := defaultCollationByCharset[csname]; found {
+		if cset.Default != nil {
 			panic(fmt.Sprintf("charset %s has more than one default collation: %s and %s",
-				csname, c.Name(), old.Name(),
+				csname, c.Name(), cset.Default.Name(),
 			))
 		}
+		cset.Default = c
 	}
 }
 
@@ -195,11 +225,13 @@ func FromID(id ID) Collation {
 
 // DefaultForCharset returns the default collation for a charset
 func DefaultForCharset(charset string) Collation {
-	coll := defaultCollationByCharset[charset]
-	if coll != nil {
-		coll.Init()
+	if cset, ok := collationsByCharset[charset]; ok {
+		if cset.Default != nil {
+			cset.Default.Init()
+			return cset.Default
+		}
 	}
-	return coll
+	return nil
 }
 
 // All returns a slice with all known collations in Vitess. This is an expensive call because
