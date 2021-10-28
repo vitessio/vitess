@@ -44,7 +44,8 @@ func TestInit(t *testing.T) {
 		Host:                       "a",
 		Port:                       1,
 		Socket:                     "b",
-		Charset:                    "c",
+		Charset:                    "utf8mb4",
+		Collation:                  "utf8mb4_general_ci",
 		Flags:                      2,
 		Flavor:                     "flavor",
 		SslCa:                      "d",
@@ -79,7 +80,8 @@ func TestInit(t *testing.T) {
 		Uname:            "app",
 		Pass:             "apppass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
+		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		ConnectTimeoutMs: 250,
@@ -90,7 +92,8 @@ func TestInit(t *testing.T) {
 		Host:             "a",
 		Port:             1,
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
+		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -106,7 +109,8 @@ func TestInit(t *testing.T) {
 		Uname:            "dba",
 		Pass:             "dbapass",
 		UnixSocket:       "b",
-		Charset:          "c",
+		Charset:          "utf8mb4",
+		Collation:        "utf8mb4_general_ci",
 		Flags:            2,
 		Flavor:           "flavor",
 		SslCa:            "d",
@@ -141,7 +145,8 @@ func TestInit(t *testing.T) {
 		},
 		appParams: mysql.ConnParams{
 			UnixSocket: "socket",
-			Charset:    "f",
+			Charset:    "utf8mb4",
+			Collation:  "", // should be transformed to the default collation for its charset
 		},
 		dbaParams: mysql.ConnParams{
 			Host:  "host",
@@ -155,7 +160,8 @@ func TestInit(t *testing.T) {
 		Uname:      "app",
 		Pass:       "apppass",
 		UnixSocket: "b",
-		Charset:    "f",
+		Charset:    "utf8mb4",
+		Collation:  "utf8mb4_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{

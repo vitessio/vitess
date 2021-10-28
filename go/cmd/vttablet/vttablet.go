@@ -157,6 +157,12 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 		log.Info("connection parameters were specified. Not loading my.cnf.")
 	}
 
+	if config.DB.Collation == "" {
+		// TODO: use the collations API to get the default collation using config.DB.Charset
+		// using arbitrary value for now
+		config.DB.Collation = "utf8mb4_general_ci"
+	}
+
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
 	// dbconfigs.

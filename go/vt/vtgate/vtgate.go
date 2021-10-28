@@ -26,8 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/vt/sysvars"
-
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 
 	"context"
@@ -98,7 +97,7 @@ var (
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
-	charset = flag.String("charset", sysvars.Charset.Default, "Character set to use by default between the client and VTGate")
+	collation = flag.String("collation", "utf8mb4_general_ci", "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -131,6 +130,8 @@ var (
 	warnings *stats.CountersWithSingleLabel
 
 	vstreamSkewDelayCount *stats.Counter
+
+	coll collations.ID
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -166,6 +167,11 @@ var RegisterVTGates []RegisterVTGate
 func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWait []topodatapb.TabletType) *VTGate {
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
+	}
+
+	coll = collations.LookupIDByName(*collation)
+	if coll == collations.Unknown {
+		log.Fatalf("Collation is incorrect or unsupported: %s", *collation)
 	}
 
 	// vschemaCounters needs to be initialized before planner to
