@@ -1073,12 +1073,13 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		)},
 	}
 
+	collationID, _ := collations.IDFromName("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collations.LookupIDByName("utf8mb4_0900_ai_ci")}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
 		Input:       fp,
 	}
 
@@ -1114,12 +1115,13 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		)},
 	}
 
+	collationID, _ := collations.IDFromName("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collations.LookupIDByName("utf8mb4_0900_as_ci")}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
 		Input:       fp,
 	}
 
@@ -1157,12 +1159,13 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		)},
 	}
 
+	collationID, _ := collations.IDFromName("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
 			Col:    1,
 		}},
-		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collations.LookupIDByName("utf8mb4_ja_0900_as_cs_ks")}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
 		Input:       fp,
 	}
 
