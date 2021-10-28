@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -27,7 +28,7 @@ import (
 	"strings"
 	"time"
 
-	"context"
+	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,7 +65,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 	}
 
 	// Figure out the character set we want.
-	characterSet, err := parseCharacterSet(params.Charset)
+	characterSet, err := parseCharacterSet(params.Charset, params.Collation)
 	if err != nil {
 		return nil, err
 	}
@@ -203,10 +204,32 @@ func (c *Conn) Ping() error {
 
 // parseCharacterSet parses the provided character set.
 // Returns SQLError(CRCantReadCharset) if it can't.
-func parseCharacterSet(cs string) (uint8, error) {
-	// Check if it's empty, return utf8. This is a reasonable default.
-	if cs == "" {
-		return CharacterSetUtf8, nil
+func parseCharacterSet(cs, coll string) (uint8, error) {
+	// Check if it's empty, return utf8mb4. This is a reasonable default.
+	if cs == "" && coll == "" {
+		return CharacterSetUtf8mb4, nil
+	}
+
+	if coll != "" {
+		collation := collations.LookupByName(coll)
+		if collation != nil && collation.Id() != collations.Unknown {
+
+			// The MySQL handshake package uses the "character set" field to define
+			// which character set must be used. But, the value we give to this field
+			// correspond in fact to the collation ID. MySQL will then deduce what the
+			// character set for this collation ID is, and use it.
+			// Problem is, this field is 8-bits long meaning that the ID can range from
+			// 0 to 255, which is smaller than the range of IDs we support.
+			// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
+			// ID equal to 305, the value would overflow when transformed into an 8 bits
+			// integer. For this reason, we return an error if we attempt to use a
+			// collation with an ID > 255.
+			// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
+			if collation.Id() > 255 {
+				return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set with ID: %d. Only 8-bits long values are supported. Use a collation with a lower ID.", collation.Id())
+			}
+			return uint8(collation.Id()), nil
+		}
 	}
 
 	// Check if it's in our map.

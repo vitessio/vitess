@@ -591,8 +591,11 @@ const (
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	// CharacterSetUtf8 is for UTF8. We use this by default.
+	// CharacterSetUtf8 is for UTF8.
 	CharacterSetUtf8 = 33
+
+	// CharacterSetUtf8mb4 is for 4-bytes UTF8. We use this by default.
+	CharacterSetUtf8mb4 = 45
 
 	// CharacterSetBinary is for binary. Use by integer fields for instance.
 	CharacterSetBinary = 63
@@ -630,7 +633,7 @@ var CharacterSetMap = map[string]uint8{
 	"macroman": 39,
 	"cp852":    40,
 	"latin7":   41,
-	"utf8mb4":  45,
+	"utf8mb4":  CharacterSetUtf8mb4,
 	"cp1251":   51,
 	"utf16":    54,
 	"utf16le":  56,
