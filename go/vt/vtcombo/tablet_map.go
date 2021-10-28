@@ -521,6 +521,13 @@ func (itc *internalTabletConn) BeginExecuteBatch(ctx context.Context, target *qu
 	return results, transactionID, alias, err
 }
 
+// BeginStreamExecute is part of queryservice.QueryService
+func (itc *internalTabletConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reserveID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+	bindVars = sqltypes.CopyBindVariables(bindVars)
+	transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, reserveID, options, callback)
+	return transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // MessageStream is part of queryservice.QueryService
 func (itc *internalTabletConn) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
 	err := itc.tablet.qsc.QueryService().MessageStream(ctx, target, name, callback)
