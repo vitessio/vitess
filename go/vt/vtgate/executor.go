@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
@@ -355,8 +357,13 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
-		case sysvars.Charset.Name:
-			bindVars[key] = sqltypes.StringBindVariable(session.Options.Charset)
+		case sysvars.Collation.Name:
+			collation := collations.LookupById(collations.ID(session.Options.Collation))
+			name := ""
+			if collation != nil {
+				name = collation.Name()
+			}
+			bindVars[key] = sqltypes.StringBindVariable(name)
 		}
 	}
 

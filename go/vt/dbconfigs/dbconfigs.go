@@ -75,6 +75,7 @@ type DBConfigs struct {
 	Host                       string        `json:"host,omitempty"`
 	Port                       int           `json:"port,omitempty"`
 	Charset                    string        `json:"charset,omitempty"`
+	Collation                  string        `json:"collation,omitempty"`
 	Flags                      uint64        `json:"flags,omitempty"`
 	Flavor                     string        `json:"flavor,omitempty"`
 	SslMode                    vttls.SslMode `json:"sslMode,omitempty"`
@@ -127,7 +128,8 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	flag.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&GlobalDBConfigs.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set used for this tablet.")
+	flag.StringVar(&GlobalDBConfigs.Collation, "db_collation", "", "Collation used for this tablet. If this flag is empty, the default collation for the character set will be used.")
 	flag.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
 	flag.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
@@ -355,9 +357,26 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.UnixSocket = defaultSocketFile
 		}
 
-		if dbcfgs.Charset != "" {
+		if dbcfgs.Charset != "" && cp.Charset == "" {
 			cp.Charset = dbcfgs.Charset
 		}
+
+		// if no collation is defined in both the connection params and default config
+		// then use the default collation of the connection params' charset, or of the
+		// default config's charset if connection params' charset is not defined.
+		// otherwise, if the default configuration already have a collation defined, use it.
+		//
+		// TODO: use the collations API to get the default collation for a given character set
+		if dbcfgs.Collation == "" && cp.Collation == "" {
+			if cp.Charset != "" {
+				cp.Collation = "utf8mb4_general_ci"
+			} else if dbcfgs.Charset != "" {
+				cp.Collation = "utf8mb4_general_ci"
+			}
+		} else if dbcfgs.Collation != "" && cp.Collation == "" {
+			cp.Collation = dbcfgs.Collation
+		}
+
 		if dbcfgs.Flags != 0 {
 			cp.Flags = dbcfgs.Flags
 		}

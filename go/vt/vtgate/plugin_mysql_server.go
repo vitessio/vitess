@@ -345,7 +345,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
-				Charset:        strings.Trim(*charset, "'"),
+				Collation:      int32(coll),
 			},
 			Autocommit:           true,
 			DDLStrategy:          *defaultDDLStrategy,

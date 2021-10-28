@@ -29,6 +29,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -1244,8 +1246,9 @@ func (tsv *TabletServer) execRequest(
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
 
-	if tsv.config.DB.Charset != options.Charset {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", options.Charset, tsv.config.DB.Charset)
+	coll := collations.LookupById(collations.ID(options.Collation))
+	if tsv.config.DB.Collation != coll.Name() {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), tsv.config.DB.Collation)
 	}
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
