@@ -155,6 +155,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
 
@@ -180,6 +181,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
 %token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -260,6 +262,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
 %token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
@@ -319,6 +322,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
+%type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -4270,6 +4274,96 @@ UTC_DATE func_paren_opt
   {
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
+| EXTRACT openb interval FROM expression closeb
+  {
+	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+  }
+
+interval:
+ interval_time_stamp
+ {}
+| DAY_HOUR
+  {
+	$$=IntervalDayHour
+  }
+| DAY_MICROSECOND
+  {
+	$$=IntervalDayMicrosecond
+  }
+| DAY_MINUTE
+  {
+	$$=IntervalDayMinute
+  }
+| DAY_SECOND
+  {
+	$$=IntervalDaySecond
+  }
+| HOUR_MICROSECOND
+  {
+	$$=IntervalHourMicrosecond
+  }
+| HOUR_MINUTE
+  {
+	$$=IntervalHourMinute
+  }
+| HOUR_SECOND
+  {
+	$$=IntervalHourSecond
+  }
+| MINUTE_MICROSECOND
+  {
+	$$=IntervalMinuteMicrosecond
+  }
+| MINUTE_SECOND
+  {
+	$$=IntervalMinuteSecond
+  }
+| SECOND_MICROSECOND
+  {
+	$$=IntervalSecondMicrosecond
+  }
+| YEAR_MONTH
+  {
+	$$=IntervalYearMonth
+  }
+
+interval_time_stamp:
+ DAY
+  {
+ 	$$=IntervalDay
+  }
+| WEEK
+  {
+  	$$=IntervalWeek
+  }
+| HOUR
+  {
+ 	$$=IntervalHour
+  }
+| MINUTE
+  {
+ 	$$=IntervalMinute
+  }
+| MONTH
+  {
+	$$=IntervalMonth
+  }
+| QUARTER
+  {
+	$$=IntervalQuarter
+  }
+| SECOND
+  {
+	$$=IntervalSecond
+  }
+| MICROSECOND
+  {
+	$$=IntervalMicrosecond
+  }
+| YEAR
+  {
+	$$=IntervalYear
+  }
 
 func_paren_opt:
   /* empty */
@@ -5204,6 +5298,7 @@ reserved_keyword:
 | ESCAPE
 | EXISTS
 | EXPLAIN
+| EXTRACT
 | FALSE
 | FIRST_VALUE
 | FOR
@@ -5587,6 +5682,24 @@ non_reserved_keyword:
 | WORK
 | YEAR
 | ZEROFILL
+| DAY
+| DAY_HOUR
+| DAY_MICROSECOND
+| DAY_MINUTE
+| DAY_SECOND
+| HOUR
+| HOUR_MICROSECOND
+| HOUR_MINUTE
+| HOUR_SECOND
+| MICROSECOND
+| MINUTE
+| MINUTE_MICROSECOND
+| MINUTE_SECOND
+| MONTH
+| QUARTER
+| SECOND
+| SECOND_MICROSECOND
+| YEAR_MONTH
 
 openb:
   '('

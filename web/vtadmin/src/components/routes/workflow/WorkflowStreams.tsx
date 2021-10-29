@@ -26,10 +26,10 @@ import { formatDateTime } from '../../../util/time';
 import { getStreams, formatStreamKey, getStreamSource, getStreamTarget } from '../../../util/workflows';
 import { DataCell } from '../../dataTable/DataCell';
 import { DataTable } from '../../dataTable/DataTable';
-import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { TabletLink } from '../../links/TabletLink';
 import { StreamStatePip } from '../../pips/StreamStatePip';
 import { WorkflowStreamsLagChart } from '../../charts/WorkflowStreamsLagChart';
+import { ShardLink } from '../../links/ShardLink';
 
 interface Props {
     clusterID: string;
@@ -76,22 +76,22 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                     </DataCell>
                     <DataCell>
                         {source ? (
-                            <KeyspaceLink
+                            <ShardLink
                                 clusterID={clusterID}
-                                name={row.binlog_source?.keyspace}
+                                keyspace={row.binlog_source?.keyspace}
                                 shard={row.binlog_source?.shard}
                             >
                                 {source}
-                            </KeyspaceLink>
+                            </ShardLink>
                         ) : (
                             <span className="text-color-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
                         {target ? (
-                            <KeyspaceLink clusterID={clusterID} name={keyspace} shard={row.shard}>
+                            <ShardLink clusterID={clusterID} keyspace={keyspace} shard={row.shard}>
                                 {target}
-                            </KeyspaceLink>
+                            </ShardLink>
                         ) : (
                             <span className="text-color-secondary">N/A</span>
                         )}

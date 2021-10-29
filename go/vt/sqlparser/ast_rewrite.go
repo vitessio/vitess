@@ -132,6 +132,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
 	case Exprs:
 		return a.rewriteExprs(parent, node, replacer)
+	case *ExtractFuncExpr:
+		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *Flush:
@@ -1961,6 +1963,33 @@ func (a *application) rewriteExprs(parent SQLNode, node Exprs, replacer replacer
 		}(x)) {
 			return false
 		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfExtractFuncExpr(parent SQLNode, node *ExtractFuncExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ExtractFuncExpr).Expr = newNode.(Expr)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -5111,6 +5140,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfDefault(parent, node, replacer)
 	case *ExistsExpr:
 		return a.rewriteRefOfExistsExpr(parent, node, replacer)
+	case *ExtractFuncExpr:
+		return a.rewriteRefOfExtractFuncExpr(parent, node, replacer)
 	case *ExtractedSubquery:
 		return a.rewriteRefOfExtractedSubquery(parent, node, replacer)
 	case *FuncExpr:

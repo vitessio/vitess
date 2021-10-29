@@ -448,7 +448,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "resharding_bytes",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": [
 				"worker_test"
 			]
@@ -468,7 +468,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "16",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"stress": {
@@ -568,7 +568,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_tablegc",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": [
 				"site_test"
 			]
@@ -909,7 +909,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_vindex",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"web_test": {
@@ -956,7 +956,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_materialize": {
@@ -974,7 +974,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_basic": {
@@ -983,7 +983,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vstream_failover": {
@@ -992,7 +992,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream_failover",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vstream_stoponreshard_true": {
@@ -1010,6 +1010,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream_stoponreshard_false",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vstream_with_keyspaces_to_watch": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "VStreamWithKeyspacesToWatch"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vstream_with_keyspaces_to_watch",
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -1037,7 +1046,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_v2",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_migrate": {

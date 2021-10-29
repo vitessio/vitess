@@ -19,7 +19,7 @@ package uca
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type WeightTable []*[]uint16
@@ -61,18 +61,18 @@ func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch,
 	switch {
 	case coll.param == nil && coll.contractions == nil && len(weightPatches) == 0:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorFast{iterator: iterator{Collation900: *coll}}
+			return &FastIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_ja_0900_as_cs_ks" || name == "utf8mb4_ja_0900_as_cs":
 		coll.iterpool.New = func() interface{} {
-			return &iteratorJA{iterator: iterator{Collation900: *coll}}
+			return &jaIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_zh_0900_as_cs":
 		coll.implicits = unicodeImplicitChineseWeights
 		fallthrough
 	default:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorSlow{iterator: iterator{Collation900: *coll}}
+			return &slowIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	}
 
@@ -80,7 +80,7 @@ func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch,
 }
 
 type CollationLegacy struct {
-	encoding     encoding.Encoding
+	charset      charset.Charset
 	table        WeightTable
 	maxCodepoint rune
 	contractions *contractions
@@ -103,9 +103,9 @@ func (c *CollationLegacy) WeightForSpace() uint16 {
 	return ascii[1+' '*stride]
 }
 
-func NewCollationLegacy(enc encoding.Encoding, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
+func NewCollationLegacy(cs charset.Charset, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
 	coll := &CollationLegacy{
-		encoding:     enc,
+		charset:      cs,
 		table:        applyTailoring(TableLayout_uca_legacy{}, weights, weightPatches),
 		maxCodepoint: maxCodepoint,
 		contractions: newContractions(contractions),

@@ -971,6 +971,20 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Wild)))
 	return size
 }
+func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *ExtractedSubquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

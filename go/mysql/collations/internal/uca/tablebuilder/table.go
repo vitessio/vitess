@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tablebuilder
 
 import (
@@ -69,6 +85,27 @@ func (p *page) adjustImplicitWeights(tb *TableBuilder) {
 		entry.weights = make([]uint16, 6)
 		uca.UnicodeImplicitWeights900(entry.weights, codepoint)
 	}
+}
+
+func (p *page) weights900Fast(level int) (w []uint16) {
+	if p.entryCount == 0 {
+		return nil
+	}
+	for i := 0; i < 128; i++ {
+		entry := &p.entries[i]
+		if len(entry.weights) > 3 {
+			panic("trying to dump fast weights for codepoint with >3 weights")
+		}
+		var weight uint16
+		if level < len(entry.weights) {
+			weight = entry.weights[level]
+		}
+		w = append(w, weight)
+	}
+	for i := 0; i < 128; i++ {
+		w = append(w, 0x0)
+	}
+	return
 }
 
 func (p *page) weights900() (w []uint16) {
@@ -203,6 +240,19 @@ func (tb *TableBuilder) DumpTables(w io.Writer, layout uca.TableLayout) {
 		fmt.Fprintf(w, "%s,", pageptr)
 	}
 	fmt.Fprintf(w, "\n}\n\n")
+}
+
+func (tb *TableBuilder) DumpFastTables(w io.Writer, layout uca.TableLayout) {
+	switch layout.(type) {
+	case uca.TableLayout_uca900:
+	default:
+		panic("unsupported table layout for FastTables")
+	}
+
+	ascii := &tb.pages[0]
+	tb.pagebuilder.WriteFastPage(w, ascii.name(tb.ucav)+"L0", ascii.weights900Fast(0))
+	tb.pagebuilder.WriteFastPage(w, ascii.name(tb.ucav)+"L1", ascii.weights900Fast(1))
+	tb.pagebuilder.WriteFastPage(w, ascii.name(tb.ucav)+"L2", ascii.weights900Fast(2))
 }
 
 func NewTableBuilder(ucav string, pagebuilder *EmbeddedPageBuilder) *TableBuilder {

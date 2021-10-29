@@ -356,6 +356,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsExprs(a, b)
+	case *ExtractFuncExpr:
+		b, ok := inB.(*ExtractFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractFuncExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
@@ -1592,6 +1598,18 @@ func EqualsExprs(a, b Exprs) bool {
 		}
 	}
 	return true
+}
+
+// EqualsRefOfExtractFuncExpr does deep equals between the two objects.
+func EqualsRefOfExtractFuncExpr(a, b *ExtractFuncExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IntervalTypes == b.IntervalTypes &&
+		EqualsExpr(a.Expr, b.Expr)
 }
 
 // EqualsRefOfExtractedSubquery does deep equals between the two objects.
@@ -3179,6 +3197,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfExistsExpr(a, b)
+	case *ExtractFuncExpr:
+		b, ok := inB.(*ExtractFuncExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfExtractFuncExpr(a, b)
 	case *ExtractedSubquery:
 		b, ok := inB.(*ExtractedSubquery)
 		if !ok {
