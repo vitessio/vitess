@@ -215,7 +215,17 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 }
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	stmtType, qr, err := e.newExecute(ctx, safeSession, sql, bindVars, logStats)
+	var err error
+	var qr *sqltypes.Result
+	var stmtType sqlparser.StatementType
+	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, time time.Time) error {
+		stmtType = plan.Type
+		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
+		return err
+	}, func(typ sqlparser.StatementType, result *sqltypes.Result) {
+		stmtType = typ
+		qr = result
+	})
 	if err == planbuilder.ErrPlanNotSupported {
 		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
 	}
@@ -1184,9 +1194,16 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		return err
 	}
 	logStats.StmtType = plan.Type.String()
-	switch plan.Type {
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "OLAP does not supported statement type: %s", plan.Type)
+	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vc)
+	if err != nil {
+		return err
+	}
+	if result != nil {
+		// if we got a result back, it means the query was handled inside
+		if err := callback(result); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
@@ -1206,7 +1223,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// So, we need the ability to consolidate those into reasonable chunks.
 	// The callback wrapper below accumulates rows and sends them as chunks
 	// dictated by stream_buffer_size.
-	result := &sqltypes.Result{}
+	result = &sqltypes.Result{}
 	byteCount := 0
 	seenResults := false
 	var foundRows uint64
@@ -1247,6 +1264,10 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	}
 
 	err = vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, callbackGen)
+
+	logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+	logStats.Table = plan.Instructions.GetTableName()
+	logStats.TabletType = vc.TabletType().String()
 
 	logStats.ExecuteTime = time.Since(execStart)
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
