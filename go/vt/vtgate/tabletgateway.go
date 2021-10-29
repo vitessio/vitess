@@ -271,14 +271,17 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		if len(tablets) == 0 {
 			// if we have a keyspace event watcher, check if the reason why our primary is not available is that it's currently being resharded
 			// or if a reparent operation is in progress.
-			if gw.kev != nil && gw.kev.TargetIsBeingResharded(target) {
-				err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
-				continue
+			if kev := gw.kev; kev != nil {
+				if kev.TargetIsBeingResharded(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "current keyspace is being resharded")
+					continue
+				}
+				if kev.PrimaryIsNotServing(target) {
+					err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
+					continue
+				}
 			}
-			if gw.kev != nil && gw.kev.PrimaryIsNotServing(target) {
-				err = vterrors.Errorf(vtrpcpb.Code_CLUSTER_EVENT, "primary is not serving, there is a reparent operation in progress")
-				continue
-			}
+
 			// fail fast if there is no tablet
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
