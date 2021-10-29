@@ -38,7 +38,6 @@ var (
 	keyspaceName    = "healthcheck_test_ks"
 	cell            = "healthcheck_test_cell"
 	shards          = []string{"-80", "80-"}
-	churnTabletUID  = 9999
 	schemaSQL       = `
 create table customer(
 	customer_id bigint not null auto_increment,
@@ -135,6 +134,8 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	numShards := len(shards)
 	// 1 for primary,replica
 	expectedTabletHCcacheEntries := numShards * 2
+	churnTabletUID := 9999
+	churnTabletType := "rdonly"
 
 	// verify output of SHOW VITESS_TABLETS
 	vtgateConn, err := mysql.Connect(ctx, &vtParams)
@@ -143,11 +144,12 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	query := "show vitess_tablets"
 
 	// starting with two shards, each with 1 primary and 1 replica tablet)
+	// we'll be adding and removing a tablet of type churnTabletType with churnTabletUID
 	qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
 	for i := 0; i < tries; i++ {
-		tablet := addTablet(t)
+		tablet := addTablet(t, churnTabletUID, churnTabletType)
 		expectedTabletHCcacheEntries++
 
 		qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
@@ -165,14 +167,14 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d", expectedTabletHCcacheEntries, len(qr.Rows))
 }
 
-func addTablet(t *testing.T) *cluster.Vttablet {
+func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet {
 	tablet := &cluster.Vttablet{
-		TabletUID: churnTabletUID,
-		Type:      "rdonly",
+		TabletUID: tabletUID,
+		Type:      tabletType,
 		HTTPPort:  clusterInstance.GetAndReservePort(),
 		GrpcPort:  clusterInstance.GetAndReservePort(),
 		MySQLPort: clusterInstance.GetAndReservePort(),
-		Alias:     fmt.Sprintf("%s-%010d", cell, churnTabletUID),
+		Alias:     fmt.Sprintf("%s-%010d", cell, tabletUID),
 	}
 	// Start Mysqlctl process
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
@@ -182,7 +184,7 @@ func addTablet(t *testing.T) *cluster.Vttablet {
 	// Start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
-		churnTabletUID,
+		tabletUID,
 		cell,
 		shards[0],
 		keyspaceName,
@@ -193,9 +195,6 @@ func addTablet(t *testing.T) *cluster.Vttablet {
 		clusterInstance.TmpDirectory,
 		clusterInstance.VtTabletExtraArgs,
 		clusterInstance.EnableSemiSync)
-	tablet.Alias = tablet.VttabletProcess.TabletPath
-	tablet.VttabletProcess.SupportsBackup = false
-	tablet.VttabletProcess.ServingStatus = "SERVING"
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
@@ -204,9 +203,8 @@ func addTablet(t *testing.T) *cluster.Vttablet {
 	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 
-	tablet.VttabletProcess.WaitForStatus("SERVING")
-	// If we don't wait in my tests, then we hit a context timeout in the subsequent call :(
-	time.Sleep(60 * time.Second)
+	serving := tablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
+	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
 	err = clusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s",
 		tablet.VttabletProcess.Keyspace, tablet.VttabletProcess.Shard, tablet.Type), 1)
 	require.Nil(t, err)
@@ -214,14 +212,6 @@ func addTablet(t *testing.T) *cluster.Vttablet {
 	t.Logf("Added tablet: %s", tablet.Alias)
 	return tablet
 }
-
-/*
-func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
-	t.Logf("Deleting tablet: %s", tablet.Alias)
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", fmt.Sprintf("%s-%d", cell, tablet.TabletUID))
-	require.Nil(t, err)
-}
-*/
 
 func killTablet(t *testing.T, tablet *cluster.Vttablet) {
 	t.Logf("Killing tablet: %s", tablet.Alias)
@@ -231,11 +221,10 @@ func killTablet(t *testing.T, tablet *cluster.Vttablet) {
 		defer wg.Done()
 		_ = tablet.VttabletProcess.TearDown()
 		_ = tablet.MysqlctlProcess.Stop()
+		tablet.MysqlctlProcess.CleanupFiles(tablet.TabletUID)
 	}(tablet)
 	wg.Wait()
 
-	// If we don't wait... the state doesn't get updated in time :-(
-	time.Sleep(30 * time.Second)
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)
 }
