@@ -133,12 +133,12 @@ func TestNormalize(t *testing.T) {
 	}, {
 		// Hex value does not convert
 		in:      "select * from t where v1 = 0x1234",
-		outstmt: "select * from t where v1 = 0x1234",
+		outstmt: "select * from t where v1 = :bv1",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// Hex value does not convert for DMLs
 		in:      "update a set v1 = 0x1234",
-		outstmt: "update a set v1 = 0x1234",
+		outstmt: "update a set v1 = :bv1",
 		outbv:   map[string]*querypb.BindVariable{},
 	}, {
 		// Bin value does not convert
