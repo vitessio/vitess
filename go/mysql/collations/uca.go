@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	register(&Collation_utf8mb4_0900_bin{})
+	register(&Collation_utf8mb4_0900_bin{}, false)
 }
 
 type CollationUCA interface {
@@ -60,10 +60,6 @@ func (c *Collation_utf8mb4_uca_0900) init() {
 	})
 }
 
-func (c *Collation_utf8mb4_uca_0900) Charset() charset.Charset {
-	return charset.Charset_utf8mb4{}
-}
-
 func (c *Collation_utf8mb4_uca_0900) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
 	return c.uca.Weights()
 }
@@ -72,8 +68,16 @@ func (c *Collation_utf8mb4_uca_0900) Name() string {
 	return c.name
 }
 
-func (c *Collation_utf8mb4_uca_0900) Id() ID {
+func (c *Collation_utf8mb4_uca_0900) ID() ID {
 	return c.id
+}
+
+func (c *Collation_utf8mb4_uca_0900) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
+}
+
+func (c *Collation_utf8mb4_uca_0900) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_utf8mb4_uca_0900) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -180,16 +184,20 @@ type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) init() {}
 
-func (c *Collation_utf8mb4_0900_bin) Charset() charset.Charset {
-	return charset.Charset_utf8mb4{}
-}
-
-func (c *Collation_utf8mb4_0900_bin) Id() ID {
+func (c *Collation_utf8mb4_0900_bin) ID() ID {
 	return 309
 }
 
 func (c *Collation_utf8mb4_0900_bin) Name() string {
 	return "utf8mb4_0900_bin"
+}
+
+func (c *Collation_utf8mb4_0900_bin) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
+}
+
+func (c *Collation_utf8mb4_0900_bin) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) int {
@@ -233,20 +241,24 @@ func (c *Collation_uca_legacy) init() {
 	})
 }
 
-func (c *Collation_uca_legacy) Charset() charset.Charset {
-	return c.charset
-}
-
 func (c *Collation_uca_legacy) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
 	return c.uca.Weights()
 }
 
-func (c *Collation_uca_legacy) Id() ID {
+func (c *Collation_uca_legacy) ID() ID {
 	return c.id
 }
 
 func (c *Collation_uca_legacy) Name() string {
 	return c.name
+}
+
+func (c *Collation_uca_legacy) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_uca_legacy) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {

@@ -16,9 +16,7 @@ limitations under the License.
 
 package collations
 
-import (
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
-)
+import "vitess.io/vitess/go/mysql/collations/internal/charset"
 
 type Collation_multibyte struct {
 	id      ID
@@ -29,12 +27,20 @@ type Collation_multibyte struct {
 
 func (c *Collation_multibyte) init() {}
 
-func (c *Collation_multibyte) Id() ID {
+func (c *Collation_multibyte) ID() ID {
 	return c.id
 }
 
 func (c *Collation_multibyte) Name() string {
 	return c.name
+}
+
+func (c *Collation_multibyte) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_multibyte) IsBinary() bool {
+	return c.sort == nil
 }
 
 func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
@@ -139,8 +145,4 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 
 func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 	return numCodepoints
-}
-
-func (c *Collation_multibyte) Charset() charset.Charset {
-	return c.charset
 }

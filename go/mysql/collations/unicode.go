@@ -31,16 +31,20 @@ type Collation_unicode_general_ci struct {
 
 func (c *Collation_unicode_general_ci) init() {}
 
-func (c *Collation_unicode_general_ci) Charset() charset.Charset {
-	return c.charset
-}
-
-func (c *Collation_unicode_general_ci) Id() ID {
+func (c *Collation_unicode_general_ci) ID() ID {
 	return c.id
 }
 
 func (c *Collation_unicode_general_ci) Name() string {
 	return c.name
+}
+
+func (c *Collation_unicode_general_ci) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_unicode_general_ci) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool) int {
@@ -130,7 +134,7 @@ type Collation_unicode_bin struct {
 
 func (c *Collation_unicode_bin) init() {}
 
-func (c *Collation_unicode_bin) Id() ID {
+func (c *Collation_unicode_bin) ID() ID {
 	return c.id
 }
 
@@ -140,6 +144,10 @@ func (c *Collation_unicode_bin) Name() string {
 
 func (c *Collation_unicode_bin) Charset() charset.Charset {
 	return c.charset
+}
+
+func (c *Collation_unicode_bin) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {

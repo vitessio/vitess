@@ -36,13 +36,18 @@ import (
 
 var Output = flag.String("out", "mysqldata.go", "")
 var Print8BitData = flag.Bool("full8bit", false, "")
+var CleanupGlobalAllocations = flag.Bool("cleanup-allocs", false, "")
 
 type tailoringWeights map[string][]uint16
 
 type collationMetadata struct {
-	Name           string
-	Charset        string
-	Binary         bool
+	Name    string
+	Charset string
+	Flags   struct {
+		Binary  bool
+		ASCII   bool
+		Default bool
+	}
 	CollationImpl  string
 	Number         uint
 	CType          []byte
@@ -128,7 +133,7 @@ func (meta *collationMetadata) writeUcaLegacy(tables, init io.Writer, seenTables
 	default:
 		panic("invalid UCAVersion")
 	}
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(init, "}, %v)\n", meta.Flags.Default)
 }
 
 func (meta *collationMetadata) writeWeightPatches(tables io.Writer, seenTables map[string]string) string {
@@ -267,7 +272,7 @@ func (meta *collationMetadata) writeUca900(tables, init io.Writer, seenTables ma
 	if meta.UpperCaseFirst {
 		fmt.Fprintf(init, "upperCaseFirst: true,\n")
 	}
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(init, "}, %v)\n", meta.Flags.Default)
 }
 
 const RowLength = 16
@@ -325,16 +330,18 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 	if meta.SortOrder != nil {
 		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.SortOrder, seenTables)
 	}
-	if meta.TabToUni != nil {
-		tableToUnicode = printUnsignedSlice(tables, "tounicode", meta.Name, meta.TabToUni, seenTables)
-	}
-	if meta.TabFromUni != nil {
-		tableFromUnicode = printUnicodeMappings(tables, "fromunicode", meta.Name, meta.TabFromUni, seenTables)
+	if meta.Charset != "latin1" {
+		if meta.TabToUni != nil {
+			tableToUnicode = printUnsignedSlice(tables, "tounicode", meta.Name, meta.TabToUni, seenTables)
+		}
+		if meta.TabFromUni != nil {
+			tableFromUnicode = printUnicodeMappings(tables, "fromunicode", meta.Name, meta.TabFromUni, seenTables)
+		}
 	}
 	fmt.Fprintf(tables, "\n")
 
 	var collation string
-	if meta.Binary {
+	if meta.Flags.Binary {
 		collation = "Collation_8bit_bin"
 	} else {
 		collation = "Collation_8bit_simple_ci"
@@ -355,22 +362,27 @@ func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[
 	}
 	fmt.Fprintf(init, "},\n")
 
-	fmt.Fprintf(init, "charset: &charset.Charset_8bit{\n")
-	fmt.Fprintf(init, "Name_: %q,\n", meta.Charset)
-	if tableToUnicode != "" {
-		fmt.Fprintf(init, "ToUnicode: %s,\n", tableToUnicode)
+	// Optimized implementation for latin1
+	if meta.Charset == "latin1" {
+		fmt.Fprintf(init, "charset: charset.Charset_latin1{},\n")
+	} else {
+		fmt.Fprintf(init, "charset: &charset.Charset_8bit{\n")
+		fmt.Fprintf(init, "Name_: %q,\n", meta.Charset)
+		if tableToUnicode != "" {
+			fmt.Fprintf(init, "ToUnicode: %s,\n", tableToUnicode)
+		}
+		if tableFromUnicode != "" {
+			fmt.Fprintf(init, "FromUnicode: %s,\n", tableFromUnicode)
+		}
+		fmt.Fprintf(init, "},\n")
 	}
-	if tableFromUnicode != "" {
-		fmt.Fprintf(init, "FromUnicode: %s,\n", tableFromUnicode)
-	}
-	fmt.Fprintf(init, "},\n")
 
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(init, "}, %v)\n", meta.Flags.Default)
 }
 
 func (meta *collationMetadata) writeUnicode(_, init io.Writer, _ map[string]string) {
 	var collation string
-	if meta.Binary {
+	if meta.Flags.Binary {
 		collation = "Collation_unicode_bin"
 	} else {
 		collation = "Collation_unicode_general_ci"
@@ -378,11 +390,11 @@ func (meta *collationMetadata) writeUnicode(_, init io.Writer, _ map[string]stri
 	fmt.Fprintf(init, "register(&%s{\n", collation)
 	fmt.Fprintf(init, "id: %d,\n", meta.Number)
 	fmt.Fprintf(init, "name: %q,\n", meta.Name)
-	if !meta.Binary {
+	if !meta.Flags.Binary {
 		fmt.Fprintf(init, "unicase: unicaseInfo_default,\n")
 	}
 	fmt.Fprintf(init, "charset: charset.Charset_%s{},\n", meta.Charset)
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(init, "}, %v)\n", meta.Flags.Default)
 }
 
 func (meta *collationMetadata) writeMultibyte(tables, init io.Writer, seenTables map[string]string) {
@@ -398,7 +410,7 @@ func (meta *collationMetadata) writeMultibyte(tables, init io.Writer, seenTables
 		fmt.Fprintf(init, "sort: %s,\n", tableSortOrder)
 	}
 	fmt.Fprintf(init, "charset: charset.Charset_%s{},\n", meta.Charset)
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(init, "}, %v)\n", meta.Flags.Default)
 }
 
 func loadMysqlMetadata() (all []*collationMetadata) {
@@ -461,6 +473,9 @@ func main() {
 		case meta.Name == "utf8mb4_0900_bin" || meta.Name == "binary":
 			// hardcoded collations; nothing to export here
 
+		case meta.Name == "tis620_bin":
+			// explicitly unsupported for now because of not accurate results
+
 		case meta.CollationImpl == "any_uca" ||
 			meta.CollationImpl == "utf16_uca" ||
 			meta.CollationImpl == "utf32_uca" ||
@@ -476,10 +491,10 @@ func main() {
 		case meta.Name == "gb18030_unicode_520_ci":
 			meta.writeUcaLegacy(&tables, &init, deduplicated)
 
-		case charset.IsMultibyte(meta.Charset):
+		case charset.IsMultibyteByName(meta.Charset):
 			meta.writeMultibyte(&tables, &init, deduplicated)
 
-		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicode(meta.Charset):
+		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicodeByName(meta.Charset):
 			meta.writeUnicode(&tables, &init, deduplicated)
 
 		case strings.HasSuffix(meta.Name, "_general_ci"):
@@ -509,13 +524,15 @@ func main() {
 	fmt.Fprintf(&file, "func init() {\n")
 	init.WriteTo(&file)
 
-	var cleanup []string
-	for _, table := range deduplicated {
-		cleanup = append(cleanup, table)
-	}
-	sort.Strings(cleanup)
-	for _, table := range cleanup {
-		fmt.Fprintf(&file, "%s = nil\n", table)
+	if *CleanupGlobalAllocations {
+		var cleanup []string
+		for _, table := range deduplicated {
+			cleanup = append(cleanup, table)
+		}
+		sort.Strings(cleanup)
+		for _, table := range cleanup {
+			fmt.Fprintf(&file, "%s = nil\n", table)
+		}
 	}
 
 	fmt.Fprintf(&file, "}\n")

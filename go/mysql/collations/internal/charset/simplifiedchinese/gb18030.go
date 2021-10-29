@@ -20,7 +20,7 @@ import (
 	"unicode/utf8"
 	_ "unsafe"
 
-	"golang.org/x/text/encoding/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
 )
 
 type Charset_gb18030 struct{}
@@ -29,14 +29,95 @@ func (Charset_gb18030) Name() string {
 	return "gb18030"
 }
 
-//go:linkname gb18030 golang.org/x/text/encoding/simplifiedchinese.gb18030
-var gb18030 [206][2]uint16
+func (Charset_gb18030) IsSuperset(other types.Charset) bool {
+	switch other.(type) {
+	case Charset_gb18030:
+		return true
+	default:
+		return false
+	}
+}
 
-//go:linkname decode golang.org/x/text/encoding/simplifiedchinese.decode
-var decode [23845]uint16
+const isgb18030 = true
+
+func (Charset_gb18030) EncodeRune(dst []byte, r rune) int {
+	_ = dst[3]
+
+	var r2 rune
+	switch {
+	case r < utf8.RuneSelf:
+		goto write1
+	case encode0Low <= r && r < encode0High:
+		if r2 = rune(encode0[r-encode0Low]); r2 != 0 {
+			goto write2
+		}
+	case encode1Low <= r && r < encode1High:
+		// Microsoft's Code Page 936 extends GBK 1.0 to encode the euro sign U+20AC
+		// as 0x80. The HTML5 specification at http://encoding.spec.whatwg.org/#gbk
+		// says to treat "gbk" as Code Page 936.
+		if r == '€' {
+			r = 0x80
+			goto write1
+		}
+		if r2 = rune(encode1[r-encode1Low]); r2 != 0 {
+			goto write2
+		}
+	case encode2Low <= r && r < encode2High:
+		if r2 = rune(encode2[r-encode2Low]); r2 != 0 {
+			goto write2
+		}
+	case encode3Low <= r && r < encode3High:
+		if r2 = rune(encode3[r-encode3Low]); r2 != 0 {
+			goto write2
+		}
+	case encode4Low <= r && r < encode4High:
+		if r2 = rune(encode4[r-encode4Low]); r2 != 0 {
+			goto write2
+		}
+	}
+
+	if isgb18030 {
+		if r < 0x10000 {
+			i, j := 0, len(gb18030)
+			for i < j {
+				h := i + (j-i)/2
+				if r >= rune(gb18030[h][1]) {
+					i = h + 1
+				} else {
+					j = h
+				}
+			}
+			dec := &gb18030[i-1]
+			r += rune(dec[0]) - rune(dec[1])
+			goto write4
+		} else if r < 0x110000 {
+			r += 189000 - 0x10000
+			goto write4
+		}
+	}
+	return -1
+
+write1:
+	dst[0] = uint8(r)
+	return 1
+
+write2:
+	dst[0] = uint8(r2 >> 8)
+	dst[1] = uint8(r2)
+	return 2
+
+write4:
+	dst[3] = uint8(r%10 + 0x30)
+	r /= 10
+	dst[2] = uint8(r%126 + 0x81)
+	r /= 126
+	dst[1] = uint8(r%10 + 0x30)
+	r /= 10
+	dst[0] = uint8(r + 0x81)
+	return 4
+}
 
 func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
-	const isgb18030 = true
 	if len(src) < 1 {
 		return utf8.RuneError, 0
 	}
@@ -116,9 +197,5 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 }
 
 func (c Charset_gb18030) SupportsSupplementaryChars() bool {
-	return true
-}
-
-func (c Charset_gb18030) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return simplifiedchinese.GB18030.NewEncoder().Bytes(in)
+	return false
 }

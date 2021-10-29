@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -169,13 +170,13 @@ func main() {
 	}
 
 	var rootCollations = []collations.Collation{
-		collations.LookupByName("utf8mb4_0900_as_cs"),
-		collations.LookupByName("utf8mb4_0900_as_ci"),
-		collations.LookupByName("utf8mb4_0900_ai_ci"),
-		collations.LookupByName("utf8mb4_general_ci"),
-		collations.LookupByName("utf8mb4_bin"),
-		collations.LookupByName("utf8mb4_unicode_ci"),
-		collations.LookupByName("utf8mb4_unicode_520_ci"),
+		collations.FromName("utf8mb4_0900_as_cs"),
+		collations.FromName("utf8mb4_0900_as_ci"),
+		collations.FromName("utf8mb4_0900_ai_ci"),
+		collations.FromName("utf8mb4_general_ci"),
+		collations.FromName("utf8mb4_bin"),
+		collations.FromName("utf8mb4_unicode_ci"),
+		collations.FromName("utf8mb4_unicode_520_ci"),
 	}
 
 	articles, err := getAllLanguages(os.Args[1])
@@ -208,7 +209,7 @@ func main() {
 		interestingCollations = append(interestingCollations, collationsForLanguage[lang]...)
 
 		for _, collation := range interestingCollations {
-			transcoded, err := collation.Charset().EncodeFromUTF8([]byte(snippet))
+			transcoded, err := charset.ConvertFromUTF8(nil, collation.Charset(), []byte(snippet))
 			if err != nil {
 				log.Printf("[%s] skip collation %s", lang, collation.Name())
 				continue
