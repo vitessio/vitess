@@ -63,9 +63,19 @@ type {{ streamAdapterName .Name }} struct {
 
 func (stream *{{ streamAdapterName .Name }}) Recv() ({{ .StreamMessage.Type }}, error) {
 	select {
-	case <-stream.ctx.Done():
-		return nil, stream.ctx.Err()
-	case err := <-stream.errch:
+	case <-stream.Context().Done():
+		return nil, stream.Context().Err()
+	case <-stream.Closed():
+		// Stream has been closed for future sends. If there are messages that
+		// have already been sent, receive them until there are no more. After
+		// all sent messages have been received, Recv will return the CloseErr.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
+	case err := <-stream.ErrCh:
 		return nil, err
 	case msg := <-stream.ch:
 		return msg, nil
@@ -73,16 +83,11 @@ func (stream *{{ streamAdapterName .Name }}) Recv() ({{ .StreamMessage.Type }}, 
 }
 
 func (stream *{{ streamAdapterName .Name }}) Send(msg {{ .StreamMessage.Type }}) error {
-	stream.m.RLock()
-	defer stream.m.RUnlock()
-
-	if stream.sendClosed {
-		return errStreamClosed
-	}
-
 	select {
-	case <-stream.ctx.Done():
-		return stream.ctx.Err()
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	case <-stream.Closed():
+		return errStreamClosed
 	case stream.ch <- msg:
 		return nil
 	}
@@ -104,7 +109,7 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 	}
 	go func() {
 		err := client.s.{{ .Name }}(in, stream)
-		stream.close(err)
+		stream.CloseWithError(err)
 	}()
 
 	return stream, nil
