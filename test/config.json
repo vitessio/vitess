@@ -272,7 +272,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "22",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": [
 				"worker_test"
 			]
@@ -849,6 +849,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_godriver": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/godriver"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_godriver",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"vtgate_watchkeyspace": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/keyspace_watches"],
@@ -965,7 +974,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -1028,7 +1037,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vault": {
