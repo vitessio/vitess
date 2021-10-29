@@ -358,9 +358,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		case sysvars.Collation.Name:
-			collation := collations.LookupById(collations.ID(session.Options.Collation))
 			name := ""
-			if collation != nil {
+			if collation := collations.FromID(collations.ID(session.Options.Collation)); collation != nil {
 				name = collation.Name()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(name)
