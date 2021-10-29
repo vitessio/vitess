@@ -24,8 +24,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net"
-	"strconv"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -62,12 +60,6 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		addr = params.UnixSocket
 	} else {
 		addr = net.JoinHostPort(params.Host, fmt.Sprintf("%v", params.Port))
-	}
-
-	// Figure out the character set we want.
-	characterSet, err := parseCharacterSet(params.Charset, params.Collation)
-	if err != nil {
-		return nil, err
 	}
 
 	// Start a background connection routine.  It first
@@ -124,7 +116,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		// make any read or write just return with an error
 		// right away.
 		status <- connectResult{
-			err: c.clientHandshake(characterSet, params),
+			err: c.clientHandshake(params),
 		}
 	}()
 
@@ -175,6 +167,15 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 			return nil, cr.err
 		}
 	}
+
+	// Once we are connected to the server, we set the collation for this connection.
+	// This step usually occurs during the handshake, however, the handshake protocol
+	// grants us 8 bits for the collation ID, which is lower than the range of supported
+	// collations. For this reason, we manually set the collation for the connection.
+	if err := setCollationForConnection(c, params); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -202,69 +203,58 @@ func (c *Conn) Ping() error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
-// parseCharacterSet transforms the given charset (cs) and collation (coll)
-// into an 8 bits integer. This integer will be added to the Handshake
-// Protocol packet we send to MySQL.
-// The integer value represents the collation ID to use. To define its value,
-// we first try to use the collation string we are given as input if it is
-// not an empty string. Using the collations API, we can translate the collation
-// string into an ID.
-// If the collation string is empty, we try to use the given charset string,
-// to resolve its ID, we use the CharacterSetMap that contains charset name as key
-// and collation ID as the value.
-// If the resolution of the charset into an ID failed, we try to parse the charset
-// string into an INT and use its value.
-// If none of these three ways worked, we return an SQLError(CRCantReadCharset).
-func parseCharacterSet(cs, coll string) (uint8, error) {
-	// Check if it's empty, return utf8mb4. This is a reasonable default.
-	if cs == "" && coll == "" {
-		return CharacterSetUtf8mb4, nil
-	}
+// setCollationForConnection sets the connection's collation to the given collation.
+func setCollationForConnection(c *Conn, params *ConnParams) error {
+	var collStr string
 
-	if coll != "" {
-		collation := collations.FromName(coll)
-		if collation != nil && collation.ID() != collations.Unknown {
+	// if no collation or charset is defined, we fall back to the DefaultCollation
+	if params.Collation == "" && params.Charset == "" {
+		collStr = DefaultCollation
+	} else {
+		var coll collations.Collation
 
-			// The MySQL handshake package uses the "character set" field to define
-			// which character set must be used. But, the value we give to this field
-			// correspond in fact to the collation ID. MySQL will then deduce what the
-			// character set for this collation ID is, and use it.
-			// Problem is, this field is 8-bits long meaning that the ID can range from
-			// 0 to 255, which is smaller than the range of IDs we support.
-			// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
-			// ID equal to 305, the value would overflow when transformed into an 8 bits
-			// integer. For this reason, we return an error if we attempt to use a
-			// collation with an ID > 255.
-			// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
-			//
-			// TODO: use collations API to wire the collation ID (PR #9108)
-			// 		- https://github.com/vitessio/vitess/pull/9108
-			if collation.ID() > 255 {
-				return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set with ID: %d. Only 8-bits long values are supported. Use a collation with a lower ID.", collation.ID())
-			}
-			return uint8(collation.ID()), nil
+		// If there is no collation we will just use the charset's default collation
+		// otherwise we directly use the given collation.
+		// Here still call the collations API to ensure the collation/charset exist
+		// and is supported by Vitess.
+		if params.Collation == "" {
+			coll = collations.DefaultForCharset(params.Charset)
+		} else {
+			coll = collations.FromName(params.Collation)
 		}
+		if coll == nil {
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot resolve collation: '%s'", params.Collation)
+		}
+		collStr = coll.Name()
 	}
 
-	// Check if it's in our map.
-	characterSet, ok := CharacterSetMap[strings.ToLower(cs)]
-	if ok {
-		return characterSet, nil
+	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", collStr)
+	_, err := c.ExecuteFetch(querySetCollation, 1, false)
+	if err != nil {
+		return err
 	}
+	return nil
+}
 
-	// As a fallback, try to parse a number. So we support more values.
-	if i, err := strconv.ParseInt(cs, 10, 8); err == nil {
-		return uint8(i), nil
+// getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
+// 8 bits integer which will be used to feed the handshake protocol's packet.
+func getHandshakeCharacterSet() (uint8, error) {
+	coll := collations.FromName(DefaultCollation)
+	if coll == nil {
+		// theoretically, this should never happen from an end user perspective
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
 	}
-
-	// No luck.
-	return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set '%v'. Try using an integer value if needed", cs)
+	if coll.ID() > 255 {
+		// same here, this should never happen
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
+	}
+	return uint8(coll.ID()), nil
 }
 
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
+func (c *Conn) clientHandshake(params *ConnParams) error {
 	// Wait for the server initial handshake packet, and parse it.
 	data, err := c.readPacket()
 	if err != nil {
@@ -287,6 +277,28 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	c.Capabilities = 0
 	if !params.DisableClientDeprecateEOF {
 		c.Capabilities = capabilities & (CapabilityClientDeprecateEOF)
+	}
+
+	// The MySQL handshake package uses the "character set" field to define
+	// which character set must be used. But, the value we give to this field
+	// correspond in fact to the collation ID. MySQL will then deduce what the
+	// character set for this collation ID is, and use it.
+	// Problem is, this field is 8-bits long meaning that the ID can range from
+	// 0 to 255, which is smaller than the range of IDs we support.
+	// If, for instance, we used the collation "utf8mb4_0900_as_ci" that has an
+	// ID equal to 305, the value would overflow when transformed into an 8 bits
+	// integer.
+	// To alleviate this issue, we use a default and safe collation for the handshake
+	// and once the connection is established, we will manually set the collation.
+	// The code below gets that default character set for the Handshake packet.
+	//
+	// Note: this character set might be different from the one we will use
+	// for the connection.
+	//
+	// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
+	characterSet, err := getHandshakeCharacterSet()
+	if err != nil {
+		return err
 	}
 
 	// Handle switch to SSL if necessary.
