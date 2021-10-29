@@ -1,3 +1,5 @@
+//go:build go1.18
+
 /*
 Copyright 2021 The Vitess Authors.
 
@@ -15,7 +17,6 @@ limitations under the License.
 */
 
 // The fuzzing tests for collations use the new Fuzz implementation in Go 1.18+
-//go:build go1.18
 
 package collations
 
