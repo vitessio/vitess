@@ -198,8 +198,6 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	return nil
 }
 
-type currFunc func(*LogStats, *SafeSession) error
-
 func (e *Executor) executePlan(
 	ctx context.Context,
 	safeSession *SafeSession,
