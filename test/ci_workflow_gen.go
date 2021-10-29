@@ -79,6 +79,7 @@ var (
 		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
+		"vtgate_godriver",
 		"vtgate_gen4",
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
