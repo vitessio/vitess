@@ -23,6 +23,7 @@ import (
 	"flag"
 	"os"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -156,11 +157,24 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 		log.Info("connection parameters were specified. Not loading my.cnf.")
 	}
 
+	// The charset should always be set as it has a default value ("utf8mb4"),
+	// however, one can always override its default to an empty string, which
+	// is not a problem as long as the user has specified the collation.
+	// If the collation flag was not specified when starting the tablet, we
+	// attempt to find the default collation for the current charset.
+	// If either the collation and charset are missing, or the resolution of
+	// the default collation using the given charset fails, we error out.
 	if config.DB.Collation == "" {
-		// TODO: use the collations API to get the default collation using config.DB.Charset
-		// using arbitrary value for now
-		config.DB.Collation = "utf8mb4_general_ci"
+		if config.DB.Charset == "" {
+			log.Exitf("cannot resolve tablet's collation: no collation or charset defined")
+		}
+		defaultColl := collations.DefaultForCharset(config.DB.Charset)
+		if defaultColl == nil {
+			log.Exitf("cannot resolve tablet's collation: charset '%s' has no default collation", config.DB.Charset)
+		}
+		config.DB.Collation = defaultColl.Name()
 	}
+	log.Info("tablet uses the '%s' collation", config.DB.Collation)
 
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize

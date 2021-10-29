@@ -97,7 +97,8 @@ var (
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
-	collation = flag.String("collation", "utf8mb4_general_ci", "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
+	// the default collation for VTGate is the default collation of utf8mb4
+	collation = flag.String("collation", collations.DefaultForCharset("utf8mb4").Name(), "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -175,9 +176,8 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		log.Fatalf("VTGate already initialized")
 	}
 
-	coll = collations.LookupIDByName(*collation)
-	if coll == collations.Unknown {
-		log.Fatalf("Collation is incorrect or unsupported: %s", *collation)
+	if err := getCollation(); err != nil {
+		log.Fatal(err.Error())
 	}
 
 	// vschemaCounters needs to be initialized before planner to
@@ -300,6 +300,15 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	initAPI(gw.hc)
 
 	return rpcVTGate
+}
+
+func getCollation() error {
+	var supported bool
+	coll, supported = collations.IDFromName(*collation)
+	if supported == false {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Collation is incorrect or unsupported: %s", *collation)
+	}
+	return nil
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {

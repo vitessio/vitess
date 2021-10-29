@@ -202,8 +202,19 @@ func (c *Conn) Ping() error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
-// parseCharacterSet parses the provided character set.
-// Returns SQLError(CRCantReadCharset) if it can't.
+// parseCharacterSet transforms the given charset (cs) and collation (coll)
+// into an 8 bits integer. This integer will be added to the Handshake
+// Protocol packet we send to MySQL.
+// The integer value represents the collation ID to use. To define its value,
+// we first try to use the collation string we are given as input if it is
+// not an empty string. Using the collations API, we can translate the collation
+// string into an ID.
+// If the collation string is empty, we try to use the given charset string,
+// to resolve its ID, we use the CharacterSetMap that contains charset name as key
+// and collation ID as the value.
+// If the resolution of the charset into an ID failed, we try to parse the charset
+// string into an INT and use its value.
+// If none of these three ways worked, we return an SQLError(CRCantReadCharset).
 func parseCharacterSet(cs, coll string) (uint8, error) {
 	// Check if it's empty, return utf8mb4. This is a reasonable default.
 	if cs == "" && coll == "" {
@@ -211,8 +222,8 @@ func parseCharacterSet(cs, coll string) (uint8, error) {
 	}
 
 	if coll != "" {
-		collation := collations.LookupByName(coll)
-		if collation != nil && collation.Id() != collations.Unknown {
+		collation := collations.FromName(coll)
+		if collation != nil && collation.ID() != collations.Unknown {
 
 			// The MySQL handshake package uses the "character set" field to define
 			// which character set must be used. But, the value we give to this field
@@ -225,10 +236,13 @@ func parseCharacterSet(cs, coll string) (uint8, error) {
 			// integer. For this reason, we return an error if we attempt to use a
 			// collation with an ID > 255.
 			// See: https://dev.mysql.com/doc/internals/en/connection-phase-packets.html
-			if collation.Id() > 255 {
-				return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set with ID: %d. Only 8-bits long values are supported. Use a collation with a lower ID.", collation.Id())
+			//
+			// TODO: use collations API to wire the collation ID (PR #9108)
+			// 		- https://github.com/vitessio/vitess/pull/9108
+			if collation.ID() > 255 {
+				return 0, NewSQLError(CRCantReadCharset, SSUnknownSQLState, "failed to interpret character set with ID: %d. Only 8-bits long values are supported. Use a collation with a lower ID.", collation.ID())
 			}
-			return uint8(collation.Id()), nil
+			return uint8(collation.ID()), nil
 		}
 	}
 

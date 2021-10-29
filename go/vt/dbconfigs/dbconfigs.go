@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttls"
 
 	"vitess.io/vitess/go/mysql"
@@ -365,14 +366,16 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 		// then use the default collation of the connection params' charset, or of the
 		// default config's charset if connection params' charset is not defined.
 		// otherwise, if the default configuration already have a collation defined, use it.
-		//
-		// TODO: use the collations API to get the default collation for a given character set
 		if dbcfgs.Collation == "" && cp.Collation == "" {
-			if cp.Charset != "" {
-				cp.Collation = "utf8mb4_general_ci"
-			} else if dbcfgs.Charset != "" {
-				cp.Collation = "utf8mb4_general_ci"
+			charset := cp.Charset
+			if charset == "" {
+				charset = dbcfgs.Charset
 			}
+			coll := collations.DefaultForCharset(charset)
+			if coll == nil {
+				log.Exitf("cannot resolve tablet's collation: charset '%s' has no default collation", charset)
+			}
+			cp.Collation = coll.Name()
 		} else if dbcfgs.Collation != "" && cp.Collation == "" {
 			cp.Collation = dbcfgs.Collation
 		}
