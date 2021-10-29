@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -335,7 +334,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
-	assert.NotEqual(t, time.Duration(0), logStats.CommitTime, "logstats: expected non-zero CommitTime")
+	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
 	// autocommit = 1, "begin"
