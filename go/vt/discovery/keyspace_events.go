@@ -456,12 +456,9 @@ func (kew *KeyspaceEventWatcher) PrimaryIsNotServing(target *query.Target) bool 
 	}
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
-	for shardName, state := range ks.shards {
-		// find the shard that the target belongs too
-		if shardName == target.Shard {
-			// If the primary tablet was present then externallyReparented will be non-zero and currentPrimary will be nil
-			return !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
-		}
+	if state, ok := ks.shards[target.Shard]; ok {
+		// If the primary tablet was present then externallyReparented will be non-zero and currentPrimary will be not nil
+		return !state.serving && !ks.consistent && state.externallyReparented != 0 && state.currentPrimary != nil
 	}
 	return false
 }
