@@ -305,7 +305,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 func getCollation() error {
 	var supported bool
 	coll, supported = collations.IDFromName(*collation)
-	if supported == false {
+	if !supported {
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Collation is incorrect or unsupported: %s", *collation)
 	}
 	return nil
