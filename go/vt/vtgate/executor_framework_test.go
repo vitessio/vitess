@@ -553,9 +553,6 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 		NewSafeSession(primarySession),
 		sql,
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

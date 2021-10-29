@@ -1170,7 +1170,14 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 }
 
 // StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target *querypb.Target, callback func(*sqltypes.Result) error) (err error) {
+func (e *Executor) StreamExecute(
+	ctx context.Context,
+	method string,
+	safeSession *SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	callback func(*sqltypes.Result) error,
+) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	defer logStats.Send()
 

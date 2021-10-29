@@ -290,9 +290,6 @@ func TestStreamBuffering(t *testing.T) {
 		NewSafeSession(primarySession),
 		"select id from music_user_map where id = 1",
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
@@ -365,9 +362,6 @@ func TestStreamLimitOffset(t *testing.T) {
 		NewSafeSession(primarySession),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
