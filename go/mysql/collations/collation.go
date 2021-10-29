@@ -19,10 +19,18 @@ package collations
 import (
 	"fmt"
 	"math"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 // Generate mysqldata.go from the JSON information dumped from MySQL
 //go:generate go run ./tools/makemysqldata/
+
+// ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
+type ID uint16
+
+// Unknown is the default ID for an unknown collation.
+const Unknown ID = 0
 
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
@@ -30,10 +38,10 @@ type Collation interface {
 	// init initializes the internal state for the collation the first time it is used
 	init()
 
-	// Id returns the numerical identifier for this collation. This is the same
+	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
-	Id() uint
+	ID() ID
 
 	// Name is the full name of this collation, in the form of "ENCODING_LANG_SENSITIVITY"
 	Name() string
@@ -98,6 +106,12 @@ type Collation interface {
 	// of the string, and in practice weight strings can be significantly smaller than the
 	// returned value.
 	WeightStringLen(numCodepoints int) int
+
+	// Charset returns the Charset with which this collation is encoded
+	Charset() charset.Charset
+
+	// IsBinary returns whether this collation is a binary collation
+	IsBinary() bool
 }
 
 const PadToMax = math.MaxInt32
@@ -110,42 +124,82 @@ func minInt(i1, i2 int) int {
 }
 
 var collationsByName = make(map[string]Collation)
-var collationsById = make(map[uint]Collation)
+var collationsById = make(map[ID]Collation)
+var binaryCollationByCharset = make(map[string]Collation)
+var defaultCollationByCharset = make(map[string]Collation)
 
-func register(c Collation) {
+func register(c Collation, isDefault bool) {
 	duplicatedCharset := func(old Collation) {
 		panic(fmt.Sprintf("duplicated collation: %s[%d] (existing collation is %s[%d])",
-			c.Name(), c.Id(), old.Name(), old.Id(),
+			c.Name(), c.ID(), old.Name(), old.ID(),
 		))
 	}
 	if old, found := collationsByName[c.Name()]; found {
 		duplicatedCharset(old)
 	}
-	if old, found := collationsById[c.Id()]; found {
+	if old, found := collationsById[c.ID()]; found {
 		duplicatedCharset(old)
 	}
 	collationsByName[c.Name()] = c
-	collationsById[c.Id()] = c
+	collationsById[c.ID()] = c
+
+	csname := c.Charset().Name()
+	if c.IsBinary() && c.Name() != "utf8mb4_bin" {
+		if old, found := binaryCollationByCharset[csname]; found {
+			panic(fmt.Sprintf("charset %s has more than one binary collation: %s and %s",
+				csname, c.Name(), old.Name(),
+			))
+		}
+		binaryCollationByCharset[csname] = c
+	}
+	if isDefault {
+		if old, found := defaultCollationByCharset[csname]; found {
+			panic(fmt.Sprintf("charset %s has more than one default collation: %s and %s",
+				csname, c.Name(), old.Name(),
+			))
+		}
+	}
 }
 
-// LookupByName returns the collation with the given name. The collation
+// FromName returns the collation with the given name. The collation
 // is initialized if it's the first time being accessed.
-func LookupByName(name string) Collation {
-	csi := collationsByName[name]
-	if csi != nil {
-		csi.init()
+func FromName(name string) Collation {
+	coll := collationsByName[name]
+	if coll != nil {
+		coll.init()
 	}
-	return csi
+	return coll
 }
 
-// LookupById returns the collation with the given numerical identifier. The collation
-// is initialized if it's the first time being accessed.
-func LookupById(id uint) Collation {
-	csi := collationsById[id]
-	if csi != nil {
-		csi.init()
+// IDFromName returns the collation ID for the given name, and whether
+// the collation is supported by this package.
+func IDFromName(name string) (ID, bool) {
+	if supported, ok := collationsByName[name]; ok {
+		return supported.ID(), true
 	}
-	return csi
+	if unsupported, ok := collationsUnsupportedByName[name]; ok {
+		return unsupported, false
+	}
+	return Unknown, false
+}
+
+// FromID returns the collation with the given numerical identifier. The collation
+// is initialized if it's the first time being accessed.
+func FromID(id ID) Collation {
+	coll := collationsById[id]
+	if coll != nil {
+		coll.init()
+	}
+	return coll
+}
+
+// DefaultForCharset returns the default collation for a charset
+func DefaultForCharset(charset string) Collation {
+	coll := defaultCollationByCharset[charset]
+	if coll != nil {
+		coll.init()
+	}
+	return coll
 }
 
 // All returns a slice with all known collations in Vitess. This is an expensive call because

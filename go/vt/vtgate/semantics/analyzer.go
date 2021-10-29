@@ -19,7 +19,6 @@ package semantics
 import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -216,10 +215,10 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type)
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type) {
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type) {
 	recursive = a.binder.recursive.dependencies(expr)
 	direct = a.binder.direct.dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]

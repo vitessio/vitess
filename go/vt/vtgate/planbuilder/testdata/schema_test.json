@@ -52,7 +52,7 @@
           "owner": "overlap_vindex"
         },
         "name_user_map": {
-          "type": "multi",
+          "type": "name_lkp_test",
           "owner": "user"
         },
         "email_user_map": {
@@ -81,6 +81,9 @@
         },
         "cfc": {
           "type": "cfc"
+        },
+        "multicolIdx": {
+          "type": "multiCol_test"
         }
       },
       "tables": {
@@ -276,6 +279,14 @@
             {
               "name": "c2",
               "type": "VARCHAR"
+            }
+          ]
+        },
+        "multicol_tbl": {
+          "column_vindexes": [
+            {
+              "columns": ["cola", "colb"],
+              "name": "multicolIdx"
             }
           ]
         }

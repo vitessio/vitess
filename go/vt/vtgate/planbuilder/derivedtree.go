@@ -74,6 +74,14 @@ func (d *derivedTree) pushOutputColumns(names []*sqlparser.ColName, semTable *se
 	return d.columnsOffset, nil
 }
 
+func (d *derivedTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on derived trees", sqlparser.String(expr))
+}
+
+func (d *derivedTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "remove '%s' predicate not supported on derived trees", sqlparser.String(expr))
+}
+
 // findOutputColumn returns the index on which the given name is found in the slice of
 // *sqlparser.SelectExprs of the derivedTree. The *sqlparser.SelectExpr must be of type
 // *sqlparser.AliasedExpr and match the given name.
