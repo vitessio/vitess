@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"testing"
 	"time"
@@ -37,9 +38,11 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -476,6 +479,227 @@ func TestApplyVSchema(t *testing.T) {
 					},
 				}
 				utils.MustMatch(t, changedSrvVSchema, finalSrvVSchema)
+			}
+		})
+	}
+}
+
+func TestBackup(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		ts        *topo.Server
+		tmc       tmclient.TabletManagerClient
+		tablet    *topodatapb.Tablet
+		req       *vtctldatapb.BackupRequest
+		shouldErr bool
+		assertion func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error)
+	}{
+		{
+			name: "ok",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+			},
+		},
+		{
+			name: "cannot backup primary",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Zero(t, len(responses), "expected no backupclient messages")
+			},
+		},
+		{
+			name: "allow-primary",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_PRIMARY,
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				AllowPrimary: true,
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Equal(t, 3, len(responses), "expected 3 messages from backupclient stream")
+			},
+		},
+		{
+			name: "no tablet",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events: []*logutilpb.Event{{}, {}, {}},
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  404,
+				},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.NotErrorIs(t, err, io.EOF, "expected backupclient stream to close with non-EOF")
+				assert.Zero(t, len(responses), "expected no backupclient messages")
+			},
+		},
+		{
+			name: "midstream error",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000100": {
+						Events:        []*logutilpb.Event{{}, {}, {}},
+						EventInterval: 100 * time.Millisecond,
+						ErrorAfter:    20 * time.Millisecond,
+					},
+				},
+			},
+			tablet: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+				Type: topodatapb.TabletType_REPLICA,
+			},
+			req: &vtctldatapb.BackupRequest{
+				TabletAlias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				assert.NotErrorIs(t, err, io.EOF, "expected Recv loop to end with error other than io.EOF")
+				assert.Less(t, len(responses), 3, "expected fewer than 3 messages from backupclient stream")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tt.tablet != nil {
+				testutil.AddTablet(ctx, t, tt.ts, tt.tablet, nil)
+			}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, tt.ts, tt.tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(ts)
+			})
+			client := localvtctldclient.New(vtctld)
+			stream, err := client.Backup(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			responses, err := func() (responses []*vtctldatapb.BackupResponse, err error) {
+				for {
+					resp, err := stream.Recv()
+					if err != nil {
+						return responses, err
+					}
+
+					responses = append(responses, resp)
+				}
+			}()
+
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(t, responses, err)
+				}()
 			}
 		})
 	}
