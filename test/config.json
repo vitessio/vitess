@@ -316,7 +316,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_ghost",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"onlineddl_vrepl": {
@@ -325,7 +325,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"onlineddl_vrepl_stress": {
@@ -1001,7 +1001,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vstream_failover",
-			"RetryMax": 2,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vstream_stoponreshard_true": {
