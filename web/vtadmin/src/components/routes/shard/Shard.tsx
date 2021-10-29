@@ -28,6 +28,7 @@ import { Code } from '../../Code';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
 import { KeyspaceLink } from '../../links/KeyspaceLink';
 import { useKeyspace } from '../../../hooks/api';
+import { ShardTablets } from './ShardTablets';
 
 interface RouteParams {
     clusterID: string;
@@ -110,13 +111,18 @@ export const Shard = () => {
 
             <ContentContainer>
                 <TabContainer>
+                    <Tab text="Tablets" to={`${url}/tablets`} />
                     <Tab text="JSON" to={`${url}/json`} />
                 </TabContainer>
 
                 <Switch>
+                    <Route path={`${path}/tablets`}>
+                        <ShardTablets {...params} />
+                    </Route>
+
                     <Route path={`${path}/json`}>{shard && <Code code={JSON.stringify(shard, null, 2)} />}</Route>
 
-                    <Redirect from={path} to={`${path}/json`} />
+                    <Redirect from={path} to={`${path}/tablets`} />
                 </Switch>
             </ContentContainer>
 
