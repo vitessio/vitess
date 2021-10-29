@@ -58,6 +58,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAutoIncSpec(in, f)
 	case *Begin:
 		return VisitRefOfBegin(in, f)
+	case *BetweenExpr:
+		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
 		return VisitRefOfBinaryExpr(in, f)
 	case BoolVal:
@@ -210,8 +212,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPartitionSpec(in, f)
 	case Partitions:
 		return VisitPartitions(in, f)
-	case *RangeCond:
-		return VisitRefOfRangeCond(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -555,6 +555,24 @@ func VisitRefOfBegin(in *Begin, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfBetweenExpr(in *BetweenExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Left, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.From, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.To, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfBinaryExpr(in *BinaryExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -879,7 +897,7 @@ func VisitRefOfCurTimeFuncExpr(in *CurTimeFuncExpr, f Visit) error {
 	if err := VisitColIdent(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.Fsp, f); err != nil {
+	if err := VisitRefOfLiteral(in.Fsp, f); err != nil {
 		return err
 	}
 	return nil
@@ -1573,24 +1591,6 @@ func VisitPartitions(in Partitions, f Visit) error {
 	}
 	return nil
 }
-func VisitRefOfRangeCond(in *RangeCond, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitExpr(in.Left, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.From, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.To, f); err != nil {
-		return err
-	}
-	return nil
-}
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -1975,7 +1975,7 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitRefOfColName(in.Name, f); err != nil {
+	if err := VisitExpr(in.Name, f); err != nil {
 		return err
 	}
 	if err := VisitRefOfLiteral(in.StrVal, f); err != nil {
@@ -2536,6 +2536,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfAndExpr(in, f)
 	case Argument:
 		return VisitArgument(in, f)
+	case *BetweenExpr:
+		return VisitRefOfBetweenExpr(in, f)
 	case *BinaryExpr:
 		return VisitRefOfBinaryExpr(in, f)
 	case BoolVal:
@@ -2580,8 +2582,6 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfNullVal(in, f)
 	case *OrExpr:
 		return VisitRefOfOrExpr(in, f)
-	case *RangeCond:
-		return VisitRefOfRangeCond(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:

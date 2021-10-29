@@ -299,7 +299,7 @@ func (g *generator) between() Expr {
 		op = NotBetweenOp
 	}
 
-	return &RangeCond{
+	return &BetweenExpr{
 		Operator: op,
 		Left:     g.intExpr(),
 		From:     g.intExpr(),

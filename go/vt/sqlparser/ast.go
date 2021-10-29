@@ -1510,7 +1510,6 @@ type ColumnType struct {
 
 	// Text field options
 	Charset string
-	Collate string
 
 	// Enum values
 	EnumValues []string
@@ -1535,6 +1534,7 @@ type ColumnTypeOptions struct {
 	As            Expr
 	Comment       *Literal
 	Storage       ColumnStorage
+	Collate       string
 	// Reference stores a foreign key constraint for the given column
 	Reference *ReferenceDefinition
 
@@ -1798,8 +1798,8 @@ type (
 	// ComparisonExprOperator is an enum for ComparisonExpr.Operator
 	ComparisonExprOperator int8
 
-	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
-	RangeCond struct {
+	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
+	BetweenExpr struct {
 		Operator RangeCondOperator
 		Left     Expr
 		From, To Expr
@@ -1927,7 +1927,7 @@ type (
 	// SubstrExpr('static string value', value_expression, value_expression)
 	// In this case StrVal will be set instead of Name.
 	SubstrExpr struct {
-		Name   *ColName
+		Name   Expr
 		StrVal *Literal
 		From   Expr
 		To     Expr
@@ -1978,7 +1978,7 @@ type (
 	// supported functions are documented in the grammar
 	CurTimeFuncExpr struct {
 		Name ColIdent
-		Fsp  Expr // fractional seconds precision, integer from 0 to 6
+		Fsp  *Literal // fractional seconds precision, integer from 0 to 6
 	}
 
 	// ExtractedSubquery is a subquery that has been extracted from the original AST
@@ -2003,7 +2003,7 @@ func (*OrExpr) iExpr()            {}
 func (*XorExpr) iExpr()           {}
 func (*NotExpr) iExpr()           {}
 func (*ComparisonExpr) iExpr()    {}
-func (*RangeCond) iExpr()         {}
+func (*BetweenExpr) iExpr()       {}
 func (*IsExpr) iExpr()            {}
 func (*ExistsExpr) iExpr()        {}
 func (*Literal) iExpr()           {}
