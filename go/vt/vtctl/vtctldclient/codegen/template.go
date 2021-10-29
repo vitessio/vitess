@@ -49,6 +49,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	{{- end }}
+	{{ if .NeedsGRPCShim -}}
+	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+	{{- end }}
 
 	{{ range .Imports -}}
 	{{ if ne .Alias "" }}{{ .Alias }} {{ end }}"{{ .Path }}"
@@ -57,7 +60,7 @@ import (
 {{ range .Methods }}
 {{ if and $.Local .IsStreaming -}}
 type {{ streamAdapterName .Name }} struct {
-	*bidiStream
+	*grpcshim.BidiStream
 	ch chan {{ .StreamMessage.Type }}
 }
 
@@ -87,7 +90,7 @@ func (stream *{{ streamAdapterName .Name }}) Send(msg {{ .StreamMessage.Type }})
 	case <-stream.Context().Done():
 		return stream.Context().Err()
 	case <-stream.Closed():
-		return errStreamClosed
+		return grpcshim.ErrStreamClosed
 	case stream.ch <- msg:
 		return nil
 	}
@@ -104,7 +107,7 @@ func (client *{{ $.Type }}) {{ .Name }}(ctx context.Context, {{ .Param.Name }} {
 	{{- else -}}
 	{{- if .IsStreaming -}}
 	stream := &{{ streamAdapterName .Name }}{
-		bidiStream: newBidiStream(ctx),
+		BidiStream: grpcshim.NewBidiStream(ctx),
 		ch:         make(chan {{ .StreamMessage.Type }}, 1),
 	}
 	go func() {
