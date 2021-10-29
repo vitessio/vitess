@@ -34533,6 +34533,582 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ReloadSchemaRequest. */
+    interface IReloadSchemaRequest {
+
+        /** ReloadSchemaRequest tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a ReloadSchemaRequest. */
+    class ReloadSchemaRequest implements IReloadSchemaRequest {
+
+        /**
+         * Constructs a new ReloadSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaRequest);
+
+        /** ReloadSchemaRequest tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new ReloadSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaRequest instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaRequest): vtctldata.ReloadSchemaRequest;
+
+        /**
+         * Encodes the specified ReloadSchemaRequest message. Does not implicitly {@link vtctldata.ReloadSchemaRequest.verify|verify} messages.
+         * @param message ReloadSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaRequest message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaRequest.verify|verify} messages.
+         * @param message ReloadSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaRequest;
+
+        /**
+         * Decodes a ReloadSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaRequest;
+
+        /**
+         * Verifies a ReloadSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaRequest;
+
+        /**
+         * Creates a plain object from a ReloadSchemaRequest message. Also converts values to other types if specified.
+         * @param message ReloadSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaResponse. */
+    interface IReloadSchemaResponse {
+    }
+
+    /** Represents a ReloadSchemaResponse. */
+    class ReloadSchemaResponse implements IReloadSchemaResponse {
+
+        /**
+         * Constructs a new ReloadSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaResponse);
+
+        /**
+         * Creates a new ReloadSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaResponse instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaResponse): vtctldata.ReloadSchemaResponse;
+
+        /**
+         * Encodes the specified ReloadSchemaResponse message. Does not implicitly {@link vtctldata.ReloadSchemaResponse.verify|verify} messages.
+         * @param message ReloadSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaResponse message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaResponse.verify|verify} messages.
+         * @param message ReloadSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaResponse;
+
+        /**
+         * Decodes a ReloadSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaResponse;
+
+        /**
+         * Verifies a ReloadSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaResponse;
+
+        /**
+         * Creates a plain object from a ReloadSchemaResponse message. Also converts values to other types if specified.
+         * @param message ReloadSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaKeyspaceRequest. */
+    interface IReloadSchemaKeyspaceRequest {
+
+        /** ReloadSchemaKeyspaceRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ReloadSchemaKeyspaceRequest wait_position */
+        wait_position?: (string|null);
+
+        /** ReloadSchemaKeyspaceRequest include_primary */
+        include_primary?: (boolean|null);
+
+        /** ReloadSchemaKeyspaceRequest concurrency */
+        concurrency?: (number|null);
+    }
+
+    /** Represents a ReloadSchemaKeyspaceRequest. */
+    class ReloadSchemaKeyspaceRequest implements IReloadSchemaKeyspaceRequest {
+
+        /**
+         * Constructs a new ReloadSchemaKeyspaceRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaKeyspaceRequest);
+
+        /** ReloadSchemaKeyspaceRequest keyspace. */
+        public keyspace: string;
+
+        /** ReloadSchemaKeyspaceRequest wait_position. */
+        public wait_position: string;
+
+        /** ReloadSchemaKeyspaceRequest include_primary. */
+        public include_primary: boolean;
+
+        /** ReloadSchemaKeyspaceRequest concurrency. */
+        public concurrency: number;
+
+        /**
+         * Creates a new ReloadSchemaKeyspaceRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaKeyspaceRequest instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaKeyspaceRequest): vtctldata.ReloadSchemaKeyspaceRequest;
+
+        /**
+         * Encodes the specified ReloadSchemaKeyspaceRequest message. Does not implicitly {@link vtctldata.ReloadSchemaKeyspaceRequest.verify|verify} messages.
+         * @param message ReloadSchemaKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaKeyspaceRequest message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaKeyspaceRequest.verify|verify} messages.
+         * @param message ReloadSchemaKeyspaceRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaKeyspaceRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaKeyspaceRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaKeyspaceRequest;
+
+        /**
+         * Decodes a ReloadSchemaKeyspaceRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaKeyspaceRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaKeyspaceRequest;
+
+        /**
+         * Verifies a ReloadSchemaKeyspaceRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaKeyspaceRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaKeyspaceRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaKeyspaceRequest;
+
+        /**
+         * Creates a plain object from a ReloadSchemaKeyspaceRequest message. Also converts values to other types if specified.
+         * @param message ReloadSchemaKeyspaceRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaKeyspaceRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaKeyspaceRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaKeyspaceResponse. */
+    interface IReloadSchemaKeyspaceResponse {
+
+        /** ReloadSchemaKeyspaceResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents a ReloadSchemaKeyspaceResponse. */
+    class ReloadSchemaKeyspaceResponse implements IReloadSchemaKeyspaceResponse {
+
+        /**
+         * Constructs a new ReloadSchemaKeyspaceResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaKeyspaceResponse);
+
+        /** ReloadSchemaKeyspaceResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new ReloadSchemaKeyspaceResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaKeyspaceResponse instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaKeyspaceResponse): vtctldata.ReloadSchemaKeyspaceResponse;
+
+        /**
+         * Encodes the specified ReloadSchemaKeyspaceResponse message. Does not implicitly {@link vtctldata.ReloadSchemaKeyspaceResponse.verify|verify} messages.
+         * @param message ReloadSchemaKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaKeyspaceResponse message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaKeyspaceResponse.verify|verify} messages.
+         * @param message ReloadSchemaKeyspaceResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaKeyspaceResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaKeyspaceResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaKeyspaceResponse;
+
+        /**
+         * Decodes a ReloadSchemaKeyspaceResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaKeyspaceResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaKeyspaceResponse;
+
+        /**
+         * Verifies a ReloadSchemaKeyspaceResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaKeyspaceResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaKeyspaceResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaKeyspaceResponse;
+
+        /**
+         * Creates a plain object from a ReloadSchemaKeyspaceResponse message. Also converts values to other types if specified.
+         * @param message ReloadSchemaKeyspaceResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaKeyspaceResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaKeyspaceResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaShardRequest. */
+    interface IReloadSchemaShardRequest {
+
+        /** ReloadSchemaShardRequest keyspace */
+        keyspace?: (string|null);
+
+        /** ReloadSchemaShardRequest shard */
+        shard?: (string|null);
+
+        /** ReloadSchemaShardRequest wait_position */
+        wait_position?: (string|null);
+
+        /** ReloadSchemaShardRequest include_primary */
+        include_primary?: (boolean|null);
+
+        /** ReloadSchemaShardRequest concurrency */
+        concurrency?: (number|null);
+    }
+
+    /** Represents a ReloadSchemaShardRequest. */
+    class ReloadSchemaShardRequest implements IReloadSchemaShardRequest {
+
+        /**
+         * Constructs a new ReloadSchemaShardRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaShardRequest);
+
+        /** ReloadSchemaShardRequest keyspace. */
+        public keyspace: string;
+
+        /** ReloadSchemaShardRequest shard. */
+        public shard: string;
+
+        /** ReloadSchemaShardRequest wait_position. */
+        public wait_position: string;
+
+        /** ReloadSchemaShardRequest include_primary. */
+        public include_primary: boolean;
+
+        /** ReloadSchemaShardRequest concurrency. */
+        public concurrency: number;
+
+        /**
+         * Creates a new ReloadSchemaShardRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaShardRequest instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaShardRequest): vtctldata.ReloadSchemaShardRequest;
+
+        /**
+         * Encodes the specified ReloadSchemaShardRequest message. Does not implicitly {@link vtctldata.ReloadSchemaShardRequest.verify|verify} messages.
+         * @param message ReloadSchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaShardRequest message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaShardRequest.verify|verify} messages.
+         * @param message ReloadSchemaShardRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaShardRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaShardRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaShardRequest;
+
+        /**
+         * Decodes a ReloadSchemaShardRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaShardRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaShardRequest;
+
+        /**
+         * Verifies a ReloadSchemaShardRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaShardRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaShardRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaShardRequest;
+
+        /**
+         * Creates a plain object from a ReloadSchemaShardRequest message. Also converts values to other types if specified.
+         * @param message ReloadSchemaShardRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaShardRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaShardRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a ReloadSchemaShardResponse. */
+    interface IReloadSchemaShardResponse {
+
+        /** ReloadSchemaShardResponse events */
+        events?: (logutil.IEvent[]|null);
+    }
+
+    /** Represents a ReloadSchemaShardResponse. */
+    class ReloadSchemaShardResponse implements IReloadSchemaShardResponse {
+
+        /**
+         * Constructs a new ReloadSchemaShardResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IReloadSchemaShardResponse);
+
+        /** ReloadSchemaShardResponse events. */
+        public events: logutil.IEvent[];
+
+        /**
+         * Creates a new ReloadSchemaShardResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ReloadSchemaShardResponse instance
+         */
+        public static create(properties?: vtctldata.IReloadSchemaShardResponse): vtctldata.ReloadSchemaShardResponse;
+
+        /**
+         * Encodes the specified ReloadSchemaShardResponse message. Does not implicitly {@link vtctldata.ReloadSchemaShardResponse.verify|verify} messages.
+         * @param message ReloadSchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IReloadSchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ReloadSchemaShardResponse message, length delimited. Does not implicitly {@link vtctldata.ReloadSchemaShardResponse.verify|verify} messages.
+         * @param message ReloadSchemaShardResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IReloadSchemaShardResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ReloadSchemaShardResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ReloadSchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.ReloadSchemaShardResponse;
+
+        /**
+         * Decodes a ReloadSchemaShardResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ReloadSchemaShardResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.ReloadSchemaShardResponse;
+
+        /**
+         * Verifies a ReloadSchemaShardResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ReloadSchemaShardResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ReloadSchemaShardResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.ReloadSchemaShardResponse;
+
+        /**
+         * Creates a plain object from a ReloadSchemaShardResponse message. Also converts values to other types if specified.
+         * @param message ReloadSchemaShardResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.ReloadSchemaShardResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ReloadSchemaShardResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a RemoveKeyspaceCellRequest. */
     interface IRemoveKeyspaceCellRequest {
 
