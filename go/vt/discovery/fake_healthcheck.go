@@ -317,9 +317,9 @@ func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 func simpleCopy(th *TabletHealth) *TabletHealth {
 	return &TabletHealth{
 		Conn:                 th.Conn,
-		Tablet:               th.Tablet,
-		Target:               th.Target,
-		Stats:                th.Stats,
+		Tablet:               proto.Clone(th.Tablet).(*topodatapb.Tablet),
+		Target:               proto.Clone(th.Target).(*querypb.Target),
+		Stats:                proto.Clone(th.Stats).(*querypb.RealtimeStats),
 		LastError:            th.LastError,
 		PrimaryTermStartTime: th.PrimaryTermStartTime,
 		Serving:              th.Serving,
