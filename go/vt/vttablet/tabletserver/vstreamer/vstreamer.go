@@ -901,9 +901,12 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		// for that
 		if value.IsBinary() && sqltypes.IsBinary(plan.Table.Fields[colNum].Type) {
 			maxBytesPerChar := uint32(1)
-			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetMap["utf8"]) {
+
+			// TODO: ensure that "Field.Charset" is set to those constants and not to any
+			//		collation ID belonging to either the utf8 or utf8mb4 charset.
+			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8) {
 				maxBytesPerChar = 3
-			} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetMap["utf8mb4"]) {
+			} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8mb4) {
 				maxBytesPerChar = 4
 			}
 
