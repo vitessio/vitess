@@ -26,29 +26,59 @@ import (
 )
 
 type bidiStream struct {
-	m          sync.RWMutex
-	ctx        context.Context
-	errch      chan error
-	sendClosed bool
+	ErrCh chan error
+
+	ctx              context.Context
+	sendClosedCtx    context.Context
+	sendClosedCancel context.CancelFunc
+
+	m        sync.RWMutex
+	closeErr error
 }
 
 func newBidiStream(ctx context.Context) *bidiStream { // nolint (TODO:@ajm188) this will be used in a future PR, and the codegen will produce invalid code for streaming rpcs without this
+	sendClosedCtx, sendClosedCancel := context.WithCancel(context.Background())
 	return &bidiStream{
-		ctx:   ctx,
-		errch: make(chan error, 1),
+		ErrCh:            make(chan error, 1),
+		ctx:              ctx,
+		sendClosedCtx:    sendClosedCtx,
+		sendClosedCancel: sendClosedCancel,
 	}
 }
 
-func (bs *bidiStream) close(err error) {
+func (bs *bidiStream) Closed() <-chan struct{} {
+	return bs.sendClosedCtx.Done()
+}
+
+func (bs *bidiStream) IsClosed() bool {
+	select {
+	case <-bs.Closed():
+		return true
+	default:
+		return false
+	}
+}
+
+func (bs *bidiStream) CloseWithError(err error) {
+	bs.m.Lock()
+	defer bs.m.Unlock()
+
+	if bs.IsClosed() {
+		return
+	}
+
 	if err == nil {
 		err = io.EOF
 	}
 
-	bs.m.Lock()
-	defer bs.m.Unlock()
+	bs.closeErr = err
+	bs.sendClosedCancel()
+}
 
-	bs.sendClosed = true
-	bs.errch <- err
+func (bs *bidiStream) CloseErr() error {
+	bs.m.RLock()
+	defer bs.m.RUnlock()
+	return bs.closeErr
 }
 
 var (
