@@ -97,6 +97,7 @@ func (fhc *FakeHealthCheck) Subscribe() chan *TabletHealth {
 	return fhc.ch
 }
 
+// GetPrimaryTablet gets the primary tablet from the tablets that healthcheck has seen so far
 func (fhc *FakeHealthCheck) GetPrimaryTablet() *topodatapb.Tablet {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
@@ -136,6 +137,23 @@ func (fhc *FakeHealthCheck) SetServing(tablet *topodatapb.Tablet, serving bool) 
 		return
 	}
 	item.ts.Serving = serving
+}
+
+// SetTabletType sets the tablet type for the given tablet
+func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType topodatapb.TabletType) {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	key := TabletToMapKey(tablet)
+	item, isPresent := fhc.items[key]
+	if !isPresent {
+		return
+	}
+	item.ts.Tablet.Type = tabletType
+	tablet.Type = tabletType
+	item.ts.Target.TabletType = tabletType
 }
 
 // Unsubscribe is not implemented.
