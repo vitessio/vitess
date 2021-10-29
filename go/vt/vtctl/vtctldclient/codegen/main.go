@@ -215,6 +215,23 @@ type ClientInterfaceDef struct {
 	ClientName  string
 }
 
+// NeedsGRPCShim returns true if the generated client code needs the internal
+// grpcshim imported. Currently this is true if the client is Local and has any
+// methods that are streaming RPCs.
+func (def *ClientInterfaceDef) NeedsGRPCShim() bool {
+	if !def.Local {
+		return false
+	}
+
+	for _, m := range def.Methods {
+		if m.IsStreaming {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Import contains the meta information about a Go import.
 type Import struct {
 	Alias string
