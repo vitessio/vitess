@@ -145,6 +145,7 @@ const (
 	Geometry   = querypb.Type_GEOMETRY
 	TypeJSON   = querypb.Type_JSON
 	Expression = querypb.Type_EXPRESSION
+	HexNum     = querypb.Type_HEXNUM
 )
 
 // bit-shift the mysql flags by two byte so we

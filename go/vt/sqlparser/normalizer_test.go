@@ -131,15 +131,19 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
 		},
 	}, {
-		// Hex value does not convert
+		// Hex value should work for selects
 		in:      "select * from t where v1 = 0x1234",
 		outstmt: "select * from t where v1 = :bv1",
-		outbv:   map[string]*querypb.BindVariable{},
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x1234")),
+		},
 	}, {
-		// Hex value does not convert for DMLs
-		in:      "update a set v1 = 0x1234",
+		// Hex value should work for DMLs
+		in:      "update a set v1 = 0x12",
 		outstmt: "update a set v1 = :bv1",
-		outbv:   map[string]*querypb.BindVariable{},
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexNumBindVariable([]byte("0x12")),
+		},
 	}, {
 		// Bin value does not convert
 		in:      "select * from t where v1 = b'11'",
