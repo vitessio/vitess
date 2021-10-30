@@ -26,6 +26,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -136,6 +137,13 @@ type TabletManagerClient struct {
 	DemoteMasterResults map[string]struct {
 		Status *replicationdatapb.PrimaryStatus
 		Error  error
+	}
+	// keyed by tablet alias.
+	ExecuteHookDelays map[string]time.Duration
+	// keyed by tablet alias.
+	ExecuteHookResults map[string]struct {
+		Response *hk.HookResult
+		Error    error
 	}
 	// keyed by tablet alias.
 	GetReplicasResults map[string]struct {
@@ -285,6 +293,30 @@ func (fake *TabletManagerClient) DemoteMaster(ctx context.Context, tablet *topod
 	}
 
 	return nil, assert.AnError
+}
+
+// ExecuteHook is part of the tmclient.TabletManagerClient interface.
+func (fake *TabletManagerClient) ExecuteHook(ctx context.Context, tablet *topodatapb.Tablet, hook *hk.Hook) (*hk.HookResult, error) {
+	if fake.ExecuteHookResults == nil {
+		return nil, fmt.Errorf("%w: no ExecuteHook results on fake TabletManagerClient", assert.AnError)
+	}
+
+	key := topoproto.TabletAliasString(tablet.Alias)
+	if fake.ExecuteHookDelays != nil {
+		if delay, ok := fake.ExecuteHookDelays[key]; ok {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+				// proceed to results
+			}
+		}
+	}
+	if result, ok := fake.ExecuteHookResults[key]; ok {
+		return result.Response, result.Error
+	}
+
+	return nil, fmt.Errorf("%w: no ExecuteHook result set for tablet %s", assert.AnError, key)
 }
 
 // GetReplicas is part of the tmclient.TabletManagerClient interface.

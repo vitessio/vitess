@@ -117,6 +117,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1461,10 +1462,22 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
-	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
+
+	resp, err := wr.VtctldServer().ExecuteHook(ctx, &vtctldatapb.ExecuteHookRequest{
+		TabletAlias: tabletAlias,
+		TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
+			Name:       subFlags.Arg(1),
+			Parameters: subFlags.Args()[2:],
+		},
+	})
 	if err != nil {
 		return err
+	}
+
+	hr := hk.HookResult{
+		ExitStatus: int(resp.HookResult.ExitStatus),
+		Stdout:     resp.HookResult.Stdout,
+		Stderr:     resp.HookResult.Stderr,
 	}
 	return printJSON(wr.Logger(), hr)
 }
