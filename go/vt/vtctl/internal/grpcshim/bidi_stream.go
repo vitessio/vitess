@@ -96,7 +96,7 @@ type BidiStream struct {
 	sendClosedCtx    context.Context
 	sendClosedCancel context.CancelFunc
 
-	m        sync.RWMutex
+	m        sync.Mutex
 	closeErr error
 }
 
@@ -157,8 +157,8 @@ func (bs *BidiStream) CloseWithError(err error) {
 // CloseErr returns the error set by CloseWithError, or nil if the stream is
 // not closed.
 func (bs *BidiStream) CloseErr() error {
-	bs.m.RLock()
-	defer bs.m.RUnlock()
+	bs.m.Lock()
+	defer bs.m.Unlock()
 	return bs.closeErr
 }
 
