@@ -278,7 +278,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("copyShardMetadata(%v, %v) failed: %v", sourceTabletAlias, destShardInfo.PrimaryAlias, err)
 	}
 
-	diffs, err := wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+	diffs, err := schematools.CompareSchemas(ctx, wr.ts, wr.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard failed because schemas could not be compared initially: %v", err)
 	}
@@ -319,7 +319,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	// statement. We want to fail early in this case because vtworker SplitDiff
 	// fails in case of such an inconsistency as well.
 	if !skipVerify {
-		diffs, err = wr.compareSchemas(ctx, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
+		diffs, err = schematools.CompareSchemas(ctx, wr.ts, wr.tmc, sourceTabletAlias, destShardInfo.PrimaryAlias, tables, excludeTables, includeViews)
 		if err != nil {
 			return fmt.Errorf("CopySchemaShard failed because schemas could not be compared finally: %v", err)
 		}
@@ -344,21 +344,6 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 	return err
-}
-
-// compareSchemas returns nil if the schema of the two tablets referenced by
-// "sourceAlias" and "destAlias" are identical. Otherwise, the difference is
-// returned as []string.
-func (wr *Wrangler) compareSchemas(ctx context.Context, sourceAlias, destAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool) ([]string, error) {
-	sourceSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, sourceAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", sourceAlias, err)
-	}
-	destSd, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, destAlias, tables, excludeTables, includeViews)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get schema from tablet %v. err: %v", destAlias, err)
-	}
-	return tmutils.DiffSchemaToArray("source", sourceSd, "dest", destSd), nil
 }
 
 // applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
