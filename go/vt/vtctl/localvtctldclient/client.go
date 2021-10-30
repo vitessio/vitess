@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	m      sync.RWMutex
+	m      sync.Mutex
 	server vtctlservicepb.VtctldServer
 )
 
@@ -59,8 +59,8 @@ func SetServer(s vtctlservicepb.VtctldServer) {
 }
 
 func localVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {
-	m.RLock()
-	defer m.RUnlock()
+	m.Lock()
+	defer m.Unlock()
 
 	if server == nil {
 		return nil, errors.New("cannot create local vtctldclient without a server; call SetServer first")
