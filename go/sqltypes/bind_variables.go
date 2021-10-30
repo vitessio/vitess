@@ -65,6 +65,11 @@ func BuildBindVariables(in map[string]interface{}) (map[string]*querypb.BindVari
 	return out, nil
 }
 
+// HexNumBindVariable converts bytes representing a hex number to a bind var.
+func HexNumBindVariable(v []byte) *querypb.BindVariable {
+	return ValueBindVariable(NewHexNum(v))
+}
+
 // Int8BindVariable converts an int8 to a bind var.
 func Int8BindVariable(v int8) *querypb.BindVariable {
 	return ValueBindVariable(NewInt8(v))
