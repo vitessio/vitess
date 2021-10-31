@@ -67,9 +67,9 @@ outer:
 }
 
 func (v *vindexTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "pushPredicate does not work on vindexTrees")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add '%s' predicate not supported on vindex trees", sqlparser.String(expr))
 }
 
 func (v *vindexTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "removePredicate does not work on vindexTrees")
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "remove '%s' predicate not supported on vindex trees", sqlparser.String(expr))
 }

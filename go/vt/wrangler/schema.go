@@ -27,9 +27,9 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,6 +37,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 const (
@@ -52,81 +53,6 @@ func (wr *Wrangler) GetSchema(ctx context.Context, tabletAlias *topodatapb.Table
 	}
 
 	return wr.tmc.GetSchema(ctx, ti.Tablet, tables, excludeTables, includeViews)
-}
-
-// ReloadSchema forces the remote tablet to reload its schema.
-func (wr *Wrangler) ReloadSchema(ctx context.Context, tabletAlias *topodatapb.TabletAlias) error {
-	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return fmt.Errorf("GetTablet(%v) failed: %v", tabletAlias, err)
-	}
-
-	return wr.tmc.ReloadSchema(ctx, ti.Tablet, "")
-}
-
-// ReloadSchemaShard reloads the schema for all replica tablets in a shard,
-// after they reach a given replication position (empty pos means immediate).
-// In general, we don't always expect all replicas to be ready to reload,
-// and the periodic schema reload makes them self-healing anyway.
-// So we do this on a best-effort basis, and log warnings for any tablets
-// that fail to reload within the context deadline.
-func (wr *Wrangler) ReloadSchemaShard(ctx context.Context, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includePrimary bool) {
-	tablets, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
-	switch {
-	case topo.IsErrType(err, topo.PartialResult):
-		// We got a partial result. Do what we can, but warn
-		// that some may be missed.
-		wr.logger.Warningf("ReloadSchemaShard(%v/%v) got a partial tablet list. Some tablets may not have schema reloaded (use vtctl ReloadSchema to fix individual tablets)", keyspace, shard)
-	case err == nil:
-		// Good case, keep going too.
-	default:
-		// This is best-effort, so just log it and move on.
-		wr.logger.Warningf("ReloadSchemaShard(%v/%v) failed to load tablet list, will not reload schema (use vtctl ReloadSchemaShard to try again): %v", keyspace, shard, err)
-		return
-	}
-
-	var wg sync.WaitGroup
-	for _, ti := range tablets {
-		if !includePrimary && ti.Type == topodatapb.TabletType_PRIMARY {
-			// We don't need to reload on the primary
-			// because we assume ExecuteFetchAsDba()
-			// already did that.
-			continue
-		}
-
-		wg.Add(1)
-		go func(tablet *topodatapb.Tablet) {
-			defer wg.Done()
-			concurrency.Acquire()
-			defer concurrency.Release()
-			pos := replicationPos
-			// Primary is always up-to-date. So, don't wait for position.
-			if tablet.Type == topodatapb.TabletType_PRIMARY {
-				pos = ""
-			}
-			if err := wr.tmc.ReloadSchema(ctx, tablet, pos); err != nil {
-				wr.logger.Warningf(
-					"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): %v",
-					topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err)
-			}
-		}(ti.Tablet)
-	}
-	wg.Wait()
-}
-
-// ReloadSchemaKeyspace reloads the schema in all shards in a
-// keyspace.  The concurrency is shared across all shards (only that
-// many tablets will be reloaded at once).
-func (wr *Wrangler) ReloadSchemaKeyspace(ctx context.Context, keyspace string, concurrency *sync2.Semaphore, includePrimary bool) error {
-	shards, err := wr.ts.GetShardNames(ctx, keyspace)
-	if err != nil {
-		return fmt.Errorf("GetShardNames(%v) failed: %v", keyspace, err)
-	}
-
-	for _, shard := range shards {
-		wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, concurrency, includePrimary)
-	}
-	return nil
 }
 
 // helper method to asynchronously diff a schema
@@ -414,11 +340,21 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 
 	// Notify Replicass to reload schema. This is best-effort.
-	concurrency := sync2.NewSemaphore(10, 0)
 	reloadCtx, cancel := context.WithTimeout(ctx, waitReplicasTimeout)
 	defer cancel()
-	wr.ReloadSchemaShard(reloadCtx, destKeyspace, destShard, destPrimaryPos, concurrency, true /* includePrimary */)
-	return nil
+	resp, err := wr.VtctldServer().ReloadSchemaShard(reloadCtx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       destKeyspace,
+		Shard:          destShard,
+		WaitPosition:   destPrimaryPos,
+		Concurrency:    10,
+		IncludePrimary: true,
+	})
+	if resp != nil {
+		for _, e := range resp.Events {
+			logutil.LogEvent(wr.Logger(), e)
+		}
+	}
+	return err
 }
 
 // copyShardMetadata copies contents of _vt.shard_metadata table from the source

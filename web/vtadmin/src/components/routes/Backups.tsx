@@ -29,10 +29,10 @@ import { DataTable } from '../dataTable/DataTable';
 import { ContentContainer } from '../layout/ContentContainer';
 import { WorkspaceHeader } from '../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../layout/WorkspaceTitle';
-import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { BackupStatusPip } from '../pips/BackupStatusPip';
 import { filterNouns } from '../../util/filterNouns';
+import { ShardLink } from '../links/ShardLink';
 
 const COLUMNS = ['Started at', 'Directory', 'Backup', 'Tablet', 'Status'];
 
@@ -73,9 +73,9 @@ export const Backups = () => {
                         <div className="font-size-small text-color-secondary">{formatRelativeTime(row.time)}</div>
                     </DataCell>
                     <DataCell>
-                        <KeyspaceLink clusterID={row.clusterID} name={row.keyspace} shard={row.shard}>
+                        <ShardLink clusterID={row.clusterID} keyspace={row.keyspace} shard={row.shard}>
                             {row.directory}
-                        </KeyspaceLink>
+                        </ShardLink>
                         <div className="font-size-small text-color-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>{row.name}</DataCell>

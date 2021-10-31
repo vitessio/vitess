@@ -21,8 +21,12 @@ const _ = grpc.SupportPackageIsVersion7
 type VTAdminClient interface {
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(ctx context.Context, in *CreateKeyspaceRequest, opts ...grpc.CallOption) (*CreateKeyspaceResponse, error)
+	// CreateShard creates a new shard in the given cluster and keyspace.
+	CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*vtctldata.CreateShardResponse, error)
 	// DeleteKeyspace deletes a keyspace in the given cluster.
 	DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error)
+	// DeleteShard deletes one or more shards in the given cluster and keyspace.
+	DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -90,9 +94,27 @@ func (c *vTAdminClient) CreateKeyspace(ctx context.Context, in *CreateKeyspaceRe
 	return out, nil
 }
 
+func (c *vTAdminClient) CreateShard(ctx context.Context, in *CreateShardRequest, opts ...grpc.CallOption) (*vtctldata.CreateShardResponse, error) {
+	out := new(vtctldata.CreateShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/CreateShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) DeleteKeyspace(ctx context.Context, in *DeleteKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.DeleteKeyspaceResponse, error) {
 	out := new(vtctldata.DeleteKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) DeleteShards(ctx context.Context, in *DeleteShardsRequest, opts ...grpc.CallOption) (*vtctldata.DeleteShardsResponse, error) {
+	out := new(vtctldata.DeleteShardsResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/DeleteShards", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +298,12 @@ func (c *vTAdminClient) VTExplain(ctx context.Context, in *VTExplainRequest, opt
 type VTAdminServer interface {
 	// CreateKeyspace creates a new keyspace in the given cluster.
 	CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error)
+	// CreateShard creates a new shard in the given cluster and keyspace.
+	CreateShard(context.Context, *CreateShardRequest) (*vtctldata.CreateShardResponse, error)
 	// DeleteKeyspace deletes a keyspace in the given cluster.
 	DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error)
+	// DeleteShard deletes one or more shards in the given cluster and keyspace.
+	DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error)
 	// FindSchema returns a single Schema that matches the provided table name
 	// across all specified clusters IDs. Not specifying a set of cluster IDs
 	// causes the search to span all configured clusters.
@@ -336,8 +362,14 @@ type UnimplementedVTAdminServer struct {
 func (UnimplementedVTAdminServer) CreateKeyspace(context.Context, *CreateKeyspaceRequest) (*CreateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateKeyspace not implemented")
 }
+func (UnimplementedVTAdminServer) CreateShard(context.Context, *CreateShardRequest) (*vtctldata.CreateShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateShard not implemented")
+}
 func (UnimplementedVTAdminServer) DeleteKeyspace(context.Context, *DeleteKeyspaceRequest) (*vtctldata.DeleteKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) DeleteShards(context.Context, *DeleteShardsRequest) (*vtctldata.DeleteShardsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteShards not implemented")
 }
 func (UnimplementedVTAdminServer) FindSchema(context.Context, *FindSchemaRequest) (*Schema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindSchema not implemented")
@@ -427,6 +459,24 @@ func _VTAdmin_CreateKeyspace_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_CreateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).CreateShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/CreateShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).CreateShard(ctx, req.(*CreateShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -441,6 +491,24 @@ func _VTAdmin_DeleteKeyspace_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).DeleteKeyspace(ctx, req.(*DeleteKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_DeleteShards_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteShardsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).DeleteShards(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/DeleteShards",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).DeleteShards(ctx, req.(*DeleteShardsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -799,8 +867,16 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_CreateKeyspace_Handler,
 		},
 		{
+			MethodName: "CreateShard",
+			Handler:    _VTAdmin_CreateShard_Handler,
+		},
+		{
 			MethodName: "DeleteKeyspace",
 			Handler:    _VTAdmin_DeleteKeyspace_Handler,
+		},
+		{
+			MethodName: "DeleteShards",
+			Handler:    _VTAdmin_DeleteShards_Handler,
 		},
 		{
 			MethodName: "FindSchema",

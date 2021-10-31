@@ -16,22 +16,31 @@ limitations under the License.
 
 package collations
 
+import (
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
+)
+
 func init() {
-	register(&Collation_binary{})
+	register(&Collation_binary{}, true)
 }
 
 type simpletables struct {
-	tounicode []uint16
-	tolower   []byte
-	toupper   []byte
-	ctype     []byte
-	sort      []byte
+	// By default we're not building in the tables for lower/upper-casing and
+	// character classes, because we're not using them for collation and they
+	// take up a lot of binary space.
+	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
+	// these tables.
+	// tolower   []byte
+	// toupper   []byte
+	// ctype     []byte
+	sort []byte
 }
 
 type Collation_8bit_bin struct {
 	id   ID
 	name string
 	simpletables
+	charset charset.Charset
 }
 
 func (c *Collation_8bit_bin) init() {}
@@ -39,8 +48,17 @@ func (c *Collation_8bit_bin) init() {}
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
 }
-func (c *Collation_8bit_bin) Id() ID {
+
+func (c *Collation_8bit_bin) ID() ID {
 	return c.id
+}
+
+func (c *Collation_8bit_bin) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_8bit_bin) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -48,7 +66,7 @@ func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int
 }
 
 func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
-	copyCodepoints := minInt(len(src), cap(dst))
+	copyCodepoints := len(src)
 
 	var padToMax bool
 	switch numCodepoints {
@@ -72,6 +90,7 @@ type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
 	simpletables
+	charset charset.Charset
 }
 
 func (c *Collation_8bit_simple_ci) init() {}
@@ -80,8 +99,16 @@ func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
 }
 
-func (c *Collation_8bit_simple_ci) Id() ID {
+func (c *Collation_8bit_simple_ci) ID() ID {
 	return c.id
+}
+
+func (c *Collation_8bit_simple_ci) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_8bit_simple_ci) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -102,8 +129,8 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 
 func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
 	padToMax := false
-	sortOrder := c.sort
-	copyCodepoints := minInt(len(src), cap(dst))
+	sortOrder := c.sort[:256]
+	copyCodepoints := len(src)
 
 	switch numCodepoints {
 	case 0:
@@ -115,7 +142,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 	}
 
 	for _, ch := range src[:copyCodepoints] {
-		dst = append(dst, sortOrder[int(ch)])
+		dst = append(dst, sortOrder[ch])
 	}
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
@@ -142,12 +169,20 @@ type Collation_binary struct{}
 
 func (c *Collation_binary) init() {}
 
-func (c *Collation_binary) Id() ID {
+func (c *Collation_binary) ID() ID {
 	return 63
 }
 
 func (c *Collation_binary) Name() string {
 	return "binary"
+}
+
+func (c *Collation_binary) Charset() charset.Charset {
+	return charset.Charset_binary{}
+}
+
+func (c *Collation_binary) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_binary) Collate(left, right []byte, isPrefix bool) int {
@@ -156,7 +191,7 @@ func (c *Collation_binary) Collate(left, right []byte, isPrefix bool) int {
 
 func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []byte {
 	padToMax := false
-	copyCodepoints := minInt(len(src), cap(dst))
+	copyCodepoints := len(src)
 
 	switch numCodepoints {
 	case 0: // no-op
