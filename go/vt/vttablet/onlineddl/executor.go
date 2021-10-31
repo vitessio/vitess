@@ -716,9 +716,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// deferred function will unlock keyspace
 }
 
-// initVreplicationMigratoinSQLMode sets sql_mode according to DDL strategy, and returns a function that
+// initVreplicationMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
 // restores sql_mode to original state
-func (e *Executor) initVreplicationMigratoinSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+func (e *Executor) initVreplicationMigrationSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
 	deferFunc = func() {}
 	if !onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
 		// No need to change sql_mode.
@@ -748,7 +748,7 @@ func (e *Executor) initVreplicationMigratoinSQLMode(ctx context.Context, onlineD
 }
 
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
-	restoreSQLModeFunc, err := e.initVreplicationMigratoinSQLMode(ctx, onlineDDL, conn)
+	restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
 	if err != nil {
 		return v, err
@@ -779,7 +779,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
-		restoreSQLModeFunc, err := e.initVreplicationMigratoinSQLMode(ctx, onlineDDL, conn)
+		restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
 			return err
