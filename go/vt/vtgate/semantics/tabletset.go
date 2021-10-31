@@ -215,6 +215,11 @@ func (ts TableSet) IsSolvedBy(other TableSet) bool {
 	}
 }
 
+// Equals returns true if `ts` and `other` contain the same tables
+func (ts TableSet) Equals(other TableSet) bool {
+	return ts.IsSolvedBy(other) && other.IsSolvedBy(ts)
+}
+
 // NumberOfTables returns the number of bits set
 func (ts TableSet) NumberOfTables() int {
 	if ts.large == nil {

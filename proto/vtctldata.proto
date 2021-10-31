@@ -371,6 +371,15 @@ message EmergencyReparentShardResponse {
   repeated logutil.Event events = 4;
 }
 
+message ExecuteHookRequest {
+  topodata.TabletAlias tablet_alias = 1;
+  tabletmanagerdata.ExecuteHookRequest tablet_hook_request = 2;
+}
+
+message ExecuteHookResponse {
+  tabletmanagerdata.ExecuteHookResponse hook_result = 1;
+}
+
 message FindAllShardsInKeyspaceRequest {
   string keyspace = 1;
 }
@@ -663,6 +672,40 @@ message RefreshStateByShardRequest {
 
 message RefreshStateByShardResponse {
   bool is_partial_refresh = 1;
+}
+
+message ReloadSchemaRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message ReloadSchemaResponse {
+}
+
+message ReloadSchemaKeyspaceRequest {
+  string keyspace = 1;
+  string wait_position = 2;
+  bool include_primary = 3;
+  // Concurrency is the global concurrency across all shards in the keyspace
+  // (so, at most this many tablets will be reloaded across the keyspace at any
+  // given point).
+  uint32 concurrency = 4;
+}
+
+message ReloadSchemaKeyspaceResponse {
+  repeated logutil.Event events = 1;
+}
+
+message ReloadSchemaShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+  string wait_position = 3;
+  bool include_primary = 4;
+  // Concurrency is the maximum number of tablets to reload at one time.
+  uint32 concurrency = 5;
+}
+
+message ReloadSchemaShardResponse {
+  repeated logutil.Event events = 2;
 }
 
 message RemoveKeyspaceCellRequest {

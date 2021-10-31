@@ -1,3 +1,19 @@
+/*
+Copyright 2021 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package tablebuilder
 
 import (
@@ -6,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math/bits"
 )
 
 type EmbeddedPageBuilder struct {
@@ -34,6 +51,25 @@ func (pb *EmbeddedPageBuilder) WritePage(w io.Writer, varname string, values []u
 		pb.raw.WriteByte(byte(v >> 8))
 	}
 	return "&" + varname
+}
+
+func (pb *EmbeddedPageBuilder) WriteFastPage(w io.Writer, varname string, values []uint16) {
+	if len(values) != 256 {
+		panic("WriteFastPage: page does not have 256 values")
+	}
+
+	fmt.Fprintf(w, "var fast%s = [...]uint32{", varname)
+	for col, val := range values {
+		if col%8 == 0 {
+			fmt.Fprintf(w, "\n")
+		}
+		if val != 0 {
+			fmt.Fprintf(w, "0x2%04x, ", bits.ReverseBytes16(val))
+		} else {
+			fmt.Fprintf(w, "0x0000, ")
+		}
+	}
+	fmt.Fprintf(w, "\n}\n\n")
 }
 
 func (pb *EmbeddedPageBuilder) WriteTrailer(w io.Writer, embedfile string) {

@@ -103,7 +103,6 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -118,6 +117,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -1462,10 +1462,22 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
-	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
+
+	resp, err := wr.VtctldServer().ExecuteHook(ctx, &vtctldatapb.ExecuteHookRequest{
+		TabletAlias: tabletAlias,
+		TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
+			Name:       subFlags.Arg(1),
+			Parameters: subFlags.Args()[2:],
+		},
+	})
 	if err != nil {
 		return err
+	}
+
+	hr := hk.HookResult{
+		ExitStatus: int(resp.HookResult.ExitStatus),
+		Stdout:     resp.HookResult.Stdout,
+		Stderr:     resp.HookResult.Stderr,
 	}
 	return printJSON(wr.Logger(), hr)
 }
@@ -3117,7 +3129,10 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return wr.ReloadSchema(ctx, tabletAlias)
+	_, err = wr.VtctldServer().ReloadSchema(ctx, &vtctldatapb.ReloadSchemaRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3141,9 +3156,19 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if *deprecatedIncludeMaster {
 		includePrimary = deprecatedIncludeMaster
 	}
-	sema := sync2.NewSemaphore(*concurrency, 0)
-	wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, sema, *includePrimary)
-	return nil
+	resp, err := wr.VtctldServer().ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       keyspace,
+		Shard:          shard,
+		WaitPosition:   "",
+		IncludePrimary: *includePrimary,
+		Concurrency:    uint32(*concurrency),
+	})
+	if resp != nil {
+		for _, e := range resp.Events {
+			logutil.LogEvent(wr.Logger(), e)
+		}
+	}
+	return err
 }
 
 func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3163,8 +3188,18 @@ func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, sub
 	if *deprecatedIncludeMaster {
 		includePrimary = deprecatedIncludeMaster
 	}
-	sema := sync2.NewSemaphore(*concurrency, 0)
-	return wr.ReloadSchemaKeyspace(ctx, subFlags.Arg(0), sema, *includePrimary)
+	resp, err := wr.VtctldServer().ReloadSchemaKeyspace(ctx, &vtctldatapb.ReloadSchemaKeyspaceRequest{
+		Keyspace:       subFlags.Arg(0),
+		WaitPosition:   "",
+		IncludePrimary: *includePrimary,
+		Concurrency:    uint32(*concurrency),
+	})
+	if resp != nil {
+		for _, e := range resp.Events {
+			logutil.LogEvent(wr.Logger(), e)
+		}
+	}
+	return err
 }
 
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

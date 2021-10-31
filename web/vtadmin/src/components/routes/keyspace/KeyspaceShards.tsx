@@ -28,6 +28,7 @@ import { useSyncedURLParam } from '../../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../../util/filterNouns';
 import { ContentContainer } from '../../layout/ContentContainer';
 import { TabletLink } from '../../links/TabletLink';
+import { ShardLink } from '../../links/ShardLink';
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
 }
@@ -56,7 +57,13 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                     acc.push(
                         <tr key={row.shard}>
                             <DataCell rowSpan={1}>
-                                <ShardServingPip isServing={row.isShardServing} /> {row.shard}
+                                <ShardLink
+                                    clusterID={keyspace?.cluster?.id}
+                                    keyspace={keyspace?.keyspace?.name}
+                                    shard={row.shard}
+                                >
+                                    <ShardServingPip isServing={row.isShardServing} /> {row.shard}
+                                </ShardLink>
                                 {row.shardState === 'NOT_SERVING' && (
                                     <div className="font-size-small text-color-secondary white-space-nowrap">
                                         {row.shardState}
@@ -79,7 +86,13 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                         <tr key={rowKey}>
                             {tdx === 0 && (
                                 <DataCell rowSpan={row.tablets.length}>
-                                    <ShardServingPip isServing={row.isShardServing} /> {row.shard}
+                                    <ShardLink
+                                        clusterID={keyspace?.cluster?.id}
+                                        keyspace={keyspace?.keyspace?.name}
+                                        shard={row.shard}
+                                    >
+                                        <ShardServingPip isServing={row.isShardServing} /> {row.shard}
+                                    </ShardLink>
                                     {row.shardState === 'NOT_SERVING' && (
                                         <div className="font-size-small text-color-secondary white-space-nowrap">
                                             {row.shardState}

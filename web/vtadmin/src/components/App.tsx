@@ -33,6 +33,7 @@ import { VTExplain } from './routes/VTExplain';
 import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
 import { Backups } from './routes/Backups';
+import { Shard } from './routes/shard/Shard';
 
 export const App = () => {
     return (
@@ -58,6 +59,10 @@ export const App = () => {
 
                         <Route path="/keyspaces">
                             <Keyspaces />
+                        </Route>
+
+                        <Route path="/keyspace/:clusterID/:keyspace/shard/:shard">
+                            <Shard />
                         </Route>
 
                         <Route path="/keyspace/:clusterID/:name">
