@@ -58,7 +58,7 @@ var (
 func initVtgateExecutor(vSchemaStr, ksShardMapStr string, opts *Options) error {
 	explainTopo = &ExplainTopo{NumShards: opts.NumShards}
 	explainTopo.TopoServer = memorytopo.NewServer(vtexplainCell)
-	healthCheck = discovery.NewFakeHealthCheck()
+	healthCheck = discovery.NewFakeHealthCheck(nil)
 
 	resolver := newFakeResolver(opts, explainTopo, vtexplainCell)
 
