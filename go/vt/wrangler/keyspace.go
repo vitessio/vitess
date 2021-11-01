@@ -386,7 +386,7 @@ func (wr *Wrangler) cancelHorizontalResharding(ctx context.Context, keyspace, sh
 	return nil
 }
 
-// MigrateServedTypes is used during horizontal splits to migrate a
+// MigrateServedTypes is used during Reshard operations to migrate a
 // served type from a list of shards to another.
 func (wr *Wrangler) MigrateServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, reverse, skipReFreshState bool, filteredReplicationWaitTime time.Duration, reverseReplication bool) (err error) {
 	// check input parameters
@@ -1097,7 +1097,7 @@ func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shar
 		return err
 	}
 	if len(destinationShard.SourceShards) != 1 || len(destinationShard.SourceShards[0].Tables) == 0 {
-		return fmt.Errorf("destination shard %v/%v is not a vertical split target", keyspace, shard)
+		return fmt.Errorf("destination shard %v/%v is not a MoveTables target", keyspace, shard)
 	}
 	sourceShard, err := wr.ts.GetShard(ctx, destinationShard.SourceShards[0].Keyspace, destinationShard.SourceShards[0].Shard)
 	if err != nil {
@@ -1123,7 +1123,7 @@ func (wr *Wrangler) cancelVerticalResharding(ctx context.Context, keyspace, shar
 	return wr.refreshPrimaryTablets(ctx, []*topo.ShardInfo{destinationShard})
 }
 
-// MigrateServedFrom is used during vertical splits to migrate a
+// MigrateServedFrom is used during MoveTable operations to migrate a
 // served type from a keyspace to another.
 func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard string, servedType topodatapb.TabletType, cells []string, reverse bool, filteredReplicationWaitTime time.Duration) (err error) {
 	// read the destination keyspace, check it
@@ -1132,7 +1132,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 		return err
 	}
 	if len(ki.ServedFroms) == 0 {
-		return fmt.Errorf("destination keyspace %v is not a vertical split target", keyspace)
+		return fmt.Errorf("destination keyspace %v is not a MoveTables target", keyspace)
 	}
 
 	// read the destination shard, check it
@@ -1141,7 +1141,7 @@ func (wr *Wrangler) MigrateServedFrom(ctx context.Context, keyspace, shard strin
 		return err
 	}
 	if len(si.SourceShards) != 1 || len(si.SourceShards[0].Tables) == 0 {
-		return fmt.Errorf("destination shard %v/%v is not a vertical split target", keyspace, shard)
+		return fmt.Errorf("destination shard %v/%v is not a MoveTables target", keyspace, shard)
 	}
 
 	// check the migration is valid before locking (will also be checked
@@ -1197,7 +1197,7 @@ func (wr *Wrangler) migrateServedFromLocked(ctx context.Context, ki *topo.Keyspa
 		return err
 	}
 	if len(destinationShard.SourceShards) != 1 {
-		return fmt.Errorf("destination shard %v/%v is not a vertical split target", destinationShard.Keyspace(), destinationShard.ShardName())
+		return fmt.Errorf("destination shard %v/%v is not a MoveTables target", destinationShard.Keyspace(), destinationShard.ShardName())
 	}
 	tables := destinationShard.SourceShards[0].Tables
 
