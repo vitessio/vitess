@@ -40,7 +40,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -60,9 +59,6 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// this is the healthcheck used by vtgate, used by the "vstream * from" functionality
-var vtgateHealthCheck discovery.HealthCheck
 
 var (
 	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
@@ -181,7 +177,11 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	stmtType, result, err := e.execute(ctx, safeSession, sql, bindVars, logStats)
 	logStats.Error = err
-	saveSessionStats(safeSession, stmtType, result, err)
+	if result == nil {
+		saveSessionStats(safeSession, stmtType, 0, 0, 0, err)
+	} else {
+		saveSessionStats(safeSession, stmtType, result.RowsAffected, result.InsertID, len(result.Rows), err)
+	}
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
@@ -195,20 +195,92 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	return result, err
 }
 
-func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType, result *sqltypes.Result, err error) {
+// StreamExecute executes a streaming query.
+func (e *Executor) StreamExecute(
+	ctx context.Context,
+	method string,
+	safeSession *SafeSession,
+	sql string,
+	bindVars map[string]*querypb.BindVariable,
+	callback func(*sqltypes.Result) error,
+) error {
+	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
+	span.Annotate("method", method)
+	trace.AnnotateSQL(span, sql)
+	defer span.Finish()
+
+	logStats := NewLogStats(ctx, method, sql, bindVars)
+
+	var err error
+	var stmtType sqlparser.StatementType
+	var rowsAffected uint64
+	var rowsReturned int
+	var insertID uint64
+	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
+		stmtType = plan.Type
+		// 4: Execute!
+		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
+			rowsAffected += qr.RowsAffected
+			rowsReturned += len(qr.Rows)
+			if insertID == 0 {
+				insertID = qr.InsertID
+			}
+			return callback(qr)
+		})
+
+		// 5: Log and add statistics
+		logStats.StmtType = plan.Type.String()
+		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
+		logStats.Table = plan.Instructions.GetTableName()
+		logStats.TabletType = vc.TabletType().String()
+		logStats.ExecuteTime = time.Since(execStart)
+
+		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
+
+		// Check if there was partial DML execution. If so, rollback the transaction.
+		if err != nil && safeSession.InTransaction() && vc.rollbackOnPartialExec {
+			_ = e.txConn.Rollback(ctx, safeSession)
+			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+		}
+		return err
+	}, func(typ sqlparser.StatementType, qr *sqltypes.Result) {
+		rowsAffected += qr.RowsAffected
+		rowsReturned += len(qr.Rows)
+		insertID = qr.InsertID
+		stmtType = typ
+		err = callback(qr)
+	})
+
+	logStats.Error = err
+	saveSessionStats(safeSession, stmtType, rowsAffected, insertID, rowsReturned, err)
+	if rowsReturned > *warnMemoryRows {
+		warnings.Add("ResultsExceeded", 1)
+		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
+		if err != nil {
+			piiSafeSQL = logStats.StmtType
+		}
+		log.Warningf("%q exceeds warning threshold of max memory rows: %v", piiSafeSQL, *warnMemoryRows)
+	}
+
+	logStats.Send()
+	return err
+
+}
+
+func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType, rowsAffected, insertID uint64, rowsReturned int, err error) {
 	safeSession.RowCount = -1
 	if err != nil {
 		return
 	}
 	if !safeSession.foundRowsHandled {
-		safeSession.FoundRows = uint64(len(result.Rows))
+		safeSession.FoundRows = uint64(rowsReturned)
 	}
-	if result.InsertID > 0 {
-		safeSession.LastInsertId = result.InsertID
+	if insertID > 0 {
+		safeSession.LastInsertId = insertID
 	}
 	switch stmtType {
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		safeSession.RowCount = int64(result.RowsAffected)
+		safeSession.RowCount = int64(rowsAffected)
 	case sqlparser.StmtDDL, sqlparser.StmtSet, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtFlush:
 		safeSession.RowCount = 0
 	}
@@ -1167,138 +1239,6 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
-}
-
-// StreamExecute executes a streaming query.
-func (e *Executor) StreamExecute(
-	ctx context.Context,
-	method string,
-	safeSession *SafeSession,
-	sql string,
-	bindVars map[string]*querypb.BindVariable,
-	callback func(*sqltypes.Result) error,
-) (err error) {
-	logStats := NewLogStats(ctx, method, sql, bindVars)
-	defer logStats.Send()
-
-	if bindVars == nil {
-		bindVars = make(map[string]*querypb.BindVariable)
-	}
-	query, comments := sqlparser.SplitMarginComments(sql)
-	vc, _ := newVCursorImpl(ctx, safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly)
-	vc.SetIgnoreMaxMemoryRows(true)
-
-	plan, err := e.getPlan(
-		vc,
-		query,
-		comments,
-		bindVars,
-		safeSession,
-		logStats,
-	)
-	if err != nil {
-		logStats.Error = err
-		return err
-	}
-	logStats.StmtType = plan.Type.String()
-	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vc)
-	if err != nil {
-		return err
-	}
-	if result != nil {
-		// if we got a result back, it means the query was handled inside
-		if err := callback(result); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
-	if err != nil {
-		return err
-	}
-
-	// add any warnings that the planner wants to add
-	for _, warning := range plan.Warnings {
-		safeSession.RecordWarning(warning)
-	}
-
-	execStart := time.Now()
-	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-
-	// Some of the underlying primitives may send results one row at a time.
-	// So, we need the ability to consolidate those into reasonable chunks.
-	// The callback wrapper below accumulates rows and sends them as chunks
-	// dictated by stream_buffer_size.
-	result = &sqltypes.Result{}
-	byteCount := 0
-	seenResults := false
-	var foundRows uint64
-	callbackGen := callback
-	if plan.Type != sqlparser.StmtStream && plan.Type != sqlparser.StmtVStream {
-		callbackGen = func(qr *sqltypes.Result) error {
-			// If the row has field info, send it separately.
-			// TODO(sougou): this behavior is for handling tests because
-			// the framework currently sends all results as one packet.
-			if len(qr.Fields) > 0 {
-				qrfield := &sqltypes.Result{Fields: qr.Fields}
-				if err := callback(qrfield); err != nil {
-					return err
-				}
-				seenResults = true
-			}
-
-			foundRows += uint64(len(qr.Rows))
-			for _, row := range qr.Rows {
-				result.Rows = append(result.Rows, row)
-
-				for _, col := range row {
-					byteCount += col.Len()
-				}
-
-				if byteCount >= e.streamSize {
-					err := callback(result)
-					seenResults = true
-					result = &sqltypes.Result{}
-					byteCount = 0
-					if err != nil {
-						return err
-					}
-				}
-			}
-			return nil
-		}
-	}
-
-	err = vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, callbackGen)
-
-	logStats.Keyspace = plan.Instructions.GetKeyspaceName()
-	logStats.Table = plan.Instructions.GetTableName()
-	logStats.TabletType = vc.TabletType().String()
-
-	logStats.ExecuteTime = time.Since(execStart)
-	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
-
-	if err != nil {
-		return err
-	}
-
-	if plan.Type == sqlparser.StmtStream || plan.Type == sqlparser.StmtVStream {
-		return nil
-	}
-
-	// Send left-over rows if there is no error on execution.
-	if len(result.Rows) > 0 || !seenResults {
-		if err := callback(result); err != nil {
-			return err
-		}
-	}
-	// save session stats for future queries
-	if !safeSession.foundRowsHandled {
-		safeSession.FoundRows = foundRows
-	}
-	safeSession.RowCount = -1
-	return nil
 }
 
 // MessageStream is part of the vtgate service API. This is a V2 level API that's sent
