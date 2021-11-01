@@ -226,8 +226,3 @@ func (cfg *Config) bufferingMode(keyspace, shard string) bufferMode {
 
 	return bufferModeDisabled
 }
-
-// SetBufferingMode should only be used from testing code to change the flag default value
-func SetBufferingMode(enabled bool) {
-	*bufferEnabled = enabled
-}
