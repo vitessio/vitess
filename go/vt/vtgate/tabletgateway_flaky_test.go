@@ -34,9 +34,9 @@ import (
 // stops buffering when the primary is healthy again
 func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 	*bufferImplementation = "keyspace_events"
-	buffer.SetBufferingMode(true)
+	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
-		buffer.SetBufferingMode(false)
+		buffer.SetBufferingModeInTestingEnv(false)
 		*bufferImplementation = "healthcheck"
 	}()
 
@@ -117,9 +117,9 @@ func TestGatewayBufferingWhenPrimarySwitchesServingState(t *testing.T) {
 // the healthchecks that happen during a PRS are simulated in this test
 func TestGatewayBufferingWhileReparenting(t *testing.T) {
 	*bufferImplementation = "keyspace_events"
-	buffer.SetBufferingMode(true)
+	buffer.SetBufferingModeInTestingEnv(true)
 	defer func() {
-		buffer.SetBufferingMode(false)
+		buffer.SetBufferingModeInTestingEnv(false)
 		*bufferImplementation = "healthcheck"
 	}()
 
