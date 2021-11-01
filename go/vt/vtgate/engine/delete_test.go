@@ -248,10 +248,26 @@ func TestDeleteSharded(t *testing.T) {
 	require.EqualError(t, err, "shard_error")
 }
 
-func TestDeleteNoStream(t *testing.T) {
-	del := &Delete{}
-	err := del.TryStreamExecute(nil, nil, false, nil)
-	require.EqualError(t, err, `query "" cannot be used for streaming`)
+func TestDeleteShardedStreaming(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	del := &Delete{
+		DML: DML{
+			Opcode:   Scatter,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_delete",
+			Table:    ks.Tables["t2"],
+		},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	err := del.TryStreamExecute(vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
+	})
 }
 
 func TestDeleteScatterOwnedVindex(t *testing.T) {
