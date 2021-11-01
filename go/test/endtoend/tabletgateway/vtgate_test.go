@@ -196,11 +196,16 @@ func TestReplicaTransactions(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	exec(t, readConn, fetchAllCustomers, "is either down or nonexistent")
 
-	// bring up tablet again
-	// query using same transaction will fail
-	_ = replicaTablet.VttabletProcess.Setup()
-	exec(t, readConn, fetchAllCustomers, "not found")
-	exec(t, readConn, "commit", "")
+	// bring up the tablet again
+	// trying to use the same session/transaction should fail as the vtgate has
+	// been restarted and the session lost
+	replicaTablet.VttabletProcess.ServingStatus = "SERVING"
+	err = replicaTablet.VttabletProcess.Setup()
+	require.Nil(t, err)
+	serving := replicaTablet.VttabletProcess.WaitForStatus("SERVING", time.Duration(60*time.Second))
+	assert.Equal(t, serving, true, "Tablet did not become ready within a reasonable time")
+	exec(t, readConn, fetchAllCustomers, "is either down or nonexistent")
+
 	// create a new connection, should be able to query again
 	readConn, err = mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
