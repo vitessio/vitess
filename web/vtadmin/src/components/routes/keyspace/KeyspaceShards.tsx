@@ -16,6 +16,7 @@
 import React from 'react';
 import { groupBy, orderBy, uniq } from 'lodash';
 
+import style from './KeyspaceShards.module.scss';
 import { topodata, vtadmin as pb } from '../../../proto/vtadmin.d';
 import { useTablets } from '../../../hooks/api';
 import { formatAlias, formatDisplayType, formatState } from '../../../util/tablets';
@@ -26,7 +27,6 @@ import { TabletServingPip } from '../../pips/TabletServingPip';
 import { DataFilter } from '../../dataTable/DataFilter';
 import { useSyncedURLParam } from '../../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../../util/filterNouns';
-import { ContentContainer } from '../../layout/ContentContainer';
 import { TabletLink } from '../../links/TabletLink';
 import { ShardLink } from '../../links/ShardLink';
 interface Props {
@@ -125,7 +125,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
     }
 
     return (
-        <ContentContainer>
+        <div className={style.container}>
             <DataFilter
                 autoFocus
                 onChange={(e) => updateFilter(e.target.value)}
@@ -135,7 +135,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
             />
 
             <DataTable columns={TABLE_COLUMNS} data={data} pageSize={PAGE_SIZE} renderRows={renderRows} />
-        </ContentContainer>
+        </div>
     );
 };
 
