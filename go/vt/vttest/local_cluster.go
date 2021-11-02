@@ -29,6 +29,8 @@ import (
 	"strings"
 	"unicode"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/proto/logutil"
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
@@ -217,6 +219,7 @@ func (db *LocalCluster) MySQLConnParams() mysql.ConnParams {
 func (db *LocalCluster) MySQLAppDebugConnParams() mysql.ConnParams {
 	connParams := db.MySQLConnParams()
 	connParams.Uname = "vt_appdebug"
+	connParams.Collation = collations.DefaultForCharset("utf8mb4").Name()
 	return connParams
 }
 
