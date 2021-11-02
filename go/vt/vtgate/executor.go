@@ -218,6 +218,48 @@ func (e *Executor) StreamExecute(
 	var insertID uint64
 	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		stmtType = plan.Type
+
+		seenResults := false
+		callbackGen := callback
+		if stmtType != sqlparser.StmtStream && stmtType != sqlparser.StmtVStream {
+			callbackGen = func(qr *sqltypes.Result) error {
+				// If the row has field info, send it separately.
+				// TODO(sougou): this behavior is for handling tests because
+				// the framework currently sends all results as one packet.
+				byteCount := 0
+				if len(qr.Fields) > 0 {
+					qrfield := &sqltypes.Result{Fields: qr.Fields}
+					if err := callback(qrfield); err != nil {
+						return err
+					}
+					seenResults = true
+				}
+
+				result := &sqltypes.Result{}
+				for _, row := range qr.Rows {
+					result.Rows = append(result.Rows, row)
+
+					for _, col := range row {
+						byteCount += col.Len()
+					}
+
+					if byteCount >= e.streamSize {
+						err := callback(result)
+						seenResults = true
+						result = &sqltypes.Result{}
+						byteCount = 0
+						if err != nil {
+							return err
+						}
+					}
+				}
+				if len(result.Rows) > 0 {
+					return callback(result)
+				}
+				return nil
+			}
+		}
+
 		// 4: Execute!
 		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
 			rowsAffected += qr.RowsAffected
@@ -225,8 +267,12 @@ func (e *Executor) StreamExecute(
 			if insertID == 0 {
 				insertID = qr.InsertID
 			}
-			return callback(qr)
+			return callbackGen(qr)
 		})
+
+		if err != nil && !seenResults {
+			err = callback(&sqltypes.Result{})
+		}
 
 		// 5: Log and add statistics
 		logStats.StmtType = plan.Type.String()

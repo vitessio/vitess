@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
@@ -259,7 +261,8 @@ func TestStreamUnsharded(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		diff := cmp.Diff(wantResult, result)
+		t.Errorf("result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
 	}
 	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
@@ -283,7 +286,7 @@ func TestStreamBuffering(t *testing.T) {
 		}},
 	}})
 
-	results := make(chan *sqltypes.Result, 10)
+	var results []*sqltypes.Result
 	err := executor.StreamExecute(
 		context.Background(),
 		"TestStreamBuffering",
@@ -291,11 +294,10 @@ func TestStreamBuffering(t *testing.T) {
 		"select id from music_user_map where id = 1",
 		nil,
 		func(qr *sqltypes.Result) error {
-			results <- qr
+			results = append(results, qr)
 			return nil
 		},
 	)
-	close(results)
 	require.NoError(t, err)
 	wantResults := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -313,11 +315,7 @@ func TestStreamBuffering(t *testing.T) {
 			sqltypes.NewVarChar("12345678901234567890"),
 		}},
 	}}
-	var gotResults []*sqltypes.Result
-	for r := range results {
-		gotResults = append(gotResults, r)
-	}
-	utils.MustMatch(t, wantResults, gotResults)
+	utils.MustMatch(t, wantResults, results)
 }
 
 func TestStreamLimitOffset(t *testing.T) {
