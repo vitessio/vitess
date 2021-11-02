@@ -29,19 +29,17 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 )
 
+type planExec func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
+type txResult func(sqlparser.StatementType, *sqltypes.Result)
+
 func (e *Executor) newExecute(
 	ctx context.Context,
 	safeSession *SafeSession,
 	sql string,
 	bindVars map[string]*querypb.BindVariable,
 	logStats *LogStats,
-	execPlan func(
-		plan *engine.Plan,
-		vc *vcursorImpl,
-		bindVars map[string]*querypb.BindVariable,
-		time time.Time,
-	) error,
-	recResult func(stmtType sqlparser.StatementType, result *sqltypes.Result),
+	execPlan planExec, // used when there is a plan to execute
+	recResult txResult, // used when it's something simple like begin/commit/rollback/savepoint
 ) error {
 	// 1: Prepare before planning and execution
 
