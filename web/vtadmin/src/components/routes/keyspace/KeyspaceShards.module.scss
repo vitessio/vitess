@@ -16,3 +16,9 @@
 .container {
     padding: 16px 0;
 }
+
+.counts > span:not(:last-child)::after {
+    color: var(--colorScaffoldingHighlight);
+    content: '/';
+    margin: 0 8px;
+}
