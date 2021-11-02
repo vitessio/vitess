@@ -26,9 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -144,7 +143,7 @@ func TestStreamBigData(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	//defer client.Execute("delete from vitess_big", nil)
+	defer client.Execute("delete from vitess_big", nil)
 
 	qr, err := client.StreamExecute("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil)
 	if err != nil {
@@ -184,12 +183,15 @@ func TestStreamBigData(t *testing.T) {
 
 func TestStreamBigDataInTx(t *testing.T) {
 	client := framework.NewClient()
+	defer client.Release()
 	err := populateBigData(client)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer client.Execute("delete from vitess_big", nil)
+	defer func() {
+		framework.NewClient().Execute("delete from vitess_big", nil)
+	}()
 
 	qr, err := client.StreamBeginExecuteWithOptions("select * from vitess_big b1, vitess_big b2 order by b1.id, b2.id", nil, nil, nil)
 	if err != nil {
