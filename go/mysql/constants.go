@@ -591,7 +591,7 @@ const (
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	DefaultCollation = "utf8mb4_0900_ai_ci"
+	DefaultCollation = "utf8mb4_general_ci"
 
 	// CharacterSetUtf8 is for UTF8.
 	CharacterSetUtf8 = 33
