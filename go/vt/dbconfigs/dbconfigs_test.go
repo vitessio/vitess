@@ -34,11 +34,12 @@ func TestInit(t *testing.T) {
 	dbConfigs := DBConfigs{
 		appParams: mysql.ConnParams{UnixSocket: "socket"},
 		dbaParams: mysql.ConnParams{Host: "host"},
+		Charset:   "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket"}, dbConfigs.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host"}, dbConfigs.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default"}, dbConfigs.appdebugParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
@@ -131,6 +132,7 @@ func TestInit(t *testing.T) {
 		SslCaPath: "e",
 		SslCert:   "f",
 		SslKey:    "g",
+		Charset:   "utf8",
 		App: UserConfig{
 			User:     "app",
 			Password: "apppass",
@@ -172,6 +174,8 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
+		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
@@ -185,6 +189,8 @@ func TestInit(t *testing.T) {
 		SslCaPath:  "e",
 		SslCert:    "f",
 		SslKey:     "g",
+		Charset:    "utf8",
+		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -201,13 +207,16 @@ func TestUseTCP(t *testing.T) {
 		Dba: UserConfig{
 			User: "dba",
 		},
+		Charset: "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
 
 	want := mysql.ConnParams{
-		Host:  "a",
-		Port:  1,
-		Uname: "app",
+		Host:      "a",
+		Port:      1,
+		Uname:     "app",
+		Charset:   "utf8",
+		Collation: "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 
@@ -216,6 +225,8 @@ func TestUseTCP(t *testing.T) {
 		Port:       1,
 		Uname:      "dba",
 		UnixSocket: "b",
+		Charset:    "utf8",
+		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -229,6 +240,8 @@ func TestAccessors(t *testing.T) {
 		filteredParams: mysql.ConnParams{},
 		replParams:     mysql.ConnParams{},
 		DBName:         "db",
+		Charset:        "utf8",
+		Collation:      "utf8_general_ci",
 	}
 	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)

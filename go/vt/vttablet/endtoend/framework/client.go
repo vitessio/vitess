@@ -46,8 +46,7 @@ type QueryClient struct {
 }
 
 var (
-	defaultCollation     = int32(collations.DefaultForCharset("utf8mb4").ID())
-	defaultExecuteOption = &querypb.ExecuteOptions{Collation: defaultCollation}
+	defaultCollation = int32(collations.DefaultForCharset("utf8mb4").ID())
 )
 
 // NewClient creates a new client for Server.
