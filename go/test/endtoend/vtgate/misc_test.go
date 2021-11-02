@@ -327,11 +327,14 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	defer func() {
+		_, _ = conn.ExecuteFetch("delete from t1", 100, false)
+	}()
 
 	utils.Exec(t, conn, `set workload='olap'`)
 	_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`, 1000, true)
-	require.Error(t, err)
-	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
+	require.NoError(t, err)
+	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1) INT64(1)] [INT64(2) INT64(2)] [INT64(3) INT64(3)] [INT64(4) INT64(4)] [INT64(5) INT64(5)]]`)
 }
 
 func TestCreateIndex(t *testing.T) {
