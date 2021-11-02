@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -147,6 +149,7 @@ func (ctl *Mysqlctl) TabletDir() string {
 func (ctl *Mysqlctl) Params(dbname string) mysql.ConnParams {
 	return mysql.ConnParams{
 		Charset:    DefaultCharset,
+		Collation:  collations.DefaultForCharset(DefaultCharset).Name(),
 		DbName:     dbname,
 		Uname:      "vt_dba",
 		UnixSocket: ctl.UnixSocket(),
