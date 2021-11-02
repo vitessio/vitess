@@ -100,10 +100,10 @@ export const Keyspace = () => {
 
                     <Redirect exact from={path} to={{ pathname: `${path}/shards`, search }} />
                 </Switch>
-            </ContentContainer>
 
-            {/* TODO skeleton placeholder */}
-            {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
+                {/* TODO skeleton placeholder */}
+                {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
+            </ContentContainer>
         </div>
     );
 };
