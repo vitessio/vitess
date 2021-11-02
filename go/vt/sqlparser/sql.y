@@ -247,7 +247,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
 %token <bytes> SUBSTR SUBSTRING
-%token <bytes> TRIM
+%token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
@@ -3890,9 +3890,25 @@ function_call_keyword:
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
   }
-| TRIM openb STRING FROM STRING closeb
+| TRIM openb value_expression closeb
   {
-    $$ = &TrimExpr{Prefix: NewStrVal($3), From: NewStrVal($5)}
+    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: $3, Dir: NewStrVal([]byte("b"))}
+  }
+| TRIM openb STRING FROM value_expression closeb
+  {
+    $$ = &TrimExpr{Pattern: NewStrVal($3), Str: $5, Dir: NewStrVal([]byte("b"))}
+  }
+| TRIM openb LEADING STRING FROM value_expression closeb
+  {
+    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("l"))}
+  }
+| TRIM openb TRAILING STRING FROM value_expression closeb
+  {
+    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("r"))}
+  }
+| TRIM openb BOTH STRING FROM value_expression closeb
+  {
+    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("b"))}
   }
 | MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {

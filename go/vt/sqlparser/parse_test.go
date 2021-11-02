@@ -3490,21 +3490,40 @@ func TestLoadData(t *testing.T) {
 }
 
 func TestTrim(t *testing.T) {
-	testCases := []struct {
-		input  string
-		output string
-	}{
+	testCases := []parseTest{
 		{
-			input:  `SELECT TRIM("a" FROM "ab")`,
-			output: `select trim('a', 'ab')`,
+			input:                `SELECT TRIM("foo")`,
+			output:               `select trim('foo', ' ', 'b') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM("bar" FROM "foo")`,
+			output:               `select trim('foo', 'bar', 'b') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(LEADING "bar" FROM "foo")`,
+			output:               `select trim('foo', 'bar', 'l') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(TRAILING "bar" FROM "foo")`,
+			output:               `select trim('foo', 'bar', 'r') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(BOTH "bar" FROM "foo")`,
+			output:               `select trim('foo', 'bar', 'b') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input: `SELECT TRIM(TRIM("foobar"))`,
+			output: `select trim(trim('foobar', ' ', 'b'), ' ', 'b')) from dual`,
+			serializeSelectExprs: true,
 		},
 	}
 	for _, tcase := range testCases {
-		p, _ := Parse(tcase.input)
-		//require.NoError(t, err)
-		if got, want := String(p), tcase.output; got != want {
-			t.Errorf("\nParse(%s):\n\tgot: %s\n\twant: %s", tcase.input, got, want)
-		}
+		runParseTestCase(t, tcase)
 	}
 }
 
