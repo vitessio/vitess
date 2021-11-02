@@ -19,6 +19,7 @@ package collations
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"path/filepath"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestGoldenWeights(t *testing.T) {
 }
 
 func TestCollationsForLanguage(t *testing.T) {
-	allCollations := All()
+	allCollations := Default().AllCollations()
 	langCounts := make(map[testutil.Lang][]string)
 
 	for lang := range testutil.KnownLanguages {
@@ -83,22 +84,53 @@ func TestCollationsForLanguage(t *testing.T) {
 }
 
 func TestAllCollationsByCharset(t *testing.T) {
-	for csname, cset := range collationsByCharset {
-		switch csname {
-		case "gb18030":
-			// this doesn't work yet
-			continue
-		}
-		if cset.Default == nil {
-			t.Fatalf("charset %s has %d collations but no default", csname, len(cset.All))
-		}
-		if cset.Binary == nil {
-			t.Fatalf("charset %s has %d collations but no binary", csname, len(cset.All))
-		}
-		t.Logf("%s: default=%s, binary=%s", csname, cset.Default.Name(), cset.Binary.Name())
+	var defaults1 = map[string][2]string{
+		"utf8mb4": {"utf8mb4_general_ci", "utf8mb4_bin"},
+	}
+	var defaults2 = map[string][2]string{
+		"utf8mb4": {"utf8mb4_0900_ai_ci", "utf8mb4_0900_bin"},
 	}
 
-	if def := DefaultForCharset("utf8mb4"); def.Name() != "utf8mb4_0900_ai_ci" {
-		t.Fatalf("bad default for utf8mb4: %s", def.Name())
+	for _, tc := range []struct {
+		version  Version
+		defaults map[string][2]string
+	}{
+		{VersionMariaDB100, defaults1},
+		{VersionMariaDB101, defaults1},
+		{VersionMariaDB102, defaults1},
+		{VersionMariaDB103, defaults1},
+		{VersionMySQL56, defaults1},
+		{VersionMySQL57, defaults1},
+		{VersionMySQL80, defaults2},
+	} {
+		t.Run(tc.version.String(), func(t *testing.T) {
+			env, err := NewEnvironment(tc.version)
+			if err != nil {
+				log.Fatal(err)
+			}
+			for csname, cset := range env.byCharset {
+				switch csname {
+				case "gb18030":
+					// this doesn't work yet
+					continue
+				}
+				if cset.Default == nil {
+					t.Fatalf("charset %s has no default", csname)
+				}
+				if cset.Binary == nil {
+					t.Fatalf("charset %s has no binary", csname)
+				}
+			}
+
+			for charset, expected := range tc.defaults {
+				expectedDefault, expectedBinary := expected[0], expected[1]
+				if def := env.DefaultCollationForCharset(charset); def.Name() != expectedDefault {
+					t.Fatalf("bad default for utf8mb4: %s (expected %s)", def.Name(), expectedDefault)
+				}
+				if def := env.BinaryCollationForCharset(charset); def.Name() != expectedBinary {
+					t.Fatalf("bad binary for utf8mb4: %s (expected %s)", def.Name(), expectedBinary)
+				}
+			}
+		})
 	}
 }

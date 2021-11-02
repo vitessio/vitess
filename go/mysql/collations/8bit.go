@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	register(&Collation_binary{}, true)
+	register(&Collation_binary{})
 }
 
 type simpletables struct {
