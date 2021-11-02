@@ -29,7 +29,7 @@ type UnicodeMapping struct {
 
 type Charset_8bit struct {
 	Name_       string
-	ToUnicode   []uint16
+	ToUnicode   *[256]uint16
 	FromUnicode []UnicodeMapping
 }
 

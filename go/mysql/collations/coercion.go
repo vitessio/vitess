@@ -123,9 +123,9 @@ type TypedCollationID struct {
 	Repertoire   Repertoire
 }
 
-func (tid *TypedCollationID) ToTypedCollation() *TypedCollation {
+func (env *Environment) TypedCollation(tid TypedCollationID) *TypedCollation {
 	return &TypedCollation{
-		Collation:    FromID(tid.Collation),
+		Collation:    env.LookupByID(tid.Collation),
 		Coercibility: tid.Coercibility,
 		Repertoire:   tid.Repertoire,
 	}
@@ -222,7 +222,7 @@ type CoercionOptions struct {
 //
 // If the collations for both sides of the expression are not compatible, an error
 // will be returned and the returned TypedCollation and Coercion will be nil.
-func MergeCollations(left, right *TypedCollation, opt CoercionOptions) (*TypedCollation, Coercion, error) {
+func (env *Environment) MergeCollations(left, right *TypedCollation, opt CoercionOptions) (*TypedCollation, Coercion, error) {
 	leftCS := left.Collation.Charset()
 	rightCS := right.Collation.Charset()
 
@@ -260,13 +260,10 @@ func MergeCollations(left, right *TypedCollation, opt CoercionOptions) (*TypedCo
 			return right, noCoercion, nil
 		}
 
-		binCollation, ok := binaryCollationByCharset[leftCS.Name()]
-		if !ok {
-			return nil, nil, fmt.Errorf("cannot find a binary collation for charset %s", leftCS.Name())
-		}
-		binCollation.init()
+		defaults := env.byCharset[leftCS.Name()]
+		defaults.Binary.Init()
 		return &TypedCollation{
-			Collation:    binCollation,
+			Collation:    defaults.Binary,
 			Coercibility: CoerceNone,
 			Repertoire:   left.Repertoire | right.Repertoire,
 		}, noCoercion, nil
