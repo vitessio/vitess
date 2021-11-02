@@ -1253,10 +1253,12 @@ func (tsv *TabletServer) execRequest(
 	// The tablet creates its connections with MySQL using the collation defined by the
 	// db_charset and db_collation flags, all the connection in the pool use the same
 	// collation.
-	if coll := collations.FromID(collations.ID(options.Collation)); coll == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", options.Collation)
-	} else if tsv.config.DB.Collation != coll.Name() {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), tsv.config.DB.Collation)
+	if options != nil {
+		if coll := collations.FromID(collations.ID(options.Collation)); coll == nil {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", options.Collation)
+		} else if tsv.config.DB.Collation != coll.Name() {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), tsv.config.DB.Collation)
+		}
 	}
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
