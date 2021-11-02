@@ -57,11 +57,17 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
             const tabletsByType = groupBy(shardTablets, (t) => t.tablet?.type);
             const sortRange = getShardSortRange(shard.name || '');
 
+            // A shard can only ever have one primary tablet, hence we can take the "first" (if there is one).
+            const primaryTablet = (tabletsByType[topodata.TabletType.PRIMARY] || [])[0];
+
             return {
                 keyspace: shard.keyspace,
                 isPrimaryServing: shard.shard?.is_primary_serving,
                 name: shard.name,
+                primaryHostname: primaryTablet?.tablet?.hostname,
                 tabletsByType,
+                // "_" prefix excludes the property name from k/v filtering
+                _primaryTablet: primaryTablet,
                 _sortStart: sortRange.start,
                 _sortEnd: sortRange.end,
             };
@@ -75,9 +81,6 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
     const renderRows = React.useCallback(
         (rows: typeof data) => {
             return rows.map((row) => {
-                // A shard can only ever have one primary tablet, hence we can take the "first" (if there is one).
-                const primaryTablet = (row.tabletsByType[topodata.TabletType.PRIMARY] || [])[0];
-
                 return (
                     <tr key={row.name}>
                         <DataCell>
@@ -109,12 +112,12 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                             )}
                         </DataCell>
                         <DataCell>
-                            {primaryTablet ? (
+                            {row._primaryTablet ? (
                                 <TabletLink
-                                    alias={formatAlias(primaryTablet.tablet?.alias)}
+                                    alias={formatAlias(row._primaryTablet.tablet?.alias)}
                                     clusterID={keyspace?.cluster?.id}
                                 >
-                                    <TabletServingPip state={primaryTablet.state} /> {primaryTablet.tablet?.hostname}
+                                    <TabletServingPip state={row._primaryTablet.state} /> {row.primaryHostname}
                                 </TabletLink>
                             ) : (
                                 <span className="text-color-secondary">No primary tablet</span>
