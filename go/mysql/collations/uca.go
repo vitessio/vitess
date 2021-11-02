@@ -24,7 +24,7 @@ import (
 )
 
 func init() {
-	register(&Collation_utf8mb4_0900_bin{}, false)
+	register(&Collation_utf8mb4_0900_bin{})
 }
 
 type CollationUCA interface {

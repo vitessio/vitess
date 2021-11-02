@@ -92,7 +92,7 @@ func TestWeightTablesAreDeduplicated(t *testing.T) {
 	}
 
 	uniqueTables := make(map[uintptr]int)
-	for _, col := range collations.All() {
+	for _, col := range collations.Default().AllCollations() {
 		if uca, ok := col.(collations.CollationUCA); ok {
 			weights, _ := uca.UnicodeWeightsTable()
 			uniqueTables[sliceptr(weights)]++
@@ -110,7 +110,7 @@ func TestWeightTablesAreDeduplicated(t *testing.T) {
 }
 
 func TestTailoringPatchApplication(t *testing.T) {
-	for _, col := range collations.All() {
+	for _, col := range collations.Default().AllCollations() {
 		uca, ok := col.(collations.CollationUCA)
 		if !ok {
 			continue

@@ -74,8 +74,7 @@ func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string
 }
 
 func NewCollation(conn *mysql.Conn, collname string) *Collation {
-	id, _ := collations.IDFromName(collname)
-	return makeRemoteCollation(conn, id, collname)
+	return makeRemoteCollation(conn, collations.Unknown, collname)
 }
 
 func (c *Collation) LastError() error {
