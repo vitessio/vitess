@@ -270,7 +270,7 @@ func (e *Executor) StreamExecute(
 			return callbackGen(qr)
 		})
 
-		if err != nil && !seenResults {
+		if err == nil && !seenResults {
 			err = callback(&sqltypes.Result{})
 		}
 
