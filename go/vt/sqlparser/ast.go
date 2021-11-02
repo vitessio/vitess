@@ -4551,10 +4551,7 @@ func (node *TrimExpr) walkSubtree(visit Visit) error {
 	if node == nil || node.Str == nil {
 		return nil
 	}
-	if node.Pattern == nil {
-		return Walk(visit, node.Str)
-	}
-	return Walk(visit, node.Str, node.Pattern)
+	return Walk(visit, node.Str, node.Pattern, node.Dir)
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)
