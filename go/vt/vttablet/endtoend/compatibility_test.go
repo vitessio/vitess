@@ -68,8 +68,8 @@ func TestCharaterSet(t *testing.T) {
 				OrgTable:     "vitess_test",
 				Database:     "vttest",
 				OrgName:      "charval",
-				ColumnLength: 30,
-				Charset:      33,
+				ColumnLength: 40,
+				Charset:      45,
 			}, {
 				Name:         "binval",
 				Type:         sqltypes.VarBinary,

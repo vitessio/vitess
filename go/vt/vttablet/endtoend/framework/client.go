@@ -94,7 +94,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	}
 	var options *querypb.ExecuteOptions
 	if clientFoundRows {
-		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
+		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows, Collation: defaultCollation}
 	}
 	transactionID, _, err := client.server.Begin(client.ctx, client.target, options)
 	if err != nil {

@@ -441,6 +441,34 @@ func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
 	dbcfgs.appParams = appParams
 }
 
+// DecideCollation will set the collation field of DBConfigs based on
+// its charset field.
+// The charset should always be set as it has a default value ("utf8mb4"),
+// however, one can always override its default to an empty string, which
+// is not a problem as long as the user has specified the collation.
+// If the collation flag was not specified when starting the tablet, we
+// attempt to find the default collation for the current charset.
+// If either the collation and charset are missing, or the resolution of
+// the default collation using the given charset fails, we error out.
+func (dbcfgs *DBConfigs) DecideCollation() error {
+	// we already have a collation, no need to override it
+	if dbcfgs.Collation != "" {
+		return nil
+	}
+
+	// cannot define a collation if we do not have a charset
+	if dbcfgs.Charset == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: no collation or charset defined")
+	}
+
+	defaultColl := collations.DefaultForCharset(dbcfgs.Charset)
+	if defaultColl == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: charset '%s' has no default collation", dbcfgs.Charset)
+	}
+	dbcfgs.Collation = defaultColl.Name()
+	return nil
+}
+
 // NewTestDBConfigs returns a DBConfigs meant for testing.
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string) *DBConfigs {
 	return &DBConfigs{
