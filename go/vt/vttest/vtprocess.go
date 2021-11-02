@@ -138,15 +138,11 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	}
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
-
-	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stdout = os.Stdout
-
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
 
 	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stderr = os.Stdout
+	vtp.proc.Stdout = os.Stdout
 
 	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
