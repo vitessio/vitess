@@ -3894,19 +3894,19 @@ function_call_keyword:
   {
     $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: $3, Dir: NewStrVal([]byte("b"))}
   }
-| TRIM openb STRING FROM value_expression closeb
+| TRIM openb value_expression FROM value_expression closeb
   {
     $$ = &TrimExpr{Pattern: NewStrVal($3), Str: $5, Dir: NewStrVal([]byte("b"))}
   }
-| TRIM openb LEADING STRING FROM value_expression closeb
+| TRIM openb LEADING value_expression FROM value_expression closeb
   {
     $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("l"))}
   }
-| TRIM openb TRAILING STRING FROM value_expression closeb
+| TRIM openb TRAILING value_expression FROM value_expression closeb
   {
     $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("r"))}
   }
-| TRIM openb BOTH STRING FROM value_expression closeb
+| TRIM openb BOTH value_expression FROM value_expression closeb
   {
     $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("b"))}
   }
