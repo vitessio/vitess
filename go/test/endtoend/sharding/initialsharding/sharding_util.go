@@ -186,6 +186,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			tablet.VttabletProcess.DbPassword = dbPwd
 			tablet.VttabletProcess.EnableSemiSync = true
+			tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, "-db_collation", "utf8mb4_general_ci")
 			tablet.VttabletProcess.SupportsBackup = false
 			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
