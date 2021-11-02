@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -53,6 +55,7 @@ func TestCreateSchema(t *testing.T) {
 		Query: upsert,
 		Error: mysql.NewSQLError(mysql.ERBadDb, "", "bad db error"),
 	}
+	db.AddExpectedQuery(fmt.Sprintf("SET collation_connection = %s", collations.DefaultForCharset("utf8mb4").Name()), nil)
 	db.AddExpectedExecuteFetch(failInsert)
 	db.AddExpectedQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), nil)
 	db.AddExpectedQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), nil)
