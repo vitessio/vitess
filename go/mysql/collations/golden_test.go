@@ -19,7 +19,6 @@ package collations
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"path/filepath"
 	"testing"
 
@@ -92,22 +91,19 @@ func TestAllCollationsByCharset(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		version  Version
+		version  collver
 		defaults map[string][2]string
 	}{
-		{VersionMariaDB100, defaults1},
-		{VersionMariaDB101, defaults1},
-		{VersionMariaDB102, defaults1},
-		{VersionMariaDB103, defaults1},
-		{VersionMySQL56, defaults1},
-		{VersionMySQL57, defaults1},
-		{VersionMySQL80, defaults2},
+		{collverMariaDB100, defaults1},
+		{collverMariaDB101, defaults1},
+		{collverMariaDB102, defaults1},
+		{collverMariaDB103, defaults1},
+		{collverMySQL56, defaults1},
+		{collverMySQL57, defaults1},
+		{collverMySQL80, defaults2},
 	} {
 		t.Run(tc.version.String(), func(t *testing.T) {
-			env, err := NewEnvironment(tc.version)
-			if err != nil {
-				log.Fatal(err)
-			}
+			env := makeEnv(tc.version)
 			for csname, cset := range env.byCharset {
 				switch csname {
 				case "gb18030":

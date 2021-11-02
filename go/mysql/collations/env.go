@@ -16,7 +16,11 @@ limitations under the License.
 
 package collations
 
-import "sync"
+import (
+	"fmt"
+	"strings"
+	"sync"
+)
 
 type colldefaults struct {
 	Default Collation
@@ -26,7 +30,7 @@ type colldefaults struct {
 // Environment is a collation environment for a MySQL version, which contains
 // a database of collations and defaults for that specific version.
 type Environment struct {
-	version     Version
+	version     collver
 	byName      map[string]Collation
 	byID        map[ID]Collation
 	byCharset   map[string]*colldefaults
@@ -100,7 +104,34 @@ func (env *Environment) AllCollations() (all []Collation) {
 }
 
 // NewEnvironment creates a collation Environment for the given MySQL Version
-func NewEnvironment(version Version) *Environment {
+func NewEnvironment(serverVersion string) (*Environment, error) {
+	var version collver
+	switch {
+	case strings.Contains(serverVersion, "MariaDB"):
+		switch {
+		case strings.HasPrefix(serverVersion, "10.0."):
+			version = collverMariaDB100
+		case strings.HasPrefix(serverVersion, "10.1."):
+			version = collverMariaDB101
+		case strings.HasPrefix(serverVersion, "10.2."):
+			version = collverMariaDB102
+		case strings.HasPrefix(serverVersion, "10.3."):
+			version = collverMariaDB103
+		}
+	case strings.HasPrefix(serverVersion, "5.6."):
+		version = collverMySQL56
+	case strings.HasPrefix(serverVersion, "5.7."):
+		version = collverMySQL57
+	case strings.HasPrefix(serverVersion, "8.0."):
+		version = collverMySQL80
+	}
+	if version == collverInvalid {
+		return nil, fmt.Errorf("unknown ServerVersion value: %q", serverVersion)
+	}
+	return makeEnv(version), nil
+}
+
+func makeEnv(version collver) *Environment {
 	env := &Environment{
 		version:     version,
 		byName:      make(map[string]Collation),
@@ -109,12 +140,10 @@ func NewEnvironment(version Version) *Environment {
 		unsupported: make(map[string]ID),
 	}
 
-	ourmask := byte(1 << version)
-
 	for collid, vi := range globalVersionInfo {
 		var ourname string
 		for mask, name := range vi.alias {
-			if mask&ourmask != 0 {
+			if mask&version != 0 {
 				ourname = name
 				break
 			}
@@ -137,7 +166,7 @@ func NewEnvironment(version Version) *Environment {
 			env.byCharset[csname] = &colldefaults{}
 		}
 		defaults := env.byCharset[csname]
-		if vi.isdefault&ourmask != 0 {
+		if vi.isdefault&version != 0 {
 			defaults.Default = collation
 		}
 		if collation.IsBinary() {
@@ -160,7 +189,7 @@ var globalDefaultInit sync.Once
 // the collation set and defaults available in MySQL 8.0
 func Default() *Environment {
 	globalDefaultInit.Do(func() {
-		globalDefault = NewEnvironment(VersionMySQL80)
+		globalDefault = makeEnv(collverMySQL80)
 	})
 	return globalDefault
 }
