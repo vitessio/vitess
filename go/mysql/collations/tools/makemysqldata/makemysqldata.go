@@ -468,7 +468,6 @@ var baseWeightsUca900 tailoringWeights
 
 func main() {
 	var unsupportedByCharset = make(map[string][]string)
-	var unsupported []*collationMetadata
 	var tables, init bytes.Buffer
 
 	allMetadata := loadMysqlMetadata()
@@ -518,7 +517,6 @@ func main() {
 			out.printCollationUnicode(meta)
 
 		default:
-			unsupported = append(unsupported, meta)
 			unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
 		}
 	}
@@ -531,12 +529,6 @@ func main() {
 	fmt.Fprintf(file, "\"vitess.io/vitess/go/mysql/collations/internal/uca\"\n")
 	fmt.Fprintf(file, ")\n\n")
 	tables.WriteTo(file)
-
-	fmt.Fprintf(file, "var collationsUnsupportedByName = map[string]ID{\n")
-	for _, meta := range unsupported {
-		fmt.Fprintf(file, "%q: %d,\n", meta.Name, meta.Number)
-	}
-	fmt.Fprintf(file, "}\n\n")
 
 	fmt.Fprintf(file, "func init() {\n")
 	init.WriteTo(file)
