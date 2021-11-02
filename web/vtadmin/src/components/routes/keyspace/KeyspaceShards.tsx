@@ -29,6 +29,7 @@ import { useSyncedURLParam } from '../../../hooks/useSyncedURLParam';
 import { filterNouns } from '../../../util/filterNouns';
 import { TabletLink } from '../../links/TabletLink';
 import { ShardLink } from '../../links/ShardLink';
+import { getShardSortRange } from '../../../util/keyspaces';
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
 }
@@ -53,29 +54,31 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
         const mapped = shards.map((shard) => {
             const shardTablets = keyspaceTablets.filter((t) => t.tablet?.shard === shard.name);
             const tabletsByType = groupBy(shardTablets, (t) => t.tablet?.type);
+            const sortRange = getShardSortRange(shard.name || '');
 
             return {
                 keyspace: shard.keyspace,
                 isPrimaryServing: shard.shard?.is_primary_serving,
                 name: shard.name,
                 tabletsByType,
+                _sortStart: sortRange.start,
+                _sortEnd: sortRange.end,
             };
         });
 
         const filtered = filterNouns(filter, mapped);
 
-        // TODO use numeric ordering, not alphabetical ordering
-        return orderBy(filtered, ['name']);
+        return orderBy(filtered, ['_sortStart', '_sortEnd']);
     }, [filter, keyspace, tablets, tq.isLoading]);
 
     const renderRows = React.useCallback(
         (rows: typeof data) => {
             return rows.map((row) => {
-                // A shard can only ever have one primary tablet, hence we can take the "first"
+                // A shard can only ever have one primary tablet, hence we can take the "first" (if there is one).
                 const primaryTablet = (row.tabletsByType[topodata.TabletType.PRIMARY] || [])[0];
 
                 return (
-                    <tr>
+                    <tr key={row.name}>
                         <DataCell>
                             <ShardLink
                                 clusterID={keyspace?.cluster?.id}
@@ -95,7 +98,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                     {Object.keys(row.tabletsByType)
                                         .sort()
                                         .map((tabletType) => (
-                                            <span>
+                                            <span key={tabletType}>
                                                 {row.tabletsByType[tabletType].length} {TABLET_TYPES[tabletType]}
                                             </span>
                                         ))}
