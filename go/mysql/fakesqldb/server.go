@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -270,7 +272,8 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8",
+		Charset:    "utf8mb4",
+		Collation:  collations.DefaultForCharset("utf8mb4").Name(),
 	})
 
 }
@@ -359,10 +362,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return nil
 	}
 
-	// Using special handling for 'SET NAMES utf8'.  The driver
-	// may send this at connection time, and we don't want it to
+	// Using special handling for setting the charset and connection collation.
+	// The driver may send this at connection time, and we don't want it to
 	// interfere.
-	if key == "set names utf8" {
+	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
 		//log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
