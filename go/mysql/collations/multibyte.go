@@ -21,11 +21,11 @@ import "vitess.io/vitess/go/mysql/collations/internal/charset"
 type Collation_multibyte struct {
 	id      ID
 	name    string
-	sort    []byte
+	sort    *[256]byte
 	charset charset.Charset
 }
 
-func (c *Collation_multibyte) init() {}
+func (c *Collation_multibyte) Init() {}
 
 func (c *Collation_multibyte) ID() ID {
 	return c.id
@@ -50,7 +50,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 
 	cmpLen := minInt(len(left), len(right))
 	cs := c.charset
-	sortOrder := c.sort[:256]
+	sortOrder := c.sort
 	for i := 0; i < cmpLen; i++ {
 		sortL, sortR := left[i], right[i]
 		if sortL > 127 {
