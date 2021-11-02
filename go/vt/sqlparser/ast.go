@@ -3529,6 +3529,7 @@ func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
 func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
+func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
@@ -4528,6 +4529,35 @@ func (node *SubstrExpr) walkSubtree(visit Visit) error {
 		node.Name,
 		node.From,
 		node.To,
+	)
+}
+
+type TrimExpr struct {
+	Prefix Expr
+	From   Expr
+}
+
+// Format formats the node
+func (node *TrimExpr) Format(buf *TrackedBuffer) {
+	if node.Prefix != nil {
+		buf.Myprintf("trim(%v, %v)", node.Prefix, node.From)
+	} else {
+		buf.Myprintf("trim(%v, %v)", " ", node.From)
+	}
+}
+
+func (node *TrimExpr) replace(from, to Expr) bool {
+	return replaceExprs(from, to, &node.From, &node.Prefix)
+}
+
+func (node *TrimExpr) walkSubtree(visit Visit) error {
+	if node == nil || node.From == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Prefix,
+		node.From,
 	)
 }
 

@@ -247,6 +247,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> REPLACE
 %token <bytes> CONVERT CAST
 %token <bytes> SUBSTR SUBSTRING
+%token <bytes> TRIM
 %token <bytes> GROUP_CONCAT SEPARATOR
 %token <bytes> TIMESTAMPADD TIMESTAMPDIFF
 
@@ -3888,6 +3889,10 @@ function_call_keyword:
 | SUBSTRING openb STRING FROM value_expression FOR value_expression closeb
   {
     $$ = &SubstrExpr{StrVal: NewStrVal($3), From: $5, To: $7}
+  }
+| TRIM openb STRING FROM STRING closeb
+  {
+    $$ = &TrimExpr{Prefix: NewStrVal($3), From: NewStrVal($5)}
   }
 | MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {

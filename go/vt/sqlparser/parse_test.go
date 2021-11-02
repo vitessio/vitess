@@ -3489,6 +3489,25 @@ func TestLoadData(t *testing.T) {
 	}
 }
 
+func TestTrim(t *testing.T) {
+	testCases := []struct {
+		input  string
+		output string
+	}{
+		{
+			input:  `SELECT TRIM("a" FROM "ab")`,
+			output: `select trim('a', 'ab')`,
+		},
+	}
+	for _, tcase := range testCases {
+		p, _ := Parse(tcase.input)
+		//require.NoError(t, err)
+		if got, want := String(p), tcase.output; got != want {
+			t.Errorf("\nParse(%s):\n\tgot: %s\n\twant: %s", tcase.input, got, want)
+		}
+	}
+}
+
 func TestCreateTableLike(t *testing.T) {
 	normal := "create table a like b"
 	testCases := []struct {
