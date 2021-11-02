@@ -2643,8 +2643,8 @@ func TestKeywords(t *testing.T) {
 			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 			output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 		}, {
-			input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-			output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
+			input:  "select /* unused keywords as cols */ write, virtual from t where varcharacter = 'foo'",
+			output: "select /* unused keywords as cols */ `write`, `virtual` from t where `varcharacter` = 'foo'",
 		}, {
 			input:  "insert into x (status) values (42)",
 			output: "insert into x(`status`) values (42)",
@@ -3517,8 +3517,8 @@ func TestTrim(t *testing.T) {
 			serializeSelectExprs: true,
 		},
 		{
-			input: `SELECT TRIM(TRIM("foobar"))`,
-			output: `select trim(trim('foobar', ' ', 'b'), ' ', 'b')) from dual`,
+			input:                `SELECT TRIM(TRIM("foobar"))`,
+			output:               `select trim(trim('foobar', ' ', 'b'), ' ', 'b') from dual`,
 			serializeSelectExprs: true,
 		},
 	}
