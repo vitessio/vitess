@@ -103,7 +103,9 @@ func (env *Environment) AllCollations() (all []Collation) {
 	return
 }
 
-// NewEnvironment creates a collation Environment for the given MySQL Version
+// NewEnvironment creates a collation Environment for the given MySQL version string.
+// The version string must be in the format that is sent by the server as the version packet
+// when opening a new MySQL connection
 func NewEnvironment(serverVersion string) (*Environment, error) {
 	var version collver
 	switch {
