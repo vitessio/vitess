@@ -30,6 +30,7 @@ import { filterNouns } from '../../../util/filterNouns';
 import { TabletLink } from '../../links/TabletLink';
 import { ShardLink } from '../../links/ShardLink';
 import { getShardSortRange } from '../../../util/keyspaces';
+
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
 }
@@ -136,7 +137,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                 autoFocus
                 onChange={(e) => updateFilter(e.target.value)}
                 onClear={() => updateFilter('')}
-                placeholder="Filter shards and tablets"
+                placeholder="Filter shards"
                 value={filter || ''}
             />
 
