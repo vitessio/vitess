@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
 
 	"github.com/stretchr/testify/require"
 
@@ -239,21 +239,12 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	defer exec(t, conn, "delete from twopc_user")
 
 	exec(t, conn, "set workload = olap")
 	exec(t, conn, "begin")
-	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
-	assertMatches(t, conn, "select * from twopc_user", ``)
+	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'Pranav')")
+	utils.AssertMatches(t, conn, "select name from twopc_user", `[[VARCHAR("Pranav")]]`)
 	exec(t, conn, "commit")
 	require.NoError(t, err)
-}
-
-func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {
-	t.Helper()
-	qr := exec(t, conn, query)
-	got := fmt.Sprintf("%v", qr.Rows)
-	diff := cmp.Diff(expected, got)
-	if diff != "" {
-		t.Errorf("Query: %s (-want +got):\n%s", query, diff)
-	}
 }
