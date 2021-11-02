@@ -3566,21 +3566,6 @@ var contractions_utf8mb4_zh_0900_as_cs = []uca.Contraction{
 	{Path: []int32{34255, 25991}, Weights: []uint16{0xb166, 0x20, 0x2, 0x9523, 0x20, 0x2, 0xf645, 0x0, 0x0}},
 	{Path: []int32{37325, 24198}, Weights: []uint16{0x2ad7, 0x20, 0x2, 0x7bc5, 0x20, 0x2, 0xf645, 0x0, 0x0}},
 }
-var collationsUnsupportedByName = map[string]ID{
-	"big5_chinese_ci":          1,
-	"latin2_czech_cs":          2,
-	"tis620_thai_ci":           18,
-	"gbk_chinese_ci":           28,
-	"latin1_german2_ci":        31,
-	"cp1250_czech_cs":          34,
-	"utf8_tolower_ci":          76,
-	"big5_bin":                 84,
-	"gbk_bin":                  87,
-	"ucs2_general_mysql500_ci": 159,
-	"utf8_general_mysql500_ci": 223,
-	"gb18030_chinese_ci":       248,
-	"gb18030_bin":              249,
-}
 
 func init() {
 	register(&Collation_8bit_simple_ci{
