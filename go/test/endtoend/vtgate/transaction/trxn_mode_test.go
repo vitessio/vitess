@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
@@ -164,10 +163,9 @@ func TestTransactionModes(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
+	defer exec(t, conn, "delete from twopc_user")
 
 	// Insert targeted to multiple tables should fail as Transaction mode is SINGLE
 	exec(t, conn, "begin")
@@ -175,16 +173,15 @@ func TestTransactionModes(t *testing.T) {
 	_, err = conn.ExecuteFetch("insert into twopc_user(user_id, name) values(6,'vick')", 1000, false)
 	exec(t, conn, "rollback")
 	want := "multi-db transaction attempted"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("multi-db insert: %v, must contain %s", err, want)
-	}
+	require.Error(t, err)
+	require.Contains(t, err.Error(), want)
 
 	// Enable TWOPC transaction mode
 	clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "TWOPC"}
+
 	// Restart VtGate
-	if err = clusterInstance.RestartVtgate(); err != nil {
-		t.Errorf("Fail to re-start vtgate with new config:  %v", err)
-	}
+	require.NoError(t,
+		clusterInstance.RestartVtgate())
 
 	// Make a new mysql connection to vtGate
 	vtParams = mysql.ConnParams{
@@ -192,9 +189,7 @@ func TestTransactionModes(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn2.Close()
 
 	// Insert targeted to multiple db should PASS with TWOPC trx mode
@@ -239,6 +234,7 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	exec(t, conn, "delete from twopc_user")
 	defer exec(t, conn, "delete from twopc_user")
 
 	exec(t, conn, "set workload = olap")
