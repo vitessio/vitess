@@ -103,6 +103,24 @@ func (env *Environment) AllCollations() (all []Collation) {
 	return
 }
 
+var globalEnvironments = make(map[collver]*Environment)
+var globalEnvironmentsMu sync.Mutex
+
+// fetchCacheEnvironment returns a cached Environment from a global cache.
+// We can keep a single Environment per collver version because Environment
+// objects are immutable once constructed.
+func fetchCacheEnvironment(version collver) *Environment {
+	globalEnvironmentsMu.Lock()
+	defer globalEnvironmentsMu.Unlock()
+
+	var env *Environment
+	if env = globalEnvironments[version]; env == nil {
+		env = makeEnv(version)
+		globalEnvironments[version] = env
+	}
+	return env
+}
+
 // NewEnvironment creates a collation Environment for the given MySQL version string.
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
@@ -130,7 +148,7 @@ func NewEnvironment(serverVersion string) (*Environment, error) {
 	if version == collverInvalid {
 		return nil, fmt.Errorf("unknown ServerVersion value: %q", serverVersion)
 	}
-	return makeEnv(version), nil
+	return fetchCacheEnvironment(version), nil
 }
 
 func makeEnv(version collver) *Environment {
@@ -184,14 +202,8 @@ func makeEnv(version collver) *Environment {
 	return env
 }
 
-var globalDefault *Environment
-var globalDefaultInit sync.Once
-
 // Default is the default collation Environment for Vitess. This is set to
 // the collation set and defaults available in MySQL 8.0
 func Default() *Environment {
-	globalDefaultInit.Do(func() {
-		globalDefault = makeEnv(collverMySQL80)
-	})
-	return globalDefault
+	return fetchCacheEnvironment(collverMySQL80)
 }
