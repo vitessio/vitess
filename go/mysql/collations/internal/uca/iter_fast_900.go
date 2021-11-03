@@ -76,7 +76,7 @@ func (it *FastIterator900) NextChunk(dstbytes []byte) int {
 
 	// Unsafe cast the destination byte slice into a slice of uint16, so the
 	// individual weights can be written directly to it.
-	dst := (*[8]uint16)(unsafe.Pointer(&dstbytes[0]))[0:8]
+	dst := (*[8]uint16)(unsafe.Pointer(&dstbytes[0]))
 	p := it.input
 
 	// The fast path works on 8-byte chunks from the original input.
