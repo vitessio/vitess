@@ -122,6 +122,9 @@ func TestTypeValues(t *testing.T) {
 	}, {
 		defined:  HexNum,
 		expected: 32 | flagIsText,
+	}, {
+		defined:  HexVal,
+		expected: 33 | flagIsText,
 	}}
 	for _, tcase := range testcases {
 		if int(tcase.defined) != tcase.expected {
@@ -166,6 +169,7 @@ func TestCategory(t *testing.T) {
 		TypeJSON,
 		Expression,
 		HexNum,
+		HexVal,
 	}
 	for _, typ := range alltypes {
 		matched := false
@@ -196,7 +200,7 @@ func TestCategory(t *testing.T) {
 			}
 			matched = true
 		}
-		if typ == Null || typ == Decimal || typ == Expression || typ == Bit || typ == HexNum {
+		if typ == Null || typ == Decimal || typ == Expression || typ == Bit || typ == HexNum || typ == HexVal {
 			if matched {
 				t.Errorf("%v matched more than one category", typ)
 			}
