@@ -19,6 +19,7 @@ package messager
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -49,8 +50,8 @@ type VStreamer interface {
 
 // Engine is the engine for handling messages.
 type Engine struct {
+	open     uint32
 	mu       sync.Mutex
-	isOpen   bool
 	managers map[string]*messageManager
 
 	tsv          TabletService
@@ -72,27 +73,31 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 
 // Open starts the Engine service.
 func (me *Engine) Open() {
-	me.mu.Lock()
-	if me.isOpen {
-		me.mu.Unlock()
+	if !atomic.CompareAndSwapUint32(&me.open, 0, 1) {
 		return
 	}
-	me.isOpen = true
-	me.mu.Unlock()
 	log.Info("Messager: opening")
 	// Unlock before invoking RegisterNotifier because it
 	// obtains the same lock.
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 }
 
+func (me *Engine) ensureOpen() error {
+	if atomic.LoadUint32(&me.open) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed")
+	}
+	return nil
+}
+
 // Close closes the Engine service.
 func (me *Engine) Close() {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	if !me.isOpen {
+	if !atomic.CompareAndSwapUint32(&me.open, 1, 0) {
 		return
 	}
-	me.isOpen = false
+
+	me.mu.Lock()
+	defer me.mu.Unlock()
+
 	me.se.UnregisterNotifier("messages")
 	for _, mm := range me.managers {
 		mm.Close()
@@ -109,11 +114,12 @@ func (me *Engine) Close() {
 // function to promptly return if the done channel is closed. Otherwise,
 // the engine's Close function will hang indefinitely.
 func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltypes.Result) error) (done <-chan struct{}, err error) {
+	if err := me.ensureOpen(); err != nil {
+		return nil, err
+	}
+
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	if !me.isOpen {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "messager engine is closed, probably because this is not a primary any more")
-	}
 	mm := me.managers[name]
 	if mm == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
@@ -123,8 +129,13 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
 func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
+	if err := me.ensureOpen(); err != nil {
+		return "", nil, err
+	}
+
 	me.mu.Lock()
 	defer me.mu.Unlock()
+
 	mm := me.managers[name]
 	if mm == nil {
 		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
@@ -135,8 +146,13 @@ func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[strin
 
 // GeneratePostponeQuery returns the query and bind vars for postponing a message.
 func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
+	if err := me.ensureOpen(); err != nil {
+		return "", nil, err
+	}
+
 	me.mu.Lock()
 	defer me.mu.Unlock()
+
 	mm := me.managers[name]
 	if mm == nil {
 		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
@@ -147,8 +163,13 @@ func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[
 
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
 func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]*querypb.BindVariable, error) {
+	if err := me.ensureOpen(); err != nil {
+		return "", nil, err
+	}
+
 	me.mu.Lock()
 	defer me.mu.Unlock()
+
 	mm := me.managers[name]
 	if mm == nil {
 		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
