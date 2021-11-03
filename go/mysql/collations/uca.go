@@ -17,7 +17,9 @@ limitations under the License.
 package collations
 
 import (
+	"math/bits"
 	"sync"
+	"unsafe"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
@@ -169,6 +171,35 @@ performPadding:
 	return dst
 }
 
+func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) uintptr {
+	var hash = uintptr(c.id)
+
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		var n int
+		for {
+			n = fast.NextChunk(chunk[:16])
+			if n < 16 {
+				break
+			}
+			hash = memhash128(unsafe.Pointer(&chunk), hash)
+		}
+		return memhashraw(unsafe.Pointer(&chunk), hash, uintptr(n))
+	}
+
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		hash = memhash16(bits.ReverseBytes16(w), hash)
+	}
+	return hash
+}
+
 func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
 	if numBytes%4 != 0 {
 		panic("WeightStringLen called with non-MOD4 length")
@@ -211,6 +242,10 @@ func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints
 		}
 	}
 	return dst
+}
+
+func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) uintptr {
+	return memhash(src, 0xb900b900)
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
@@ -317,6 +352,31 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	}
 
 	return dst
+}
+
+func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) uintptr {
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	var hash = uintptr(c.id)
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		hash = memhash16(bits.ReverseBytes16(w), hash)
+	}
+
+	if numCodepoints > 0 {
+		weightForSpace := bits.ReverseBytes16(c.uca.WeightForSpace())
+		numCodepoints -= it.Length()
+		for numCodepoints > 0 {
+			hash = memhash16(weightForSpace, hash)
+			numCodepoints--
+		}
+	}
+
+	return hash
 }
 
 func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {

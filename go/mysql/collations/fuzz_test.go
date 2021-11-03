@@ -25,7 +25,7 @@ import "testing"
 func FuzzUCACollate(f *testing.F) {
 	for _, left := range AllTestStrings {
 		for _, right := range AllTestStrings {
-			f.Add([]byte(left), []byte(right))
+			f.Add([]byte(left.Content), []byte(right.Content))
 		}
 	}
 
@@ -38,7 +38,7 @@ func FuzzUCACollate(f *testing.F) {
 
 func FuzzUCAWeightStrings(f *testing.F) {
 	for _, input := range AllTestStrings {
-		f.Add([]byte(input))
+		f.Add([]byte(input.Content))
 	}
 
 	coll := testcollation(f, "utf8mb4_0900_ai_ci")
