@@ -734,7 +734,7 @@ func (e *Executor) initVreplicationMigrationSQLMode(ctx context.Context, onlineD
 	if err != nil {
 		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
 	}
-	// Pre-calculate estore function
+	// Pre-calculate restore function
 	deferFunc = func() {
 		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
 		conn.ExecuteFetch(restoreSQLModeQuery, 0, false)
