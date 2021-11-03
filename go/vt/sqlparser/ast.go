@@ -4535,23 +4535,30 @@ func (node *SubstrExpr) walkSubtree(visit Visit) error {
 type TrimExpr struct {
 	Str     Expr
 	Pattern Expr
-	Dir     Expr
+	Dir     string
 }
 
 // Format formats the node
 func (node *TrimExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("trim(%v, %v, %v)", node.Str, node.Pattern, node.Dir)
+	buf.Myprintf("trim(%v, %v, %s)", node.Str, node.Pattern, node.Dir)
 }
 
 func (node *TrimExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Pattern, &node.Str)
+	if replaceExprs(from, to, &node.Pattern) {
+		return true
+	}
+	if replaceExprs(from, to, &node.Str) {
+		return true
+	}
+
+	return false
 }
 
 func (node *TrimExpr) walkSubtree(visit Visit) error {
 	if node == nil || node.Str == nil {
 		return nil
 	}
-	return Walk(visit, node.Str, node.Pattern, node.Dir)
+	return Walk(visit, node.Str, node.Pattern)
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)

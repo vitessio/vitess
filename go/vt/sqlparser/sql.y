@@ -3892,23 +3892,23 @@ function_call_keyword:
   }
 | TRIM openb value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: $3, Dir: NewStrVal([]byte("b"))}
+    $$ = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: $3, Dir: "b"}
   }
 | TRIM openb value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal($3), Str: $5, Dir: NewStrVal([]byte("b"))}
+    $$ = &TrimExpr{Pattern: $3, Str: $5, Dir: "b"}
   }
 | TRIM openb LEADING value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("l"))}
+    $$ = &TrimExpr{Pattern: $4, Str: $6, Dir: "l"}
   }
 | TRIM openb TRAILING value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("r"))}
+    $$ = &TrimExpr{Pattern: $4, Str: $6, Dir: "r"}
   }
 | TRIM openb BOTH value_expression FROM value_expression closeb
   {
-    $$ = &TrimExpr{Pattern: NewStrVal($4), Str: $6, Dir: NewStrVal([]byte("b"))}
+    $$ = &TrimExpr{Pattern: $4, Str: $6, Dir: "b"}
   }
 | MATCH openb argument_expression_list closeb AGAINST openb value_expression match_option closeb
   {
