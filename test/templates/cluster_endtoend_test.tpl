@@ -86,7 +86,7 @@ jobs:
         set -x
 
         # run the tests however you normally do, then produce a JUnit XML file
-        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code | tee -a report.xml
+        eatmydata -- go run test.go -docker=false -follow -shard {{.Shard}} | tee -a output.txt | go-junit-report -set-exit-code > report.xml
 
     - name: Print test output and Record test result in launchable
       run: |
