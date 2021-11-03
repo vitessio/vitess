@@ -445,6 +445,6 @@ func compareStrings(l, r EvalResult) (int, error) {
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
 	}
 
-	collation := collations.LookupById(l.collation)
+	collation := collations.Default().LookupByID(l.collation)
 	return collation.Collate(l.bytes, r.bytes, false), nil
 }

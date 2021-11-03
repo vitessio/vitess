@@ -44,7 +44,7 @@ var (
 	T = true
 	F = false
 
-	defaultCollation = collations.LookupIDByName("utf8mb4_bin")
+	defaultCollation = collations.Default().LookupByName("utf8mb4_bin").ID()
 )
 
 func (tc testCase) run(t *testing.T) {
@@ -878,6 +878,13 @@ func TestCompareStrings(t *testing.T) {
 			v1:   NewColumn(0, defaultCollation), v2: NewColumn(1, defaultCollation),
 			out: &T, op: &EqualOp{},
 			row: []sqltypes.Value{sqltypes.NewVarChar("1"), sqltypes.NewInt64(1)},
+		},
+		{
+			name: "string equal string unknown collation",
+			v1:   NewColumn(0, collations.Unknown), v2: NewColumn(1, collations.Unknown),
+			op:  &EqualOp{},
+			err: "cannot compare strings with an unknown collation",
+			row: []sqltypes.Value{sqltypes.NewVarChar("1"), sqltypes.NewVarChar("1")},
 		},
 	}
 
