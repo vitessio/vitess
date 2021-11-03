@@ -443,7 +443,7 @@ func TestArithmetics(t *testing.T) {
 	}
 }
 
-func TestNullsafeAdd(t *testing.T) {
+func TestNullSafeAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    sqltypes.Value
@@ -482,7 +482,11 @@ func TestNullsafeAdd(t *testing.T) {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		out: NewInt64(-9223372036854775808),
+		out: NewInt64(1),
+	}, {
+		v1:  NewInt64(-100),
+		v2:  NewUint64(10),
+		err: vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT UNSIGNED", 10, -100),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
@@ -490,10 +494,16 @@ func TestNullsafeAdd(t *testing.T) {
 		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
-		got := NullsafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+		got, err := NullSafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+
+		if tcase.err == nil {
+			require.NoError(t, err)
+		} else {
+			require.EqualError(t, err, tcase.err.Error())
+		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("NullsafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("NullSafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 }
@@ -1202,9 +1212,9 @@ func TestPrioritize(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndprioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
-			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
+			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
+			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndPrioritize")
+			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1581,7 +1591,7 @@ func BenchmarkAddActual(b *testing.B) {
 	v1 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1"))
 	v2 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		v1 = NullsafeAdd(v1, v2, querypb.Type_INT64)
+		v1, _ = NullSafeAdd(v1, v2, querypb.Type_INT64)
 	}
 }
 
