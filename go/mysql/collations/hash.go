@@ -14,6 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Copyright 2014 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+// all the code in this file has been adapted from the internal hash implementation in the Go runtime:
+// https://golang.org/src/runtime/hash64.go
+
 package collations
 
 import (
