@@ -716,7 +716,44 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// deferred function will unlock keyspace
 }
 
+// initVreplicationMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
+// restores sql_mode to original state
+func (e *Executor) initVreplicationMigrationSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+	deferFunc = func() {}
+	if !onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
+		// No need to change sql_mode.
+		return deferFunc, nil
+	}
+
+	// Grab current sql_mode value
+	rs, err := conn.ExecuteFetch(`select @@session.sql_mode as sql_mode`, 1, true)
+	if err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	sqlMode, err := rs.Named().Row().ToString("sql_mode")
+	if err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	// Pre-calculate restore function
+	deferFunc = func() {
+		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
+		conn.ExecuteFetch(restoreSQLModeQuery, 0, false)
+	}
+	// Change sql_mode
+	changeSSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
+	if _, err := conn.ExecuteFetch(changeSSQLModeQuery, 0, false); err != nil {
+		return deferFunc, err
+	}
+	return deferFunc, nil
+}
+
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
+	restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
+	if err != nil {
+		return v, err
+	}
+
 	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
 	{
 		// Apply CREATE TABLE for materialized table
@@ -740,8 +777,14 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // postInitVreplicationOriginalMigration runs extra changes after a vreplication online DDL has been initialized.
 // This function is called after both source and target tables have been analyzed, so there's more information
 // about the two, and about the transition between the two.
-func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
+func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
+		restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
+		if err != nil {
+			return err
+		}
+
 		// Apply ALTER TABLE AUTO_INCREMENT=?
 		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
@@ -832,7 +875,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
 			return err
 		}
-		if err := e.postInitVreplicationOriginalMigration(ctx, v, conn); err != nil {
+		if err := e.postInitVreplicationOriginalMigration(ctx, onlineDDL, v, conn); err != nil {
 			return err
 		}
 	}
@@ -1022,6 +1065,9 @@ exit $exit_code
 			fmt.Sprintf(`--alter=%s`, alterOptions),
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
+		}
+		if onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
+			args = append(args, "--allow-zero-in-date")
 		}
 		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
