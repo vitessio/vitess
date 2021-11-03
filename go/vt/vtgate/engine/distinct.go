@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -73,7 +74,8 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 
 func equal(a, b []sqltypes.Value) (bool, error) {
 	for i, aVal := range a {
-		cmp, err := evalengine.NullsafeCompare(aVal, b[i])
+		// TODO(king-11) make collation aware
+		cmp, err := evalengine.NullsafeCompare(aVal, b[i], collations.Unknown)
 		if err != nil {
 			return false, err
 		}

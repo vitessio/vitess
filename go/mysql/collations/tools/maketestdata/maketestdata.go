@@ -159,8 +159,9 @@ func colldump(collation string, input []byte) []byte {
 }
 
 func main() {
+	var defaults = collations.Default()
 	var collationsForLanguage = make(map[testutil.Lang][]collations.Collation)
-	var allcollations = collations.All()
+	var allcollations = defaults.AllCollations()
 	for lang := range testutil.KnownLanguages {
 		for _, coll := range allcollations {
 			if lang.MatchesCollation(coll.Name()) {
@@ -170,13 +171,13 @@ func main() {
 	}
 
 	var rootCollations = []collations.Collation{
-		collations.FromName("utf8mb4_0900_as_cs"),
-		collations.FromName("utf8mb4_0900_as_ci"),
-		collations.FromName("utf8mb4_0900_ai_ci"),
-		collations.FromName("utf8mb4_general_ci"),
-		collations.FromName("utf8mb4_bin"),
-		collations.FromName("utf8mb4_unicode_ci"),
-		collations.FromName("utf8mb4_unicode_520_ci"),
+		defaults.LookupByName("utf8mb4_0900_as_cs"),
+		defaults.LookupByName("utf8mb4_0900_as_ci"),
+		defaults.LookupByName("utf8mb4_0900_ai_ci"),
+		defaults.LookupByName("utf8mb4_general_ci"),
+		defaults.LookupByName("utf8mb4_bin"),
+		defaults.LookupByName("utf8mb4_unicode_ci"),
+		defaults.LookupByName("utf8mb4_unicode_520_ci"),
 	}
 
 	articles, err := getAllLanguages(os.Args[1])

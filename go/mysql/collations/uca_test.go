@@ -25,7 +25,7 @@ import (
 
 func testcollation(t testing.TB, name string) Collation {
 	t.Helper()
-	coll := FromName(name)
+	coll := Default().LookupByName(name)
 	if coll == nil {
 		t.Fatalf("missing collation: %s", name)
 	}
@@ -33,7 +33,7 @@ func testcollation(t testing.TB, name string) Collation {
 }
 
 func TestWeightsForSpace(t *testing.T) {
-	for _, coll := range All() {
+	for _, coll := range Default().AllCollations() {
 		var actual, expected uint16
 		switch coll := coll.(type) {
 		case *Collation_uca_legacy:

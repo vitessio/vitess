@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -1057,7 +1058,8 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
 			c = bytes.Compare(sourceRow[compareIndex].ToBytes(), targetRow[compareIndex].ToBytes())
 		} else {
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex])
+			// TODO(king-11) make collation aware
+			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
 		}
 		if err != nil {
 			return 0, err
