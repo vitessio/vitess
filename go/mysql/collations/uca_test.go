@@ -18,22 +18,51 @@ package collations
 
 import (
 	"bytes"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
 )
 
+var testcollationMap map[string]Collation
+var testcollationSlice []Collation
+var testcollationOnce sync.Once
+
+func testinit() {
+	testcollationOnce.Do(func() {
+		testcollationSlice = make([]Collation, 0, len(globalAllCollations))
+		testcollationMap = make(map[string]Collation)
+
+		for _, collation := range globalAllCollations {
+			collation.Init()
+			testcollationMap[collation.Name()] = collation
+			testcollationSlice = append(testcollationSlice, collation)
+		}
+
+		sort.Slice(testcollationSlice, func(i, j int) bool {
+			return testcollationSlice[i].ID() < testcollationSlice[j].ID()
+		})
+	})
+}
+
 func testcollation(t testing.TB, name string) Collation {
 	t.Helper()
-	coll := Default().LookupByName(name)
+	testinit()
+	coll := testcollationMap[name]
 	if coll == nil {
 		t.Fatalf("missing collation: %s", name)
 	}
 	return coll
 }
 
+func testall() []Collation {
+	testinit()
+	return testcollationSlice
+}
+
 func TestWeightsForSpace(t *testing.T) {
-	for _, coll := range Default().AllCollations() {
+	for _, coll := range testall() {
 		var actual, expected uint16
 		switch coll := coll.(type) {
 		case *Collation_uca_legacy:

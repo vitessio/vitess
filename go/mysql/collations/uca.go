@@ -39,7 +39,7 @@ type Collation_utf8mb4_uca_0900 struct {
 
 	weights          uca.WeightTable
 	tailoring        []uca.WeightPatch
-	contractions     []uca.Contraction
+	contract         uca.Contractor
 	reorder          []uca.Reorder
 	upperCaseFirst   bool
 	levelsForCompare int
@@ -50,11 +50,10 @@ type Collation_utf8mb4_uca_0900 struct {
 
 func (c *Collation_utf8mb4_uca_0900) Init() {
 	c.ucainit.Do(func() {
-		c.uca = uca.NewCollation(c.name, c.weights, c.tailoring, c.reorder, c.contractions, c.upperCaseFirst, c.levelsForCompare)
+		c.uca = uca.NewCollation(c.name, c.weights, c.tailoring, c.reorder, c.contract, c.upperCaseFirst, c.levelsForCompare)
 
 		// Clear the external metadata for this collation, so it can be picked up by the GC
 		c.weights = nil
-		c.contractions = nil
 		c.tailoring = nil
 		c.reorder = nil
 	})
@@ -225,7 +224,7 @@ type Collation_uca_legacy struct {
 	charset      charset.Charset
 	weights      uca.WeightTable
 	tailoring    []uca.WeightPatch
-	contractions []uca.Contraction
+	contract     uca.Contractor
 	maxCodepoint rune
 
 	uca     *uca.CollationLegacy
@@ -234,10 +233,9 @@ type Collation_uca_legacy struct {
 
 func (c *Collation_uca_legacy) Init() {
 	c.ucainit.Do(func() {
-		c.uca = uca.NewCollationLegacy(c.charset, c.weights, c.tailoring, c.contractions, c.maxCodepoint)
+		c.uca = uca.NewCollationLegacy(c.charset, c.weights, c.tailoring, c.contract, c.maxCodepoint)
 		c.weights = nil
 		c.tailoring = nil
-		c.contractions = nil
 	})
 }
 
