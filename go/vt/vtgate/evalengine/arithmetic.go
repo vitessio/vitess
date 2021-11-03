@@ -158,7 +158,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	return lresult.toSQLValue(lresult.typ), nil
 }
 
-// NullsafeAdd adds two Values in a null-safe manner. A null value
+// NullSafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
 // If both values are not null, a numeric value is built
 // from each input: Signed->int64, Unsigned->uint64, Float->float64.
@@ -169,7 +169,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
 // result is preserved.
-func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value {
+func NullSafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) (sqltypes.Value, error) {
 	if v1.IsNull() {
 		v1 = sqltypes.MakeTrusted(resultType, zeroBytes)
 	}
@@ -179,15 +179,17 @@ func NullsafeAdd(v1, v2 sqltypes.Value, resultType querypb.Type) sqltypes.Value 
 
 	lv1, err := newEvalResult(v1)
 	if err != nil {
-		return sqltypes.NULL
+		return sqltypes.NULL, err
 	}
 	lv2, err := newEvalResult(v2)
 	if err != nil {
-		return sqltypes.NULL
+		return sqltypes.NULL, err
 	}
-	lresult := addNumeric(lv1, lv2)
-
-	return lresult.toSQLValue(resultType)
+	lresult, err := addNumericWithError(lv1, lv2)
+	if err != nil {
+		return sqltypes.NULL, err
+	}
+	return lresult.toSQLValue(resultType), nil
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -312,7 +314,7 @@ func minmax(v1, v2 sqltypes.Value, min bool, collation collations.ID) (sqltypes.
 }
 
 func addNumeric(v1, v2 EvalResult) EvalResult {
-	v1, v2 = makeNumericAndprioritize(v1, v2)
+	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intPlusInt(v1.ival, v2.ival)
@@ -330,7 +332,7 @@ func addNumeric(v1, v2 EvalResult) EvalResult {
 }
 
 func addNumericWithError(v1, v2 EvalResult) (EvalResult, error) {
-	v1, v2 = makeNumericAndprioritize(v1, v2)
+	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intPlusIntWithError(v1.ival, v2.ival)
@@ -341,7 +343,7 @@ func addNumericWithError(v1, v2 EvalResult) (EvalResult, error) {
 		case sqltypes.Uint64:
 			return uintPlusUintWithError(v1.uval, v2.uval)
 		}
-	case sqltypes.Float64:
+	case sqltypes.Float64, sqltypes.Decimal:
 		return floatPlusAny(v1.fval, v2), nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
@@ -377,7 +379,7 @@ func subtractNumericWithError(i1, i2 EvalResult) (EvalResult, error) {
 }
 
 func multiplyNumericWithError(v1, v2 EvalResult) (EvalResult, error) {
-	v1, v2 = makeNumericAndprioritize(v1, v2)
+	v1, v2 = makeNumericAndPrioritize(v1, v2)
 	switch v1.typ {
 	case sqltypes.Int64:
 		return intTimesIntWithError(v1.ival, v2.ival)
@@ -411,9 +413,9 @@ func divideNumericWithError(i1, i2 EvalResult) (EvalResult, error) {
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", v1.Value().String(), v2.Value().String())
 }
 
-// makeNumericAndprioritize reorders the input parameters
+// makeNumericAndPrioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
-func makeNumericAndprioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
+func makeNumericAndPrioritize(i1, i2 EvalResult) (EvalResult, EvalResult) {
 	v1 := makeNumeric(i1)
 	v2 := makeNumeric(i2)
 	switch v1.typ {
@@ -507,12 +509,13 @@ func uintPlusInt(v1 uint64, v2 int64) EvalResult {
 }
 
 func uintPlusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
-	if v2 < 0 && v1 < uint64(v2) {
+	result := v1 + uint64(v2)
+	if v2 < 0 && v1 < uint64(-v2) || v2 > 0 && (result < v1 || result < uint64(v2)) {
 		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
-	return uintPlusUintWithError(v1, uint64(v2))
+	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
 }
 
 func uintMinusIntWithError(v1 uint64, v2 int64) (EvalResult, error) {
@@ -543,7 +546,7 @@ func uintPlusUint(v1, v2 uint64) EvalResult {
 
 func uintPlusUintWithError(v1, v2 uint64) (EvalResult, error) {
 	result := v1 + v2
-	if result < v2 {
+	if result < v1 || result < v2 {
 		return EvalResult{}, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in %v + %v", "BIGINT UNSIGNED", v1, v2)
 	}
 	return EvalResult{typ: sqltypes.Uint64, uval: result}, nil
