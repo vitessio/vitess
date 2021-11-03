@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 import React, { useMemo } from 'react';
-import { groupBy, isEmpty, orderBy } from 'lodash';
+import { isEmpty, orderBy } from 'lodash';
 
 import style from './KeyspaceShards.module.scss';
 import { topodata, vtadmin as pb } from '../../../proto/vtadmin';
 import { useTablets } from '../../../hooks/api';
-import { formatAlias, TABLET_TYPES } from '../../../util/tablets';
+import { formatAlias, formatType } from '../../../util/tablets';
 import { DataTable } from '../../dataTable/DataTable';
 import { DataCell } from '../../dataTable/DataCell';
 import { ShardServingPip } from '../../pips/ShardServingPip';
@@ -30,6 +30,8 @@ import { filterNouns } from '../../../util/filterNouns';
 import { TabletLink } from '../../links/TabletLink';
 import { ShardLink } from '../../links/ShardLink';
 import { getShardSortRange } from '../../../util/keyspaces';
+import { Pip } from '../../pips/Pip';
+import { Tooltip } from '../../tooltip/Tooltip';
 
 interface Props {
     keyspace: pb.Keyspace | null | undefined;
@@ -46,26 +48,23 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
             return [];
         }
 
-        const shards = Object.values(keyspace?.shards);
-
         const keyspaceTablets = tablets.filter(
             (t) => t.cluster?.id === keyspace.cluster?.id && t.tablet?.keyspace === keyspace.keyspace?.name
         );
 
-        const mapped = shards.map((shard) => {
-            const shardTablets = keyspaceTablets.filter((t) => t.tablet?.shard === shard.name);
-            const tabletsByType = groupBy(shardTablets, (t) => t.tablet?.type);
+        const mapped = Object.values(keyspace?.shards).map((shard) => {
             const sortRange = getShardSortRange(shard.name || '');
 
-            // A shard can only ever have one primary tablet, hence we can take the "first" (if there is one).
-            const primaryTablet = (tabletsByType[topodata.TabletType.PRIMARY] || [])[0];
+            const shardTablets = keyspaceTablets.filter((t) => t.tablet?.shard === shard.name);
+
+            const primaryTablet = shardTablets.find((t) => t.tablet?.type === topodata.TabletType.PRIMARY);
 
             return {
                 keyspace: shard.keyspace,
                 isPrimaryServing: shard.shard?.is_primary_serving,
                 name: shard.name,
                 primaryHostname: primaryTablet?.tablet?.hostname,
-                tabletsByType,
+                tabletsByType: countTablets(shardTablets),
                 // "_" prefix excludes the property name from k/v filtering
                 _primaryTablet: primaryTablet,
                 _sortStart: sortRange.start,
@@ -102,11 +101,24 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                 <div className={style.counts}>
                                     {Object.keys(row.tabletsByType)
                                         .sort()
-                                        .map((tabletType) => (
-                                            <span key={tabletType}>
-                                                {row.tabletsByType[tabletType].length} {TABLET_TYPES[tabletType]}
-                                            </span>
-                                        ))}
+                                        .map((tabletType) => {
+                                            const tt = row.tabletsByType[tabletType];
+                                            const allSuccess = tt.serving === tt.total;
+                                            const tooltip = allSuccess
+                                                ? `${tt.serving}/${tt.total} ${tabletType} serving`
+                                                : `${tt.total - tt.serving}/${tt.total} ${tabletType} not serving`;
+
+                                            return (
+                                                <span key={tabletType}>
+                                                    <Tooltip text={tooltip}>
+                                                        <span>
+                                                            <Pip state={allSuccess ? 'success' : 'danger'} />
+                                                        </span>
+                                                    </Tooltip>{' '}
+                                                    {tt.total} {tabletType}
+                                                </span>
+                                            );
+                                        })}
                                 </div>
                             ) : (
                                 <span className="text-color-secondary">No tablets</span>
@@ -148,4 +160,34 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
             <DataTable columns={TABLE_COLUMNS} data={data} renderRows={renderRows} />
         </div>
     );
+};
+
+interface TabletCounts {
+    // tabletType is the stringified/display version of the
+    // topodata.TabletType enum.
+    [tabletType: string]: {
+        // The number of serving tablets for this type.
+        serving: number;
+        // The total number of tablets for this type.
+        total: number;
+    };
+}
+
+const countTablets = (tablets: pb.Tablet[]): TabletCounts => {
+    return tablets.reduce((acc, t) => {
+        // If t.tablet.type is truly an undefined/null/otherwise invalid
+        // value (i.e,. not in the proto, which should in theory never happen),
+        // then call that "UNDEFINED" so as not to co-opt the existing "UNKNOWN"
+        // tablet state.
+        const ft = formatType(t) || 'UNDEFINED';
+        if (!(ft in acc)) acc[ft] = { serving: 0, total: 0 };
+
+        acc[ft].total++;
+
+        if (t.state === pb.Tablet.ServingState.SERVING) {
+            acc[ft].serving++;
+        }
+
+        return acc;
+    }, {} as TabletCounts);
 };
