@@ -48,7 +48,7 @@ func (Charset_utf16be) IsSuperset(other types.Charset) bool {
 	}
 }
 
-func encodeRuneUTF16be(dst []byte, r rune) int {
+func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
 	_ = dst[3]
 
 	if r <= 0xffff {
@@ -63,10 +63,6 @@ func encodeRuneUTF16be(dst []byte, r rune) int {
 		dst[3] = uint8(r2)
 		return 4
 	}
-}
-
-func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
-	return encodeRuneUTF16be(dst, r)
 }
 
 func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
@@ -111,11 +107,20 @@ func (Charset_utf16le) IsSuperset(other types.Charset) bool {
 }
 
 func (Charset_utf16le) EncodeRune(dst []byte, r rune) int {
-	nDst := encodeRuneUTF16be(dst, r)
-	for i := 0; i < nDst; i += 2 {
-		dst[i], dst[i+1] = dst[i+1], dst[i]
+	_ = dst[3]
+
+	if r <= 0xffff {
+		dst[0] = uint8(r)
+		dst[1] = uint8(r >> 8)
+		return 2
+	} else {
+		r1, r2 := utf16.EncodeRune(r)
+		dst[0] = uint8(r1)
+		dst[1] = uint8(r1 >> 8)
+		dst[2] = uint8(r2)
+		dst[3] = uint8(r2 >> 8)
+		return 4
 	}
-	return nDst
 }
 
 func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {

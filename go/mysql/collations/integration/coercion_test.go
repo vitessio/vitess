@@ -116,8 +116,8 @@ func TestComparisonSemantics(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	for _, coll := range collations.All() {
-		text := verifyTranscoding(t, coll, remote.ForName(conn, coll.Name()), []byte(BaseString))
+	for _, coll := range defaultenv.AllCollations() {
+		text := verifyTranscoding(t, coll, remote.NewCollation(conn, coll.Name()), []byte(BaseString))
 		testInputs = append(testInputs, &TextWithCollation{Text: text, Collation: coll})
 	}
 	sort.Slice(testInputs, func(i, j int) bool {
@@ -156,7 +156,7 @@ func TestComparisonSemantics(t *testing.T) {
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					resultLocal, coercionLocal, errLocal := collations.MergeCollations(left, right,
+					resultLocal, coercionLocal, errLocal := defaultenv.MergeCollations(left, right,
 						collations.CoercionOptions{
 							ConvertToSuperset:   true,
 							ConvertWithCoercion: true,
@@ -186,7 +186,7 @@ func TestComparisonSemantics(t *testing.T) {
 						continue
 					}
 
-					remoteCollation := collations.FromName(resultRemote.Rows[0][1].ToString())
+					remoteCollation := defaultenv.LookupByName(resultRemote.Rows[0][1].ToString())
 					remoteCI, _ := resultRemote.Rows[0][2].ToInt64()
 					remoteTest.Test(t, &RemoteCoercionResult{
 						Expr:         resultRemote.Rows[0][0],

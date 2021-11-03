@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	register(&Collation_binary{}, true)
+	register(&Collation_binary{})
 }
 
 type simpletables struct {
@@ -30,10 +30,10 @@ type simpletables struct {
 	// take up a lot of binary space.
 	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
 	// these tables.
-	// tolower   []byte
-	// toupper   []byte
-	// ctype     []byte
-	sort []byte
+	// tolower   *[256]byte
+	// toupper   *[256]byte
+	// ctype     *[256]byte
+	sort *[256]byte
 }
 
 type Collation_8bit_bin struct {
@@ -43,7 +43,7 @@ type Collation_8bit_bin struct {
 	charset charset.Charset
 }
 
-func (c *Collation_8bit_bin) init() {}
+func (c *Collation_8bit_bin) Init() {}
 
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
@@ -93,7 +93,7 @@ type Collation_8bit_simple_ci struct {
 	charset charset.Charset
 }
 
-func (c *Collation_8bit_simple_ci) init() {}
+func (c *Collation_8bit_simple_ci) Init() {}
 
 func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
@@ -116,7 +116,7 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 	cmpLen := minInt(len(left), len(right))
 
 	for i := 0; i < cmpLen; i++ {
-		sortL, sortR := sortOrder[int(left[i])], sortOrder[int(right[i])]
+		sortL, sortR := sortOrder[left[i]], sortOrder[right[i]]
 		if sortL != sortR {
 			return int(sortL) - int(sortR)
 		}
@@ -129,7 +129,7 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 
 func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
 	padToMax := false
-	sortOrder := c.sort[:256]
+	sortOrder := c.sort
 	copyCodepoints := len(src)
 
 	switch numCodepoints {
@@ -167,7 +167,7 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 
 type Collation_binary struct{}
 
-func (c *Collation_binary) init() {}
+func (c *Collation_binary) Init() {}
 
 func (c *Collation_binary) ID() ID {
 	return 63

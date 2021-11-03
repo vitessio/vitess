@@ -140,10 +140,6 @@ func (it *FastIterator900) NextChunk(dstbytes []byte) int {
 				mask &= weight
 				dst[2] = uint16(weight)
 
-				weight = table[p[2]]
-				mask &= weight
-				dst[2] = uint16(weight)
-
 				weight = table[p[3]]
 				mask &= weight
 				dst[3] = uint16(weight)
