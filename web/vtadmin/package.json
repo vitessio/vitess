@@ -27,7 +27,7 @@
     "react-dom": "^17.0.1",
     "react-query": "^3.5.9",
     "react-router-dom": "^5.2.0",
-    "react-scripts": "4.0.1",
+    "react-scripts": "^4.0.3",
     "react-tiny-popover": "^6.0.5",
     "sass": "^1.43.4",
     "source-map-explorer": "^2.5.2",
