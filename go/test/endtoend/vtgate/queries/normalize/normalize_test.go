@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gotest.tools/assert"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
@@ -37,8 +37,8 @@ func TestNormalizeAllFields(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	insertQuery := string(`insert into t1 values (1, "chars", "variable chars", hex("sure"), 0x676F, 0.33, 9.99, 1, "1976-06-08", "small", "b", "{\"key\":\"value\"}", point(1,5))`)
-	normalizedInsertQuery := string(`insert into t1 values (:vtg1, :vtg2, :vtg3, hex(:vtg4), :vtg5, :vtg6, :vtg7, :vtg8, :vtg9, :vtg10, :vtg11, :vtg12, point(:vtg13, :vtg14))`)
+	insertQuery := string(`insert into t1 values (1, "chars", "variable chars", x'73757265', 0x676F, 0.33, 9.99, 1, "1976-06-08", "small", "b", "{\"key\":\"value\"}", point(1,5))`)
+	normalizedInsertQuery := string(`insert into t1 values (:vtg1, :vtg2, :vtg3, :vtg4, :vtg5, :vtg6, :vtg7, :vtg8, :vtg9, :vtg10, :vtg11, :vtg12, point(:vtg13, :vtg14))`)
 	selectQuery := "select * from t1"
 	utils.Exec(t, conn, insertQuery)
 	qr := utils.Exec(t, conn, selectQuery)
@@ -55,7 +55,7 @@ func TestNormalizeAllFields(t *testing.T) {
 			break
 		}
 	}
-	assert.Equal(t, found, true, "correctly normalized record not found in planner cache")
+	assert.True(t, found, "correctly normalized record not found in planner cache")
 }
 
 func getPlanCache(vtgateHostPort string) ([]map[string]interface{}, error) {

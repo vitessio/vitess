@@ -131,14 +131,28 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.TestBindVariable([]interface{}{1, 4, 5}),
 		},
 	}, {
-		// Hex value should work for selects
+		// Hex number values should work for selects
 		in:      "select * from t where v1 = 0x1234",
 		outstmt: "select * from t where v1 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.HexNumBindVariable([]byte("0x1234")),
 		},
 	}, {
-		// Hex value should work for DMLs
+		// Hex encoded string values should work for selects
+		in:      "select * from t where v1 = x'7b7d'",
+		outstmt: "select * from t where v1 = :bv1",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
+		},
+	}, {
+		// Ensure that hex notation bind vars work with collation based conversions
+		in:      "select convert(x'7b7d' using utf8mb4) from dual",
+		outstmt: "select convert(:bv1 using utf8mb4) from dual",
+		outbv: map[string]*querypb.BindVariable{
+			"bv1": sqltypes.HexValBindVariable([]byte("x'7b7d'")),
+		},
+	}, {
+		// Hex number values should work for DMLs
 		in:      "update a set v1 = 0x12",
 		outstmt: "update a set v1 = :bv1",
 		outbv: map[string]*querypb.BindVariable{
