@@ -4540,7 +4540,7 @@ type TrimExpr struct {
 
 // Format formats the node
 func (node *TrimExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("trim(%v, %v, %v)", node.Str, node.Pattern, node.Dir)
+	buf.Myprintf("trim(%v, %v, %s)", node.Str, node.Pattern, node.Dir)
 }
 
 func (node *TrimExpr) replace(from, to Expr) bool {

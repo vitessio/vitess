@@ -3493,32 +3493,32 @@ func TestTrim(t *testing.T) {
 	testCases := []parseTest{
 		{
 			input:                `SELECT TRIM("foo")`,
-			output:               `select trim('foo', ' ', 'b') from dual`,
+			output:               `select trim('foo', ' ', b) from dual`,
 			serializeSelectExprs: true,
 		},
 		{
 			input:                `SELECT TRIM("bar" FROM "foo")`,
-			output:               `select trim('foo', 'bar', 'b') from dual`,
+			output:               `select trim('foo', 'bar', b) from dual`,
 			serializeSelectExprs: true,
 		},
 		{
 			input:                `SELECT TRIM(LEADING "bar" FROM "foo")`,
-			output:               `select trim('foo', 'bar', 'l') from dual`,
+			output:               `select trim('foo', 'bar', l) from dual`,
 			serializeSelectExprs: true,
 		},
 		{
 			input:                `SELECT TRIM(TRAILING "bar" FROM "foo")`,
-			output:               `select trim('foo', 'bar', 'r') from dual`,
+			output:               `select trim('foo', 'bar', r) from dual`,
 			serializeSelectExprs: true,
 		},
 		{
 			input:                `SELECT TRIM(BOTH "bar" FROM "foo")`,
-			output:               `select trim('foo', 'bar', 'b') from dual`,
+			output:               `select trim('foo', 'bar', b) from dual`,
 			serializeSelectExprs: true,
 		},
 		{
 			input:                `SELECT TRIM(TRIM("foobar"))`,
-			output:               `select trim(trim('foobar', ' ', 'b'), ' ', 'b') from dual`,
+			output:               `select trim(trim('foobar', ' ', b), ' ', b) from dual`,
 			serializeSelectExprs: true,
 		},
 	}
