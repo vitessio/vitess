@@ -144,9 +144,25 @@ func (f *FakeConn) Delete(ctx context.Context, filePath string, version topo.Ver
 	panic("implement me")
 }
 
+// fakeLockDescriptor implements the topo.LockDescriptor interface
+type fakeLockDescriptor struct {
+}
+
+// Check implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Check(ctx context.Context) error {
+	return nil
+}
+
+// Unlock implements the topo.LockDescriptor interface
+func (f fakeLockDescriptor) Unlock(ctx context.Context) error {
+	return nil
+}
+
+var _ topo.LockDescriptor = (*fakeLockDescriptor)(nil)
+
 // Lock implements the Conn interface
 func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
-	panic("implement me")
+	return &fakeLockDescriptor{}, nil
 }
 
 // Watch implements the Conn interface
