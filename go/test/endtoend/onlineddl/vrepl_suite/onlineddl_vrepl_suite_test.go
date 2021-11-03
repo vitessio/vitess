@@ -213,6 +213,11 @@ func testSingle(t *testing.T, testName string) {
 		expectQueryFailure = content
 	}
 
+	singleDDLStrategy := ddlStrategy
+	if extra, exists := readTestFile(t, testName, "ddl_strategy"); exists {
+		singleDDLStrategy = fmt.Sprintf("%s %s", singleDDLStrategy, extra)
+	}
+
 	var migrationMessage string
 	var migrationStatus string
 	// Run test
@@ -222,7 +227,7 @@ func testSingle(t *testing.T, testName string) {
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
 	// Run the DDL!
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+	uuid := testOnlineDDLStatement(t, alterStatement, singleDDLStrategy, expectQueryFailure)
 
 	if expectQueryFailure != "" {
 		// Nothing further to do. Migration isn't actually running
