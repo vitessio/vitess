@@ -85,11 +85,12 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                     <tr key={row.name}>
                         <DataCell>
                             <ShardLink
+                                className="font-weight-bold"
                                 clusterID={keyspace?.cluster?.id}
                                 keyspace={keyspace?.keyspace?.name}
                                 shard={row.name}
                             >
-                                <ShardServingPip isServing={row.isPrimaryServing} /> {row.keyspace}/{row.name}
+                                {row.keyspace}/{row.name}
                             </ShardLink>
                         </DataCell>
                         <DataCell>
