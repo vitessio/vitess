@@ -18,6 +18,7 @@ package faketopo
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -101,7 +102,40 @@ var _ topo.Conn = (*FakeConn)(nil)
 
 // ListDir implements the Conn interface
 func (f *FakeConn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
-	panic("implement me")
+	var res []topo.DirEntry
+
+	for filePath := range f.getResultMap {
+		if strings.HasPrefix(filePath, dirPath) {
+			remaining := filePath[len(dirPath)+1:]
+			idx := strings.Index(remaining, "/")
+			if idx == -1 {
+				res = addToListOfDirEntries(res, topo.DirEntry{
+					Name: remaining,
+					Type: topo.TypeFile,
+				})
+			} else {
+				res = addToListOfDirEntries(res, topo.DirEntry{
+					Name: remaining[0:idx],
+					Type: topo.TypeDirectory,
+				})
+			}
+		}
+	}
+
+	if len(res) == 0 {
+		return nil, topo.NewError(topo.NoNode, dirPath)
+	}
+	return res, nil
+}
+
+func addToListOfDirEntries(list []topo.DirEntry, elem topo.DirEntry) []topo.DirEntry {
+	for _, entry := range list {
+		if entry.Name == elem.Name {
+			return list
+		}
+	}
+	list = append(list, elem)
+	return list
 }
 
 // Create implements the Conn interface
