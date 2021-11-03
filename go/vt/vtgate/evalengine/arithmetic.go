@@ -224,7 +224,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
 	if v1.IsText() && v2.IsText() && collationID != collations.Unknown {
-		collation := collations.FromID(collationID)
+		collation := collations.Default().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
 				ID: collationID,
