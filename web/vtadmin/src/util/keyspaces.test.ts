@@ -109,6 +109,10 @@ describe('getShardSortRange', () => {
         expected: ShardRange;
     }[] = [
         {
+            shardName: '0',
+            expected: { start: Number.MIN_VALUE, end: Number.MAX_VALUE },
+        },
+        {
             shardName: '-',
             expected: { start: Number.MIN_VALUE, end: Number.MAX_VALUE },
         },
@@ -123,6 +127,10 @@ describe('getShardSortRange', () => {
         {
             shardName: '80-c0',
             expected: { start: 128, end: 192 },
+        },
+        {
+            shardName: 'c0-',
+            expected: { start: 192, end: Number.MAX_VALUE },
         },
         {
             shardName: 'c0-',

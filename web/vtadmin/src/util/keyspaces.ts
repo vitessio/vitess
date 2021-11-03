@@ -46,6 +46,13 @@ export interface ShardRange {
  * minimum/maximum integer values. Useful for sorting shard names numerically.
  */
 export const getShardSortRange = (shardName: string): ShardRange => {
+    if (shardName === '0' || shardName === '-') {
+        return {
+            start: Number.MIN_VALUE,
+            end: Number.MAX_VALUE,
+        };
+    }
+
     const parsed = shardName.split('-');
     if (parsed.length !== 2) {
         throw Error(`could not parse sortable range from shard ${shardName}`);
