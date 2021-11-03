@@ -63,12 +63,13 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                 keyspace: shard.keyspace,
                 isPrimaryServing: shard.shard?.is_primary_serving,
                 name: shard.name,
+                primaryAlias: formatAlias(primaryTablet?.tablet?.alias),
                 primaryHostname: primaryTablet?.tablet?.hostname,
-                tabletsByType: countTablets(shardTablets),
                 // "_" prefix excludes the property name from k/v filtering
                 _primaryTablet: primaryTablet,
                 _sortStart: sortRange.start,
                 _sortEnd: sortRange.end,
+                _tabletsByType: countTablets(shardTablets),
             };
         });
 
@@ -97,12 +98,12 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                             {row.isPrimaryServing ? 'SERVING' : 'NOT SERVING'}
                         </DataCell>
                         <DataCell>
-                            {!isEmpty(row.tabletsByType) ? (
+                            {!isEmpty(row._tabletsByType) ? (
                                 <div className={style.counts}>
-                                    {Object.keys(row.tabletsByType)
+                                    {Object.keys(row._tabletsByType)
                                         .sort()
                                         .map((tabletType) => {
-                                            const tt = row.tabletsByType[tabletType];
+                                            const tt = row._tabletsByType[tabletType];
                                             const allSuccess = tt.serving === tt.total;
                                             const tooltip = allSuccess
                                                 ? `${tt.serving}/${tt.total} ${tabletType} serving`
@@ -126,12 +127,12 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                         </DataCell>
                         <DataCell>
                             {row._primaryTablet ? (
-                                <TabletLink
-                                    alias={formatAlias(row._primaryTablet.tablet?.alias)}
-                                    clusterID={keyspace?.cluster?.id}
-                                >
-                                    <TabletServingPip state={row._primaryTablet.state} /> {row.primaryHostname}
-                                </TabletLink>
+                                <div>
+                                    <TabletLink alias={row.primaryAlias} clusterID={keyspace?.cluster?.id}>
+                                        <TabletServingPip state={row._primaryTablet.state} /> {row.primaryAlias}
+                                    </TabletLink>
+                                    <div className="font-size-small text-color-secondary">{row.primaryHostname}</div>
+                                </div>
                             ) : (
                                 <span className="text-color-secondary">No primary tablet</span>
                             )}
