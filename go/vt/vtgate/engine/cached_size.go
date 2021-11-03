@@ -175,6 +175,28 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Filter) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Predicate vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Predicate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ASTPredicate vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.ASTPredicate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -702,7 +724,7 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -711,6 +733,10 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
 	}
 	// field Vars map[string]int
 	if cached.Vars != nil {
