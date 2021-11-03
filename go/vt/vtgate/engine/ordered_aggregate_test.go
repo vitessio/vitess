@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 
@@ -652,13 +653,13 @@ func TestMerge(t *testing.T) {
 		"1|3|2.8|2|bc",
 	)
 
-	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil)
+	merged, _, err := oa.merge(fields, r.Rows[0], r.Rows[1], nil, nil)
 	assert.NoError(err)
 	want := sqltypes.MakeTestResult(fields, "1|5|6|2|bc").Rows[0]
 	assert.Equal(want, merged)
 
 	// swap and retry
-	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil)
+	merged, _, err = oa.merge(fields, r.Rows[1], r.Rows[0], nil, nil)
 	assert.NoError(err)
 	assert.Equal(want, merged)
 }
@@ -1049,4 +1050,137 @@ func TestMultiDistinct(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, want, results)
+}
+
+func TestOrderedAggregateCollate(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"B|-1",
+			"c|3",
+			"c|4",
+			"ß|11",
+			"ss|2",
+		)},
+	}
+
+	collationID, _ := collations.IDFromName("utf8mb4_0900_ai_ci")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|3",
+		"b|1",
+		"c|7",
+		"ß|13",
+	)
+	assert.Equal(wantResult, result)
+}
+
+func TestOrderedAggregateCollateAS(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"c|3",
+			"c|4",
+			"Ç|4",
+		)},
+	}
+
+	collationID, _ := collations.IDFromName("utf8mb4_0900_as_ci")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|2",
+		"Ǎ|1",
+		"b|2",
+		"c|7",
+		"Ç|4",
+	)
+	assert.Equal(wantResult, result)
+}
+
+func TestOrderedAggregateCollateKS(t *testing.T) {
+	assert := assert.New(t)
+	fields := sqltypes.MakeTestFields(
+		"col|count(*)",
+		"varchar|decimal",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1",
+			"A|1",
+			"Ǎ|1",
+			"b|2",
+			"c|3",
+			"c|4",
+			"\xE3\x83\x8F\xE3\x81\xAF|2",
+			"\xE3\x83\x8F\xE3\x83\x8F|1",
+		)},
+	}
+
+	collationID, _ := collations.IDFromName("utf8mb4_ja_0900_as_cs_ks")
+	oa := &OrderedAggregate{
+		Aggregates: []*AggregateParams{{
+			Opcode: AggregateCount,
+			Col:    1,
+		}},
+		GroupByKeys: []*GroupByParams{{KeyCol: 0, CollationID: collationID}},
+		Input:       fp,
+	}
+
+	result, err := oa.TryExecute(&noopVCursor{}, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		fields,
+		"a|1",
+		"A|1",
+		"Ǎ|1",
+		"b|2",
+		"c|7",
+		"\xE3\x83\x8F\xE3\x81\xAF|2",
+		"\xE3\x83\x8F\xE3\x83\x8F|1",
+	)
+	assert.Equal(wantResult, result)
 }
