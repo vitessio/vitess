@@ -17,6 +17,10 @@
     padding: 16px 0;
 }
 
+.counts > span {
+    white-space: nowrap;
+}
+
 .counts > span:not(:last-child)::after {
     color: var(--colorScaffoldingHighlight);
     content: '/';
