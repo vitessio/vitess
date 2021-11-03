@@ -4532,6 +4532,13 @@ func (node *SubstrExpr) walkSubtree(visit Visit) error {
 	)
 }
 
+// Options for Trim
+const (
+	LEADING_CHARS  string = "l"
+	TRAILING_CHARS string = "r"
+	BOTH_CHARS     string = "b"
+)
+
 type TrimExpr struct {
 	Str     Expr
 	Pattern Expr
