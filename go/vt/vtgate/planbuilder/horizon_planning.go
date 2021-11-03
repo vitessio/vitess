@@ -147,6 +147,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *pulloutSubquery:
 		return hp.truncateColumnsIfNeeded(p.underlying)
+	case *filter:
+		return hp.truncateColumnsIfNeeded(p.input)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
 	}
@@ -686,6 +688,13 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 	case *vindexFunc:
 		// This is evaluated at VTGate only, so weight_string function cannot be used.
 		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
+	case *filter:
+		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.input)
+		if err != nil {
+			return nil, err
+		}
+		plan.input = newUnderlyingPlan
+		return plan, nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 	}

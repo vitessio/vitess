@@ -29,13 +29,13 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type fakeConverterSchemaTable struct{}
+type notImplementedSchemaInfoConverter struct{}
 
-func (f *fakeConverterSchemaTable) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not supported")
+func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
 }
 
-func (f *fakeConverterSchemaTable) CollationIDLookup(sqlparser.Expr) collations.ID {
+func (f *notImplementedSchemaInfoConverter) CollationIDLookup(sqlparser.Expr) collations.ID {
 	return 0
 }
 
@@ -121,7 +121,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := evalengine.Convert(other, &fakeConverterSchemaTable{})
+				evalExpr, err := evalengine.Convert(other, &notImplementedSchemaInfoConverter{})
 				if err != nil {
 					if strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
 						// This just means we can't rewrite this particular expression,

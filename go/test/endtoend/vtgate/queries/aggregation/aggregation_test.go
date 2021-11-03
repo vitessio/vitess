@@ -106,16 +106,17 @@ func TestEqualFilterOnScatter(t *testing.T) {
 		t.Run(workload, func(t *testing.T) {
 			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
 
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)     // where clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)     // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)     // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)     // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)   // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`) // where clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 1", `[]`)               // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"1\"", `[]`)           // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`) // having clause
-			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)  // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 1", `[]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"1\"", `[]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
 
 			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) = 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
 		})
