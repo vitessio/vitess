@@ -600,7 +600,7 @@ func TestNullsafeCompare(t *testing.T) {
 }
 
 func getCollationID(collation string) collations.ID {
-	id, _ := collations.IDFromName(collation)
+	id, _ := collations.Default().LookupID(collation)
 	return id
 }
 
