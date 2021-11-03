@@ -89,7 +89,7 @@ func hasNullEvalResult(l, r EvalResult) bool {
 	return l.typ == sqltypes.Null || r.typ == sqltypes.Null
 }
 
-func evalResultsAreString(l, r EvalResult) bool {
+func evalResultsAreStrings(l, r EvalResult) bool {
 	return (sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ)) && (sqltypes.IsText(r.typ) || sqltypes.IsBinary(r.typ))
 }
 
@@ -128,7 +128,7 @@ func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func executeComparison(lVal, rVal EvalResult) (int, error) {
 	switch {
-	case evalResultsAreString(lVal, rVal):
+	case evalResultsAreStrings(lVal, rVal):
 		return compareStrings(lVal, rVal)
 
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):

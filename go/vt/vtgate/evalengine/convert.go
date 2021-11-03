@@ -67,15 +67,12 @@ func translateComparisonOperator(op sqlparser.ComparisonExprOperator) Comparison
 	}
 }
 
-func getCollation(expr sqlparser.Expr, lookup ConverterLookup) (collations.ID, error) {
+func getCollation(expr sqlparser.Expr, lookup ConverterLookup) collations.ID {
 	collation := collations.Unknown
 	if lookup != nil {
 		collation = lookup.CollationIDLookup(expr)
 	}
-	if collation == collations.Unknown {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: missing collation information for %s", ErrConvertExprNotSupported, sqlparser.String(expr))
-	}
-	return collation, nil
+	return collation
 }
 
 // Convert converts between AST expressions and executable expressions
@@ -89,10 +86,7 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		collation := collations.Unknown
-		if lookup != nil {
-			collation = lookup.CollationIDLookup(e)
-		}
+		collation := getCollation(node, lookup)
 		return NewColumn(idx, collation), nil
 	case *sqlparser.ComparisonExpr:
 		left, err := Convert(node.Left, lookup)
@@ -121,10 +115,7 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		case sqlparser.FloatVal:
 			return NewLiteralFloatFromBytes(node.Bytes())
 		case sqlparser.StrVal:
-			collation, err := getCollation(e, lookup)
-			if err != nil {
-				return nil, err
-			}
+			collation := getCollation(e, lookup)
 			return NewLiteralString(node.Bytes(), collation), nil
 		case sqlparser.HexNum:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: hexadecimal value: %s", ErrConvertExprNotSupported, node.Val)
