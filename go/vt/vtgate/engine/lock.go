@@ -38,6 +38,8 @@ type Lock struct {
 	// Query specifies the query to be executed.
 	Query string
 
+	FieldQuery string
+
 	noInputs
 
 	noTxNeeded
@@ -60,6 +62,10 @@ func (l *Lock) GetTableName() string {
 
 // TryExecute is part of the Primitive interface
 func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	return l.execLock(vcursor, l.Query, bindVars)
+}
+
+func (l *Lock) execLock(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(l.Keyspace.Name, nil, []key.Destination{l.TargetDestination})
 	if err != nil {
 		return nil, err
@@ -68,11 +74,11 @@ func (l *Lock) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVari
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 
-	query := &querypb.BoundQuery{
-		Sql:           l.Query,
+	boundQuery := &querypb.BoundQuery{
+		Sql:           query,
 		BindVariables: bindVars,
 	}
-	return vcursor.ExecuteLock(rss[0], query)
+	return vcursor.ExecuteLock(rss[0], boundQuery)
 }
 
 // TryStreamExecute is part of the Primitive interface
@@ -86,12 +92,13 @@ func (l *Lock) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 
 // GetFields is part of the Primitive interface
 func (l *Lock) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "not implements in lock primitive")
+	return l.execLock(vcursor, l.FieldQuery, bindVars)
 }
 
 func (l *Lock) description() PrimitiveDescription {
 	other := map[string]interface{}{
-		"Query": l.Query,
+		"Query":      l.Query,
+		"FieldQuery": l.FieldQuery,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Lock",
