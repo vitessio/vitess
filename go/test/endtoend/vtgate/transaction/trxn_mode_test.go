@@ -23,14 +23,11 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
-
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -149,29 +146,19 @@ func TestMain(m *testing.M) {
 	}
 }
 
-func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return qr
-}
-
-// TestTransactionModes tests trasactions using twopc mode
+// TestTransactionModes tests transactions using twopc mode
 func TestTransactionModes(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
-	defer exec(t, conn, "delete from twopc_user")
 
 	// Insert targeted to multiple tables should fail as Transaction mode is SINGLE
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into twopc_user(user_id, name) values(1,'john')")
 	_, err = conn.ExecuteFetch("insert into twopc_user(user_id, name) values(6,'vick')", 1000, false)
-	exec(t, conn, "rollback")
+	utils.Exec(t, conn, "rollback")
 	want := "multi-db transaction attempted"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
@@ -193,54 +180,23 @@ func TestTransactionModes(t *testing.T) {
 	defer conn2.Close()
 
 	// Insert targeted to multiple db should PASS with TWOPC trx mode
-	exec(t, conn2, "begin")
-	exec(t, conn2, "insert into twopc_user(user_id, name) values(3,'mark')")
-	exec(t, conn2, "insert into twopc_user(user_id, name) values(4,'doug')")
-	exec(t, conn2, "insert into twopc_lookup(name, id) values('Tim',7)")
-	exec(t, conn2, "commit")
+	utils.Exec(t, conn2, "begin")
+	utils.Exec(t, conn2, "insert into twopc_user(user_id, name) values(3,'mark')")
+	utils.Exec(t, conn2, "insert into twopc_user(user_id, name) values(4,'doug')")
+	utils.Exec(t, conn2, "insert into twopc_lookup(name, id) values('Tim',7)")
+	utils.Exec(t, conn2, "commit")
 
 	// Verify the values are present
-	qr := exec(t, conn2, "select user_id from twopc_user where name='mark'")
-	got := fmt.Sprintf("%v", qr.Rows)
-	want = `[[INT64(3)]]`
-	assert.Equal(t, want, got)
-
-	qr = exec(t, conn2, "select name from twopc_lookup where id=3")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[[VARCHAR("mark")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatches(t, conn2, "select user_id from twopc_user where name='mark'", `[[INT64(3)]]`)
+	utils.AssertMatches(t, conn2, "select name from twopc_lookup where id=3", `[[VARCHAR("mark")]]`)
 
 	// DELETE from multiple tables using TWOPC transaction mode
-	exec(t, conn2, "begin")
-	exec(t, conn2, "delete from twopc_user where user_id = 3")
-	exec(t, conn2, "delete from twopc_lookup where id = 3")
-	exec(t, conn2, "commit")
+	utils.Exec(t, conn2, "begin")
+	utils.Exec(t, conn2, "delete from twopc_user where user_id = 3")
+	utils.Exec(t, conn2, "delete from twopc_lookup where id = 3")
+	utils.Exec(t, conn2, "commit")
 
 	// VERIFY that values are deleted
-	qr = exec(t, conn2, "select user_id from twopc_user where user_id=3")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[]`
-	assert.Equal(t, want, got)
-
-	qr = exec(t, conn2, "select name from twopc_lookup where id=3")
-	got = fmt.Sprintf("%v", qr.Rows)
-	want = `[]`
-	assert.Equal(t, want, got)
-}
-
-func TestTransactionsInStreamingMode(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	exec(t, conn, "delete from twopc_user")
-	defer exec(t, conn, "delete from twopc_user")
-
-	exec(t, conn, "set workload = olap")
-	exec(t, conn, "begin")
-	exec(t, conn, "insert into twopc_user(user_id, name) values(1,'Pranav')")
-	utils.AssertMatches(t, conn, "select name from twopc_user", `[[VARCHAR("Pranav")]]`)
-	exec(t, conn, "commit")
-	require.NoError(t, err)
+	utils.AssertMatches(t, conn2, "select user_id from twopc_user where user_id=3", `[]`)
+	utils.AssertMatches(t, conn2, "select name from twopc_lookup where id=3", `[]`)
 }
