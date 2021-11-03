@@ -18,7 +18,9 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -41,9 +43,12 @@ var _ logicalPlan = (*filter)(nil)
 var _ evalengine.ConverterLookup = (*simpleConverterLookup)(nil)
 
 func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
-	offset, _, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, s.plan, s.semTable, true, true, false)
+	offset, added, err := pushProjection(&sqlparser.AliasedExpr{Expr: col}, s.plan, s.semTable, true, true, false)
 	if err != nil {
 		return 0, err
+	}
+	if added {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column should not be pushed to projection while doing a column lookup")
 	}
 	return offset, nil
 }
