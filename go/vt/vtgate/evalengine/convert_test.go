@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sqlparser
+package evalengine
 
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -75,13 +75,13 @@ func TestEvaluate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.expression, func(t *testing.T) {
 			// Given
-			stmt, err := Parse("select " + test.expression)
+			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
-			astExpr := stmt.(*Select).SelectExprs[0].(*AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr)
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			sqltypesExpr, err := Convert(astExpr, nil)
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := evalengine.ExpressionEnv{
+			env := ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),

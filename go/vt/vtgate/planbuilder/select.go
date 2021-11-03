@@ -320,9 +320,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 		if sqlparser.IsLockingFunc(expr.Expr) {
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
-
 		}
-		exprs[i], err = sqlparser.Convert(expr.Expr)
+		exprs[i], err = evalengine.Convert(expr.Expr, nil)
 		if err != nil {
 			return nil, nil
 		}

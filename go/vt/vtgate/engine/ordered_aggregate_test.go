@@ -448,6 +448,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 			"c|4|1",
 			// Single null
 			"d|null|1",
+			"d|1|1",
 			// Start with null
 			"e|null|1",
 			"e|1|1",
@@ -496,14 +497,16 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		"a|1|3",
 		"b|1|1",
 		"c|7|2",
-		"d|null|1",
+		"d|1|2",
 		"e|1|2",
 		"f|1|2",
 		"g|6|4",
 		"h|6|4",
 		"i|7|2",
 	)
-	assert.Equal(wantResult, result)
+	want := fmt.Sprintf("%v", wantResult.Rows)
+	got := fmt.Sprintf("%v", result.Rows)
+	assert.Equal(want, got)
 }
 
 func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
