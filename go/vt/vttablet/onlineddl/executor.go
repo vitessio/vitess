@@ -456,6 +456,12 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
+	if err != nil {
+		return false, err
+	}
+
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
@@ -716,9 +722,9 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// deferred function will unlock keyspace
 }
 
-// initVreplicationMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
+// initMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
 // restores sql_mode to original state
-func (e *Executor) initVreplicationMigrationSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
 	deferFunc = func() {}
 	if !onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
 		// No need to change sql_mode.
@@ -748,7 +754,7 @@ func (e *Executor) initVreplicationMigrationSQLMode(ctx context.Context, onlineD
 }
 
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
-	restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 	defer restoreSQLModeFunc()
 	if err != nil {
 		return v, err
@@ -779,7 +785,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // about the two, and about the transition between the two.
 func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
-		restoreSQLModeFunc, err := e.initVreplicationMigrationSQLMode(ctx, onlineDDL, conn)
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
 		defer restoreSQLModeFunc()
 		if err != nil {
 			return err
@@ -1741,6 +1747,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		// Create the comparison table
 		ddlStmt.SetTable("", comparisonTableName)
 		modifiedCreateSQL := sqlparser.String(ddlStmt)
+
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
+		if err != nil {
+			return "", err
+		}
 
 		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
 			return "", err
