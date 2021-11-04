@@ -18,6 +18,8 @@ package uca
 
 import (
 	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type iterator900 struct {
@@ -162,10 +164,12 @@ func (it *slowIterator900) Next() (uint16, bool) {
 		}
 
 		it.input = it.input[width:]
-		if weights, remainder := it.contractions.weightForContraction(cp, it.input); weights != nil {
-			it.codepoint.initContraction(weights, it.level)
-			it.input = remainder
-			continue
+		if it.contract != nil {
+			if weights, remainder, _ := it.contract.Find(charset.Charset_utf8mb4{}, cp, it.input); weights != nil {
+				it.codepoint.initContraction(weights, it.level)
+				it.input = remainder
+				continue
+			}
 		}
 		it.codepoint.init(&it.iterator900, cp)
 	}

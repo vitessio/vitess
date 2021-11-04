@@ -97,7 +97,7 @@ func (it *jaIterator900) Next() (uint16, bool) {
 		}
 
 		it.input = it.input[width:]
-		if weights := it.contractions.weightForContextualContraction(cp, it.prevCodepoint); weights != nil {
+		if weights := it.contract.FindContextual(cp, it.prevCodepoint); weights != nil {
 			// if this is a Kana-sensitive iterator and we're at level 3 (the Kana level),
 			// we cannot return the contraction's weight here, we need the actual weights in
 			// our Kana cache.
