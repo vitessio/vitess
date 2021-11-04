@@ -34,7 +34,7 @@ zone1-0000000101 sourcekeyspace 0 rdonly 192.168.0.134:15101 192.168.0.134:17101
 zone1-0000000102 sourcekeyspace 0 replica 192.168.0.134:15102 192.168.0.134:17102 [] <null>
 zone1-0000000103 sourcekeyspace 0 rdonly 192.168.0.134:15103 192.168.0.134:17103 [] <null>
 ```
-##Default Behaviour Changes
+## Default Behaviour Changes
 
 ### Enabling reserved connections
 Use of reserved connections are controlled by the vtgate flag `-enable_system_settings`. This flag has traditionally defaulted to false (or off) in release versions (i.e. x.0 and x.0.y) of Vitess, and to true (or on) in development versions.
