@@ -422,10 +422,9 @@ func TestSchemaChange(t *testing.T) {
 		// IF NOT EXISTS is supported in non-declarative mode. Just verifying that the statement itself is good,
 		// so that the failure we tested for, above, actually tests the "declarative" logic, rather than some
 		// unrelated error.
-		uuid := testOnlineDDLStatement(t, createStatementZeroDate, "online --allow-zero-in-date", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		// the table existed, so we expect no changes in this non-declarative DDL
 		checkMigratedTable(t, tableName, "create_with_zero")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
