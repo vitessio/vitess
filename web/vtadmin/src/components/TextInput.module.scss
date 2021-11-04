@@ -1,3 +1,5 @@
+@use "sass:math";
+
 .inputContainer {
     display: block;
     position: relative;
@@ -58,7 +60,7 @@ $iconPositionHorizontalLarge: 1.6rem;
 .icon {
     fill: var(--grey600);
     height: $iconSizeMedium;
-    margin-top: -($iconSizeMedium / 2);
+    margin-top: -1 * math.div($iconSizeMedium, 2);
     position: absolute;
     top: 50%;
     width: $iconSizeMedium;
@@ -80,7 +82,7 @@ $iconPositionHorizontalLarge: 1.6rem;
 
 .large ~ .icon {
     height: $iconSizeLarge;
-    margin-top: -($iconSizeLarge / 2);
+    margin-top: -1 * math.div($iconSizeLarge, 2);
     width: $iconSizeLarge;
 }
 
