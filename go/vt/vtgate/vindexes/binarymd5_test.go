@@ -17,6 +17,7 @@ limitations under the License.
 package vindexes
 
 import (
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -72,13 +73,17 @@ func TestBinaryMD5Map(t *testing.T) {
 }
 
 func TestBinaryMD5Verify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst")}
-	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za[")}
+	hexValStr := "21cf"
+	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
+	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexBytes, _ := hex.DecodeString(hexValStr)
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("Test"), sqltypes.NewVarBinary("TEst"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
+	ksids := [][]byte{[]byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), []byte("\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["), vMD5Hash(hexBytes), vMD5Hash(hexBytes)}
 	got, err := binVindex.Verify(nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []bool{true, false}
+	want := []bool{true, false, true, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binaryMD5.Verify: %v, want %v", got, want)
 	}

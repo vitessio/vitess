@@ -18,6 +18,7 @@ package vindexes
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"reflect"
 	"testing"
@@ -94,13 +95,17 @@ func TestXXHashMap(t *testing.T) {
 }
 
 func TestXXHashVerify(t *testing.T) {
-	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2)}
-	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}}
+	hexValStr := "9efa"
+	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
+	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
+	hexBytes, _ := hex.DecodeString(hexValStr)
+	ids := []sqltypes.Value{sqltypes.NewUint64(1), sqltypes.NewUint64(2), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
+	ksids := [][]byte{{0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, {0xd4, 0x64, 0x5, 0x36, 0x76, 0x12, 0xb4, 0xb7}, vXXHash(hexBytes), vXXHash(hexBytes)}
 	got, err := xxHash.Verify(nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []bool{true, false}
+	want := []bool{true, false, true, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("xxHash.Verify: %v, want %v", got, want)
 	}

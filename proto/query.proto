@@ -206,6 +206,12 @@ enum Type {
   // This type is for internal use only.
   // Properties: 31, None.
   EXPRESSION = 31;
+  // HEXNUM specifies a HEXNUM type (unquoted varbinary).
+  // Properties: 32, IsText.
+  HEXNUM = 4128;
+  // HEXVAL specifies a HEXVAL type (unquoted varbinary).
+  // Properties: 33, IsText.
+  HEXVAL = 4129;
 }
 
 // Value represents a typed value.
