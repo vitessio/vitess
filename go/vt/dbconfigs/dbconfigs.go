@@ -186,6 +186,31 @@ func New(mcp *mysql.ConnParams) Connector {
 	}
 }
 
+// MatchCollation returns nil if the given collations.ID matches with the connection's
+// collation, otherwise it returns an error explaining why it does not match.
+// We do the comparison all the way down in the Connector to use mysql.ConnParams
+// collations environment to achieve the collation lookup using the same server version.
+func (c Connector) MatchCollation(collationID collations.ID) error {
+
+	// The collation environment of a connection parameter shall never be nil, if we fail
+	// to create it we already error out when initializing the connection with MySQL.
+	// The only situation where this field is nil is when send the very first query to
+	// MySQL to actually set the connection's collation.
+	// In this case, it is okay to ignore the collation matching and exit the function.
+	if c.connParams.CollationEnvironment == nil {
+		return nil
+	}
+
+	coll := c.connParams.CollationEnvironment.LookupByID(collationID)
+	if coll == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
+	}
+	if coll.Name() != c.connParams.Collation {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.connParams.Collation)
+	}
+	return nil
+}
+
 // Connect will invoke the mysql.connect method and return a connection
 func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	params, err := c.MysqlParams()
@@ -358,25 +383,18 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.UnixSocket = defaultSocketFile
 		}
 
+		// If the connection params has a charset defined, it will not be overridden by the
+		// global configuration, same thing applies to the collation field.
+		// At a later stage, when we establish a connection with MySQL, we will receive the
+		// server name back, and we will be able to create a collation environment which is
+		// required to figure out the default collation of a charset or if a collation is valid.
+		// This collation environment will be stored directly in the connection parameters as
+		// only the individual connection parameters are used to talk with MySQL, not the global
+		// connection parameter (DBConfigs).
 		if dbcfgs.Charset != "" && cp.Charset == "" {
 			cp.Charset = dbcfgs.Charset
 		}
-
-		// if no collation is defined in both the connection params and default config
-		// then use the default collation of the connection params' charset, or of the
-		// default config's charset if connection params' charset is not defined.
-		// otherwise, if the default configuration already have a collation defined, use it.
-		if dbcfgs.Collation == "" && cp.Collation == "" {
-			charset := cp.Charset
-			if charset == "" {
-				charset = dbcfgs.Charset
-			}
-			coll := collations.DefaultForCharset(charset)
-			if coll == nil {
-				log.Exitf("cannot resolve tablet's collation: charset '%s' has no default collation", charset)
-			}
-			cp.Collation = coll.Name()
-		} else if dbcfgs.Collation != "" && cp.Collation == "" {
+		if dbcfgs.Collation != "" && cp.Collation == "" {
 			cp.Collation = dbcfgs.Collation
 		}
 
@@ -439,34 +457,6 @@ func (dbcfgs *DBConfigs) getParams(userKey string, dbc *DBConfigs) (*UserConfig,
 func (dbcfgs *DBConfigs) SetDbParams(dbaParams, appParams mysql.ConnParams) {
 	dbcfgs.dbaParams = dbaParams
 	dbcfgs.appParams = appParams
-}
-
-// DecideCollation will set the collation field of DBConfigs based on
-// its charset field.
-// The charset should always be set as it has a default value ("utf8mb4"),
-// however, one can always override its default to an empty string, which
-// is not a problem as long as the user has specified the collation.
-// If the collation flag was not specified when starting the tablet, we
-// attempt to find the default collation for the current charset.
-// If either the collation and charset are missing, or the resolution of
-// the default collation using the given charset fails, we error out.
-func (dbcfgs *DBConfigs) DecideCollation() error {
-	// we already have a collation, no need to override it
-	if dbcfgs.Collation != "" {
-		return nil
-	}
-
-	// cannot define a collation if we do not have a charset
-	if dbcfgs.Charset == "" {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: no collation or charset defined")
-	}
-
-	defaultColl := collations.DefaultForCharset(dbcfgs.Charset)
-	if defaultColl == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: charset '%s' has no default collation", dbcfgs.Charset)
-	}
-	dbcfgs.Collation = defaultColl.Name()
-	return nil
 }
 
 // NewTestDBConfigs returns a DBConfigs meant for testing.

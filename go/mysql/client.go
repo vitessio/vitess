@@ -28,7 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -200,36 +200,66 @@ func (c *Conn) Ping() error {
 	case ErrPacket:
 		return ParseErrorPacket(data)
 	}
-	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected packet type: %d", data[0])
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected packet type: %d", data[0])
 }
 
 // setCollationForConnection sets the connection's collation to the given collation.
+//
+// The charset should always be set as it has a default value ("utf8mb4"),
+// however, one can always override its default to an empty string, which
+// is not a problem as long as the user has specified the collation.
+// If the collation flag was not specified when starting the tablet, we
+// attempt to find the default collation for the current charset.
+// If either the collation and charset are missing, or the resolution of
+// the default collation using the given charset fails, we error out.
+//
+// This method is also responsible for creating and storing the collation
+// environment that will be used by this connection. The collation environment
+// allows us to make informed decisions around charset's default collation
+// depending on the MySQL/MariaDB version we are using.
 func setCollationForConnection(c *Conn, params *ConnParams) error {
 	var collStr string
 
-	// if no collation or charset is defined, we fall back to the DefaultCollation
-	if params.Collation == "" && params.Charset == "" {
-		collStr = DefaultCollation
-	} else {
-		var coll collations.Collation
-
-		// If there is no collation we will just use the charset's default collation
-		// otherwise we directly use the given collation.
-		// Here still call the collations API to ensure the collation/charset exist
-		// and is supported by Vitess.
-		if params.Collation == "" {
-			coll = collations.DefaultForCharset(params.Charset)
-		} else {
-			coll = collations.FromName(params.Collation)
-		}
-		if coll == nil {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot resolve collation: '%s'", params.Collation)
-		}
-		collStr = coll.Name()
+	// Once we have done the initial handshake with MySQL, we receive the server version
+	// string. This string is critical as it enables the instantiation of a new collation
+	// environment variable.
+	// Certain MySQL or MariaDB versions might have different default collations for some
+	// charsets, so it is important to use a database-version-aware collation system/API.
+	env, err := collations.NewEnvironment(c.ServerVersion)
+	if err != nil {
+		return err
 	}
 
+	// The collation environment is stored inside the connection parameters struct.
+	// We will use it to verify that execution requests issued by VTGate match the
+	// same collation as the one used to communicate with MySQL.
+	params.CollationEnvironment = env
+
+	if params.Collation == "" && params.Charset == "" {
+		// If no collation or charset is defined, we can fail, this is a critical issue.
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: no collation or charset defined")
+	}
+	var coll collations.Collation
+
+	if params.Collation == "" {
+		// If there is no collation we will just use the charset's default collation
+		// otherwise we directly use the given collation.
+		coll = env.DefaultCollationForCharset(params.Charset)
+	} else {
+		// Here we call the collations API to ensure the collation/charset exist
+		// and is supported by Vitess.
+		coll = env.LookupByName(params.Collation)
+	}
+	if coll == nil {
+		// The given collation is most likely unknown or unsupported, we need to fail.
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: '%s'", params.Collation)
+	}
+	collStr = coll.Name()
+
+	// We send a query to MySQL to set the connection's collation.
+	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
 	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", collStr)
-	_, err := c.ExecuteFetch(querySetCollation, 1, false)
+	_, err = c.ExecuteFetch(querySetCollation, 1, false)
 	if err != nil {
 		return err
 	}
@@ -239,14 +269,14 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 // getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
 // 8 bits integer which will be used to feed the handshake protocol's packet.
 func getHandshakeCharacterSet() (uint8, error) {
-	coll := collations.FromName(DefaultCollation)
+	coll := collations.Default().LookupByName(DefaultCollation)
 	if coll == nil {
 		// theoretically, this should never happen from an end user perspective
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)
 	}
 	if coll.ID() > 255 {
 		// same here, this should never happen
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "collation ID for '%s' will overflow, value: %d", DefaultCollation, coll.ID())
 	}
 	return uint8(coll.ID()), nil
 }
@@ -769,7 +799,7 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 			// Encrypt password with public key
 			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
 			if err != nil {
-				return vterrors.Errorf(vtrpc.Code_INTERNAL, "error encrypting password with public key: %v", err)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error encrypting password with public key: %v", err)
 			}
 			// Write encrypted password
 			if err := c.writeScrambledPassword(enc); err != nil {
@@ -787,7 +817,7 @@ func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) 
 	pos := 1
 	pluginName, pos, ok := readNullString(data, pos)
 	if !ok {
-		return "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
+		return "", nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot get plugin name from AuthSwitchRequest: %v", data)
 	}
 
 	// If this was a request with a salt in it, max 20 bytes
@@ -804,7 +834,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	data, pos := c.startEphemeralPacketWithHeader(1)
 	data[pos] = 0x02
 	if err := c.writeEphemeralPacket(); err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "error sending public key request packet: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
 	}
 
 	response, err := c.readPacket()
@@ -820,7 +850,7 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	block, _ := pem.Decode(response[1:])
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "failed to parse public key from server: %v", err)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
 	}
 
 	return pub.(*rsa.PublicKey), nil
@@ -834,7 +864,7 @@ func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }
@@ -846,7 +876,7 @@ func (c *Conn) writeScrambledPassword(scrambledPassword []byte) error {
 	pos += copy(data[pos:], scrambledPassword)
 	// Sanity check.
 	if pos != len(data) {
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error building %v packet: got %v bytes expected %v", c.authPluginName, pos, len(data))
 	}
 	return c.writeEphemeralPacket()
 }

@@ -108,7 +108,6 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 func main() {
 	defer exit.Recover()
 
-	time.Sleep(20 * time.Second)
 	// flag parsing
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
@@ -143,11 +142,6 @@ func main() {
 
 	var mysqld *mysqlctl.Mysqld
 	var cnf *mysqlctl.Mycnf
-
-	err := dbconfigs.GlobalDBConfigs.DecideCollation()
-	if err != nil {
-		log.Exitf(err.Error())
-	}
 
 	if *startMysql {
 		mysqld, cnf = startMysqld(1)

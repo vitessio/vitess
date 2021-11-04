@@ -37,9 +37,9 @@ func TestInit(t *testing.T) {
 		Charset:   "utf8",
 	}
 	dbConfigs.InitWithSocket("default")
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.appParams)
-	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.dbaParams)
-	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8", Collation: "utf8_general_ci"}, dbConfigs.appdebugParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "socket", Charset: "utf8"}, dbConfigs.appParams)
+	assert.Equal(t, mysql.ConnParams{Host: "host", Charset: "utf8"}, dbConfigs.dbaParams)
+	assert.Equal(t, mysql.ConnParams{UnixSocket: "default", Charset: "utf8"}, dbConfigs.appdebugParams)
 
 	dbConfigs = DBConfigs{
 		Host:                       "a",
@@ -163,7 +163,6 @@ func TestInit(t *testing.T) {
 		Pass:       "apppass",
 		UnixSocket: "b",
 		Charset:    "utf8mb4",
-		Collation:  "utf8mb4_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 	want = mysql.ConnParams{
@@ -175,7 +174,6 @@ func TestInit(t *testing.T) {
 		SslCert:    "f",
 		SslKey:     "g",
 		Charset:    "utf8",
-		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.appdebugParams)
 	want = mysql.ConnParams{
@@ -190,7 +188,6 @@ func TestInit(t *testing.T) {
 		SslCert:    "f",
 		SslKey:     "g",
 		Charset:    "utf8",
-		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
@@ -212,11 +209,10 @@ func TestUseTCP(t *testing.T) {
 	dbConfigs.InitWithSocket("default")
 
 	want := mysql.ConnParams{
-		Host:      "a",
-		Port:      1,
-		Uname:     "app",
-		Charset:   "utf8",
-		Collation: "utf8_general_ci",
+		Host:    "a",
+		Port:    1,
+		Uname:   "app",
+		Charset: "utf8",
 	}
 	assert.Equal(t, want, dbConfigs.appParams)
 
@@ -226,7 +222,6 @@ func TestUseTCP(t *testing.T) {
 		Uname:      "dba",
 		UnixSocket: "b",
 		Charset:    "utf8",
-		Collation:  "utf8_general_ci",
 	}
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }

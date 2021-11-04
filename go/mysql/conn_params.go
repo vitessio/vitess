@@ -16,20 +16,24 @@ limitations under the License.
 
 package mysql
 
-import "vitess.io/vitess/go/vt/vttls"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vttls"
+)
 
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	DbName     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Collation  string `json:"collation"`
-	Flags      uint64 `json:"flags"`
-	Flavor     string `json:"flavor,omitempty"`
+	Host                 string                  `json:"host"`
+	Port                 int                     `json:"port"`
+	Uname                string                  `json:"uname"`
+	Pass                 string                  `json:"pass"`
+	DbName               string                  `json:"dbname"`
+	UnixSocket           string                  `json:"unix_socket"`
+	Charset              string                  `json:"charset"`
+	Collation            string                  `json:"collation"`
+	Flags                uint64                  `json:"flags"`
+	Flavor               string                  `json:"flavor,omitempty"`
+	CollationEnvironment *collations.Environment `json:"collation_environment,omitempty"`
 
 	// The following SSL flags control the SSL behavior.
 	//

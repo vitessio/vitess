@@ -28,8 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -273,7 +271,7 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		Uname:      "user1",
 		Pass:       "password1",
 		Charset:    "utf8mb4",
-		Collation:  collations.DefaultForCharset("utf8mb4").Name(),
+		Collation:  "utf8mb4_general_ci",
 	})
 
 }
