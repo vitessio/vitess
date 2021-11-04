@@ -241,6 +241,10 @@ table tbody td[rowSpan] {
     text-align: right;
 }
 
+.text-align-center {
+    text-align: center;
+}
+
 .text-color-secondary {
     color: var(--textColorSecondary);
 }
