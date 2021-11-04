@@ -17,13 +17,10 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"sync"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -32,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -366,8 +365,8 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		vsdw.destinationSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+		vsdw.destinationSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.destinationAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)
@@ -379,8 +378,8 @@ func (vsdw *VerticalSplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		vsdw.sourceSchemaDefinition, err = vsdw.wr.GetSchema(
-			shortCtx, vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
+		vsdw.sourceSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, vsdw.wr.TopoServer(), vsdw.wr.TabletManagerClient(), vsdw.sourceAlias, vsdw.shardInfo.SourceShards[0].Tables, nil /* excludeTables */, false /* includeViews */)
 		cancel()
 		if err != nil {
 			vsdw.markAsWillFail(rec, err)
