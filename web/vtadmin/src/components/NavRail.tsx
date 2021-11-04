@@ -67,7 +67,7 @@ export const NavRail = () => {
                         <NavRailLink icon={Icons.keyT} text="Tablets" to="/tablets" count={tablets.length} />
                     </li>
                     <li>
-                        <NavRailLink icon={Icons.keyT} text="vtctlds" to="/vtctlds" count={vtctlds.length} />
+                        <NavRailLink icon={Icons.keyV} text="vtctlds" to="/vtctlds" count={vtctlds.length} />
                     </li>
                 </ul>
 
