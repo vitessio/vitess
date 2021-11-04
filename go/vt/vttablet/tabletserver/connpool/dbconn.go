@@ -48,7 +48,7 @@ import (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
+	Info    dbconfigs.Connector
 	pool    *Pool
 	dbaPool *dbconnpool.ConnectionPool
 	stats   *tabletenv.Stats
@@ -72,7 +72,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 	}
 	return &DBConn{
 		conn:    c,
-		info:    appParams,
+		Info:    appParams,
 		pool:    cp,
 		dbaPool: cp.dbaPool,
 		stats:   cp.env.Stats(),
@@ -87,7 +87,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 	}
 	return &DBConn{
 		conn:    c,
-		info:    params,
+		Info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
@@ -389,7 +389,7 @@ func (dbc *DBConn) BaseShowTables() string {
 func (dbc *DBConn) reconnect(ctx context.Context) error {
 	dbc.conn.Close()
 	// Reuse MySQLTimings from dbc.conn.
-	newConn, err := dbconnpool.NewDBConnection(ctx, dbc.info)
+	newConn, err := dbconnpool.NewDBConnection(ctx, dbc.Info)
 	if err != nil {
 		return err
 	}

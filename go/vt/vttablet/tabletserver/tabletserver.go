@@ -29,8 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -1245,21 +1243,6 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
-
-	// We want to ensure that each execution request we get in the tablet is using the
-	// exact same collation as the one used by the tablet.
-	// If the collation we receive does not match with the tablet's, the execution will
-	// fail with an RPC error (listed below).
-	// The tablet creates its connections with MySQL using the collation defined by the
-	// db_charset and db_collation flags, all the connection in the pool use the same
-	// collation.
-	if options != nil {
-		if coll := collations.FromID(collations.ID(options.Collation)); coll == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", options.Collation)
-		} else if tsv.config.DB.Collation != coll.Name() {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), tsv.config.DB.Collation)
-		}
-	}
 
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
