@@ -79,7 +79,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Bit || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -100,6 +100,16 @@ func MakeTrusted(typ querypb.Type, val []byte) Value {
 	}
 
 	return Value{typ: typ, val: val}
+}
+
+// NewHexNum builds an Hex Value.
+func NewHexNum(v []byte) Value {
+	return MakeTrusted(HexNum, v)
+}
+
+// NewHexVal builds a HexVal Value.
+func NewHexVal(v []byte) Value {
+	return MakeTrusted(HexVal, v)
 }
 
 // NewInt64 builds an Int64 Value.
