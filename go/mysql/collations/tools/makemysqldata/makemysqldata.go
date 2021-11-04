@@ -64,12 +64,9 @@ type collationMetadata struct {
 }
 
 type output struct {
-	dedup        map[string]string
-	tables       io.Writer
-	contractions io.Writer
-
-	init  io.Writer
-	tests io.Writer
+	dedup  map[string]string
+	tables io.Writer
+	init   io.Writer
 }
 
 func diffMaps(orgWeights, modWeights tailoringWeights) (diff []uca.WeightPatch) {
@@ -132,7 +129,7 @@ func (out *output) printCollationUcaLegacy(meta *collationMetadata) {
 		fmt.Fprintf(out.init, "tailoring: %s,\n", tableWeightPatches)
 	}
 	if tableContractions != "" {
-		fmt.Fprintf(out.init, "contractions: %s,\n", tableContractions)
+		fmt.Fprintf(out.init, "contract: %s{},\n", tableContractions)
 	}
 	switch meta.UCAVersion {
 	case 400:
@@ -181,23 +178,9 @@ func (out *output) writeContractions(meta *collationMetadata) string {
 	var dedup bool
 
 	if len(meta.Contractions) > 0 {
-		tableContractions, dedup = out.dedupTable("contractions", meta.Name, meta.Contractions)
+		tableContractions, dedup = out.dedupTable("contractor", meta.Name, meta.Contractions)
 		if !dedup {
-			fmt.Fprintf(out.tables, "var %s = []uca.Contraction{\n", tableContractions)
-			for _, ctr := range meta.Contractions {
-				for i := 0; i < len(ctr.Weights)-3; i += 3 {
-					if ctr.Weights[i] == 0x0 && ctr.Weights[i+1] == 0x0 && ctr.Weights[i+2] == 0x0 {
-						ctr.Weights = ctr.Weights[:i]
-						break
-					}
-				}
-				fmt.Fprintf(out.tables, "{ Path: %#v, Weights: %#v, ", ctr.Path, ctr.Weights)
-				if ctr.Contextual {
-					fmt.Fprintf(out.tables, "Contextual: true,")
-				}
-				fmt.Fprintf(out.tables, "},\n")
-			}
-			fmt.Fprintf(out.tables, "}\n")
+			out.printContractionsFast(tableContractions, meta.Contractions)
 		}
 	}
 	return tableContractions
@@ -273,7 +256,7 @@ func (out *output) printCollationUca900(meta *collationMetadata) {
 		fmt.Fprintf(out.init, "tailoring: %s,\n", tableWeightPatches)
 	}
 	if tableContractions != "" {
-		fmt.Fprintf(out.init, "contractions: %s,\n", tableContractions)
+		fmt.Fprintf(out.init, "contract: %s{},\n", tableContractions)
 	}
 	if tableReorder != "" {
 		fmt.Fprintf(out.init, "reorder: %s,\n", tableReorder)
@@ -476,12 +459,9 @@ func main() {
 	baseWeightsUca900 = findCollation(allMetadata, "utf8mb4_0900_ai_ci").Weights
 
 	out := output{
-		dedup:        make(map[string]string),
-		tables:       &tables,
-		contractions: nil,
-
-		init:  &init,
-		tests: nil,
+		dedup:  make(map[string]string),
+		tables: &tables,
+		init:   &init,
 	}
 
 	for _, meta := range allMetadata {
