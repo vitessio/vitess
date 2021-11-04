@@ -461,22 +461,22 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 
 	checkRouting(t, tme.wr, map[string][]string{
-		"t1":             {"ks2.t1"},
-		"ks1.t1":         {"ks2.t1"},
-		"t2":             {"ks2.t2"},
-		"ks1.t2":         {"ks2.t2"},
-		"t1@replica":     {"ks2.t1"},
-		"ks2.t1@replica": {"ks2.t1"},
-		"ks1.t1@replica": {"ks2.t1"},
-		"t2@replica":     {"ks2.t2"},
-		"ks2.t2@replica": {"ks2.t2"},
-		"ks1.t2@replica": {"ks2.t2"},
-		"t1@rdonly":      {"ks2.t1"},
-		"ks2.t1@rdonly":  {"ks2.t1"},
-		"ks1.t1@rdonly":  {"ks2.t1"},
-		"t2@rdonly":      {"ks2.t2"},
-		"ks2.t2@rdonly":  {"ks2.t2"},
-		"ks1.t2@rdonly":  {"ks2.t2"},
+		"`t1`":               {"`ks2`.`t1`"},
+		"`ks1`.`t1`":         {"`ks2`.`t1`"},
+		"`t2`":               {"`ks2`.`t2`"},
+		"`ks1`.`t2`":         {"`ks2`.`t2`"},
+		"`t1`@replica":       {"`ks2`.`t1`"},
+		"`ks2`.`t1`@replica": {"`ks2`.`t1`"},
+		"`ks1`.`t1`@replica": {"`ks2`.`t1`"},
+		"`t2`@replica":       {"`ks2`.`t2`"},
+		"`ks2`.`t2`@replica": {"`ks2`.`t2`"},
+		"`ks1`.`t2`@replica": {"`ks2`.`t2`"},
+		"`t1`@rdonly":        {"`ks2`.`t1`"},
+		"`ks2`.`t1`@rdonly":  {"`ks2`.`t1`"},
+		"`ks1`.`t1`@rdonly":  {"`ks2`.`t1`"},
+		"`t2`@rdonly":        {"`ks2`.`t2`"},
+		"`ks2`.`t2`@rdonly":  {"`ks2`.`t2`"},
+		"`ks1`.`t2`@rdonly":  {"`ks2`.`t2`"},
 	})
 	checkDenyList(t, tme.ts, "ks1:-40", []string{"t1", "t2"})
 	checkDenyList(t, tme.ts, "ks1:40-", []string{"t1", "t2"})
