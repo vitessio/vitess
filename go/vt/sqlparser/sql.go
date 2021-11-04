@@ -9617,31 +9617,31 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:3894
 		{
-			yyVAL.expr = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: yyDollar[3].expr, Dir: BOTH_CHARS}
+			yyVAL.expr = &TrimExpr{Pattern: NewStrVal([]byte(" ")), Str: yyDollar[3].expr, Dir: Both}
 		}
 	case 767:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:3898
 		{
-			yyVAL.expr = &TrimExpr{Pattern: yyDollar[3].expr, Str: yyDollar[5].expr, Dir: BOTH_CHARS}
+			yyVAL.expr = &TrimExpr{Pattern: yyDollar[3].expr, Str: yyDollar[5].expr, Dir: Both}
 		}
 	case 768:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:3902
 		{
-			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: LEADING_CHARS}
+			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Leading}
 		}
 	case 769:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:3906
 		{
-			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: TRAILING_CHARS}
+			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Trailing}
 		}
 	case 770:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:3910
 		{
-			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: BOTH_CHARS}
+			yyVAL.expr = &TrimExpr{Pattern: yyDollar[4].expr, Str: yyDollar[6].expr, Dir: Both}
 		}
 	case 771:
 		yyDollar = yyS[yypt-9 : yypt+1]
