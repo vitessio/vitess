@@ -28,6 +28,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -225,7 +226,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 		)
 
 		for _, rule := range srvVSchema.RoutingRules.Rules {
-			ruleName := fmt.Sprintf("%s.%s@%s", keyspace, table, strings.ToLower(tabletType.String()))
+			ruleName := fmt.Sprintf("%s.%s@%s", sqlescape.EscapeID(keyspace), sqlescape.EscapeID(table), strings.ToLower(tabletType.String()))
 			if rule.FromTable == ruleName {
 				found = true
 
@@ -236,7 +237,7 @@ func (s *Server) GetCellsWithTableReadsSwitched(
 						return nil, nil, err
 					}
 
-					if ks == keyspace {
+					if ks == sqlescape.EscapeID(keyspace) {
 						switched = true
 						break // if one table in the workflow switched, we are done.
 					}
