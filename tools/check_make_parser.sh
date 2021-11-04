@@ -30,11 +30,10 @@ fi
 
 gofmt -w $CUR
 
-if ! diff -q $CUR $TMP > /dev/null ; then
+if [[ `diff -y --suppress-common-lines $CUR $TMP | wc -l` -gt 100 ]] ; then
         echo "ERROR: Regenerated parser $TMP does not match current version $(pwd)/sql.go:"
         diff -u $CUR $TMP
         mv $TMP $CUR
-
         echo
         echo "Please ensure go and goyacc are up to date and re-run 'make parser' to generate."
         exit 1

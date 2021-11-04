@@ -2643,8 +2643,8 @@ func TestKeywords(t *testing.T) {
 			input:  "select /* share and mode as cols */ share, mode from t where share = 'foo'",
 			output: "select /* share and mode as cols */ `share`, `mode` from t where `share` = 'foo'",
 		}, {
-			input:  "select /* unused keywords as cols */ write, virtual from t where trailing = 'foo'",
-			output: "select /* unused keywords as cols */ `write`, `virtual` from t where `trailing` = 'foo'",
+			input:  "select /* unused keywords as cols */ write, virtual from t where varcharacter = 'foo'",
+			output: "select /* unused keywords as cols */ `write`, `virtual` from t where `varcharacter` = 'foo'",
 		}, {
 			input:  "insert into x (status) values (42)",
 			output: "insert into x(`status`) values (42)",
@@ -3486,6 +3486,44 @@ func TestLoadData(t *testing.T) {
 		if got, want := String(p), tcase.output; got != want {
 			t.Errorf("Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 		}
+	}
+}
+
+func TestTrim(t *testing.T) {
+	testCases := []parseTest{
+		{
+			input:                `SELECT TRIM("foo")`,
+			output:               `select trim(both ' ' from 'foo') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM("bar" FROM "foo")`,
+			output:               `select trim(both 'bar' from 'foo') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(LEADING "bar" FROM "foo")`,
+			output:               `select trim(leading 'bar' from 'foo') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(TRAILING "bar" FROM "foo")`,
+			output:               `select trim(trailing 'bar' from 'foo') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(BOTH "bar" FROM "foo")`,
+			output:               `select trim(both 'bar' from 'foo') from dual`,
+			serializeSelectExprs: true,
+		},
+		{
+			input:                `SELECT TRIM(TRIM("foobar"))`,
+			output:               `select trim(both ' ' from trim(both ' ' from 'foobar')) from dual`,
+			serializeSelectExprs: true,
+		},
+	}
+	for _, tcase := range testCases {
+		runParseTestCase(t, tcase)
 	}
 }
 

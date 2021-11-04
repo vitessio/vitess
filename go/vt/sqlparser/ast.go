@@ -3529,6 +3529,7 @@ func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
 func (*ConvertExpr) iExpr()       {}
 func (*SubstrExpr) iExpr()        {}
+func (*TrimExpr) iExpr()          {}
 func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
@@ -4529,6 +4530,48 @@ func (node *SubstrExpr) walkSubtree(visit Visit) error {
 		node.From,
 		node.To,
 	)
+}
+
+// Options for Trim
+const (
+	Leading  string = "l"
+	Trailing string = "r"
+	Both     string = "b"
+)
+
+type TrimExpr struct {
+	Str     Expr
+	Pattern Expr
+	Dir     string
+}
+
+// Format formats the node
+func (node *TrimExpr) Format(buf *TrackedBuffer) {
+	if node.Dir == Leading {
+		buf.Myprintf("trim(leading %v from %v)", node.Pattern, node.Str)
+	} else if node.Dir == Trailing {
+		buf.Myprintf("trim(trailing %v from %v)", node.Pattern, node.Str)
+	} else {
+		buf.Myprintf("trim(both %v from %v)", node.Pattern, node.Str)
+	}
+}
+
+func (node *TrimExpr) replace(from, to Expr) bool {
+	if replaceExprs(from, to, &node.Pattern) {
+		return true
+	}
+	if replaceExprs(from, to, &node.Str) {
+		return true
+	}
+
+	return false
+}
+
+func (node *TrimExpr) walkSubtree(visit Visit) error {
+	if node == nil || node.Str == nil {
+		return nil
+	}
+	return Walk(visit, node.Str, node.Pattern)
 }
 
 // ConvertExpr represents a call to CONVERT(expr, type)
