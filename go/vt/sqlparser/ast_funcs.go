@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
@@ -467,6 +468,28 @@ func (node *Literal) Bytes() []byte {
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
+}
+
+// EncodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// for passing on to MySQL as a bind var
+func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
+	nb := node.Bytes()
+	if node.Type != HexVal {
+		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
+	}
+
+	// Let's make this idempotent in case it's called more than once
+	if nb[0] == 'x' && nb[1] == '0' && nb[len(nb)-1] == '\'' {
+		return nb, nil
+	}
+
+	var bb bytes.Buffer
+	bb.WriteByte('x')
+	bb.WriteByte('\'')
+	bb.WriteString(string(nb))
+	bb.WriteByte('\'')
+	nb = bb.Bytes()
+	return nb, nil
 }
 
 // Equal returns true if the column names match.

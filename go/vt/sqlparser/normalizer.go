@@ -202,6 +202,17 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			v, err = sqltypes.NewValue(sqltypes.Int64, node.Bytes())
 		case FloatVal:
 			v, err = sqltypes.NewValue(sqltypes.Float64, node.Bytes())
+		case HexNum:
+			v, err = sqltypes.NewValue(sqltypes.HexNum, node.Bytes())
+		case HexVal:
+			// We parse the `x'7b7d'` string literal into a hex encoded string of `7b7d` in the parser
+			// We need to re-encode it back to the original MySQL query format before passing it on as a bindvar value to MySQL
+			var vbytes []byte
+			vbytes, err = node.encodeHexValToMySQLQueryFormat()
+			if err != nil {
+				return nil
+			}
+			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
 		default:
 			return nil
 		}
