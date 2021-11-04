@@ -167,6 +167,7 @@ func (hj *HashJoin) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         hj.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(hj.Cols)), ","), "[]"),
+		"Predicate":         sqlparser.String(hj.ASTPred),
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",

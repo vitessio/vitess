@@ -34,6 +34,12 @@ type joinTree struct {
 	lhs, rhs queryTree
 
 	leftJoin bool
+
+	// predicatesToRemove lists all the predicates that needs to be removed
+	// from the right-hand side if we decide to do a hash join.
+	predicatesToRemove []sqlparser.Expr
+
+	predicate sqlparser.Expr
 }
 
 var _ queryTree = (*joinTree)(nil)
