@@ -247,7 +247,7 @@ func (wr *Wrangler) PreflightSchema(ctx context.Context, tabletAlias *topodatapb
 
 // CopySchemaShardFromShard copies the schema from a source shard to the specified destination shard.
 // For both source and destination it picks the primary tablet. See also CopySchemaShard.
-func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
+func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool, disableForeignKeyChecks bool) error {
 	sourceShardInfo, err := wr.ts.GetShard(ctx, sourceKeyspace, sourceShard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", sourceKeyspace, sourceShard, err)
@@ -256,14 +256,14 @@ func (wr *Wrangler) CopySchemaShardFromShard(ctx context.Context, tables, exclud
 		return fmt.Errorf("no primary in shard record %v/%v. Consider running 'vtctl InitShardPrimary' in case of a new shard or reparenting the shard to fix the topology data, or providing a non-primary tablet alias", sourceKeyspace, sourceShard)
 	}
 
-	return wr.CopySchemaShard(ctx, sourceShardInfo.PrimaryAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
+	return wr.CopySchemaShard(ctx, sourceShardInfo.PrimaryAlias, tables, excludeTables, includeViews, destKeyspace, destShard, waitReplicasTimeout, skipVerify, disableForeignKeyChecks)
 }
 
 // CopySchemaShard copies the schema from a source tablet to the
 // specified shard.  The schema is applied directly on the primary of
 // the destination shard, and is propagated to the replicas through
 // binlogs.
-func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
+func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodatapb.TabletAlias, tables, excludeTables []string, includeViews bool, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool, disableForeignKeyChecks bool) error {
 	destShardInfo, err := wr.ts.GetShard(ctx, destKeyspace, destShard)
 	if err != nil {
 		return fmt.Errorf("GetShard(%v, %v) failed: %v", destKeyspace, destShard, err)
@@ -297,7 +297,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
 	}
 	for i, sqlLine := range createSQL {
-		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1)
+		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1, disableForeignKeyChecks)
 		if err != nil {
 			return fmt.Errorf("creating a table failed."+
 				" Most likely some tables already exist on the destination and differ from the source."+
@@ -353,7 +353,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 // Thus it should be used only for changes that can be applied on a live instance without causing issues;
 // it shouldn't be used for anything that will require a pivot.
 // The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool) error {
+func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool, disableForeignKeyChecks bool) error {
 	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
 	if err != nil {
 		return fmt.Errorf("fillStringTemplate failed: %v", err)
@@ -361,7 +361,7 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, reloadSchema)
+	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, false, reloadSchema)
 	return err
 }
 

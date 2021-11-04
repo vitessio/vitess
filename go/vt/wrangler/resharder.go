@@ -290,7 +290,7 @@ func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (workflow.StreamT
 func (rs *resharder) copySchema(ctx context.Context) error {
 	oneSource := rs.sourceShards[0].PrimaryAlias
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
-		return rs.wr.CopySchemaShard(ctx, oneSource, []string{"/.*"}, nil, false, rs.keyspace, target.ShardName(), 1*time.Second, false)
+		return rs.wr.CopySchemaShard(ctx, oneSource, []string{"/.*"}, nil, false, rs.keyspace, target.ShardName(), 1*time.Second, false, false)
 	})
 	return err
 }

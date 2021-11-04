@@ -27,7 +27,7 @@ import (
 )
 
 // ExecuteFetchAsDba will execute the given query, possibly disabling binlogs and reload schema.
-func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, disableForeignKeyChecks bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	// get a connection
 	conn, err := tm.MysqlDaemon.GetDbaConnection(ctx)
 	if err != nil {
@@ -39,6 +39,13 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 	if disableBinlogs {
 		_, err := conn.ExecuteFetch("SET sql_log_bin = OFF", 0, false)
 		if err != nil {
+			return nil, err
+		}
+	}
+
+	// disable foreign_key_checks if necessary
+	if disableForeignKeyChecks {
+		if _, err := conn.ExecuteFetch("SET foreign_key_checks = 0", 0, false); err != nil {
 			return nil, err
 		}
 	}
@@ -58,6 +65,13 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, query []byte, db
 		if err != nil {
 			// if we can't reset the sql_log_bin flag,
 			// let's just close the connection.
+			conn.Close()
+		}
+	}
+
+	// re-enable foreign_key_checks if necessary
+	if disableForeignKeyChecks && !conn.IsClosed() {
+		if _, err := conn.ExecuteFetch("SET foreign_key_checks = 1", 0, false); err != nil {
 			conn.Close()
 		}
 	}

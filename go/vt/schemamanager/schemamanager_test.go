@@ -277,11 +277,11 @@ func (client *fakeTabletManagerClient) GetSchema(ctx context.Context, tablet *to
 	return result, nil
 }
 
-func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *fakeTabletManagerClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, disableForeignKeyChecks, reloadSchema bool) (*querypb.QueryResult, error) {
 	if client.EnableExecuteFetchAsDbaError {
 		return nil, fmt.Errorf("ExecuteFetchAsDba occur an unknown error")
 	}
-	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, query, maxRows, disableBinlogs, reloadSchema)
+	return client.TabletManagerClient.ExecuteFetchAsDba(ctx, tablet, usePool, query, maxRows, disableBinlogs, disableForeignKeyChecks, reloadSchema)
 }
 
 // newFakeTopo returns a topo with:

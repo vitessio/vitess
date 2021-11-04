@@ -98,7 +98,7 @@ type TabletManagerClient interface {
 	// ExecuteFetchAsDba executes a query remotely using the DBA pool.
 	// If usePool is set, a connection pool may be used to make the
 	// query faster. Close() should close the pool in that case.
-	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, disableForeignKeyChecks, reloadSchema bool) (*querypb.QueryResult, error)
 
 	// ExecuteFetchAsAllPrivs executes a query remotely using the allprivs user.
 	ExecuteFetchAsAllPrivs(ctx context.Context, tablet *topodatapb.Tablet, query []byte, maxRows int, reloadSchema bool) (*querypb.QueryResult, error)

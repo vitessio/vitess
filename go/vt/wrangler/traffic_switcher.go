@@ -1401,7 +1401,7 @@ func (ts *trafficSwitcher) removeSourceTables(ctx context.Context, removalType w
 				ts.Logger().Infof("Renaming table %s.%s to %s.%s\n", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 				query = fmt.Sprintf("rename table %s.%s TO %s.%s", source.GetPrimary().DbName(), tableName, source.GetPrimary().DbName(), renameName)
 			}
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, true)
+			_, err := ts.wr.ExecuteFetchAsDba(ctx, source.GetPrimary().Alias, query, 1, false, false, true)
 			if err != nil {
 				ts.Logger().Errorf("Error removing table %s: %v", tableName, err)
 				return err
@@ -1483,7 +1483,7 @@ func (ts *trafficSwitcher) removeTargetTables(ctx context.Context) error {
 		for _, tableName := range ts.Tables() {
 			query := fmt.Sprintf("drop table %s.%s", target.GetPrimary().DbName(), tableName)
 			ts.Logger().Infof("Dropping table %s.%s\n", target.GetPrimary().DbName(), tableName)
-			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, true)
+			_, err := ts.wr.ExecuteFetchAsDba(ctx, target.GetPrimary().Alias, query, 1, false, false, true)
 			if err != nil {
 				ts.Logger().Errorf("Error removing table %s: %v", tableName, err)
 				return err

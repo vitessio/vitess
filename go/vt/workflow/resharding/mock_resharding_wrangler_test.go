@@ -38,17 +38,17 @@ func (m *MockReshardingWrangler) EXPECT() *MockReshardingWranglerMockRecorder {
 }
 
 // CopySchemaShardFromShard mocks base method.
-func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify bool) error {
+func (m *MockReshardingWrangler) CopySchemaShardFromShard(ctx context.Context, tables, excludeTables []string, includeViews bool, sourceKeyspace, sourceShard, destKeyspace, destShard string, waitReplicasTimeout time.Duration, skipVerify, disableForeignKeyChecks bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
+	ret := m.ctrl.Call(m, "CopySchemaShardFromShard", ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify, disableForeignKeyChecks)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CopySchemaShardFromShard indicates an expected call of CopySchemaShardFromShard.
-func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify interface{}) *gomock.Call {
+func (mr *MockReshardingWranglerMockRecorder) CopySchemaShardFromShard(ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify, disableForeignKeyChecks interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySchemaShardFromShard", reflect.TypeOf((*MockReshardingWrangler)(nil).CopySchemaShardFromShard), ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CopySchemaShardFromShard", reflect.TypeOf((*MockReshardingWrangler)(nil).CopySchemaShardFromShard), ctx, tables, excludeTables, includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, waitReplicasTimeout, skipVerify, disableForeignKeyChecks)
 }
 
 // MigrateServedTypes mocks base method.

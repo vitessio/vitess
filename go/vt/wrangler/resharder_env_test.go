@@ -241,7 +241,7 @@ func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *
 	return qrs[0].result, nil
 }
 
-func (tmc *testResharderTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tmc *testResharderTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, disableForeignKeyChecks, reloadSchema bool) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
 	return tmc.VReplicationExec(ctx, tablet, string(query))
 }

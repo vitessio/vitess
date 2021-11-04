@@ -416,7 +416,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	if viaQueryService {
 		result, err = exec.wr.TabletManagerClient().ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
-		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
+		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, false, true)
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

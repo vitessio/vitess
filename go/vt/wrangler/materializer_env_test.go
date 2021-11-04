@@ -250,7 +250,7 @@ func (tmc *testMaterializerTMClient) VReplicationExec(ctx context.Context, table
 	return qrs[0].result, nil
 }
 
-func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (tmc *testMaterializerTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, disableForeignKeyChecks, reloadSchema bool) (*querypb.QueryResult, error) {
 	// Reuse VReplicationExec
 	return tmc.VReplicationExec(ctx, tablet, string(query))
 }
@@ -277,7 +277,7 @@ func (tmc *testMaterializerTMClient) ApplySchema(ctx context.Context, tablet *to
 	stmts := strings.Split(change.SQL, ";")
 
 	for _, stmt := range stmts {
-		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(stmt), 0, false, true)
+		_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(stmt), 0, false, false, true)
 		if err != nil {
 			return nil, err
 		}

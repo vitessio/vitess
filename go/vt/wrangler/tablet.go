@@ -196,12 +196,12 @@ func (wr *Wrangler) ExecuteFetchAsApp(ctx context.Context, tabletAlias *topodata
 }
 
 // ExecuteFetchAsDba executes a query remotely using the DBA pool
-func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (wr *Wrangler) ExecuteFetchAsDba(ctx context.Context, tabletAlias *topodatapb.TabletAlias, query string, maxRows int, disableBinlogs bool, disableForeignKeyChecks bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	ti, err := wr.ts.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
-	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(query), maxRows, disableBinlogs, reloadSchema)
+	return wr.tmc.ExecuteFetchAsDba(ctx, ti.Tablet, false, []byte(query), maxRows, disableBinlogs, disableForeignKeyChecks, reloadSchema)
 }
 
 // VReplicationExec executes a query remotely using the DBA pool

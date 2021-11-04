@@ -435,7 +435,7 @@ func (client *Client) ExecuteQuery(ctx context.Context, tablet *topodatapb.Table
 }
 
 // ExecuteFetchAsDba is part of the tmclient.TabletManagerClient interface.
-func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, disableForeignKeyChecks, reloadSchema bool) (*querypb.QueryResult, error) {
 	var c tabletmanagerservicepb.TabletManagerClient
 	var err error
 	if usePool {
@@ -457,11 +457,12 @@ func (client *Client) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.
 	}
 
 	response, err := c.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
-		Query:          query,
-		DbName:         topoproto.TabletDbName(tablet),
-		MaxRows:        uint64(maxRows),
-		DisableBinlogs: disableBinlogs,
-		ReloadSchema:   reloadSchema,
+		Query:                   query,
+		DbName:                  topoproto.TabletDbName(tablet),
+		MaxRows:                 uint64(maxRows),
+		DisableBinlogs:          disableBinlogs,
+		DisableForeignKeyChecks: disableForeignKeyChecks,
+		ReloadSchema:            reloadSchema,
 	})
 	if err != nil {
 		return nil, err

@@ -212,7 +212,7 @@ func (s *server) ExecuteFetchAsDba(ctx context.Context, request *tabletmanagerda
 	defer s.tm.HandleRPCPanic(ctx, "ExecuteFetchAsDba", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.ExecuteFetchAsDbaResponse{}
-	qr, err := s.tm.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.ReloadSchema)
+	qr, err := s.tm.ExecuteFetchAsDba(ctx, request.Query, request.DbName, int(request.MaxRows), request.DisableBinlogs, request.DisableForeignKeyChecks, request.ReloadSchema)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}

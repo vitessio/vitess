@@ -463,7 +463,7 @@ func (vrw *VReplicationWorkflow) IsCopyInProgress() (bool, error) {
 	for _, target := range vrw.ts.targets {
 		for id := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), 1, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), 1, false, false, false)
 			if err != nil {
 				return false, err
 			}
@@ -486,7 +486,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	for _, target := range vrw.ts.targets {
 		for id, bls := range target.Sources {
 			query := fmt.Sprintf(getTablesQuery, id)
-			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), MaxRows, false, false)
+			p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, target.GetPrimary().Tablet, true, []byte(query), MaxRows, false, false, false)
 			if err != nil {
 				return nil, err
 			}
@@ -530,7 +530,7 @@ func (vrw *VReplicationWorkflow) GetCopyProgress() (*CopyProgress, error) {
 	}
 
 	var getTableMetrics = func(tablet *topodatapb.Tablet, query string, rowCounts *map[string]int64, tableSizes *map[string]int64) error {
-		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false)
+		p3qr, err := vrw.wr.tmc.ExecuteFetchAsDba(ctx, tablet, true, []byte(query), len(tables), false, false, false)
 		if err != nil {
 			return err
 		}

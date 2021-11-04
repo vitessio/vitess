@@ -47,7 +47,7 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 		QueryServiceControl: tabletservermock.NewController(),
 	}
 
-	_, err := tm.ExecuteFetchAsDba(ctx, []byte("select 42"), dbName, 10, false, false)
+	_, err := tm.ExecuteFetchAsDba(ctx, []byte("select 42"), dbName, 10, false, false, false)
 	require.NoError(t, err)
 	want := []string{
 		"use ` escap``e me `",

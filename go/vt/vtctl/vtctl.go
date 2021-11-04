@@ -1392,6 +1392,7 @@ func commandExecuteFetchAsApp(ctx context.Context, wr *wrangler.Wrangler, subFla
 func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	maxRows := subFlags.Int("max_rows", 10000, "Specifies the maximum number of rows to allow in fetch")
 	disableBinlogs := subFlags.Bool("disable_binlogs", false, "Disables writing to binlogs during the query")
+	disableForeignKeyChecks := subFlags.Bool("disable_foreign_key_checks", false, "toggles foreign_key_checks=0 before the query and =1 after. NOTE: this flag has no effect on tablets <= 12.0")
 	reloadSchema := subFlags.Bool("reload_schema", false, "Indicates whether the tablet schema will be reloaded after executing the SQL command. The default value is <code>false</code>, which indicates that the tablet schema will not be reloaded.")
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
@@ -1407,7 +1408,7 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 		return err
 	}
 	query := subFlags.Arg(1)
-	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *reloadSchema)
+	qrproto, err := wr.ExecuteFetchAsDba(ctx, alias, query, *maxRows, *disableBinlogs, *disableForeignKeyChecks, *reloadSchema)
 	if err != nil {
 		return err
 	}
@@ -3363,6 +3364,7 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	excludeTables := subFlags.String("exclude_tables", "", "Specifies a comma-separated list of tables to exclude. Each is either an exact match, or a regular expression of the form /regexp/")
 	includeViews := subFlags.Bool("include-views", true, "Includes views in the output")
 	skipVerify := subFlags.Bool("skip-verify", false, "Skip verification of source and target schema after copy")
+	disableForeignKeyChecks := subFlags.Bool("disable-foreign-key-checks", false, "set FOREIGN_KEY_CHECKS=0 when copying schemas")
 	// for backwards compatibility
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
 	if err := subFlags.Parse(args); err != nil {
@@ -3387,11 +3389,11 @@ func commandCopySchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags
 
 	sourceKeyspace, sourceShard, err := topoproto.ParseKeyspaceShard(subFlags.Arg(0))
 	if err == nil {
-		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
+		return wr.CopySchemaShardFromShard(ctx, tableArray, excludeTableArray, *includeViews, sourceKeyspace, sourceShard, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify, *disableForeignKeyChecks)
 	}
 	sourceTabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
 	if err == nil {
-		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify)
+		return wr.CopySchemaShard(ctx, sourceTabletAlias, tableArray, excludeTableArray, *includeViews, destKeyspace, destShard, *waitReplicasTimeout, *skipVerify, *disableForeignKeyChecks)
 	}
 	return err
 }

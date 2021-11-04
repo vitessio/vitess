@@ -635,7 +635,7 @@ var testExecuteFetchResult = &querypb.QueryResult{
 	},
 }
 
-func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error) {
+func (fra *fakeRPCTM) ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, disableForeignKeyChecks bool, reloadSchema bool) (*querypb.QueryResult, error) {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
@@ -669,13 +669,13 @@ func (fra *fakeRPCTM) ExecuteFetchAsApp(ctx context.Context, query []byte, maxro
 
 func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
 
 	// not using pool
-	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true)
+	qr, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, true)
 	compareError(t, "ExecuteFetchAsDba", err, qr, testExecuteFetchResult)
 	qr, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	compareError(t, "ExecuteFetchAsApp", err, qr, testExecuteFetchResult)
@@ -686,13 +686,13 @@ func tmRPCTestExecuteFetch(ctx context.Context, t *testing.T, client tmclient.Ta
 
 func tmRPCTestExecuteFetchPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	// using pool
-	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err := client.ExecuteFetchAsDba(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, true, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)
 
 	// not using pool
-	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, false)
+	_, err = client.ExecuteFetchAsDba(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows, true, true, false)
 	expectHandleRPCPanic(t, "ExecuteFetchAsDba", false /*verbose*/, err)
 	_, err = client.ExecuteFetchAsApp(ctx, tablet, false, testExecuteFetchQuery, testExecuteFetchMaxRows)
 	expectHandleRPCPanic(t, "ExecuteFetchAsApp", false /*verbose*/, err)

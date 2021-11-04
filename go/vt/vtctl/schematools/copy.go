@@ -48,9 +48,9 @@ func CopyShardMetadata(ctx context.Context, ts *topo.Server, tmc tmclient.Tablet
 	}
 
 	sql := "SELECT 1 FROM information_schema.tables WHERE table_schema = '_vt' AND table_name = 'shard_metadata'"
-	presenceResult, err := tmc.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, false, []byte(sql), 1, false, false)
+	presenceResult, err := tmc.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, false, []byte(sql), 1, false, false, false)
 	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 1, false, false) failed: %v", topoproto.TabletAliasString(source), sql, err)
+		return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 1, false, false, false) failed: %v", topoproto.TabletAliasString(source), sql, err)
 	}
 	if len(presenceResult.Rows) == 0 {
 		log.Infof("_vt.shard_metadata doesn't exist on the source tablet %v, skipping its copy.", topoproto.TabletAliasString(source))
@@ -59,9 +59,9 @@ func CopyShardMetadata(ctx context.Context, ts *topo.Server, tmc tmclient.Tablet
 
 	// (TODO|@ajm188,@deepthi): 100 may be too low here for row limit
 	sql = "SELECT db_name, name, value FROM _vt.shard_metadata"
-	p3qr, err := tmc.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, false, []byte(sql), 100, false, false)
+	p3qr, err := tmc.ExecuteFetchAsDba(ctx, sourceTablet.Tablet, false, []byte(sql), 100, false, false, false)
 	if err != nil {
-		return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 100, false, false) failed: %v", topoproto.TabletAliasString(source), sql, err)
+		return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 100, false, false, false) failed: %v", topoproto.TabletAliasString(source), sql, err)
 	}
 
 	qr := sqltypes.Proto3ToResult(p3qr)
@@ -79,9 +79,9 @@ func CopyShardMetadata(ctx context.Context, ts *topo.Server, tmc tmclient.Tablet
 		queryBuf.WriteString(") ON DUPLICATE KEY UPDATE value = ")
 		value.EncodeSQL(queryBuf)
 
-		_, err := tmc.ExecuteFetchAsDba(ctx, destTablet.Tablet, false, queryBuf.Bytes(), 0, false, false)
+		_, err := tmc.ExecuteFetchAsDba(ctx, destTablet.Tablet, false, queryBuf.Bytes(), 0, false, false, false)
 		if err != nil {
-			return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 0, false, false) failed: %v", topoproto.TabletAliasString(dest), queryBuf.String(), err)
+			return fmt.Errorf("ExecuteFetchAsDba(%v, false, %v, 0, false, false, false) failed: %v", topoproto.TabletAliasString(dest), queryBuf.String(), err)
 		}
 
 		queryBuf.Reset()

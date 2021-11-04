@@ -72,7 +72,7 @@ type RPCTM interface {
 
 	ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, disableForeignKeyChecks bool, reloadSchema bool) (*querypb.QueryResult, error)
 
 	ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error)
 
