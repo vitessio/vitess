@@ -87,7 +87,43 @@ type logicalPlan interface {
 	ContainsTables() semantics.TableSet
 }
 
-//-------------------------------------------------------------------------
+// gen4Plan implements a few methods from logicalPlan that are unused by Gen4.
+type gen4Plan struct{}
+
+// Order implements the logicalPlan interface
+func (*gen4Plan) Order() int {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// ResultColumns implements the logicalPlan interface
+func (*gen4Plan) ResultColumns() []*resultColumn {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// Reorder implements the logicalPlan interface
+func (*gen4Plan) Reorder(int) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// Wireup implements the logicalPlan interface
+func (*gen4Plan) Wireup(logicalPlan, *jointab) error {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyVar implements the logicalPlan interface
+func (*gen4Plan) SupplyVar(int, int, *sqlparser.ColName, string) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyCol implements the logicalPlan interface
+func (*gen4Plan) SupplyCol(*sqlparser.ColName) (rc *resultColumn, colNumber int) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
+
+// SupplyWeightString implements the logicalPlan interface
+func (*gen4Plan) SupplyWeightString(int, bool) (weightcolNumber int, err error) {
+	panic("[BUG]: should not be called. This is a Gen4 primitive")
+}
 
 type planVisitor func(logicalPlan) (bool, logicalPlan, error)
 

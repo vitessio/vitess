@@ -1,1 +1,121 @@
 # Add your test case here for debugging and run go test -run=One.
+# wire-up join with join, reuse existing result from a lower join
+"select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u1_col": 1
+    },
+    "TableName": "`user`_`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "u1_col": 1
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
+            "Query": "select u1.id, u1.col from `user` as u1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+            "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
+        "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "u3_col": 0
+    },
+    "TableName": "`user`_`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
+        "Query": "select u3.col from `user` as u3",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-2",
+        "JoinVars": {
+          "u1_col": 0
+        },
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
+            "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u3_col",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
+            "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -453,6 +453,11 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 }
 
 func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
+	canHashJoin, lhsKey, rhsKey, err := canHashJoin(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+
 	lhs, err := transformToLogicalPlan(ctx, n.lhs)
 	if err != nil {
 		return nil, err
@@ -465,13 +470,77 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 	if n.leftJoin {
 		opCode = engine.LeftJoin
 	}
+
+	if canHashJoin {
+		return &hashJoin{
+			Left:      lhs,
+			Right:     rhs,
+			Cols:      n.columns,
+			Opcode:    opCode,
+			LHSKey:    lhsKey,
+			RHSKey:    rhsKey,
+			Predicate: n.predicate,
+		}, nil
+	}
 	return &joinGen4{
-		Left:   lhs,
-		Right:  rhs,
-		Cols:   n.columns,
-		Vars:   n.vars,
-		Opcode: opCode,
+		Left:      lhs,
+		Right:     rhs,
+		Cols:      n.columns,
+		Vars:      n.vars,
+		Opcode:    opCode,
+		Predicate: n.predicate,
 	}, nil
+}
+
+// canHashJoin decides whether a join tree can be transformed into a hash join or apply join.
+// Since hash join use variables from the left-hand side, we want to remove any
+// join predicate living in the right-hand side.
+// Hash joins are only supporting equality join predicates, which is why the join predicate
+// has to be an EqualOp.
+func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhsKey, rhsKey int, err error) {
+	if len(n.predicatesToRemove) != 1 || n.rhs.cost() <= 5 || n.leftJoin {
+		return
+	}
+	cmp, isCmp := n.predicatesToRemove[0].(*sqlparser.ComparisonExpr)
+	if !isCmp || cmp.Operator != sqlparser.EqualOp {
+		return
+	}
+	var col *sqlparser.ColName
+	var arg string
+	if lCol, isCol := cmp.Left.(*sqlparser.ColName); isCol {
+		col = lCol
+		if rArg, isArg := cmp.Right.(sqlparser.Argument); isArg {
+			arg = string(rArg)
+		}
+	} else if rCol, isCol := cmp.Right.(*sqlparser.ColName); isCol {
+		col = rCol
+		if lArg, isArg := cmp.Left.(sqlparser.Argument); isArg {
+			arg = string(lArg)
+		}
+	} else {
+		return
+	}
+
+	lhsKey, found := n.vars[arg]
+	if !found {
+		return
+	}
+
+	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.semTable)
+	if err != nil {
+		return
+	}
+	if len(columns) != 1 {
+		return
+	}
+	rhsKey = columns[0]
+	canHash = true
+
+	err = n.rhs.removePredicate(ctx, cmp)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func relToTableExpr(t relation) (sqlparser.TableExpr, error) {

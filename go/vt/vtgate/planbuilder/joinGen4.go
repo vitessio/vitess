@@ -34,26 +34,9 @@ type joinGen4 struct {
 	Opcode      engine.JoinOpcode
 	Cols        []int
 	Vars        map[string]int
-}
+	Predicate   sqlparser.Expr
 
-// Order implements the logicalPlan interface
-func (j *joinGen4) Order() int {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
-// ResultColumns implements the logicalPlan interface
-func (j *joinGen4) ResultColumns() []*resultColumn {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
-// Reorder implements the logicalPlan interface
-func (j *joinGen4) Reorder(i int) {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
-// Wireup implements the logicalPlan interface
-func (j *joinGen4) Wireup(lp logicalPlan, jt *jointab) error {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
+	gen4Plan
 }
 
 // WireupGen4 implements the logicalPlan interface
@@ -65,29 +48,15 @@ func (j *joinGen4) WireupGen4(semTable *semantics.SemTable) error {
 	return j.Right.WireupGen4(semTable)
 }
 
-// SupplyVar implements the logicalPlan interface
-func (j *joinGen4) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
-// SupplyCol implements the logicalPlan interface
-func (j *joinGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
-// SupplyWeightString implements the logicalPlan interface
-func (j *joinGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
-	panic("[BUG]: should not be called. This is a Gen4 primitive")
-}
-
 // Primitive implements the logicalPlan interface
 func (j *joinGen4) Primitive() engine.Primitive {
 	return &engine.Join{
-		Left:   j.Left.Primitive(),
-		Right:  j.Right.Primitive(),
-		Cols:   j.Cols,
-		Vars:   j.Vars,
-		Opcode: j.Opcode,
+		Left:    j.Left.Primitive(),
+		Right:   j.Right.Primitive(),
+		Cols:    j.Cols,
+		Vars:    j.Vars,
+		Opcode:  j.Opcode,
+		ASTPred: j.Predicate,
 	}
 }
 
