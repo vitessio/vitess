@@ -4547,7 +4547,13 @@ type TrimExpr struct {
 
 // Format formats the node
 func (node *TrimExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("trim(%v, %v, %s)", node.Str, node.Pattern, node.Dir)
+	if node.Dir == Leading {
+		buf.Myprintf("trim(leading %v from %v)", node.Pattern, node.Str)
+	} else if node.Dir == Trailing {
+		buf.Myprintf("trim(trailing %v from %v)", node.Pattern, node.Str)
+	} else {
+		buf.Myprintf("trim(both %v from %v)", node.Pattern, node.Str)
+	}
 }
 
 func (node *TrimExpr) replace(from, to Expr) bool {
