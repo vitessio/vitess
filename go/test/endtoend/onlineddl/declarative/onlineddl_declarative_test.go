@@ -114,6 +114,19 @@ var (
 			key updates_idx(updates)
 		) ENGINE=InnoDB
 	`
+	createStatementZeroDate = `
+		CREATE TABLE stress_test (
+			id bigint(20) not null,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default 'create_with_zero',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			zero_datetime datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY (id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+	`
 	createIfNotExistsStatement = `
 		CREATE TABLE IF NOT EXISTS stress_test (
 			id bigint(20) not null,
@@ -402,6 +415,18 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		// the table existed, so we expect no changes in this non-declarative DDL
 		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		// IF NOT EXISTS is supported in non-declarative mode. Just verifying that the statement itself is good,
+		// so that the failure we tested for, above, actually tests the "declarative" logic, rather than some
+		// unrelated error.
+		uuid := testOnlineDDLStatement(t, createStatementZeroDate, "online --allow-zero-in-date", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkMigratedTable(t, tableName, "create_with_zero")
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
