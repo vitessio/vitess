@@ -125,17 +125,19 @@ func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr Tabl
 // Start starts the topology watcher
 func (tw *TopologyWatcher) Start() {
 	tw.wg.Add(1)
-	defer tw.wg.Done()
-	ticker := time.NewTicker(tw.refreshInterval)
-	defer ticker.Stop()
-	for {
-		tw.loadTablets()
-		select {
-		case <-tw.ctx.Done():
-			return
-		case <-ticker.C:
+	go func() {
+		defer tw.wg.Done()
+		ticker := time.NewTicker(tw.refreshInterval)
+		defer ticker.Stop()
+		for {
+			tw.loadTablets()
+			select {
+			case <-tw.ctx.Done():
+				return
+			case <-ticker.C:
+			}
 		}
-	}
+	}()
 }
 
 // Stop stops the watcher. It does not clean up the tablets added to LegacyTabletRecorder.
