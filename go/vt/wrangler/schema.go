@@ -17,14 +17,14 @@ limitations under the License.
 package wrangler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"html/template"
 	"sort"
 	"sync"
+	"text/template"
 	"time"
 
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -366,11 +366,10 @@ func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletIn
 }
 
 // fillStringTemplate returns the string template filled
-func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
-	myTemplate := template.Must(template.New("").Parse(tmpl))
-	data := new(bytes.Buffer)
-	if err := myTemplate.Execute(data, vars); err != nil {
+func fillStringTemplate(tmplStr string, vars interface{}) (string, error) {
+	tmpl, err := template.New("").Parse(tmplStr)
+	if err != nil {
 		return "", err
 	}
-	return data.String(), nil
+	return textutil.ExecuteTemplate(tmpl, vars)
 }
