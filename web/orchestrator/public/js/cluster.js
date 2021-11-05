@@ -1632,12 +1632,10 @@ function Cluster() {
     instances.forEach(function(instance) {
       if (instance.isMaster) {
         getData("/api/recently-active-instance-recovery/" + instance.Key.Hostname + "/" + instance.Key.Port, function(recoveries) {
-          if (!recoveries) {
-            return
-          }
-          // Result is an array: either empty (no active recovery) or with multiple entries
-          var recoveryEntry = recoveries[0];
-          addInfo('<strong>' + instance.title + '</strong> has just recently (' + recoveryEntry.RecoveryEndTimestamp + ') been promoted as result of <strong>' + recoveryEntry.AnalysisEntry.Analysis + '</strong>. It may still take some time to rebuild topology graph.');
+          // Result is undefined or an array: either empty (no active recovery) or with multiple entries
+          (recoveries || []).slice(0,1).forEach(function(recoveryEntry) {
+            addInfo('<strong>' + instance.title + '</strong> has just recently (' + recoveryEntry.RecoveryEndTimestamp + ') been promoted as result of <strong>' + recoveryEntry.AnalysisEntry.Analysis + '</strong>. It may still take some time to rebuild topology graph.');
+          });
         });
       }
     });
@@ -1723,12 +1721,10 @@ function Cluster() {
       });
     });
     getData("/api/recently-active-cluster-recovery/" + currentClusterName(), function(recoveries) {
-      if (!recoveries) {
-        return
-      }
-      // Result is an array: either empty (no active recovery) or with multiple entries
-      var recoveryEntry = recoveries[0]
-      addInfo('This cluster just recently (' + recoveryEntry.RecoveryEndTimestamp + ') recovered from <strong><a href="' + appUrl('/web/audit-recovery/cluster/' + currentClusterName()) + '">' + recoveryEntry.AnalysisEntry.Analysis + '</strong></a>. It may still take some time to rebuild topology graph.');
+      // Result is undefined or an array: either empty (no active recovery) or with multiple entries
+      (recoveries || []).slice(0,1).forEach(function(recoveryEntry) {
+        addInfo('This cluster just recently (' + recoveryEntry.RecoveryEndTimestamp + ') recovered from <strong><a href="' + appUrl('/web/audit-recovery/cluster/' + currentClusterName()) + '">' + recoveryEntry.AnalysisEntry.Analysis + '</strong></a>. It may still take some time to rebuild topology graph.');
+      });
     });
     getData("/api/blocked-recoveries/cluster/" + currentClusterName(), function(blockedRecoveries) {
       // Result is an array: either empty (no active recovery) or with multiple entries
