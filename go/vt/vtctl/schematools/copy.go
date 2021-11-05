@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"text/template"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -29,6 +31,65 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// CopySchemas applies a set of `CREATE TABLE` SQL statements on the target
+// tablet. It works by applying the SQL statements directly on the primary with
+// binary logging enabled, so that schemas propagate via standard MySQL
+// replication. Therefore, it should only be used for changes that can be
+// applied on a live instance without causing issues; it should not be used for
+// anything that will require downtime.
+//
+// It returns the primary position of target tablet after applying all
+// statements, so callers know what position to wait for if verifying replicas
+// in the shard.
+//
+// Each SQL statement is first processed as a text/template, and the
+// tablet's database name can be interpolated as {{ .DatabaseName }} there.
+func CopySchemas(ctx context.Context, tmc tmclient.TabletManagerClient, target *topo.TabletInfo, changes []string, disableForeignKeyChecks bool) (string, error) {
+	buf := bytes.NewBuffer(nil)
+	vars := map[string]string{"DatabaseName": target.DbName()}
+
+	filledChanges := make([]string, len(changes))
+	for i, change := range changes {
+		tmpl, err := template.New("").Parse(change)
+		if err != nil {
+			return "", err
+		}
+
+		if err := tmpl.Execute(buf, vars); err != nil {
+			return "", err
+		}
+
+		filledChanges[i] = buf.String()
+		buf.Reset()
+	}
+
+	for i, sql := range filledChanges {
+		reloadSchema := i == len(filledChanges)-1
+		if err := applySchemaSQL(ctx, tmc, target.Tablet, sql, disableForeignKeyChecks, reloadSchema); err != nil {
+			return "", fmt.Errorf("creating a table failed."+
+				" Most likely some tables already exist on the destination and differ from the source."+
+				" Please remove all to be copied tables from the destination manually and run this command again."+
+				" Full error: %v", err)
+		}
+	}
+
+	pos, err := tmc.MasterPosition(ctx, target.Tablet)
+	if err != nil {
+		return "", fmt.Errorf("CopySchemas: can't get replication position after schema applied: %v", err)
+	}
+
+	return pos, nil
+}
+
+func applySchemaSQL(ctx context.Context, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet, sql string, disableForeignKeyChecks bool, reloadSchema bool) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
+	_, err := tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 0, false, disableForeignKeyChecks, reloadSchema)
+	return err
+}
 
 // CopyShardMetadata copies the contents of the _vt.shard_metadata table from
 // the source tablet to the destination tablet.

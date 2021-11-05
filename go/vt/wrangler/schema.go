@@ -21,16 +21,13 @@ import (
 	"fmt"
 	"sort"
 	"sync"
-	"text/template"
 	"time"
 
-	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 
@@ -296,20 +293,10 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	if err != nil {
 		return fmt.Errorf("GetTablet(%v) failed: %v", destShardInfo.PrimaryAlias, err)
 	}
-	for i, sqlLine := range createSQL {
-		err = wr.applySQLShard(ctx, destTabletInfo, sqlLine, i == len(createSQL)-1, disableForeignKeyChecks)
-		if err != nil {
-			return fmt.Errorf("creating a table failed."+
-				" Most likely some tables already exist on the destination and differ from the source."+
-				" Please remove all to be copied tables from the destination manually and run this command again."+
-				" Full error: %v", err)
-		}
-	}
 
-	// Remember the replication position after all the above were applied.
-	destPrimaryPos, err := wr.tmc.PrimaryPosition(ctx, destTabletInfo.Tablet)
+	destPrimaryPos, err := schematools.CopySchemas(ctx, wr.tmc, destTabletInfo, createSQL, disableForeignKeyChecks)
 	if err != nil {
-		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
+		return err
 	}
 
 	// Although the copy was successful, we have to verify it to catch the case
@@ -344,32 +331,4 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 		}
 	}
 	return err
-}
-
-// applySQLShard applies a given SQL change on a given tablet alias. It allows executing arbitrary
-// SQL statements, but doesn't return any results, so it's only useful for SQL statements
-// that would be run for their effects (e.g., CREATE).
-// It works by applying the SQL statement on the shard's primary tablet with replication turned on.
-// Thus it should be used only for changes that can be applied on a live instance without causing issues;
-// it shouldn't be used for anything that will require a pivot.
-// The SQL statement string is expected to have {{.DatabaseName}} in place of the actual db name.
-func (wr *Wrangler) applySQLShard(ctx context.Context, tabletInfo *topo.TabletInfo, change string, reloadSchema bool, disableForeignKeyChecks bool) error {
-	filledChange, err := fillStringTemplate(change, map[string]string{"DatabaseName": tabletInfo.DbName()})
-	if err != nil {
-		return fmt.Errorf("fillStringTemplate failed: %v", err)
-	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	// Need to make sure that we enable binlog, since we're only applying the statement on primaries.
-	_, err = wr.tmc.ExecuteFetchAsDba(ctx, tabletInfo.Tablet, false, []byte(filledChange), 0, false, false, reloadSchema)
-	return err
-}
-
-// fillStringTemplate returns the string template filled
-func fillStringTemplate(tmplStr string, vars interface{}) (string, error) {
-	tmpl, err := template.New("").Parse(tmplStr)
-	if err != nil {
-		return "", err
-	}
-	return textutil.ExecuteTemplate(tmpl, vars)
 }
