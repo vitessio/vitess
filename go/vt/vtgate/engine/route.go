@@ -135,6 +135,7 @@ type OrderByParams struct {
 	StarColFixedIndex int
 	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
 	FromGroupBy bool
+	// Collation ID for comparison using collation
 	CollationID collations.ID
 }
 
