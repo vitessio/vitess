@@ -16,6 +16,7 @@ package planbuilder
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -329,12 +330,14 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 			}
 		}
 
+		// TODO(king-11) pass in collation here
 		ob := engine.OrderByParams{
 			Col:               colNumber,
 			WeightStringCol:   -1,
 			Desc:              order.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: starColFixedIndex,
 			FromGroupBy:       order.fromGroupBy,
+			CollationID:       collations.Unknown,
 		}
 		node.eroute.OrderBy = append(node.eroute.OrderBy, ob)
 
