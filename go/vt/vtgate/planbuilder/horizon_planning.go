@@ -721,6 +721,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			CollationID:     semTable.CollationFor(order.Inner.Expr),
 		})
 	}
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
@@ -839,11 +840,13 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
 		}
+		// TODO(king-11) not sure whether below will work or not.
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
+			CollationID:       plan.eaggr.GroupByKeys[offset].CollationID,
 		})
 	}
 	return ms, nil
@@ -889,6 +892,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 			WeightStringCol:   weightStringOffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
+			CollationID:       ctx.semTable.CollationFor(order.Inner.Expr),
 		})
 	}
 	return ms, nil
