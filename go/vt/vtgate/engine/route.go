@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -134,6 +135,7 @@ type OrderByParams struct {
 	StarColFixedIndex int
 	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
 	FromGroupBy bool
+	CollationID collations.ID
 }
 
 // String returns a string. Used for plan descriptions
