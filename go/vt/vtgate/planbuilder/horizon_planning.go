@@ -716,7 +716,7 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 		if err != nil {
 			return nil, false, err
 		}
-
+		// TODO(king-11) add tests for this.
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderByParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
@@ -840,7 +840,7 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
 		}
-		// TODO(king-11) not sure whether below will work or not.
+		// TODO(king-11) add tests for this.
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
@@ -887,6 +887,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 			return nil, err
 		}
 		hp.haveToTruncate(added)
+		// TODO(king-11) add tests for this.
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
