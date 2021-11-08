@@ -716,7 +716,6 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 		if err != nil {
 			return nil, false, err
 		}
-		// TODO(king-11) add tests for this.
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderByParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
