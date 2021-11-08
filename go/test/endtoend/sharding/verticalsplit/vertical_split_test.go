@@ -668,19 +668,7 @@ func initializeCluster() (int, error) {
 			}
 			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				clusterInstance.Cell,
-				shardName,
-				keyspace.Name,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, clusterInstance.Cell, shardName, keyspace.Name, clusterInstance.VtctldProcess.Port, tablet.Type, clusterInstance.TopoProcess.Port, clusterInstance.Hostname, clusterInstance.TmpDirectory, clusterInstance.VtTabletExtraArgs, clusterInstance.EnableSemiSync, clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)

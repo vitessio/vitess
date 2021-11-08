@@ -216,26 +216,14 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return
-			} else {
-				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				clusterInstance.Cell,
-				shardName,
-				keyspaceName,
-				clusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				clusterInstance.TopoProcess.Port,
-				clusterInstance.Hostname,
-				clusterInstance.TmpDirectory,
-				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, clusterInstance.Cell, shardName, keyspaceName, clusterInstance.VtctldProcess.Port, tablet.Type, clusterInstance.TopoProcess.Port, clusterInstance.Hostname, clusterInstance.TmpDirectory, clusterInstance.VtTabletExtraArgs, clusterInstance.EnableSemiSync, clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)

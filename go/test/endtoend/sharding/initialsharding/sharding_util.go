@@ -170,19 +170,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
-				tablet.GrpcPort,
-				tablet.TabletUID,
-				ClusterInstance.Cell,
-				shardName,
-				keyspaceName,
-				ClusterInstance.VtctldProcess.Port,
-				tablet.Type,
-				ClusterInstance.TopoProcess.Port,
-				ClusterInstance.Hostname,
-				ClusterInstance.TmpDirectory,
-				ClusterInstance.VtTabletExtraArgs,
-				ClusterInstance.EnableSemiSync)
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, ClusterInstance.Cell, shardName, keyspaceName, ClusterInstance.VtctldProcess.Port, tablet.Type, ClusterInstance.TopoProcess.Port, ClusterInstance.Hostname, ClusterInstance.TmpDirectory, ClusterInstance.VtTabletExtraArgs, ClusterInstance.EnableSemiSync, ClusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			tablet.VttabletProcess.DbPassword = dbPwd
 			tablet.VttabletProcess.EnableSemiSync = true
@@ -715,8 +703,7 @@ func getPasswordField(localCluster *cluster.LocalProcessCluster) (pwdCol string,
 	if err = tablet.MysqlctlProcess.Start(); err != nil {
 		return "", err
 	}
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0,
-		tablet.Type, localCluster.TopoPort, "", "", nil, false)
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0, tablet.Type, localCluster.TopoPort, "", "", nil, false, localCluster.DefaultCharset)
 	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
 	if err == nil && len(result.Rows) > 0 {
 		return "password", nil

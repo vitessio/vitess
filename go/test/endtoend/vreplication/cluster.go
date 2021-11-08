@@ -31,6 +31,7 @@ var (
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
 type ClusterConfig struct {
+	charset              string
 	hostname             string
 	topoPort             int
 	vtctldPort           int
@@ -128,6 +129,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		charset:             "utf8mb4",
 	}
 }
 
@@ -242,20 +244,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		options = append(options, "-vreplication_store_compressed_gtid=true")
 	}
 
-	vttablet := cluster.VttabletProcessInstance(
-		vc.ClusterConfig.tabletPortBase+tabletID,
-		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
-		tabletID,
-		cell.Name,
-		shard.Name,
-		keyspace.Name,
-		vc.ClusterConfig.vtctldPort,
-		tabletType,
-		vc.Topo.Port,
-		vc.ClusterConfig.hostname,
-		vc.ClusterConfig.tmpDir,
-		options,
-		false)
+	vttablet := cluster.VttabletProcessInstance(vc.ClusterConfig.tabletPortBase+tabletID, vc.ClusterConfig.tabletGrpcPortBase+tabletID, tabletID, cell.Name, shard.Name, keyspace.Name, vc.ClusterConfig.vtctldPort, tabletType, vc.Topo.Port, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir, options, false, vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
