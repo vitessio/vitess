@@ -264,7 +264,7 @@ func TestSchemaChange(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
-			assert.Equal(t, 86400, retainArtifactSeconds)
+			assert.Equal(t, int64(86400), retainArtifactSeconds)
 		}
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
