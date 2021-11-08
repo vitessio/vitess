@@ -40,16 +40,35 @@ type FakeFactory struct {
 var _ topo.Factory = (*FakeFactory)(nil)
 
 // NewFakeTopoFactory creates a new fake topo factory
-func NewFakeTopoFactory(cells ...string) *FakeFactory {
+func NewFakeTopoFactory() *FakeFactory {
 	factory := &FakeFactory{
 		mu:    sync.Mutex{},
 		cells: map[string][]*FakeConn{},
 	}
-	for _, cell := range cells {
-		factory.cells[cell] = []*FakeConn{}
-	}
 	factory.cells[topo.GlobalCell] = []*FakeConn{newFakeConnection()}
 	return factory
+}
+
+// AddCell is used to add a cell to the factory. It takes in when the get and update calls should fail. It also takes in as an argument
+// whether the update call's write should succeed or not
+func (f *FakeFactory) AddCell(cell string, getErrors []bool, updateErrors []bool, writePersists []bool) {
+	conn := newFakeConnection()
+	conn.getErrors = getErrors
+	var updErrors []struct {
+		error         bool
+		writePersists bool
+	}
+	for i, updateError := range updateErrors {
+		updErrors = append(updErrors, struct {
+			error         bool
+			writePersists bool
+		}{
+			error:         updateError,
+			writePersists: writePersists[i],
+		})
+	}
+	conn.updateErrors = updErrors
+	f.cells[cell] = []*FakeConn{conn}
 }
 
 // HasGlobalReadOnlyCell implements the Factory interface
@@ -82,12 +101,23 @@ type FakeConn struct {
 
 	// getResultMap is a map storing the results for each filepath
 	getResultMap map[string]result
+	// updateErrors stores whether update function call should error or not
+	updateErrors []struct {
+		error         bool
+		writePersists bool
+	}
+	// getErrors stores whether the get function call should error or not
+	getErrors []bool
+
+	// watches is a map of all watches for this connection to the cell keyed by the filepath.
+	watches map[string][]chan *topo.WatchData
 }
 
 // newFakeConnection creates a new fake connection
 func newFakeConnection() *FakeConn {
 	return &FakeConn{
 		getResultMap: map[string]result{},
+		watches:      map[string][]chan *topo.WatchData{},
 	}
 }
 
@@ -95,7 +125,6 @@ func newFakeConnection() *FakeConn {
 type result struct {
 	contents []byte
 	version  uint64
-	err      error
 }
 
 var _ topo.Conn = (*FakeConn)(nil)
@@ -143,15 +172,21 @@ func (f *FakeConn) Create(ctx context.Context, filePath string, contents []byte)
 	f.getResultMap[filePath] = result{
 		contents: contents,
 		version:  1,
-		err:      nil,
 	}
 	return memorytopo.NodeVersion(1), nil
 }
 
 // Update implements the Conn interface
 func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	shouldErr := false
+	writeSucceeds := true
+	if len(f.updateErrors) > 0 {
+		shouldErr = f.updateErrors[0].error
+		writeSucceeds = f.updateErrors[0].writePersists
+		f.updateErrors = f.updateErrors[1:]
+	}
 	if version == nil {
-		_, err := f.Create(ctx, filePath, contents)
+		_, err := f.Create(ctx, filePath, []byte{})
 		if err != nil {
 			return nil, err
 		}
@@ -160,17 +195,43 @@ func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte,
 	if !isPresent {
 		return nil, topo.NewError(topo.NoNode, filePath)
 	}
-	res.contents = contents
-	return memorytopo.NodeVersion(res.version), res.err
+	if writeSucceeds {
+		res.contents = contents
+		f.getResultMap[filePath] = res
+	}
+	if shouldErr {
+		return nil, topo.NewError(topo.Timeout, filePath)
+	}
+
+	// Call the watches
+	for path, watches := range f.watches {
+		if path != filePath {
+			continue
+		}
+		for _, watch := range watches {
+			watch <- &topo.WatchData{
+				Contents: res.contents,
+				Version:  memorytopo.NodeVersion(res.version),
+			}
+		}
+	}
+	return memorytopo.NodeVersion(res.version), nil
 }
 
 // Get implements the Conn interface
 func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	if len(f.getErrors) > 0 {
+		shouldErr := f.getErrors[0]
+		f.getErrors = f.getErrors[1:]
+		if shouldErr {
+			return nil, nil, topo.NewError(topo.Timeout, filePath)
+		}
+	}
 	res, isPresent := f.getResultMap[filePath]
 	if !isPresent {
 		return nil, nil, topo.NewError(topo.NoNode, filePath)
 	}
-	return res.contents, memorytopo.NodeVersion(res.version), res.err
+	return res.contents, memorytopo.NodeVersion(res.version), nil
 }
 
 // Delete implements the Conn interface
@@ -200,8 +261,33 @@ func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.Loc
 }
 
 // Watch implements the Conn interface
-func (f *FakeConn) Watch(ctx context.Context, filePath string) (current *topo.WatchData, changes <-chan *topo.WatchData, cancel topo.CancelFunc) {
-	panic("implement me")
+func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	res, isPresent := f.getResultMap[filePath]
+	if !isPresent {
+		return &topo.WatchData{Err: topo.NewError(topo.NoNode, filePath)}, nil, nil
+	}
+	current := &topo.WatchData{
+		Contents: res.contents,
+		Version:  memorytopo.NodeVersion(res.version),
+	}
+
+	notifications := make(chan *topo.WatchData, 100)
+	f.watches[filePath] = append(f.watches[filePath], notifications)
+
+	cancel := func() {
+		watches, isPresent := f.watches[filePath]
+		if !isPresent {
+			return
+		}
+		for i, watch := range watches {
+			if notifications == watch {
+				close(notifications)
+				watches = append(watches[0:i], watches[i+1:]...)
+				break
+			}
+		}
+	}
+	return current, notifications, cancel
 }
 
 // NewMasterParticipation implements the Conn interface
