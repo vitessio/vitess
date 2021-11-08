@@ -3489,6 +3489,19 @@ func TestLoadData(t *testing.T) {
 	}
 }
 
+func TestEscape(t *testing.T) {
+	testCases := []parseTest{
+		{
+			input:                `SELECT * FROM test WHERE col LIKE "%$_%" ESCAPE "$"`,
+			output:               `select * from test where col like '%$_%' escape '$'`,
+			serializeSelectExprs: true,
+		},
+	}
+	for _, tcase := range testCases {
+		runParseTestCase(t, tcase)
+	}
+}
+
 func TestTrim(t *testing.T) {
 	testCases := []parseTest{
 		{
