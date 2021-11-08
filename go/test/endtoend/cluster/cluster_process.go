@@ -283,7 +283,21 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 			// start vttablet process
-			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, cluster.Cell, shardName, keyspace.Name, cluster.VtctldProcess.Port, tablet.Type, cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory, cluster.VtTabletExtraArgs, cluster.EnableSemiSync, cluster.DefaultCharset)
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				cluster.Cell,
+				shardName,
+				keyspace.Name,
+				cluster.VtctldProcess.Port,
+				tablet.Type,
+				cluster.TopoProcess.Port,
+				cluster.Hostname,
+				cluster.TmpDirectory,
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
 				tablet.VttabletProcess.ServingStatus = "SERVING"
@@ -385,7 +399,21 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 			// Setup MysqlctlProcess
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
 			// Setup VttabletProcess
-			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, tablet.Cell, shard.Name, keyspace.Name, cluster.VtctldProcess.Port, tablet.Type, cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory, cluster.VtTabletExtraArgs, cluster.EnableSemiSync, cluster.DefaultCharset)
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				tablet.Cell,
+				shard.Name,
+				keyspace.Name,
+				cluster.VtctldProcess.Port,
+				tablet.Type,
+				cluster.TopoProcess.Port,
+				cluster.Hostname,
+				cluster.TmpDirectory,
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync,
+				cluster.DefaultCharset)
 		}
 
 		keyspace.Shards = append(keyspace.Shards, shard)
@@ -726,13 +754,41 @@ func (cluster *LocalProcessCluster) NewVtgrProcess(clusters []string, config str
 
 // VtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
-	return VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, cluster.Cell, shardName, ksName, cluster.VtctldProcess.Port, tablet.Type, cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory, cluster.VtTabletExtraArgs, cluster.EnableSemiSync, cluster.DefaultCharset)
+	return VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cluster.Cell,
+		shardName,
+		ksName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync,
+		cluster.DefaultCharset)
 }
 
 // StartVttablet starts a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
-	tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, cell, shardName, keyspaceName, cluster.VtctldProcess.Port, tablet.Type, cluster.TopoProcess.Port, hostname, cluster.TmpDirectory, cluster.VtTabletExtraArgs, cluster.EnableSemiSync, cluster.DefaultCharset)
+	tablet.VttabletProcess = VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cell,
+		shardName,
+		keyspaceName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync,
+		cluster.DefaultCharset)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus

@@ -182,7 +182,21 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	require.Nil(t, err)
 
 	// Start vttablet process
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tabletUID, cell, shards[0], keyspaceName, clusterInstance.VtctldProcess.Port, tablet.Type, clusterInstance.TopoProcess.Port, clusterInstance.Hostname, clusterInstance.TmpDirectory, clusterInstance.VtTabletExtraArgs, clusterInstance.EnableSemiSync, clusterInstance.DefaultCharset)
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(
+		tablet.HTTPPort,
+		tablet.GrpcPort,
+		tabletUID,
+		cell,
+		shards[0],
+		keyspaceName,
+		clusterInstance.VtctldProcess.Port,
+		tablet.Type,
+		clusterInstance.TopoProcess.Port,
+		clusterInstance.Hostname,
+		clusterInstance.TmpDirectory,
+		clusterInstance.VtTabletExtraArgs,
+		clusterInstance.EnableSemiSync,
+		clusterInstance.DefaultCharset)
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
