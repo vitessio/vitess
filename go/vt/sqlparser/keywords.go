@@ -117,6 +117,7 @@ var keywords = []keyword{
 	{"charset", CHARSET},
 	{"check", CHECK},
 	{"checksum", CHECKSUM},
+	{"cleanup", CLEANUP},
 	{"coalesce", COALESCE},
 	{"code", CODE},
 	{"collate", COLLATE},
