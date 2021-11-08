@@ -343,7 +343,7 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -353,6 +353,8 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field FieldQuery string
+	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	return size
 }
 func (cached *MStream) CachedSize(alloc bool) int64 {
