@@ -330,30 +330,6 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	return callback(qr)
 }
 
-// StreamExecute executes a streaming query on vttablet. The retry rules are the same.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines, through processOneStreamingResult.
-func (stc *ScatterConn) StreamExecute(
-	ctx context.Context,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	rss []*srvtopo.ResolvedShard,
-	options *querypb.ExecuteOptions,
-	callback func(reply *sqltypes.Result) error,
-) error {
-
-	// mu protects fieldSent, replyErr and callback
-	var mu sync.Mutex
-	fieldSent := false
-
-	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars, 0, options, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
-	})
-	return allErrors.AggrError(vterrors.Aggregate)
-}
-
 // StreamExecuteMulti is like StreamExecute,
 // but each shard gets its own bindVars. If len(shards) is not equal to
 // len(bindVars), the function panics.

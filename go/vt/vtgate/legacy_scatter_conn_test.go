@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,23 +121,6 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 
 		qr, errs := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false /*autocommit*/, false)
 		return qr, vterrors.Aggregate(errs)
-	})
-}
-
-func TestScatterConnStreamExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
-		if err != nil {
-			return nil, err
-		}
-
-		qr := new(sqltypes.Result)
-		err = sc.StreamExecute(ctx, "query", nil, rss, nil, func(r *sqltypes.Result) error {
-			qr.AppendResult(r)
-			return nil
-		})
-		return qr, err
 	})
 }
 
@@ -467,26 +449,6 @@ func TestMultiExecs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
-	}
-}
-
-func TestScatterConnStreamExecuteSendError(t *testing.T) {
-	createSandbox("TestScatterConnStreamExecuteSendError")
-	hc := discovery.NewFakeLegacyHealthCheck()
-	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination failed: %v", err)
-	}
-	err = sc.StreamExecute(ctx, "query", nil, rss, nil, func(*sqltypes.Result) error {
-		return fmt.Errorf("send error")
-	})
-	want := "send error"
-	// Ensure that we handle send errors.
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("got %s, must contain %v", err, want)
 	}
 }
 
