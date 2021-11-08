@@ -268,10 +268,11 @@ func TestConnectionFromListener(t *testing.T) {
 	fmt.Printf("host: %s, port: %d\n", host, port)
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	c, err := Connect(context.Background(), params)
@@ -297,10 +298,11 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	c, err := Connect(context.Background(), params)
@@ -330,10 +332,11 @@ func TestConnectionWithSourceHost(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	_, err = Connect(context.Background(), params)
@@ -363,10 +366,11 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "mysql_password",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "mysql_password",
+		Charset: "utf8mb4",
 	}
 
 	_, err = Connect(context.Background(), params)
@@ -402,6 +406,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
+		Charset:    "utf8mb4",
 	}
 
 	c, err := Connect(context.Background(), params)
@@ -427,10 +432,11 @@ func TestClientFoundRows(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	// Test without flag.
@@ -476,10 +482,11 @@ func TestConnCounts(t *testing.T) {
 
 	// Test with one new connection.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: user,
-		Pass:  passwd,
+		Host:    host,
+		Port:    port,
+		Uname:   user,
+		Pass:    passwd,
+		Charset: "utf8mb4",
 	}
 
 	c, err := Connect(context.Background(), params)
@@ -633,10 +640,11 @@ func TestServerStats(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	timings.Reset()
@@ -783,6 +791,7 @@ func TestDialogServer(t *testing.T) {
 		Port:    port,
 		Uname:   "user1",
 		Pass:    "password1",
+		Charset: "utf8mb4",
 		SslMode: vttls.Disabled,
 	}
 	sql := "select rows"
@@ -862,6 +871,7 @@ func TestTLSServer(t *testing.T) {
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
+		Charset:    "utf8mb4",
 	}
 
 	// Run a 'select rows' command with results.
@@ -960,6 +970,7 @@ func TestTLSRequired(t *testing.T) {
 		Pass:       "password1",
 		SslMode:    vttls.Disabled,
 		ServerName: "server.example.com",
+		Charset:    "utf8mb4",
 	}
 	conn, err := Connect(context.Background(), params)
 	require.NotNil(t, err)
@@ -1049,6 +1060,7 @@ func TestCachingSha2PasswordAuthWithTLS(t *testing.T) {
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
 		ServerName: "server.example.com",
+		Charset:    "utf8mb4",
 	}
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
@@ -1099,6 +1111,7 @@ func TestCachingSha2PasswordAuthWithoutTLS(t *testing.T) {
 		Uname:   "user1",
 		Pass:    "password1",
 		SslMode: vttls.Disabled,
+		Charset: "utf8mb4",
 	}
 
 	// Connection should fail, as server requires SSL for caching_sha2_password.
@@ -1134,10 +1147,11 @@ func TestErrorCodes(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 
 	ctx := context.Background()
@@ -1312,10 +1326,11 @@ func TestListenerShutdown(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 	}
 	connRefuse.Reset()
 
@@ -1383,8 +1398,9 @@ func TestServerFlush(t *testing.T) {
 
 	host, port := getHostPort(t, l.Addr())
 	params := &ConnParams{
-		Host: host,
-		Port: port,
+		Host:    host,
+		Port:    port,
+		Charset: "utf8mb4",
 	}
 
 	c, err := Connect(context.Background(), params)

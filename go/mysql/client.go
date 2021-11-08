@@ -235,9 +235,9 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 	// same collation as the one used to communicate with MySQL.
 	params.CollationEnvironment = env
 
+	// if there is no collation or charset, we default to utf8mb4
 	if params.Collation == "" && params.Charset == "" {
-		// If no collation or charset is defined, we can fail, this is a critical issue.
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot resolve tablet's collation: no collation or charset defined")
+		params.Charset = "utf8mb4"
 	}
 	var coll collations.Collation
 

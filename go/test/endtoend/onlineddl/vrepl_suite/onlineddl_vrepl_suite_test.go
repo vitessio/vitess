@@ -354,7 +354,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, mysqlParams(""))
+	conn, err := mysql.Connect(ctx, mysqlParams("utf8mb4"))
 	require.Nil(t, err)
 	defer conn.Close()
 
