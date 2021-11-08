@@ -99,6 +99,9 @@ type FakeConn struct {
 	cell       string
 	serverAddr string
 
+	// mutex to protect all the operations
+	mu sync.Mutex
+
 	// getResultMap is a map storing the results for each filepath
 	getResultMap map[string]result
 	// updateErrors stores whether update function call should error or not
@@ -131,6 +134,8 @@ var _ topo.Conn = (*FakeConn)(nil)
 
 // ListDir implements the Conn interface
 func (f *FakeConn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	var res []topo.DirEntry
 
 	for filePath := range f.getResultMap {
@@ -169,6 +174,8 @@ func addToListOfDirEntries(list []topo.DirEntry, elem topo.DirEntry) []topo.DirE
 
 // Create implements the Conn interface
 func (f *FakeConn) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.getResultMap[filePath] = result{
 		contents: contents,
 		version:  1,
@@ -178,6 +185,8 @@ func (f *FakeConn) Create(ctx context.Context, filePath string, contents []byte)
 
 // Update implements the Conn interface
 func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	shouldErr := false
 	writeSucceeds := true
 	if len(f.updateErrors) > 0 {
@@ -186,10 +195,11 @@ func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte,
 		f.updateErrors = f.updateErrors[1:]
 	}
 	if version == nil {
-		_, err := f.Create(ctx, filePath, []byte{})
-		if err != nil {
-			return nil, err
+		f.getResultMap[filePath] = result{
+			contents: contents,
+			version:  1,
 		}
+		return memorytopo.NodeVersion(1), nil
 	}
 	res, isPresent := f.getResultMap[filePath]
 	if !isPresent {
@@ -220,6 +230,8 @@ func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte,
 
 // Get implements the Conn interface
 func (f *FakeConn) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if len(f.getErrors) > 0 {
 		shouldErr := f.getErrors[0]
 		f.getErrors = f.getErrors[1:]
@@ -257,11 +269,15 @@ var _ topo.LockDescriptor = (*fakeLockDescriptor)(nil)
 
 // Lock implements the Conn interface
 func (f *FakeConn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return &fakeLockDescriptor{}, nil
 }
 
 // Watch implements the Conn interface
 func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, topo.CancelFunc) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	res, isPresent := f.getResultMap[filePath]
 	if !isPresent {
 		return &topo.WatchData{Err: topo.NewError(topo.NoNode, filePath)}, nil, nil
