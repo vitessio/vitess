@@ -142,7 +142,6 @@ func main() {
 
 	var mysqld *mysqlctl.Mysqld
 	var cnf *mysqlctl.Mycnf
-
 	if *startMysql {
 		mysqld, cnf = startMysqld(1)
 		servenv.OnClose(func() {

@@ -492,7 +492,7 @@ func CheckThrottlerService(t *testing.T, server string, names []string, rate int
 }
 
 func getDBConnFromTablet(t *testing.T, vttablet *cluster.Vttablet, ks string) *mysql.Conn {
-	dbParams := cluster.NewConnParams(vttablet.VttabletProcess.DbPort, vttablet.VttabletProcess.DbPassword, path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"), ks, vttablet.VttabletProcess.Charset)
+	dbParams := cluster.NewConnParams(vttablet.VttabletProcess.DbPort, vttablet.VttabletProcess.DbPassword, path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"), ks)
 	dbConn, err := mysql.Connect(context.Background(), &dbParams)
 	require.NoError(t, err)
 	return dbConn

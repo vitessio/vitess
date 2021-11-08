@@ -378,7 +378,7 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if !useDb {
 		keyspace = ""
 	}
-	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace, vttablet.Charset)
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
 	conn, err := vttablet.conn(&dbParams)
 	if err != nil {
 		return nil, err
