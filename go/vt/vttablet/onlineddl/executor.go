@@ -2894,6 +2894,8 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
+	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -2907,6 +2909,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(onlineDDL.RequestContext),
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
+		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 	)
 	if err != nil {
 		return nil, err
