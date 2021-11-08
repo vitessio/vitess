@@ -235,7 +235,7 @@ func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, 
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.
-func NewConnParams(port int, password, socketPath, keyspace, charset string) mysql.ConnParams {
+func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
 	if port != 0 {
 		socketPath = ""
 	}
@@ -244,7 +244,6 @@ func NewConnParams(port int, password, socketPath, keyspace, charset string) mys
 		Port:       port,
 		UnixSocket: socketPath,
 		Pass:       password,
-		Charset:    charset,
 	}
 
 	if keyspace != "" {

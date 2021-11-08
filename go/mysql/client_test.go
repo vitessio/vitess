@@ -209,7 +209,6 @@ func TestTLSClientDisabled(t *testing.T) {
 		Port:    port,
 		Uname:   "user1",
 		Pass:    "password1",
-		Charset: "utf8mb4",
 		SslMode: vttls.Disabled,
 	}
 
@@ -284,7 +283,6 @@ func TestTLSClientPreferredDefault(t *testing.T) {
 		Port:       port,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8mb4",
 		SslMode:    vttls.Preferred,
 		ServerName: "server.example.com",
 	}
@@ -403,11 +401,10 @@ func TestTLSClientVerifyCA(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:    host,
-		Port:    port,
-		Uname:   "user1",
-		Pass:    "password1",
-		Charset: "utf8mb4",
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
 		// SSL flags.
 		SslMode:    vttls.VerifyCA,
 		ServerName: "server.example.com",
@@ -489,11 +486,10 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:    host,
-		Port:    port,
-		Uname:   "user1",
-		Pass:    "password1",
-		Charset: "utf8mb4",
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
 		// SSL flags.
 		SslMode:    vttls.VerifyIdentity,
 		ServerName: "server.example.com",
