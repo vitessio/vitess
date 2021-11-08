@@ -1640,8 +1640,8 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error {
-	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, options, callback)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, callback func(reply *sqltypes.Result) error) []error {
+	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, session, callback)
 }
 
 // ExecuteLock implements the IExecutor interface
