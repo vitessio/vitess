@@ -95,8 +95,9 @@ func TestCheckConstraint(t *testing.T) {
 
 func TestValueDefault(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

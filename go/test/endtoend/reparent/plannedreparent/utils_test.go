@@ -194,6 +194,7 @@ func getMysqlConnParam(tablet *cluster.Vttablet) mysql.ConnParams {
 		Uname:      username,
 		DbName:     dbName,
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
+		Charset:    clusterInstance.DefaultCharset,
 	}
 	return connParams
 }

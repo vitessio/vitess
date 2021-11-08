@@ -287,8 +287,9 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	defer clusterInstance.Teardown()
 
 	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    clusterInstance.Hostname,
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s

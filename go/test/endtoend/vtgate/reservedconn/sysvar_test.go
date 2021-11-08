@@ -33,8 +33,9 @@ func TestCharsetIntro(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -52,8 +53,9 @@ func TestSetSysVarSingle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	type queriesWithExpectations struct {
 		name, expr, expected string
@@ -113,8 +115,9 @@ func TestSetSysVarSingle(t *testing.T) {
 
 func TestSetSystemVariable(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -135,8 +138,9 @@ func TestSetSystemVariable(t *testing.T) {
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -167,8 +171,9 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 
 func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -189,8 +194,9 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -208,8 +214,9 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 
 func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -238,8 +245,9 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -257,8 +265,9 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 
 func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -288,8 +297,9 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 
 func TestSetSystemVarInTxWithConnError(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
@@ -323,8 +333,9 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 
 func TestEnableSystemSettings(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -354,8 +365,9 @@ func TestEnableSystemSettings(t *testing.T) {
 // Tests type consitency through multiple queries
 func TestSystemVariableType(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -377,8 +389,9 @@ func TestSystemVariableType(t *testing.T) {
 
 func TestSysvarSocket(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

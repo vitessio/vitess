@@ -82,8 +82,9 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+			Host:    clusterInstance.Hostname,
+			Port:    clusterInstance.VtgateMySQLPort,
+			Charset: clusterInstance.DefaultCharset,
 		}
 		return m.Run(), nil
 	}()

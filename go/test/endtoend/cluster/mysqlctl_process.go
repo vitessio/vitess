@@ -190,7 +190,7 @@ func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirec
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
-func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username, tmpDirectory, charset string) (*mysql.Conn, error) {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	if err != nil {
@@ -199,6 +199,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 	params := mysql.ConnParams{
 		Uname:      username,
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
+		Charset:    charset,
 	}
 
 	return mysql.Connect(ctx, &params)

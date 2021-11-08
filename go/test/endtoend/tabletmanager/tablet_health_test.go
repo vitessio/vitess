@@ -101,7 +101,7 @@ func TestHealthCheck(t *testing.T) {
 	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
-	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
+	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory, clusterInstance.DefaultCharset)
 	require.NoError(t, err)
 
 	defer replicaConn.Close()

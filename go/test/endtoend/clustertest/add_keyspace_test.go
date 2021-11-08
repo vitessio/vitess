@@ -71,8 +71,9 @@ func TestAddKeyspace(t *testing.T) {
 
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: clusterInstance.Hostname,
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    clusterInstance.Hostname,
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
