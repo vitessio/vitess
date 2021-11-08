@@ -39,6 +39,9 @@ var (
 	mockNowFunc = func() time.Time {
 		return now
 	}
+
+	env, _           = collations.NewEnvironment("5.7.")
+	defaultCollation = env.DefaultCollationForCharset("utf8mb4")
 )
 
 func TestCreateSchema(t *testing.T) {
@@ -55,7 +58,7 @@ func TestCreateSchema(t *testing.T) {
 		Query: upsert,
 		Error: mysql.NewSQLError(mysql.ERBadDb, "", "bad db error"),
 	}
-	db.AddExpectedQuery(fmt.Sprintf("SET collation_connection = %s", collations.DefaultForCharset("utf8mb4").Name()), nil)
+	db.AddExpectedQuery(fmt.Sprintf("SET collation_connection = %s", defaultCollation.Name()), nil)
 	db.AddExpectedExecuteFetch(failInsert)
 	db.AddExpectedQuery(fmt.Sprintf(sqlCreateSidecarDB, "_vt"), nil)
 	db.AddExpectedQuery(fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"), nil)

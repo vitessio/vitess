@@ -60,7 +60,8 @@ import (
 )
 
 var (
-	defaultCollation     = int32(collations.DefaultForCharset("utf8mb4").ID())
+	env, _               = collations.NewEnvironment("5.7.")
+	defaultCollation     = int32(env.DefaultCollationForCharset("utf8mb4").ID())
 	defaultExecuteOption = &querypb.ExecuteOptions{Collation: defaultCollation}
 )
 

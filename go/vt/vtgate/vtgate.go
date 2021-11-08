@@ -98,7 +98,7 @@ var (
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
 	// the default collation for VTGate is the default collation of utf8mb4
-	collation = flag.String("collation", "", "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
+	_ = flag.String("collation", "", "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {

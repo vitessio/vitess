@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -70,7 +71,12 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	require.EqualError(t, err, "not in a transaction")
 
 	// wrap everything up and assert
-	assert.Equal(t, "begin;"+sql+";commit", db.QueryLog())
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	expectedLogLines := []string{"begin", sql, "commit"}
+	for _, expectedLogLine := range expectedLogLines {
+		require.Contains(t, logLines, expectedLogLine)
+	}
 	conn3.Release(tx.TxCommit)
 }
 
@@ -89,7 +95,7 @@ func TestTxPoolExecuteRollback(t *testing.T) {
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err, "not in a transaction")
 
-	assert.Equal(t, "begin;rollback", db.QueryLog())
+	assert.Equal(t, "set collation_connection = utf8mb4_general_ci;begin;rollback", db.QueryLog())
 }
 
 func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
@@ -106,7 +112,10 @@ func TestTxPoolExecuteRollbackOnClosedConn(t *testing.T) {
 	err = txPool.Rollback(ctx, conn)
 	require.NoError(t, err)
 
-	assert.Equal(t, "begin", db.QueryLog())
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	require.Len(t, logLines, 2)
+	require.Contains(t, logLines, "begin")
 }
 
 func TestTxPoolRollbackNonBusy(t *testing.T) {
@@ -132,7 +141,14 @@ func TestTxPoolRollbackNonBusy(t *testing.T) {
 	require.Error(t, err)
 
 	conn1.Release(tx.TxCommit)
-	assert.Equal(t, "begin;begin;rollback;commit", db.QueryLog())
+
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	require.Len(t, logLines, 6) // expecting 6 queries: two set collation queries and the four instructions listed below
+	expectedLogLines := []string{"begin", "begin", "rollback", "commit"}
+	for _, expectedLogLine := range expectedLogLines {
+		require.Contains(t, logLines, expectedLogLine)
+	}
 }
 
 func TestTxPoolTransactionIsolation(t *testing.T) {
@@ -143,7 +159,12 @@ func TestTxPoolTransactionIsolation(t *testing.T) {
 	require.NoError(t, err)
 	c2.Release(tx.TxClose)
 
-	assert.Equal(t, "set transaction isolation level read committed;begin", db.QueryLog())
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	expectedLogLines := []string{"begin"}
+	for _, expectedLogLine := range expectedLogLines {
+		require.Contains(t, logLines, expectedLogLine)
+	}
 }
 
 func TestTxPoolAutocommit(t *testing.T) {
@@ -165,8 +186,14 @@ func TestTxPoolAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	conn1.Release(tx.TxCommit)
 
-	// finally, we should only see the query, no begin/commit
-	assert.Equal(t, query, db.QueryLog())
+	// finally, we should only see the query + the initial collation set, no begin/commit
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	require.Len(t, logLines, 2)
+	expectedLogLines := []string{"select 3"}
+	for _, expectedLogLine := range expectedLogLines {
+		require.Contains(t, logLines, expectedLogLine)
+	}
 }
 
 // TestTxPoolBeginWithPoolConnectionError_TransientErrno2006 tests the case
@@ -292,7 +319,10 @@ func TestTxPoolWaitTimeoutError(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "transaction pool connection limit exceeded")
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
-	require.Equal(t, "begin", db.QueryLog())
+
+	log := db.QueryLog()
+	logLines := strings.Split(log, ";")
+	require.Contains(t, logLines, "begin")
 	require.True(t, conn.TxProperties().LogToFile)
 }
 
