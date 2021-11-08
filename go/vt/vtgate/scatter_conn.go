@@ -340,7 +340,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	query string,
 	rss []*srvtopo.ResolvedShard,
 	bindVars []map[string]*querypb.BindVariable,
-	options *querypb.ExecuteOptions,
+	session *SafeSession,
 	callback func(reply *sqltypes.Result) error,
 ) []error {
 	// mu protects fieldSent, callback and replyErr
@@ -348,7 +348,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	fieldSent := false
 
 	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, options, func(qr *sqltypes.Result) error {
+		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, session.Options, func(qr *sqltypes.Result) error {
 			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
 		})
 	})
