@@ -61,6 +61,7 @@ func TestClearTextClientAuth(t *testing.T) {
 		Port:    port,
 		Uname:   "user1",
 		Pass:    "password1",
+		Charset: "utf8mb4",
 		SslMode: vttls.Disabled,
 	}
 
@@ -138,10 +139,11 @@ func TestSSLConnection(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: "user1",
-		Pass:  "password1",
+		Host:    host,
+		Port:    port,
+		Uname:   "user1",
+		Pass:    "password1",
+		Charset: "utf8mb4",
 		// SSL flags.
 		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),

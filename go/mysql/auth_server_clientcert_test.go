@@ -74,10 +74,11 @@ func TestValidCert(t *testing.T) {
 
 	// Setup the right parameters.
 	params := &ConnParams{
-		Host:  host,
-		Port:  port,
-		Uname: clientCertUsername,
-		Pass:  "",
+		Host:    host,
+		Port:    port,
+		Uname:   clientCertUsername,
+		Pass:    "",
+		Charset: "utf8mb4",
 		// SSL flags.
 		SslMode:    vttls.VerifyIdentity,
 		SslCa:      path.Join(root, "ca-cert.pem"),
