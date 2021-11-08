@@ -244,7 +244,21 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		options = append(options, "-vreplication_store_compressed_gtid=true")
 	}
 
-	vttablet := cluster.VttabletProcessInstance(vc.ClusterConfig.tabletPortBase+tabletID, vc.ClusterConfig.tabletGrpcPortBase+tabletID, tabletID, cell.Name, shard.Name, keyspace.Name, vc.ClusterConfig.vtctldPort, tabletType, vc.Topo.Port, vc.ClusterConfig.hostname, vc.ClusterConfig.tmpDir, options, false, vc.ClusterConfig.charset)
+	vttablet := cluster.VttabletProcessInstance(
+		vc.ClusterConfig.tabletPortBase+tabletID,
+		vc.ClusterConfig.tabletGrpcPortBase+tabletID,
+		tabletID,
+		cell.Name,
+		shard.Name,
+		keyspace.Name,
+		vc.ClusterConfig.vtctldPort,
+		tabletType,
+		vc.Topo.Port,
+		vc.ClusterConfig.hostname,
+		vc.ClusterConfig.tmpDir,
+		options,
+		false,
+		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
