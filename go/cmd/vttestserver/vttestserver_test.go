@@ -339,9 +339,11 @@ func addColumnVindex(cluster vttest.LocalCluster, keyspace string, vschemaMigrat
 func execOnCluster(cluster vttest.LocalCluster, keyspace string, f func(*mysql.Conn) error) error {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		DbName: keyspace,
-		Port:   cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
+		Host:      "localhost",
+		DbName:    keyspace,
+		Port:      cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
+		Charset:   cluster.Charset,
+		Collation: cluster.Collation,
 	}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
