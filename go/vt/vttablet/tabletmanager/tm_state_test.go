@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/faketopo"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/vt/key"
@@ -378,6 +380,76 @@ func TestStateChangeTabletType(t *testing.T) {
 	assert.Equal(t, "replica", statsTabletType.Get())
 	assert.Equal(t, 2, len(statsTabletTypeCount.Counts()))
 	assert.Equal(t, int64(2), statsTabletTypeCount.Counts()["replica"])
+}
+
+// TestChangeTypeErrorWhileWritingToTopo tests the case where we fail while writing to the topo-server
+func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
+	testcases := []struct {
+		name               string
+		writePersists      bool
+		numberOfReadErrors int
+		expectedTabletType topodatapb.TabletType
+		expectedError      string
+	}{
+		{
+			name:               "Write persists even when error thrown from topo server",
+			writePersists:      true,
+			numberOfReadErrors: 5,
+			expectedTabletType: topodatapb.TabletType_PRIMARY,
+		}, {
+			name:               "Topo server throws error and the write also fails",
+			writePersists:      false,
+			numberOfReadErrors: 17,
+			expectedTabletType: topodatapb.TabletType_REPLICA,
+			expectedError:      "deadline exceeded: tablets/cell1-0000000002/Tablet",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			factory := faketopo.NewFakeTopoFactory()
+			// add cell1 to the factory. Make it so that the fourth call to update fails with an error. This will be the call from ChangeTabletType.
+			factory.AddCell("cell1", getErrorsList(testcase.numberOfReadErrors) /* update errors */, []bool{false, false, false, true} /* write Persists */, []bool{true, true, true, testcase.writePersists})
+			ts := faketopo.NewFakeTopoServer(factory)
+			statsTabletTypeCount.ResetAll()
+			tm := newTestTM(t, ts, 2, "ks", "0")
+			defer tm.Stop()
+
+			ctx := context.Background()
+			err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
+			if testcase.expectedError != "" {
+				require.EqualError(t, err, testcase.expectedError)
+			} else {
+				require.NoError(t, err)
+			}
+
+			alias := &topodatapb.TabletAlias{
+				Cell: "cell1",
+				Uid:  2,
+			}
+			ti, err := ts.GetTablet(ctx, alias)
+			require.NoError(t, err)
+			require.Equal(t, testcase.expectedTabletType, ti.Type)
+
+			// assert that next change type succeeds irrespective of previous failures
+			err = tm.tmState.ChangeTabletType(context.Background(), topodatapb.TabletType_REPLICA, DBActionNone)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// getErrorsList creates an array of getErrors that is passed to the fake topo server.
+// There are initially some number of get requests to pass so that the tablet comes up properly
+// After that we start fail the number of specified requests
+func getErrorsList(readErrors int) []bool {
+	var res []bool
+	for i := 0; i < 9; i++ {
+		res = append(res, false)
+	}
+	for i := 0; i < readErrors; i++ {
+		res = append(res, true)
+	}
+	return res
 }
 
 func TestPublishStateNew(t *testing.T) {
