@@ -282,7 +282,7 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 		for i, watch := range watches {
 			if notifications == watch {
 				close(notifications)
-				watches = append(watches[0:i], watches[i+1:]...)
+				f.watches[filePath] = append(watches[0:i], watches[i+1:]...)
 				break
 			}
 		}
