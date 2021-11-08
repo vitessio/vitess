@@ -35,8 +35,9 @@ func TestQPS(t *testing.T) {
 	ctx := context.Background()
 
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

@@ -65,7 +65,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
 	defer vtgateConn.Close()
 
 	verifyClusterHealth(t, vc)

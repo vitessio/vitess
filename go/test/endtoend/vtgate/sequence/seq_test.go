@@ -224,8 +224,9 @@ func TestSeq(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -276,9 +277,10 @@ func TestDotTableSeq(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		DbName: shardedKeyspaceName,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		DbName:  shardedKeyspaceName,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -299,9 +301,10 @@ func TestInsertAllDefaults(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:   "localhost",
-		Port:   clusterInstance.VtgateMySQLPort,
-		DbName: shardedKeyspaceName,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		DbName:  shardedKeyspaceName,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

@@ -387,11 +387,12 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	return executeQuery(conn, query)
 }
 
-func (vttablet *VttabletProcess) defaultConn(dbname string) (*mysql.Conn, error) {
+func (vttablet *VttabletProcess) defaultConn(dbname, charset string) (*mysql.Conn, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
 		DbName:     dbname,
+		Charset:    charset,
 	}
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
@@ -406,7 +407,7 @@ func (vttablet *VttabletProcess) conn(dbParams *mysql.ConnParams) (*mysql.Conn, 
 
 // QueryTabletWithDB lets you execute query on a specific DB in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) (*sqltypes.Result, error) {
-	conn, err := vttablet.defaultConn(dbname)
+	conn, err := vttablet.defaultConn(dbname, vttablet.Charset)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +454,7 @@ func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, work
 	}
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 
-	conn, err := vttablet.defaultConn("")
+	conn, err := vttablet.defaultConn("", vttablet.Charset)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +508,7 @@ func (vttablet *VttabletProcess) BulkLoad(t testing.TB, db, table string, bulkIn
 		t.Fatal(err)
 	}
 
-	conn, err := vttablet.defaultConn("vt_" + db)
+	conn, err := vttablet.defaultConn("vt_"+db, vttablet.Charset)
 	if err != nil {
 		t.Fatal(err)
 	}

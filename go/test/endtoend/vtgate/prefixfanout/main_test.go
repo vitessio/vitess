@@ -152,8 +152,9 @@ func TestCFCPrefixQueryNoHash(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -194,8 +195,9 @@ func TestCFCPrefixQueryWithHash(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -239,8 +241,9 @@ func TestCFCInsert(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

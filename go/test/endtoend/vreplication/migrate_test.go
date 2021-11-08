@@ -60,7 +60,7 @@ func TestMigrate(t *testing.T) {
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
@@ -79,7 +79,7 @@ func TestMigrate(t *testing.T) {
 
 	extVtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "rating", "0"), 1)
 	verifyClusterHealth(t, extVc)
-	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
+	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
 	var err error

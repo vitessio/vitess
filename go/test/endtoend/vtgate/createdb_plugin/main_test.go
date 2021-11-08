@@ -73,8 +73,9 @@ func TestMain(m *testing.M) {
 		}
 
 		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+			Host:    clusterInstance.Hostname,
+			Port:    clusterInstance.VtgateMySQLPort,
+			Charset: clusterInstance.DefaultCharset,
 		}
 		return m.Run()
 	}()
@@ -85,8 +86,9 @@ func TestDBDDLPlugin(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+		Host:    "localhost",
+		Port:    clusterInstance.VtgateMySQLPort,
+		Charset: clusterInstance.DefaultCharset,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

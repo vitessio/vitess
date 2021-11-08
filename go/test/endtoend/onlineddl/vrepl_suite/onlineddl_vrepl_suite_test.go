@@ -114,8 +114,9 @@ func TestMain(m *testing.M) {
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
 		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
+			Host:    clusterInstance.Hostname,
+			Port:    clusterInstance.VtgateMySQLPort,
+			Charset: clusterInstance.DefaultCharset,
 		}
 
 		return m.Run(), nil
@@ -143,7 +144,7 @@ func TestSchemaChange(t *testing.T) {
 		}
 		// this is a test!
 		t.Run(f.Name(), func(t *testing.T) {
-			testSingle(t, f.Name())
+			testSingle(t, f.Name(), clusterInstance.DefaultCharset)
 		})
 	}
 }
@@ -162,7 +163,7 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 
 // testSingle is the main testing function for a single test in the suite.
 // It prepares the grounds, creates the test data, runs a migration, expects results/error, cleans up.
-func testSingle(t *testing.T, testName string) {
+func testSingle(t *testing.T, testName string, charset string) {
 	if ignoreVersions, exists := readTestFile(t, testName, "ignore_versions"); exists {
 		// ignoreVersions is a regexp
 		re, err := regexp.Compile(ignoreVersions)
@@ -195,7 +196,7 @@ func testSingle(t *testing.T, testName string) {
 		f := "create.sql"
 		_, exists := readTestFile(t, testName, f)
 		require.True(t, exists)
-		onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+		onlineddl.MysqlClientExecFile(t, mysqlParams(charset), testDataPath, testName, f)
 		// ensure test table has been created:
 		getCreateTableStatement(t, tableName)
 	}
@@ -203,7 +204,7 @@ func testSingle(t *testing.T, testName string) {
 		// destroy
 		f := "destroy.sql"
 		if _, exists := readTestFile(t, testName, f); exists {
-			onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, testName, f)
+			onlineddl.MysqlClientExecFile(t, mysqlParams(charset), testDataPath, testName, f)
 		}
 	}()
 
@@ -283,11 +284,11 @@ func testSingle(t *testing.T, testName string) {
 
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBefore)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), testDataPath, "", selectBeforeFile)
 
 		selectAfterFile := onlineddl.CreateTempScript(t, selectAfter)
 		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), testDataPath, "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), testDataPath, "", selectAfterFile)
 
 		require.Equal(t, beforeOutput, afterOutput, "results mismatch: (%s) and (%s)", selectBefore, selectAfter)
 	}
@@ -335,7 +336,7 @@ func getTablet() *cluster.Vttablet {
 	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 }
 
-func mysqlParams() *mysql.ConnParams {
+func mysqlParams(charset string) *mysql.ConnParams {
 	if evaluatedMysqlParams != nil {
 		return evaluatedMysqlParams
 	}
@@ -343,6 +344,7 @@ func mysqlParams() *mysql.ConnParams {
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
 		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
+		Charset:    charset,
 	}
 	return evaluatedMysqlParams
 }
@@ -352,7 +354,7 @@ func mysqlExec(t *testing.T, sql string, expectError string) *sqltypes.Result {
 	t.Helper()
 
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, mysqlParams())
+	conn, err := mysql.Connect(ctx, mysqlParams(""))
 	require.Nil(t, err)
 	defer conn.Close()
 

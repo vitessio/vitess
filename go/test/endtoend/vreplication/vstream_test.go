@@ -58,7 +58,7 @@ func testVStreamWithFailover(t *testing.T, failover bool) {
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 3)
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
 	defer vtgateConn.Close()
 
 	verifyClusterHealth(t, vc)
@@ -247,7 +247,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	require.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "unsharded", "0"), 1)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
