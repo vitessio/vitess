@@ -397,7 +397,8 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, err := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	session := NewSafeSession(&vtgatepb.Session{})
+	_, err := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
@@ -441,7 +442,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}
-	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(*sqltypes.Result) error {
+	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, session, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
