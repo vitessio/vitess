@@ -128,11 +128,10 @@ func TestMain(m *testing.M) {
 		}
 
 		vtParams = mysql.ConnParams{
-			Host:    clusterInstance.Hostname,
-			Port:    clusterInstance.VtgateMySQLPort,
-			Uname:   "testuser1",
-			Pass:    "testpassword1",
-			Charset: clusterInstance.DefaultCharset,
+			Host:  clusterInstance.Hostname,
+			Port:  clusterInstance.VtgateMySQLPort,
+			Uname: "testuser1",
+			Pass:  "testpassword1",
 		}
 
 		primaryTabletProcess := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess

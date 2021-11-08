@@ -584,7 +584,6 @@ func getMysqlConnParam(tablet *cluster.Vttablet, db string) mysql.ConnParams {
 	connParams := mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-		Charset:    tablet.VttabletProcess.Charset,
 	}
 	if db != "" {
 		connParams.DbName = db

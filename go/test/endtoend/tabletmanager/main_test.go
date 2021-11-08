@@ -136,13 +136,11 @@ func TestMain(m *testing.M) {
 			Uname:      username,
 			DbName:     dbName,
 			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", primaryTablet.TabletUID)),
-			Charset:    clusterInstance.DefaultCharset,
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
 			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID)),
-			Charset:    clusterInstance.DefaultCharset,
 		}
 
 		// create tablet manager client

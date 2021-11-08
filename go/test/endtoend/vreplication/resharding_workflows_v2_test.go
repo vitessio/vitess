@@ -407,7 +407,7 @@ func setupCluster(t *testing.T) *VitessCluster {
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	verifyClusterHealth(t, vc)
 	insertInitialData(t)
 

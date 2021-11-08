@@ -198,9 +198,8 @@ func TestMain(m *testing.M) {
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
 		vtParams = mysql.ConnParams{
-			Host:    clusterInstance.Hostname,
-			Port:    clusterInstance.VtgateMySQLPort,
-			Charset: clusterInstance.DefaultCharset,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 
 		return m.Run(), nil

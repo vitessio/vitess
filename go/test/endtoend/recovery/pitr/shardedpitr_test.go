@@ -454,9 +454,8 @@ func initializeCluster(t *testing.T) {
 func insertRow(t *testing.T, id int, productName string, isSlow bool) {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

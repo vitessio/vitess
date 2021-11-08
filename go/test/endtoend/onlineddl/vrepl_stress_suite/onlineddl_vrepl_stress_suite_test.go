@@ -379,7 +379,7 @@ func getTablet() *cluster.Vttablet {
 	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 }
 
-func mysqlParams(charset string) *mysql.ConnParams {
+func mysqlParams() *mysql.ConnParams {
 	if evaluatedMysqlParams != nil {
 		return evaluatedMysqlParams
 	}
@@ -387,7 +387,6 @@ func mysqlParams(charset string) *mysql.ConnParams {
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
 		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
-		Charset:    charset,
 	}
 	return evaluatedMysqlParams
 }
@@ -452,9 +451,8 @@ func TestMain(m *testing.M) {
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
 		vtParams = mysql.ConnParams{
-			Host:    clusterInstance.Hostname,
-			Port:    clusterInstance.VtgateMySQLPort,
-			Charset: clusterInstance.DefaultCharset,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 
 		return m.Run(), nil
@@ -520,7 +518,7 @@ func TestSchemaChange(t *testing.T) {
 				cancel() // will cause runMultipleConnections() to terminate
 				wg.Wait()
 				if !testcase.expectFailure {
-					testCompareBeforeAfterTables(t, vtParams.Charset)
+					testCompareBeforeAfterTables(t)
 				}
 
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -735,7 +733,7 @@ func initTable(t *testing.T) {
 }
 
 // testCompareBeforeAfterTables validates that stress_test_before and stress_test_after contents are non empty and completely identical
-func testCompareBeforeAfterTables(t *testing.T, charset string) {
+func testCompareBeforeAfterTables(t *testing.T) {
 	var countBefore int64
 	{
 		// Validate after table is populated
@@ -782,14 +780,14 @@ func testCompareBeforeAfterTables(t *testing.T, charset string) {
 	{
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), os.TempDir(), "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectBeforeFile)
 		beforeOutput = strings.TrimSpace(beforeOutput)
 		require.NotEmpty(t, beforeOutput)
 		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
 
 		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
 		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), os.TempDir(), "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectAfterFile)
 		afterOutput = strings.TrimSpace(afterOutput)
 		require.NotEmpty(t, afterOutput)
 		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))

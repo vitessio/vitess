@@ -246,9 +246,8 @@ func TestInsertIgnoreOnLookupUniqueVindex(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 
 	// end-to-end test
@@ -276,9 +275,8 @@ func TestOpenTxBlocksInSerial(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -309,9 +307,8 @@ func TestOpenTxBlocksInConcurrent(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -348,9 +345,8 @@ func TestUpdateLookupUniqueVindex(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
