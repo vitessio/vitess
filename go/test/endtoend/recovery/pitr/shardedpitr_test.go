@@ -495,19 +495,7 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
-	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
-		tablet.GrpcPort,
-		tablet.TabletUID,
-		clusterInstance.Cell,
-		shardName,
-		keyspaceName,
-		clusterInstance.VtctldProcess.Port,
-		tablet.Type,
-		clusterInstance.TopoProcess.Port,
-		clusterInstance.Hostname,
-		clusterInstance.TmpDirectory,
-		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.EnableSemiSync)
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, clusterInstance.Cell, shardName, keyspaceName, clusterInstance.VtctldProcess.Port, tablet.Type, clusterInstance.TopoProcess.Port, clusterInstance.Hostname, clusterInstance.TmpDirectory, clusterInstance.VtTabletExtraArgs, clusterInstance.EnableSemiSync, clusterInstance.DefaultCharset)
 	tablet.Alias = tablet.VttabletProcess.TabletPath
 	tablet.VttabletProcess.SupportsBackup = true
 	tablet.VttabletProcess.Keyspace = restoreKeyspaceName
