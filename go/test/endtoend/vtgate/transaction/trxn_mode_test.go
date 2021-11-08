@@ -132,9 +132,8 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		vtParams = mysql.ConnParams{
-			Host:    clusterInstance.Hostname,
-			Port:    clusterInstance.VtgateMySQLPort,
-			Charset: clusterInstance.DefaultCharset,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 
 		return m.Run(), nil
@@ -185,9 +184,8 @@ func TestTransactionModes(t *testing.T) {
 
 	// Make a new mysql connection to vtGate
 	vtParams = mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn2, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {

@@ -83,7 +83,7 @@ func TestShardedMaterialize(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "-", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks2, "0"), 1)
 
-	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort, vc.ClusterConfig.charset)
+	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 	_, err := vtgateConn.ExecuteFetch(initDataQuery, 0, false)

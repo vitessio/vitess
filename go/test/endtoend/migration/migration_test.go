@@ -186,9 +186,8 @@ func TestMigration(t *testing.T) {
 	}}
 
 	vtParams = &mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(context.Background(), vtParams)
 	require.NoError(t, err)
@@ -238,8 +237,8 @@ func startCluster(t *testing.T) string {
 	productSocket := path.Join(keyspaces["product"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
 	customerSocket := path.Join(keyspaces["customer"].Shards[0].Vttablets[0].VttabletProcess.Directory, "mysql.sock")
 
-	populate(t, productSocket, legacyProductData, clusterInstance.DefaultCharset)
-	populate(t, customerSocket, legacyCustomerData, clusterInstance.DefaultCharset)
+	populate(t, productSocket, legacyProductData)
+	populate(t, customerSocket, legacyCustomerData)
 
 	buf := &bytes.Buffer{}
 	fmt.Fprintf(buf, "externalConnections:\n")
@@ -259,13 +258,12 @@ func createKeyspace(t *testing.T, ks cluster.Keyspace, shards []string, customiz
 	keyspaces[ks.Name] = &clusterInstance.Keyspaces[len(clusterInstance.Keyspaces)-1]
 }
 
-func populate(t *testing.T, socket, sql, charset string) {
+func populate(t *testing.T, socket, sql string) {
 	t.Helper()
 
 	params := &mysql.ConnParams{
 		UnixSocket: socket,
 		Uname:      "vt_app",
-		Charset:    charset,
 	}
 	conn, err := mysql.Connect(context.Background(), params)
 	require.NoError(t, err)

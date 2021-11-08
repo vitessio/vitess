@@ -57,9 +57,8 @@ func TestUnsharded(t *testing.T) {
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
-				Host:    "localhost",
-				Port:    vtest.port,
-				Charset: "utf8mb4",
+				Host: "localhost",
+				Port: vtest.port,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
@@ -89,9 +88,8 @@ func TestSharded(t *testing.T) {
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
-				Host:    "localhost",
-				Port:    vtest.port,
-				Charset: "utf8mb4",
+				Host: "localhost",
+				Port: vtest.port,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
@@ -123,9 +121,8 @@ func TestMysqlMaxCons(t *testing.T) {
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
-				Host:    "localhost",
-				Port:    vtest.port,
-				Charset: "utf8mb4",
+				Host: "localhost",
+				Port: vtest.port,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)
@@ -157,9 +154,8 @@ func TestLargeNumberOfKeyspaces(t *testing.T) {
 
 			ctx := context.Background()
 			vttestParams := mysql.ConnParams{
-				Host:    "localhost",
-				Port:    vtest.port,
-				Charset: "utf8mb4",
+				Host: "localhost",
+				Port: vtest.port,
 			}
 			conn, err := mysql.Connect(ctx, &vttestParams)
 			require.NoError(t, err)

@@ -298,11 +298,10 @@ func initializeClusterLate(t *testing.T) {
 func insertRow(t *testing.T, id int, productName string) {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Uname:   vtgateUser,
-		Pass:    vtgatePassword,
-		Charset: clusterInstance.DefaultCharset,
+		Host:  clusterInstance.Hostname,
+		Port:  clusterInstance.VtgateMySQLPort,
+		Uname: vtgateUser,
+		Pass:  vtgatePassword,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)

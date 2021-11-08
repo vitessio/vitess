@@ -182,7 +182,7 @@ func getTablet() *cluster.Vttablet {
 	return clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 }
 
-func mysqlParams(charset string) *mysql.ConnParams {
+func mysqlParams() *mysql.ConnParams {
 	if evaluatedMysqlParams != nil {
 		return evaluatedMysqlParams
 	}
@@ -190,7 +190,6 @@ func mysqlParams(charset string) *mysql.ConnParams {
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", getTablet().TabletUID), "/mysql.sock"),
 		DbName:     fmt.Sprintf("vt_%s", keyspaceName),
-		Charset:    charset,
 	}
 	return evaluatedMysqlParams
 }
@@ -251,9 +250,8 @@ func TestMain(m *testing.M) {
 		// ensure it is torn down during cluster TearDown
 		clusterInstance.VtgateProcess = *vtgateInstance
 		vtParams = mysql.ConnParams{
-			Host:    clusterInstance.Hostname,
-			Port:    clusterInstance.VtgateMySQLPort,
-			Charset: clusterInstance.DefaultCharset,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 
 		return m.Run(), nil
@@ -314,7 +312,7 @@ func TestSchemaChange(t *testing.T) {
 		hint := "hint-alter-without-workload"
 		uuid := testOnlineDDLStatement(t, fmt.Sprintf(alterHintStatement, hint), onlineDDLStrategy, "vtgate", hint)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-		testSelectTableMetricsAfterMigration(t, vtParams.Charset)
+		testSelectTableMetricsAfterMigration(t)
 	})
 
 	for i := 0; i < countIterations; i++ {
@@ -347,7 +345,7 @@ func TestSchemaChange(t *testing.T) {
 				wg.Wait()
 			})
 			t.Run("validate metrics", func(t *testing.T) {
-				testSelectTableMetricsAfterMigration(t, "")
+				testSelectTableMetricsAfterMigration(t)
 			})
 		})
 	}
@@ -619,7 +617,7 @@ func testSelectTableMetrics(t *testing.T) {
 	testSelectTableMetricsWithStatement(t, selectCountRowsStatement)
 }
 
-func testSelectTableMetricsAfterMigration(t *testing.T, charset string) {
+func testSelectTableMetricsAfterMigration(t *testing.T) {
 	writeMetrics.mu.Lock()
 	defer writeMetrics.mu.Unlock()
 
@@ -671,14 +669,14 @@ func testSelectTableMetricsAfterMigration(t *testing.T, charset string) {
 	{
 		selectBeforeFile := onlineddl.CreateTempScript(t, selectBeforeTable)
 		defer os.Remove(selectBeforeFile)
-		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), os.TempDir(), "", selectBeforeFile)
+		beforeOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectBeforeFile)
 		beforeOutput = strings.TrimSpace(beforeOutput)
 		require.NotEmpty(t, beforeOutput)
 		assert.Equal(t, countBefore, int64(len(strings.Split(beforeOutput, "\n"))))
 
 		selectAfterFile := onlineddl.CreateTempScript(t, selectAfterTable)
 		defer os.Remove(selectAfterFile)
-		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(charset), os.TempDir(), "", selectAfterFile)
+		afterOutput := onlineddl.MysqlClientExecFile(t, mysqlParams(), os.TempDir(), "", selectAfterFile)
 		afterOutput = strings.TrimSpace(afterOutput)
 		require.NotEmpty(t, afterOutput)
 		assert.Equal(t, countAfter, int64(len(strings.Split(afterOutput, "\n"))))

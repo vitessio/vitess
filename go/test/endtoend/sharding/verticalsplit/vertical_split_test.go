@@ -177,9 +177,8 @@ func TestVerticalSplit(t *testing.T) {
 	require.NoError(t, err)
 
 	vtParams := mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 
 	ctx := context.Background()
@@ -257,7 +256,6 @@ func TestVerticalSplit(t *testing.T) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(destinationPrimaryTablet.VttabletProcess.Directory, "mysql.sock"),
-		Charset:    clusterInstance.DefaultCharset,
 	}
 	dbParams.DbName = "_vt"
 	dbConn, err := mysql.Connect(ctx, &dbParams)

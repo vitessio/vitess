@@ -112,9 +112,8 @@ func createCluster(extraVTGateArgs []string) (*cluster.LocalProcessCluster, int)
 		return nil, 1
 	}
 	vtParams = mysql.ConnParams{
-		Host:    clusterInstance.Hostname,
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	rand.Seed(time.Now().UnixNano())
 	return clusterInstance, 0

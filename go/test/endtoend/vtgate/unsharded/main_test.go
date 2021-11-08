@@ -196,9 +196,8 @@ func TestSelectIntoAndLoadFrom(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -232,9 +231,8 @@ func TestEmptyStatement(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -250,9 +248,8 @@ func TestTopoDownServingQuery(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -271,9 +268,8 @@ func TestInsertAllDefaults(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -287,9 +283,8 @@ func TestDDLUnsharded(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -309,11 +304,10 @@ func TestCallProcedure(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Flags:   mysql.CapabilityClientMultiResults,
-		DbName:  "@primary",
-		Charset: clusterInstance.DefaultCharset,
+		Host:   "localhost",
+		Port:   clusterInstance.VtgateMySQLPort,
+		Flags:  mysql.CapabilityClientMultiResults,
+		DbName: "@primary",
 	}
 	time.Sleep(5 * time.Second)
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -359,9 +353,8 @@ func TestTempTable(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn1, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -385,9 +378,8 @@ func TestReservedConnDML(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -409,9 +401,8 @@ func TestNumericPrecisionScale(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -447,9 +438,8 @@ func TestNumericPrecisionScale(t *testing.T) {
 
 func TestDeleteAlias(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -461,9 +451,8 @@ func TestDeleteAlias(t *testing.T) {
 
 func TestFloatValueDefault(t *testing.T) {
 	vtParams := mysql.ConnParams{
-		Host:    "localhost",
-		Port:    clusterInstance.VtgateMySQLPort,
-		Charset: clusterInstance.DefaultCharset,
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)

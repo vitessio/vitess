@@ -624,7 +624,6 @@ func getDBparams(vttablet cluster.Vttablet, ks string) mysql.ConnParams {
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"),
 		DbName:     "vt_" + ks,
-		Charset:    vttablet.VttabletProcess.Charset,
 	}
 	return dbParams
 }
