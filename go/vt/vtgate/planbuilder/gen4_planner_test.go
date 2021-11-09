@@ -124,6 +124,9 @@ func TestOptimizeQuery(t *testing.T) {
 		}, {
 			query: "select id from user_extra join unsharded where 4 < user_extra.id and unsharded.col = user_extra.id",
 			result: `Join: {
+	JoinVars: map[user_extra_id:0]
+	Columns: []
+	PredicatesToRemove: unsharded.col = :user_extra_id
 	LHS: 	RouteTree{
 		Opcode: SelectScatter,
 		Tables: user_extra,
@@ -138,8 +141,6 @@ func TestOptimizeQuery(t *testing.T) {
 		ColNames: ,
 		LeftJoins: 
 	}
-	JoinVars: map[user_extra_id:0]
-	Columns: []
 }`,
 		}, {
 			query: "select t.x from (select id from user_extra) t(x) where t.x = 4",
@@ -224,32 +225,32 @@ func TestOptimizeQuery(t *testing.T) {
 			query: "select u1.id from music u1 join music u2 on u2.col = u1.col join music u3 where u3.col = u1.col",
 			result: `Join: {
 	JoinVars: map[u3_col:0]
-	Columns: [-1]
+	Columns: []
 	PredicatesToRemove: :u3_col = u1.col
 	LHS: 	RouteTree{
 		Opcode: SelectScatter,
 		Tables: music,
 		Predicates: <nil>,
 		ColNames: u3.col,
-		LeftJoins:
+		LeftJoins: 
 	}
 	RHS: 	Join: {
 		JoinVars: map[u1_col:0]
-		Columns: [-1]
+		Columns: []
 		PredicatesToRemove: u2.col = :u1_col
 		LHS: 	RouteTree{
 			Opcode: SelectScatter,
 			Tables: music,
 			Predicates: :u3_col = u1.col,
 			ColNames: u1.col,
-			LeftJoins:
+			LeftJoins: 
 		}
 		RHS: 	RouteTree{
 			Opcode: SelectScatter,
 			Tables: music,
 			Predicates: u2.col = :u1_col,
 			ColNames: ,
-			LeftJoins:
+			LeftJoins: 
 		}
 	}
 }`,
