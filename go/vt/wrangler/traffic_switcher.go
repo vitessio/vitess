@@ -210,24 +210,33 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		return nil, nil, err
 	}
 
-	ws := &workflow.State{Workflow: workflowName, TargetKeyspace: targetKeyspace}
-	ws.SourceKeyspace = ts.SourceKeyspaceName()
-	var cellsSwitched, cellsNotSwitched []string
-	var keyspace string
-	var reverse bool
+	ws := workflow.NewServer(wr.ts, wr.tmc)
+	_ = ws // make it compile
+	state := &workflow.State{
+		Workflow:       workflowName,
+		SourceKeyspace: ts.SourceKeyspaceName(),
+		TargetKeyspace: targetKeyspace,
+	}
+
+	var (
+		reverse          bool
+		keyspace         string
+		cellsSwitched    []string
+		cellsNotSwitched []string
+	)
 
 	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
 	// source of the reverse workflow, which is the target of the workflow initiated by the user for checking routing rules
 	// Similarly we use a target shard of the reverse workflow as the original source to check if writes have been switched
 	if strings.HasSuffix(workflowName, "_reverse") {
 		reverse = true
-		keyspace = ws.SourceKeyspace
+		keyspace = state.SourceKeyspace
 		workflowName = workflow.ReverseWorkflowName(workflowName)
 	} else {
 		keyspace = targetKeyspace
 	}
 	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES {
-		ws.WorkflowType = workflow.TypeMoveTables
+		state.WorkflowType = workflow.TypeMoveTables
 
 		// we assume a consistent state, so only choose routing rule for one table for replica/rdonly
 		if len(ts.Tables()) == 0 {
@@ -240,12 +249,12 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
+		state.RdonlyCellsNotSwitched, state.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
 		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "replica")
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+		state.ReplicaCellsNotSwitched, state.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
 		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return nil, nil, err
@@ -254,11 +263,11 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			rr := rules[table]
 			// if a rule exists for the table and points to the target keyspace, writes have been switched
 			if len(rr) > 0 && rr[0] == fmt.Sprintf("%s.%s", keyspace, table) {
-				ws.WritesSwitched = true
+				state.WritesSwitched = true
 			}
 		}
 	} else {
-		ws.WorkflowType = workflow.TypeReshard
+		state.WorkflowType = workflow.TypeReshard
 
 		// we assume a consistent state, so only choose one shard
 		var shard *topo.ShardInfo
@@ -272,18 +281,18 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.RdonlyCellsNotSwitched, ws.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
+		state.RdonlyCellsNotSwitched, state.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
 		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "replica")
 		if err != nil {
 			return nil, nil, err
 		}
-		ws.ReplicaCellsNotSwitched, ws.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+		state.ReplicaCellsNotSwitched, state.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
 		if !shard.IsPrimaryServing {
-			ws.WritesSwitched = true
+			state.WritesSwitched = true
 		}
 	}
 
-	return ts, ws, nil
+	return ts, state, nil
 }
 
 func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string) (bool, error) {
