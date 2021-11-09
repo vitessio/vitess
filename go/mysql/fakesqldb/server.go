@@ -273,7 +273,6 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		Charset:    "utf8mb4",
 		Collation:  "utf8mb4_general_ci",
 	})
-
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
@@ -443,9 +442,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 			db.t.Errorf("%v: got unexpected query start (index=%v): %v != %v", db.name, index, query, expected)
 		}
 	} else {
-		if query == "SET collation_connection = utf8mb4_general_ci" {
-
-		} else if query != expected {
+		if query != expected {
 			db.t.Errorf("%v: got unexpected query (index=%v): %v != %v", db.name, index, query, expected)
 			return nil, errors.New("unexpected query")
 		}
