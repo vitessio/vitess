@@ -76,7 +76,6 @@ var (
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
-		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
 		"vtgate_godriver",
@@ -101,6 +100,7 @@ var (
 
 	clusterSelfHostedList = []string{
 		"vreplication_basic",
+		"vtorc",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_v2",
