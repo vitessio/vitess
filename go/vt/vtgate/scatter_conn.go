@@ -173,18 +173,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	qr = new(sqltypes.Result)
 
 	if session.InLockSession() && session.TriggerLockHeartBeat() {
-		go func() {
-			_, lockErr := stc.ExecuteLock(ctx, &srvtopo.ResolvedShard{
-				Target:  session.LockSession.Target,
-				Gateway: stc.gateway,
-			}, &querypb.BoundQuery{
-				Sql:           "select 1",
-				BindVariables: nil,
-			}, session)
-			if lockErr != nil {
-				log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
-			}
-		}()
+		go stc.runLockQuery(ctx, session)
 	}
 
 	allErrors := stc.multiGoTransaction(
@@ -283,6 +272,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 	return qr, allErrors.GetErrors()
 }
 
+func (stc *ScatterConn) runLockQuery(ctx context.Context, session *SafeSession) {
+	rs := &srvtopo.ResolvedShard{Target: session.LockSession.Target, Gateway: stc.gateway}
+	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
+	_, lockErr := stc.ExecuteLock(ctx, rs, query, session)
+	if lockErr != nil {
+		log.Warningf("Locking heartbeat failed, held locks might be released: %s", lockErr.Error())
+	}
+}
+
 func checkAndResetShardSession(info *shardActionInfo, err error, session *SafeSession, target *querypb.Target) reset {
 	retry := none
 	if info.reservedID != 0 && info.transactionID == 0 {
@@ -341,17 +339,78 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	rss []*srvtopo.ResolvedShard,
 	bindVars []map[string]*querypb.BindVariable,
 	session *SafeSession,
+	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 ) []error {
 	// mu protects fieldSent, callback and replyErr
 	var mu sync.Mutex
-	fieldSent := false
 
-	allErrors := stc.multiGo("StreamExecute", rss, func(rs *srvtopo.ResolvedShard, i int) error {
-		return rs.Gateway.StreamExecute(ctx, rs.Target, query, bindVars[i], 0, session.Options, func(qr *sqltypes.Result) error {
-			return stc.processOneStreamingResult(&mu, &fieldSent, qr, callback)
-		})
-	})
+	if session.InLockSession() && session.TriggerLockHeartBeat() {
+		go stc.runLockQuery(ctx, session)
+	}
+
+	allErrors := stc.multiGoTransaction(
+		ctx,
+		"Execute",
+		rss,
+		session,
+		autocommit,
+		func(rs *srvtopo.ResolvedShard, i int, info *shardActionInfo) (*shardActionInfo, error) {
+			var (
+				err   error
+				opts  *querypb.ExecuteOptions
+				alias *topodatapb.TabletAlias
+				qs    queryservice.QueryService
+			)
+			transactionID := info.transactionID
+
+			if session != nil && session.Session != nil {
+				opts = session.Session.Options
+			}
+
+			if autocommit {
+				// As this is auto-commit, the transactionID is supposed to be zero.
+				if transactionID != int64(0) {
+					return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "in autocommit mode, transactionID should be zero but was: %d", transactionID)
+				}
+			}
+
+			qs, err = getQueryService(rs, info)
+			if err != nil {
+				return nil, err
+			}
+
+			switch info.actionNeeded {
+			case nothing:
+				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], info.transactionID, opts, callback)
+				if err != nil {
+					// TODO once we have stream support for reserved connections, this should use the retryRequest from the ExecuteMulti method
+					return nil, err
+				}
+			case begin:
+				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.GetSavepoints(), query, bindVars[i], 0, opts, callback)
+				if err != nil {
+					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
+					return nil, err
+				}
+			case reserve:
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
+			case reserveBegin:
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
+			default:
+				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
+			}
+			// We need to new shard info irrespective of the error.
+			newInfo := info.updateTransactionAndReservedID(transactionID, 0, alias)
+			if err != nil {
+				return newInfo, err
+			}
+			mu.Lock()
+			defer mu.Unlock()
+
+			return newInfo, nil
+		},
+	)
 	return allErrors.GetErrors()
 }
 
