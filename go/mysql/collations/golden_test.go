@@ -60,7 +60,7 @@ func TestGoldenWeights(t *testing.T) {
 }
 
 func TestCollationsForLanguage(t *testing.T) {
-	allCollations := Default().AllCollations()
+	allCollations := testall()
 	langCounts := make(map[testutil.Lang][]string)
 
 	for lang := range testutil.KnownLanguages {
