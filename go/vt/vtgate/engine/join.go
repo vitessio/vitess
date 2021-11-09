@@ -266,7 +266,9 @@ func (jn *Join) description() PrimitiveDescription {
 	other := map[string]interface{}{
 		"TableName":         jn.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(jn.Cols)), ","), "[]"),
-		"Predicate":         sqlparser.String(jn.ASTPred),
+	}
+	if jn.ASTPred != nil {
+		other["Predicate"] = sqlparser.String(jn.ASTPred)
 	}
 	if len(jn.Vars) > 0 {
 		other["JoinVars"] = orderedStringIntMap(jn.Vars)

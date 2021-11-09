@@ -733,7 +733,48 @@ Gen4 plan same as above
     ]
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "Predicate": "`user`.col = user_extra.col",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
 
 # Multi-route unique vindex route on both routes
 "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5 and user_extra.user_id = 5"
@@ -855,6 +896,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_col": 1
     },
+    "Predicate": "`user`.col = user_extra.col and user_extra.user_id = `user`.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -936,6 +978,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_col": 0
     },
+    "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
@@ -1176,6 +1219,7 @@ Gen4 plan same as above
     "JoinVars": {
       "unsharded_id": 0
     },
+    "Predicate": "unsharded.id = `user`.id",
     "TableName": "unsharded_`user`",
     "Inputs": [
       {
@@ -1287,6 +1331,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_extra_col": 0
     },
+    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1378,6 +1423,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_extra_col": 0
     },
+    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -1548,6 +1594,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_extra_col": 0
     },
+    "Predicate": "u.id in (user_extra.col, 1)",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -3143,6 +3190,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_extra_col": 0
     },
+    "Predicate": "`user`.id = user_extra.col",
     "TableName": "user_extra_`user`",
     "Inputs": [
       {
@@ -3207,6 +3255,7 @@ Gen4 plan same as above
     "JoinVars": {
       "user_col": 0
     },
+    "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
       {
