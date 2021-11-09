@@ -181,22 +181,21 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, PrimaryTermStartTime)
 		if err != nil {
-			log.Errorf("error in changing type in tablet record in topo for tablet %s :- %v", topoproto.TabletAliasString(ts.tm.tabletAlias), err)
-			log.Errorf("will keep trying to read from the topo server")
+			log.Errorf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err)
 			// In case of a topo error, we aren't sure if the data has been written or not.
 			// We must read the data again and verify whether the previous write succeeded or not.
 			// The only way to guarantee safety is to keep retrying read until we succeed
 			for {
 				ti, errInReading := ts.tm.TopoServer.GetTablet(ctx, ts.tm.tabletAlias)
 				if errInReading != nil {
-					time.Sleep(100 * time.Millisecond)
+					<-time.After(100 * time.Millisecond)
 					continue
 				}
 				if ti.Type == tabletType && proto.Equal(ti.PrimaryTermStartTime, PrimaryTermStartTime) {
-					log.Errorf("read successful. data written to topo-server, continuing operation")
+					log.Infof("Tablet record in toposerver matches, continuing operation")
 					break
 				}
-				log.Errorf("read successful. data not written to topo-server, canceling operation")
+				log.Errorf("Tablet record read from toposerver does not match what we attempted to write, canceling operation")
 				return err
 			}
 		}
