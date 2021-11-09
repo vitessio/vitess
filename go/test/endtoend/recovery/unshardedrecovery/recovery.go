@@ -25,6 +25,9 @@ import (
 	"path"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/proto/query"
+
 	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 
@@ -289,7 +292,7 @@ func TestRecoveryImpl(t *testing.T) {
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.NoError(t, err)
 	defer vtgateConn.Close()
-	session := vtgateConn.Session("@replica", nil)
+	session := vtgateConn.Session("@replica", &query.ExecuteOptions{Collation: int32(collations.Default().LookupByName("utf8mb4_general_ci").ID())})
 
 	//check that vtgate doesn't route queries to new tablet
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
