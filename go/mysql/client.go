@@ -255,6 +255,7 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: '%s'", params.Collation)
 	}
 	collStr = coll.Name()
+	params.Collation = collStr
 
 	// We send a query to MySQL to set the connection's collation.
 	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html

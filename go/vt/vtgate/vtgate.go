@@ -98,7 +98,7 @@ var (
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 
 	// the default collation for VTGate is the default collation of utf8mb4
-	_ = flag.String("collation", "", "Collation to use by default between the client, VTGate, VTTablet and MySQL.")
+	collation = flag.String("collation", "utf8mb4_general_ci", "Collation to use by default between the client, VTGate, VTTablet and MySQL. If the default value is not overridden, the collation will be set to the default collation of utf8mb4 used by the backend MySQL/MariaDB servers. The version of the backend servers are sent to VTGate through schema tracking.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -177,6 +177,12 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	if rpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
+
+	foundColl := collations.Default().LookupByName(*collation)
+	if foundColl == nil {
+		log.Fatalf("Cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
+	}
+	coll = foundColl.ID()
 
 	// vschemaCounters needs to be initialized before planner to
 	// catch the initial load stats.
