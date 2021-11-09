@@ -195,10 +195,10 @@ func (entry *watchEntry) onErrorLocked(callerCtx context.Context, err error, ini
 	if init {
 		entry.lastError = err
 
-		// This watcher will able to continue to return the last value till it is not able to connect to the topo server even if the cache TTL is reached.
-		// TTL cache is only checked if the error is a known error i.e topo.Error.
+		// This watcher will able to continue to return the last value till it is not able to connect to the topo server.
+		// We only clear the cache entry if we can talk to the topo server but got a known error i.e topo.Error.
 		_, isTopoErr := err.(topo.Error)
-		if isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
+		if isTopoErr {
 			log.Errorf("WatchSrvKeyspace clearing cached entry for %v", entry.key)
 			entry.value = nil
 		}

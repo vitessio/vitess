@@ -21,25 +21,22 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 var (
-	// srvTopoCacheTTL and srvTopoCacheRefresh control the behavior of
+	// srvTopoCacheRefresh controls the behavior of
 	// the caching for both watched and unwatched values.
 	//
 	// For entries we don't watch (like the list of Keyspaces), we refresh
 	// the cached list from the topo after srv_topo_cache_refresh elapses.
-	// If the fetch fails, we hold onto the cached value until
-	// srv_topo_cache_ttl elapses.
+	// If the fetch fails, we hold onto the cached value and continue to serve
+	// that until we can refresh the cache.
 	//
 	// For entries we watch (like the SrvKeyspace for a given cell), if
 	// setting the watch fails, we will use the last known value until
-	// srv_topo_cache_ttl elapses and we only try to re-establish the watch
-	// once every srv_topo_cache_refresh interval.
+	// we can re-establish the watch at a srv_topo_cache_refresh interval.
 	srvTopoTimeout      = flag.Duration("srv_topo_timeout", 5*time.Second, "topo server timeout")
-	srvTopoCacheTTL     = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 	srvTopoCacheRefresh = flag.Duration("srv_topo_cache_refresh", 1*time.Second, "how frequently to refresh the topology for cached entries")
 )
 
@@ -65,10 +62,6 @@ type ResilientServer struct {
 // NewResilientServer creates a new ResilientServer
 // based on the provided topo.Server.
 func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServer {
-	if *srvTopoCacheRefresh > *srvTopoCacheTTL {
-		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
-	}
-
 	var metric string
 	if counterPrefix == "" {
 		metric = counterPrefix + "Counts"
@@ -80,9 +73,9 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 	return &ResilientServer{
 		topoServer:            base,
 		counts:                counts,
-		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
-		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
-		SrvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, *srvTopoCacheRefresh, *srvTopoCacheTTL),
+		SrvKeyspaceWatcher:    NewSrvKeyspaceWatcher(base, counts, *srvTopoCacheRefresh),
+		SrvVSchemaWatcher:     NewSrvVSchemaWatcher(base, counts, *srvTopoCacheRefresh),
+		SrvKeyspaceNamesQuery: NewSrvKeyspaceNamesQuery(base, counts, *srvTopoCacheRefresh),
 	}
 }
 

@@ -78,11 +78,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	cacheValid := entry.value != nil && (time.Since(entry.insertionTime) < q.cacheTTL)
-	if !cacheValid && staleOK {
-		// Only allow stale results for a bounded period
-		cacheValid = entry.value != nil && (time.Since(entry.insertionTime) < (q.cacheTTL + 2*q.cacheRefreshInterval))
-	}
+	cacheValid := entry.value != nil
 	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefreshInterval
 
 	// If it is not time to check again, then return either the cached
@@ -124,7 +120,6 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 			if err == nil {
 				// save the value we got and the current time in the cache
 				entry.insertionTime = time.Now()
-				// Avoid a tiny race if TTL == refresh time (the default)
 				entry.lastQueryTime = entry.insertionTime
 				entry.value = result
 			} else {
@@ -133,11 +128,8 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, wkey, err)
 				} else if newCtx.Err() == context.DeadlineExceeded {
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value)
-				} else if entry.value != nil && time.Since(entry.insertionTime) < q.cacheTTL {
-					q.counts.Add(cachedCategory, 1)
-					log.Warningf("ResilientQuery(%v, %v) failed: %v (keeping cached value: %v)", ctx, wkey, err, entry.value)
 				} else {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (cached value expired)", ctx, wkey, err)
+					log.Errorf("ResilientQuery(%v, %v) failed: %v (no cached value)", ctx, wkey, err)
 					entry.insertionTime = time.Time{}
 					entry.value = nil
 				}
@@ -148,15 +140,9 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 		}()
 	}
 
-	// If the cached entry is still valid then use it, otherwise wait
-	// for the refresh attempt to complete to get a more up to date
-	// response.
-	//
-	// In the event that the topo service is slow or unresponsive either
-	// on the initial fetch or if the cache TTL expires, then several
-	// requests could be blocked on refreshingChan waiting for the response
-	// to come back.
-	if cacheValid {
+	// Unless we've explicitly said that we want to block and wait for up to date
+	// results (e.g. during vreplication workflows) then let's return the cache value
+	if cacheValid && staleOK {
 		return entry.value, nil
 	}
 
@@ -173,6 +159,5 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	if entry.value != nil {
 		return entry.value, nil
 	}
-
 	return nil, entry.lastError
 }
