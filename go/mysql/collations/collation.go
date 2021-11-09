@@ -106,6 +106,21 @@ type Collation interface {
 	// returned value.
 	WeightStringLen(numCodepoints int) int
 
+	// Hash returns a 32 or 64 bit identifier (depending on the platform) that uniquely identifies
+	// the given string based on this collation. It is functionally equivalent to calling WeightString
+	// and then hashing the result.
+	//
+	// Consequently, if the hashes for two strings are different, then the two strings are considered
+	// different according to this collation. If the hashes for two strings are equal, the two strings
+	// may or may not be considered equal according to this collation, because hashes can collide unlike
+	// weight strings.
+	//
+	// The numCodepoints argument has the same behavior as in WeightString: if this collation uses PAD SPACE,
+	// the hash will interpret the source string as if it were stored in a `CHAR(n)` column. If the value of
+	// numCodepoints is 0, this is equivalent to setting `numCodepoints = RuneCount(src)`.
+	// For collations with NO PAD, the numCodepoint argument is ignored.
+	Hash(src []byte, numCodepoints int) uintptr
+
 	// Charset returns the Charset with which this collation is encoded
 	Charset() charset.Charset
 
