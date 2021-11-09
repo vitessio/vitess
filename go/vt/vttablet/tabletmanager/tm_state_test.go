@@ -409,7 +409,7 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			factory := faketopo.NewFakeTopoFactory()
 			// add cell1 to the factory. Make it so that the fourth call to update fails with an error. This will be the call from ChangeTabletType.
-			factory.AddCell("cell1", getErrorsList(testcase.numberOfReadErrors) /* update errors */, []bool{false, false, false, true} /* write Persists */, []bool{true, true, true, testcase.writePersists})
+			factory.AddCell("cell1", getErrorsList(testcase.numberOfReadErrors), []bool{false, false, false, true} /* update errors */, []bool{true, true, true, testcase.writePersists} /* write Persists */)
 			ts := faketopo.NewFakeTopoServer(factory)
 			statsTabletTypeCount.ResetAll()
 			tm := newTestTM(t, ts, 2, "ks", "0")
