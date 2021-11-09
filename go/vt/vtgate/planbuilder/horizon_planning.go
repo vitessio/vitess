@@ -339,6 +339,10 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		hp.vtgateGrouping = true
 	}
 
+	if joinPlan && hp.qp.HasAggr && len(hp.qp.GroupByExprs) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+	}
+
 	for _, e := range hp.qp.SelectExprs {
 		aliasExpr, err := e.GetAliasedExpr()
 		if err != nil {
