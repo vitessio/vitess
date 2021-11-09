@@ -1115,6 +1115,7 @@ exit $exit_code
 
 	go func() error {
 		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
+		defer e.deleteGhostPostponeFlagFile(onlineDDL.UUID) // irrespective whether the file was in fact in use or not
 		defer e.dropOnlineDDLUser(ctx)
 		defer e.gcArtifacts(ctx)
 
