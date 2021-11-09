@@ -324,10 +324,21 @@ func (e *Executor) createGhostPanicFlagFile(uuid string) error {
 	_, err := os.Create(e.ghostPanicFlagFileName(uuid))
 	return err
 }
+
 func (e *Executor) deleteGhostPanicFlagFile(uuid string) error {
 	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
 	// if file does not exist; RemoveAll does not.
 	return os.RemoveAll(e.ghostPanicFlagFileName(uuid))
+}
+
+func (e *Executor) ghostPostponeFlagFileName(uuid string) string {
+	return path.Join(os.TempDir(), fmt.Sprintf("ghost.%s.postpone.flag", uuid))
+}
+
+func (e *Executor) deleteGhostPostponeFlagFile(uuid string) error {
+	// We use RemoveAll because if the file does not exist that's fine. Remove will return an error
+	// if file does not exist; RemoveAll does not.
+	return os.RemoveAll(e.ghostPostponeFlagFileName(uuid))
 }
 
 func (e *Executor) ptPidFileName(uuid string) string {
@@ -1010,6 +1021,10 @@ exit $exit_code
 		log.Errorf("Error removing gh-ost panic flag file %s: %+v", e.ghostPanicFlagFileName(onlineDDL.UUID), err)
 		return err
 	}
+	if err := e.deleteGhostPostponeFlagFile(onlineDDL.UUID); err != nil {
+		log.Errorf("Error removing gh-ost postpone flag file %s before migration: %+v", e.ghostPostponeFlagFileName(onlineDDL.UUID), err)
+		return err
+	}
 	// Validate gh-ost binary:
 	_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, "validating gh-ost --version")
 	log.Infof("Will now validate gh-ost binary")
@@ -1075,6 +1090,10 @@ exit $exit_code
 		if onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
 			args = append(args, "--allow-zero-in-date")
 		}
+		if execute && onlineDDL.StrategySetting().IsPostponeCompletion() {
+			args = append(args, "--postpone-cut-over-flag-file", e.ghostPostponeFlagFileName(onlineDDL.UUID))
+		}
+
 		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
 		_, err := execCmd("bash", args, os.Environ(), "/tmp", nil, nil)
@@ -2922,7 +2941,11 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 		return nil, err
 	}
 	defer e.triggerNextCheckInterval()
-
+	if err := e.deleteGhostPostponeFlagFile(uuid); err != nil {
+		// This should work without error even if the migration is not a gh-ost migration, and even
+		// if the file does not exist. An error here indicates a general system error of sorts.
+		return nil, err
+	}
 	return e.execQuery(ctx, query)
 }
 
