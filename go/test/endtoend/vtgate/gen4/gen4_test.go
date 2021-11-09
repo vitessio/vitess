@@ -248,5 +248,9 @@ func TestJoin(t *testing.T) {
 
 	utils.Exec(t, conn, `insert into t1(id, col) values (1, 1),(2, 3),(3, 4),(4, 7)`)
 
-	utils.AssertMatches(t, conn, `select t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(2)]]`)
+	utils.AssertMatches(t, conn, `select t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
+
+	utils.Exec(t, conn, `set workload = olap`)
+	defer utils.Exec(t, conn, `set workload = oltp`)
+	utils.AssertMatches(t, conn, `select t1.id from t1 x join t1 where x.col = t1.col and x.id <= 3 and t1.id >= 3`, `[[INT64(3)]]`)
 }
