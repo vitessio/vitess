@@ -351,7 +351,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 	allErrors := stc.multiGoTransaction(
 		ctx,
-		"Execute",
+		"StreamExecute",
 		rss,
 		session,
 		autocommit,
@@ -366,6 +366,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
+			}
+
+			if info.reservedID != 0 {
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			}
 
 			if autocommit {
@@ -393,9 +397,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
 					return nil, err
 				}
-			case reserve:
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
-			case reserveBegin:
+			case reserve, reserveBegin:
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)

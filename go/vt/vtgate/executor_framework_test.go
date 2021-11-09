@@ -549,7 +549,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	err = executor.StreamExecute(
 		context.Background(),
 		"TestExecuteStream",
-		NewSafeSession(primarySession),
+		NewSafeSession(nil),
 		sql,
 		nil,
 		func(qr *sqltypes.Result) error {
