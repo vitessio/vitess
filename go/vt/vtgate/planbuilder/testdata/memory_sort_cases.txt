@@ -792,37 +792,41 @@ Gen4 plan same as above
   "QueryType": "SELECT",
   "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
   "Instructions": {
-    "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "u_a": 0
-    },
-    "Predicate": "u.a = m.a",
-    "TableName": "`user`_music",
+    "OperatorType": "Sort",
+    "Variant": "Memory",
+    "OrderBy": "(1|2) DESC",
+    "ResultColumns": 1,
     "Inputs": [
       {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.a, binary a, weight_string(binary a) from `user` as u where 1 != 1",
-        "OrderBy": "(1|2) DESC",
-        "Query": "select u.a, binary a, weight_string(binary a) from `user` as u order by binary a desc",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select 1 from music as m where 1 != 1",
-        "Query": "select 1 from music as m where m.a = :u_a",
-        "Table": "music"
+        "OperatorType": "Join",
+        "Variant": "HashJoin",
+        "JoinColumnIndexes": "-1,-2,-3",
+        "Predicate": "u.a = m.a",
+        "TableName": "`user`_music",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.a, binary a, weight_string(binary a) from `user` as u where 1 != 1",
+            "Query": "select u.a, binary a, weight_string(binary a) from `user` as u",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select m.a from music as m where 1 != 1",
+            "Query": "select m.a from music as m",
+            "Table": "music"
+          }
+        ]
       }
     ]
   }

@@ -242,11 +242,8 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "Join",
+        "Variant": "HashJoin",
         "JoinColumnIndexes": "-2",
-        "JoinVars": {
-          "u1_col": 0
-        },
         "Predicate": "u3.col = u1.col",
         "TableName": "`user`_`user`",
         "Inputs": [
@@ -268,8 +265,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
+            "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
+            "Query": "select u3.col from `user` as u3",
             "Table": "`user`"
           }
         ]
@@ -358,10 +355,7 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinVars": {
-          "u2_col": 0
-        },
+        "Variant": "HashJoin",
         "Predicate": "u3.col = u2.col",
         "TableName": "`user`_`user`",
         "Inputs": [
@@ -383,8 +377,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.col = :u2_col",
+            "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
+            "Query": "select u3.col from `user` as u3",
             "Table": "`user`"
           }
         ]
@@ -459,11 +453,8 @@
   "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "u3_col": 0
-    },
+    "Variant": "HashJoin",
+    "JoinColumnIndexes": "2",
     "Predicate": "u3.col = u1.col",
     "TableName": "`user`_`user`_`user`",
     "Inputs": [
@@ -480,12 +471,9 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-2",
-        "JoinVars": {
-          "u1_col": 0
-        },
-        "Predicate": "u2.col = u1.col and u1.col = :u3_col",
+        "Variant": "HashJoin",
+        "JoinColumnIndexes": "-1,-2",
+        "Predicate": "u2.col = u1.col",
         "TableName": "`user`_`user`",
         "Inputs": [
           {
@@ -496,7 +484,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u3_col",
+            "Query": "select u1.col, u1.id from `user` as u1",
             "Table": "`user`"
           },
           {
@@ -506,8 +494,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
+            "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
+            "Query": "select u2.col from `user` as u2",
             "Table": "`user`"
           }
         ]
@@ -625,11 +613,8 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "1",
-        "JoinVars": {
-          "u4_col": 0
-        },
+        "Variant": "HashJoin",
+        "JoinColumnIndexes": "2",
         "Predicate": "u4.col = u1.col",
         "TableName": "`user`_`user`_`user`",
         "Inputs": [
@@ -647,11 +632,11 @@
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "-2",
+            "JoinColumnIndexes": "-1,-2",
             "JoinVars": {
               "u1_col": 0
             },
-            "Predicate": "u3.id = u1.col and u1.col = :u4_col",
+            "Predicate": "u3.id = u1.col",
             "TableName": "`user`_`user`",
             "Inputs": [
               {
@@ -662,7 +647,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1 where u1.col = :u4_col",
+                "Query": "select u1.col, u1.id from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -1041,11 +1026,8 @@
     "Inputs": [
       {
         "OperatorType": "Join",
-        "Variant": "Join",
+        "Variant": "HashJoin",
         "JoinColumnIndexes": "-2,1",
-        "JoinVars": {
-          "u_col": 0
-        },
         "Predicate": "e.id = u.col",
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -1068,7 +1050,7 @@
               "Sharded": true
             },
             "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-            "Query": "select e.id from user_extra as e where e.id = :u_col",
+            "Query": "select e.id from user_extra as e",
             "Table": "user_extra"
           }
         ]
@@ -1164,11 +1146,8 @@
         "Inputs": [
           {
             "OperatorType": "Join",
-            "Variant": "Join",
+            "Variant": "HashJoin",
             "JoinColumnIndexes": "-2,1",
-            "JoinVars": {
-              "u_col": 0
-            },
             "Predicate": "e.id = u.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -1191,7 +1170,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Query": "select e.id from user_extra as e",
                 "Table": "user_extra"
               }
             ]
@@ -1310,11 +1289,8 @@
           },
           {
             "OperatorType": "Join",
-            "Variant": "Join",
+            "Variant": "HashJoin",
             "JoinColumnIndexes": "-2,1,-3",
-            "JoinVars": {
-              "u_col": 0
-            },
             "Predicate": "e.id = u.col",
             "TableName": "`user`_user_extra",
             "Inputs": [
@@ -1337,7 +1313,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select e.id from user_extra as e where 1 != 1",
-                "Query": "select e.id from user_extra as e where e.id = :u_col",
+                "Query": "select e.id from user_extra as e",
                 "Table": "user_extra"
               }
             ]

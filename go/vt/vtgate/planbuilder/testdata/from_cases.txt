@@ -2044,11 +2044,8 @@ Gen4 error: Duplicate column name 'id'
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
+    "Variant": "HashJoin",
     "JoinColumnIndexes": "-1",
-    "JoinVars": {
-      "t_id": 0
-    },
     "Predicate": "t.id = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -2074,8 +2071,8 @@ Gen4 error: Duplicate column name 'id'
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.col = :t_id",
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra",
         "Table": "user_extra"
       }
     ]
@@ -2602,11 +2599,8 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Join",
-        "Variant": "Join",
+        "Variant": "HashJoin",
         "JoinColumnIndexes": "-2,-3",
-        "JoinVars": {
-          "user_col": 0
-        },
         "Predicate": "user_extra.col = `user`.col",
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -2628,8 +2622,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_extra.col = :user_col",
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select user_extra.col from user_extra",
             "Table": "user_extra"
           }
         ]
@@ -2711,11 +2705,8 @@ Gen4 plan same as above
   "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "ua_id": 0
-    },
+    "Variant": "HashJoin",
+    "JoinColumnIndexes": "2",
     "Predicate": "t.id = ua.id",
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
@@ -2733,6 +2724,7 @@ Gen4 plan same as above
       {
         "OperatorType": "SimpleProjection",
         "Columns": [
+          0,
           1
         ],
         "Inputs": [
@@ -2740,23 +2732,18 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
-            "Predicate": "`user`.id = :ua_id",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectEqualUnique",
+                "Variant": "SelectScatter",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id",
-                "Table": "`user`",
-                "Values": [
-                  ":ua_id"
-                ],
-                "Vindex": "user_index"
+                "Query": "select `user`.id, `user`.col1 from `user`",
+                "Table": "`user`"
               },
               {
                 "OperatorType": "Route",

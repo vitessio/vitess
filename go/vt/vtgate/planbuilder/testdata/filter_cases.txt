@@ -738,11 +738,8 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "user_col": 0
-    },
+    "Variant": "HashJoin",
+    "JoinColumnIndexes": "2",
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -768,8 +765,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.col, user_extra.id from user_extra",
         "Table": "user_extra"
       }
     ]
@@ -973,11 +970,8 @@ Gen4 plan same as above
   "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
-    "JoinColumnIndexes": "1",
-    "JoinVars": {
-      "user_col": 0
-    },
+    "Variant": "HashJoin",
+    "JoinColumnIndexes": "2",
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -999,8 +993,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
+        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.col, user_extra.id from user_extra where 1 = 1",
         "Table": "user_extra"
       }
     ]
@@ -3250,11 +3244,8 @@ Gen4 plan same as above
   "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "Join",
+    "Variant": "HashJoin",
     "JoinColumnIndexes": "-2",
-    "JoinVars": {
-      "user_col": 0
-    },
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -3276,8 +3267,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select 1 from user_extra where 1 != 1",
-        "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col",
+        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+        "Query": "select user_extra.col from user_extra where user_extra.foobar = 5",
         "Table": "user_extra"
       }
     ]
