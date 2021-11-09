@@ -928,15 +928,10 @@ func (tsv *TabletServer) BeginStreamExecute(
 	preQueries []string,
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
-	reservedID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (int64, *topodatapb.TabletAlias, error) {
-	if reservedID != 0 {
-		return 0, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "reserved connections in streaming mode")
-	}
-
-	transactionID, alias, err := tsv.begin(ctx, target, preQueries, reservedID, options)
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries /* revervedID */, 0, options)
 	if err != nil {
 		return 0, nil, err
 	}

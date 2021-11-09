@@ -266,7 +266,6 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 		preQueries,
 		query,
 		bindvars,
-		0,
 		options,
 		func(res *sqltypes.Result) error {
 			if result.Fields == nil {

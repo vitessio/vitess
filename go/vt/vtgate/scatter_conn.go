@@ -388,7 +388,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					return nil, err
 				}
 			case begin:
-				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.GetSavepoints(), query, bindVars[i], 0, opts, callback)
+				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.GetSavepoints(), query, bindVars[i], opts, callback)
 				if err != nil {
 					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
 					return nil, err

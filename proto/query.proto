@@ -673,8 +673,7 @@ message BeginStreamExecuteRequest {
   Target target = 3;
   BoundQuery query = 4;
   ExecuteOptions options = 5;
-  int64 reserved_id = 6;
-  repeated string pre_queries = 7;
+  repeated string pre_queries = 6;
 }
 
 // BeginStreamExecuteResponse is the returned value from BeginStreamExecute
