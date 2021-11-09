@@ -2312,6 +2312,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		uuid := row["migration_uuid"].ToString()
 		strategy := schema.DDLStrategy(row["strategy"].ToString())
 		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
 
 		uuidsFoundRunning[uuid] = true
@@ -2350,6 +2351,10 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 						if elapsedSeconds < vreplicationTestSuiteWaitSeconds {
 							isReady = false
 						}
+					}
+					if postponeCompletion {
+						// override. Even if migration is ready, we do not complet it.
+						isReady = false
 					}
 					if isReady {
 						if err := e.cutOverVReplMigration(ctx, s); err != nil {
@@ -2899,6 +2904,28 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	return e.execQuery(ctx, query)
 }
 
+// CompleteMigration clears the postpone_completion flag for a given migration, assuming it was set in the first place
+func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in COMPLETE: %s", uuid)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlUpdateCompleteMigration,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer e.triggerNextCheckInterval()
+
+	return e.execQuery(ctx, query)
+}
+
 // SubmitMigration inserts a new migration request
 func (e *Executor) SubmitMigration(
 	ctx context.Context,
@@ -2917,7 +2944,6 @@ func (e *Executor) SubmitMigration(
 	}
 
 	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
-
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -2932,6 +2958,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
+		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
 	)
 	if err != nil {
 		return nil, err
