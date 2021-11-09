@@ -115,7 +115,66 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	// build the probe table from the LHS result
+	probeTable := map[hashKey][]row{}
+	var lfields []*querypb.Field
+	err := vcursor.StreamExecutePrimitive(hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
+		if len(lfields) == 0 && len(result.Fields) != 0 {
+			lfields = result.Fields
+		}
+		for _, current := range result.Rows {
+			joinVal := current[hj.LHSKey]
+			if joinVal.IsNull() {
+				continue
+			}
+			hashcode, err := evalengine.NullsafeHashcode(joinVal)
+			if err != nil {
+				return err
+			}
+			probeTable[hashcode] = append(probeTable[hashcode], current)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return vcursor.StreamExecutePrimitive(hj.Right, bindVars, wantfields, func(result *sqltypes.Result) error {
+		res := &sqltypes.Result{}
+		if len(result.Fields) != 0 {
+			res = &sqltypes.Result{
+				Fields: joinFields(lfields, result.Fields, hj.Cols),
+			}
+		}
+		for _, currentRHSRow := range result.Rows {
+			joinVal := currentRHSRow[hj.RHSKey]
+			if joinVal.IsNull() {
+				continue
+			}
+			hashcode, err := evalengine.NullsafeHashcode(joinVal)
+			if err != nil {
+				return err
+			}
+			lftRows := probeTable[hashcode]
+			for _, currentLHSRow := range lftRows {
+				lhsVal := currentLHSRow[hj.LHSKey]
+				// hash codes can give false positives, so we need to check with a real comparison as well
+				cmp, err := evalengine.NullsafeCompare(joinVal, lhsVal, collations.Unknown)
+				if err != nil {
+					return err
+				}
+
+				if cmp == 0 {
+					// we have a match!
+					res.Rows = append(res.Rows, joinRows(currentLHSRow, currentRHSRow, hj.Cols))
+				}
+			}
+		}
+		if len(res.Rows) != 0 || len(res.Fields) != 0 {
+			return callback(res)
+		}
+		return nil
+	})
 }
 
 // RouteType implements the Primitive interface
