@@ -551,6 +551,11 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 			return transactionID, alias, tabletconn.ErrorFromGRPC(err)
 		}
 
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return transactionID, alias, nil
+		}
+
 		if fields == nil {
 			fields = ser.Result.Fields
 		}
