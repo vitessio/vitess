@@ -285,5 +285,14 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
 
+	if args.RemoteTopoImplementation != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{
+			"-remote_topo_server",
+			"-topo_implementation", args.RemoteTopoImplementation,
+			"-topo_global_server_address", args.RemoteTopoGlobalServerAddress,
+			"-topo_global_root", args.RemoteTopoGlobalRoot,
+		}...)
+	}
+
 	return vt
 }
