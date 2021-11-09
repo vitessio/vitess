@@ -125,6 +125,7 @@
     "JoinVars": {
       "order2s_id": 0
     },
+    "Predicate": "order2s.id = book6s_order2s.order2_id",
     "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",
     "Inputs": [
       {
@@ -145,6 +146,7 @@
         "JoinVars": {
           "book6s_supplier5_id": 0
         },
+        "Predicate": "supplier5s.id = book6s.supplier5_id and book6s_order2s.order2_id = :order2s_id",
         "TableName": "author5s, book6s_book6s_order2s_supplier5s",
         "Inputs": [
           {
@@ -154,6 +156,7 @@
             "JoinVars": {
               "book6s_id": 0
             },
+            "Predicate": "book6s_order2s.book6_id = book6s.id and book6s_order2s.order2_id = :order2s_id",
             "TableName": "author5s, book6s_book6s_order2s",
             "Inputs": [
               {
