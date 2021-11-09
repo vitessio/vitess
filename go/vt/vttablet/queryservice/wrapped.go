@@ -235,7 +235,7 @@ func (ws *wrappedService) BeginExecuteBatch(ctx context.Context, target *querypb
 }
 
 func (ws *wrappedService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
-	err = ws.wrapper(ctx, target, ws.impl, "BeginExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+	err = ws.wrapper(ctx, target, ws.impl, "BeginStreamExecute", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		var innerErr error
 		transactionID, alias, innerErr = conn.BeginStreamExecute(ctx, target, preQueries, query, bindVars, options, callback)
 		return canRetry(ctx, innerErr), innerErr

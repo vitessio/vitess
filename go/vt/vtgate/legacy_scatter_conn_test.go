@@ -133,7 +133,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), false, func(r *sqltypes.Result) error {
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true, func(r *sqltypes.Result) error {
 			qr.AppendResult(r)
 			return nil
 		})
