@@ -398,7 +398,7 @@ func skipToEnd(yylex interface{}) {
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <bytes> ignored_alter_object_type
-%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
+%type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update drop_statement_action
 %type <str> pk_name_opt constraint_symbol_opt infile_opt
 %type <exprs> call_param_list_opt
 %type <procedureParams> proc_param_list_opt proc_param_list
@@ -2434,7 +2434,7 @@ rename_list:
   }
 
 drop_statement:
-  DROP TABLE exists_opt table_name_list
+  DROP TABLE exists_opt table_name_list drop_statement_action
   {
     var exists bool
     if $3 != 0 {
@@ -2485,6 +2485,19 @@ drop_statement:
       exists = true
     }
     $$ = &DDL{Action: DropStr, ProcedureSpec: &ProcedureSpec{Name: string($4)}, IfExists: exists}
+  }
+
+drop_statement_action:
+  {
+
+  }
+| RESTRICT
+  {
+    $$ = Restrict
+  }
+| CASCADE
+  {
+    $$ = Cascade
   }
 
 truncate_statement:

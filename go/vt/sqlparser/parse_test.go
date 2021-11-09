@@ -1333,6 +1333,15 @@ var (
 			input:  "drop table if exists a",
 			output: "drop table if exists a",
 		}, {
+			input:  "drop table a cascade",
+			output: "drop table a",
+		}, {
+			input:  "drop table b restrict",
+			output: "drop table b",
+		}, {
+			input:  "drop table b        ",
+			output: "drop table b",
+		}, {
 			input:  "drop view if exists a",
 			output: "drop view if exists a",
 		}, {
@@ -3899,6 +3908,9 @@ var (
 	}, {
 		input:  "start transaction read",
 		output: "syntax error at position 23 near 'read'",
+	}, {
+		input:  "drop table x CASAS",
+		output: "syntax error at position 19 near 'CASAS'",
 	},
 	}
 )
