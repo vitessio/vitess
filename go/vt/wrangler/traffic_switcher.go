@@ -211,7 +211,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	}
 
 	ws := workflow.NewServer(wr.ts, wr.tmc)
-	_ = ws // make it compile
 	state := &workflow.State{
 		Workflow:       workflowName,
 		SourceKeyspace: ts.SourceKeyspaceName(),
@@ -219,10 +218,8 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	}
 
 	var (
-		reverse          bool
-		keyspace         string
-		cellsSwitched    []string
-		cellsNotSwitched []string
+		reverse  bool
+		keyspace string
 	)
 
 	// we reverse writes by using the source_keyspace.workflowname_reverse workflow spec, so we need to use the
@@ -245,16 +242,15 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 		}
 		table := ts.Tables()[0]
 
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "rdonly")
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return nil, nil, err
 		}
-		state.RdonlyCellsNotSwitched, state.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithTableReadsSwitched(ctx, keyspace, table, "replica")
+
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithTableReadsSwitched(ctx, keyspace, table, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, nil, err
 		}
-		state.ReplicaCellsNotSwitched, state.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
 		rules, err := topotools.GetRoutingRules(ctx, ts.TopoServer())
 		if err != nil {
 			return nil, nil, err
@@ -277,16 +273,16 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 			shard = ts.SourceShards()[0]
 		}
 
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "rdonly")
+		state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_RDONLY)
 		if err != nil {
 			return nil, nil, err
 		}
-		state.RdonlyCellsNotSwitched, state.RdonlyCellsSwitched = cellsNotSwitched, cellsSwitched
-		cellsSwitched, cellsNotSwitched, err = wr.getCellsWithShardReadsSwitched(ctx, keyspace, shard, "replica")
+
+		state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched, err = ws.GetCellsWithShardReadsSwitched(ctx, keyspace, shard, topodatapb.TabletType_REPLICA)
 		if err != nil {
 			return nil, nil, err
 		}
-		state.ReplicaCellsNotSwitched, state.ReplicaCellsSwitched = cellsNotSwitched, cellsSwitched
+
 		if !shard.IsPrimaryServing {
 			state.WritesSwitched = true
 		}
