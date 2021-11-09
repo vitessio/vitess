@@ -90,10 +90,13 @@ const (
 			ready_timestamp=NOW()
 		WHERE
 			migration_status='queued'
+			AND (
+				postpone_completion=0 OR ddl_action='alter'
+			)
 		ORDER BY
 			requested_timestamp ASC
 		LIMIT 1
-	`
+	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just don't schedule it
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
 		WHERE
@@ -366,11 +369,8 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
-			AND (
-				postpone_completion=0 OR ddl_action='alter'
-			)
 		LIMIT 1
-	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just skip it
+	`
 	sqlSelectPTOSCMigrationTriggers = `SELECT
 			TRIGGER_SCHEMA as trigger_schema,
 			TRIGGER_NAME as trigger_name
