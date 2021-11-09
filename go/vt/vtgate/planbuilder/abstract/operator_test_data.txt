@@ -303,9 +303,7 @@ SubQuery: {
 	}]
 	Outer: 	QueryGraph: {
 	Tables:
-		TableSet{0}:`user` AS u
-	JoinPredicates:
-		TableSet{0,1} - u.id = (select id from user_extra where id = u.id)
+		TableSet{0}:`user` AS u where u.id = (select id from user_extra where id = u.id)
 	}
 }
 
@@ -398,4 +396,22 @@ Concatenate(distinct) {
 		TableSet{1}:unsharded_auto
 	},
 	order by id asc
+}
+
+select id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutExists
+		Query: 	QueryGraph: {
+		Tables:
+			TableSet{1}:user_extra where user_id = 3
+		JoinPredicates:
+			TableSet{0,1} - user_id < `user`.id
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		TableSet{0}:`user` where exists (select user_id from user_extra where user_id = 3 and user_id < `user`.id)
+	}
 }

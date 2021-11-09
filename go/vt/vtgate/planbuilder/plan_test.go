@@ -90,31 +90,31 @@ func newLookupIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 
 var _ vindexes.Lookup = (*lookupIndex)(nil)
 
-// multiIndex satisfies Lookup, NonUnique.
-type multiIndex struct{ name string }
+// nameLkpIndex satisfies Lookup, NonUnique.
+type nameLkpIndex struct{ name string }
 
-func (v *multiIndex) String() string   { return v.name }
-func (*multiIndex) Cost() int          { return 3 }
-func (*multiIndex) IsUnique() bool     { return false }
-func (*multiIndex) NeedsVCursor() bool { return false }
-func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
+func (v *nameLkpIndex) String() string   { return v.name }
+func (*nameLkpIndex) Cost() int          { return 3 }
+func (*nameLkpIndex) IsUnique() bool     { return false }
+func (*nameLkpIndex) NeedsVCursor() bool { return false }
+func (*nameLkpIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
-func (*multiIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (*nameLkpIndex) Map(cursor vindexes.VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	return nil, nil
 }
-func (*multiIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
-func (*multiIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
-func (*multiIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
+func (*nameLkpIndex) Create(vindexes.VCursor, [][]sqltypes.Value, [][]byte, bool) error { return nil }
+func (*nameLkpIndex) Delete(vindexes.VCursor, [][]sqltypes.Value, []byte) error         { return nil }
+func (*nameLkpIndex) Update(vindexes.VCursor, []sqltypes.Value, []byte, []sqltypes.Value) error {
 	return nil
 }
 
-func newMultiIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
-	return &multiIndex{name: name}, nil
+func newNameLkpIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &nameLkpIndex{name: name}, nil
 }
 
-var _ vindexes.Vindex = (*multiIndex)(nil)
-var _ vindexes.Lookup = (*multiIndex)(nil)
+var _ vindexes.Vindex = (*nameLkpIndex)(nil)
+var _ vindexes.Lookup = (*nameLkpIndex)(nil)
 
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
@@ -142,11 +142,39 @@ func newCostlyIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 var _ vindexes.Vindex = (*costlyIndex)(nil)
 var _ vindexes.Lookup = (*costlyIndex)(nil)
 
+// multiColIndex satisfies multi column vindex.
+type multiColIndex struct {
+	name string
+}
+
+func newMultiColIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
+	return &multiColIndex{name: name}, nil
+}
+
+var _ vindexes.MultiColumn = (*multiColIndex)(nil)
+
+func (m *multiColIndex) String() string { return m.name }
+
+func (m *multiColIndex) Cost() int { return 1 }
+
+func (m *multiColIndex) IsUnique() bool { return true }
+
+func (m *multiColIndex) NeedsVCursor() bool { return false }
+
+func (m *multiColIndex) Map(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+
+func (m *multiColIndex) Verify(vcursor vindexes.VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return []bool{}, nil
+}
+
 func init() {
 	vindexes.Register("hash_test", newHashIndex)
 	vindexes.Register("lookup_test", newLookupIndex)
-	vindexes.Register("multi", newMultiIndex)
+	vindexes.Register("name_lkp_test", newNameLkpIndex)
 	vindexes.Register("costly", newCostlyIndex)
+	vindexes.Register("multiCol_test", newMultiColIndex)
 }
 
 const (
@@ -422,6 +450,17 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 		if ks.Error != nil {
 			t.Fatal(ks.Error)
 		}
+
+		// setting a default value to all the text columns in the tables of this keyspace
+		// so that we can "simulate" a real case scenario where the vschema is aware of
+		// columns' collations.
+		for _, table := range ks.Tables {
+			for i, col := range table.Columns {
+				if sqltypes.IsText(col.Type) {
+					table.Columns[i].CollationName = "latin1_swedish_ci"
+				}
+			}
+		}
 	}
 	return vschema
 }
@@ -435,6 +474,9 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       PlannerVersion
+}
+
+func (vw *vschemaWrapper) PlannerWarning(_ string) {
 }
 
 func (vw *vschemaWrapper) ForeignKeyMode() string {

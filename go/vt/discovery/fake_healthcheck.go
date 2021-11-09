@@ -45,9 +45,10 @@ var (
 // circular dependencies.
 
 // NewFakeHealthCheck returns the fake healthcheck object.
-func NewFakeHealthCheck() *FakeHealthCheck {
+func NewFakeHealthCheck(ch chan *TabletHealth) *FakeHealthCheck {
 	return &FakeHealthCheck{
 		items: make(map[string]*fhcItem),
+		ch:    ch,
 	}
 }
 
@@ -56,6 +57,9 @@ type FakeHealthCheck struct {
 	// mu protects the items map
 	mu    sync.RWMutex
 	items map[string]*fhcItem
+
+	// channel to return on subscribe. Pass nil if no subscribe should not return a channel
+	ch chan *TabletHealth
 }
 
 type fhcItem struct {
@@ -88,9 +92,68 @@ func (fhc *FakeHealthCheck) GetHealthyTabletStats(target *querypb.Target) []*Tab
 	return result
 }
 
-// Subscribe is not implemented.
+// Subscribe returns the channel in the struct. Subscribe should only be called in one place for this fake health check
 func (fhc *FakeHealthCheck) Subscribe() chan *TabletHealth {
+	return fhc.ch
+}
+
+// GetPrimaryTablet gets the primary tablet from the tablets that healthcheck has seen so far
+func (fhc *FakeHealthCheck) GetPrimaryTablet() *topodatapb.Tablet {
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	for _, item := range fhc.items {
+		if item.ts.Tablet.GetType() == topodatapb.TabletType_PRIMARY {
+			return item.ts.Tablet
+		}
+	}
 	return nil
+}
+
+// Broadcast broadcasts the healthcheck for the given tablet
+func (fhc *FakeHealthCheck) Broadcast(tablet *topodatapb.Tablet) {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	key := TabletToMapKey(tablet)
+	item, isPresent := fhc.items[key]
+	if !isPresent {
+		return
+	}
+	fhc.ch <- simpleCopy(item.ts)
+}
+
+// SetServing sets the serving variable for the given tablet
+func (fhc *FakeHealthCheck) SetServing(tablet *topodatapb.Tablet, serving bool) {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	key := TabletToMapKey(tablet)
+	item, isPresent := fhc.items[key]
+	if !isPresent {
+		return
+	}
+	item.ts.Serving = serving
+}
+
+// SetTabletType sets the tablet type for the given tablet
+func (fhc *FakeHealthCheck) SetTabletType(tablet *topodatapb.Tablet, tabletType topodatapb.TabletType) {
+	if fhc.ch == nil {
+		return
+	}
+	fhc.mu.Lock()
+	defer fhc.mu.Unlock()
+	key := TabletToMapKey(tablet)
+	item, isPresent := fhc.items[key]
+	if !isPresent {
+		return
+	}
+	item.ts.Tablet.Type = tabletType
+	tablet.Type = tabletType
+	item.ts.Target.TabletType = tabletType
 }
 
 // Unsubscribe is not implemented.
@@ -249,4 +312,16 @@ func (fhc *FakeHealthCheck) GetAllTablets() map[string]*topodatapb.Tablet {
 		res[key] = t.ts.Tablet
 	}
 	return res
+}
+
+func simpleCopy(th *TabletHealth) *TabletHealth {
+	return &TabletHealth{
+		Conn:                 th.Conn,
+		Tablet:               proto.Clone(th.Tablet).(*topodatapb.Tablet),
+		Target:               proto.Clone(th.Target).(*querypb.Target),
+		Stats:                proto.Clone(th.Stats).(*querypb.RealtimeStats),
+		LastError:            th.LastError,
+		PrimaryTermStartTime: th.PrimaryTermStartTime,
+		Serving:              th.Serving,
+	}
 }

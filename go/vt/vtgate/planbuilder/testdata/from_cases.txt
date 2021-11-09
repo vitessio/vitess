@@ -784,7 +784,7 @@ Gen4 plan same as above
   }
 }
 
-# Straight-join
+# Straight-join (Gen4 ignores the straight_join hint)
 "select m1.col from unsharded as m1 straight_join unsharded as m2"
 {
   "QueryType": "SELECT",
@@ -798,6 +798,21 @@ Gen4 plan same as above
     },
     "FieldQuery": "select m1.col from unsharded as m1 straight_join unsharded as m2 where 1 != 1",
     "Query": "select m1.col from unsharded as m1 straight_join unsharded as m2",
+    "Table": "unsharded"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select m1.col from unsharded as m1 straight_join unsharded as m2",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select m1.col from unsharded as m1, unsharded as m2 where 1 != 1",
+    "Query": "select m1.col from unsharded as m1, unsharded as m2",
     "Table": "unsharded"
   }
 }
@@ -2803,7 +2818,7 @@ Gen4 plan same as above
           "Sharded": false
         },
         "FieldQuery": "select unsharded_a.col from unsharded_a, unsharded_b where 1 != 1",
-        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where (:__sq_has_values1 = 1 and unsharded_a.col in ::__sq1)",
+        "Query": "select unsharded_a.col from unsharded_a, unsharded_b where :__sq_has_values1 = 1 and unsharded_a.col in ::__sq1",
         "Table": "unsharded_a, unsharded_b"
       }
     ]
@@ -2867,61 +2882,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select unsharded.col from unsharded join user on user.col in (select col from user)",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1",
-        "TableName": "unsharded_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectUnsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select unsharded.col from unsharded where 1 != 1",
-            "Query": "select unsharded.col from unsharded",
-            "Table": "unsharded"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where (:__sq_has_values1 = 1 and `user`.col in ::__sq1)",
-            "Table": "`user`"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # subquery in ON clause, with left join primitives
 # The subquery is not pulled all the way out.
@@ -3028,7 +2989,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where (:__sq_has_values1 = 1 and `user`.col in ::__sq1)",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
             "Table": "`user`"
           }
         ]
@@ -3150,7 +3111,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` where 1 != 1",
-            "Query": "select 1 from `user` where (:__sq_has_values1 = 1 and `user`.col in ::__sq1)",
+            "Query": "select 1 from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1",
             "Table": "`user`"
           },
           {
@@ -4270,7 +4231,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals) and col = :__sq2",
+            "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and col = :__sq2",
             "Table": "`user`",
             "Values": [
               "::__sq1"

@@ -198,8 +198,14 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 }
 
 // WaitForStatus waits till desired status of tablet is reached
-func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
-	return vttablet.GetTabletStatus() == status
+func (vttablet *VttabletProcess) WaitForStatus(status string, howLong time.Duration) bool {
+	ticker := time.NewTicker(howLong)
+	for range ticker.C {
+		if vttablet.GetTabletStatus() == status {
+			return true
+		}
+	}
+	return false
 }
 
 // GetTabletStatus returns the tablet state as seen in /debug/vars TabletStateName
@@ -425,7 +431,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 		return "", err
 	}
 	if len(output.Rows) > 0 {
-		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
+		return output.Rows[0][1].ToString(), nil
 	}
 	return "", nil
 }

@@ -112,8 +112,9 @@ type ColumnVindex struct {
 
 // Column describes a column.
 type Column struct {
-	Name sqlparser.ColIdent `json:"name"`
-	Type querypb.Type       `json:"type"`
+	Name          sqlparser.ColIdent `json:"name"`
+	Type          querypb.Type       `json:"type"`
+	CollationName string             `json:"collation_name"`
 }
 
 // MarshalJSON returns a JSON representation of Column.

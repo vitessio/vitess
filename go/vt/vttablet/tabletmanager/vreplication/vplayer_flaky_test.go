@@ -2432,7 +2432,6 @@ func TestTimestamp(t *testing.T) {
 func shouldRunJSONTests(t *testing.T, name string) bool {
 	skipTest := true
 	flavors := []string{"mysql80", "mysql57"}
-	//flavors = append(flavors, "mysql56") // uncomment for local testing, in CI it fails on percona56
 	for _, flavor := range flavors {
 		if strings.EqualFold(env.Flavor, flavor) {
 			skipTest = false

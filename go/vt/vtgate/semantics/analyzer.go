@@ -17,13 +17,8 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-	"runtime/debug"
-	"strings"
-
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,6 +37,7 @@ type analyzer struct {
 	inProjection int
 
 	projErr error
+	warning string
 }
 
 // newAnalyzer create the semantic analyzer
@@ -74,7 +70,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	semTable.ProjectionErr = analyzer.projErr
 	return semTable, nil
 }
 
@@ -86,6 +81,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
 		ProjectionErr:    a.projErr,
+		Warning:          a.warning,
 		Comments:         statement.GetComments(),
 		SubqueryMap:      a.binder.subqueryMap,
 		SubqueryRef:      a.binder.subqueryRef,
@@ -126,10 +122,8 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		a.setError(err)
 		return true
 	}
-	if err := a.binder.down(cursor); err != nil {
-		a.setError(err)
-		return true
-	}
+	// log any warn in rewriting.
+	a.warning = a.rewriter.warning
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
@@ -141,6 +135,11 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 	if !a.shouldContinue() {
 		return false
+	}
+
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
 
 	if err := a.scoper.up(cursor); err != nil {
@@ -216,12 +215,12 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type)
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *querypb.Type) {
-	recursive = a.binder.recursive.Dependencies(expr)
-	direct = a.binder.direct.Dependencies(expr)
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type) {
+	recursive = a.binder.recursive.dependencies(expr)
+	direct = a.binder.direct.dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
 		return
@@ -324,17 +323,6 @@ func (a *analyzer) shouldContinue() bool {
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	return a.tables.tableSetFor(t)
-}
-
-// Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
-func Gen4NotSupportedF(format string, args ...interface{}) error {
-	message := fmt.Sprintf("gen4 does not yet support: "+format, args...)
-
-	// add the line that this happens in so it is easy to find it
-	stack := string(debug.Stack())
-	lines := strings.Split(stack, "\n")
-	message += "\n" + lines[6]
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, message)
 }
 
 // ProjError is used to mark an error as something that should only be returned

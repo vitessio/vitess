@@ -18,6 +18,8 @@ package mysql
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestStatusReplicationRunning(t *testing.T) {
@@ -81,22 +83,33 @@ func TestFindErrantGTIDs(t *testing.T) {
 		sourceSID: []interval{{2, 6}, {15, 45}},
 	}
 
-	status1 := ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set1}}
-	status2 := ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set2}}
-	status3 := ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set3}}
+	testcases := []struct {
+		mainRepStatus    *ReplicationStatus
+		otherRepStatuses []*ReplicationStatus
+		want             Mysql56GTIDSet
+	}{{
+		mainRepStatus: &ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set1}},
+		otherRepStatuses: []*ReplicationStatus{
+			{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set2}},
+			{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set3}},
+		},
+		want: Mysql56GTIDSet{
+			sid1: []interval{{39, 39}, {40, 49}, {71, 75}},
+			sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
+			sid4: []interval{{1, 30}},
+		},
+	}, {
+		mainRepStatus:    &ReplicationStatus{SourceUUID: sourceSID, RelayLogPosition: Position{GTIDSet: set1}},
+		otherRepStatuses: []*ReplicationStatus{{SourceUUID: sid1, RelayLogPosition: Position{GTIDSet: set1}}},
+		// servers with the same GTID sets should not be diagnosed with errant GTIDs
+		want: nil,
+	}}
 
-	got, err := status1.FindErrantGTIDs([]*ReplicationStatus{&status2, &status3})
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-
-	want := Mysql56GTIDSet{
-		sid1: []interval{{39, 39}, {40, 49}, {71, 75}},
-		sid2: []interval{{1, 2}, {6, 7}, {20, 21}, {26, 31}, {38, 50}, {60, 66}},
-		sid4: []interval{{1, 30}},
-	}
-
-	if !got.Equal(want) {
-		t.Errorf("got %#v; want %#v", got, want)
+	for _, testcase := range testcases {
+		t.Run("", func(t *testing.T) {
+			got, err := testcase.mainRepStatus.FindErrantGTIDs(testcase.otherRepStatuses)
+			require.NoError(t, err)
+			require.Equal(t, testcase.want, got)
+		})
 	}
 }

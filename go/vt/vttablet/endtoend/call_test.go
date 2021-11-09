@@ -111,7 +111,7 @@ func TestCallProcedureInsideTx(t *testing.T) {
 
 func TestCallProcedureInsideReservedConn(t *testing.T) {
 	client := framework.NewClient()
-	_, err := client.ReserveBeginExecute(`call proc_dml()`, nil, nil)
+	_, err := client.ReserveBeginExecute(`call proc_dml()`, nil, nil, nil)
 	require.EqualError(t, err, "Transaction state change inside the stored procedure is not allowed (CallerID: dev)")
 	client.Release()
 

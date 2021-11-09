@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/util"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
@@ -503,11 +504,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = PrimaryIsReadOnly
 			a.Description = "Primary is read-only"
 			//
-		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) != 0 && !a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) != 0 && !a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustBeSet
 			a.Description = "Primary semi-sync must be set"
 			//
-		} else if a.IsClusterPrimary && PrimarySemiSync(a.AnalyzedInstanceKey) == 0 && a.SemiSyncPrimaryEnabled {
+		} else if a.IsClusterPrimary && reparentutil.SemiSyncAckers(tablet) == 0 && a.SemiSyncPrimaryEnabled {
 			a.Analysis = PrimarySemiSyncMustNotBeSet
 			a.Description = "Primary semi-sync must not be set"
 			//
@@ -531,11 +532,11 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			a.Analysis = ReplicationStopped
 			a.Description = "Replication is stopped"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && ReplicaSemiSyncFromTablet(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && reparentutil.ReplicaSemiSync(primaryTablet, tablet) && !a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustBeSet
 			a.Description = "Replica semi-sync must be set"
 			//
-		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !ReplicaSemiSyncFromTablet(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
+		} else if topo.IsReplicaType(a.TabletType) && !a.IsPrimary && !reparentutil.ReplicaSemiSync(primaryTablet, tablet) && a.SemiSyncReplicaEnabled {
 			a.Analysis = ReplicaSemiSyncMustNotBeSet
 			a.Description = "Replica semi-sync must not be set"
 			//

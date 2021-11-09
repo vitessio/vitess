@@ -119,8 +119,8 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 
 	r.inSubquery++
 	argName, hasValuesArg := r.reservedVars.ReserveSubQueryWithHasValues()
-	semTableSQ.ArgName = argName
-	semTableSQ.HasValuesArg = hasValuesArg
+	semTableSQ.SetArgName(argName)
+	semTableSQ.SetHasValuesArg(hasValuesArg)
 	cursor.Replace(semTableSQ)
 	return nil
 }
@@ -130,12 +130,12 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 	if !found {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: came across subquery that was not in the subq map")
 	}
-	if semTableSQ.ArgName != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
+	if semTableSQ.GetArgName() != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
 		return nil
 	}
 	r.inSubquery++
 	argName := r.reservedVars.ReserveSubQuery()
-	semTableSQ.ArgName = argName
+	semTableSQ.SetArgName(argName)
 	cursor.Replace(semTableSQ)
 	return nil
 }
@@ -148,7 +148,7 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 
 	r.inSubquery++
 	argName := r.reservedVars.ReserveHasValuesSubQuery()
-	semTableSQ.ArgName = argName
+	semTableSQ.SetArgName(argName)
 	cursor.Replace(semTableSQ)
 	return nil
 }
@@ -167,26 +167,36 @@ func rewriteHavingClause(node *sqlparser.Select) {
 		selectExprMap[aliasedExpr.As.Lowered()] = aliasedExpr.Expr
 	}
 
-	sqlparser.Rewrite(node.Having.Expr, func(cursor *sqlparser.Cursor) bool {
-		switch x := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			if !x.Qualifier.IsEmpty() {
-				return false
-			}
-			originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
-			if isInMap {
-				cursor.Replace(originalExpr)
-				return false
-			}
-			return false
-		}
-		return true
-	}, nil)
-
+	// for each expression in the having clause, we check if it contains aggregation.
+	// if it does, we keep the expression in the having clause ; and if it does not
+	// and the expression is in the select list, we replace the expression by the one
+	// used in the select list and add it to the where clause instead of the having clause.
 	exprs := sqlparser.SplitAndExpression(nil, node.Having.Expr)
 	node.Having = nil
 	for _, expr := range exprs {
-		if sqlparser.ContainsAggregation(expr) {
+		var hasAggr bool
+		sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			switch x := cursor.Node().(type) {
+			case *sqlparser.ColName:
+				if !x.Qualifier.IsEmpty() {
+					return false
+				}
+				originalExpr, isInMap := selectExprMap[x.Name.Lowered()]
+				if isInMap {
+					if sqlparser.ContainsAggregation(originalExpr) {
+						hasAggr = true
+					} else {
+						cursor.Replace(originalExpr)
+					}
+				}
+				return false
+			default:
+				hasAggr = hasAggr || sqlparser.IsAggregation(x)
+			}
+			return true
+		}, nil)
+
+		if hasAggr {
 			node.AddHaving(expr)
 		} else {
 			node.AddWhere(expr)

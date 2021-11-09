@@ -19,6 +19,7 @@ import {
     fetchClusters,
     fetchExperimentalTabletDebugVars,
     fetchGates,
+    fetchKeyspace,
     fetchKeyspaces,
     fetchSchema,
     FetchSchemaParams,
@@ -28,6 +29,7 @@ import {
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
@@ -55,6 +57,25 @@ export const useGates = (options?: UseQueryOptions<pb.VTGate[], Error> | undefin
     useQuery(['gates'], fetchGates, options);
 
 /**
+ * useKeyspace is a query hook that fetches a single keyspace by name.
+ */
+export const useKeyspace = (
+    params: Parameters<typeof fetchKeyspace>[0],
+    options?: UseQueryOptions<pb.Keyspace, Error>
+) => {
+    const queryClient = useQueryClient();
+    return useQuery(['keyspace', params], () => fetchKeyspace(params), {
+        initialData: () => {
+            const keyspaces = queryClient.getQueryData<pb.Keyspace[]>('keyspaces');
+            return (keyspaces || []).find(
+                (k) => k.cluster?.id === params.clusterID && k.keyspace?.name === params.name
+            );
+        },
+        ...options,
+    });
+};
+
+/**
  * useKeyspaces is a query hook that fetches all keyspaces across every cluster.
  */
 export const useKeyspaces = (options?: UseQueryOptions<pb.Keyspace[], Error> | undefined) =>
@@ -71,6 +92,12 @@ export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undef
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
+
+/**
+ * useVtctlds is a query hook that fetches all vtctlds across every cluster.
+ */
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+    useQuery(['vtctlds'], fetchVtctlds, options);
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.
