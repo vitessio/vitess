@@ -72,20 +72,41 @@ func TestNotInSubqueryPrecedence(t *testing.T) {
 	not := tree.(*Select).Where.Expr.(*NotExpr)
 	cmp := not.Expr.(*ComparisonExpr)
 	subq := cmp.Right.(*Subquery)
-	fmt.Println(subq)
 
 	extracted := &ExtractedSubquery{
-		Original:     cmp,
-		ArgName:      "arg1",
-		HasValuesArg: "has_values1",
-		OpCode:       1,
-		Subquery:     subq.Select,
-		OtherSide:    cmp.Left,
+		Original:  cmp,
+		OpCode:    1,
+		Subquery:  subq,
+		OtherSide: cmp.Left,
 	}
-	not.Expr = extracted
+	extracted.SetArgName("arg1")
+	extracted.SetHasValuesArg("has_values1")
 
+	not.Expr = extracted
 	output := readable(not)
 	assert.Equal(t, "not (:has_values1 = 1 and id in ::arg1)", output)
+}
+
+func TestSubqueryPrecedence(t *testing.T) {
+	tree, err := Parse("select * from a where id in (select 42) and false")
+	require.NoError(t, err)
+	where := tree.(*Select).Where
+	andExpr := where.Expr.(*AndExpr)
+	cmp := andExpr.Left.(*ComparisonExpr)
+	subq := cmp.Right.(*Subquery)
+
+	extracted := &ExtractedSubquery{
+		Original:  andExpr.Left,
+		OpCode:    1,
+		Subquery:  subq,
+		OtherSide: cmp.Left,
+	}
+	extracted.SetArgName("arg1")
+	extracted.SetHasValuesArg("has_values1")
+
+	andExpr.Left = extracted
+	output := readable(extracted)
+	assert.Equal(t, ":has_values1 = 1 and id in ::arg1", output)
 }
 
 func TestPlusStarPrecedence(t *testing.T) {
@@ -193,7 +214,7 @@ func TestRandom(t *testing.T) {
 	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
 	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
 	seed := time.Now().UnixNano()
-	fmt.Println(fmt.Sprintf("seed is %d", seed)) //nolint
+	fmt.Println(fmt.Sprintf("seed is %d", seed)) // nolint
 	g := newGenerator(seed, 5)
 	endBy := time.Now().Add(1 * time.Second)
 

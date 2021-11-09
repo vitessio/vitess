@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -29,14 +31,16 @@ import (
 
 type (
 	EvalResult struct {
-		typ   querypb.Type
-		ival  int64
-		uval  uint64
-		fval  float64
-		bytes []byte
+		typ       querypb.Type
+		ival      int64
+		uval      uint64
+		fval      float64
+		bytes     []byte
+		collation collations.ID
 	}
-	//ExpressionEnv contains the environment that the expression
-	//evaluates in, such as the current row and bindvars
+
+	// ExpressionEnv contains the environment that the expression
+	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
@@ -49,35 +53,35 @@ type (
 		String() string
 	}
 
-	//BinaryExpr allows binary expressions to not have to evaluate child expressions - this is done by the BinaryOp
-	BinaryExpr interface {
-		Evaluate(left, right EvalResult) (EvalResult, error)
-		Type(left querypb.Type) querypb.Type
-		String() string
-	}
-
 	// Expressions
-	Literal      struct{ Val EvalResult }
-	BindVariable struct{ Key string }
-	Column       struct{ Offset int }
-	BinaryOp     struct {
-		Expr        BinaryExpr
-		Left, Right Expr
+	Null    struct{}
+	Literal struct {
+		Val       EvalResult
+		Collation collations.ID
 	}
-
-	// Binary ops
-	Addition       struct{}
-	Subtraction    struct{}
-	Multiplication struct{}
-	Division       struct{}
+	BindVariable struct {
+		Key       string
+		Collation collations.ID
+	}
+	Column struct {
+		Offset    int
+		Collation collations.ID
+	}
 )
 
-//Value allows for retrieval of the value we expose for public consumption
+var _ Expr = (*Null)(nil)
+var _ Expr = (*Literal)(nil)
+var _ Expr = (*BindVariable)(nil)
+var _ Expr = (*Column)(nil)
+var _ Expr = (*BinaryExpr)(nil)
+var _ Expr = (*ComparisonExpr)(nil)
+
+// Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
 }
 
-//NewLiteralIntFromBytes returns a literal expression
+// NewLiteralIntFromBytes returns a literal expression
 func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 	ival, err := strconv.ParseInt(string(val), 10, 64)
 	if err != nil {
@@ -86,136 +90,91 @@ func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 	return NewLiteralInt(ival), nil
 }
 
-//NewLiteralInt returns a literal expression
+// NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{EvalResult{typ: sqltypes.Int64, ival: i}}
+	return &Literal{Val: EvalResult{typ: sqltypes.Int64, ival: i}}
 }
 
-//NewLiteralFloat returns a literal expression
-func NewLiteralFloat(val []byte) (Expr, error) {
+// NewLiteralFloat returns a literal expression
+func NewLiteralFloat(val float64) Expr {
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: val}}
+}
+
+// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	fval, err := strconv.ParseFloat(string(val), 64)
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
 }
 
-//NewLiteralFloat returns a literal expression
-func NewLiteralString(val []byte) Expr {
-	return &Literal{EvalResult{typ: sqltypes.VarBinary, bytes: val}}
+// NewLiteralString returns a literal expression
+func NewLiteralString(val []byte, collation collations.ID) Expr {
+	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val}, Collation: collation}
 }
 
-//NewBindVar returns a bind variable
-func NewBindVar(key string) Expr {
-	return &BindVariable{Key: key}
+// NewBindVar returns a bind variable
+func NewBindVar(key string, collation collations.ID) Expr {
+	return &BindVariable{
+		Key:       key,
+		Collation: collation,
+	}
 }
 
-//NewColumn returns a bind variable
-func NewColumn(offset int) Expr {
+// NewColumn returns a bind variable
+func NewColumn(offset int, collation collations.ID) Expr {
 	return &Column{
-		Offset: offset,
+		Offset:    offset,
+		Collation: collation,
 	}
 }
 
-var _ Expr = (*Literal)(nil)
-var _ Expr = (*BindVariable)(nil)
-var _ Expr = (*BinaryOp)(nil)
-var _ Expr = (*Column)(nil)
-
-var _ BinaryExpr = (*Addition)(nil)
-var _ BinaryExpr = (*Subtraction)(nil)
-var _ BinaryExpr = (*Multiplication)(nil)
-var _ BinaryExpr = (*Division)(nil)
-
-//Evaluate implements the Expr interface
-func (b *BinaryOp) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	lVal, err := b.Left.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	rVal, err := b.Right.Evaluate(env)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	return b.Expr.Evaluate(lVal, rVal)
+// Evaluate implements the Expr interface
+func (n Null) Evaluate(ExpressionEnv) (EvalResult, error) {
+	return EvalResult{}, nil
 }
 
-//Evaluate implements the Expr interface
+// Type implements the Expr interface
+func (n Null) Type(ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_NULL_TYPE, nil
+}
+
+// String implements the Expr interface
+func (n Null) String() string {
+	return "null"
+}
+
+// Evaluate implements the Expr interface
 func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
-	return l.Val, nil
+	eval := l.Val
+	eval.collation = l.Collation
+	return eval, nil
 }
 
-//Evaluate implements the Expr interface
+// Evaluate implements the Expr interface
 func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	val, ok := env.BindVars[b.Key]
 	if !ok {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
-	return evaluateByType(val)
+	eval, err := evaluateByType(val)
+	if err != nil {
+		return EvalResult{}, err
+	}
+	eval.collation = b.Collation
+	return eval, nil
 }
 
-//Evaluate implements the Expr interface
+// Evaluate implements the Expr interface
 func (c *Column) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	value := env.Row[c.Offset]
 	numeric, err := newEvalResult(value)
+	numeric.collation = c.Collation
 	return numeric, err
 }
 
-//Evaluate implements the BinaryOp interface
-func (a *Addition) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return addNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (s *Subtraction) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return subtractNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return multiplyNumericWithError(left, right)
-}
-
-//Evaluate implements the BinaryOp interface
-func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return divideNumericWithError(left, right)
-}
-
-//Type implements the BinaryExpr interface
-func (a *Addition) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the BinaryExpr interface
-func (m *Multiplication) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the BinaryExpr interface
-func (d *Division) Type(querypb.Type) querypb.Type {
-	return sqltypes.Float64
-}
-
-//Type implements the BinaryExpr interface
-func (s *Subtraction) Type(left querypb.Type) querypb.Type {
-	return left
-}
-
-//Type implements the Expr interface
-func (b *BinaryOp) Type(env ExpressionEnv) (querypb.Type, error) {
-	ltype, err := b.Left.Type(env)
-	if err != nil {
-		return 0, err
-	}
-	rtype, err := b.Right.Type(env)
-	if err != nil {
-		return 0, err
-	}
-	typ := mergeNumericalTypes(ltype, rtype)
-	return b.Expr.Type(typ), nil
-}
-
-//Type implements the Expr interface
+// Type implements the Expr interface
 func (b *BindVariable) Type(env ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
 	v, found := e[b.Key]
@@ -225,52 +184,27 @@ func (b *BindVariable) Type(env ExpressionEnv) (querypb.Type, error) {
 	return v.Type, nil
 }
 
-//Type implements the Expr interface
+// Type implements the Expr interface
 func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
 	return l.Val.typ, nil
 }
 
-//Type implements the Expr interface
+// Type implements the Expr interface
 func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
 	return sqltypes.Float64, nil
 }
 
-//String implements the BinaryExpr interface
-func (d *Division) String() string {
-	return "/"
-}
-
-//String implements the BinaryExpr interface
-func (m *Multiplication) String() string {
-	return "*"
-}
-
-//String implements the BinaryExpr interface
-func (s *Subtraction) String() string {
-	return "-"
-}
-
-//String implements the BinaryExpr interface
-func (a *Addition) String() string {
-	return "+"
-}
-
-//String implements the Expr interface
-func (b *BinaryOp) String() string {
-	return b.Left.String() + " " + b.Expr.String() + " " + b.Right.String()
-}
-
-//String implements the Expr interface
+// String implements the Expr interface
 func (b *BindVariable) String() string {
 	return ":" + b.Key
 }
 
-//String implements the Expr interface
+// String implements the Expr interface
 func (l *Literal) String() string {
 	return l.Val.Value().String()
 }
 
-//String implements the Expr interface
+// String implements the Expr interface
 func (c *Column) String() string {
 	return fmt.Sprintf("column %d from the input", c.Offset)
 }
@@ -317,13 +251,15 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 		return EvalResult{typ: sqltypes.Float64, fval: fval}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
+	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
+		return EvalResult{typ: val.Type, bytes: val.Value}, nil
 	case sqltypes.Null:
 		return EvalResult{typ: sqltypes.Null}, nil
 	}
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %s", val.Type.String())
 }
 
-// debugString is
+// debugString prints the entire EvalResult in a debug format
 func (e *EvalResult) debugString() string {
 	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
 }

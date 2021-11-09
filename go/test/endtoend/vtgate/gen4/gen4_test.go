@@ -54,6 +54,24 @@ func TestOrderBy(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestCorrelatedExistsSubquery(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	defer func() {
+		_, _ = exec(t, conn, `delete from t1`)
+		_, _ = exec(t, conn, `delete from t2`)
+	}()
+	// insert some data.
+	checkedExec(t, conn, `insert into t1(id, col) values (100, 123),(10, 12), (1, 13), (4, 13),(1000, 1234)`)
+	checkedExec(t, conn, `insert into t2(id, tcol1, tcol2) values (100, 13, 1),(9, 7, 15),(1, 123, 123),(1004, 134, 123)`)
+
+	assertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol2)`, `[[INT64(100)]]`)
+	assertMatches(t, conn, `select id from t1 where exists(select 1 from t2 where t1.col = t2.tcol1) order by id`, `[[INT64(1)] [INT64(4)] [INT64(100)]]`)
+}
+
 func TestGroupBy(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -194,6 +212,28 @@ func TestSubQueries(t *testing.T) {
 	assert.EqualError(t, err, "subquery returned more than one row (errno 1105) (sqlstate HY000) during query: select (select id from t2) from t2 order by id")
 
 	assertMatches(t, conn, `select (select id from t2 order by id limit 1) from t2 order by id limit 2`, `[[INT64(1)] [INT64(1)]]`)
+}
+
+func TestPlannerWarning(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// straight_join query
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+
+	// execute same query again.
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
+
+	// random query to reset the warning.
+	_ = checkedExec(t, conn, `select 1 from t1`)
+
+	// execute same query again.
+	_ = checkedExec(t, conn, `select 1 from t1 straight_join t2 on t1.id = t2.id`)
+	assertMatches(t, conn, `show warnings`, `[[VARCHAR("Warning") UINT16(1235) VARCHAR("straight join is converted to normal join")]]`)
 }
 
 func assertMatches(t *testing.T, conn *mysql.Conn, query, expected string) {

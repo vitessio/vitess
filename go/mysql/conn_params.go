@@ -39,6 +39,7 @@ type ConnParams struct {
 	SslCa            string        `json:"ssl_ca"`
 	SslCaPath        string        `json:"ssl_ca_path"`
 	SslCert          string        `json:"ssl_cert"`
+	SslCrl           string        `json:"ssl_crl"`
 	SslKey           string        `json:"ssl_key"`
 	TLSMinVersion    string        `json:"tls_min_version"`
 	ServerName       string        `json:"server_name"`

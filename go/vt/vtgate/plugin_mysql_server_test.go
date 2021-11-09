@@ -264,6 +264,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
+	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
 	serverCACert := ""
@@ -272,7 +273,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

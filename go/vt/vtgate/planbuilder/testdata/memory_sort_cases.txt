@@ -706,6 +706,7 @@ Gen4 plan same as above
     ]
   }
 }
+Gen4 plan same as above
 
 # unary expression
 "select a from user order by binary a desc"

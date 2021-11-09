@@ -1,6 +1,7 @@
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
 "unsupported: '*' expression in cross-shard query"
+Gen4 plan same as above
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
@@ -81,11 +82,6 @@ Gen4 plan same as above
 "select * from user group by 1"
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
-
-# Filtering on scatter aggregates
-"select count(*) a from user having a >10"
-"unsupported: filtering on results of aggregates"
-Gen4 plan same as above
 
 # group by must reference select list
 "select a from user group by b"
@@ -489,7 +485,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # avg function on scatter query
 "select avg(id) from user"
 "unsupported: in scatter query: complex aggregate expression"
-Gen4 plan same as above
+Gen4 error: unsupported: in scatter query: aggregation function 'avg'
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -504,11 +500,11 @@ Gen4 plan same as above
 # TODO this should be planned without using OA and MS
 "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
@@ -527,7 +523,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Table": "`user`"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by with non-unique vindex filter
 "select 1 from user having count(id) = 10 and name = 'a'"
@@ -550,7 +546,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
@@ -596,3 +592,43 @@ Gen4 error: Column 'id' in field list is ambiguous
     "Table": "`user`"
   }
 }
+
+# unsupported with clause in delete statement
+"with x as (select * from user) delete from x"
+"unsupported: with expression in delete statement"
+Gen4 plan same as above
+
+# unsupported with clause in update statement
+"with x as (select * from user) update x set name = 'f'"
+"unsupported: with expression in update statement"
+Gen4 plan same as above
+
+# unsupported with clause in select statement
+"with x as (select * from user) select * from x"
+"unsupported: with expression in select statement"
+Gen4 plan same as above
+
+# unsupported with clause in union statement
+"with x as (select * from user) select * from x union select * from x"
+"unsupported: with expression in union statement"
+Gen4 plan same as above
+
+# Aggregate on join
+"select user.a, count(*) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
+
+# Aggregate on other table in join
+"select user.a, count(user_extra.a) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
+
+# Equal filter with hexadecimal value
+"select count(*) a from user having a = 0x01"
+"unsupported: filtering on results of aggregates"
+Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
+
+# scatter aggregate with complex select list (can't build order by)
+"select distinct a+1 from user"
+"generating order by clause: cannot reference a complex expression"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1

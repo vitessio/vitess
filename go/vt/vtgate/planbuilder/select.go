@@ -36,6 +36,9 @@ import (
 func buildSelectPlan(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		sel := stmt.(*sqlparser.Select)
+		if sel.With != nil {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+		}
 
 		p, err := handleDualSelects(sel, vschema)
 		if err != nil {
@@ -317,9 +320,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 		if sqlparser.IsLockingFunc(expr.Expr) {
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
-
 		}
-		exprs[i], err = sqlparser.Convert(expr.Expr)
+		exprs[i], err = evalengine.Convert(expr.Expr, nil)
 		if err != nil {
 			return nil, nil
 		}
@@ -340,10 +342,12 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 	if err != nil {
 		return nil, err
 	}
+	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
 		Query:             sqlparser.String(sel),
+		FieldQuery:        buf.String(),
 	}, nil
 }
 

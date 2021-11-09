@@ -31,7 +31,7 @@ type VindexTable struct {
 
 var _ TableInfo = (*VindexTable)(nil)
 
-// Dependencies implements the TableInfo interface
+// dependencies implements the TableInfo interface
 func (v *VindexTable) dependencies(colName string, org originable) (dependencies, error) {
 	return v.Table.dependencies(colName, org)
 }

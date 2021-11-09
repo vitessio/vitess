@@ -251,7 +251,7 @@ Gen4 error: Column 'col1' in field list is ambiguous
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where (:__sq_has_values1 = 1 and id in ::__vals)",
+        "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
         "Table": "`user`",
         "Values": [
           "::__sq1"
@@ -589,44 +589,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col2 from user) order by col",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col2 from `user` where 1 != 1",
-        "Query": "select col2 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by col asc",
-        "ResultColumns": 1,
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY NULL for join
 "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null"
@@ -947,42 +910,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col2 from user) order by null",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col2 from `user` where 1 != 1",
-        "Query": "select col2 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by null",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # ORDER BY RAND()
 "select col from user order by RAND()"
@@ -1134,42 +1062,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col2 from user) order by rand()",
-  "Instructions": {
-    "OperatorType": "Subquery",
-    "Variant": "PulloutIn",
-    "PulloutVars": [
-      "__sq_has_values1",
-      "__sq1"
-    ],
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col2 from `user` where 1 != 1",
-        "Query": "select col2 from `user`",
-        "Table": "`user`"
-      },
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) order by rand()",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # Order by, '*' expression
 "select * from user where id = 5 order by col"
@@ -1694,48 +1587,7 @@ Gen4 plan same as above
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user where col in (select col1 from user) limit 1",
-  "Instructions": {
-    "OperatorType": "Limit",
-    "Count": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Subquery",
-        "Variant": "PulloutIn",
-        "PulloutVars": [
-          "__sq_has_values1",
-          "__sq1"
-        ],
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col1 from `user` where 1 != 1",
-            "Query": "select col1 from `user`",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select col from `user` where 1 != 1",
-            "Query": "select col from `user` where (:__sq_has_values1 = 1 and col in ::__sq1) limit :__upper_limit",
-            "Table": "`user`"
-          }
-        ]
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # limit on reference table
 "select col from ref limit 1"

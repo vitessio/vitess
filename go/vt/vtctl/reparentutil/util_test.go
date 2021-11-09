@@ -18,21 +18,23 @@ package reparentutil
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 type chooseNewPrimaryTestTMClient struct {
@@ -510,6 +512,326 @@ func TestFindCurrentPrimary(t *testing.T) {
 
 			actual := FindCurrentPrimary(tt.in, logger)
 			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestGetValidCandidatesAndPositionsAsList(t *testing.T) {
+	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
+	mysqlGTID1 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 9,
+	}
+	mysqlGTID2 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 10,
+	}
+	mysqlGTID3 := mysql.Mysql56GTID{
+		Server:   sid1,
+		Sequence: 11,
+	}
+
+	positionMostAdvanced := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID1)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID2)
+	positionMostAdvanced.GTIDSet = positionMostAdvanced.GTIDSet.AddGTID(mysqlGTID3)
+
+	positionIntermediate1 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate1.GTIDSet = positionIntermediate1.GTIDSet.AddGTID(mysqlGTID1)
+
+	positionIntermediate2 := mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID1)
+	positionIntermediate2.GTIDSet = positionIntermediate2.GTIDSet.AddGTID(mysqlGTID2)
+
+	tests := []struct {
+		name            string
+		validCandidates map[string]mysql.Position
+		tabletMap       map[string]*topo.TabletInfo
+		tabletRes       []*topodatapb.Tablet
+	}{
+		{
+			name: "test conversion",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": positionMostAdvanced,
+				"zone1-0000000101": positionIntermediate1,
+				"zone1-0000000102": positionIntermediate2,
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Hostname: "primary-elect",
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Hostname: "requires force start",
+					},
+				},
+				"zone1-0000000404": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  404,
+						},
+						Hostname: "ignored tablet",
+					},
+				},
+			},
+			tabletRes: []*topodatapb.Tablet{
+				{
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  100,
+					},
+					Hostname: "primary-elect",
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  101,
+					},
+				}, {
+					Alias: &topodatapb.TabletAlias{
+						Cell: "zone1",
+						Uid:  102,
+					},
+					Hostname: "requires force start",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tabletRes, posRes, err := getValidCandidatesAndPositionsAsList(test.validCandidates, test.tabletMap)
+			assert.NoError(t, err)
+			assert.ElementsMatch(t, test.tabletRes, tabletRes)
+			assert.Equal(t, len(tabletRes), len(posRes))
+			for i, tablet := range tabletRes {
+				assert.Equal(t, test.validCandidates[topoproto.TabletAliasString(tablet.Alias)], posRes[i])
+			}
+		})
+	}
+}
+
+func TestWaitForCatchUp(t *testing.T) {
+	tests := []struct {
+		name       string
+		tmc        tmclient.TabletManagerClient
+		source     *topodatapb.Tablet
+		newPrimary *topodatapb.Tablet
+		err        string
+	}{
+		{
+			name: "success",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    nil,
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": nil,
+					},
+				},
+			},
+			source: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+		}, {
+			name: "error in primary position",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    fmt.Errorf("found error in primary position"),
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": nil,
+					},
+				},
+			},
+			source: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			err: "found error in primary position",
+		}, {
+			name: "error in waiting for position",
+			tmc: &testutil.TabletManagerClient{
+				MasterPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Position: "abc",
+						Error:    nil,
+					},
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000101": {
+						"abc": fmt.Errorf("found error in waiting for position"),
+					},
+				},
+			},
+			source: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				},
+			},
+			newPrimary: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				},
+			},
+			err: "found error in waiting for position",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			logger := logutil.NewMemoryLogger()
+			err := waitForCatchUp(ctx, test.tmc, logger, test.newPrimary, test.source, 2*time.Second)
+			if test.err != "" {
+				assert.EqualError(t, err, test.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestRestrictValidCandidates(t *testing.T) {
+	tests := []struct {
+		name            string
+		validCandidates map[string]mysql.Position
+		tabletMap       map[string]*topo.TabletInfo
+		result          map[string]mysql.Position
+	}{
+		{
+			name: "remove invalid tablets",
+			validCandidates: map[string]mysql.Position{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000102": {},
+				"zone1-0000000103": {},
+				"zone1-0000000104": {},
+				"zone1-0000000105": {},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+						Type: topodatapb.TabletType_PRIMARY,
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+						Type: topodatapb.TabletType_RDONLY,
+					},
+				},
+				"zone1-0000000102": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  102,
+						},
+						Type: topodatapb.TabletType_RESTORE,
+					},
+				},
+				"zone1-0000000103": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_DRAINED,
+					},
+				},
+				"zone1-0000000104": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  104,
+						},
+						Type: topodatapb.TabletType_SPARE,
+					},
+				},
+				"zone1-0000000105": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  103,
+						},
+						Type: topodatapb.TabletType_BACKUP,
+					},
+				},
+			},
+			result: map[string]mysql.Position{
+				"zone1-0000000100": {},
+				"zone1-0000000101": {},
+				"zone1-0000000104": {},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			res, err := restrictValidCandidates(test.validCandidates, test.tabletMap)
+			assert.NoError(t, err)
+			assert.Equal(t, res, test.result)
 		})
 	}
 }
