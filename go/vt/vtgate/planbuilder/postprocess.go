@@ -101,7 +101,7 @@ var _ planVisitor = setUpperLimit
 func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 	arg := sqlparser.NewArgument("__upper_limit")
 	switch node := plan.(type) {
-	case *join, *joinGen4:
+	case *join, *joinGen4, *hashJoin:
 		return false, node, nil
 	case *memorySort:
 		pv, err := sqlparser.NewPlanValue(arg)

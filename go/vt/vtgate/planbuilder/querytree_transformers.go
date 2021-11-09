@@ -479,7 +479,7 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 			Opcode:    opCode,
 			LHSKey:    lhsKey,
 			RHSKey:    rhsKey,
-			Predicate: n.predicate,
+			Predicate: sqlparser.AndExpressions(n.predicates...),
 		}, nil
 	}
 	return &joinGen4{
@@ -488,7 +488,7 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 		Cols:      n.columns,
 		Vars:      n.vars,
 		Opcode:    opCode,
-		Predicate: n.predicate,
+		Predicate: sqlparser.AndExpressions(n.predicates...),
 	}, nil
 }
 

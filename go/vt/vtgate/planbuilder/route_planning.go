@@ -579,13 +579,14 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	if err != nil {
 		return nil, err
 	}
+
 	return &joinTree{
 		lhs:                lhsPlan,
 		rhs:                rhsPlan,
 		leftJoin:           node.leftJoin,
 		vars:               node.vars,
-		predicatesToRemove: rhsPreds,
-		predicate:          sqlparser.AndExpressions(exprs...),
+		predicatesToRemove: append(node.predicatesToRemove, rhsPreds...),
+		predicates:         append(node.predicates, exprs...),
 	}, nil
 }
 
