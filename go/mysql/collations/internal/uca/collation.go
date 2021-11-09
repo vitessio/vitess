@@ -19,18 +19,18 @@ package uca
 import (
 	"sync"
 
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type WeightTable []*[]uint16
 
 type Collation900 struct {
-	table        WeightTable
-	implicits    func([]uint16, rune)
-	contractions *contractions
-	param        *parametricT
-	maxLevel     int
-	iterpool     *sync.Pool
+	table     WeightTable
+	implicits func([]uint16, rune)
+	contract  Contractor
+	param     *parametricT
+	maxLevel  int
+	iterpool  *sync.Pool
 }
 
 func (c *Collation900) Weights() (WeightTable, TableLayout) {
@@ -48,31 +48,31 @@ func (c *Collation900) WeightForSpace() uint16 {
 	return ascii[CodepointsPerPage+' ']
 }
 
-func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch, reorder []Reorder, contractions []Contraction, upperCaseFirst bool, levels int) *Collation900 {
+func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch, reorder []Reorder, contract Contractor, upperCaseFirst bool, levels int) *Collation900 {
 	coll := &Collation900{
-		table:        applyTailoring(TableLayout_uca900{}, weights, weightPatches),
-		implicits:    UnicodeImplicitWeights900,
-		maxLevel:     levels,
-		param:        newParametricTailoring(reorder, upperCaseFirst),
-		contractions: newContractions(contractions),
-		iterpool:     &sync.Pool{},
+		table:     applyTailoring(TableLayout_uca900{}, weights, weightPatches),
+		implicits: UnicodeImplicitWeights900,
+		contract:  contract,
+		maxLevel:  levels,
+		param:     newParametricTailoring(reorder, upperCaseFirst),
+		iterpool:  &sync.Pool{},
 	}
 
 	switch {
-	case coll.param == nil && coll.contractions == nil && len(weightPatches) == 0:
+	case coll.param == nil && len(weightPatches) == 0 && coll.contract == nil:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorFast{iterator: iterator{Collation900: *coll}}
+			return &FastIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_ja_0900_as_cs_ks" || name == "utf8mb4_ja_0900_as_cs":
 		coll.iterpool.New = func() interface{} {
-			return &iteratorJA{iterator: iterator{Collation900: *coll}}
+			return &jaIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	case name == "utf8mb4_zh_0900_as_cs":
 		coll.implicits = unicodeImplicitChineseWeights
 		fallthrough
 	default:
 		coll.iterpool.New = func() interface{} {
-			return &iteratorSlow{iterator: iterator{Collation900: *coll}}
+			return &slowIterator900{iterator900: iterator900{Collation900: *coll}}
 		}
 	}
 
@@ -80,10 +80,10 @@ func NewCollation(name string, weights WeightTable, weightPatches []WeightPatch,
 }
 
 type CollationLegacy struct {
-	encoding     encoding.Encoding
+	charset      charset.Charset
 	table        WeightTable
 	maxCodepoint rune
-	contractions *contractions
+	contract     Contractor
 	iterpool     *sync.Pool
 }
 
@@ -103,12 +103,12 @@ func (c *CollationLegacy) WeightForSpace() uint16 {
 	return ascii[1+' '*stride]
 }
 
-func NewCollationLegacy(enc encoding.Encoding, weights WeightTable, weightPatches []WeightPatch, contractions []Contraction, maxCodepoint rune) *CollationLegacy {
+func NewCollationLegacy(cs charset.Charset, weights WeightTable, weightPatches []WeightPatch, contract Contractor, maxCodepoint rune) *CollationLegacy {
 	coll := &CollationLegacy{
-		encoding:     enc,
+		charset:      cs,
 		table:        applyTailoring(TableLayout_uca_legacy{}, weights, weightPatches),
 		maxCodepoint: maxCodepoint,
-		contractions: newContractions(contractions),
+		contract:     contract,
 		iterpool:     &sync.Pool{},
 	}
 

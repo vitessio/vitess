@@ -21,10 +21,12 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -35,6 +37,8 @@ var (
 )
 
 var waitmysql = flag.Bool("waitmysql", false, "")
+
+var defaultenv = collations.Default()
 
 func mysqlconn(t *testing.T) *mysql.Conn {
 	conn, err := mysql.Connect(context.Background(), &connParams)
@@ -93,5 +97,12 @@ func TestMain(m *testing.M) {
 func debugMysql() {
 	fmt.Fprintf(os.Stderr, "Connect to MySQL using parameters: mysql -u %s -D %s -S %s\n",
 		connParams.Uname, connParams.DbName, connParams.UnixSocket)
-	select {}
+	fmt.Fprintf(os.Stderr, "Press ^C to resume testing...\n")
+
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, os.Interrupt)
+	<-sigchan
+	signal.Stop(sigchan)
+
+	fmt.Fprintf(os.Stderr, "Resuming!\n")
 }

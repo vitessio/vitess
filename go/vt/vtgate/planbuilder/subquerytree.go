@@ -51,3 +51,11 @@ func (s *subqueryTree) clone() queryTree {
 func (s *subqueryTree) pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push output columns on subquery")
 }
+
+func (s *subqueryTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return s.outer.pushPredicate(ctx, expr)
+}
+
+func (s *subqueryTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return s.outer.removePredicate(ctx, expr)
+}

@@ -1279,7 +1279,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2604,7 +2604,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2638,7 +2638,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema

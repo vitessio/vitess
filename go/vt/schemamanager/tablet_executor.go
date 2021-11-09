@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -386,7 +387,17 @@ func (exec *TabletExecutor) executeOnAllTablets(ctx context.Context, execResult 
 		wg.Add(1)
 		go func(result ShardResult) {
 			defer wg.Done()
-			exec.wr.ReloadSchemaShard(reloadCtx, exec.keyspace, result.Shard, result.Position, concurrency, false /* includePrimary */)
+			schematools.ReloadShard(
+				reloadCtx,
+				exec.wr.TopoServer(),
+				exec.wr.TabletManagerClient(),
+				exec.wr.Logger(),
+				exec.keyspace,
+				result.Shard,
+				result.Position,
+				concurrency,
+				false, /* includePrimary */
+			)
 		}(result)
 	}
 	wg.Wait()

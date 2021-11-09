@@ -2495,3 +2495,238 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# select expression having dependencies on both sides of a join
+"select user.id * user_id as amount from user, user_extra"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.id * user_id as amount from user, user_extra",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id from `user` where 1 != 1",
+        "Query": "select `user`.id from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select :user_id * user_id as amount from user_extra where 1 != 1",
+        "Query": "select :user_id * user_id as amount from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+Gen4 plan same as above
+
+# correlated subquery in exists clause
+"select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id)",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, col from `user` where 1 != 1",
+        "Query": "select `user`.id, col from `user`",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+        "Table": "user_extra",
+        "Values": [
+          3
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# correlated subquery in exists clause with an order by
+"select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id) order by col",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, col, weight_string(col) from `user` where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select `user`.id, col, weight_string(col) from `user` order by col asc",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+        "Table": "user_extra",
+        "Values": [
+          3
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+# correlated subquery having dependencies on two tables
+"select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "u1_col": 0,
+      "u2_col": 1
+    },
+    "ProjectedIndexes": "-3",
+    "TableName": "`user`_`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,1,-2",
+        "TableName": "`user`_`user`",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u1.col, 1 from `user` as u1 where 1 != 1",
+            "Query": "select u1.col, 1 from `user` as u1",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
+            "Query": "select u2.col from `user` as u2",
+            "Table": "`user`"
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+        "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# correlated subquery using a column twice
+"select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "u_col": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col, 1 from `user` as u where 1 != 1",
+        "Query": "select u.col, 1 from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+        "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# correlated subquery part of an OR clause
+"select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
+"unsupported: cross-shard correlated subquery"
+Gen4 error: exists sub-queries are only supported with AND clause

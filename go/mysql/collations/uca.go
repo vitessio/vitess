@@ -17,9 +17,11 @@ limitations under the License.
 package collations
 
 import (
+	"math/bits"
 	"sync"
+	"unsafe"
 
-	"vitess.io/vitess/go/mysql/collations/internal/encoding"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -29,17 +31,17 @@ func init() {
 
 type CollationUCA interface {
 	Collation
-	Encoding() encoding.Encoding
+	Charset() charset.Charset
 	UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout)
 }
 
 type Collation_utf8mb4_uca_0900 struct {
 	name string
-	id   uint
+	id   ID
 
 	weights          uca.WeightTable
 	tailoring        []uca.WeightPatch
-	contractions     []uca.Contraction
+	contract         uca.Contractor
 	reorder          []uca.Reorder
 	upperCaseFirst   bool
 	levelsForCompare int
@@ -48,20 +50,15 @@ type Collation_utf8mb4_uca_0900 struct {
 	ucainit sync.Once
 }
 
-func (c *Collation_utf8mb4_uca_0900) init() {
+func (c *Collation_utf8mb4_uca_0900) Init() {
 	c.ucainit.Do(func() {
-		c.uca = uca.NewCollation(c.name, c.weights, c.tailoring, c.reorder, c.contractions, c.upperCaseFirst, c.levelsForCompare)
+		c.uca = uca.NewCollation(c.name, c.weights, c.tailoring, c.reorder, c.contract, c.upperCaseFirst, c.levelsForCompare)
 
 		// Clear the external metadata for this collation, so it can be picked up by the GC
 		c.weights = nil
-		c.contractions = nil
 		c.tailoring = nil
 		c.reorder = nil
 	})
-}
-
-func (c *Collation_utf8mb4_uca_0900) Encoding() encoding.Encoding {
-	return encoding.Encoding_utf8mb4{}
 }
 
 func (c *Collation_utf8mb4_uca_0900) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
@@ -72,8 +69,16 @@ func (c *Collation_utf8mb4_uca_0900) Name() string {
 	return c.name
 }
 
-func (c *Collation_utf8mb4_uca_0900) Id() uint {
+func (c *Collation_utf8mb4_uca_0900) ID() ID {
 	return c.id
+}
+
+func (c *Collation_utf8mb4_uca_0900) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
+}
+
+func (c *Collation_utf8mb4_uca_0900) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_utf8mb4_uca_0900) Collate(left, right []byte, rightIsPrefix bool) int {
@@ -105,7 +110,7 @@ nextLevel:
 	switch {
 	case itleft.Level() == itright.Level():
 		if l == r && lok && rok {
-			level = itleft.Level()
+			level++
 			if level < levelsToCompare {
 				goto nextLevel
 			}
@@ -113,15 +118,12 @@ nextLevel:
 	case itleft.Level() > level:
 		return -1
 	case itright.Level() > level:
-		// TODO@vmg: this is not fully correct
 		if rightIsPrefix {
-			if itleft.SkipLevel() {
-				level = itleft.Level()
-				if level < levelsToCompare {
-					goto nextLevel
-				}
+			level = itleft.SkipLevel()
+			if level < levelsToCompare {
+				goto nextLevel
 			}
-			break
+			return -int(r)
 		}
 		return 1
 	}
@@ -133,14 +135,33 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
-	for {
-		w, ok := it.Next()
-		if !ok {
-			break
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		for {
+			for cap(dst)-len(dst) >= 16 {
+				n := fast.NextChunk(dst[len(dst) : len(dst)+16])
+				if n <= 0 {
+					goto performPadding
+				}
+				dst = dst[:len(dst)+n]
+			}
+			n := fast.NextChunk(chunk[:16])
+			if n <= 0 {
+				goto performPadding
+			}
+			dst = append(dst, chunk[:n]...)
 		}
-		dst = append(dst, byte(w>>8), byte(w))
+	} else {
+		for {
+			w, ok := it.Next()
+			if !ok {
+				break
+			}
+			dst = append(dst, byte(w>>8), byte(w))
+		}
 	}
 
+performPadding:
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x00)
@@ -148,6 +169,35 @@ func (c *Collation_utf8mb4_uca_0900) WeightString(dst, src []byte, numCodepoints
 	}
 
 	return dst
+}
+
+func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) uintptr {
+	var hash = uintptr(c.id)
+
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	if fast, ok := it.(*uca.FastIterator900); ok {
+		var chunk [16]byte
+		var n int
+		for {
+			n = fast.NextChunk(chunk[:16])
+			if n < 16 {
+				break
+			}
+			hash = memhash128(unsafe.Pointer(&chunk), hash)
+		}
+		return memhashraw(unsafe.Pointer(&chunk), hash, uintptr(n))
+	}
+
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		hash = memhash16(bits.ReverseBytes16(w), hash)
+	}
+	return hash
 }
 
 func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
@@ -162,13 +212,9 @@ func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
 
 type Collation_utf8mb4_0900_bin struct{}
 
-func (c *Collation_utf8mb4_0900_bin) init() {}
+func (c *Collation_utf8mb4_0900_bin) Init() {}
 
-func (c *Collation_utf8mb4_0900_bin) Encoding() encoding.Encoding {
-	return encoding.Encoding_utf8mb4{}
-}
-
-func (c *Collation_utf8mb4_0900_bin) Id() uint {
+func (c *Collation_utf8mb4_0900_bin) ID() ID {
 	return 309
 }
 
@@ -176,13 +222,20 @@ func (c *Collation_utf8mb4_0900_bin) Name() string {
 	return "utf8mb4_0900_bin"
 }
 
+func (c *Collation_utf8mb4_0900_bin) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
+}
+
+func (c *Collation_utf8mb4_0900_bin) IsBinary() bool {
+	return true
+}
+
 func (c *Collation_utf8mb4_0900_bin) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
-	copyCodepoints := minInt(len(src), cap(dst))
-	dst = append(dst, src[:copyCodepoints]...)
+	dst = append(dst, src...)
 	if numCodepoints == PadToMax {
 		for len(dst) < cap(dst) {
 			dst = append(dst, 0x0)
@@ -191,47 +244,54 @@ func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints
 	return dst
 }
 
+func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) uintptr {
+	return memhash(src, 0xb900b900)
+}
+
 func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
 	return numBytes
 }
 
 type Collation_uca_legacy struct {
 	name string
-	id   uint
+	id   ID
 
-	charset      encoding.Encoding
+	charset      charset.Charset
 	weights      uca.WeightTable
 	tailoring    []uca.WeightPatch
-	contractions []uca.Contraction
+	contract     uca.Contractor
 	maxCodepoint rune
 
 	uca     *uca.CollationLegacy
 	ucainit sync.Once
 }
 
-func (c *Collation_uca_legacy) init() {
+func (c *Collation_uca_legacy) Init() {
 	c.ucainit.Do(func() {
-		c.uca = uca.NewCollationLegacy(c.charset, c.weights, c.tailoring, c.contractions, c.maxCodepoint)
+		c.uca = uca.NewCollationLegacy(c.charset, c.weights, c.tailoring, c.contract, c.maxCodepoint)
 		c.weights = nil
 		c.tailoring = nil
-		c.contractions = nil
 	})
-}
-
-func (c *Collation_uca_legacy) Encoding() encoding.Encoding {
-	return c.charset
 }
 
 func (c *Collation_uca_legacy) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
 	return c.uca.Weights()
 }
 
-func (c *Collation_uca_legacy) Id() uint {
+func (c *Collation_uca_legacy) ID() ID {
 	return c.id
 }
 
 func (c *Collation_uca_legacy) Name() string {
 	return c.name
+}
+
+func (c *Collation_uca_legacy) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_uca_legacy) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
@@ -245,10 +305,6 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	defer itleft.Done()
 	defer itright.Done()
 
-	if isPrefix {
-		panic("unimplemented: isPrefix")
-	}
-
 	for {
 		l, lok = itleft.Next()
 		r, rok = itright.Next()
@@ -256,7 +312,9 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 		if l == r && lok && rok {
 			continue
 		}
-
+		if !rok && isPrefix {
+			return 0
+		}
 		return int(l) - int(r)
 	}
 }
@@ -294,6 +352,31 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	}
 
 	return dst
+}
+
+func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) uintptr {
+	it := c.uca.Iterator(src)
+	defer it.Done()
+
+	var hash = uintptr(c.id)
+	for {
+		w, ok := it.Next()
+		if !ok {
+			break
+		}
+		hash = memhash16(bits.ReverseBytes16(w), hash)
+	}
+
+	if numCodepoints > 0 {
+		weightForSpace := bits.ReverseBytes16(c.uca.WeightForSpace())
+		numCodepoints -= it.Length()
+		for numCodepoints > 0 {
+			hash = memhash16(weightForSpace, hash)
+			numCodepoints--
+		}
+	}
+
+	return hash
 }
 
 func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {

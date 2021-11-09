@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"go/format"
 	"io"
 	"log"
 	"os"
@@ -30,17 +29,25 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/internal/codegen"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
 var Output = flag.String("out", "mysqldata.go", "")
+var Print8BitData = flag.Bool("full8bit", false, "")
+var CleanupGlobalAllocations = flag.Bool("cleanup-allocs", false, "")
 
 type tailoringWeights map[string][]uint16
 
 type collationMetadata struct {
-	Name           string
-	Charset        string
-	Binary         bool
+	Name    string
+	Charset string
+	Flags   struct {
+		Binary  bool
+		ASCII   bool
+		Default bool
+	}
 	CollationImpl  string
 	Number         uint
 	CType          []byte
@@ -48,11 +55,18 @@ type collationMetadata struct {
 	ToUpper        []byte
 	SortOrder      []byte
 	TabToUni       []uint16
+	TabFromUni     []charset.UnicodeMapping
 	UCAVersion     int
 	Weights        tailoringWeights
 	Contractions   []uca.Contraction
 	Reorder        [][4]uint16
 	UpperCaseFirst bool
+}
+
+type output struct {
+	dedup  map[string]string
+	tables io.Writer
+	init   io.Writer
 }
 
 func diffMaps(orgWeights, modWeights tailoringWeights) (diff []uca.WeightPatch) {
@@ -76,11 +90,11 @@ func diffMaps(orgWeights, modWeights tailoringWeights) (diff []uca.WeightPatch) 
 	}
 
 	for key, val := range diffMap {
-		r, err := strconv.ParseInt(key[2:], 16, 32)
+		cp, err := strconv.ParseInt(key[2:], 16, 32)
 		if err != nil {
 			panic(err)
 		}
-		diff = append(diff, uca.WeightPatch{Codepoint: rune(r), Patch: val})
+		diff = append(diff, uca.WeightPatch{Codepoint: rune(cp), Patch: val})
 	}
 
 	sort.Slice(diff, func(i, j int) bool {
@@ -90,45 +104,45 @@ func diffMaps(orgWeights, modWeights tailoringWeights) (diff []uca.WeightPatch) 
 	return
 }
 
-func dedupTable(name, coll string, val interface{}, dedup map[string]string) (string, bool) {
+func (out *output) dedupTable(name, coll string, val interface{}) (string, bool) {
 	raw := fmt.Sprintf("%#v", val)
-	if exist, ok := dedup[raw]; ok {
+	if exist, ok := out.dedup[raw]; ok {
 		log.Printf("deduplicated %q -> %q", name+"_"+coll, exist)
 		return exist, true
 	}
 
 	varname := fmt.Sprintf("%s_%s", name, coll)
-	dedup[raw] = varname
+	out.dedup[raw] = varname
 	return varname, false
 }
 
-func (meta *collationMetadata) writeUcaLegacy(tables, init io.Writer, seenTables map[string]string) {
-	tableWeightPatches := meta.writeWeightPatches(tables, seenTables)
-	tableContractions := meta.writeContractions(tables, seenTables)
+func (out *output) printCollationUcaLegacy(meta *collationMetadata) {
+	tableWeightPatches := out.writeWeightPatches(meta)
+	tableContractions := out.writeContractions(meta)
 
-	fmt.Fprintf(init, "register(&Collation_uca_legacy{\n")
-	fmt.Fprintf(init, "name: %q,\n", meta.Name)
-	fmt.Fprintf(init, "id: %d,\n", meta.Number)
-	fmt.Fprintf(init, "charset: encoding.Encoding_%s{},\n", meta.Charset)
-	fmt.Fprintf(init, "weights: uca.WeightTable_uca%d,\n", meta.UCAVersion)
+	fmt.Fprintf(out.init, "register(&Collation_uca_legacy{\n")
+	fmt.Fprintf(out.init, "name: %q,\n", meta.Name)
+	fmt.Fprintf(out.init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(out.init, "charset: charset.Charset_%s{},\n", meta.Charset)
+	fmt.Fprintf(out.init, "weights: uca.WeightTable_uca%d,\n", meta.UCAVersion)
 	if tableWeightPatches != "" {
-		fmt.Fprintf(init, "tailoring: %s,\n", tableWeightPatches)
+		fmt.Fprintf(out.init, "tailoring: %s,\n", tableWeightPatches)
 	}
 	if tableContractions != "" {
-		fmt.Fprintf(init, "contractions: %s,\n", tableContractions)
+		fmt.Fprintf(out.init, "contract: %s{},\n", tableContractions)
 	}
 	switch meta.UCAVersion {
 	case 400:
-		fmt.Fprintf(init, "maxCodepoint: 0xFFFF,\n")
+		fmt.Fprintf(out.init, "maxCodepoint: 0xFFFF,\n")
 	case 520:
-		fmt.Fprintf(init, "maxCodepoint: 0x10FFFF,\n")
+		fmt.Fprintf(out.init, "maxCodepoint: 0x10FFFF,\n")
 	default:
 		panic("invalid UCAVersion")
 	}
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(out.init, "})\n")
 }
 
-func (meta *collationMetadata) writeWeightPatches(tables io.Writer, seenTables map[string]string) string {
+func (out *output) writeWeightPatches(meta *collationMetadata) string {
 	var tableWeightPatches string
 	var dedup bool
 	var baseWeights tailoringWeights
@@ -146,64 +160,50 @@ func (meta *collationMetadata) writeWeightPatches(tables io.Writer, seenTables m
 
 	diff := diffMaps(baseWeights, meta.Weights)
 	if len(diff) > 0 {
-		tableWeightPatches, dedup = dedupTable("weightTailoring", meta.Name, diff, seenTables)
+		tableWeightPatches, dedup = out.dedupTable("weightTailoring", meta.Name, diff)
 		if !dedup {
-			fmt.Fprintf(tables, "var %s = []uca.WeightPatch{\n", tableWeightPatches)
+			fmt.Fprintf(out.tables, "var %s = []uca.WeightPatch{\n", tableWeightPatches)
 			for _, d := range diff {
-				fmt.Fprintf(tables, "{ Codepoint: %d, Patch: %#v },\n", d.Codepoint, d.Patch)
+				fmt.Fprintf(out.tables, "{ Codepoint: %d, Patch: %#v },\n", d.Codepoint, d.Patch)
 			}
-			fmt.Fprintf(tables, "}\n")
+			fmt.Fprintf(out.tables, "}\n")
 		}
 	}
 
 	return tableWeightPatches
 }
 
-func (meta *collationMetadata) writeContractions(tables io.Writer, seenTables map[string]string) string {
+func (out *output) writeContractions(meta *collationMetadata) string {
 	var tableContractions string
 	var dedup bool
 
 	if len(meta.Contractions) > 0 {
-		tableContractions, dedup = dedupTable("contractions", meta.Name, meta.Contractions, seenTables)
+		tableContractions, dedup = out.dedupTable("contractor", meta.Name, meta.Contractions)
 		if !dedup {
-			fmt.Fprintf(tables, "var %s = []uca.Contraction{\n", tableContractions)
-			for _, ctr := range meta.Contractions {
-				for i := 0; i < len(ctr.Weights)-3; i += 3 {
-					if ctr.Weights[i] == 0x0 && ctr.Weights[i+1] == 0x0 && ctr.Weights[i+2] == 0x0 {
-						ctr.Weights = ctr.Weights[:i]
-						break
-					}
-				}
-				fmt.Fprintf(tables, "{ Path: %#v, Weights: %#v, ", ctr.Path, ctr.Weights)
-				if ctr.Contextual {
-					fmt.Fprintf(tables, "Contextual: true,")
-				}
-				fmt.Fprintf(tables, "},\n")
-			}
-			fmt.Fprintf(tables, "}\n")
+			out.printContractionsFast(tableContractions, meta.Contractions)
 		}
 	}
 	return tableContractions
 }
 
-func (meta *collationMetadata) writeReorders(tables io.Writer, seenTables map[string]string) string {
+func (out *output) writeReorders(meta *collationMetadata) string {
 	var tableReorder string
 	var dedup bool
 
 	if len(meta.Reorder) > 0 {
-		tableReorder, dedup = dedupTable("reorder", meta.Name, meta.Reorder, seenTables)
+		tableReorder, dedup = out.dedupTable("reorder", meta.Name, meta.Reorder)
 		if !dedup {
-			fmt.Fprintf(tables, "var %s = []uca.Reorder{\n", tableReorder)
+			fmt.Fprintf(out.tables, "var %s = []uca.Reorder{\n", tableReorder)
 			for _, r := range meta.Reorder {
-				fmt.Fprintf(tables, "{FromMin: 0x%04X, FromMax: 0x%04X, ToMin: 0x%04X, ToMax: 0x%04X},\n", r[0], r[1], r[2], r[3])
+				fmt.Fprintf(out.tables, "{FromMin: 0x%04X, FromMax: 0x%04X, ToMin: 0x%04X, ToMax: 0x%04X},\n", r[0], r[1], r[2], r[3])
 			}
-			fmt.Fprintf(tables, "}\n")
+			fmt.Fprintf(out.tables, "}\n")
 		}
 	}
 	return tableReorder
 }
 
-func (meta *collationMetadata) writeUca900(tables, init io.Writer, seenTables map[string]string) {
+func (out *output) printCollationUca900(meta *collationMetadata) {
 	if meta.UCAVersion != 900 {
 		panic("unexpected UCA version for UCA900 collation")
 	}
@@ -228,13 +228,13 @@ func (meta *collationMetadata) writeUca900(tables, init io.Writer, seenTables ma
 		meta.Weights = nil
 	}
 
-	tableWeightPatches := meta.writeWeightPatches(tables, seenTables)
-	tableContractions := meta.writeContractions(tables, seenTables)
-	tableReorder := meta.writeReorders(tables, seenTables)
+	tableWeightPatches := out.writeWeightPatches(meta)
+	tableContractions := out.writeContractions(meta)
+	tableReorder := out.writeReorders(meta)
 
-	fmt.Fprintf(init, "register(&Collation_utf8mb4_uca_0900{\n")
-	fmt.Fprintf(init, "name: %q,\n", meta.Name)
-	fmt.Fprintf(init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(out.init, "register(&Collation_utf8mb4_uca_0900{\n")
+	fmt.Fprintf(out.init, "name: %q,\n", meta.Name)
+	fmt.Fprintf(out.init, "id: %d,\n", meta.Number)
 
 	var levels int
 	switch {
@@ -250,90 +250,159 @@ func (meta *collationMetadata) writeUca900(tables, init io.Writer, seenTables ma
 		panic(fmt.Sprintf("unknown levelsForCompare: %q", meta.Name))
 	}
 
-	fmt.Fprintf(init, "levelsForCompare: %d,\n", levels)
-	fmt.Fprintf(init, "weights: %s,\n", tableWeights)
+	fmt.Fprintf(out.init, "levelsForCompare: %d,\n", levels)
+	fmt.Fprintf(out.init, "weights: %s,\n", tableWeights)
 	if tableWeightPatches != "" {
-		fmt.Fprintf(init, "tailoring: %s,\n", tableWeightPatches)
+		fmt.Fprintf(out.init, "tailoring: %s,\n", tableWeightPatches)
 	}
 	if tableContractions != "" {
-		fmt.Fprintf(init, "contractions: %s,\n", tableContractions)
+		fmt.Fprintf(out.init, "contract: %s{},\n", tableContractions)
 	}
 	if tableReorder != "" {
-		fmt.Fprintf(init, "reorder: %s,\n", tableReorder)
+		fmt.Fprintf(out.init, "reorder: %s,\n", tableReorder)
 	}
 	if meta.UpperCaseFirst {
-		fmt.Fprintf(init, "upperCaseFirst: true,\n")
+		fmt.Fprintf(out.init, "upperCaseFirst: true,\n")
 	}
-	fmt.Fprintf(init, "})\n")
+	fmt.Fprintf(out.init, "})\n")
 }
 
 const RowLength = 16
 
-func printByteSlice(f io.Writer, name, coll string, a []byte, seenTables map[string]string) string {
-	tableName, dedup := dedupTable(name, coll, a, seenTables)
+func (out *output) printSliceUint8(name, coll string, a []byte) string {
+	tableName, dedup := out.dedupTable(name, coll, a)
 	if !dedup {
-		fmt.Fprintf(f, "var %s = []byte{", tableName)
+		fmt.Fprintf(out.tables, "var %s = [...]byte{", tableName)
 		for idx, val := range a {
 			if idx%RowLength == 0 {
-				fmt.Fprintf(f, "\n")
+				fmt.Fprintf(out.tables, "\n")
 			}
-			fmt.Fprintf(f, "0x%02X, ", val)
+			fmt.Fprintf(out.tables, "0x%02X, ", val)
 		}
-		fmt.Fprintf(f, "\n}\n")
+		fmt.Fprintf(out.tables, "\n}\n")
 	}
 	return tableName
 }
 
-func printUnsignedSlice(f io.Writer, name, coll string, a []uint16, seenTables map[string]string) string {
-	tableName, dedup := dedupTable(name, coll, a, seenTables)
+func (out *output) printSliceUint16(name, coll string, a []uint16) string {
+	tableName, dedup := out.dedupTable(name, coll, a)
 	if !dedup {
-		fmt.Fprintf(f, "var %s = []uint16{", tableName)
+		fmt.Fprintf(out.tables, "var %s = [...]uint16{", tableName)
 		for idx, val := range a {
 			if idx%RowLength == 0 {
-				fmt.Fprintf(f, "\n")
+				fmt.Fprintf(out.tables, "\n")
 			}
-			fmt.Fprintf(f, "0x%04X, ", val)
+			fmt.Fprintf(out.tables, "0x%04X, ", val)
 		}
-		fmt.Fprintf(f, "\n}\n")
+		fmt.Fprintf(out.tables, "\n}\n")
 	}
 	return tableName
 }
 
-func (meta *collationMetadata) write8bit(tables, init io.Writer, seenTables map[string]string) {
-	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUni string
+func (out *output) printUnicodeMappings(name, coll string, mappings []charset.UnicodeMapping) string {
+	tableName, dedup := out.dedupTable(name, coll, mappings)
+	if !dedup {
+		fmt.Fprintf(out.tables, "var %s = []charset.UnicodeMapping{\n", tableName)
+		for _, m := range mappings {
+			fmt.Fprintf(out.tables, "{From: 0x%x, To: 0x%x, Range: %#v},\n", m.From, m.To, m.Range)
+		}
+		fmt.Fprintf(out.tables, "}")
+	}
+	return tableName
+}
 
-	tableCtype = printByteSlice(tables, "ctype", meta.Name, meta.CType, seenTables)
-	tableToLower = printByteSlice(tables, "tolower", meta.Name, meta.ToLower, seenTables)
-	tableToUpper = printByteSlice(tables, "toupper", meta.Name, meta.ToUpper, seenTables)
+func (out *output) printCollation8bit(meta *collationMetadata) {
+	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUnicode, tableFromUnicode string
+
+	if *Print8BitData {
+		tableCtype = out.printSliceUint8("ctype", meta.Name, meta.CType)
+		tableToLower = out.printSliceUint8("tolower", meta.Name, meta.ToLower)
+		tableToUpper = out.printSliceUint8("toupper", meta.Name, meta.ToUpper)
+	}
 	if meta.SortOrder != nil {
-		tableSortOrder = printByteSlice(tables, "sortorder", meta.Name, meta.ToUpper, seenTables)
+		tableSortOrder = out.printSliceUint8("sortorder", meta.Name, meta.SortOrder)
 	}
-	if meta.TabToUni != nil {
-		tableToUni = printUnsignedSlice(tables, "tabtouni", meta.Name, meta.TabToUni, seenTables)
+	if meta.Charset != "latin1" {
+		if meta.TabToUni != nil {
+			tableToUnicode = out.printSliceUint16("tounicode", meta.Name, meta.TabToUni)
+		}
+		if meta.TabFromUni != nil {
+			tableFromUnicode = out.printUnicodeMappings("fromunicode", meta.Name, meta.TabFromUni)
+		}
 	}
-	fmt.Fprintf(tables, "\n")
+	fmt.Fprintf(out.tables, "\n")
 
 	var collation string
-	if meta.Binary {
+	if meta.Flags.Binary {
 		collation = "Collation_8bit_bin"
 	} else {
 		collation = "Collation_8bit_simple_ci"
 	}
 
-	fmt.Fprintf(init, "register(&%s{\n", collation)
-	fmt.Fprintf(init, "id: %d,\n", meta.Number)
-	fmt.Fprintf(init, "name: %q,\n", meta.Name)
-	fmt.Fprintf(init, "simpletables: simpletables{\n")
-	fmt.Fprintf(init, "ctype: %s,\n", tableCtype)
-	fmt.Fprintf(init, "tolower: %s,\n", tableToLower)
-	fmt.Fprintf(init, "toupper: %s,\n", tableToUpper)
+	fmt.Fprintf(out.init, "register(&%s{\n", collation)
+	fmt.Fprintf(out.init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(out.init, "name: %q,\n", meta.Name)
+
+	fmt.Fprintf(out.init, "simpletables: simpletables{\n")
+	if *Print8BitData {
+		fmt.Fprintf(out.init, "ctype: &%s,\n", tableCtype)
+		fmt.Fprintf(out.init, "tolower: &%s,\n", tableToLower)
+		fmt.Fprintf(out.init, "toupper: &%s,\n", tableToUpper)
+	}
 	if tableSortOrder != "" {
-		fmt.Fprintf(init, "sort: %s,\n", tableSortOrder)
+		fmt.Fprintf(out.init, "sort: &%s,\n", tableSortOrder)
 	}
-	if tableToUni != "" {
-		fmt.Fprintf(init, "tounicode: %s,\n", tableToUni)
+	fmt.Fprintf(out.init, "},\n")
+
+	// Optimized implementation for latin1
+	if meta.Charset == "latin1" {
+		fmt.Fprintf(out.init, "charset: charset.Charset_latin1{},\n")
+	} else {
+		fmt.Fprintf(out.init, "charset: &charset.Charset_8bit{\n")
+		fmt.Fprintf(out.init, "Name_: %q,\n", meta.Charset)
+		if tableToUnicode != "" {
+			fmt.Fprintf(out.init, "ToUnicode: &%s,\n", tableToUnicode)
+		}
+		if tableFromUnicode != "" {
+			fmt.Fprintf(out.init, "FromUnicode: %s,\n", tableFromUnicode)
+		}
+		fmt.Fprintf(out.init, "},\n")
 	}
-	fmt.Fprintf(init, "},\n})\n")
+
+	fmt.Fprintf(out.init, "})\n")
+}
+
+func (out *output) printCollationUnicode(meta *collationMetadata) {
+	var collation string
+	if meta.Flags.Binary {
+		collation = "Collation_unicode_bin"
+	} else {
+		collation = "Collation_unicode_general_ci"
+	}
+	fmt.Fprintf(out.init, "register(&%s{\n", collation)
+	fmt.Fprintf(out.init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(out.init, "name: %q,\n", meta.Name)
+	if !meta.Flags.Binary {
+		fmt.Fprintf(out.init, "unicase: unicaseInfo_default,\n")
+	}
+	fmt.Fprintf(out.init, "charset: charset.Charset_%s{},\n", meta.Charset)
+	fmt.Fprintf(out.init, "})\n")
+}
+
+func (out *output) printCollationMultibyte(meta *collationMetadata) {
+	var tableSortOrder string
+	if meta.SortOrder != nil {
+		tableSortOrder = out.printSliceUint8("sortorder", meta.Name, meta.SortOrder)
+	}
+
+	fmt.Fprintf(out.init, "register(&Collation_multibyte{\n")
+	fmt.Fprintf(out.init, "id: %d,\n", meta.Number)
+	fmt.Fprintf(out.init, "name: %q,\n", meta.Name)
+	if tableSortOrder != "" {
+		fmt.Fprintf(out.init, "sort: &%s,\n", tableSortOrder)
+	}
+	fmt.Fprintf(out.init, "charset: charset.Charset_%s{},\n", meta.Charset)
+	fmt.Fprintf(out.init, "})\n")
 }
 
 func loadMysqlMetadata() (all []*collationMetadata) {
@@ -367,13 +436,6 @@ func loadMysqlMetadata() (all []*collationMetadata) {
 	return
 }
 
-var hardcodedCollations = map[string]bool{
-	"utf8mb4_general_ci": true,
-	"utf8mb4_bin":        true,
-	"utf8mb4_0900_bin":   true,
-	"binary":             true,
-}
-
 func findCollation(all []*collationMetadata, name string) *collationMetadata {
 	for _, meta := range all {
 		if meta.Name == name {
@@ -388,8 +450,7 @@ var baseWeightsUca520 tailoringWeights
 var baseWeightsUca900 tailoringWeights
 
 func main() {
-	var unhandled = make(map[string][]string)
-	var deduplicated = make(map[string]string)
+	var unsupportedByCharset = make(map[string][]string)
 	var tables, init bytes.Buffer
 
 	allMetadata := loadMysqlMetadata()
@@ -397,69 +458,86 @@ func main() {
 	baseWeightsUca520 = findCollation(allMetadata, "utf8mb4_unicode_520_ci").Weights
 	baseWeightsUca900 = findCollation(allMetadata, "utf8mb4_0900_ai_ci").Weights
 
+	out := output{
+		dedup:  make(map[string]string),
+		tables: &tables,
+		init:   &init,
+	}
+
 	for _, meta := range allMetadata {
-		if hardcodedCollations[meta.Name] {
-			continue
-		}
+		switch {
+		case meta.Name == "utf8mb4_0900_bin" || meta.Name == "binary":
+			// hardcoded collations; nothing to export here
 
-		switch meta.CollationImpl {
-		case "any_uca", "utf16_uca", "utf32_uca", "ucs2_uca":
-			meta.writeUcaLegacy(&tables, &init, deduplicated)
-		case "uca_900":
-			meta.writeUca900(&tables, &init, deduplicated)
-		case "8bit_bin", "8bit_simple_ci":
-			meta.write8bit(&tables, &init, deduplicated)
+		case meta.Name == "tis620_bin":
+			// explicitly unsupported for now because of not accurate results
+
+		case meta.CollationImpl == "any_uca" ||
+			meta.CollationImpl == "utf16_uca" ||
+			meta.CollationImpl == "utf32_uca" ||
+			meta.CollationImpl == "ucs2_uca":
+			out.printCollationUcaLegacy(meta)
+
+		case meta.CollationImpl == "uca_900":
+			out.printCollationUca900(meta)
+
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci":
+			out.printCollation8bit(meta)
+
+		case meta.Name == "gb18030_unicode_520_ci":
+			out.printCollationUcaLegacy(meta)
+
+		case charset.IsMultibyteByName(meta.Charset):
+			out.printCollationMultibyte(meta)
+
+		case strings.HasSuffix(meta.Name, "_bin") && charset.IsUnicodeByName(meta.Charset):
+			out.printCollationUnicode(meta)
+
+		case strings.HasSuffix(meta.Name, "_general_ci"):
+			out.printCollationUnicode(meta)
+
 		default:
-			switch meta.Name {
-			case "gb18030_unicode_520_ci":
-				meta.writeUcaLegacy(&tables, &init, deduplicated)
-			default:
-				unhandled[meta.Charset] = append(unhandled[meta.Charset], meta.Name)
-			}
+			unsupportedByCharset[meta.Charset] = append(unsupportedByCharset[meta.Charset], meta.Name)
 		}
 	}
 
-	var file bytes.Buffer
-	fmt.Fprintf(&file, "// DO NOT MODIFY: this file is autogenerated by makemysqldata.go\n\n")
-	fmt.Fprintf(&file, "package collations\n\n")
-	fmt.Fprintf(&file, "import (\n")
-	fmt.Fprintf(&file, "\"vitess.io/vitess/go/mysql/collations/internal/encoding\"\n")
-	fmt.Fprintf(&file, "\"vitess.io/vitess/go/mysql/collations/internal/uca\"\n")
-	fmt.Fprintf(&file, ")\n\n")
-	tables.WriteTo(&file)
-	fmt.Fprintf(&file, "func init() {\n")
-	init.WriteTo(&file)
+	var file = codegen.NewGoFile(*Output)
+	fmt.Fprintf(file, "// DO NOT MODIFY: this file is autogenerated by makemysqldata.go\n\n")
+	fmt.Fprintf(file, "package collations\n\n")
+	fmt.Fprintf(file, "import (\n")
+	fmt.Fprintf(file, "\"vitess.io/vitess/go/mysql/collations/internal/charset\"\n")
+	fmt.Fprintf(file, "\"vitess.io/vitess/go/mysql/collations/internal/uca\"\n")
+	fmt.Fprintf(file, ")\n\n")
+	tables.WriteTo(file)
 
-	var cleanup []string
-	for _, table := range deduplicated {
-		cleanup = append(cleanup, table)
-	}
-	sort.Strings(cleanup)
-	for _, table := range cleanup {
-		fmt.Fprintf(&file, "%s = nil\n", table)
-	}
+	fmt.Fprintf(file, "func init() {\n")
+	init.WriteTo(file)
 
-	fmt.Fprintf(&file, "}\n")
-
-	formatted, err := format.Source(file.Bytes())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "source:\n%s\n", file.String())
-		log.Fatalf("failed to format generated code: %v", err)
+	if *CleanupGlobalAllocations {
+		var cleanup []string
+		for _, table := range out.dedup {
+			cleanup = append(cleanup, table)
+		}
+		sort.Strings(cleanup)
+		for _, table := range cleanup {
+			fmt.Fprintf(file, "%s = nil\n", table)
+		}
 	}
 
-	err = os.WriteFile(*Output, formatted, 0644)
-	if err != nil {
-		log.Fatalf("failed to generate %q: %v", *Output, err)
+	fmt.Fprintf(file, "}\n")
+
+	if err := file.Close(); err != nil {
+		log.Fatal(err)
 	}
 
 	var unhandledCount int
-	for impl, collations := range unhandled {
+	for impl, collations := range unsupportedByCharset {
 		log.Printf("unhandled implementation %q: %s", impl, strings.Join(collations, ", "))
 		unhandledCount += len(collations)
 	}
 
-	log.Printf("written %q - %d bytes, %d/%d collations (%.2f%% handled)",
-		*Output, len(formatted),
+	log.Printf("written %q: %d/%d collations (%.2f%% handled)",
+		*Output,
 		len(allMetadata)-unhandledCount, len(allMetadata),
 		float64(len(allMetadata)-unhandledCount)/float64(len(allMetadata))*100.0,
 	)

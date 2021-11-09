@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
@@ -478,6 +479,28 @@ func (node *Literal) Bytes() []byte {
 // HexDecode decodes the hexval into bytes.
 func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
+}
+
+// EncodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// for passing on to MySQL as a bind var
+func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
+	nb := node.Bytes()
+	if node.Type != HexVal {
+		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
+	}
+
+	// Let's make this idempotent in case it's called more than once
+	if nb[0] == 'x' && nb[1] == '0' && nb[len(nb)-1] == '\'' {
+		return nb, nil
+	}
+
+	var bb bytes.Buffer
+	bb.WriteByte('x')
+	bb.WriteByte('\'')
+	bb.WriteString(string(nb))
+	bb.WriteByte('\'')
+	nb = bb.Bytes()
+	return nb, nil
 }
 
 // Equal returns true if the column names match.
@@ -1214,6 +1237,54 @@ func (ty ExplainType) ToString() string {
 		return AnalyzeStr
 	default:
 		return "Unknown ExplainType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IntervalTypes) ToString() string {
+	switch ty {
+	case IntervalYear:
+		return YearStr
+	case IntervalQuarter:
+		return QuarterStr
+	case IntervalMonth:
+		return MonthStr
+	case IntervalWeek:
+		return WeekStr
+	case IntervalDay:
+		return DayStr
+	case IntervalHour:
+		return HourStr
+	case IntervalMinute:
+		return MinuteStr
+	case IntervalSecond:
+		return SecondStr
+	case IntervalMicrosecond:
+		return MicrosecondStr
+	case IntervalYearMonth:
+		return YearMonthStr
+	case IntervalDayHour:
+		return DayHourStr
+	case IntervalDayMinute:
+		return DayMinuteStr
+	case IntervalDaySecond:
+		return DaySecondStr
+	case IntervalHourMinute:
+		return HourMinuteStr
+	case IntervalHourSecond:
+		return HourSecondStr
+	case IntervalMinuteSecond:
+		return MinuteSecondStr
+	case IntervalDayMicrosecond:
+		return DayMicrosecondStr
+	case IntervalHourMicrosecond:
+		return HourMicrosecondStr
+	case IntervalMinuteMicrosecond:
+		return MinuteMicrosecondStr
+	case IntervalSecondMicrosecond:
+		return SecondMicrosecondStr
+	default:
+		return "Unknown IntervalType"
 	}
 }
 
