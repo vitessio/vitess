@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -170,34 +169,6 @@ func (ts *trafficSwitcher) ForAllUIDs(f func(target *workflow.MigrationTarget, u
 }
 
 /* end: implementation of workflow.ITrafficSwitcher */
-
-// For a Reshard, to check whether we have switched reads for a tablet type, we check if any one of the source shards has
-// the query service disabled in its tablet control record
-func (wr *Wrangler) getCellsWithShardReadsSwitched(ctx context.Context, targetKeyspace string, si *topo.ShardInfo, tabletTypeStr string) (
-	cellsSwitched, cellsNotSwitched []string, err error) {
-
-	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithShardReadsSwitched(ctx, targetKeyspace, si, tabletType)
-}
-
-// For MoveTables,  to check whether we have switched reads for a tablet type, we check whether the routing rule
-// for the tablet_type is pointing to the target keyspace
-func (wr *Wrangler) getCellsWithTableReadsSwitched(ctx context.Context, targetKeyspace, table, tabletTypeStr string) (
-	cellsSwitched, cellsNotSwitched []string, err error) {
-
-	tabletType, err := topoproto.ParseTabletType(tabletTypeStr)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s := workflow.NewServer(wr.ts, wr.tmc)
-	return s.GetCellsWithTableReadsSwitched(ctx, targetKeyspace, table, tabletType)
-}
 
 func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workflowName string) (*trafficSwitcher, *workflow.State, error) {
 	ts, err := wr.buildTrafficSwitcher(ctx, targetKeyspace, workflowName)
