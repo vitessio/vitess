@@ -407,6 +407,13 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
+	// when creating a connection to the database, we send an initial query to set the connection's
+	// collation, we want to skip the query check if we get such initial query.
+	// this is done to ease the test readability.
+	if query == "SET collation_connection = utf8mb4_general_ci" {
+		return &sqltypes.Result{}, nil
+	}
+
 	index := db.expectedExecuteFetchIndex
 	if db.infinite && index == len(db.expectedExecuteFetch) {
 		// Although we already executed all queries, we'll continue to answer the
@@ -436,7 +443,9 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 			db.t.Errorf("%v: got unexpected query start (index=%v): %v != %v", db.name, index, query, expected)
 		}
 	} else {
-		if query != expected {
+		if query == "SET collation_connection = utf8mb4_general_ci" {
+
+		} else if query != expected {
 			db.t.Errorf("%v: got unexpected query (index=%v): %v != %v", db.name, index, query, expected)
 			return nil, errors.New("unexpected query")
 		}
