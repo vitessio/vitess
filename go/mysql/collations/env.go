@@ -129,13 +129,13 @@ func NewEnvironment(serverVersion string) (*Environment, error) {
 	switch {
 	case strings.Contains(serverVersion, "MariaDB"):
 		switch {
-		case strings.HasPrefix(serverVersion, "10.0."):
+		case strings.Contains(serverVersion, "10.0."):
 			version = collverMariaDB100
-		case strings.HasPrefix(serverVersion, "10.1."):
+		case strings.Contains(serverVersion, "10.1."):
 			version = collverMariaDB101
-		case strings.HasPrefix(serverVersion, "10.2."):
+		case strings.Contains(serverVersion, "10.2."):
 			version = collverMariaDB102
-		case strings.HasPrefix(serverVersion, "10.3."):
+		case strings.Contains(serverVersion, "10.3."):
 			version = collverMariaDB103
 		}
 	case strings.HasPrefix(serverVersion, "5.7."):
