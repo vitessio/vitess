@@ -28,7 +28,7 @@ access to Vitess.
 
 ### Using a self-hosted runner to debug a flaky test
 You will need access to the self-hosted runner machine to be able to connect to it via SSH.
-1. From the output of the run on GitHub Actions, find the `Machine name`
+1. From the output of the run on GitHub Actions, find the `Machine name` in the `Set up job` step 
 2. Find that machine on the Equinix dashboard and connect to it via ssh
 3. From the output of the `Print Volume Used` step find the volume used
 4. From the output of the `Build Docker Image` step find the docker image built for this workflow
