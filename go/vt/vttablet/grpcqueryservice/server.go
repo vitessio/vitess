@@ -300,14 +300,14 @@ func (q *query) BeginExecuteBatch(ctx context.Context, request *querypb.BeginExe
 	}, nil
 }
 
-// BeginStreamExecuteBatch is part of the queryservice.QueryServer interface
+// BeginStreamExecute is part of the queryservice.QueryServer interface
 func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, stream queryservicepb.Query_BeginStreamExecuteServer) (err error) {
 	defer q.server.HandlePanic(&err)
 	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
+	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})

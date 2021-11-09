@@ -2869,13 +2869,8 @@ func (m *BeginStreamExecuteRequest) MarshalToSizedBufferVT(dAtA []byte) (int, er
 			copy(dAtA[i:], m.PreQueries[iNdEx])
 			i = encodeVarint(dAtA, i, uint64(len(m.PreQueries[iNdEx])))
 			i--
-			dAtA[i] = 0x3a
+			dAtA[i] = 0x32
 		}
-	}
-	if m.ReservedId != 0 {
-		i = encodeVarint(dAtA, i, uint64(m.ReservedId))
-		i--
-		dAtA[i] = 0x30
 	}
 	if m.Options != nil {
 		size, err := m.Options.MarshalToSizedBufferVT(dAtA[:i])
@@ -5193,9 +5188,6 @@ func (m *BeginStreamExecuteRequest) SizeVT() (n int) {
 	if m.Options != nil {
 		l = m.Options.SizeVT()
 		n += 1 + l + sov(uint64(l))
-	}
-	if m.ReservedId != 0 {
-		n += 1 + sov(uint64(m.ReservedId))
 	}
 	if len(m.PreQueries) > 0 {
 		for _, s := range m.PreQueries {
@@ -12954,25 +12946,6 @@ func (m *BeginStreamExecuteRequest) UnmarshalVT(dAtA []byte) error {
 			}
 			iNdEx = postIndex
 		case 6:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field ReservedId", wireType)
-			}
-			m.ReservedId = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.ReservedId |= int64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field PreQueries", wireType)
 			}
