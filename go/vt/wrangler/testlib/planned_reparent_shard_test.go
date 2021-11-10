@@ -288,8 +288,7 @@ func TestPlannedReparentNoPrimary(t *testing.T) {
 	NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
 	NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
 
-	// use deprecated flag new_master to ensure coverage
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_master", topoproto.TabletAliasString(replica1.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", replica1.Tablet.Keyspace + "/" + replica1.Tablet.Shard, "-new_primary", topoproto.TabletAliasString(replica1.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "the shard has no current primary")
 }
@@ -485,8 +484,7 @@ func TestPlannedReparentShardWaitForPositionTimeout(t *testing.T) {
 	defer goodReplica2.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	// use deprecated flag new_master to ensure coverage
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "-new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "replication on primary-elect cell1-0000000001 did not catch up in time")
 
@@ -626,8 +624,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	defer goodReplica1.StopActionLoop(t)
 
 	// run PlannedReparentShard
-	// use deprecated flag new_master to ensure coverage
-	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "-new_master",
+	err := vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", primary.Tablet.Keyspace + "/" + primary.Tablet.Shard, "-new_primary",
 		topoproto.TabletAliasString(primary.Tablet.Alias)})
 	require.NoError(t, err)
 	// check what was run
@@ -770,8 +767,7 @@ func TestPlannedReparentShardPromoteReplicaFail(t *testing.T) {
 	}
 
 	// run PlannedReparentShard
-	// use deprecated flag new_master to ensure coverage
-	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "-new_master", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
+	err = vp.Run([]string{"PlannedReparentShard", "-wait_replicas_timeout", "10s", "-keyspace_shard", newPrimary.Tablet.Keyspace + "/" + newPrimary.Tablet.Shard, "-new_primary", topoproto.TabletAliasString(newPrimary.Tablet.Alias)})
 	require.NoError(t, err)
 
 	// check that primary changed correctly
