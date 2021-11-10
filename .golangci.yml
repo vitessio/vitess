@@ -27,7 +27,12 @@ linters:
     - gofmt
     - goimports
 
+    # revive is a replacement for golint, but we do not run it in CI for now.
+    # This is only enabled as a post-commit hook
+    # - revive
+
 issues:
+  new: true
   exclude-rules:
     - path: '^go/vt/proto/'
       linters:
@@ -43,6 +48,9 @@ issues:
     - path: '^go/mysql/'
       linters:
       - errcheck
+    - path: '^go/mysql/collations'
+      linters:
+        - revive
     - path: '^go/pools/.*_test.go'
       linters:
       - errcheck
