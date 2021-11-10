@@ -679,7 +679,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	// we receive is not nil, this situation can happen in tests for instance.
 	if qre.options != nil {
 		if err := conn.Info.MatchCollation(collations.ID(qre.options.Collation)); err != nil {
-			return nil, err
+			log.Warning(err.Error())
 		}
 	}
 
