@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	cloud.google.com/go/storage v1.10.0
-	github.com/AdaLogics/go-fuzz-headers v0.0.0-20210330150358-dbd898e17899
+	github.com/AdaLogics/go-fuzz-headers v0.0.0-20211102141018-f7be0cbad29c
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-storage-blob-go v0.10.0
 	github.com/DataDog/datadog-go v2.2.0+incompatible
@@ -131,6 +131,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
+	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/daaku/go.zipexe v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/color v1.9.0 // indirect
