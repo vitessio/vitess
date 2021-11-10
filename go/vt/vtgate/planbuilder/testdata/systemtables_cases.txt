@@ -1270,3 +1270,144 @@ Gen4 plan same as above
     "Table": "information_schema.`tables`"
   }
 }
+
+# merge even one side have schema name in derived table
+"select id from (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns) dt"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns) dt",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectDBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from information_schema.`table` as t where 1 != 1",
+                "Query": "select id from information_schema.`table` as t where t.schema_name = :__vtschemaname",
+                "SysTableTableSchema": "[VARBINARY(\"a\")]",
+                "Table": "information_schema.`table`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectDBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from information_schema.`columns` where 1 != 1",
+                "Query": "select id from information_schema.`columns`",
+                "Table": "information_schema.`columns`"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns) dt",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from (select id from information_schema.`table` as t where 1 != 1 union select id from information_schema.`columns` where 1 != 1) as dt where 1 != 1",
+    "Query": "select id from (select id from information_schema.`table` as t where t.schema_name = :__vtschemaname union select id from information_schema.`columns`) as dt",
+    "SysTableTableSchema": "[VARBINARY(\"a\")]",
+    "Table": "information_schema.`table`"
+  }
+}
+
+# merge even one side have schema name in subquery
+"select id from information_schema.random t where t.col in (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns)"
+{
+  "QueryType": "SELECT",
+  "Original": "select id from information_schema.random t where t.col in (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns)",
+  "Instructions": {
+    "OperatorType": "Subquery",
+    "Variant": "PulloutIn",
+    "PulloutVars": [
+      "__sq_has_values1",
+      "__sq1"
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Distinct",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectDBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from information_schema.`table` as t where 1 != 1",
+                "Query": "select id from information_schema.`table` as t where t.schema_name = :__vtschemaname",
+                "SysTableTableSchema": "[VARBINARY(\"a\")]",
+                "Table": "information_schema.`table`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "SelectDBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from information_schema.`columns` where 1 != 1",
+                "Query": "select id from information_schema.`columns`",
+                "Table": "information_schema.`columns`"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select id from information_schema.random as t where 1 != 1",
+        "Query": "select id from information_schema.random as t where :__sq_has_values1 = 1 and t.col in ::__sq1",
+        "Table": "information_schema.random"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select id from information_schema.random t where t.col in (select id from information_schema.table t where t.schema_name = 'a' union select id from information_schema.columns)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select id from information_schema.random as t where 1 != 1",
+    "Query": "select id from information_schema.random as t where t.col in (select id from information_schema.`table` as t where t.schema_name = :__vtschemaname union select id from information_schema.`columns`)",
+    "SysTableTableSchema": "[VARBINARY(\"a\")]",
+    "Table": "information_schema.random"
+  }
+}

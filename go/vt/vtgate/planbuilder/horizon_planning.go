@@ -317,14 +317,14 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		node.cols = append(node.cols, column)
 		return len(node.cols) - 1, true, nil
 	case *concatenateGen4:
+		if hasAggregation {
+			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
+		}
 		offset, added, err := pushProjection(expr, node.sources[0], semTable, inner, reuseCol, hasAggregation)
 		if err != nil {
 			return 0, false, err
 		}
 		if added {
-			if hasAggregation {
-				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "aggregation not supported on top of unions")
-			}
 			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 		}
 		return offset, false, nil
