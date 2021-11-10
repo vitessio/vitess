@@ -1038,11 +1038,9 @@ func canSelectDBAMerge(a, b *route) bool {
 		}
 	}
 
-	// when we have no information from either side, they both will be routed to default keyspace, so they can be merged
-	return len(a.eroute.SysTableTableSchema) == 0 &&
-		len(a.eroute.SysTableTableName) == 0 &&
-		len(b.eroute.SysTableTableSchema) == 0 &&
-		len(b.eroute.SysTableTableName) == 0
+	// if either/both of the side does not have any routing information, then they can be merged.
+	return (len(a.eroute.SysTableTableSchema) == 0 && len(a.eroute.SysTableTableName) == 0) ||
+		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
 }
 
 func tryMerge(ctx *planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {
