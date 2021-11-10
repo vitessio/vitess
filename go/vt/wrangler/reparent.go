@@ -63,9 +63,9 @@ func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shar
 			wg.Add(1)
 			go func(i int, ti *topo.TabletInfo) {
 				defer wg.Done()
-				pos, err := wr.tmc.MasterPosition(ctx, ti.Tablet)
+				pos, err := wr.tmc.PrimaryPosition(ctx, ti.Tablet)
 				if err != nil {
-					rec.RecordError(fmt.Errorf("MasterPosition(%v) failed: %v", ti.AliasString(), err))
+					rec.RecordError(fmt.Errorf("PrimaryPosition(%v) failed: %v", ti.AliasString(), err))
 					return
 				}
 				result[i] = &replicationdatapb.Status{

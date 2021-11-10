@@ -1923,7 +1923,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
-	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false); err != nil {
+	if err := s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false); err != nil {
 		return nil, err
 	}
 
@@ -2215,7 +2215,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 				var status *replicationdatapb.Status
 
-				pos, err := s.tmc.MasterPosition(ctx, tablet)
+				pos, err := s.tmc.PrimaryPosition(ctx, tablet)
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
@@ -2225,7 +2225,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
-						rec.RecordError(fmt.Errorf("MasterPosition(%s) failed: %w", alias, err))
+						rec.RecordError(fmt.Errorf("PrimaryPosition(%s) failed: %w", alias, err))
 						return
 					}
 				} else {

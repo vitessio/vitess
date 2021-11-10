@@ -756,7 +756,7 @@ func CreateConsistentTransactions(ctx context.Context, tablet *topo.TabletInfo, 
 		return nil, "", vterrors.Wrapf(err, "failed to create transactions on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}
 	wr.Logger().Infof("transactions created on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
-	executedGtid, err := tm.MasterPosition(ctx, tablet.Tablet)
+	executedGtid, err := tm.PrimaryPosition(ctx, tablet.Tablet)
 	if err != nil {
 		return nil, "", vterrors.Wrapf(err, "could not read executed GTID set on %v", topoproto.TabletAliasString(tablet.Tablet.Alias))
 	}

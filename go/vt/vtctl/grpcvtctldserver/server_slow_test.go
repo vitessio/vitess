@@ -96,7 +96,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -118,13 +118,13 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
 					"zone1-0000000200": {},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},
@@ -215,7 +215,7 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -237,13 +237,13 @@ func TestEmergencyReparentShardSlow(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
 					"zone1-0000000200": {},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},
@@ -393,7 +393,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -404,7 +404,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -428,9 +428,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
-					"zone1-0000000200": nil, // waiting for master-position during promotion
-					// reparent SetMaster calls
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil, // waiting for primary-position during promotion
+					// reparent SetReplicationSource calls
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},
@@ -496,7 +496,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -507,7 +507,7 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -531,9 +531,9 @@ func TestPlannedReparentShardSlow(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
-					"zone1-0000000200": nil, // waiting for master-position during promotion
-					// reparent SetMaster calls
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil, // waiting for primary-position during promotion
+					// reparent SetReplicationSource calls
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},

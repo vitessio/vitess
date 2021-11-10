@@ -417,17 +417,17 @@ func (tm *TabletManager) catchupToGTID(ctx context.Context, afterGTIDPos string,
 
 	if *binlogSslCa != "" || *binlogSslCert != "" {
 		// We need to use TLS
-		changeMasterCmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
+		cmd := fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1, MASTER_SSL=1", *binlogHost, *binlogPort, *binlogUser, *binlogPwd)
 		if *binlogSslCa != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
+			cmd += fmt.Sprintf(", MASTER_SSL_CA='%s'", *binlogSslCa)
 		}
 		if *binlogSslCert != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
+			cmd += fmt.Sprintf(", MASTER_SSL_CERT='%s'", *binlogSslCert)
 		}
 		if *binlogSslKey != "" {
-			changeMasterCmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
+			cmd += fmt.Sprintf(", MASTER_SSL_KEY='%s'", *binlogSslKey)
 		}
-		cmds = append(cmds, changeMasterCmd+";")
+		cmds = append(cmds, cmd+";")
 	} else {
 		// No TLS
 		cmds = append(cmds, fmt.Sprintf("CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='%s', MASTER_PASSWORD='%s', MASTER_AUTO_POSITION=1;", *binlogHost, *binlogPort, *binlogUser, *binlogPwd))
@@ -551,7 +551,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos mysql.Positio
 	defer tmc.Close()
 	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer remoteCancel()
-	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(remoteCtx, ti.Tablet)
 	if err != nil {
 		// It is possible that though PrimaryAlias is set, the primary tablet is unreachable
 		// Log a warning and let tablet restore in that case

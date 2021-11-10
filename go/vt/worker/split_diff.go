@@ -356,9 +356,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err := sdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, primaryInfo.Tablet, int(sdw.sourceShard.Uid), mysqlPos); err != nil {
 		return vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	}
-	primaryPos, err := sdw.wr.TabletManagerClient().MasterPosition(shortCtx, primaryInfo.Tablet)
+	primaryPos, err := sdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, primaryInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "MasterPosition for %v failed", sdw.shardInfo.PrimaryAlias)
+		return vterrors.Wrapf(err, "PrimaryPosition for %v failed", sdw.shardInfo.PrimaryAlias)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
