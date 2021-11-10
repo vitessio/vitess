@@ -971,11 +971,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	case engine.SelectUnsharded, engine.SelectReference:
 		return a.eroute.Opcode == b.eroute.Opcode
 	case engine.SelectDBA:
-		return b.eroute.Opcode == engine.SelectDBA &&
-			len(a.eroute.SysTableTableSchema) == 0 &&
-			len(a.eroute.SysTableTableName) == 0 &&
-			len(b.eroute.SysTableTableSchema) == 0 &&
-			len(b.eroute.SysTableTableName) == 0
+		return canSelectDBAMerge(a, b)
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if b.eroute.Opcode == engine.SelectEqualUnique &&
@@ -992,6 +988,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	}
 	return false
 }
+
 func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
@@ -1017,6 +1014,37 @@ func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 		}
 	}
 	return false
+}
+
+func canSelectDBAMerge(a, b *route) bool {
+	if a.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+	if b.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+
+	for _, aExpr := range a.eroute.SysTableTableSchema {
+		for _, bExpr := range b.eroute.SysTableTableSchema {
+			if aExpr.String() == bExpr.String() {
+				return true
+			}
+		}
+	}
+
+	for _, aExpr := range a.eroute.SysTableTableName {
+		for _, bExpr := range b.eroute.SysTableTableName {
+			if aExpr.String() == bExpr.String() {
+				return true
+			}
+		}
+	}
+
+	// when we have no information from either side, they both will be routed to default keyspace, so they can be merged
+	return len(a.eroute.SysTableTableSchema) == 0 &&
+		len(a.eroute.SysTableTableName) == 0 &&
+		len(b.eroute.SysTableTableSchema) == 0 &&
+		len(b.eroute.SysTableTableName) == 0
 }
 
 func tryMerge(ctx *planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {

@@ -1013,3 +1013,186 @@ Gen4 plan same as above
     "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
   }
 }
+
+"select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t"
+"unsupported: cross-shard query with aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select sum(found) from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
+    "Query": "select sum(found) from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)) as t",
+    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"music\")]",
+    "Table": "information_schema.`tables`"
+  }
+}
+
+# union as a derived table
+"select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+            "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname",
+            "SysTableTableSchema": "[VARBINARY(\"music\")]",
+            "Table": "information_schema.`tables`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectDBA",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+            "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1",
+            "SysTableTableSchema": "[VARBINARY(\"music\")]",
+            "Table": "information_schema.views"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select found from (select 1 as found from information_schema.`tables` where table_schema = 'music' union all (select 1 as found from information_schema.views where table_schema = 'music' limit 1)) as t",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select found from (select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)) as t where 1 != 1",
+    "Query": "select found from (select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)) as t",
+    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"music\")]",
+    "Table": "information_schema.`tables`"
+  }
+}
+
+# merge system schema queries as long as they have any same table_schema
+"select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
+        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\")]",
+        "Table": "information_schema.`tables`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
+        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"user\")]",
+        "Table": "information_schema.views"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
+    "Table": "information_schema.`tables`"
+  }
+}
+
+# merge system schema queries as long as they have any same table_name
+"select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)"
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
+  "Instructions": {
+    "OperatorType": "Concatenate",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1",
+        "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname and table_schema = :__vtschemaname",
+        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\")]",
+        "Table": "information_schema.`tables`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectDBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select 1 as found from information_schema.views where 1 != 1",
+        "Query": "select 1 as found from information_schema.views where table_schema = :__vtschemaname and table_schema = :__vtschemaname limit 1",
+        "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"user\")]",
+        "Table": "information_schema.views"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select 1 as found from information_schema.`tables` where table_schema = 'music' and table_schema = 'Music' union all (select 1 as found from information_schema.views where table_schema = 'music' and table_schema = 'user' limit 1)",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select 1 as found from information_schema.`tables` where 1 != 1 union all (select 1 as found from information_schema.views where 1 != 1)",
+    "Query": "select 1 as found from information_schema.`tables` where table_schema = :__vtschemaname union all (select 1 as found from information_schema.views where table_schema = :__vtschemaname limit 1)",
+    "SysTableTableSchema": "[VARBINARY(\"music\"), VARBINARY(\"Music\"), VARBINARY(\"music\"), VARBINARY(\"user\")]",
+    "Table": "information_schema.`tables`"
+  }
+}

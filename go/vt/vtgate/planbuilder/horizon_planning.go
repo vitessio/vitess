@@ -322,6 +322,9 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 			return 0, false, err
 		}
 		if added {
+			if hasAggregation {
+				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "aggregation not supported on top of unions")
+			}
 			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 		}
 		return offset, false, nil
