@@ -341,15 +341,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		return err
 	}
 
-	conn, err := tm.MysqlDaemon.GetAppConnection(ctx)
-	if err != nil {
-		return err
-	}
 	err = tm.QueryServiceControl.InitDBConfig(&querypb.Target{
 		Keyspace:        tablet.Keyspace,
 		Shard:           tablet.Shard,
 		TabletType:      tablet.Type,
-		DbServerVersion: conn.ServerVersion,
+		DbServerVersion: tm.MysqlDaemon.GetVersionString(),
 	}, tm.DBConfigs, tm.MysqlDaemon)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")

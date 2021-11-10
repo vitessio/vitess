@@ -195,24 +195,11 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
 	}
 
-	t := gw.hc.GetFirstHealthyTarget()
-	if t == nil {
-		log.Fatalf("could not find a tablet to create a collation environment")
-	}
-	env, err := collations.NewEnvironment(t.DbServerVersion)
+	vtgateCollation, err := getVTGateCollation(gw)
 	if err != nil {
-		log.Fatalf("cannot create a collation environment: %v", err)
+		log.Fatalf(err.Error())
 	}
-	var foundColl collations.Collation
-	if *collation == "" {
-		foundColl = env.DefaultCollationForCharset("utf8mb4")
-	} else {
-		foundColl = env.LookupByName(*collation)
-	}
-	if foundColl == nil {
-		log.Fatalf("Cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
-	}
-	coll = foundColl.ID()
+	coll = vtgateCollation.ID()
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
@@ -317,6 +304,36 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	initAPI(gw.hc)
 
 	return rpcVTGate
+}
+
+func getVTGateCollation(gw *TabletGateway) (collations.Collation, error) {
+	t := gw.hc.GetFirstHealthyTarget()
+	if t == nil {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find a tablet to create a collation environment")
+	}
+
+	var env *collations.Environment
+	if t.DbServerVersion == "" {
+		log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
+		env = collations.Default()
+	} else {
+		newEnv, err := collations.NewEnvironment(t.DbServerVersion)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot create a collation environment: %v", err)
+		}
+		env = newEnv
+	}
+
+	var foundColl collations.Collation
+	if *collation == "" {
+		foundColl = env.DefaultCollationForCharset("utf8mb4")
+	} else {
+		foundColl = env.LookupByName(*collation)
+	}
+	if foundColl == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
+	}
+	return foundColl, nil
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {

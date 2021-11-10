@@ -189,9 +189,11 @@ func New(mcp *mysql.ConnParams) Connector {
 // SetCollationInformation sets the charset, collation and collation environment of the
 // connection.
 func (c *Connector) SetCollationInformation(charset, collation string, env *collations.Environment) {
-	c.connParams.Collation = collation
-	c.connParams.Charset = charset
-	c.connParams.CollationEnvironment = env
+	if c.connParams.Charset != charset && c.connParams.Collation != collation {
+		c.connParams.Collation = collation
+		c.connParams.Charset = charset
+		c.connParams.CollationEnvironment = env
+	}
 }
 
 // MatchCollation returns nil if the given collations.ID matches with the connection's
