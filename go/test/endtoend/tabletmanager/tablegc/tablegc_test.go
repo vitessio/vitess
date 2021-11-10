@@ -107,8 +107,7 @@ func TestMain(m *testing.M) {
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
-			// TODO(deepthi): fix after v12.0
-			if tablet.Type == "master" || tablet.Type == "primary" {
+			if tablet.Type == "primary" {
 				primaryTablet = *tablet
 			}
 		}
