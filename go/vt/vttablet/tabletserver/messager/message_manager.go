@@ -47,6 +47,12 @@ var (
 		[]string{"TableName", "Metric"})
 )
 
+type QueryGenerator interface {
+	GenerateAckQuery(ids []string) (string, map[string]*querypb.BindVariable)
+	GeneratePostponeQuery(ids []string) (string, map[string]*querypb.BindVariable)
+	GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable)
+}
+
 type messageReceiver struct {
 	ctx     context.Context
 	errChan chan error
@@ -581,10 +587,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		// big", we'll end up spamming non-stop.
 		log.Errorf("Error sending messages: %v: %v", qr, err)
 	}
-	mm.postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
+	mm.postpone(mm.tsv, mm.ackWaitTime, ids)
 }
 
-func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+func (mm *messageManager) postpone(tsv TabletService, ackWaitTime time.Duration, ids []string) {
 	// Use the semaphore to limit parallelism.
 	if !mm.postponeSema.Acquire() {
 		// Unreachable.
@@ -593,7 +599,7 @@ func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime t
 	defer mm.postponeSema.Release()
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
-	if _, err := tsv.PostponeMessages(ctx, nil, name, ids); err != nil {
+	if _, err := tsv.PostponeMessages(ctx, nil, mm, ids); err != nil {
 		// This can happen during spikes. Record the incident for monitoring.
 		MessageStats.Add([]string{mm.name.String(), "PostponeFailed"}, 1)
 	}
@@ -786,30 +792,26 @@ func (mm *messageManager) runPoller() {
 }
 
 func (mm *messageManager) runPurge() {
-	go purge(mm.tsv, mm.name.String(), mm.purgeAfter, mm.purgeTicks.Interval())
-}
-
-// purge is a non-member because it should be called asynchronously and should
-// not rely on members of messageManager.
-func purge(tsv TabletService, name string, purgeAfter, purgeInterval time.Duration) {
-	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), purgeInterval)
-	defer func() {
-		tsv.LogError()
-		cancel()
+	go func() {
+		ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.purgeTicks.Interval())
+		defer func() {
+			mm.tsv.LogError()
+			cancel()
+		}()
+		for {
+			count, err := mm.tsv.PurgeMessages(ctx, nil, mm, time.Now().Add(-mm.purgeAfter).UnixNano())
+			if err != nil {
+				MessageStats.Add([]string{mm.name.String(), "PurgeFailed"}, 1)
+				log.Errorf("Unable to delete messages: %v", err)
+			} else {
+				MessageStats.Add([]string{mm.name.String(), "Purged"}, count)
+			}
+			// If deleted 500 or more, we should continue.
+			if count < 500 {
+				return
+			}
+		}
 	}()
-	for {
-		count, err := tsv.PurgeMessages(ctx, nil, name, time.Now().Add(-purgeAfter).UnixNano())
-		if err != nil {
-			MessageStats.Add([]string{name, "PurgeFailed"}, 1)
-			log.Errorf("Unable to delete messages: %v", err)
-		} else {
-			MessageStats.Add([]string{name, "Purged"}, count)
-		}
-		// If deleted 500 or more, we should continue.
-		if count < 500 {
-			return
-		}
-	}
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
