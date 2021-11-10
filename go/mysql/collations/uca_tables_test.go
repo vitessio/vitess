@@ -14,30 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package uca_test
+package collations
 
 import (
 	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 	"unsafe"
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
-func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights uca.WeightTable, layout uca.TableLayout) {
+func verifyAllCodepoints(t *testing.T, expected map[rune][]uint16, weights uca.Weights, layout uca.Layout) {
 	t.Helper()
 
 	maxCodepoint := layout.MaxCodepoint()
 	for cp := rune(0); cp <= maxCodepoint; cp++ {
 		vitessWeights := layout.DebugWeights(weights, cp)
-		mysqlWeights, mysqlFound := expected[fmt.Sprintf("U+%04X", cp)]
+		mysqlWeights, mysqlFound := expected[cp]
 
 		if len(vitessWeights) == 0 {
 			if mysqlFound {
@@ -65,8 +65,8 @@ func verifyAllCodepoints(t *testing.T, expected map[string][]uint16, weights uca
 	}
 }
 
-func loadExpectedWeights(t *testing.T, weights string) map[string][]uint16 {
-	fullpath := fmt.Sprintf("../../testdata/mysqldata/%s.json", weights)
+func loadExpectedWeights(t *testing.T, weights string) map[rune][]uint16 {
+	fullpath := fmt.Sprintf("testdata/mysqldata/%s.json", weights)
 	weightsMysqlFile, err := os.Open(fullpath)
 	if err != nil {
 		t.Skipf("failed to load %q (did you run 'colldump' locally?)", fullpath)
@@ -77,26 +77,41 @@ func loadExpectedWeights(t *testing.T, weights string) map[string][]uint16 {
 	}
 	dec := json.NewDecoder(weightsMysqlFile)
 	require.NoError(t, dec.Decode(&meta))
-	return meta.Weights
+
+	var result = make(map[rune][]uint16, len(meta.Weights))
+	for key, w := range meta.Weights {
+		cp, err := strconv.ParseInt(key[2:], 16, 32)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result[rune(cp)] = w
+	}
+	return result
 }
 
 func TestWeightsForAllCodepoints(t *testing.T) {
 	testWeightsFromMysql := loadExpectedWeights(t, "utf8mb4_0900_ai_ci")
-	verifyAllCodepoints(t, testWeightsFromMysql, uca.WeightTable_uca900, uca.TableLayout_uca900{})
+	verifyAllCodepoints(t, testWeightsFromMysql, weightTable_uca900, uca.Layout_uca900{})
 }
 
 func TestWeightTablesAreDeduplicated(t *testing.T) {
-	sliceptr := func(table uca.WeightTable) uintptr {
+	sliceptr := func(table uca.Weights) uintptr {
 		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&table))
 		return hdr.Data
 	}
 
 	uniqueTables := make(map[uintptr]int)
-	for _, col := range collations.Default().AllCollations() {
-		if uca, ok := col.(collations.CollationUCA); ok {
-			weights, _ := uca.UnicodeWeightsTable()
-			uniqueTables[sliceptr(weights)]++
+	for _, col := range testall() {
+		var weights uca.Weights
+		switch col := col.(type) {
+		case *Collation_uca_legacy:
+			weights, _ = col.uca.Weights()
+		case *Collation_utf8mb4_uca_0900:
+			weights, _ = col.uca.Weights()
+		default:
+			continue
 		}
+		uniqueTables[sliceptr(weights)]++
 	}
 
 	var total int
@@ -110,18 +125,22 @@ func TestWeightTablesAreDeduplicated(t *testing.T) {
 }
 
 func TestTailoringPatchApplication(t *testing.T) {
-	for _, col := range collations.Default().AllCollations() {
-		uca, ok := col.(collations.CollationUCA)
-		if !ok {
-			continue
-		}
-		switch uca.Charset().(type) {
-		case charset.Charset_utf8mb4:
+	for _, col := range testall() {
+		var weightTable uca.Weights
+		var tableLayout uca.Layout
+
+		switch col := col.(type) {
+		case *Collation_uca_legacy:
+			if _, utf8 := col.charset.(charset.Charset_utf8mb4); !utf8 {
+				continue
+			}
+			weightTable, tableLayout = col.uca.Weights()
+		case *Collation_utf8mb4_uca_0900:
+			weightTable, tableLayout = col.uca.Weights()
 		default:
 			continue
 		}
 
-		weightTable, tableLayout := uca.UnicodeWeightsTable()
 		t.Run(col.Name(), func(t *testing.T) {
 			expected := loadExpectedWeights(t, col.Name())
 			verifyAllCodepoints(t, expected, weightTable, tableLayout)
