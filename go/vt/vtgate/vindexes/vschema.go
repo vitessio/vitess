@@ -438,7 +438,7 @@ outer:
 				}
 				continue outer
 			}
-			rr.Tables = append(rr.Tables, sqlescape.EscapeID(t))
+			rr.Tables = append(rr.Tables, t)
 		}
 		vschema.RoutingRules[rule.FromTable] = rr
 	}
