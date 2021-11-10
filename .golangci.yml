@@ -32,7 +32,6 @@ linters:
     # - revive
 
 issues:
-  new: true
   exclude-rules:
     - path: '^go/vt/proto/'
       linters:
