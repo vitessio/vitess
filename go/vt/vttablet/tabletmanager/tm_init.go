@@ -194,7 +194,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string) (*topodatapb.Tablet, error) {
 	hostname := *tabletHostname
 	if hostname == "" {
 		var err error
@@ -239,12 +239,13 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32) (
 			"vt":   port,
 			"grpc": grpcPort,
 		},
-		Keyspace:       *initKeyspace,
-		Shard:          shard,
-		KeyRange:       keyRange,
-		Type:           tabletType,
-		DbNameOverride: *initDbNameOverride,
+		Keyspace:        *initKeyspace,
+		Shard:           shard,
+		KeyRange:        keyRange,
+		Type:            tabletType,
+		DbNameOverride:  *initDbNameOverride,
 		Tags:           mergeTags(buildTags, initTags),
+		DbServerVersion: dbServerVersion,
 	}, nil
 }
 
@@ -342,10 +343,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}
 
 	err = tm.QueryServiceControl.InitDBConfig(&querypb.Target{
-		Keyspace:        tablet.Keyspace,
-		Shard:           tablet.Shard,
-		TabletType:      tablet.Type,
-		DbServerVersion: tm.MysqlDaemon.GetVersionString(),
+		Keyspace:   tablet.Keyspace,
+		Shard:      tablet.Shard,
+		TabletType: tablet.Type,
 	}, tm.DBConfigs, tm.MysqlDaemon)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to InitDBConfig")

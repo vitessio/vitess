@@ -36,7 +36,6 @@ message Target {
   // cell is used for routing queries between vtgate and vttablets. It
   // is not used when Target is part of the Session sent by the client.
   string cell = 4;
-  string db_server_version = 5;
 }
 
 // VTGateCallerID is sent by VTGate to VTTablet to describe the

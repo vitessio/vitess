@@ -23,8 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -152,15 +150,9 @@ func TestMain(m *testing.M) {
 		}
 		defer cluster.TearDown()
 
-		collEnv, err := collations.NewEnvironment("5.7.")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			return 1
-		}
 		vtParams = mysql.ConnParams{
-			Host:      "localhost",
-			Port:      cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
-			Collation: collEnv.DefaultCollationForCharset("utf8mb4").Name(),
+			Host: "localhost",
+			Port: cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
 		}
 		mysqlParams = cluster.MySQLConnParams()
 		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))

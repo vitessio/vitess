@@ -172,6 +172,8 @@ message Tablet {
   //
   vttime.Time primary_term_start_time = 14;
 
+  string db_server_version = 15;
+
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;
