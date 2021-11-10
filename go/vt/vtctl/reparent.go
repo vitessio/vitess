@@ -43,14 +43,6 @@ func init() {
 		help:   "Sets the initial primary for a shard. Will make all other tablets in the shard replicas of the provided tablet. WARNING: this could cause data loss on an already replicating shard. PlannedReparentShard or EmergencyReparentShard should be used instead.",
 	})
 	addCommand("Shards", command{
-		name:         "InitShardMaster",
-		method:       commandInitShardPrimary,
-		params:       "[-force] [-wait_replicas_timeout=<duration>] <keyspace/shard> <tablet alias>",
-		help:         "DEPRECATED. Use InitShardPrimary instead.",
-		deprecated:   true,
-		deprecatedBy: "InitShardPrimary",
-	})
-	addCommand("Shards", command{
 		name:   "PlannedReparentShard",
 		method: commandPlannedReparentShard,
 		params: "-keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>] [-wait_replicas_timeout=<duration>]",
@@ -123,18 +115,13 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 	newPrimary := subFlags.String("new_primary", "", "alias of a tablet that should be the new primary")
 	avoidTablet := subFlags.String("avoid_tablet", "", "alias of a tablet that should not be the primary, i.e. reparent to any other tablet if this one is the primary")
 
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedNewMaster := subFlags.String("new_master", "", "DEPRECATED. Use -new_primary instead")
-	deprecatedAvoidMaster := subFlags.String("avoid_master", "", "DEPRECATED. Use -avoid_tablet instead")
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *keyspaceShard != "" || *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flags -keyspace_shard and -new_master/-new_primary for action PlannedReparentShard at the same time")
+			return fmt.Errorf("cannot use legacy syntax and flags -keyspace_shard and -new_primary for action PlannedReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
@@ -142,12 +129,6 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("action PlannedReparentShard requires -keyspace_shard=<keyspace/shard> [-new_primary=<tablet alias>] [-avoid_tablet=<tablet alias>]")
 	}
 
-	if *deprecatedNewMaster != "" {
-		newPrimary = deprecatedNewMaster
-	}
-	if *deprecatedAvoidMaster != "" {
-		avoidTablet = deprecatedAvoidMaster
-	}
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
 	if err != nil {
 		return err
@@ -179,26 +160,18 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 	preventCrossCellPromotion := subFlags.Bool("prevent_cross_cell_promotion", false, "only promotes a new primary from the same cell as the previous primary")
 	ignoreReplicasList := subFlags.String("ignore_replicas", "", "comma-separated list of replica tablet aliases to ignore during emergency reparent")
 
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedNewMaster := subFlags.String("new_master", "", "DEPRECATED. Use -new_primary instead")
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() == 2 {
 		// Legacy syntax: "<keyspace/shard> <tablet alias>".
 		if *newPrimary != "" {
-			return fmt.Errorf("cannot use legacy syntax and flag -new_master/-new_primary for action EmergencyReparentShard at the same time")
+			return fmt.Errorf("cannot use legacy syntax and flag -new_primary for action EmergencyReparentShard at the same time")
 		}
 		*keyspaceShard = subFlags.Arg(0)
 		*newPrimary = subFlags.Arg(1)
 	} else if subFlags.NArg() != 0 {
 		return fmt.Errorf("action EmergencyReparentShard requires -keyspace_shard=<keyspace/shard>")
-	}
-
-	if *deprecatedNewMaster != "" {
-		newPrimary = deprecatedNewMaster
 	}
 
 	keyspace, shard, err := topoproto.ParseKeyspaceShard(*keyspaceShard)
