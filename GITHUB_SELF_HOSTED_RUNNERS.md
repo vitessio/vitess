@@ -28,12 +28,13 @@ access to Vitess.
 
 ### Using a self-hosted runner to debug a flaky test
 You will need access to the self-hosted runner machine to be able to connect to it via SSH.
-1. From the output of the run on GitHub Actions, find the `Machine name`
+1. From the output of the run on GitHub Actions, find the `Machine name` in the `Set up job` step 
 2. Find that machine on the Equinix dashboard and connect to it via ssh
 3. From the output of the `Print Volume Used` step find the volume used
 4. From the output of the `Build Docker Image` step find the docker image built for this workflow
 5. On the machine run `docker run -d -v <volume-name>:/vt/vtdataroot <image-name> /bin/bash -c "sleep 600000000000"`
 6. On the terminal copy the docker id of the newly created container
-7. Now execute `docker exec -it <docker-id> /bin/bash`
-8. Use the `/vt/vtdataroot` directory to find the output of the run along with the debug files
-
+7. Now execute `docker exec -it <docker-id> /bin/bash` to go into the container and use the `/vt/vtdataroot` directory to find the output of the run along with the debug files
+8. Alternately, execute `docker cp <docker-id>:/vt/vtdataroot ./debugFiles/` to copy the files from the docker container to the servers local file system
+9. You can browse the files there or go a step further and download them locally via `scp`.
+10. Please remember to cleanup the folders created and remove the docker container via `docker stop <docker-id>`.
