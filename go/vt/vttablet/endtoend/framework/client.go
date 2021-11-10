@@ -21,8 +21,6 @@ import (
 	"errors"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -44,11 +42,6 @@ type QueryClient struct {
 	transactionID int64
 	reservedID    int64
 }
-
-var (
-	env, _           = collations.NewEnvironment("5.7.")
-	defaultCollation = int32(env.DefaultCollationForCharset("utf8mb4").ID())
-)
 
 // NewClient creates a new client for Server.
 func NewClient() *QueryClient {
@@ -94,7 +87,7 @@ func (client *QueryClient) Begin(clientFoundRows bool) error {
 	}
 	var options *querypb.ExecuteOptions
 	if clientFoundRows {
-		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows, Collation: defaultCollation}
+		options = &querypb.ExecuteOptions{ClientFoundRows: clientFoundRows}
 	}
 	transactionID, _, err := client.server.Begin(client.ctx, client.target, options)
 	if err != nil {
@@ -179,7 +172,7 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
 // BeginExecute performs a BeginExecute.
@@ -194,7 +187,7 @@ func (client *QueryClient) BeginExecute(query string, bindvars map[string]*query
 		query,
 		bindvars,
 		client.reservedID,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	client.transactionID = transactionID
 	if err != nil {
@@ -213,7 +206,7 @@ func (client *QueryClient) BeginExecuteBatch(queries []*querypb.BoundQuery, asTr
 		client.target,
 		queries,
 		asTransaction,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 	client.transactionID = transactionID
 	if err != nil {
@@ -237,7 +230,7 @@ func (client *QueryClient) ExecuteWithOptions(query string, bindvars map[string]
 
 // StreamExecute executes a query & returns the results.
 func (client *QueryClient) StreamExecute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+	return client.StreamExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 }
 
 // StreamExecuteWithOptions executes a query & returns the results using 'options'.
@@ -272,7 +265,7 @@ func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.Bin
 		query,
 		bindvars,
 		0,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 		sendFunc,
 	)
 }
@@ -285,7 +278,7 @@ func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransac
 		queries,
 		asTransaction,
 		client.transactionID,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation},
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
 	)
 }
 
@@ -311,7 +304,7 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
-	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+	qr, reservedID, _, err := client.server.ReserveExecute(client.ctx, client.target, preQueries, query, bindvars, client.transactionID, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.reservedID = reservedID
 	if err != nil {
 		return nil, err
@@ -327,7 +320,7 @@ func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = transactionID
 	client.reservedID = reservedID
 	if err != nil {

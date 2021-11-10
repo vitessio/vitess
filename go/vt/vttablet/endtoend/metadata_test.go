@@ -19,20 +19,12 @@ package endtoend
 import (
 	"testing"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-)
-
-var (
-	env, _               = collations.NewEnvironment("5.7.")
-	defaultCollation     = int32(env.DefaultCollationForCharset("utf8mb4").ID())
-	defaultExecuteOption = &querypb.ExecuteOptions{Collation: defaultCollation}
 )
 
 func getAndSetup(t *testing.T) *framework.QueryClient {
@@ -63,14 +55,14 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: defaultCollation})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,11 +104,11 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 	client := getAndSetup(t)
 	defer cleanup(client)
 
-	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, defaultExecuteOption)
+	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, &querypb.ExecuteOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, defaultExecuteOption)
+	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,11 +136,11 @@ func TestMetadataNoExecOptions(t *testing.T) {
 	client := getAndSetup(t)
 	defer cleanup(client)
 
-	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, defaultExecuteOption)
+	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, defaultExecuteOption)
+	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

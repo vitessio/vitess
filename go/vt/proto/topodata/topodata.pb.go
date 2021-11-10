@@ -405,7 +405,8 @@ type Tablet struct {
 	// EmergencyReparentShard, and TabletExternallyReparented.
 	//
 	PrimaryTermStartTime *vttime.Time `protobuf:"bytes,14,opt,name=primary_term_start_time,json=primaryTermStartTime,proto3" json:"primary_term_start_time,omitempty"`
-	DbServerVersion      string       `protobuf:"bytes,15,opt,name=db_server_version,json=dbServerVersion,proto3" json:"db_server_version,omitempty"`
+	// db_server_version represents the database version used by the tablet.
+	DbServerVersion string `protobuf:"bytes,15,opt,name=db_server_version,json=dbServerVersion,proto3" json:"db_server_version,omitempty"`
 }
 
 func (x *Tablet) Reset() {
