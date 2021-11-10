@@ -82,6 +82,9 @@ type MysqlDaemon interface {
 	// GetAllPrivsConnection returns an allprivs connection (for user with all privileges except SUPER).
 	GetAllPrivsConnection(ctx context.Context) (*dbconnpool.DBConnection, error)
 
+	// GetVersionString returns the database version as a string
+	GetVersionString() string
+
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
 
