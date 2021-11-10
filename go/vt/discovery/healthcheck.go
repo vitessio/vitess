@@ -198,6 +198,8 @@ type HealthCheck interface {
 
 	// Unsubscribe removes a listener.
 	Unsubscribe(c chan *TabletHealth)
+
+	GetFirstHealthyTarget() *query.Target
 }
 
 var _ HealthCheck = (*HealthCheckImpl)(nil)
@@ -310,6 +312,15 @@ func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Dur
 	}
 
 	return hc
+}
+
+func (hc *HealthCheckImpl) GetFirstHealthyTarget() *query.Target {
+	for _, health := range hc.healthy {
+		for _, t := range health {
+			return t.Target
+		}
+	}
+	return nil
 }
 
 // AddTablet adds the tablet, and starts health check.
