@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -118,6 +119,42 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 	*initTabletType = "primary"
 	_, err = BuildTabletFromInput(alias, port, grpcport)
 	assert.Contains(t, err.Error(), "invalid init_tablet_type PRIMARY")
+}
+
+func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
+	alias := &topodatapb.TabletAlias{
+		Cell: "cell",
+		Uid:  1,
+	}
+	port := int32(12)
+	grpcport := int32(34)
+
+	// Hostname should be used as is.
+	*tabletHostname = "foo"
+	*initKeyspace = "test_keyspace"
+	*initShard = "0"
+	*initTabletType = "replica"
+	*initDbNameOverride = "aa"
+	*skipBuildInfoTags = ""
+	defer func() { *skipBuildInfoTags = "/.*/" }()
+	wantTablet := &topodatapb.Tablet{
+		Alias:    alias,
+		Hostname: "foo",
+		PortMap: map[string]int32{
+			"vt":   port,
+			"grpc": grpcport,
+		},
+		Keyspace:       "test_keyspace",
+		Shard:          "0",
+		KeyRange:       nil,
+		Type:           topodatapb.TabletType_REPLICA,
+		Tags:           servenv.AppVersion.ToStringMap(),
+		DbNameOverride: "aa",
+	}
+
+	gotTablet, err := BuildTabletFromInput(alias, port, grpcport)
+	require.NoError(t, err)
+	assert.Equal(t, wantTablet, gotTablet)
 }
 
 func TestStartCreateKeyspaceShard(t *testing.T) {
