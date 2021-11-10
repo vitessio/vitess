@@ -185,7 +185,7 @@ func StopReplicationAndBuildStatusMaps(
 		case mysql.ErrNotReplica:
 			var primaryStatus *replicationdatapb.PrimaryStatus
 
-			primaryStatus, err = tmc.DemoteMaster(groupCtx, tabletInfo.Tablet)
+			primaryStatus, err = tmc.DemotePrimary(groupCtx, tabletInfo.Tablet)
 			if err != nil {
 				msg := "replica %v thinks it's primary but we failed to demote it"
 				err = vterrors.Wrapf(err, msg+": %v", alias, err)

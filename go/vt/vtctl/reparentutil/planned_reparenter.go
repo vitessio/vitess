@@ -209,7 +209,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	snapshotCtx, snapshotCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer snapshotCancel()
 
-	snapshotPos, err := pr.tmc.MasterPosition(snapshotCtx, currentPrimary.Tablet)
+	snapshotPos, err := pr.tmc.PrimaryPosition(snapshotCtx, currentPrimary.Tablet)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "cannot get replication position on current primary %v; current primary must be healthy to perform PlannedReparent", currentPrimary.AliasString())
 	}
@@ -220,12 +220,12 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// the snapshot point we grabbed above and when we demote the old primary
 	// below.
 	//
-	// We do this as an idempotent SetMaster to make sure the replica knows who
+	// We do this as an idempotent SetReplicationSource to make sure the replica knows who
 	// the current primary is.
-	setMasterCtx, setMasterCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
-	defer setMasterCancel()
+	setSourceCtx, setSourceCancel := context.WithTimeout(ctx, opts.WaitReplicasTimeout)
+	defer setSourceCancel()
 
-	if err := pr.tmc.SetMaster(setMasterCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true); err != nil {
+	if err := pr.tmc.SetReplicationSource(setSourceCtx, primaryElect, currentPrimary.Alias, 0, snapshotPos, true); err != nil {
 		return "", vterrors.Wrapf(err, "replication on primary-elect %v did not catch up in time; replication must be healthy to perform PlannedReparent", primaryElectAliasStr)
 	}
 
@@ -235,7 +235,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	}
 
 	// Next up, demote the current primary and get its replication position.
-	// It's fine if the current primary was already demoted, since DemoteMaster
+	// It's fine if the current primary was already demoted, since DemotePrimary
 	// is idempotent.
 	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
 	event.DispatchUpdate(ev, "demoting old primary")
@@ -243,9 +243,9 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer demoteCancel()
 
-	primaryStatus, err := pr.tmc.DemoteMaster(demoteCtx, currentPrimary.Tablet)
+	primaryStatus, err := pr.tmc.DemotePrimary(demoteCtx, currentPrimary.Tablet)
 	if err != nil {
-		return "", vterrors.Wrapf(err, "failed to DemoteMaster on current primary %v: %v", currentPrimary.AliasString(), err)
+		return "", vterrors.Wrapf(err, "failed to DemotePrimary on current primary %v: %v", currentPrimary.AliasString(), err)
 	}
 
 	// Wait for the primary-elect to catch up to the position we demoted the
@@ -273,9 +273,9 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 		defer undoCancel()
 
-		if undoErr := pr.tmc.UndoDemoteMaster(undoCtx, currentPrimary.Tablet); undoErr != nil {
-			pr.logger.Warningf("encountered error while performing UndoDemoteMaster(%v): %v", currentPrimary.AliasString(), undoErr)
-			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemoteMaster(%v): %v", currentPrimary.AliasString(), undoErr)
+		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet); undoErr != nil {
+			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
+			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}
 
 		return "", finalWaitErr
@@ -317,7 +317,7 @@ func (pr *PlannedReparenter) performPartialPromotionRecovery(ctx context.Context
 
 	// Get the replication position so we can try to fix the replicas (back in
 	// reparentShardLocked())
-	reparentJournalPosition, err := pr.tmc.MasterPosition(refreshCtx, primaryElect)
+	reparentJournalPosition, err := pr.tmc.PrimaryPosition(refreshCtx, primaryElect)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "failed to get replication position of current primary %v", topoproto.TabletAliasString(primaryElect.Alias))
 	}
@@ -373,15 +373,15 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 			defer stopAllWg.Done()
 
 			// Regardless of what type this tablet thinks it is, we will always
-			// call DemoteMaster to ensure the underlying MySQL server is in
-			// read-only, and to check its replication position. DemoteMaster is
+			// call DemotePrimary to ensure the underlying MySQL server is in
+			// read-only, and to check its replication position. DemotePrimary is
 			// idempotent, so it's fine to call it on a replica (or other
 			// tablet type), that's already in read-only.
 			pr.logger.Infof("demoting tablet %v", alias)
 
-			primaryStatus, err := pr.tmc.DemoteMaster(stopAllCtx, tablet)
+			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet)
 			if err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "DemoteMaster(%v) failed on contested primary", alias))
+				rec.RecordError(vterrors.Wrapf(err, "DemotePrimary(%v) failed on contested primary", alias))
 
 				return
 			}
@@ -594,8 +594,8 @@ func (pr *PlannedReparenter) reparentTablets(
 			// that it needs to start replication after transitioning from
 			// PRIMARY => REPLICA.
 			forceStartReplication := false
-			if err := pr.tmc.SetMaster(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
-				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetMaster(%v): %v", alias, primaryElectAliasStr, err))
+			if err := pr.tmc.SetReplicationSource(replCtx, tablet, ev.NewPrimary.Alias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "tablet %v failed to SetReplicationSource(%v): %v", alias, primaryElectAliasStr, err))
 			}
 		}(alias, tabletInfo.Tablet)
 	}

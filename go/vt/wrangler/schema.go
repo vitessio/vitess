@@ -307,7 +307,7 @@ func (wr *Wrangler) CopySchemaShard(ctx context.Context, sourceTabletAlias *topo
 	}
 
 	// Remember the replication position after all the above were applied.
-	destPrimaryPos, err := wr.tmc.MasterPosition(ctx, destTabletInfo.Tablet)
+	destPrimaryPos, err := wr.tmc.PrimaryPosition(ctx, destTabletInfo.Tablet)
 	if err != nil {
 		return fmt.Errorf("CopySchemaShard: can't get replication position after schema applied: %v", err)
 	}

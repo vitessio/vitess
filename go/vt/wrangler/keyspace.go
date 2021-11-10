@@ -502,7 +502,7 @@ func (wr *Wrangler) getPrimaryPositions(ctx context.Context, shards []*topo.Shar
 				return
 			}
 
-			pos, err := wr.tmc.MasterPosition(ctx, ti.Tablet)
+			pos, err := wr.tmc.PrimaryPosition(ctx, ti.Tablet)
 			if err != nil {
 				rec.RecordError(err)
 				return
@@ -822,7 +822,7 @@ func (wr *Wrangler) setupReverseReplication(ctx context.Context, sourceShards, d
 		}
 
 		wr.Logger().Infof("Gathering primary position for %v", topoproto.TabletAliasString(dest.PrimaryAlias))
-		primaryPositions[i], err = wr.tmc.MasterPosition(ctx, ti.Tablet)
+		primaryPositions[i], err = wr.tmc.PrimaryPosition(ctx, ti.Tablet)
 		if err != nil {
 			return err
 		}
@@ -1269,7 +1269,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 
 	// get the position
 	event.DispatchUpdate(ev, "getting primary position")
-	primaryPosition, err := wr.tmc.MasterPosition(ctx, sourcePrimaryTabletInfo.Tablet)
+	primaryPosition, err := wr.tmc.PrimaryPosition(ctx, sourcePrimaryTabletInfo.Tablet)
 	if err != nil {
 		return err
 	}

@@ -424,7 +424,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	}
 	// Get a replication position that's guaranteed to be after the schema change
 	// was applied on the primary.
-	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
+	pos, err := exec.wr.TabletManagerClient().PrimaryPosition(ctx, tablet)
 	if err != nil {
 		errChan <- ShardWithError{
 			Shard: tablet.Shard,
