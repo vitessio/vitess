@@ -311,6 +311,10 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 
 	if canMergeUnionPlans(ctx, lroute, rroute) {
 		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
+		lroute.eroute.SysTableTableSchema = append(lroute.eroute.SysTableTableSchema, rroute.eroute.SysTableTableSchema...)
+		for k, v := range rroute.eroute.SysTableTableName {
+			lroute.eroute.SysTableTableName[k] = v
+		}
 		return lroute
 	}
 	return nil
