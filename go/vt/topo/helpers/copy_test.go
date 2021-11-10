@@ -49,8 +49,8 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 			Cell: "test_cell",
 			Uid:  123,
 		},
-		Hostname:      "masterhost",
-		MysqlHostname: "masterhost",
+		Hostname:      "primaryhost",
+		MysqlHostname: "primaryhost",
 		PortMap: map[string]int32{
 			"vt":   8101,
 			"gprc": 8102,
@@ -63,7 +63,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 	}
 	tablet1.MysqlPort = 3306
 	if err := fromTS.CreateTablet(ctx, tablet1); err != nil {
-		t.Fatalf("cannot create master tablet: %v", err)
+		t.Fatalf("cannot create primary tablet: %v", err)
 	}
 	tablet2 := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
