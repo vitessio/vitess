@@ -1671,17 +1671,20 @@ func TestRescheduleMessages(t *testing.T) {
 	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
+	_, err := tsv.messager.GetGenerator("nonmsg")
 	want := "message table nonmsg not found in schema"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
 
-	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
+	gen, err := tsv.messager.GetGenerator("msg")
+	require.NoError(t, err)
+
+	_, err = tsv.PostponeMessages(ctx, &target, gen, []string{"1", "2"})
 	want = "query: 'update msg set time_next"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
+	count, err := tsv.PostponeMessages(ctx, &target, gen, []string{"1", "2"})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
 }
@@ -1692,18 +1695,21 @@ func TestPurgeMessages(t *testing.T) {
 	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
+	_, err := tsv.messager.GetGenerator("nonmsg")
 	want := "message table nonmsg not found in schema"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
 
-	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
+	gen, err := tsv.messager.GetGenerator("msg")
+	require.NoError(t, err)
+
+	_, err = tsv.PurgeMessages(ctx, &target, gen, 0)
 	want = "query: 'delete from msg where time_acked"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
 	db.AddQuery("delete from msg where time_acked < 3 limit 500", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
+	count, err := tsv.PurgeMessages(ctx, &target, gen, 3)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
 }

@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,8 +31,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -1042,8 +1041,13 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 	for _, val := range ids {
 		sids = append(sids, sqltypes.ProtoToValue(val).ToString())
 	}
+	querygen, err := tsv.messager.GetGenerator(name)
+	if err != nil {
+		return 0, err
+	}
 	count, err = tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GenerateAckQuery(name, sids)
+		query, bv := querygen.GenerateAckQuery(sids)
+		return query, bv, nil
 	})
 	if err != nil {
 		return 0, err
@@ -1054,17 +1058,19 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 
 // PostponeMessages postpones the list of messages for a given message table.
 // It returns the number of messages successfully postponed.
-func (tsv *TabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (tsv *TabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, querygen messager.QueryGenerator, ids []string) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GeneratePostponeQuery(name, ids)
+		query, bv := querygen.GeneratePostponeQuery(ids)
+		return query, bv, nil
 	})
 }
 
 // PurgeMessages purges messages older than specified time in Unix Nanoseconds.
 // It purges at most 500 messages. It returns the number of messages successfully purged.
-func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, querygen messager.QueryGenerator, timeCutoff int64) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GeneratePurgeQuery(name, timeCutoff)
+		query, bv := querygen.GeneratePurgeQuery(timeCutoff)
+		return query, bv, nil
 	})
 }
 
