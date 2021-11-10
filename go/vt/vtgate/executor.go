@@ -99,6 +99,9 @@ type ExecutorCollation struct {
 	// DefaultCollation is expected to match with the one the VTTablets use.
 	// String literals will be treated as if they were using DefaultCollation.
 	DefaultCollation collations.Collation
+
+	// CollationString represents the input collation as a string.
+	CollationString string
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -224,13 +227,25 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
+// Set sets the ExecutorCollation fields using the given tablet health.
+// This method is meant to be executed only once.
+// If the tablet health does not contain any relevant information for us to
+// figure the default collation and collation environment, we warn the user
+// and use the collation that was specified through VTGate's arguments, or
+// we use the default collation of utf8mb4 if the flag was not specified.
 func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
 	ec.once.Do(func() {
 		t := th.Tablet
 		env := collations.Default()
-		if t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
+
+		// if the tablet health does not contain a proper database server version string,
+		// we will use the default collation environment (MySQL80) and warn the user.
+		if t == nil || t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
 			log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
 		} else {
+			// otherwise, we try to create a new environment with the database server version
+			// string. again, we fall back to the default environment and warn the user if
+			// we cannot create the environment.
 			newEnv, err := collations.NewEnvironment(t.DbServerVersion)
 			if err != nil {
 				log.Warningf("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults: %v", err)
@@ -239,6 +254,8 @@ func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
 			}
 		}
 
+		// if VTGate's -collation flag was not specified, we use the default collation of utf8mb4
+		// given our collation environment.
 		var foundColl collations.Collation
 		if *collation == "" {
 			foundColl = env.DefaultCollationForCharset("utf8mb4")
@@ -249,6 +266,11 @@ func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
 		ec.mu.Lock()
 		defer ec.mu.Unlock()
 
+		if foundColl == nil {
+			ec.CollationString = *collation
+		} else {
+			ec.CollationString = foundColl.Name()
+		}
 		ec.CollationEnvironment = env
 		ec.DefaultCollation = foundColl
 	})
@@ -414,10 +436,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
 		case sysvars.Collation.Name:
 			name := ""
-			if session.Options != nil {
-				if collation := collations.Default().LookupByID(collations.ID(session.Options.Collation)); collation != nil {
-					name = collation.Name()
-				}
+			if e.collation != nil && e.collation.DefaultCollation != nil {
+				name = e.collation.DefaultCollation.Name()
 			}
 			bindVars[key] = sqltypes.StringBindVariable(name)
 		}

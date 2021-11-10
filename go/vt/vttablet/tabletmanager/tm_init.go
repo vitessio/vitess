@@ -244,7 +244,7 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		KeyRange:        keyRange,
 		Type:            tabletType,
 		DbNameOverride:  *initDbNameOverride,
-		Tags:           mergeTags(buildTags, initTags),
+		Tags:            mergeTags(buildTags, initTags),
 		DbServerVersion: dbServerVersion,
 	}, nil
 }

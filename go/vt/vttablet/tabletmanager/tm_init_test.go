@@ -69,7 +69,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		KeyRange:        nil,
 		Type:            topodatapb.TabletType_REPLICA,
 		DbNameOverride:  "aa",
-		Tags:           servenv.AppVersion.ToStringMap(),
+		Tags:            servenv.AppVersion.ToStringMap(),
 		DbServerVersion: dbServerVersion,
 	}
 

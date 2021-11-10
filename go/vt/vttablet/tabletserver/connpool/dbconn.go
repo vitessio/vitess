@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,7 +50,7 @@ import (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	Info    dbconfigs.Connector
+	info    dbconfigs.Connector
 	pool    *Pool
 	dbaPool *dbconnpool.ConnectionPool
 	stats   *tabletenv.Stats
@@ -72,7 +74,7 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 	}
 	return &DBConn{
 		conn:    c,
-		Info:    appParams,
+		info:    appParams,
 		pool:    cp,
 		dbaPool: cp.dbaPool,
 		stats:   cp.env.Stats(),
@@ -87,7 +89,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 	}
 	return &DBConn{
 		conn:    c,
-		Info:    params,
+		info:    params,
 		dbaPool: dbaPool,
 		pool:    nil,
 		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
@@ -389,7 +391,7 @@ func (dbc *DBConn) BaseShowTables() string {
 func (dbc *DBConn) reconnect(ctx context.Context) error {
 	dbc.conn.Close()
 	// Reuse MySQLTimings from dbc.conn.
-	newConn, err := dbconnpool.NewDBConnection(ctx, dbc.Info)
+	newConn, err := dbconnpool.NewDBConnection(ctx, dbc.info)
 	if err != nil {
 		return err
 	}
@@ -437,4 +439,11 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
+}
+
+// MatchCollation uses the Connector MatchCollation method to tells whether this connection's
+// collation matches with the given collation ID.
+// If it does not match an error will be returned explaining why.
+func (dbc *DBConn) MatchCollation(collationID collations.ID) error {
+	return dbc.info.MatchCollation(collationID)
 }

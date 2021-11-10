@@ -166,12 +166,7 @@ func TestTxEngineBegin(t *testing.T) {
 		require.NoError(t, err)
 		_, _, err = te.Commit(ctx, tx1)
 		require.NoError(t, err)
-		log := db.QueryLog()
-		logLines := strings.Split(log, ";")
-		expectedLogLines := []string{"start transaction read only", "commit"}
-		for _, expectedLogLine := range expectedLogLines {
-			require.Contains(t, logLines, expectedLogLine)
-		}
+		requireLogs(t, db.QueryLog(), "start transaction read only", "commit")
 		db.ResetQueryLog()
 
 		te.AcceptReadWrite()
@@ -179,12 +174,7 @@ func TestTxEngineBegin(t *testing.T) {
 		require.NoError(t, err)
 		_, _, err = te.Commit(ctx, tx2)
 		require.NoError(t, err)
-		log = db.QueryLog()
-		logLines = strings.Split(log, ";")
-		expectedLogLines = []string{"begin", "commit"}
-		for _, expectedLogLine := range expectedLogLines {
-			require.Contains(t, logLines, expectedLogLine)
-		}
+		requireLogs(t, db.QueryLog(), "begin", "commit")
 		db.ResetQueryLog()
 
 		te.transition(Transitioning)
