@@ -143,7 +143,13 @@ func mergeSubQueryPlan(ctx *planningContext, inner, outer logicalPlan, n *subque
 		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
 		n.extracted.NeedsRewrite = true
 		replaceSubQuery(ctx, oroute.Select)
-
+		// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
+		// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
+		// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
+		oroute.eroute.SysTableTableSchema = append(oroute.eroute.SysTableTableSchema, iroute.eroute.SysTableTableSchema...)
+		for k, v := range iroute.eroute.SysTableTableName {
+			oroute.eroute.SysTableTableName[k] = v
+		}
 		return oroute
 	}
 	return nil
@@ -309,6 +315,9 @@ func mergeUnionLogicalPlans(ctx *planningContext, left logicalPlan, right logica
 		return nil
 	}
 
+	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
+	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
+	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
 	if canMergeUnionPlans(ctx, lroute, rroute) {
 		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
 		lroute.eroute.SysTableTableSchema = append(lroute.eroute.SysTableTableSchema, rroute.eroute.SysTableTableSchema...)
