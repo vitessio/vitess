@@ -131,16 +131,6 @@ var (
 	warnings *stats.CountersWithSingleLabel
 
 	vstreamSkewDelayCount *stats.Counter
-
-	// coll is the default collation ID that will be used for this VTGate instance.
-	// Its value is set through the --collation flag, and is readable by selecting
-	// the @@collation variable.
-	// The collation linked to this ID is expected to match with the one the VTTablets
-	// use. If they do not match, queries will fail.
-	// String literals will be treated as if they were using this collation.
-	//
-	// TODO: remove
-	coll collations.ID
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -195,11 +185,11 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
 	}
 
-	vtgateCollation, err := getVTGateCollation(gw)
+	// Get the default collation of VTGate using VTTablet's health check and the given collation flag.
+	vtgateCollation, collationEnvironment, err := getVTGateCollation(gw)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
-	coll = vtgateCollation.ID()
 
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
@@ -236,7 +226,20 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		LFU:            *queryPlanCacheLFU,
 	}
 
-	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, si, *noScatter)
+	executor := NewExecutor(
+		ctx,
+		serv,
+		cell,
+		resolver,
+		*normalizeQueries,
+		*warnShardedOnly,
+		*streamBufferSize,
+		cacheCfg,
+		si,
+		*noScatter,
+		vtgateCollation,
+		collationEnvironment,
+	)
 
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
@@ -306,20 +309,20 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	return rpcVTGate
 }
 
-func getVTGateCollation(gw *TabletGateway) (collations.Collation, error) {
+func getVTGateCollation(gw *TabletGateway) (collations.Collation, *collations.Environment, error) {
 	t := gw.hc.GetFirstHealthyTarget()
 	if t == nil {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find a tablet to create a collation environment")
+		return nil, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find a tablet to create a collation environment")
 	}
 
 	var env *collations.Environment
-	if t.DbServerVersion == "" {
+	if t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
 		log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
 		env = collations.Default()
 	} else {
 		newEnv, err := collations.NewEnvironment(t.DbServerVersion)
 		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot create a collation environment: %v", err)
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot create a collation environment: %v", err)
 		}
 		env = newEnv
 	}
@@ -331,9 +334,9 @@ func getVTGateCollation(gw *TabletGateway) (collations.Collation, error) {
 		foundColl = env.LookupByName(*collation)
 	}
 	if foundColl == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
 	}
-	return foundColl, nil
+	return foundColl, env, nil
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
@@ -670,7 +673,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil, *noScatter),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil, *noScatter, nil, nil),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
