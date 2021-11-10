@@ -86,6 +86,19 @@ func init() {
 	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
+type ExecutorCollation struct {
+	mu   sync.Mutex
+	once sync.Once
+
+	// defaultCollation is the default collation that will be used for this Executor.
+	// defaultCollation is expected to match with the one the VTTablets use.
+	// String literals will be treated as if they were using defaultCollation.
+	// collationEnvironment is the collation environment that was used to create
+	// defaultCollation, it can be used later to lookup collations by name or ID.
+	CollationEnvironment *collations.Environment
+	DefaultCollation     collations.Collation
+}
+
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
@@ -107,13 +120,7 @@ type Executor struct {
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
 
-	// defaultCollation is the default collation that will be used for this Executor.
-	// defaultCollation is expected to match with the one the VTTablets use.
-	// String literals will be treated as if they were using defaultCollation.
-	// collationEnvironment is the collation environment that was used to create
-	// defaultCollation, it can be used later to lookup collations by name or ID.
-	collationEnvironment *collations.Environment
-	defaultCollation     collations.Collation
+	collation *ExecutorCollation
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
@@ -126,33 +133,20 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(
-	ctx context.Context,
-	serv srvtopo.Server,
-	cell string,
-	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
-	cacheCfg *cache.Config,
-	schemaTracker SchemaInfo,
-	noScatter bool,
-	collation collations.Collation,
-	collationEnvironment *collations.Environment,
-) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config, schemaTracker SchemaInfo, noScatter bool) *Executor {
 	e := &Executor{
-		serv:                 serv,
-		cell:                 cell,
-		resolver:             resolver,
-		scatterConn:          resolver.scatterConn,
-		txConn:               resolver.scatterConn.txConn,
-		plans:                cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:            normalize,
-		warnShardedOnly:      warnOnShardedOnly,
-		streamSize:           streamSize,
-		schemaTracker:        schemaTracker,
-		allowScatter:         !noScatter,
-		defaultCollation:     collation,
-		collationEnvironment: collationEnvironment,
+		serv:            serv,
+		cell:            cell,
+		resolver:        resolver,
+		scatterConn:     resolver.scatterConn,
+		txConn:          resolver.scatterConn.txConn,
+		plans:           cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:       normalize,
+		warnShardedOnly: warnOnShardedOnly,
+		streamSize:      streamSize,
+		schemaTracker:   schemaTracker,
+		allowScatter:    !noScatter,
+		collation:       &ExecutorCollation{},
 	}
 
 	vschemaacl.Init()
@@ -228,15 +222,50 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
+func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
+	ec.once.Do(func() {
+		t := th.Target
+		env := collations.Default()
+		if t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
+			log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
+		} else {
+			newEnv, err := collations.NewEnvironment(t.DbServerVersion)
+			if err != nil {
+				log.Warningf("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults: %v", err)
+			} else {
+				env = newEnv
+			}
+		}
+
+		var foundColl collations.Collation
+		if *collation == "" {
+			foundColl = env.DefaultCollationForCharset("utf8mb4")
+		} else {
+			foundColl = env.LookupByName(*collation)
+		}
+
+		ec.mu.Lock()
+		defer ec.mu.Unlock()
+
+		ec.CollationEnvironment = env
+		ec.DefaultCollation = foundColl
+	})
+}
+
 // setSessionExecuteOptionCollation sets the collation of the given session to the executor's default collation
 func (e *Executor) setSessionExecuteOptionCollation(session *SafeSession) {
+	// locking the session
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
-	if session.Options == nil || e.defaultCollation == nil {
+	// locking the executor's collation
+	e.collation.mu.Lock()
+	defer e.collation.mu.Unlock()
+
+	if session.Options == nil || e.collation.DefaultCollation == nil {
 		return
 	}
-	session.Options.Collation = int32(e.defaultCollation.ID())
+	session.Options.Collation = int32(e.collation.DefaultCollation.ID())
 }
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {

@@ -26,7 +26,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 
 	"context"
@@ -185,12 +184,6 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		log.Fatalf("gateway.WaitForTablets failed: %v", err)
 	}
 
-	// Get the default collation of VTGate using VTTablet's health check and the given collation flag.
-	vtgateCollation, collationEnvironment, err := getVTGateCollation(gw)
-	if err != nil {
-		log.Fatalf(err.Error())
-	}
-
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if discovery.FilteringKeyspaces() {
@@ -237,9 +230,10 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		cacheCfg,
 		si,
 		*noScatter,
-		vtgateCollation,
-		collationEnvironment,
 	)
+
+	// Get the default collation of VTGate using VTTablet's health check and the given collation flag.
+	setVTGateCollation(gw.hc.Subscribe(), executor.collation.Set)
 
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
@@ -299,7 +293,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err = initQueryLogger(rpcVTGate)
+	err := initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
@@ -309,34 +303,11 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	return rpcVTGate
 }
 
-func getVTGateCollation(gw *TabletGateway) (collations.Collation, *collations.Environment, error) {
-	t := gw.hc.GetFirstHealthyTarget()
-	if t == nil {
-		return nil, nil, vterrors.New(vtrpcpb.Code_INTERNAL, "could not find a tablet to create a collation environment")
-	}
-
-	var env *collations.Environment
-	if t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
-		log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
-		env = collations.Default()
-	} else {
-		newEnv, err := collations.NewEnvironment(t.DbServerVersion)
-		if err != nil {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot create a collation environment: %v", err)
-		}
-		env = newEnv
-	}
-
-	var foundColl collations.Collation
-	if *collation == "" {
-		foundColl = env.DefaultCollationForCharset("utf8mb4")
-	} else {
-		foundColl = env.LookupByName(*collation)
-	}
-	if foundColl == nil {
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: %s, the collation might be unsupported or unknown", *collation)
-	}
-	return foundColl, env, nil
+func setVTGateCollation(ch chan *discovery.TabletHealth, set func(*discovery.TabletHealth)) {
+	go func() {
+		th := <-ch
+		set(th)
+	}()
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
@@ -673,7 +644,7 @@ func LegacyInit(ctx context.Context, hc discovery.LegacyHealthCheck, serv srvtop
 	}
 
 	rpcVTGate = &VTGate{
-		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil, *noScatter, nil, nil),
+		executor: NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, nil, *noScatter),
 		resolver: resolver,
 		vsm:      vsm,
 		txConn:   tc,
