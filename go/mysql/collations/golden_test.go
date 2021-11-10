@@ -98,7 +98,6 @@ func TestAllCollationsByCharset(t *testing.T) {
 		{collverMariaDB101, defaults1},
 		{collverMariaDB102, defaults1},
 		{collverMariaDB103, defaults1},
-		{collverMySQL56, defaults1},
 		{collverMySQL57, defaults1},
 		{collverMySQL80, defaults2},
 	} {
