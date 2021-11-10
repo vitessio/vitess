@@ -632,3 +632,8 @@ Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
 "select distinct a+1 from user"
 "generating order by clause: cannot reference a complex expression"
 Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+
+# aggregation on union
+"select sum(col) from (select col from user union all select col from unsharded) t"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: aggregation on unions
