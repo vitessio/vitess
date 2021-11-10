@@ -438,7 +438,7 @@ outer:
 				}
 				continue outer
 			}
-			rr.Tables = append(rr.Tables, t)
+			rr.Tables = append(rr.Tables, sqlescape.EscapeID(t))
 		}
 		vschema.RoutingRules[rule.FromTable] = rr
 	}
@@ -500,7 +500,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 
 // FindRoutedTable finds a table checking the routing rules.
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
-	qualified := tablename
+	qualified := sqlescape.EscapeID(tablename)
 	if keyspace != "" {
 		qualified = sqlescape.EscapeID(keyspace) + "." + sqlescape.EscapeID(tablename)
 	}
