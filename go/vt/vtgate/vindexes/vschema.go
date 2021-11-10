@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -501,7 +502,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 func (vschema *VSchema) FindRoutedTable(keyspace, tablename string, tabletType topodatapb.TabletType) (*Table, error) {
 	qualified := tablename
 	if keyspace != "" {
-		qualified = keyspace + "." + tablename
+		qualified = sqlescape.EscapeID(keyspace) + "." + sqlescape.EscapeID(tablename)
 	}
 	fqtn := qualified + TabletTypeSuffix[tabletType]
 	// First look for a fully qualified table name: keyspace.table@tablet_type.
