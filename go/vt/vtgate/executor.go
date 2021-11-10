@@ -107,6 +107,14 @@ type Executor struct {
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
 
+	// defaultCollation is the default collation that will be used for this Executor.
+	// defaultCollation is expected to match with the one the VTTablets use.
+	// String literals will be treated as if they were using defaultCollation.
+	// collationEnvironment is the collation environment that was used to create
+	// defaultCollation, it can be used later to lookup collations by name or ID.
+	collationEnvironment *collations.Environment
+	defaultCollation     collations.Collation
+
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
 }
@@ -128,19 +136,23 @@ func NewExecutor(
 	cacheCfg *cache.Config,
 	schemaTracker SchemaInfo,
 	noScatter bool,
+	collation collations.Collation,
+	collationEnvironment *collations.Environment,
 ) *Executor {
 	e := &Executor{
-		serv:            serv,
-		cell:            cell,
-		resolver:        resolver,
-		scatterConn:     resolver.scatterConn,
-		txConn:          resolver.scatterConn.txConn,
-		plans:           cache.NewDefaultCacheImpl(cacheCfg),
-		normalize:       normalize,
-		warnShardedOnly: warnOnShardedOnly,
-		streamSize:      streamSize,
-		schemaTracker:   schemaTracker,
-		allowScatter:    !noScatter,
+		serv:                 serv,
+		cell:                 cell,
+		resolver:             resolver,
+		scatterConn:          resolver.scatterConn,
+		txConn:               resolver.scatterConn.txConn,
+		plans:                cache.NewDefaultCacheImpl(cacheCfg),
+		normalize:            normalize,
+		warnShardedOnly:      warnOnShardedOnly,
+		streamSize:           streamSize,
+		schemaTracker:        schemaTracker,
+		allowScatter:         !noScatter,
+		defaultCollation:     collation,
+		collationEnvironment: collationEnvironment,
 	}
 
 	vschemaacl.Init()
@@ -216,7 +228,19 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
+// setSessionExecuteOptionCollation sets the collation of the given session to the executor's default collation
+func (e *Executor) setSessionExecuteOptionCollation(session *SafeSession) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.Options == nil || e.defaultCollation == nil {
+		return
+	}
+	session.Options.Collation = int32(e.defaultCollation.ID())
+}
+
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
+	e.setSessionExecuteOptionCollation(safeSession)
 	stmtType, qr, err := e.newExecute(ctx, safeSession, sql, bindVars, logStats)
 	if err == planbuilder.ErrPlanNotSupported {
 		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)
