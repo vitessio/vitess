@@ -86,17 +86,19 @@ func init() {
 	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
+// ExecutorCollation contains information about the default collation to use by the executor.
 type ExecutorCollation struct {
 	mu   sync.Mutex
 	once sync.Once
 
-	// defaultCollation is the default collation that will be used for this Executor.
-	// defaultCollation is expected to match with the one the VTTablets use.
-	// String literals will be treated as if they were using defaultCollation.
-	// collationEnvironment is the collation environment that was used to create
-	// defaultCollation, it can be used later to lookup collations by name or ID.
+	// CollationEnvironment is the collation environment that was used to create
+	// DefaultCollation, it can be used later to lookup collations by name or ID.
 	CollationEnvironment *collations.Environment
-	DefaultCollation     collations.Collation
+
+	// DefaultCollation is the default collation that will be used for this Executor.
+	// DefaultCollation is expected to match with the one the VTTablets use.
+	// String literals will be treated as if they were using DefaultCollation.
+	DefaultCollation collations.Collation
 }
 
 // Executor is the engine that executes queries by utilizing
@@ -224,7 +226,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 
 func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
 	ec.once.Do(func() {
-		t := th.Target
+		t := th.Tablet
 		env := collations.Default()
 		if t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
 			log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")

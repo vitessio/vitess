@@ -202,21 +202,18 @@ func (c *Connector) SetCollationInformation(charset, collation string, env *coll
 // collations environment to achieve the collation lookup using the same server version.
 func (c Connector) MatchCollation(collationID collations.ID) error {
 
-	// The collation environment of a connection parameter shall never be nil, if we fail
-	// to create it we already error out when initializing the connection with MySQL.
-	// The only situation where this field is nil is when send the very first query to
-	// MySQL to actually set the connection's collation.
-	// In this case, it is okay to ignore the collation matching and exit the function.
+	// The collation environment of a connection parameter should never be nil, if we fail
+	// to create it we already errored out when initializing the connection with MySQL.
 	if c.connParams.CollationEnvironment == nil {
-		return nil
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "No collation environment for this connection")
 	}
 
 	coll := c.connParams.CollationEnvironment.LookupByID(collationID)
 	if coll == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
 	}
 	if coll.Name() != c.connParams.Collation {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.connParams.Collation)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.connParams.Collation)
 	}
 	return nil
 }

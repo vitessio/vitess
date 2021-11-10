@@ -70,11 +70,6 @@ type fhcItem struct {
 // discovery.HealthCheck interface methods
 //
 
-// GetFirstHealthyTarget is not implemented.
-func (fhc *FakeHealthCheck) GetFirstHealthyTarget() *querypb.Target {
-	return nil
-}
-
 // RegisterStats is not implemented.
 func (fhc *FakeHealthCheck) RegisterStats() {
 }
