@@ -17,7 +17,7 @@ The following is the full list, alphabetically ordered.
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
 * Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
-* Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
+* Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@figma.com
 * Rohit Nayak ([rohit-nayak-ps](https://github.com/rohit-nayak-ps)) rohit@planetscale.com
 * Sara Bee ([doeg](https://github.com/doeg)) sarab@slack-corp.com
 * Shlomi Noach ([shlomi-noach](https://github.com/shlomi-noach)) shlomi@planetscale.com
