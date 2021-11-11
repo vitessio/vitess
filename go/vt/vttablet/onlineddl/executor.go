@@ -2201,6 +2201,9 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 			break
 		}
 	}
+	if onlineDDL == nil {
+		return nil
+	}
 	{
 		// We strip out any VT query comments because our simplified parser doesn't work well with comments
 		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
