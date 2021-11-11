@@ -346,37 +346,12 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlSelectReadyMigration = `SELECT
-			id,
-			migration_uuid,
-			keyspace,
-			shard,
-			mysql_schema,
-			mysql_table,
-			migration_statement,
-			strategy,
-			options,
-			added_timestamp,
-			ready_timestamp,
-			started_timestamp,
-			liveness_timestamp,
-			completed_timestamp,
-			migration_status,
-			log_path,
-			log_file,
-			retries,
-			ddl_action,
-			artifacts,
-			tablet,
-			added_unique_keys,
-			removed_unique_keys,
-			migration_context,
-			retain_artifacts_seconds,
-			postpone_completion
+	sqlSelectReadyMigrations = `SELECT
+			migration_uuid
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
-		LIMIT 1
+		ORDER BY id
 	`
 	sqlSelectPTOSCMigrationTriggers = `SELECT
 			TRIGGER_SCHEMA as trigger_schema,

@@ -2186,37 +2186,30 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
-	r, err := e.execQuery(ctx, sqlSelectReadyMigration)
+	r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
 	if err != nil {
 		return err
 	}
-	named := r.Named()
-	for i, row := range named.Rows {
-		onlineDDL := &schema.OnlineDDL{
-			Keyspace: row["keyspace"].ToString(),
-			Table:    row["mysql_table"].ToString(),
-			Schema:   row["mysql_schema"].ToString(),
-			SQL:      row["migration_statement"].ToString(),
-			UUID:     row["migration_uuid"].ToString(),
-			Strategy: schema.DDLStrategy(row["strategy"].ToString()),
-			Options:  row["options"].ToString(),
-			Status:   schema.OnlineDDLStatus(row["migration_status"].ToString()),
+	var onlineDDL *schema.OnlineDDL
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		onlineDDL, _, err = e.readMigration(ctx, uuid)
+		if err != nil {
+			return err
 		}
-		{
-			// We strip out any VT query comments because our simplified parser doesn't work well with comments
-			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
-			if err == nil {
-				ddlStmt.SetComments(sqlparser.Comments{})
-				onlineDDL.SQL = sqlparser.String(ddlStmt)
-			}
-		}
-		e.executeMigration(ctx, onlineDDL)
-		// the query should only ever return a single row at the most
-		// but let's make it also explicit here that we only run a single migration
-		if i == 0 {
+		if onlineDDL != nil {
 			break
 		}
 	}
+	{
+		// We strip out any VT query comments because our simplified parser doesn't work well with comments
+		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+		if err == nil {
+			ddlStmt.SetComments(sqlparser.Comments{})
+			onlineDDL.SQL = sqlparser.String(ddlStmt)
+		}
+	}
+	e.executeMigration(ctx, onlineDDL)
 	return nil
 }
 
