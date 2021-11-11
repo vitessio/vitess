@@ -49,26 +49,11 @@ func NewFakeTopoFactory() *FakeFactory {
 	return factory
 }
 
-// AddCell is used to add a cell to the factory. It takes in when the get and update calls should fail. It also takes in as an argument
-// whether the update call's write should succeed or not
-func (f *FakeFactory) AddCell(cell string, getErrors []bool, updateErrors []bool, writePersists []bool) {
+// AddCell is used to add a cell to the factory. It returns the fake connection created. This connection can then be used to set get and update errors
+func (f *FakeFactory) AddCell(cell string) *FakeConn {
 	conn := newFakeConnection()
-	conn.getErrors = getErrors
-	var updErrors []struct {
-		error         bool
-		writePersists bool
-	}
-	for i, updateError := range updateErrors {
-		updErrors = append(updErrors, struct {
-			error         bool
-			writePersists bool
-		}{
-			error:         updateError,
-			writePersists: writePersists[i],
-		})
-	}
-	conn.updateErrors = updErrors
 	f.cells[cell] = []*FakeConn{conn}
+	return conn
 }
 
 // HasGlobalReadOnlyCell implements the Factory interface
@@ -105,10 +90,7 @@ type FakeConn struct {
 	// getResultMap is a map storing the results for each filepath
 	getResultMap map[string]result
 	// updateErrors stores whether update function call should error or not
-	updateErrors []struct {
-		error         bool
-		writePersists bool
-	}
+	updateErrors []updateError
 	// getErrors stores whether the get function call should error or not
 	getErrors []bool
 
@@ -116,12 +98,38 @@ type FakeConn struct {
 	watches map[string][]chan *topo.WatchData
 }
 
+// updateError contains the information whether a update call should return an error or not
+// it also stores if the current write should persist or not
+type updateError struct {
+	shouldError   bool
+	writePersists bool
+}
+
 // newFakeConnection creates a new fake connection
 func newFakeConnection() *FakeConn {
 	return &FakeConn{
 		getResultMap: map[string]result{},
 		watches:      map[string][]chan *topo.WatchData{},
+		getErrors:    []bool{},
+		updateErrors: []updateError{},
 	}
+}
+
+// AddGetError is used to add a get error to the fake connection
+func (f *FakeConn) AddGetError(shouldErr bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getErrors = append(f.getErrors, shouldErr)
+}
+
+// AddUpdateError is used to add an update error to the fake connection
+func (f *FakeConn) AddUpdateError(shouldErr bool, writePersists bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.updateErrors = append(f.updateErrors, updateError{
+		shouldError:   shouldErr,
+		writePersists: writePersists,
+	})
 }
 
 // result keeps track of the fields needed to respond to a Get function call
@@ -190,7 +198,7 @@ func (f *FakeConn) Update(ctx context.Context, filePath string, contents []byte,
 	shouldErr := false
 	writeSucceeds := true
 	if len(f.updateErrors) > 0 {
-		shouldErr = f.updateErrors[0].error
+		shouldErr = f.updateErrors[0].shouldError
 		writeSucceeds = f.updateErrors[0].writePersists
 		f.updateErrors = f.updateErrors[1:]
 	}
