@@ -1802,9 +1802,9 @@ type (
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
-		Operator RangeCondOperator
-		Left     Expr
-		From, To Expr
+		isBetween bool
+		Left      Expr
+		From, To  Expr
 	}
 
 	// RangeCondOperator is an enum for RangeCond.Operator

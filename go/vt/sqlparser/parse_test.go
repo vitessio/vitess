@@ -41,6 +41,10 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output:     "create table x",
+		partialDDL: true,
+	}, {
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
