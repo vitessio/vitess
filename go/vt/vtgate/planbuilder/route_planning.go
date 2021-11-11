@@ -427,7 +427,7 @@ func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
 	}
