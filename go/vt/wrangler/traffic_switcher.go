@@ -262,39 +262,6 @@ func (wr *Wrangler) getWorkflowState(ctx context.Context, targetKeyspace, workfl
 	return ts, state, nil
 }
 
-func (wr *Wrangler) doCellsHaveRdonlyTablets(ctx context.Context, cells []string) (bool, error) {
-	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
-		for _, tablet := range tablets {
-			if tablet.Type == topodatapb.TabletType_RDONLY {
-				return true
-			}
-		}
-		return false
-	}
-
-	if len(cells) == 0 {
-		tablets, err := topotools.GetAllTabletsAcrossCells(ctx, wr.ts)
-		if err != nil {
-			return false, err
-		}
-		if areAnyRdonly(tablets) {
-			return true, nil
-		}
-
-	} else {
-		for _, cell := range cells {
-			tablets, err := topotools.GetAllTablets(ctx, wr.ts, cell)
-			if err != nil {
-				return false, err
-			}
-			if areAnyRdonly(tablets) {
-				return true, nil
-			}
-		}
-	}
-	return false, nil
-}
-
 // SwitchReads is a generic way of switching read traffic for a resharding workflow.
 func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowName string, servedTypes []topodatapb.TabletType,
 	cells []string, direction workflow.TrafficSwitchDirection, dryRun bool) (*[]string, error) {
@@ -334,7 +301,7 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent rdonly tablets
 	if switchReplicas && !switchRdonly {
 		var err error
-		rdonlyTabletsExist, err := wr.doCellsHaveRdonlyTablets(ctx, cells)
+		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, wr.ts, cells)
 		if err != nil {
 			return nil, err
 		}
