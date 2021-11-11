@@ -222,8 +222,9 @@ func (e *Executor) StreamExecute(
 		stmtType = plan.Type
 
 		var seenResults sync2.AtomicBool
+		result := &sqltypes.Result{}
 		callbackGen := callback
-		if stmtType != sqlparser.StmtStream && stmtType != sqlparser.StmtVStream {
+		if canReturnRows(stmtType) {
 			callbackGen = func(qr *sqltypes.Result) error {
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
@@ -237,7 +238,6 @@ func (e *Executor) StreamExecute(
 					seenResults.Set(true)
 				}
 
-				result := &sqltypes.Result{}
 				for _, row := range qr.Rows {
 					result.Rows = append(result.Rows, row)
 
@@ -255,9 +255,6 @@ func (e *Executor) StreamExecute(
 						}
 					}
 				}
-				if len(result.Rows) > 0 {
-					return callback(result)
-				}
 				return nil
 			}
 		}
@@ -272,8 +269,19 @@ func (e *Executor) StreamExecute(
 			return callbackGen(qr)
 		})
 
-		if err == nil && !seenResults.Get() {
-			err = callback(&sqltypes.Result{})
+		if err != nil {
+			return err
+		}
+
+		if !canReturnRows(stmtType) {
+			return nil
+		}
+
+		// Send left-over rows if there is no error on execution.
+		if len(result.Rows) > 0 || !seenResults.Get() {
+			if err := callback(result); err != nil {
+				return err
+			}
 		}
 
 		// 5: Log and add statistics
@@ -313,6 +321,15 @@ func (e *Executor) StreamExecute(
 	logStats.Send()
 	return err
 
+}
+
+func canReturnRows(stmtType sqlparser.StatementType) bool {
+	switch stmtType {
+	case sqlparser.StmtSelect, sqlparser.StmtShow, sqlparser.StmtExplain, sqlparser.StmtCallProc:
+		return true
+	default:
+		return false
+	}
 }
 
 func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType, rowsAffected, insertID uint64, rowsReturned int, err error) {
