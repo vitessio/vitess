@@ -495,7 +495,7 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
-	if ct.Options.Collate != "" {
+	if ct.Options != nil && ct.Options.Collate != "" {
 		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
 	}
 	if ct.Options.Null != nil && ct.Options.As == nil {
@@ -1009,7 +1009,11 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BetweenExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.ToString(), node.From, node.To)
+	if node.isBetween {
+		buf.astPrintf(node, "%v between %l and %r", node.Left, node.From, node.To)
+	} else {
+		buf.astPrintf(node, "%v not between %l and %r", node.Left, node.From, node.To)
+	}
 }
 
 // Format formats the node.

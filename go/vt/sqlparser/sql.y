@@ -1239,8 +1239,8 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt COLLATE id_or_var
   {
-    	$1.Collate = string($3.String())
-    	$$ = $1
+	$1.Collate = string($3.String())
+	$$ = $1
   }
 column_storage:
   VIRTUAL
@@ -3871,104 +3871,104 @@ bool_pri IS NULL %prec IS
   }
 
 predicate:
-		 bit_expr IN col_tuple
-		  {
-			$$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
-		  }
-		| bit_expr NOT IN col_tuple
-		  {
-			$$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
-		  }
-        | bit_expr BETWEEN bit_expr AND predicate
-          {
-             $$ = &BetweenExpr{Left: $1, Operator: BetweenOp, From: $3, To: $5}
-          }
-        | bit_expr NOT BETWEEN bit_expr AND predicate
-          {
-     		$$ = &BetweenExpr{Left: $1, Operator: NotBetweenOp, From: $4, To: $6}
-          }
-        | bit_expr LIKE simple_expr
-          {
-              $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
-          }
-        | bit_expr NOT LIKE simple_expr
-          {
-    		$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
-          }
-        | bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
-          {
-              $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
-          }
-        | bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
-          {
-    		$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
-          }
-        | bit_expr REGEXP bit_expr
-          {
-    		$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
-          }
-        | bit_expr NOT REGEXP bit_expr
-          {
-             $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
-          }
-        | bit_expr %prec EXPRESSION_PREC_SETTER
-         {
-         	$$ = $1
-         }
+bit_expr IN col_tuple
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+  }
+| bit_expr NOT IN col_tuple
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+  }
+| bit_expr BETWEEN bit_expr AND predicate
+  {
+	 $$ = &BetweenExpr{Left: $1, isBetween: true, From: $3, To: $5}
+  }
+| bit_expr NOT BETWEEN bit_expr AND predicate
+  {
+	$$ = &BetweenExpr{Left: $1, isBetween: false, From: $4, To: $6}
+  }
+| bit_expr LIKE simple_expr
+  {
+	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+  }
+| bit_expr NOT LIKE simple_expr
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+  }
+| bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
+  {
+	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+  }
+| bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+  }
+| bit_expr REGEXP bit_expr
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+  }
+| bit_expr NOT REGEXP bit_expr
+  {
+	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+  }
+| bit_expr %prec EXPRESSION_PREC_SETTER
+ {
+	$$ = $1
+ }
 
 bit_expr:
-          bit_expr '|' bit_expr %prec '|'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
-          }
-        | bit_expr '&' bit_expr %prec '&'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
-          }
-        | bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
-          }
-        | bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
-          }
-        | bit_expr '+' bit_expr %prec '+'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
-          }
-        | bit_expr '-' bit_expr %prec '-'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
-          }
-        | bit_expr '*' bit_expr %prec '*'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
-          }
-        | bit_expr '/' bit_expr %prec '/'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
-          }
-        | bit_expr '%' bit_expr %prec '%'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
-          }
-        | bit_expr DIV bit_expr %prec DIV
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
-          }
-        | bit_expr MOD bit_expr %prec MOD
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
-          }
-        | bit_expr '^' bit_expr %prec '^'
-          {
-              $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
-          }
-        | simple_expr %prec EXPRESSION_PREC_SETTER
-          {
-          	$$ = $1
-          }
+bit_expr '|' bit_expr %prec '|'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+  }
+| bit_expr '&' bit_expr %prec '&'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+  }
+| bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+  }
+| bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+  }
+| bit_expr '+' bit_expr %prec '+'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+  }
+| bit_expr '-' bit_expr %prec '-'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+  }
+| bit_expr '*' bit_expr %prec '*'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+  }
+| bit_expr '/' bit_expr %prec '/'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+  }
+| bit_expr '%' bit_expr %prec '%'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+  }
+| bit_expr DIV bit_expr %prec DIV
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+  }
+| bit_expr MOD bit_expr %prec MOD
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+  }
+| bit_expr '^' bit_expr %prec '^'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+  }
+| simple_expr %prec EXPRESSION_PREC_SETTER
+  {
+	$$ = $1
+  }
 
 simple_expr:
 function_call_keyword
@@ -4408,38 +4408,6 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
   }
-
-
-//geometry_function:
-//GEOMETRYCOLLECTION openb select_expression_list_opt closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("geometrycollection"), Exprs: $3}
-//  }
-//| LINESTRING openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("linestring"), Exprs: $3}
-//  }
-//| MULTILINESTRING openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("multilinestring"), Exprs: $3}
-//  }
-//| MULTIPOINT openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("multipoint"), Exprs: $3}
-//  }
-//| MULTIPOLYGON openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("multipolygon"), Exprs: $3}
-//  }
-//| POINT openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("point"), Exprs: $3}
-//  }
-//| POLYGON openb select_expression_list closeb
-//  {
-//  	$$ = &FuncExpr{Name: NewColIdent("polygon"), Exprs: $3}
-//  }
-
 
 match_option:
 /*empty*/
@@ -5065,7 +5033,7 @@ row_tuple:
     $$ = ValTuple($2)
   }
 tuple_expression:
-row_tuple
+ row_tuple
   {
     if len($1) == 1 {
       $$ = $1[0]

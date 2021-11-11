@@ -11635,7 +11635,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:3883
 		{
-			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), Operator: BetweenOp, From: yyDollar[3].exprUnion(), To: yyDollar[5].exprUnion()}
+			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), isBetween: true, From: yyDollar[3].exprUnion(), To: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 759:
@@ -11643,7 +11643,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:3887
 		{
-			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), Operator: NotBetweenOp, From: yyDollar[4].exprUnion(), To: yyDollar[6].exprUnion()}
+			yyLOCAL = &BetweenExpr{Left: yyDollar[1].exprUnion(), isBetween: false, From: yyDollar[4].exprUnion(), To: yyDollar[6].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 760:

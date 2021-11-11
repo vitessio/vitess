@@ -690,7 +690,7 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(ct.Charset)
 	}
-	if ct.Options.Collate != "" {
+	if ct.Options != nil && ct.Options.Collate != "" {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[COLLATE])
 		buf.WriteByte(' ')
@@ -1345,13 +1345,19 @@ func (node *ComparisonExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *BetweenExpr) formatFast(buf *TrackedBuffer) {
-	buf.printExpr(node, node.Left, true)
-	buf.WriteByte(' ')
-	buf.WriteString(node.Operator.ToString())
-	buf.WriteByte(' ')
-	buf.printExpr(node, node.From, true)
-	buf.WriteString(" and ")
-	buf.printExpr(node, node.To, false)
+	if node.isBetween {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	} else {
+		buf.printExpr(node, node.Left, true)
+		buf.WriteString(" not between ")
+		buf.printExpr(node, node.From, true)
+		buf.WriteString(" and ")
+		buf.printExpr(node, node.To, false)
+	}
 }
 
 // formatFast formats the node.

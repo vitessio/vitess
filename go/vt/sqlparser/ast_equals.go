@@ -1141,7 +1141,7 @@ func EqualsRefOfBetweenExpr(a, b *BetweenExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Operator == b.Operator &&
+	return a.isBetween == b.isBetween &&
 		EqualsExpr(a.Left, b.Left) &&
 		EqualsExpr(a.From, b.From) &&
 		EqualsExpr(a.To, b.To)
