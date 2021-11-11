@@ -1355,9 +1355,7 @@ func TestStreamSelectScatter(t *testing.T) {
 			sandboxconn.StreamRowResult.Rows[0],
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 // TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
