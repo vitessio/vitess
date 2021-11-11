@@ -570,3 +570,159 @@ func TestSavepointInReservedConn(t *testing.T) {
 	defer utils.Exec(t, conn, `delete from t7_xxhash`)
 	utils.AssertMatches(t, conn, "select uid from t7_xxhash", `[[VARCHAR("2")]]`)
 }
+
+func TestUnionWithManyInfSchemaQueries(t *testing.T) {
+	// trying to reproduce the problems in https://github.com/vitessio/vitess/issues/9139
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, `SELECT
+	kcu.TABLE_SCHEMA,
+	kcu.TABLE_NAME,
+	kcu.CONSTRAINT_NAME,
+	kcu.COLUMN_NAME,
+	kcu.REFERENCED_TABLE_SCHEMA,
+	kcu.REFERENCED_TABLE_NAME,
+	kcu.REFERENCED_COLUMN_NAME,
+	rc.DELETE_RULE ON_DELETE,
+	rc.UPDATE_RULE ON_UPDATE
+FROM (
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't1'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't1_id2_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 'vstream_test'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't2'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't2_id4_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't3'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't3_id7_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+	WHERE
+		kcu.TABLE_SCHEMA = 'ks'
+		AND
+		kcu.TABLE_NAME = 't4'
+) kcu
+INNER JOIN (
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't1'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't1_id2_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 'vstream_test'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't2'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't2_id4_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't3'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't3_id7_idx'
+ UNION 
+	SELECT
+		*
+	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
+	WHERE
+		CONSTRAINT_SCHEMA = 'ks'
+		AND
+		TABLE_NAME = 't4'
+) rc
+	ON
+		rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
+		AND
+		rc.TABLE_NAME = kcu.TABLE_NAME
+		AND
+		rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME`)
+}
