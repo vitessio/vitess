@@ -408,7 +408,6 @@ func TestSchemaChange(t *testing.T) {
 		}()
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy+" -postpone-completion")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		// Should be still running!
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
@@ -419,7 +418,7 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		cancel() // will cause runMultipleConnections() to terminate
 		wg.Wait()
-		checkMigratedTable(t, tableName, alterHints[0])
+		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
 
