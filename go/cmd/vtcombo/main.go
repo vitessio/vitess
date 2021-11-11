@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -120,6 +121,12 @@ func main() {
 		exit.Return(1)
 	}
 
+	// Stash away a copy of the topology that vtcombo was started with.
+	//
+	// We will use this to determine the shard structure when keyspaces
+	// get recreated.
+	originalTopology := proto.Clone(tpb).(*vttestpb.VTTestTopology)
+
 	// default cell to "test" if unspecified
 	if len(tpb.Cells) == 0 {
 		tpb.Cells = append(tpb.Cells, "test")
@@ -169,6 +176,18 @@ func main() {
 	}
 
 	globalCreateDb = func(ctx context.Context, ks *vttestpb.Keyspace) error {
+		// Check if we're recreating a keyspace that was previously deleted by looking
+		// at the original topology definition.
+		//
+		// If we find a matching keyspace, we create it with the same sharding
+		// configuration. This ensures that dropping and recreating a keyspace
+		// will end up with the same number of shards.
+		for _, originalKs := range originalTopology.Keyspaces {
+			if originalKs.Name == ks.Name {
+				ks = proto.Clone(originalKs).(*vttestpb.Keyspace)
+			}
+		}
+
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 		newUID, err := vtcombo.CreateKs(ctx, ts, tpb, mysqld, &dbconfigs.GlobalDBConfigs, *schemaDir, ks, true, uid, wr)
 		if err != nil {
