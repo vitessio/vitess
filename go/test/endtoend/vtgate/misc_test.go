@@ -579,150 +579,103 @@ func TestUnionWithManyInfSchemaQueries(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	utils.Exec(t, conn, `SELECT
-	kcu.TABLE_SCHEMA,
-	kcu.TABLE_NAME,
-	kcu.CONSTRAINT_NAME,
-	kcu.COLUMN_NAME,
-	kcu.REFERENCED_TABLE_SCHEMA,
-	kcu.REFERENCED_TABLE_NAME,
-	kcu.REFERENCED_COLUMN_NAME,
-	rc.DELETE_RULE ON_DELETE,
-	rc.UPDATE_RULE ON_UPDATE
-FROM (
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't1'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't1_id2_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 'vstream_test'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't2'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't2_id4_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't3'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't3_id7_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-	WHERE
-		kcu.TABLE_SCHEMA = 'ks'
-		AND
-		kcu.TABLE_NAME = 't4'
-) kcu
-INNER JOIN (
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't1'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't1_id2_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 'vstream_test'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't2'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't2_id4_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't3'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't3_id7_idx'
- UNION 
-	SELECT
-		*
-	FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS
-	WHERE
-		CONSTRAINT_SCHEMA = 'ks'
-		AND
-		TABLE_NAME = 't4'
-) rc
-	ON
-		rc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
-		AND
-		rc.TABLE_NAME = kcu.TABLE_NAME
-		AND
-		rc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME`)
+	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company_invite_code'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_role'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_urgent'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_event'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user_company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user'`)
 }
