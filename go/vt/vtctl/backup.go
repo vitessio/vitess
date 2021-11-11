@@ -73,10 +73,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
 
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -92,9 +88,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	if *deprecatedAllowMaster {
-		*allowPrimary = *deprecatedAllowMaster
-	}
 
 	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowPrimary)
 }
@@ -102,10 +95,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
-
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -165,10 +154,6 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	if tabletForBackup == nil {
 		return errors.New("no tablet available for backup")
-	}
-
-	if *deprecatedAllowMaster {
-		*allowPrimary = *deprecatedAllowMaster
 	}
 
 	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowPrimary)
