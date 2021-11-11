@@ -1478,3 +1478,16 @@ func GetAllSelects(selStmt SelectStatement) []*Select {
 	}
 	panic("[BUG]: unknown type for SelectStatement")
 }
+
+// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
+func RemoveKeyspaceFromColName(expr Expr) Expr {
+	return Rewrite(expr, nil, func(cursor *Cursor) bool {
+		switch col := cursor.Node().(type) {
+		case *ColName:
+			if !col.Qualifier.Qualifier.IsEmpty() {
+				col.Qualifier.Qualifier = NewTableIdent("")
+			}
+		}
+		return true
+	}).(Expr) // This hard cast is safe because we do not change the type the input
+}

@@ -399,3 +399,51 @@ Concatenate(distinct) {
 	},
 	order by id asc
 }
+
+select id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)
+SubQuery: {
+	SubQueries: [
+	{
+		Type: PulloutExists
+		Query: 	QueryGraph: {
+		Tables:
+			TableSet{1}:user_extra where user_id = 3
+		JoinPredicates:
+			TableSet{0,1} - user_id < `user`.id
+		}
+	}]
+	Outer: 	QueryGraph: {
+	Tables:
+		TableSet{0}:`user`
+	JoinPredicates:
+		TableSet{0,1} - exists (select user_id from user_extra where user_id = 3 and user_id < `user`.id)
+	}
+}
+# we should remove the keyspace from predicates
+select ks.tbl.col from ks.tbl where ks.tbl.id = 1
+QueryGraph: {
+Tables:
+	TableSet{0}:ks.tbl where tbl.id = 1
+}
+
+select 1 from ks.t join ks.y on ks.t.id = ks.y.t_id
+QueryGraph: {
+Tables:
+	TableSet{0}:ks.t
+	TableSet{1}:ks.y
+JoinPredicates:
+	TableSet{0,1} - t.id = y.t_id
+}
+
+select 1 from ks.t left join ks.y on ks.t.id = ks.y.t_id
+OuterJoin: {
+	Inner: 	QueryGraph: {
+	Tables:
+		TableSet{0}:ks.t
+	}
+	Outer: 	QueryGraph: {
+	Tables:
+		TableSet{1}:ks.y
+	}
+	Predicate: t.id = y.t_id
+}

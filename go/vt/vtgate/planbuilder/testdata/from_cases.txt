@@ -369,6 +369,123 @@ Gen4 plan same as above
 "table disabled has been disabled"
 Gen4 plan same as above
 
+"select second_user.foo.col from second_user.foo join user on second_user.foo.id = user.id where second_user.foo.col = 42"
+{
+  "QueryType": "SELECT",
+  "Original": "select second_user.foo.col from second_user.foo join user on second_user.foo.id = user.id where second_user.foo.col = 42",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select foo.col from `user` as foo join `user` on foo.id = `user`.id where 1 != 1",
+    "Query": "select foo.col from `user` as foo join `user` on foo.id = `user`.id where foo.col = 42",
+    "Table": "`user`"
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select second_user.foo.col from second_user.foo join user on second_user.foo.id = user.id where second_user.foo.col = 42",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "FieldQuery": "select foo.col from `user` as foo, `user` where 1 != 1",
+    "Query": "select foo.col from `user` as foo, `user` where foo.col = 42 and foo.id = `user`.id",
+    "Table": "`user`"
+  }
+}
+
+"select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42"
+{
+  "QueryType": "SELECT",
+  "Original": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "music_id": 1
+    },
+    "TableName": "music_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.foo, music.id from music where 1 != 1",
+        "Query": "select music.foo, music.id from music where music.col = 42",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where `user`.id = :music_id",
+        "Table": "`user`",
+        "Values": [
+          ":music_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select user.music.foo from user.music join user on user.music.id = user.id where user.music.col = 42",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "music_id": 0
+    },
+    "TableName": "music_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select music.id, music.foo from music where 1 != 1",
+        "Query": "select music.id, music.foo from music where music.col = 42",
+        "Table": "music"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` where 1 != 1",
+        "Query": "select 1 from `user` where `user`.id = :music_id",
+        "Table": "`user`",
+        "Values": [
+          ":music_id"
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
+
 # ',' join
 "select music.col from user, music"
 {
