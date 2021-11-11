@@ -153,7 +153,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "20",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"backup_xtrabackup_xbstream": {
@@ -252,7 +252,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "",
-			"RetryMax": 1,
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"keyspace": {
@@ -864,7 +864,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_gen4",
-			"RetryMax": 1,
+			"RetryMax": 2,
 			"Tags": []
 		},
 		"vtgate_godriver": {
