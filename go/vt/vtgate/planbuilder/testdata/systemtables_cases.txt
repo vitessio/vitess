@@ -124,7 +124,21 @@ Gen4 plan same as above
     "Table": "information_schema.a"
   }
 }
-Gen4 plan same as above
+{
+  "QueryType": "SELECT",
+  "Original": "select * from information_schema.a where information_schema.a.b=10",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from information_schema.a where 1 != 1",
+    "Query": "select * from information_schema.a where a.b = 10",
+    "Table": "information_schema.a"
+  }
+}
 
 # union of information_schema
 "select * from information_schema.a union select * from information_schema.b"
