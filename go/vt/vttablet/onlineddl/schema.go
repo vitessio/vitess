@@ -287,6 +287,13 @@ const (
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
 	`
+	sqlSelectQueuedRevertMigrations = `SELECT
+			migration_uuid
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='queued'
+			AND ddl_action='revert'
+	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
 			artifacts,
