@@ -1727,23 +1727,30 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 		return err
 	}
 	revertedActionStr := row["ddl_action"].ToString()
-	mimickedActionStr := ""
+	if onlineDDL.Table == "" {
+		// table name should be populated by reviewQueuedMigrations
+		// but this was a newly added functionality. To be backwards compatible,
+		// we double check here, and populate table name and ddl_action.
 
-	switch revertedActionStr {
-	case sqlparser.CreateStr:
-		mimickedActionStr = sqlparser.DropStr
-	case sqlparser.DropStr:
-		mimickedActionStr = sqlparser.CreateStr
-	case sqlparser.AlterStr:
-		mimickedActionStr = sqlparser.AlterStr
-	default:
-		return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
-	}
-	if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
-		return err
-	}
-	if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
-		return err
+		// TODO: remove in v14
+		mimickedActionStr := ""
+
+		switch revertedActionStr {
+		case sqlparser.CreateStr:
+			mimickedActionStr = sqlparser.DropStr
+		case sqlparser.DropStr:
+			mimickedActionStr = sqlparser.CreateStr
+		case sqlparser.AlterStr:
+			mimickedActionStr = sqlparser.AlterStr
+		default:
+			return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
+		}
+		if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
+			return err
+		}
+		if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
+			return err
+		}
 	}
 
 	switch revertedActionStr {
@@ -1808,6 +1815,8 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				return err
 			}
 		}
+	default:
+		return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
 	}
 
 	return nil
