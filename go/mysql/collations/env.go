@@ -138,15 +138,13 @@ func NewEnvironment(serverVersion string) (*Environment, error) {
 		case strings.HasPrefix(serverVersion, "10.3."):
 			version = collverMariaDB103
 		}
-	case strings.HasPrefix(serverVersion, "5.6."):
-		version = collverMySQL56
 	case strings.HasPrefix(serverVersion, "5.7."):
 		version = collverMySQL57
 	case strings.HasPrefix(serverVersion, "8.0."):
 		version = collverMySQL80
 	}
 	if version == collverInvalid {
-		return nil, fmt.Errorf("unknown ServerVersion value: %q", serverVersion)
+		return nil, fmt.Errorf("unsupported ServerVersion value: %q", serverVersion)
 	}
 	return fetchCacheEnvironment(version), nil
 }

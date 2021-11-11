@@ -17,12 +17,9 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,15 +28,18 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func TestStartBuildTabletFromInput(t *testing.T) {
@@ -67,6 +67,7 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 		Shard:          "0",
 		KeyRange:       nil,
 		Type:           topodatapb.TabletType_REPLICA,
+		Tags:           servenv.AppVersion.ToStringMap(),
 		DbNameOverride: "aa",
 	}
 
@@ -507,6 +508,67 @@ func TestCheckTabletTypeResets(t *testing.T) {
 	ter0 := ti.GetPrimaryTermStartTime()
 	assert.Equal(t, now, ter0)
 	tm.Stop()
+}
+
+func TestGetBuildTags(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		in      map[string]string
+		skipCSV string
+		want    map[string]string
+		wantErr bool
+	}{
+		{
+			in: map[string]string{
+				"a": "a",
+				"b": "b",
+				"c": "c",
+			},
+			skipCSV: "a,c",
+			want: map[string]string{
+				"b": "b",
+			},
+		},
+		{
+			in: map[string]string{
+				"hello": "world",
+				"help":  "me",
+				"good":  "bye",
+				"a":     "b",
+			},
+			skipCSV: "a,/hel.*/",
+			want: map[string]string{
+				"good": "bye",
+			},
+		},
+		{
+			in: map[string]string{
+				"a":      "a",
+				"/hello": "/hello",
+			},
+			skipCSV: "/,a", // len(skipTag) <= 1, so not a regexp
+			want: map[string]string{
+				"/hello": "/hello",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.skipCSV, func(t *testing.T) {
+			t.Parallel()
+
+			out, err := getBuildTags(tt.in, tt.skipCSV)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, out)
+		})
+	}
 }
 
 func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
