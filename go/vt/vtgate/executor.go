@@ -32,6 +32,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
@@ -213,13 +215,13 @@ func (e *Executor) StreamExecute(
 
 	var err error
 	var stmtType sqlparser.StatementType
-	var rowsAffected uint64
-	var rowsReturned int
-	var insertID uint64
+	var rowsAffected sync2.AtomicInt64
+	var rowsReturned sync2.AtomicInt64
+	var insertID sync2.AtomicInt64
 	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		stmtType = plan.Type
 
-		seenResults := false
+		var seenResults sync2.AtomicBool
 		callbackGen := callback
 		if stmtType != sqlparser.StmtStream && stmtType != sqlparser.StmtVStream {
 			callbackGen = func(qr *sqltypes.Result) error {
@@ -232,7 +234,7 @@ func (e *Executor) StreamExecute(
 					if err := callback(qrfield); err != nil {
 						return err
 					}
-					seenResults = true
+					seenResults.Set(true)
 				}
 
 				result := &sqltypes.Result{}
@@ -245,7 +247,7 @@ func (e *Executor) StreamExecute(
 
 					if byteCount >= e.streamSize {
 						err := callback(result)
-						seenResults = true
+						seenResults.Set(true)
 						result = &sqltypes.Result{}
 						byteCount = 0
 						if err != nil {
@@ -262,15 +264,15 @@ func (e *Executor) StreamExecute(
 
 		// 4: Execute!
 		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
-			rowsAffected += qr.RowsAffected
-			rowsReturned += len(qr.Rows)
-			if insertID == 0 {
-				insertID = qr.InsertID
+			rowsAffected.Add(int64(qr.RowsAffected))
+			rowsReturned.Add(int64(len(qr.Rows)))
+			if insertID.Get() == 0 {
+				insertID.Set(int64(qr.InsertID))
 			}
 			return callbackGen(qr)
 		})
 
-		if err == nil && !seenResults {
+		if err == nil && !seenResults.Get() {
 			err = callback(&sqltypes.Result{})
 		}
 
@@ -290,16 +292,16 @@ func (e *Executor) StreamExecute(
 		}
 		return err
 	}, func(typ sqlparser.StatementType, qr *sqltypes.Result) {
-		rowsAffected += qr.RowsAffected
-		rowsReturned += len(qr.Rows)
-		insertID = qr.InsertID
+		rowsAffected.Add(int64(qr.RowsAffected))
+		rowsReturned.Add(int64(len(qr.Rows)))
+		insertID.Set(int64(qr.InsertID))
 		stmtType = typ
 		err = callback(qr)
 	})
 
 	logStats.Error = err
-	saveSessionStats(safeSession, stmtType, rowsAffected, insertID, rowsReturned, err)
-	if rowsReturned > *warnMemoryRows {
+	saveSessionStats(safeSession, stmtType, uint64(rowsAffected.Get()), uint64(insertID.Get()), int(rowsReturned.Get()), err)
+	if rowsReturned.Get() > int64(*warnMemoryRows) {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
 		if err != nil {
