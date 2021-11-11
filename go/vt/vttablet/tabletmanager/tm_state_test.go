@@ -408,13 +408,24 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			factory := faketopo.NewFakeTopoFactory()
-			// add cell1 to the factory. Make it so that the fourth call to update fails with an error. This will be the call from ChangeTabletType.
-			factory.AddCell("cell1", getErrorsList(testcase.numberOfReadErrors), []bool{false, false, false, true} /* update errors */, []bool{true, true, true, testcase.writePersists} /* write Persists */)
+			// add cell1 to the factory. This returns a fake connection which we will use to set the get and update errors as we require.
+			fakeConn := factory.AddCell("cell1")
 			ts := faketopo.NewFakeTopoServer(factory)
 			statsTabletTypeCount.ResetAll()
 			tm := newTestTM(t, ts, 2, "ks", "0")
 			defer tm.Stop()
 
+			// ChangeTabletType calls topotools.ChangeType which in-turn issues
+			// a GET request and an UPDATE request to the topo server.
+			// We want the first GET request to pass without any failure
+			// We want the UPDATE request to fail
+			fakeConn.AddGetError(false)
+			fakeConn.AddUpdateError(true, testcase.writePersists)
+			// Since the UPDATE request failed, we will try a GET request on the
+			// topo server until it succeeds.
+			for i := 0; i < testcase.numberOfReadErrors; i++ {
+				fakeConn.AddGetError(true)
+			}
 			ctx := context.Background()
 			err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 			if testcase.expectedError != "" {
@@ -436,20 +447,6 @@ func TestChangeTypeErrorWhileWritingToTopo(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-}
-
-// getErrorsList creates an array of getErrors that is passed to the fake topo server.
-// There are initially some number of get requests to pass so that the tablet comes up properly
-// After that we start fail the number of specified requests
-func getErrorsList(readErrors int) []bool {
-	var res []bool
-	for i := 0; i < 9; i++ {
-		res = append(res, false)
-	}
-	for i := 0; i < readErrors; i++ {
-		res = append(res, true)
-	}
-	return res
 }
 
 func TestPublishStateNew(t *testing.T) {
