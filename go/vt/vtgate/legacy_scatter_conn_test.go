@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -133,7 +134,10 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
+		var mu sync.Mutex
 		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true, func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
 			qr.AppendResult(r)
 			return nil
 		})
