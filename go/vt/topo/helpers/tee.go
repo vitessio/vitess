@@ -30,7 +30,7 @@ import (
 // topo.Server to another.
 //
 // - primary: we read everything from it, and write to it. We also create
-//     MasterParticipation from it.
+//     LeaderParticipation from it.
 // - secondary: we write to it as well, but we usually don't fail.
 // - we lock primary/secondary if reverseLockOrder is False,
 // or secondary/primary if reverseLockOrder is True.
@@ -224,7 +224,7 @@ func (ld *teeTopoLockDescriptor) Unlock(ctx context.Context) error {
 	return ferr
 }
 
-// NewMasterParticipation is part of the topo.Conn interface.
-func (c *TeeConn) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
-	return c.primary.NewMasterParticipation(name, id)
+// NewLeaderParticipation is part of the topo.Conn interface.
+func (c *TeeConn) NewLeaderParticipation(name, id string) (topo.LeaderParticipation, error) {
+	return c.primary.NewLeaderParticipation(name, id)
 }
