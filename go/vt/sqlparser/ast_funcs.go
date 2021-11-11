@@ -1614,7 +1614,7 @@ func defaultRequiresParens(ct *ColumnType) bool {
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
 func RemoveKeyspaceFromColName(expr Expr) Expr {
-	return Rewrite(expr, nil, func(cursor *Cursor) bool {
+	Rewrite(expr, nil, func(cursor *Cursor) bool {
 		switch col := cursor.Node().(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
@@ -1622,5 +1622,7 @@ func RemoveKeyspaceFromColName(expr Expr) Expr {
 			}
 		}
 		return true
-	}).(Expr) // This hard cast is safe because we do not change the type the input
+	}) // This hard cast is safe because we do not change the type the input
+
+	return expr
 }
