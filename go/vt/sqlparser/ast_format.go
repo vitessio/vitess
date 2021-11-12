@@ -1009,7 +1009,7 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BetweenExpr) Format(buf *TrackedBuffer) {
-	if node.isBetween {
+	if node.IsBetween {
 		buf.astPrintf(node, "%v between %l and %r", node.Left, node.From, node.To)
 	} else {
 		buf.astPrintf(node, "%v not between %l and %r", node.Left, node.From, node.To)

@@ -1345,7 +1345,7 @@ func (node *ComparisonExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *BetweenExpr) formatFast(buf *TrackedBuffer) {
-	if node.isBetween {
+	if node.IsBetween {
 		buf.printExpr(node, node.Left, true)
 		buf.WriteString(" between ")
 		buf.printExpr(node, node.From, true)

@@ -3881,11 +3881,11 @@ bit_expr IN col_tuple
   }
 | bit_expr BETWEEN bit_expr AND predicate
   {
-	 $$ = &BetweenExpr{Left: $1, isBetween: true, From: $3, To: $5}
+	 $$ = &BetweenExpr{Left: $1, IsBetween: true, From: $3, To: $5}
   }
 | bit_expr NOT BETWEEN bit_expr AND predicate
   {
-	$$ = &BetweenExpr{Left: $1, isBetween: false, From: $4, To: $6}
+	$$ = &BetweenExpr{Left: $1, IsBetween: false, From: $4, To: $6}
   }
 | bit_expr LIKE simple_expr
   {
