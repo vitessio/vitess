@@ -272,16 +272,22 @@ func TestCircularReplication(t *testing.T) {
 		}
 	}
 
+	// check replication is setup correctly
+	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica}, 15*time.Second)
+
+	// change the replication source on the primary
 	changeReplicationSourceCommands := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
-
 	_, err := utils.RunSQL(t, changeReplicationSourceCommands, primary, "")
 	require.NoError(t, err)
+
+	// wait for primary to reach stable state
+	time.Sleep(1 * time.Second)
 
 	// wait for repair
 	err = utils.WaitForReplicationToStop(t, primary)
 	require.NoError(t, err)
-	// check replication is setup correctly
-	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica}, 10*time.Second)
+	// check that the writes still succeed
+	utils.VerifyWritesSucceed(t, clusterInfo, primary, []*cluster.Vttablet{replica}, 10*time.Second)
 }
