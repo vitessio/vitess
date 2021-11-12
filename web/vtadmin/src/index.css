@@ -227,7 +227,3 @@ table tbody td[rowSpan] {
 .max-width-content {
     max-width: var(--contentWidth);
 }
-
-.white-space-nowrap {
-    white-space: nowrap;
-}

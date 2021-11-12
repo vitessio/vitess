@@ -124,7 +124,7 @@ export const Workflows = () => {
                     </DataCell>
 
                     <DataCell>
-                        <div className="font-sans white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
+                        <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
                         <div className="font-sans font-size-small text-secondary">
                             {formatRelativeTime(row.timeUpdated)}
                         </div>

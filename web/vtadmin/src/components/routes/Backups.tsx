@@ -84,7 +84,7 @@ export const Backups = () => {
                             {row.tablet}
                         </TabletLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">
+                    <DataCell className="whitespace-nowrap">
                         <BackupStatusPip status={row._status} /> {row.status}
                     </DataCell>
                 </tr>
