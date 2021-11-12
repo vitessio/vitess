@@ -117,14 +117,14 @@ The release cutover section is divided in 4 steps:
 
 * Build a Release Notes document using the Makefile: 
     ```shell
-    make RELEASE_BRANCH="release-12" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" release-notes
+    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes
     ```
 
 * Check to make sure all labels and categories set for each PR.
 
     > The Release Notes document can be put aside for now, it will be used when creating the release tag in a future step.
 
-* Create a new release branch from master.
+* Create a new release branch from main.
     ```shell
     git checkout -b release-12.0 upstream/main
     ```
@@ -165,7 +165,7 @@ The release cutover section is divided in 4 steps:
 
 * Build a Release Notes document using the Makefile:
     ```shell
-    make RELEASE_BRANCH="release-12" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" release-notes
+    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes
     ```
 
 * Check to make sure all labels and categories set for each PR.
@@ -244,7 +244,7 @@ And finally, click on `Publish release`.
 * Run following script to once the `base` Docker image is live. 
 
 ```
-https://github.com/vitessio/vitess/blob/master/helm/release.sh
+https://github.com/vitessio/vitess/blob/main/docker/release.sh
 ```
 
 * Deploy and release Java packages by following the `Java Packages Deploy & Release` section below. 

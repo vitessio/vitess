@@ -17,7 +17,10 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,15 +30,16 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-const T0 TableSet = 0
+var T0 TableSet
 
-const (
+var (
 	// Just here to make outputs more readable
-	T1 TableSet = 1 << iota
-	T2
-	T3
-	T4
-	T5
+	None = EmptyTableSet()
+	T1   = SingleTableSet(0)
+	T2   = SingleTableSet(1)
+	T3   = SingleTableSet(2)
+	T4   = SingleTableSet(3)
+	T5   = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -61,7 +65,7 @@ func TestBindingSingleTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
-			assert.EqualValues(t, 1, ts)
+			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			assert.Equal(t, T1, recursiveDeps, query)
@@ -87,7 +91,7 @@ func TestBindingSingleAliasedTablePositive(t *testing.T) {
 			sel, _ := stmt.(*sqlparser.Select)
 			t1 := sel.From[0].(*sqlparser.AliasedTableExpr)
 			ts := semTable.TableSetFor(t1)
-			assert.EqualValues(t, 1, ts)
+			assert.Equal(t, SingleTableSet(0), ts)
 
 			recursiveDeps := semTable.RecursiveDeps(extract(sel, 0))
 			require.Equal(t, T1, recursiveDeps, query)
@@ -155,15 +159,15 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		numberOfTables: 1,
 	}, {
 		query:          "select max(t.col+s.col) from t, s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(t.col+s.col) from t join s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select case t.col when s.col then r.col else u.col end from t, s, r, w, u",
-		deps:           T1 | T2 | T3 | T5,
+		deps:           MergeTableSets(T1, T2, T3, T5),
 		numberOfTables: 4,
 		// }, {
 		// TODO: move to subquery
@@ -175,7 +179,7 @@ func TestBindingMultiTablePositive(t *testing.T) {
 		// 	deps:  T1 | T2,
 	}, {
 		query:          "select u1.a + u2.a from u1, u2",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -201,15 +205,15 @@ func TestBindingMultiAliasedTablePositive(t *testing.T) {
 		numberOfTables: 1,
 	}, {
 		query:          "select X.col+S.col from t as X, s as S",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+S.col) from t as X, s as S",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}, {
 		query:          "select max(X.col+s.col) from t as X, s",
-		deps:           T1 | T2,
+		deps:           MergeTableSets(T1, T2),
 		numberOfTables: 2,
 	}}
 	for _, query := range queries {
@@ -485,10 +489,10 @@ func TestScopeForSubqueries(t *testing.T) {
 			deps: T2,
 		}, {
 			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
-			deps: T3,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
-			deps: T5,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select id from t) from x as t`,
 			deps: T2,
@@ -506,6 +510,94 @@ func TestScopeForSubqueries(t *testing.T) {
 			require.NoError(t, semTable.ProjectionErr)
 			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 			assert.Equal(t, tc.deps, s1)
+		})
+	}
+}
+
+func TestSubqueriesMappingWhereClause(t *testing.T) {
+	tcs := []struct {
+		sql           string
+		opCode        engine.PulloutOpcode
+		otherSideName string
+	}{
+		{
+			sql:           "select id from t1 where id in (select uid from t2)",
+			opCode:        engine.PulloutIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t1 where id not in (select uid from t2)",
+			opCode:        engine.PulloutNotIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+		{
+			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutExists,
+			otherSideName: "",
+		},
+		{
+			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			var subq *sqlparser.Subquery
+			switch whereExpr := sel.Where.Expr.(type) {
+			case *sqlparser.ComparisonExpr:
+				subq = whereExpr.Right.(*sqlparser.Subquery)
+			case *sqlparser.ExistsExpr:
+				subq = whereExpr.Subquery
+			}
+
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr))
+			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
+			if tc.otherSideName == "" {
+				assert.Nil(t, extractedSubq.OtherSide)
+			} else {
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
+			}
+		})
+	}
+}
+
+func TestSubqueriesMappingSelectExprs(t *testing.T) {
+	tcs := []struct {
+		sql        string
+		selExprIdx int
+	}{
+		{
+			sql:        "select (select id from t1)",
+			selExprIdx: 0,
+		},
+		{
+			sql:        "select id, (select id from t1) from t1",
+			selExprIdx: 1,
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq))
+			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
 		})
 	}
 }
@@ -583,25 +675,25 @@ func TestOrderByBindingTable(t *testing.T) {
 		T2,
 	}, {
 		"(select id from t1) union (select uid from t2) order by id",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select id from t1 union (select uid from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select id from t1 union select uid from t2 union (select name from t) order by 1",
-		T1 | T2 | T3,
+		MergeTableSets(T1, T2, T3),
 	}, {
 		"select a.id from t1 as a union (select uid from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select b.id as a from t1 as b union (select uid as c from t2) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by 1",
-		T1 | T2,
+		MergeTableSets(T1, T2, T4),
 	}, {
 		"select a.id from t1 as a union (select uid from t2, t union (select name from t) order by 1) order by id",
-		T1 | T2,
+		MergeTableSets(T1, T2, T4),
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -719,7 +811,7 @@ func TestHavingBinding(t *testing.T) {
 		T1,
 	}, {
 		"select t.id, count(*) as a from t, t1 group by t.id having a = 1",
-		T1 | T2,
+		MergeTableSets(T1, T2),
 	}, {
 		sql:  "select u2.a, u1.a from u1, u2 having u2.a = 2",
 		deps: T2,
@@ -740,15 +832,15 @@ func TestUnionCheckFirstAndLastSelectsDeps(t *testing.T) {
 
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
-	sel1 := union.FirstStatement.(*sqlparser.Select)
-	sel2 := union.UnionSelects[0].Statement.(*sqlparser.Select)
+	sel1 := union.Left.(*sqlparser.Select)
+	sel2 := union.Right.(*sqlparser.Select)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
 	ts1 := semTable.TableSetFor(t1)
 	ts2 := semTable.TableSetFor(t2)
-	assert.EqualValues(t, 1, ts1)
-	assert.EqualValues(t, 2, ts2)
+	assert.Equal(t, SingleTableSet(0), ts1)
+	assert.Equal(t, SingleTableSet(1), ts2)
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
@@ -760,10 +852,10 @@ func TestUnionOrderByRewrite(t *testing.T) {
 	query := "select tabl1.id from tabl1 union select 1 order by 1"
 
 	stmt, _ := parseAndAnalyze(t, query, "")
-	assert.Equal(t, "(select tabl1.id from tabl1) union (select 1 from dual) order by id asc", sqlparser.String(stmt))
+	assert.Equal(t, "select tabl1.id from tabl1 union select 1 from dual order by id asc", sqlparser.String(stmt))
 }
 
-func TestInvalidUnion(t *testing.T) {
+func TestInvalidQueries(t *testing.T) {
 	tcases := []struct {
 		sql string
 		err string
@@ -785,6 +877,15 @@ func TestInvalidUnion(t *testing.T) {
 	}, {
 		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
 		err: "Column 'id' in field list is ambiguous",
+	}, {
+		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
+		err: "SQL_CALC_FOUND_ROWS not supported with union",
+	}, {
+		sql: "select * from (select sql_calc_found_rows id from a) as t",
+		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+	}, {
+		sql: "select (select sql_calc_found_rows id from a) as t",
+		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
@@ -804,14 +905,14 @@ func TestUnionWithOrderBy(t *testing.T) {
 	stmt, semTable := parseAndAnalyze(t, query, "")
 	union, _ := stmt.(*sqlparser.Union)
 	sel1 := sqlparser.GetFirstSelect(union)
-	sel2 := sqlparser.GetFirstSelect(union.UnionSelects[0].Statement)
+	sel2 := sqlparser.GetFirstSelect(union.Right)
 
 	t1 := sel1.From[0].(*sqlparser.AliasedTableExpr)
 	t2 := sel2.From[0].(*sqlparser.AliasedTableExpr)
 	ts1 := semTable.TableSetFor(t1)
 	ts2 := semTable.TableSetFor(t2)
-	assert.EqualValues(t, 1, ts1)
-	assert.EqualValues(t, 2, ts2)
+	assert.Equal(t, SingleTableSet(0), ts1)
+	assert.Equal(t, SingleTableSet(1), ts2)
 
 	d1 := semTable.RecursiveDeps(extract(sel1, 0))
 	d2 := semTable.RecursiveDeps(extract(sel2, 0))
@@ -866,11 +967,11 @@ func TestScopingWDerivedTables(t *testing.T) {
 		}, {
 			query:                "select t.id from (select * from user, music) as t",
 			expectation:          T3,
-			recursiveExpectation: T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
 		}, {
 			query:                "select t.id from (select * from user, music) as t order by t.id",
 			expectation:          T3,
-			recursiveExpectation: T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
 		}, {
 			query:                "select t.id from (select * from user) as t join user as u on t.id = u.id",
 			expectation:          T2,
@@ -914,6 +1015,65 @@ func TestScopingWDerivedTables(t *testing.T) {
 				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
 				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
+		})
+	}
+}
+
+func TestDerivedTablesOrderClause(t *testing.T) {
+	queries := []struct {
+		query                string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{{
+		query:                "select 1 from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by t.id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id as foo from (select id from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}}
+	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewTableIdent("t")}}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", si)
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
+
 		})
 	}
 }
@@ -973,8 +1133,8 @@ func TestScopingWVindexTables(t *testing.T) {
 			expectation:          T1,
 		}, {
 			query:                "select u.id + t.id from t as t join user_index as u where u.id = 1 and u.id = t.id",
-			recursiveExpectation: T1 | T2,
-			expectation:          T1 | T2,
+			recursiveExpectation: MergeTableSets(T1, T2),
+			expectation:          MergeTableSets(T1, T2),
 		},
 	}
 	for _, query := range queries {

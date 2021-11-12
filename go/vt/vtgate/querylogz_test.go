@@ -17,7 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -85,7 +85,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
-	body, _ := ioutil.ReadAll(response.Body)
+	body, _ := io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, fastQueryPattern, logStats, body)
 
 	// medium query
@@ -114,7 +114,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
-	body, _ = ioutil.ReadAll(response.Body)
+	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, mediumQueryPattern, logStats, body)
 
 	// slow query
@@ -142,7 +142,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
-	body, _ = ioutil.ReadAll(response.Body)
+	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 	// ensure querylogz is not affected by the filter tag
@@ -152,7 +152,7 @@ func TestQuerylogzHandlerFormatting(t *testing.T) {
 	ch <- logStats
 	querylogzHandler(ch, response, req)
 	close(ch)
-	body, _ = ioutil.ReadAll(response.Body)
+	body, _ = io.ReadAll(response.Body)
 	checkQuerylogzHasStats(t, slowQueryPattern, logStats, body)
 
 }

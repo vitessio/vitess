@@ -19,6 +19,8 @@ package sqlparser
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +38,58 @@ func BenchmarkVisitLargeExpression(b *testing.B) {
 			return true
 		})
 	}
+}
+
+func TestReplaceWorksInLaterCalls(t *testing.T) {
+	q := "select * from tbl1"
+	stmt, err := Parse(q)
+	require.NoError(t, err)
+	count := 0
+	Rewrite(stmt, func(cursor *Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case *Select:
+			node.SelectExprs[0] = &AliasedExpr{
+				Expr: NewStrLiteral("apa"),
+			}
+			node.SelectExprs = append(node.SelectExprs, &AliasedExpr{
+				Expr: NewStrLiteral("foobar"),
+			})
+		case *StarExpr:
+			t.Errorf("should not have seen the star")
+		case *Literal:
+			count++
+		}
+		return true
+	}, nil)
+	assert.Equal(t, 2, count)
+}
+
+func TestReplaceAndRevisitWorksInLaterCalls(t *testing.T) {
+	q := "select * from tbl1"
+	stmt, err := Parse(q)
+	require.NoError(t, err)
+	count := 0
+	Rewrite(stmt, func(cursor *Cursor) bool {
+		switch node := cursor.Node().(type) {
+		case SelectExprs:
+			if len(node) != 1 {
+				return true
+			}
+			expr1 := &AliasedExpr{
+				Expr: NewStrLiteral("apa"),
+			}
+			expr2 := &AliasedExpr{
+				Expr: NewStrLiteral("foobar"),
+			}
+			cursor.ReplaceAndRevisit(SelectExprs{expr1, expr2})
+		case *StarExpr:
+			t.Errorf("should not have seen the star")
+		case *Literal:
+			count++
+		}
+		return true
+	}, nil)
+	assert.Equal(t, 2, count)
 }
 
 func TestChangeValueTypeGivesError(t *testing.T) {

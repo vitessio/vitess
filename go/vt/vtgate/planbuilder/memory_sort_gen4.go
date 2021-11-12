@@ -61,7 +61,7 @@ func (m *memorySortGen4) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, co
 	panic("implement me")
 }
 
-func (m *memorySortGen4) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (m *memorySortGen4) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 

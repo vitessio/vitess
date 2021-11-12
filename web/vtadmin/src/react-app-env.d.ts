@@ -29,6 +29,11 @@ declare namespace NodeJS {
         // made against vtadmin-api. If unspecified, uses fetch defaults.
         // See https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch#sending_a_request_with_credentials_included
         REACT_APP_FETCH_CREDENTIALS?: RequestCredentials;
+
+        // Optional.  Used for the document.title property. The default is "VTAdmin".
+        // Overriding this can be useful to differentiate between multiple VTAdmin deployments,
+        // e.g., "VTAdmin (staging)".
+        REACT_APP_DOCUMENT_TITLE?: string;
     }
 }
 

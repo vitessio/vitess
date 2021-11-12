@@ -17,7 +17,10 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/vt/key"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -44,13 +47,12 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	if !ok {
 		return nil
 	}
-
 	switch t := node.Expr.(type) {
 	case *sqlparser.DerivedTable:
 		switch sel := t.Select.(type) {
 		case *sqlparser.Select:
 			tables := tc.scoper.wScope[sel]
-			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, tables.tables, tc.org)
+			tableInfo := createDerivedTableForExpressions(sqlparser.GetFirstSelect(sel).SelectExprs, node.Columns, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -65,7 +67,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		case *sqlparser.Union:
 			firstSelect := sqlparser.GetFirstSelect(sel)
 			tables := tc.scoper.wScope[firstSelect]
-			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, tables.tables, tc.org)
+			tableInfo := createDerivedTableForExpressions(firstSelect.SelectExprs, node.Columns, tables.tables, tc.org)
 			if err := tableInfo.checkForDuplicates(); err != nil {
 				return err
 			}
@@ -77,7 +79,7 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			return scope.addTable(tableInfo)
 
 		default:
-			return Gen4NotSupportedF("union in derived table")
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in a derived table", sel)
 		}
 
 	case sqlparser.TableName:
@@ -88,9 +90,13 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 			isInfSchema = true
 		} else {
 			var err error
-			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+			var target key.Destination
+			tbl, vindex, _, _, target, err = tc.si.FindTableOrVindex(t)
 			if err != nil {
 				return err
+			}
+			if target != nil {
+				return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
 			}
 			if tbl == nil && vindex != nil {
 				tbl = newVindexTable(t.Name)
@@ -127,7 +133,7 @@ func newVindexTable(t sqlparser.TableIdent) *vindexes.Table {
 func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	for i, t2 := range tc.Tables {
 		if t == t2.getExpr() {
-			return TableSet(1 << i)
+			return SingleTableSet(i)
 		}
 	}
 	panic("unknown table")

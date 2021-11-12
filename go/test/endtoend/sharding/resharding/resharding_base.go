@@ -812,10 +812,9 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// do a Migrate that will fail waiting for replication
 	// which should cause the Migrate to be canceled and the source
 	// primary to be serving again.
-	// This is the legacy resharding migration command which should work with either primary or master
-	// We will leave this one to test that, all other usages have been replaced with "primary"
+	// This is the legacy resharding migration command
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
-		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
+		"-filtered_replication_wait_time", "0s", shard1Ks, "primary")
 	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}

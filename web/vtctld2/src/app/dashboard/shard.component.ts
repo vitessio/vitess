@@ -120,8 +120,8 @@ export class ShardComponent implements OnInit, OnDestroy {
     if (!isMaster) {
       // Add replication-related methods to the 'Change' section for slaves.
       result[1].items.push(
-        {label: 'Start Replication', command: (event) => {this.openStartSlaveDialog(); }},
-        {label: 'Stop Replication', command: (event) => {this.openStopSlaveDialog(); }},
+        {label: 'Start Replication', command: (event) => {this.openStartReplicationDialog(); }},
+        {label: 'Stop Replication', command: (event) => {this.openStopReplicationDialog(); }},
       );
     }
     if (this.featuresService.activeReparents) {
@@ -489,23 +489,23 @@ export class ShardComponent implements OnInit, OnDestroy {
     this.dialogSettings.toggleModal();
   }
 
-  openStartSlaveDialog() {
+  openStartReplicationDialog() {
     this.dialogSettings = new DialogSettings('Start', `Start replication on ${this.selectedTablet.label}`,
                                              `Restart replication on ${this.selectedTablet.label}.`,
                                              `There was a problem starting replication on ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Started replication on ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartSlave');
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StartReplication');
     this.dialogSettings.toggleModal();
   }
 
-  openStopSlaveDialog() {
+  openStopReplicationDialog() {
     this.dialogSettings = new DialogSettings('Stop', `Stop replication on ${this.selectedTablet.label}`,
                                              `Stop replication on ${this.selectedTablet.label}. May render the tablet unhealthy.`,
                                              `There was a problem stopping replication on ${this.selectedTablet.label}:`);
     this.dialogSettings.setMessage(`Stopped replication on ${this.selectedTablet.label}`);
     let flags = new PingTabletFlags(this.selectedTablet.alias).flags;
-    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopSlave');
+    this.dialogContent = new DialogContent('tablet_alias', flags, {}, undefined, 'StopReplication');
     this.dialogSettings.toggleModal();
   }
 

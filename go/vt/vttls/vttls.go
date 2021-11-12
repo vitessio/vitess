@@ -19,7 +19,7 @@ package vttls
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io/ioutil"
+	"os"
 	"strings"
 	"sync"
 
@@ -128,7 +128,7 @@ var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters.
-func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16) (*tls.Config, error) {
+func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
 	config := newTLSConfig(minTLSVersion)
 
 	// Load the client-side cert & key if any.
@@ -190,12 +190,20 @@ func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
 	}
 
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
+	}
+
 	return config, nil
 }
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
 	config := newTLSConfig(minTLSVersion)
 
 	var certificates *[]tls.Certificate
@@ -225,6 +233,14 @@ func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Co
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
+	}
+
 	return config, nil
 }
 
@@ -251,7 +267,7 @@ func loadx509CertPool(ca string) (*x509.CertPool, error) {
 }
 
 func doLoadx509CertPool(ca string) error {
-	b, err := ioutil.ReadFile(ca)
+	b, err := os.ReadFile(ca)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 	}
@@ -339,19 +355,19 @@ func doLoadAndCombineTLSCertificates(ca, cert, key string) error {
 	combinedTLSIdentifier := tlsCertificatesIdentifier(ca, cert, key)
 
 	// Read CA certificates chain
-	caB, err := ioutil.ReadFile(ca)
+	caB, err := os.ReadFile(ca)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", ca)
 	}
 
 	// Read server certificate
-	certB, err := ioutil.ReadFile(cert)
+	certB, err := os.ReadFile(cert)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read server cert file: %s", cert)
 	}
 
 	// Read server key file
-	keyB, err := ioutil.ReadFile(key)
+	keyB, err := os.ReadFile(key)
 	if err != nil {
 		return vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read key file: %s", key)
 	}

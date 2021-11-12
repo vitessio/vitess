@@ -21,6 +21,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
@@ -178,7 +180,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"-planner_version", "Gen4"} // enable Gen4 planner.
+		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4 // enable Gen4 planner.
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1

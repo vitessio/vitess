@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -73,7 +74,8 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 
 func equal(a, b []sqltypes.Value) (bool, error) {
 	for i, aVal := range a {
-		cmp, err := evalengine.NullsafeCompare(aVal, b[i])
+		// TODO(king-11) make collation aware
+		cmp, err := evalengine.NullsafeCompare(aVal, b[i], collations.Unknown)
 		if err != nil {
 			return false, err
 		}
@@ -88,7 +90,7 @@ func newProbeTable() *probeTable {
 	return &probeTable{m: map[int64][]row{}}
 }
 
-// Execute implements the Primitive interface
+// TryExecute implements the Primitive interface
 func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	input, err := vcursor.ExecutePrimitive(d.Source, bindVars, wantfields)
 	if err != nil {
@@ -115,7 +117,7 @@ func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return result, err
 }
 
-// StreamExecute implements the Primitive interface
+// TryStreamExecute implements the Primitive interface
 func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	pt := newProbeTable()
 

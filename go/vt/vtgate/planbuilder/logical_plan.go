@@ -70,7 +70,7 @@ type logicalPlan interface {
 
 	// SupplyWeightString must supply a weight_string expression of the
 	// specified column. It returns an error if we cannot supply a weight column for it.
-	SupplyWeightString(colNumber int) (weightcolNumber int, err error)
+	SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error)
 
 	// Primitive returns the underlying primitive.
 	// This function should only be called after Wireup is finished.
@@ -170,8 +170,8 @@ func (bc *logicalPlanCommon) SupplyCol(col *sqlparser.ColName) (rc *resultColumn
 	return bc.input.SupplyCol(col)
 }
 
-func (bc *logicalPlanCommon) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
-	return bc.input.SupplyWeightString(colNumber)
+func (bc *logicalPlanCommon) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
+	return bc.input.SupplyWeightString(colNumber, alsoAddToGroupBy)
 }
 
 // Rewrite implements the logicalPlan interface
@@ -239,12 +239,14 @@ func (rsb *resultsBuilder) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, 
 	return rc, colNumber
 }
 
-func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (rsb *resultsBuilder) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	rc := rsb.resultColumns[colNumber]
-	if weightcolNumber, ok := rsb.weightStrings[rc]; ok {
+	var ok bool
+	weightcolNumber, ok = rsb.weightStrings[rc]
+	if !alsoAddToGroupBy && ok {
 		return weightcolNumber, nil
 	}
-	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber)
+	weightcolNumber, err = rsb.input.SupplyWeightString(colNumber, alsoAddToGroupBy)
 	if err != nil {
 		return 0, nil
 	}

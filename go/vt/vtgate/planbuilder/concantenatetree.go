@@ -25,6 +25,9 @@ import (
 
 type (
 	concatenateTree struct {
+		distinct    bool
+		ordering    sqlparser.OrderBy
+		limit       *sqlparser.Limit
 		selectStmts []*sqlparser.Select
 		sources     []queryTree
 	}
@@ -35,7 +38,7 @@ var _ queryTree = (*concatenateTree)(nil)
 func (c *concatenateTree) tableID() semantics.TableSet {
 	var tableSet semantics.TableSet
 	for _, source := range c.sources {
-		tableSet |= source.tableID()
+		tableSet.MergeInPlace(source.tableID())
 	}
 	return tableSet
 }
@@ -58,4 +61,12 @@ func (c *concatenateTree) cost() int {
 
 func (c *concatenateTree) pushOutputColumns(columns []*sqlparser.ColName, semTable *semantics.SemTable) ([]int, error) {
 	return nil, vterrors.New(vtrpc.Code_INTERNAL, "pushOutputColumns should not be called on this struct")
+}
+
+func (c *concatenateTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "add '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
+}
+
+func (c *concatenateTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "remove '%s' predicate not supported on concatenate trees", sqlparser.String(expr))
 }

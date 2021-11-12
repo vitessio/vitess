@@ -353,6 +353,8 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 		return planbuilder.Gen4Left2Right
 	case "gen4fallback":
 		return planbuilder.Gen4WithFallback
+	case "gen4comparev3":
+		return planbuilder.Gen4CompareV3
 	}
 
 	log.Warning("unknown planner version configured. using the default")
@@ -369,6 +371,7 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+// MaxBufferingRetries is to represent max retries on buffering.
 const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -744,7 +747,18 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	}
 }
 
-// ForeignKey implements the VCursor interface
+// PlannerWarning implements the VCursor interface
+func (vc *vcursorImpl) PlannerWarning(message string) {
+	if message == "" {
+		return
+	}
+	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
+		Code:    mysql.ERNotSupportedYet,
+		Message: message,
+	})
+}
+
+// ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
 	if foreignKeyMode == nil {
 		return ""

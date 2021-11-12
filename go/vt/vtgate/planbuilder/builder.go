@@ -52,6 +52,7 @@ type ContextVSchema interface {
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
+	SetPlannerVersion(pv PlannerVersion)
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
@@ -61,6 +62,9 @@ type ContextVSchema interface {
 	// This will let the user know that they are using something
 	// that could become a problem if they move to a sharded keyspace
 	WarnUnshardedOnly(format string, params ...interface{})
+
+	// PlannerWarning records warning created during planning.
+	PlannerWarning(message string)
 
 	// ForeignKeyMode returns the foreign_key flag value
 	ForeignKeyMode() string
@@ -80,10 +84,12 @@ const (
 	Gen4Left2Right = querypb.ExecuteOptions_Gen4Left2Right
 	// Gen4WithFallback first attempts to use the Gen4 planner, and if that fails, uses the V3 planner instead
 	Gen4WithFallback = querypb.ExecuteOptions_Gen4WithFallback
+	// Gen4CompareV3 executes queries on both Gen4 and V3 to compare their results.
+	Gen4CompareV3 = querypb.ExecuteOptions_Gen4CompareV3
 )
 
 var (
-	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback}
+	plannerVersions = []PlannerVersion{V3, Gen4, Gen4GreedyOnly, Gen4Left2Right, Gen4WithFallback, Gen4CompareV3}
 )
 
 type truncater interface {
@@ -97,7 +103,7 @@ func TestBuilder(query string, vschema ContextVSchema, keyspace string) (*engine
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset)
 	if err != nil {
 		return nil, err
 	}
@@ -126,6 +132,8 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, reservedVars *sqlpars
 
 func getConfiguredPlanner(vschema ContextVSchema, v3planner selectPlanner) (selectPlanner, error) {
 	switch vschema.Planner() {
+	case Gen4CompareV3:
+		return gen4CompareV3Planner, nil
 	case Gen4, Gen4Left2Right, Gen4GreedyOnly:
 		return gen4Planner, nil
 	case Gen4WithFallback:
@@ -197,7 +205,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		// Empty by design. Not executed by a plan
 		return nil, nil
 	case *sqlparser.Show:
-		return buildShowPlan(stmt, vschema)
+		return buildRoutePlan(stmt, reservedVars, vschema, buildShowPlan)
 	case *sqlparser.LockTables:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildLockPlan)
 	case *sqlparser.UnlockTables:

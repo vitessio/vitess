@@ -299,6 +299,7 @@ const (
 	// - the client cannot write an initial auth packet.
 	// - the client cannot read an initial auth packet.
 	// - the client cannot read a response from the server.
+	//     This happens when a running query is killed.
 	CRServerLost = 2013
 
 	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
@@ -693,6 +694,16 @@ func IsConnErr(err error) bool {
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
+	}
+	return false
+}
+
+// IsConnLostDuringQuery returns true if the error is a CRServerLost error.
+// Happens most commonly when a query is killed MySQL server-side.
+func IsConnLostDuringQuery(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		num := sqlErr.Number()
+		return (num == CRServerLost)
 	}
 	return false
 }
