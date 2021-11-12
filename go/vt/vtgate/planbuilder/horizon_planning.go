@@ -147,6 +147,8 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 		p.truncater.SetTruncateColumnCount(hp.sel.GetColumnCount())
 	case *pulloutSubquery:
 		return hp.truncateColumnsIfNeeded(p.underlying)
+	case *filter:
+		return hp.truncateColumnsIfNeeded(p.input)
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "plan type not known for column truncation: %T", plan)
 	}
@@ -172,7 +174,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 				return i, false, nil
 			}
 		}
-		expr = removeKeyspaceFromColName(expr)
+		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 		sel, isSel := node.Select.(*sqlparser.Select)
 		if !isSel {
 			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
@@ -314,6 +316,18 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		node.cols = append(node.cols, column)
 		return len(node.cols) - 1, true, nil
+	case *concatenateGen4:
+		if hasAggregation {
+			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
+		}
+		offset, added, err := pushProjection(expr, node.sources[0], semTable, inner, reuseCol, hasAggregation)
+		if err != nil {
+			return 0, false, err
+		}
+		if added {
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
+		}
+		return offset, false, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
@@ -332,15 +346,6 @@ func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *sema
 		}
 	}
 	return nil
-}
-
-func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
-	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
-		expr = sqlparser.CloneRefOfAliasedExpr(expr)
-		col := expr.Expr.(*sqlparser.ColName)
-		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-	}
-	return expr
 }
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
@@ -408,6 +413,10 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		hp.vtgateGrouping = true
 	}
 
+	if joinPlan && hp.qp.HasAggr && len(hp.qp.GroupByExprs) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+	}
+
 	for _, e := range hp.qp.SelectExprs {
 		aliasExpr, err := e.GetAliasedExpr()
 		if err != nil {
@@ -458,7 +467,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 		hp.haveToTruncate(added)
 	}
 
-	err := hp.planHaving(ctx, newPlan)
+	newPlan, err := hp.planHaving(ctx, newPlan)
 	if err != nil {
 		return nil, err
 	}
@@ -660,35 +669,28 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		return plan, nil
 	case *memorySort:
 		return plan, nil
-	case *pulloutSubquery:
-		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.underlying)
-		if err != nil {
-			return nil, err
-		}
-		plan.underlying = newUnderlyingPlan
-		return plan, nil
-	case *semiJoin:
-		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.lhs)
-		if err != nil {
-			return nil, err
-		}
-		plan.lhs = newUnderlyingPlan
-		return plan, nil
-	case *limit:
-		newUnderlyingPlan, err := hp.planOrderBy(ctx, orderExprs, plan.input)
-		if err != nil {
-			return nil, err
-		}
-		plan.input = newUnderlyingPlan
-		return plan, nil
 	case *simpleProjection:
 		return hp.createMemorySortPlan(ctx, plan, orderExprs, true)
 	case *vindexFunc:
 		// This is evaluated at VTGate only, so weight_string function cannot be used.
 		return hp.createMemorySortPlan(ctx, plan, orderExprs /* useWeightStr */, false)
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
+	case *limit, *semiJoin, *filter, *pulloutSubquery:
+		inputs := plan.Inputs()
+		if len(inputs) == 0 {
+			break
+		}
+		newFirstInput, err := hp.planOrderBy(ctx, orderExprs, inputs[0])
+		if err != nil {
+			return nil, err
+		}
+		inputs[0] = newFirstInput
+		err = plan.Rewrite(inputs...)
+		if err != nil {
+			return nil, err
+		}
+		return plan, nil
 	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
 }
 
 func isSpecialOrderBy(o abstract.OrderBy) bool {
@@ -1082,31 +1084,25 @@ func (hp *horizonPlanning) needDistinctHandling(ctx *planningContext, funcExpr *
 	return true, innerAliased, nil
 }
 
-func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) error {
+func (hp *horizonPlanning) planHaving(ctx *planningContext, plan logicalPlan) (logicalPlan, error) {
 	if hp.sel.Having == nil {
-		return nil
+		return plan, nil
 	}
-	for _, expr := range sqlparser.SplitAndExpression(nil, hp.sel.Having.Expr) {
-		err := pushHaving(expr, plan, ctx.semTable)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return pushHaving(hp.sel.Having.Expr, plan, ctx.semTable)
 }
 
-func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) error {
+func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTable) (logicalPlan, error) {
 	switch node := plan.(type) {
 	case *route:
 		sel := sqlparser.GetFirstSelect(node.Select)
 		sel.AddHaving(expr)
-		return nil
+		return plan, nil
 	case *pulloutSubquery:
 		return pushHaving(expr, node.underlying, semTable)
 	case *simpleProjection:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
 	case *orderedAggregate:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of aggregates")
+		return newFilter(semTable, plan, expr)
 	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
 }

@@ -69,7 +69,7 @@ func TestCellTabletsWatcherNoRefreshKnown(t *testing.T) {
 
 func checkWatcher(t *testing.T, refreshKnownTablets bool) {
 	ts := memorytopo.NewServer("aa")
-	fhc := NewFakeHealthCheck()
+	fhc := NewFakeHealthCheck(nil)
 	logger := logutil.NewMemoryLogger()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
@@ -387,7 +387,7 @@ var (
 )
 
 func TestFilterByKeyspace(t *testing.T) {
-	hc := NewFakeHealthCheck()
+	hc := NewFakeHealthCheck(nil)
 	f := NewFilterByKeyspace(testKeyspacesToWatch)
 	ts := memorytopo.NewServer(testCell)
 	tw := NewCellTabletsWatcher(context.Background(), ts, hc, f, testCell, 10*time.Minute, true, 5)

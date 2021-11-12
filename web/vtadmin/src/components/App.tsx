@@ -34,6 +34,7 @@ import { Keyspace } from './routes/keyspace/Keyspace';
 import { Tablet } from './routes/tablet/Tablet';
 import { Backups } from './routes/Backups';
 import { Shard } from './routes/shard/Shard';
+import { Vtctlds } from './routes/Vtctlds';
 
 export const App = () => {
     return (
@@ -83,6 +84,10 @@ export const App = () => {
 
                         <Route path="/tablet/:clusterID/:alias">
                             <Tablet />
+                        </Route>
+
+                        <Route path="/vtctlds">
+                            <Vtctlds />
                         </Route>
 
                         <Route path="/vtexplain">

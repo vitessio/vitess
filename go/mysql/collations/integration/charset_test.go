@@ -18,48 +18,12 @@ package integration
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/remote"
 )
-
-func TestCJKEncodings(t *testing.T) {
-	conn := mysqlconn(t)
-	defer conn.Close()
-
-	allCollations := collations.All()
-
-	testdata, _ := filepath.Glob("../internal/charset/testdata/*.txt")
-	for _, testfile := range testdata {
-		charset := filepath.Base(testfile)
-		charset = strings.TrimSuffix(charset, ".txt")
-		charset = charset[strings.LastIndexByte(charset, '-')+1:]
-
-		var valid []collations.Collation
-		for _, coll := range allCollations {
-			if coll.Charset().Name() == charset {
-				valid = append(valid, coll)
-				t.Logf("%s -> %s", testfile, coll.Name())
-			}
-		}
-		if len(valid) == 0 {
-			continue
-		}
-		text, err := os.ReadFile(testfile)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, coll := range valid {
-			verifyWeightString(t, coll, remote.ForName(conn, coll.Name()), text)
-		}
-	}
-}
 
 func TestLocalEncodings(t *testing.T) {
 	var cases = []struct {
@@ -76,8 +40,8 @@ func TestLocalEncodings(t *testing.T) {
 	defer conn.Close()
 
 	for _, tc := range cases {
-		local := collations.FromName(tc.collation)
-		remote := remote.ForName(conn, tc.collation)
+		local := defaultenv.LookupByName(tc.collation)
+		remote := remote.NewCollation(conn, tc.collation)
 		verifyTranscoding(t, local, remote, tc.input)
 	}
 }
@@ -111,11 +75,11 @@ func TestCJKStress(t *testing.T) {
 	conn := mysqlconn(t)
 	defer conn.Close()
 
-	remoteUtf8mb4 := remote.ForName(conn, "utf8mb4_0900_bin").Charset()
+	remoteUtf8mb4 := remote.NewCharset(conn, "utf8mb4")
 
 	for _, local := range charsets {
 		t.Run(local.Name(), func(t *testing.T) {
-			remote := remote.ForName(conn, local.Name()).Charset()
+			remote := remote.NewCharset(conn, local.Name())
 			convert := func(block []byte) ([]byte, []byte) {
 				t.Helper()
 				ours, _ := charset.ConvertFromUTF8(nil, local, block)

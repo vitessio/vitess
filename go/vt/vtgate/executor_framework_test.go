@@ -449,7 +449,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	vtgateHealthCheck = hc
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema

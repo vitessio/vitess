@@ -10,6 +10,9 @@
       "from_table": "second_user.user",
       "to_tables": ["user.user"]
     }, {
+      "from_table": "second_user.foo",
+      "to_tables": ["user.user"]
+    }, {
       "from_table": "primary_redirect@primary",
       "to_tables": ["user.user"]
     }, {
