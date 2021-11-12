@@ -124,8 +124,9 @@ func (c *Concatenate) execSources(vcursor VCursor, bindVars map[string]*querypb.
 	defer restoreCtx()
 	for i, source := range c.Sources {
 		currIndex, currSource := i, source
+		vars := copyBindVars(bindVars)
 		g.Go(func() error {
-			result, err := vcursor.ExecutePrimitive(currSource, bindVars, wantfields)
+			result, err := vcursor.ExecutePrimitive(currSource, vars, wantfields)
 			if err != nil {
 				return err
 			}

@@ -155,21 +155,21 @@ type Conn interface {
 	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc)
 
 	//
-	// Master election methods. This is meant to have a small
+	// Leader election methods. This is meant to have a small
 	// number of processes elect a primary within a group. The
 	// backend storage for this can either be the global topo
 	// server, or a resilient quorum of individual cells, to
 	// reduce the load / dependency on the global topo server.
 	//
 
-	// NewMasterParticipation creates a MasterParticipation
-	// object, used to become the Master in an election for the
+	// NewLeaderParticipation creates a LeaderParticipation
+	// object, used to become the Leader in an election for the
 	// provided group name.  Id is the name of the local process,
 	// passing in the hostname:port of the current process as id
 	// is the common usage. Id must be unique for each process
 	// calling this, for a given name. Calling this function does
 	// not make the current process a candidate for the election.
-	NewMasterParticipation(name, id string) (MasterParticipation, error)
+	NewLeaderParticipation(name, id string) (LeaderParticipation, error)
 
 	// Close closes the connection to the server.
 	Close()
@@ -270,14 +270,14 @@ type WatchData struct {
 	Err error
 }
 
-// MasterParticipation is the object returned by NewMasterParticipation.
+// LeaderParticipation is the object returned by NewLeaderParticipation.
 // Sample usage:
 //
-// mp := server.NewMasterParticipation("vtctld", "hostname:8080")
+// mp := server.NewLeaderParticipation("vtctld", "hostname:8080")
 // job := NewJob()
 // go func() {
 //   for {
-//     ctx, err := mp.WaitForMastership()
+//     ctx, err := mp.WaitForLeadership()
 //     switch err {
 //     case nil:
 //       job.RunUntilContextDone(ctx)
@@ -294,34 +294,34 @@ type WatchData struct {
 //   if job.Running() {
 //     job.WriteStatus(w, r)
 //   } else {
-//     http.Redirect(w, r, mp.GetCurrentMasterID(context.Background()), http.StatusFound)
+//     http.Redirect(w, r, mp.GetCurrentLeaderID(context.Background()), http.StatusFound)
 //   }
 // })
 //
 // servenv.OnTermSync(func() {
 //   mp.Stop()
 // })
-type MasterParticipation interface {
-	// WaitForMastership makes the current process a candidate
+type LeaderParticipation interface {
+	// WaitForLeadership makes the current process a candidate
 	// for election, and waits until this process is the primary.
 	// After we become the primary, we may lose primaryship. In that case,
 	// the returned context will be canceled. If Stop was called,
-	// WaitForMastership will return nil, ErrInterrupted.
-	WaitForMastership() (context.Context, error)
+	// WaitForLeadership will return nil, ErrInterrupted.
+	WaitForLeadership() (context.Context, error)
 
 	// Stop is called when we don't want to participate in the
 	// primary election any more. Typically, that is when the
 	// hosting process is terminating.  We will relinquish
 	// primaryship at that point, if we had it. Stop should
 	// not return until everything has been done.
-	// The MasterParticipation object should be discarded
-	// after Stop has been called. Any call to WaitForMastership
+	// The LeaderParticipation object should be discarded
+	// after Stop has been called. Any call to WaitForLeadership
 	// after Stop() will return nil, ErrInterrupted.
-	// If WaitForMastership() was running, it will return
+	// If WaitForLeadership() was running, it will return
 	// nil, ErrInterrupted as soon as possible.
 	Stop()
 
-	// GetCurrentMasterID returns the current primary id.
+	// GetCurrentLeaderID returns the current primary id.
 	// This may not work after Stop has been called.
-	GetCurrentMasterID(ctx context.Context) (string, error)
+	GetCurrentLeaderID(ctx context.Context) (string, error)
 }
