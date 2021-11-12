@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,10 +29,11 @@ const (
 	keyspaceName = "ks"
 	shardName    = "0"
 	hostname     = "localhost"
-	cell1        = "zone1"
-	cell2        = "zone2"
+	Cell1        = "zone1"
+	Cell2        = "zone2"
 )
 
+// CellInfo stores the information regarding 1 cell including the tablets it contains
 type CellInfo struct {
 	CellName       string
 	ReplicaTablets []*cluster.Vttablet
@@ -42,7 +44,8 @@ type CellInfo struct {
 	UIDBase     int
 }
 
-type VtorcClusterInfo struct {
+// VtOrcClusterInfo stores the information for a cluster. This is supposed to be used only for VtOrc tests.
+type VtOrcClusterInfo struct {
 	ClusterInstance *cluster.LocalProcessCluster
 	Ts              *topo.Server
 	CellInfos       []*CellInfo
@@ -50,8 +53,8 @@ type VtorcClusterInfo struct {
 }
 
 // CreateClusterAndStartTopo starts the cluster and topology service
-func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtorcClusterInfo, error) {
-	clusterInstance := cluster.NewCluster(cell1, hostname)
+func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtOrcClusterInfo, error) {
+	clusterInstance := cluster.NewCluster(Cell1, hostname)
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -60,11 +63,11 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtorcClusterInfo, error)
 	}
 
 	// Adding another cell in the same cluster
-	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2)
+	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+Cell2)
 	if err != nil {
 		return nil, err
 	}
-	err = clusterInstance.VtctlProcess.AddCellInfo(cell2)
+	err = clusterInstance.VtctlProcess.AddCellInfo(Cell2)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +80,7 @@ func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtorcClusterInfo, error)
 
 	// create topo server connection
 	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctlProcess.TopoGlobalAddress, clusterInstance.VtctlProcess.TopoGlobalRoot)
-	return &VtorcClusterInfo{
+	return &VtOrcClusterInfo{
 		ClusterInstance: clusterInstance,
 		Ts:              ts,
 		CellInfos:       cellInfos,
@@ -162,7 +165,7 @@ func createVttablets(clusterInstance *cluster.LocalProcessCluster, cellInfos []*
 }
 
 // shutdownVttablets shuts down all the vttablets and removes them from the topology
-func shutdownVttablets(clusterInfo *VtorcClusterInfo) error {
+func shutdownVttablets(clusterInfo *VtOrcClusterInfo) error {
 	// demote the primary tablet if there is
 	err := demotePrimaryTablet(clusterInfo.Ts)
 	if err != nil {
@@ -214,7 +217,7 @@ func demotePrimaryTablet(ts *topo.Server) (err error) {
 }
 
 // startVtorc is used to start the orchestrator with the given extra arguments
-func startVtorc(t *testing.T, clusterInfo *VtorcClusterInfo, orcExtraArgs []string, pathToConfig string) {
+func startVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, orcExtraArgs []string, pathToConfig string) {
 	t.Helper()
 	// Start vtorc
 	clusterInfo.ClusterInstance.VtorcProcess = clusterInfo.ClusterInstance.NewOrcProcess(pathToConfig)
@@ -224,7 +227,7 @@ func startVtorc(t *testing.T, clusterInfo *VtorcClusterInfo, orcExtraArgs []stri
 }
 
 // stopVtorc is used to stop the orchestrator
-func stopVtorc(t *testing.T, clusterInfo *VtorcClusterInfo) {
+func stopVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo) {
 	t.Helper()
 	// Stop vtorc
 	if clusterInfo.ClusterInstance.VtorcProcess != nil {
@@ -234,8 +237,8 @@ func stopVtorc(t *testing.T, clusterInfo *VtorcClusterInfo) {
 	clusterInfo.ClusterInstance.VtorcProcess = nil
 }
 
-// setupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
-func setupVttabletsAndVtorc(t *testing.T, clusterInfo *VtorcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
+// SetupVttabletsAndVtorc is used to setup the vttablets and start the orchestrator
+func SetupVttabletsAndVtorc(t *testing.T, clusterInfo *VtOrcClusterInfo, numReplicasReqCell1, numRdonlyReqCell1 int, orcExtraArgs []string, configFileName string) {
 	// stop vtorc if it is running
 	stopVtorc(t, clusterInfo)
 
@@ -244,7 +247,7 @@ func setupVttabletsAndVtorc(t *testing.T, clusterInfo *VtorcClusterInfo, numRepl
 	require.NoError(t, err)
 
 	for _, cellInfo := range clusterInfo.CellInfos {
-		if cellInfo.CellName == cell1 {
+		if cellInfo.CellName == Cell1 {
 			for _, tablet := range cellInfo.ReplicaTablets {
 				if numReplicasReqCell1 == 0 {
 					break
@@ -277,23 +280,30 @@ func setupVttabletsAndVtorc(t *testing.T, clusterInfo *VtorcClusterInfo, numRepl
 		require.NoError(t, err)
 	}
 
-	pathToConfig := path.Join(os.Getenv("PWD"), configFileName)
+	workingDir := os.Getenv("PWD")
+	idx := strings.Index(workingDir, "vtorc")
+	if idx == -1 {
+		t.Fatalf("SetupVttabletsAndVtorc should only be used from a package inside the vtorc directory")
+	}
+
+	pathToConfig := path.Join(workingDir[:idx], "vtorc", "utils", configFileName)
 	// start vtorc
 	startVtorc(t, clusterInfo, orcExtraArgs, pathToConfig)
 }
 
-func cleanAndStartVttablet(t *testing.T, clusterInfo *VtorcClusterInfo, vttablet *cluster.Vttablet) {
+// cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
+func cleanAndStartVttablet(t *testing.T, clusterInfo *VtOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
 	// remove the databases if they exist
-	_, err := runSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
+	_, err := RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")
 	require.NoError(t, err)
-	_, err = runSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
+	_, err = RunSQL(t, "DROP DATABASE IF EXISTS _vt", vttablet, "")
 	require.NoError(t, err)
 	// stop the replication
-	_, err = runSQL(t, "STOP SLAVE", vttablet, "")
+	_, err = RunSQL(t, "STOP SLAVE", vttablet, "")
 	require.NoError(t, err)
 	// reset the binlog
-	_, err = runSQL(t, "RESET MASTER", vttablet, "")
+	_, err = RunSQL(t, "RESET MASTER", vttablet, "")
 	require.NoError(t, err)
 
 	// start the vttablet
@@ -303,7 +313,8 @@ func cleanAndStartVttablet(t *testing.T, clusterInfo *VtorcClusterInfo, vttablet
 	clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets, vttablet)
 }
 
-func shardPrimaryTablet(t *testing.T, clusterInfo *VtorcClusterInfo, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
+// ShardPrimaryTablet waits until a primary tablet has been elected for the given shard and returns it
+func ShardPrimaryTablet(t *testing.T, clusterInfo *VtOrcClusterInfo, keyspace *cluster.Keyspace, shard *cluster.Shard) *cluster.Vttablet {
 	start := time.Now()
 	for {
 		now := time.Now()
@@ -329,8 +340,9 @@ func shardPrimaryTablet(t *testing.T, clusterInfo *VtorcClusterInfo, keyspace *c
 	}
 }
 
+// CheckPrimaryTablet waits until the specified tablet becomes the primary tablet
 // Makes sure the tablet type is primary, and its health check agrees.
-func checkPrimaryTablet(t *testing.T, clusterInfo *VtorcClusterInfo, tablet *cluster.Vttablet, checkServing bool) {
+func CheckPrimaryTablet(t *testing.T, clusterInfo *VtOrcClusterInfo, tablet *cluster.Vttablet, checkServing bool) {
 	start := time.Now()
 	for {
 		now := time.Now()
@@ -371,11 +383,12 @@ func checkPrimaryTablet(t *testing.T, clusterInfo *VtorcClusterInfo, tablet *clu
 	}
 }
 
-func checkReplication(t *testing.T, clusterInfo *VtorcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+// CheckReplication checks that the replication is setup correctly and writes succeed and are replicated on all the replicas
+func CheckReplication(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	endTime := time.Now().Add(timeToWait)
 	// create tables, insert data and make sure it is replicated correctly
 	sqlSchema := `
-		create table vt_ks.vt_insert_test (
+		create table if not exists vt_ks.vt_insert_test (
 		id bigint,
 		msg varchar(64),
 		primary key (id)
@@ -388,7 +401,7 @@ func checkReplication(t *testing.T, clusterInfo *VtorcClusterInfo, primary *clus
 			t.Fatal("timedout waiting for keyspace vt_ks to be created by schema engine")
 			return
 		default:
-			_, err := runSQL(t, sqlSchema, primary, "")
+			_, err := RunSQL(t, sqlSchema, primary, "")
 			if err != nil {
 				log.Warning("create table failed on primary, will retry")
 				time.Sleep(100 * time.Millisecond)
@@ -402,9 +415,9 @@ func checkReplication(t *testing.T, clusterInfo *VtorcClusterInfo, primary *clus
 	}
 }
 
-// call this function only after check replication.
-// it inserts more data into the table vt_insert_test and checks that it is replicated too
-func verifyWritesSucceed(t *testing.T, clusterInfo *VtorcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+// VerifyWritesSucceed inserts more data into the table vt_insert_test and checks that it is replicated too
+// Call this function only after CheckReplication has been executed once, since that function creates the table that this function uses.
+func VerifyWritesSucceed(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
 	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 	clusterInfo.lastUsedValue++
 }
@@ -413,7 +426,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 	log.Infof("Insert data into primary and check that it is replicated to replica")
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", valueToInsert, valueToInsert)
-	_, err := runSQL(t, insertSQL, primary, "vt_ks")
+	_, err := RunSQL(t, insertSQL, primary, "vt_ks")
 	require.NoError(t, err)
 	time.Sleep(100 * time.Millisecond)
 	timeout := time.After(timeToWait)
@@ -442,7 +455,7 @@ func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*clu
 
 func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) error {
 	selectSQL := fmt.Sprintf("select msg from vt_ks.vt_insert_test where id=%d", index)
-	qr, err := runSQL(t, selectSQL, tablet, "")
+	qr, err := RunSQL(t, selectSQL, tablet, "")
 	// The error may be not nil, if the replication has not caught upto the point where the table exists.
 	// We can safely skip this error and retry reading after wait
 	if err == nil && len(qr.Rows) == 1 {
@@ -451,14 +464,15 @@ func checkInsertedValues(t *testing.T, tablet *cluster.Vttablet, index int) erro
 	return fmt.Errorf("data is not yet replicated")
 }
 
-func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
+// WaitForReplicationToStop waits for replication to stop on the given tablet
+func WaitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 	timeout := time.After(15 * time.Second)
 	for {
 		select {
 		case <-timeout:
 			return fmt.Errorf("timedout: waiting for primary to stop replication")
 		default:
-			res, err := runSQL(t, "SHOW SLAVE STATUS", vttablet, "")
+			res, err := RunSQL(t, "SHOW SLAVE STATUS", vttablet, "")
 			if err != nil {
 				return err
 			}
@@ -470,7 +484,7 @@ func waitForReplicationToStop(t *testing.T, vttablet *cluster.Vttablet) error {
 	}
 }
 
-func validateTopology(t *testing.T, clusterInfo *VtorcClusterInfo, pingTablets bool, timeToWait time.Duration) {
+func validateTopology(t *testing.T, clusterInfo *VtOrcClusterInfo, pingTablets bool, timeToWait time.Duration) {
 	ch := make(chan error)
 	timeout := time.After(timeToWait)
 	go func() {
@@ -507,7 +521,8 @@ func validateTopology(t *testing.T, clusterInfo *VtorcClusterInfo, pingTablets b
 	}
 }
 
-func killTablets(vttablets []*cluster.Vttablet) {
+// KillTablets is used to kill the tablets
+func KillTablets(vttablets []*cluster.Vttablet) {
 	for _, tablet := range vttablets {
 		log.Infof("Shutting down MySQL for %v", tablet.Alias)
 		_ = tablet.MysqlctlProcess.Stop()
@@ -527,7 +542,8 @@ func getMysqlConnParam(tablet *cluster.Vttablet, db string) mysql.ConnParams {
 	return connParams
 }
 
-func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
+// RunSQL is used to run a SQL statement on the given tablet
+func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sqltypes.Result, error) {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -536,7 +552,7 @@ func runSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	require.Nil(t, err)
 	defer conn.Close()
 
-	// runSQL
+	// RunSQL
 	return execute(t, conn, sql)
 }
 
@@ -545,8 +561,8 @@ func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, er
 	return conn.ExecuteFetch(query, 1000, true)
 }
 
-// startVttablet is used to start a vttablet from the given cell and type
-func startVttablet(t *testing.T, clusterInfo *VtorcClusterInfo, cell string, isRdonly bool) *cluster.Vttablet {
+// StartVttablet is used to start a vttablet from the given cell and type
+func StartVttablet(t *testing.T, clusterInfo *VtOrcClusterInfo, cell string, isRdonly bool) *cluster.Vttablet {
 
 	var tablet *cluster.Vttablet
 	for _, cellInfo := range clusterInfo.CellInfos {
@@ -576,7 +592,7 @@ func startVttablet(t *testing.T, clusterInfo *VtorcClusterInfo, cell string, isR
 	return tablet
 }
 
-func isVttabletInUse(clusterInfo *VtorcClusterInfo, tablet *cluster.Vttablet) bool {
+func isVttabletInUse(clusterInfo *VtOrcClusterInfo, tablet *cluster.Vttablet) bool {
 	for _, vttablet := range clusterInfo.ClusterInstance.Keyspaces[0].Shards[0].Vttablets {
 		if tablet == vttablet {
 			return true
@@ -585,14 +601,16 @@ func isVttabletInUse(clusterInfo *VtorcClusterInfo, tablet *cluster.Vttablet) bo
 	return false
 }
 
-func permanentlyRemoveVttablet(clusterInfo *VtorcClusterInfo, tablet *cluster.Vttablet) {
+// PermanentlyRemoveVttablet removes the tablet specified from the cluster. It makes it so that
+// this vttablet or mysql instance are not reused for any other test.
+func PermanentlyRemoveVttablet(clusterInfo *VtOrcClusterInfo, tablet *cluster.Vttablet) {
 	// remove the tablet from our global list
 	for _, cellInfo := range clusterInfo.CellInfos {
 		for i, vttablet := range cellInfo.ReplicaTablets {
 			if vttablet == tablet {
 				// remove this tablet since its mysql has stopped
 				cellInfo.ReplicaTablets = append(cellInfo.ReplicaTablets[:i], cellInfo.ReplicaTablets[i+1:]...)
-				killTablets([]*cluster.Vttablet{tablet})
+				KillTablets([]*cluster.Vttablet{tablet})
 				return
 			}
 		}
@@ -600,37 +618,39 @@ func permanentlyRemoveVttablet(clusterInfo *VtorcClusterInfo, tablet *cluster.Vt
 			if vttablet == tablet {
 				// remove this tablet since its mysql has stopped
 				cellInfo.ReplicaTablets = append(cellInfo.ReplicaTablets[:i], cellInfo.ReplicaTablets[i+1:]...)
-				killTablets([]*cluster.Vttablet{tablet})
+				KillTablets([]*cluster.Vttablet{tablet})
 				return
 			}
 		}
 	}
 }
 
-func changePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
-	_, err := runSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
+// ChangePrivileges is used to change the privileges of the given user. These commands are executed such that they are not replicated
+func ChangePrivileges(t *testing.T, sql string, tablet *cluster.Vttablet, user string) {
+	_, err := RunSQL(t, "SET sql_log_bin = OFF;"+sql+";SET sql_log_bin = ON;", tablet, "")
 	require.NoError(t, err)
 
-	res, err := runSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
+	res, err := RunSQL(t, fmt.Sprintf("SELECT id FROM INFORMATION_SCHEMA.PROCESSLIST WHERE user = '%s'", user), tablet, "")
 	require.NoError(t, err)
 	for _, row := range res.Rows {
 		id, err := row[0].ToInt64()
 		require.NoError(t, err)
-		_, err = runSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
+		_, err = RunSQL(t, fmt.Sprintf("kill %d", id), tablet, "")
 		require.NoError(t, err)
 	}
 }
 
-func resetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
-	_, err := runSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
+// ResetPrimaryLogs is used reset the binary logs
+func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
+	_, err := RunSQL(t, "FLUSH BINARY LOGS", curPrimary, "")
 	require.NoError(t, err)
 
-	binLogsOutput, err := runSQL(t, "SHOW BINARY LOGS", curPrimary, "")
+	binLogsOutput, err := RunSQL(t, "SHOW BINARY LOGS", curPrimary, "")
 	require.NoError(t, err)
 	require.True(t, len(binLogsOutput.Rows) >= 2, "there should be atlease 2 binlog files")
 
 	lastLogFile := binLogsOutput.Rows[len(binLogsOutput.Rows)-1][0].ToString()
 
-	_, err = runSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
+	_, err = RunSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
 	require.NoError(t, err)
 }
