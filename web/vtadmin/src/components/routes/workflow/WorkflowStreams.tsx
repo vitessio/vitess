@@ -18,8 +18,6 @@ import { orderBy, groupBy } from 'lodash-es';
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import style from './WorkflowStreams.module.scss';
-
 import { useWorkflow } from '../../../hooks/api';
 import { formatAlias } from '../../../util/tablets';
 import { formatDateTime } from '../../../util/time';
@@ -107,7 +105,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
     };
 
     return (
-        <div className="mt-12">
+        <div className="mt-12 mb-16">
             {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
                     <h3 className="my-8">Stream VReplication Lag</h3>
@@ -123,7 +121,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                 }
 
                 return (
-                    <div className={style.streamTable} key={streamState}>
+                    <div className="my-12" key={streamState}>
                         <DataTable
                             columns={COLUMNS}
                             data={streamsByState[streamState]}
