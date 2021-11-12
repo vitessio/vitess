@@ -450,7 +450,6 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
-	vtgateHealthCheck = hc
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
@@ -550,12 +549,9 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	err = executor.StreamExecute(
 		context.Background(),
 		"TestExecuteStream",
-		NewSafeSession(primarySession),
+		NewSafeSession(nil),
 		sql,
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

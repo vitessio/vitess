@@ -106,7 +106,12 @@ func (upd *Update) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute performs a streaming exec.
 func (upd *Update) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	return fmt.Errorf("query %q cannot be used for streaming", upd.Query)
+	res, err := upd.TryExecute(vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(res)
+
 }
 
 // GetFields fetches the field info.

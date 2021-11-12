@@ -921,6 +921,25 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 	return result, transactionID, alias, err
 }
 
+// BeginStreamExecute combines Begin and StreamExecute.
+func (tsv *TabletServer) BeginStreamExecute(
+	ctx context.Context,
+	target *querypb.Target,
+	preQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	options *querypb.ExecuteOptions,
+	callback func(*sqltypes.Result) error,
+) (int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries /* revervedID */, 0, options)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, options, callback)
+	return transactionID, alias, err
+}
+
 func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions, sql string, bindVariables map[string]*querypb.BindVariable) (txserializer.DoneFunc, error) {
 	// Serialize the creation of new transactions *if* the first
 	// UPDATE or DELETE query has the same WHERE clause as a query which is
