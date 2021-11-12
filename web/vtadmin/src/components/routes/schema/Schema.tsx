@@ -64,7 +64,7 @@ export const Schema = () => {
                         <Link to="/schemas">Schemas</Link>
                     </NavCrumbs>
 
-                    <WorkspaceTitle className="font-family-monospace">{table}</WorkspaceTitle>
+                    <WorkspaceTitle className="font-mono">{table}</WorkspaceTitle>
 
                     <div className={style.headingMeta}>
                         <span>
@@ -141,7 +141,7 @@ export const Schema = () => {
                                             <th>Params</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="font-family-monospace">
+                                    <tbody className="font-mono">
                                         {tableVindexes.map((v, vdx) => {
                                             const columns = v.column ? [v.column] : v.columns;
                                             return (

@@ -221,10 +221,6 @@ table tbody td[rowSpan] {
 }
 
 /* One-liner utilities */
-.font-family-monospace {
-    font-family: var(--fontFamilyMonospace);
-}
-
 .font-family-primary {
     font-family: var(--fontFamilyPrimary);
 }

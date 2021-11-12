@@ -100,7 +100,7 @@ export const Shard = () => {
                     </KeyspaceLink>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{shardName}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{shardName}</WorkspaceTitle>
 
                 <div className={style.headingMeta}>
                     <span>

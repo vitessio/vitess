@@ -40,8 +40,7 @@ const TABLE_COLUMNS = [
         <HelpTooltip
             text={
                 <span>
-                    Size is an approximate value derived from{' '}
-                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>.
+                    Size is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>.
                 </span>
             }
         />
@@ -52,9 +51,8 @@ const TABLE_COLUMNS = [
             text={
                 // c.f. https://dev.mysql.com/doc/refman/5.7/en/information-schema-tables-table.html
                 <span>
-                    Row count is an approximate value derived from{' '}
-                    <span className="font-family-monospace">INFORMATION_SCHEMA</span>. Actual values may vary by as much
-                    as 40% to 50%.
+                    Row count is an approximate value derived from <span className="font-mono">INFORMATION_SCHEMA</span>
+                    . Actual values may vary by as much as 40% to 50%.
                 </span>
             }
         />
