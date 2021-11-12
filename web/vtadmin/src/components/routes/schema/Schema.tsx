@@ -112,13 +112,13 @@ export const Schema = () => {
                 {!is404 && !isError && tableDefinition && (
                     <div className={style.container}>
                         <section className={style.panel}>
-                            <h3>Table Definition</h3>
+                            <h3 className="my-8">Table Definition</h3>
                             <Code code={tableDefinition.schema} />
                         </section>
 
                         {!!tableVindexes.length && (
                             <section className={style.panel}>
-                                <h3>Vindexes</h3>
+                                <h3 className="my-8">Vindexes</h3>
                                 <p>
                                     A Vindex provides a way to map a column value to a keyspace ID. Since each shard in
                                     Vitess covers a range of keyspace ID values, this mapping can be used to identify

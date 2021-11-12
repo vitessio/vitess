@@ -107,15 +107,15 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
     };
 
     return (
-        <div>
+        <div className="mt-12">
             {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
-                    <h3>Stream VReplication Lag</h3>
+                    <h3 className="my-8">Stream VReplication Lag</h3>
                     <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
                 </>
             )}
 
-            <h3>Streams</h3>
+            <h3 className="mt-24 mb-8">Streams</h3>
             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                 if (!Array.isArray(streamsByState[streamState])) {
