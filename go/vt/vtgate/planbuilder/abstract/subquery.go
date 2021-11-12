@@ -17,8 +17,9 @@ limitations under the License.
 package abstract
 
 import (
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -32,10 +33,13 @@ var _ Operator = (*SubQuery)(nil)
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {
-	Inner           Operator
-	Type            engine.PulloutOpcode
-	SelectStatement *sqlparser.Select
-	ArgName         string
+	// Inner is the Operator inside the parenthesis of the subquery.
+	// i.e: select (select 1 union select 1), the Inner here would be
+	// of type Concatenate since we have a Union.
+	Inner Operator
+
+	// ExtractedSubquery contains all information we need about this subquery
+	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
 // TableID implements the Operator interface
@@ -48,8 +52,8 @@ func (s *SubQuery) TableID() semantics.TableSet {
 }
 
 // PushPredicate implements the Operator interface
-func (s *SubQuery) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {
-	return semantics.Gen4NotSupportedF("pushing predicate on subquery")
+func (s *SubQuery) PushPredicate(sqlparser.Expr, *semantics.SemTable) error {
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should not try to push predicate on subquery")
 }
 
 // UnsolvedPredicates implements the Operator interface
@@ -72,4 +76,20 @@ func (s *SubQuery) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.
 		}
 	}
 	return result
+}
+
+// CheckValid implements the Operator interface
+func (s *SubQuery) CheckValid() error {
+	for _, inner := range s.Inner {
+		err := inner.Inner.CheckValid()
+		if err != nil {
+			return err
+		}
+	}
+	return s.Outer.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (s *SubQuery) Compact(*semantics.SemTable) (Operator, error) {
+	return s, nil
 }

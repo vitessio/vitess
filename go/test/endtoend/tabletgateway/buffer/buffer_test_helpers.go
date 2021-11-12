@@ -32,7 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"sync"
@@ -246,6 +246,7 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, bt.VtGateExtraArgs...)
 
 	// Start vtgate
+	clusterInstance.VtGatePlannerVersion = 0
 	if err := clusterInstance.StartVtgate(); err != nil {
 		return nil, 1
 	}
@@ -359,7 +360,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	require.Equal(t, 200, resp.StatusCode)
 
 	var metadata VTGateBufferingStats
-	respByte, _ := ioutil.ReadAll(resp.Body)
+	respByte, _ := io.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &metadata)
 	require.NoError(t, err)
 

@@ -43,8 +43,11 @@ type (
 		iSelectStatement()
 		iInsertRows()
 		AddOrder(*Order)
+		SetOrderBy(OrderBy)
 		SetLimit(*Limit)
 		SetLock(lock Lock)
+		SetInto(into *SelectInto)
+		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
 		SetComments(comments Comments)
@@ -121,6 +124,18 @@ type (
 		DefaultVal  Expr
 	}
 
+	// With contains the lists of common table expression and specifies if it is recursive or not
+	With struct {
+		ctes      []*CommonTableExpr
+		Recursive bool
+	}
+
+	// CommonTableExpr is the structure for supporting common table expressions
+	CommonTableExpr struct {
+		TableID  TableIdent
+		Columns  Columns
+		Subquery *Subquery
+	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
 		OldColumn        *ColName
@@ -209,6 +224,7 @@ type (
 		Comments    Comments
 		SelectExprs SelectExprs
 		Where       *Where
+		With        *With
 		GroupBy     GroupBy
 		Having      *Where
 		OrderBy     OrderBy
@@ -234,18 +250,16 @@ type (
 	// Lock is an enum for the type of lock in the statement
 	Lock int8
 
-	// UnionSelect represents union type and select statement after first select statement.
-	UnionSelect struct {
-		Distinct  bool
-		Statement SelectStatement
-	}
 	// Union represents a UNION statement.
 	Union struct {
-		FirstStatement SelectStatement
-		UnionSelects   []*UnionSelect
-		OrderBy        OrderBy
-		Limit          *Limit
-		Lock           Lock
+		Left     SelectStatement
+		Right    SelectStatement
+		Distinct bool
+		OrderBy  OrderBy
+		With     *With
+		Limit    *Limit
+		Lock     Lock
+		Into     *SelectInto
 	}
 
 	// VStream represents a VSTREAM statement.
@@ -292,6 +306,7 @@ type (
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
+		With       *With
 		Comments   Comments
 		Ignore     Ignore
 		TableExprs TableExprs
@@ -304,6 +319,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		With       *With
 		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
@@ -503,11 +519,6 @@ type (
 	Load struct {
 	}
 
-	// ParenSelect is a parenthesized SELECT statement.
-	ParenSelect struct {
-		Select SelectStatement
-	}
-
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -582,6 +593,8 @@ type (
 		Table TableName
 		Wild  string
 	}
+	// IntervalTypes is an enum to get types of intervals
+	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -618,7 +631,6 @@ func (*OtherRead) iStatement()         {}
 func (*OtherAdmin) iStatement()        {}
 func (*Select) iSelectStatement()      {}
 func (*Union) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
 func (*Load) iStatement()              {}
 func (*CreateDatabase) iStatement()    {}
 func (*AlterDatabase) iStatement()     {}
@@ -1387,11 +1399,6 @@ func (node *AlterDatabase) GetDatabaseName() string {
 	return node.DBName.String()
 }
 
-// ParenSelect can actually not be a top level statement,
-// but we have to allow it because it's a requirement
-// of SelectStatement.
-func (*ParenSelect) iStatement() {}
-
 type (
 
 	// ShowInternal will represent all the show statement types.
@@ -1440,10 +1447,9 @@ type InsertRows interface {
 	SQLNode
 }
 
-func (*Select) iInsertRows()      {}
-func (*Union) iInsertRows()       {}
-func (Values) iInsertRows()       {}
-func (*ParenSelect) iInsertRows() {}
+func (*Select) iInsertRows() {}
+func (*Union) iInsertRows()  {}
+func (Values) iInsertRows()  {}
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -1707,6 +1713,7 @@ type (
 		Partitions Partitions
 		As         TableIdent
 		Hints      *IndexHints
+		Columns    Columns
 	}
 
 	// JoinTableExpr represents a TableExpr that's a JOIN operation.
@@ -1921,6 +1928,12 @@ type (
 		Unit  string
 	}
 
+	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
+	ExtractFuncExpr struct {
+		IntervalTypes IntervalTypes
+		Expr          Expr
+	}
+
 	// CollateExpr represents dynamic collate operator.
 	CollateExpr struct {
 		Expr    Expr
@@ -2008,6 +2021,21 @@ type (
 		Name ColIdent
 		Fsp  Expr // fractional seconds precision, integer from 0 to 6
 	}
+
+	// ExtractedSubquery is a subquery that has been extracted from the original AST
+	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
+	// CAUTION: you should only change argName and hasValuesArg through the setter methods
+	ExtractedSubquery struct {
+		Original     Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery     *Subquery
+		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+
+		hasValuesArg string
+		argName      string
+		alternative  Expr // this is what will be used to Format this struct
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -2033,6 +2061,7 @@ func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
+func (*ExtractFuncExpr) iExpr()   {}
 func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
@@ -2042,6 +2071,7 @@ func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
+func (*ExtractedSubquery) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

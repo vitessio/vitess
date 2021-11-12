@@ -1,0 +1,36 @@
+--source suite/collations/include/unicode.inc
+insert into unicode values (0x100001,'GH','Vietnamese GH','Lu');
+insert into unicode values (0x100002,'Gh','Vietnamese Gh','Lt');
+insert into unicode values (0x100003,'gh','Vietnamese gh','Ll');
+insert into unicode values (0x100004,'GI','Vietnamese GI','Lu');
+insert into unicode values (0x100005,'Gi','Vietnamese Gi','Lt');
+insert into unicode values (0x100006,'gi','Vietnamese gi','Ll');
+insert into unicode values (0x100007,'KH','Vietnamese KH','Lu');
+insert into unicode values (0x100008,'Kh','Vietnamese Kh','Lt');
+insert into unicode values (0x100009,'kh','Vietnamese kh','Ll');
+insert into unicode values (0x10000A,'NH','Vietnamese NH','Lu');
+insert into unicode values (0x10000B,'Nh','Vietnamese Nh','Lt');
+insert into unicode values (0x10000C,'nh','Vietnamese nh','Ll');
+insert into unicode values (0x10000D,'NG','Vietnamese NG','Lu');
+insert into unicode values (0x10000E,'Ng','Vietnamese Ng','Lt');
+insert into unicode values (0x10000F,'ng','Vietnamese ng','Ll');
+insert into unicode values (0x100010,'NGH','Vietnamese NGH','Lu');
+insert into unicode values (0x100011,'Ngh','Vietnamese Ngh','Lt');
+insert into unicode values (0x100012,'ngh','Vietnamese ngh','Ll');
+insert into unicode values (0x100013,'PH','Vietnamese PH','Lu');
+insert into unicode values (0x100014,'Ph','Vietnamese Ph','Lt');
+insert into unicode values (0x100015,'ph','Vietnamese ph','Ll');
+insert into unicode values (0x100016,'QU','Vietnamese QU','Lu');
+insert into unicode values (0x100017,'Qu','Vietnamese Qu','Lt');
+insert into unicode values (0x100018,'qu','Vietnamese qu','Ll');
+insert into unicode values (0x100019,'TH','Vietnamese TH','Lu');
+insert into unicode values (0x10001A,'Th','Vietnamese Th','Lt');
+insert into unicode values (0x10001B,'th','Vietnamese th','Ll');
+insert into unicode values (0x10001C,'TR','Vietnamese TR','Lu');
+insert into unicode values (0x10001D,'Tr','Vietnamese Tr','Lt');
+insert into unicode values (0x10001E,'tr','Vietnamese tr','Ll');
+--test:uca0900 utf8mb4_vi_0900_ai_ci
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_vi_0900_ai_ci)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_vi_0900_ai_ci, cp;
+--test:uca0900 utf8mb4_vi_0900_as_cs
+select hex(convert(uc using utf32)), hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_vi_0900_as_cs)), name from unicode where category in ('Lu','Ll','Lt','Lm') order by uc  collate utf8mb4_vi_0900_as_cs, cp;
+drop table if exists unicode;

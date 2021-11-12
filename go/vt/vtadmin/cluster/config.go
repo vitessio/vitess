@@ -87,14 +87,7 @@ func (cfg *Config) Set(value string) error {
 	return parseFlag(cfg, value)
 }
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface.
-func (cfg *Config) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	attributes := map[string]string{}
-
-	if err := unmarshal(attributes); err != nil {
-		return err
-	}
-
+func (cfg *Config) unmarshalMap(attributes map[string]string) error {
 	for k, v := range attributes {
 		if err := parseOne(cfg, k, v); err != nil {
 			return err

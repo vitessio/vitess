@@ -20,7 +20,7 @@ package worker
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -151,7 +151,7 @@ func TestWebInterface(t *testing.T) {
 		resp, err = http.Get(baseURL + "/status")
 		assert.Nil(t, err)
 		if resp.StatusCode == 200 {
-			respByte, _ := ioutil.ReadAll(resp.Body)
+			respByte, _ := io.ReadAll(resp.Body)
 			respStr := string(respByte)
 			assert.Contains(t, respStr, "Ping command was called with message: 'pong'", fmt.Sprintf("Command did not log output to /status: %s", respStr))
 		}
@@ -162,7 +162,7 @@ func TestWebInterface(t *testing.T) {
 		resp, err = http.Get(baseURL + "/status")
 		assert.Nil(t, err)
 		if resp.StatusCode == 200 {
-			respByte, _ := ioutil.ReadAll(resp.Body)
+			respByte, _ := io.ReadAll(resp.Body)
 			statusAfterReset := string(respByte)
 			assert.Contains(t, statusAfterReset, "This worker is idle.", "/status does not indicate that the reset was successful")
 		}
@@ -353,7 +353,7 @@ func assertShardDataEqual(t *testing.T, shardNum string, sourceTablet *cluster.V
 	countQuery := "select count(*) from worker_test"
 	qrDestinationCount, err := destinationTablet.VttabletProcess.QueryTablet(countQuery, keyspaceName, true)
 	assert.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%d", len(qrDestination.Rows)), fmt.Sprintf("%s", qrDestinationCount.Rows[0][0].ToBytes()))
+	assert.Equal(t, fmt.Sprintf("%d", len(qrDestination.Rows)), qrDestinationCount.Rows[0][0].ToString())
 
 }
 

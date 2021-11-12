@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/callerid"
+
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"vitess.io/vitess/go/mysql"
@@ -57,9 +59,16 @@ type (
 const defaultConsumeDelay = 1 * time.Second
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, user *string) *Tracker {
+	ctx := context.Background()
+	// Set the caller on the context if the user is provided.
+	// This user that will be sent down to vttablet calls.
+	if user != nil && *user != "" {
+		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(*user))
+	}
+
 	return &Tracker{
-		ctx:          context.Background(),
+		ctx:          ctx,
 		ch:           ch,
 		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
 		tracked:      map[keyspaceStr]*updateController{},
@@ -69,7 +78,7 @@ func NewTracker(ch chan *discovery.TabletHealth) *Tracker {
 
 // LoadKeyspace loads the keyspace schema.
 func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	res, err := conn.Execute(context.Background(), target, mysql.FetchTables, nil, 0, 0, nil)
+	res, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -84,7 +93,7 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 // Start starts the schema tracking.
 func (t *Tracker) Start() {
 	log.Info("Starting schema tracking")
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 	go func(ctx context.Context, t *Tracker) {
 		for {
@@ -118,13 +127,13 @@ func (t *Tracker) newUpdateController() *updateController {
 	return &updateController{update: t.updateSchema, reloadKeyspace: t.initKeyspace, signal: t.signal, consumeDelay: t.consumeDelay}
 }
 
-func (t *Tracker) initKeyspace(th *discovery.TabletHealth) bool {
+func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
 		log.Warningf("Unable to add keyspace to tracker: %v", err)
-		return false
+		return err
 	}
-	return true
+	return nil
 }
 
 // Stop stops the schema tracking
@@ -187,9 +196,10 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		tbl := row[0].ToString()
 		colName := row[1].ToString()
 		colType := row[2].ToString()
+		collation := row[3].ToString()
 
 		cType := sqlparser.ColumnType{Type: colType}
-		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType()}
+		col := vindexes.Column{Name: sqlparser.NewColIdent(colName), Type: cType.SQLType(), CollationName: collation}
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))
@@ -208,8 +218,13 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 
 // AddNewKeyspace adds keyspace to the tracker.
 func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	t.tracked[target.Keyspace] = t.newUpdateController()
-	return t.LoadKeyspace(conn, target)
+	updateController := t.newUpdateController()
+	t.tracked[target.Keyspace] = updateController
+	err := t.LoadKeyspace(conn, target)
+	if err != nil {
+		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))
+	}
+	return err
 }
 
 type tableMap struct {

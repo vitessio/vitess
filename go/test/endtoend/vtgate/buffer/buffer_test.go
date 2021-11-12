@@ -32,7 +32,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -208,7 +208,8 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 		"-buffer_max_failover_duration", "10m",
 		"-buffer_min_time_between_failovers", "20m",
 		// Use legacy gateway. tabletgateway test is at go/test/endtoend/tabletgateway/buffer/buffer_test.go
-		"-gateway_implementation", "discoverygateway"}
+		"-gateway_implementation", "discoverygateway",
+	}
 
 	// Start vtgate
 	if err := clusterInstance.StartVtgate(); err != nil {
@@ -304,7 +305,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	bufferingStops := 0
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
+		respByte, _ := io.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			panic(err)

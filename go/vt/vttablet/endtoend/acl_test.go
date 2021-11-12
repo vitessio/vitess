@@ -19,8 +19,9 @@ package endtoend
 import (
 	"bytes"
 	"encoding/json"
-	"strings"
 	"testing"
+
+	"gotest.tools/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -32,7 +33,7 @@ import (
 func TestTableACL(t *testing.T) {
 	client := framework.NewClient()
 
-	aclErr := "table acl error"
+	aclErr := "command denied to user 'dev' for table"
 	execCases := []struct {
 		query string
 		err   string
@@ -101,9 +102,7 @@ func TestTableACL(t *testing.T) {
 			}
 			continue
 		}
-		if err == nil || !strings.HasPrefix(err.Error(), tcase.err) {
-			t.Errorf("Execute(%s): Error: %v, must start with %s", tcase.query, err, tcase.err)
-		}
+		assert.ErrorContains(t, err, tcase.err)
 	}
 
 	streamCases := []struct {
@@ -131,9 +130,7 @@ func TestTableACL(t *testing.T) {
 			}
 			continue
 		}
-		if err == nil || !strings.HasPrefix(err.Error(), tcase.err) {
-			t.Errorf("Error: %v, must start with %s", err, tcase.err)
-		}
+		assert.ErrorContains(t, err, tcase.err)
 	}
 }
 

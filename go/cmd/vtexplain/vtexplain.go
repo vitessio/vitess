@@ -19,13 +19,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtexplain"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var (
@@ -43,10 +45,12 @@ var (
 	normalize          = flag.Bool("normalize", false, "Whether to enable vtgate normalization")
 	outputMode         = flag.String("output-mode", "text", "Output in human-friendly text or json")
 	dbName             = flag.String("dbname", "", "Optional database target to override normal routing")
+	plannerVersionStr  = flag.String("planner-version", "V3", "Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4")
 
 	// vtexplainFlags lists all the flags that should show in usage
 	vtexplainFlags = []string{
 		"output-mode",
+		"planner-version",
 		"normalize",
 		"shards",
 		"replication-mode",
@@ -123,7 +127,7 @@ func getFileParam(flag, flagFile, name string, required bool) (string, error) {
 
 		return "", nil
 	}
-	data, err := ioutil.ReadFile(flagFile)
+	data, err := os.ReadFile(flagFile)
 	if err != nil {
 		return "", fmt.Errorf("cannot read file %v: %v", flagFile, err)
 	}
@@ -165,8 +169,14 @@ func parseAndRun() error {
 		return err
 	}
 
+	plannerVersion := querypb.ExecuteOptions_PlannerVersion(querypb.ExecuteOptions_PlannerVersion_value[*plannerVersionStr])
+	if plannerVersion != querypb.ExecuteOptions_V3 && plannerVersion != querypb.ExecuteOptions_Gen4 {
+		return fmt.Errorf("invalid value specified for planner-version of '%s' -- valid values are V3 and Gen4", *plannerVersionStr)
+	}
+
 	opts := &vtexplain.Options{
 		ExecutionMode:   *executionMode,
+		PlannerVersion:  plannerVersion,
 		ReplicationMode: *replicationMode,
 		NumShards:       *numShards,
 		Normalize:       *normalize,

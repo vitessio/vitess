@@ -34,7 +34,7 @@ type vTableInfo struct {
 
 var _ TableInfo = (*vTableInfo)(nil)
 
-// Dependencies implements the TableInfo interface
+// dependencies implements the TableInfo interface
 func (v *vTableInfo) dependencies(colName string, org originable) (dependencies, error) {
 	var deps dependencies = &nothing{}
 	var err error
@@ -42,20 +42,7 @@ func (v *vTableInfo) dependencies(colName string, org originable) (dependencies,
 		if name != colName {
 			continue
 		}
-		recursiveDeps, qt := org.depsForExpr(v.cols[i])
-
-		var directDeps TableSet
-		/*
-				If we find a match, it means the query looks something like:
-				SELECT 1 as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/0
-				SELECT t1.x as x FROM t1 ORDER BY/GROUP BY x - d/r: 0/1
-				SELECT x FROM t1 ORDER BY/GROUP BY x - d/r: 1/1
-
-			    Now, after figuring out the recursive deps
-		*/
-		if recursiveDeps.NumberOfTables() > 0 {
-			directDeps = recursiveDeps
-		}
+		directDeps, recursiveDeps, qt := org.depsForExpr(v.cols[i])
 
 		newDeps := createCertain(directDeps, recursiveDeps, qt)
 		deps, err = deps.merge(newDeps)
@@ -106,7 +93,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables > 0
+	return v.tables.NumberOfTables() > 0
 }
 
 // GetTables implements the TableInfo interface
@@ -155,7 +142,7 @@ func selectExprsToInfos(
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				ts |= table.getTableSet(org)
+				ts.MergeInPlace(table.getTableSet(org))
 			}
 		}
 	}

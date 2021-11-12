@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -623,7 +622,7 @@ func TestMakeSureToCloseDbConnWhenBeginQueryFails(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// run a query with a non-existent reserved id
-	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{}, "select 42", nil, options)
+	_, _, _, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{}, nil, "select 42", nil, options)
 	require.Error(t, err)
 }
 
@@ -637,7 +636,7 @@ func TestTabletServerReserveAndBeginCommit(t *testing.T) {
 	options := &querypb.ExecuteOptions{}
 
 	// reserve a connection and a transaction
-	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, options)
+	_, txID, rID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "select 42", nil, options)
 	require.NoError(t, err)
 	defer func() {
 		// fallback so the test finishes quickly
@@ -1817,12 +1816,12 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	want := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
-	if err == nil || err.Error() != want {
-		t.Errorf("error got '%v', want '%s'", err, want)
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\"\"}"
+	wantLog := wantErr
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
@@ -1846,7 +1845,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 
 func TestTruncateErrors(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.TerseErrors = true
+	config.TerseErrors = false
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1862,11 +1861,14 @@ func TestTruncateErrors(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+
+	// Error not truncated
+	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
+	// but log *is* truncated
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARBINARY value:\\ [TRUNCATED]"
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
@@ -1881,16 +1883,48 @@ func TestTruncateErrors(t *testing.T) {
 		nil,
 	)
 
-	wantErr = "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+	// Error not truncated
+	wantErr = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
+	// Log not truncated, since our limit is large enough now
 	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
 	*sqlparser.TruncateErrLen = 0
+}
+
+func TestTerseErrors(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TerseErrors = true
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+
+	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
+	err := tsv.convertAndLogError(
+		ctx,
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
+		sqlErr,
+		nil,
+	)
+
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
+	}
+
+	// Log should be truncated in same way as the error
+	wantLog := wantErr
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
+	}
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -1938,7 +1972,7 @@ func TestACLHUP(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 
-	f, err := ioutil.TempFile("", "tableacl")
+	f, err := os.CreateTemp("", "tableacl")
 	require.NoError(t, err)
 	defer os.Remove(f.Name())
 
@@ -2049,7 +2083,7 @@ func TestReserveBeginExecute(t *testing.T) {
 	defer db.Close()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 43"}, "select 42", nil, &querypb.ExecuteOptions{})
+	_, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, &target, []string{"select 43"}, nil, "select 42", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 
 	assert.Greater(t, transactionID, int64(0), "transactionID")
@@ -2154,7 +2188,7 @@ func TestRelease(t *testing.T) {
 
 			switch {
 			case test.begin && test.reserve:
-				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, []string{"select 1212"}, "select 42", nil, &querypb.ExecuteOptions{})
+				_, transactionID, reservedID, _, err = tsv.ReserveBeginExecute(ctx, &target, []string{"select 1212"}, nil, "select 42", nil, &querypb.ExecuteOptions{})
 				require.NotEqual(t, int64(0), transactionID)
 				require.NotEqual(t, int64(0), reservedID)
 			case test.begin:
@@ -2192,7 +2226,7 @@ func TestReserveStats(t *testing.T) {
 	ctx := callerid.NewContext(context.Background(), nil, callerID)
 
 	// Starts reserved connection and transaction
-	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, "select 42", nil, &querypb.ExecuteOptions{})
+	_, rbeTxID, rbeRID, _, err := tsv.ReserveBeginExecute(ctx, &target, nil, nil, "select 42", nil, &querypb.ExecuteOptions{})
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, tsv.te.txPool.env.Stats().UserActiveReservedCount.Counts()["test"])
 
@@ -2478,7 +2512,7 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
-	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)

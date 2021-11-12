@@ -54,6 +54,8 @@ func selectScatter(solved semantics.TableSet, keyspace *vindexes.Keyspace) *rout
 	}
 }
 
+var ts = semantics.TableSetFromIds
+
 func TestMergeJoins(t *testing.T) {
 	t.Skip("?")
 	ks := &vindexes.Keyspace{Name: "apa", Sharded: false}
@@ -65,36 +67,36 @@ func TestMergeJoins(t *testing.T) {
 	}
 
 	tests := []testCase{{
-		l:        unsharded(1, ks),
-		r:        unsharded(2, ks),
-		expected: unsharded(1|2, ks),
+		l:        unsharded(ts(0), ks),
+		r:        unsharded(ts(1), ks),
+		expected: unsharded(ts(0, 1), ks),
 	}, {
-		l:        unsharded(1, ks),
-		r:        unsharded(2, ks2),
+		l:        unsharded(ts(0), ks),
+		r:        unsharded(ts(1), ks2),
 		expected: nil,
 	}, {
-		l:        unsharded(2, ks),
-		r:        unsharded(1, ks2),
+		l:        unsharded(ts(1), ks),
+		r:        unsharded(ts(0), ks2),
 		expected: nil,
 	}, {
-		l:        selectDBA(1, ks),
-		r:        selectDBA(2, ks),
-		expected: selectDBA(1|2, ks),
+		l:        selectDBA(ts(0), ks),
+		r:        selectDBA(ts(1), ks),
+		expected: selectDBA(ts(0, 1), ks),
 	}, {
-		l:        selectDBA(1, ks),
-		r:        selectDBA(2, ks2),
-		expected: selectDBA(1|2, ks),
+		l:        selectDBA(ts(0), ks),
+		r:        selectDBA(ts(1), ks2),
+		expected: selectDBA(ts(0, 1), ks),
 	}, {
-		l:        selectDBA(2, ks),
-		r:        selectDBA(1, ks2),
-		expected: selectDBA(1|2, ks),
+		l:        selectDBA(ts(1), ks),
+		r:        selectDBA(ts(0), ks2),
+		expected: selectDBA(ts(0, 1), ks),
 	}, {
-		l:        unsharded(1, ks),
-		r:        selectDBA(2, ks),
+		l:        unsharded(ts(0), ks),
+		r:        selectDBA(ts(1), ks),
 		expected: nil,
 	}, {
-		l: selectScatter(1, ks),
-		r: selectScatter(2, ks),
+		l: selectScatter(ts(0), ks),
+		r: selectScatter(ts(1), ks),
 		predicates: []sqlparser.Expr{
 			equals(colName("t1", "id"), colName("t2", "id")),
 		},
@@ -130,28 +132,28 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	assert := assert.New(t)
 	m1 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: semantics.TableSet(1),
+			TableID: ts(0),
 			Table:   sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
 	m2 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: semantics.TableSet(2),
+			TableID: ts(1),
 			Table:   sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
 	m3 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: semantics.TableSet(4),
+			TableID: ts(2),
 			Table:   sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
 	a := &routeTree{
 		routeOpCode: engine.SelectUnsharded,
-		solved:      semantics.TableSet(1),
+		solved:      ts(0),
 		tables:      []relation{m1},
 	}
 	col1 := sqlparser.NewColNameWithQualifier("id", sqlparser.TableName{
@@ -162,7 +164,7 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	})
 	b := &routeTree{
 		routeOpCode: engine.SelectUnsharded,
-		solved:      semantics.TableSet(6),
+		solved:      ts(1, 2),
 		tables:      []relation{m2, m3},
 		predicates:  []sqlparser.Expr{equals(col1, col2)},
 	}

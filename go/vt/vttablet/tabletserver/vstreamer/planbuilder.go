@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -164,7 +165,8 @@ func compare(comparison Opcode, columnValue, filterValue sqltypes.Value) (bool, 
 	}
 	// at this point neither values can be null
 	// NullsafeCompare returns 0 if values match, -1 if columnValue < filterValue, 1 if columnValue > filterValue
-	result, err := evalengine.NullsafeCompare(columnValue, filterValue)
+	// TODO(king-11) make collation aware
+	result, err := evalengine.NullsafeCompare(columnValue, filterValue, collations.Unknown)
 	if err != nil {
 		return false, err
 	}

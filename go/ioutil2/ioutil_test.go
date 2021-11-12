@@ -19,7 +19,6 @@ package ioutil2
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -32,7 +31,7 @@ func TestWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rData, err := ioutil.ReadFile(fname)
+	rData, err := os.ReadFile(fname)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,7 +19,7 @@ package vttest
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -68,7 +68,7 @@ func getVars(addr string) ([]byte, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // defaultHealthCheck checks the health of the Vitess process using getVars.

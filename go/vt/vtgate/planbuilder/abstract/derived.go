@@ -25,9 +25,10 @@ import (
 
 // Derived represents a derived table in the query
 type Derived struct {
-	Sel   sqlparser.SelectStatement
-	Inner Operator
-	Alias string
+	Sel           sqlparser.SelectStatement
+	Inner         Operator
+	Alias         string
+	ColumnAliases sqlparser.Columns
 }
 
 var _ Operator = (*Derived)(nil)
@@ -57,4 +58,14 @@ func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTabl
 // UnsolvedPredicates implements the Operator interface
 func (d *Derived) UnsolvedPredicates(semTable *semantics.SemTable) []sqlparser.Expr {
 	return d.Inner.UnsolvedPredicates(semTable)
+}
+
+// CheckValid implements the Operator interface
+func (d *Derived) CheckValid() error {
+	return d.Inner.CheckValid()
+}
+
+// Compact implements the Operator interface
+func (d *Derived) Compact(*semantics.SemTable) (Operator, error) {
+	return d, nil
 }

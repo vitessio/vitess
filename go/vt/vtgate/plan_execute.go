@@ -54,7 +54,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 		query,
 		comments,
 		bindVars,
-		skipQueryPlanCache(safeSession),
+		safeSession,
 		logStats,
 	)
 	if err == planbuilder.ErrPlanNotSupported {

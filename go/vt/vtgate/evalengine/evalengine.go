@@ -17,6 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
+	"time"
+
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	"strconv"
@@ -162,7 +166,11 @@ func newEvalResult(v sqltypes.Value) (EvalResult, error) {
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		typ := sqltypes.Float64
+		if v.Type() == sqltypes.Decimal {
+			typ = sqltypes.Decimal
+		}
+		return EvalResult{fval: fval, typ: typ}, nil
 	default:
 		return EvalResult{typ: v.Type(), bytes: raw}, nil
 	}
@@ -253,7 +261,8 @@ func hashCode(v EvalResult) int64 {
 }
 
 func compareNumeric(v1, v2 EvalResult) (int, error) {
-	// Equalize the types.
+	// Equalize the types the same way MySQL does
+	// https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 	switch v1.typ {
 	case sqltypes.Int64:
 		switch v2.typ {
@@ -262,8 +271,8 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return -1, nil
 			}
 			v1 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v1.ival)}
-		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.ival)}
+		case sqltypes.Float64, sqltypes.Decimal:
+			v1 = EvalResult{typ: v2.typ, fval: float64(v1.ival)}
 		}
 	case sqltypes.Uint64:
 		switch v2.typ {
@@ -272,15 +281,32 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return 1, nil
 			}
 			v2 = EvalResult{typ: sqltypes.Uint64, uval: uint64(v2.ival)}
-		case sqltypes.Float64:
-			v1 = EvalResult{typ: sqltypes.Float64, fval: float64(v1.uval)}
+		case sqltypes.Float64, sqltypes.Decimal:
+			v1 = EvalResult{typ: v2.typ, fval: float64(v1.uval)}
 		}
 	case sqltypes.Float64:
 		switch v2.typ {
 		case sqltypes.Int64:
 			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.ival)}
 		case sqltypes.Uint64:
+			if v1.fval < 0 {
+				return -1, nil
+			}
 			v2 = EvalResult{typ: sqltypes.Float64, fval: float64(v2.uval)}
+		case sqltypes.Decimal:
+			v2.typ = sqltypes.Float64
+		}
+	case sqltypes.Decimal:
+		switch v2.typ {
+		case sqltypes.Int64:
+			v2 = EvalResult{typ: sqltypes.Decimal, fval: float64(v2.ival)}
+		case sqltypes.Uint64:
+			if v1.fval < 0 {
+				return -1, nil
+			}
+			v2 = EvalResult{typ: sqltypes.Decimal, fval: float64(v2.uval)}
+		case sqltypes.Float64:
+			v1.typ = sqltypes.Float64
 		}
 	}
 
@@ -300,7 +326,7 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1.uval < v2.uval:
 			return -1, nil
 		}
-	case sqltypes.Float64:
+	case sqltypes.Float64, sqltypes.Decimal:
 		switch {
 		case v1.fval == v2.fval:
 			return 0, nil
@@ -311,4 +337,114 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 
 	// v1>v2
 	return 1, nil
+}
+
+func parseDate(expr EvalResult) (t time.Time, err error) {
+	switch expr.typ {
+	case sqltypes.Date:
+		t, err = time.Parse("2006-01-02", string(expr.bytes))
+	case sqltypes.Timestamp, sqltypes.Datetime:
+		t, err = time.Parse("2006-01-02 15:04:05", string(expr.bytes))
+	case sqltypes.Time:
+		t, err = time.Parse("15:04:05", string(expr.bytes))
+		if err == nil {
+			now := time.Now()
+			// setting the date to today's date, because we use AddDate on t
+			// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+			// and day to take into account the 01 in both month and day of t
+			t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
+		}
+	}
+	return
+}
+
+// matchExprWithAnyDateFormat formats the given expr (usually a string) to a date using the first format
+// that does not return an error.
+func matchExprWithAnyDateFormat(expr EvalResult) (t time.Time, err error) {
+	layouts := []string{"2006-01-02", "2006-01-02 15:04:05", "15:04:05"}
+	for _, layout := range layouts {
+		t, err = time.Parse(layout, string(expr.bytes))
+		if err == nil {
+			if layout == "15:04:05" {
+				now := time.Now()
+				// setting the date to today's date, because we use AddDate on t
+				// which is "0000-01-01 xx:xx:xx", we do minus one on the month
+				// and day to take into account the 01 in both month and day of t
+				t = t.AddDate(now.Year(), int(now.Month()-1), now.Day()-1)
+			}
+			return
+		}
+	}
+	return
+}
+
+// Date comparison based on:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
+// 		- https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+func compareDates(l, r EvalResult) (int, error) {
+	lTime, err := parseDate(l)
+	if err != nil {
+		return 0, err
+	}
+	rTime, err := parseDate(r)
+	if err != nil {
+		return 0, err
+	}
+
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareDateAndString(l, r EvalResult) (int, error) {
+	var lTime, rTime time.Time
+	var err error
+	switch {
+	case sqltypes.IsDate(l.typ):
+		lTime, err = parseDate(l)
+		if err != nil {
+			return 0, err
+		}
+		rTime, err = matchExprWithAnyDateFormat(r)
+		if err != nil {
+			return 0, err
+		}
+	case sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ):
+		rTime, err = parseDate(r)
+		if err != nil {
+			return 0, err
+		}
+		lTime, err = matchExprWithAnyDateFormat(l)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return compareGoTimes(lTime, rTime)
+}
+
+func compareGoTimes(lTime, rTime time.Time) (int, error) {
+	if lTime.Before(rTime) {
+		return -1, nil
+	}
+	if lTime.After(rTime) {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// More on string collations coercibility on MySQL documentation:
+// 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
+func compareStrings(l, r EvalResult) (int, error) {
+	// If one of the strings has an unknown collation we fail, though such error should
+	// already be handled before the execution by the planner.
+	if l.collation == collations.Unknown || r.collation == collations.Unknown {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with an unknown collation")
+	}
+
+	// We cannot compare different collations for now, so we fail
+	// TODO: support multiple collations comparison
+	if r.collation != l.collation {
+		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
+	}
+
+	collation := collations.Default().LookupByID(l.collation)
+	return collation.Collate(l.bytes, r.bytes, false), nil
 }

@@ -77,7 +77,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			default:
 				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: only simple references allowed")
 			}
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1, FromGroupBy: true})
 		}
 		// Append the distinct aggregate if any.
 		if node.extraDistinct != nil {
@@ -110,7 +110,7 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 			if rc.column.Origin() == node {
 				return newDistinct(node), nil
 			}
-			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1})
+			node.eaggr.GroupByKeys = append(node.eaggr.GroupByKeys, &engine.GroupByParams{KeyCol: i, WeightStringCol: -1, FromGroupBy: false})
 		}
 		newInput, err := planDistinct(node.input)
 		if err != nil {

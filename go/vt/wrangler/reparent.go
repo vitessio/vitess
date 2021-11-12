@@ -43,12 +43,6 @@ import (
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
-const (
-	plannedReparentShardOperation       = "PlannedReparentShard"       //nolint
-	emergencyReparentShardOperation     = "EmergencyReparentShard"     //nolint
-	tabletExternallyReparentedOperation = "TabletExternallyReparented" //nolint
-)
-
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
 func (wr *Wrangler) ShardReplicationStatuses(ctx context.Context, keyspace, shard string) ([]*topo.TabletInfo, []*replicationdatapb.Status, error) {
 	tabletMap, err := wr.ts.GetTabletMapForShard(ctx, keyspace, shard)
@@ -151,15 +145,16 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 
 // EmergencyReparentShard will make the provided tablet the primary for
 // the shard, when the old primary is completely unreachable.
-func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String) (err error) {
+func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, primaryElectTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration, ignoredTablets sets.String, preventCrossCellPromotion bool) (err error) {
 	_, err = reparentutil.NewEmergencyReparenter(wr.ts, wr.tmc, wr.logger).ReparentShard(
 		ctx,
 		keyspace,
 		shard,
 		reparentutil.EmergencyReparentOptions{
-			NewPrimaryAlias:     primaryElectTabletAlias,
-			WaitReplicasTimeout: waitReplicasTimeout,
-			IgnoreReplicas:      ignoredTablets,
+			NewPrimaryAlias:           primaryElectTabletAlias,
+			WaitReplicasTimeout:       waitReplicasTimeout,
+			IgnoreReplicas:            ignoredTablets,
+			PreventCrossCellPromotion: preventCrossCellPromotion,
 		},
 	)
 
