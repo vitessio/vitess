@@ -314,8 +314,8 @@ func (f *FakeConn) Watch(ctx context.Context, filePath string) (*topo.WatchData,
 	return current, notifications, cancel
 }
 
-// NewMasterParticipation implements the Conn interface
-func (f *FakeConn) NewMasterParticipation(name, id string) (topo.MasterParticipation, error) {
+// NewLeaderParticipation implements the Conn interface
+func (f *FakeConn) NewLeaderParticipation(string, string) (topo.LeaderParticipation, error) {
 	panic("implement me")
 }
 
