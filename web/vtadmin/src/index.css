@@ -15,6 +15,10 @@
  */
 @import './style/fonts.css';
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
     /* Greyscale */
     --grey75: #f8fafd;
