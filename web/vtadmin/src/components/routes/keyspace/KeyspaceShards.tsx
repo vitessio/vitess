@@ -85,7 +85,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                     <tr key={row.name}>
                         <DataCell>
                             <ShardLink
-                                className="font-weight-bold"
+                                className="font-bold"
                                 clusterID={keyspace?.cluster?.id}
                                 keyspace={keyspace?.keyspace?.name}
                                 shard={row.name}

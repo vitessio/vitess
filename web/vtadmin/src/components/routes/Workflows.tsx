@@ -66,7 +66,7 @@ export const Workflows = () => {
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div className="font-weight-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
                         <div className="font-size-small text-color-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>

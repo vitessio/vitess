@@ -72,7 +72,7 @@ export const Tablets = () => {
                         </ShardLink>
                     </DataCell>
                     <DataCell>
-                        <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>
+                        <TabletLink alias={t.alias} className="font-bold" clusterID={t._raw.cluster?.id}>
                             {t.alias}
                         </TabletLink>
                     </DataCell>

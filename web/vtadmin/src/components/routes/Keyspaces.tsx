@@ -58,7 +58,7 @@ export const Keyspaces = () => {
             <tr key={idx}>
                 <DataCell>
                     <KeyspaceLink clusterID={row.clusterID} name={row.name}>
-                        <div className="font-weight-bold">{row.name}</div>
+                        <div className="font-bold">{row.name}</div>
                         <div className="font-size-small text-color-secondary">{row.cluster}</div>
                     </KeyspaceLink>
                 </DataCell>
@@ -69,7 +69,7 @@ export const Keyspaces = () => {
                         </div>
                     )}
                     {!!row.nonservingShards && (
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             <Pip state="danger" /> {row.nonservingShards}{' '}
                             {row.nonservingShards === 1 ? 'shard' : 'shards'} not serving
                         </div>

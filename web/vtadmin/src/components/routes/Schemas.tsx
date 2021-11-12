@@ -94,9 +94,7 @@ export const Schemas = () => {
                             <div className="font-size-small text-color-secondary">{row.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
-                    <DataCell className="font-weight-bold">
-                        {href ? <Link to={href}>{row.table}</Link> : row.table}
-                    </DataCell>
+                    <DataCell className="font-bold">{href ? <Link to={href}>{row.table}</Link> : row.table}</DataCell>
                     <DataCell className="text-right">
                         <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
                         <div className="font-size-small text-color-secondary">

@@ -47,7 +47,7 @@ export const Vtctlds = () => {
             return (
                 <tr key={row.hostname}>
                     <DataCell>
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             {row.fqdn ? (
                                 <a href={`//${row.fqdn}`} rel="noopener noreferrer" target="_blank">
                                     {row.hostname}

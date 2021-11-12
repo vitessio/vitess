@@ -224,10 +224,6 @@ table tbody td[rowSpan] {
     font-size: var(--fontSizeSmall);
 }
 
-.font-weight-bold {
-    font-weight: 700;
-}
-
 .max-width-content {
     max-width: var(--contentWidth);
 }

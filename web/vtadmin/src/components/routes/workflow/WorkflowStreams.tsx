@@ -67,7 +67,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                 <tr key={row.key}>
                     <DataCell>
                         <StreamStatePip state={row.state} />{' '}
-                        <Link className="font-weight-bold" to={href}>
+                        <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
                         <div className="font-size-small text-color-secondary">
