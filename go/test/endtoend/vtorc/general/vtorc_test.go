@@ -204,18 +204,20 @@ func TestReplicationFromOtherReplica(t *testing.T) {
 	require.NotNil(t, replica, "should be able to find a replica")
 	require.NotNil(t, otherReplica, "should be able to find 2nd replica")
 
-	// point replica at otherReplica
-	// Get primary position
-	hostname := "localhost"
-	_, gtid := cluster.GetPrimaryPosition(t, *otherReplica, hostname)
-
-	changeReplicationSourceCommand := fmt.Sprintf("STOP SLAVE; RESET MASTER; SET GLOBAL gtid_purged = '%s';"+
-		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1; START SLAVE", gtid, hostname, otherReplica.MySQLPort)
-	result, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", replica.Alias, changeReplicationSourceCommand)
-	require.NoError(t, err, result)
-
 	// check replication is setup correctly
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
+
+	// point replica at otherReplica
+	changeReplicationSourceCommand := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
+		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1; START SLAVE", utils.Hostname, otherReplica.MySQLPort)
+	_, err = utils.RunSQL(t, changeReplicationSourceCommand, replica, "")
+	require.NoError(t, err)
+
+	// wait until the source port is set back correctly by vtorc
+	utils.CheckSourcePort(t, replica, curPrimary, 15*time.Second)
+
+	// check that writes succeed
+	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica, otherReplica}, 15*time.Second)
 }
 
 func TestRepairAfterTER(t *testing.T) {
@@ -270,7 +272,7 @@ func TestCircularReplication(t *testing.T) {
 		}
 	}
 
-	changeReplicationSourceCommands := fmt.Sprintf("RESET SLAVE;"+
+	changeReplicationSourceCommands := fmt.Sprintf("STOP SLAVE; RESET SLAVE ALL;"+
 		"CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1;"+
 		"START SLAVE;", replica.VttabletProcess.TabletHostname, replica.MySQLPort)
 
