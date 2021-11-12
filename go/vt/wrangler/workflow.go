@@ -210,11 +210,11 @@ func NewWorkflowError(tablet string, id int64, description string) *WorkflowErro
 	return wfErr
 }
 
-// GetStreamCount returns a count of total and running streams and any stream errors
+// GetStreamCount returns a count of total streams and of streams that have started processing
 func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowError, error) {
 	var err error
 	var workflowErrors []*WorkflowError
-	var totalStreams, runningStreams int64
+	var total, started int64
 	res, err := vrw.wr.ShowWorkflow(vrw.ctx, vrw.params.Workflow, vrw.params.TargetKeyspace)
 	if err != nil {
 		return 0, 0, nil, err
@@ -222,7 +222,7 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 	for ksShard := range res.ShardStatuses {
 		statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 		for _, st := range statuses {
-			totalStreams++
+			total++
 			if strings.HasPrefix(st.Message, "Error:") {
 				workflowErrors = append(workflowErrors, NewWorkflowError(st.Tablet, st.ID, st.Message))
 				continue
@@ -230,13 +230,13 @@ func (vrw *VReplicationWorkflow) GetStreamCount() (int64, int64, []*WorkflowErro
 			if st.Pos == "" {
 				continue
 			}
-			if st.State == "Running" {
-				runningStreams++
+			if st.State == "Running" || st.State == "Copying" {
+				started++
 			}
 		}
 	}
 
-	return totalStreams, runningStreams, workflowErrors, nil
+	return total, started, workflowErrors, nil
 }
 
 // SwitchTraffic switches traffic in the direction passed for specified tablet_types
