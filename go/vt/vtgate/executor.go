@@ -197,6 +197,27 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	return result, err
 }
 
+type streaminResultReceiver struct {
+	mu           sync.Mutex
+	stmtType     sqlparser.StatementType
+	rowsAffected uint64
+	rowsReturned int
+	insertID     uint64
+	callback     func(*sqltypes.Result) error
+}
+
+func (s *streaminResultReceiver) storeResultStats(typ sqlparser.StatementType, qr *sqltypes.Result) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rowsAffected += qr.RowsAffected
+	s.rowsReturned += len(qr.Rows)
+	if qr.InsertID != 0 {
+		s.insertID = qr.InsertID
+	}
+	s.stmtType = typ
+	return s.callback(qr)
+}
+
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(
 	ctx context.Context,
@@ -212,21 +233,15 @@ func (e *Executor) StreamExecute(
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-
+	srr := &streaminResultReceiver{callback: callback}
 	var err error
-	var stmtType sqlparser.StatementType
-	var rowsAffected sync2.AtomicInt64
-	var rowsReturned sync2.AtomicInt64
-	var insertID sync2.AtomicInt64
-	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
-		stmtType = plan.Type
 
+	resultHandler := func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
 		var seenResults sync2.AtomicBool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
-		callbackGen := callback
-		if canReturnRows(stmtType) {
-			callbackGen = func(qr *sqltypes.Result) error {
+		if canReturnRows(plan.Type) {
+			srr.callback = func(qr *sqltypes.Result) error {
 				resultMu.Lock()
 				defer resultMu.Unlock()
 				// If the row has field info, send it separately.
@@ -264,19 +279,14 @@ func (e *Executor) StreamExecute(
 
 		// 4: Execute!
 		err := vc.StreamExecutePrimitive(plan.Instructions, bindVars, true, func(qr *sqltypes.Result) error {
-			rowsAffected.Add(int64(qr.RowsAffected))
-			rowsReturned.Add(int64(len(qr.Rows)))
-			if insertID.Get() == 0 {
-				insertID.Set(int64(qr.InsertID))
-			}
-			return callbackGen(qr)
+			return srr.storeResultStats(plan.Type, qr)
 		})
 
 		if err != nil {
 			return err
 		}
 
-		if !canReturnRows(stmtType) {
+		if !canReturnRows(plan.Type) {
 			return nil
 		}
 
@@ -288,7 +298,6 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		logStats.StmtType = plan.Type.String()
 		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
 		logStats.Table = plan.Instructions.GetTableName()
 		logStats.TabletType = vc.TabletType().String()
@@ -302,17 +311,13 @@ func (e *Executor) StreamExecute(
 			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 		}
 		return err
-	}, func(typ sqlparser.StatementType, qr *sqltypes.Result) {
-		rowsAffected.Add(int64(qr.RowsAffected))
-		rowsReturned.Add(int64(len(qr.Rows)))
-		insertID.Set(int64(qr.InsertID))
-		stmtType = typ
-		err = callback(qr)
-	})
+	}
+
+	err = e.newExecute(ctx, safeSession, sql, bindVars, logStats, resultHandler, srr.storeResultStats)
 
 	logStats.Error = err
-	saveSessionStats(safeSession, stmtType, uint64(rowsAffected.Get()), uint64(insertID.Get()), int(rowsReturned.Get()), err)
-	if rowsReturned.Get() > int64(*warnMemoryRows) {
+	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.insertID, srr.rowsReturned, err)
+	if srr.rowsReturned > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
 		piiSafeSQL, err := sqlparser.RedactSQLQuery(sql)
 		if err != nil {
@@ -362,9 +367,10 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		stmtType = plan.Type
 		qr, err = e.executePlan(ctx, safeSession, plan, vc, bindVars, logStats, time)
 		return err
-	}, func(typ sqlparser.StatementType, result *sqltypes.Result) {
+	}, func(typ sqlparser.StatementType, result *sqltypes.Result) error {
 		stmtType = typ
 		qr = result
+		return nil
 	})
 	if err == planbuilder.ErrPlanNotSupported {
 		return e.legacyExecute(ctx, safeSession, sql, bindVars, logStats)

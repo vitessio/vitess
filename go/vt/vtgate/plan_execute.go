@@ -30,7 +30,7 @@ import (
 )
 
 type planExec func(plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, startTime time.Time) error
-type txResult func(sqlparser.StatementType, *sqltypes.Result)
+type txResult func(sqlparser.StatementType, *sqltypes.Result) error
 
 func (e *Executor) newExecute(
 	ctx context.Context,
@@ -92,8 +92,7 @@ func (e *Executor) newExecute(
 		return err
 	}
 	if result != nil {
-		recResult(plan.Type, result)
-		return nil
+		return recResult(plan.Type, result)
 	}
 
 	// 3: Prepare for execution
