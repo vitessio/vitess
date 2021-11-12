@@ -59,7 +59,7 @@ export const Vtctlds = () => {
                     </DataCell>
                     <DataCell>
                         {row.cluster}
-                        <div className="font-size-small text-color-secondary">{row.clusterID}</div>
+                        <div className="font-size-small text-secondary">{row.clusterID}</div>
                     </DataCell>
                 </tr>
             );

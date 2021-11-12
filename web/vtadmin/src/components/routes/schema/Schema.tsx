@@ -165,9 +165,7 @@ export const Schema = () => {
                                                                 </div>
                                                             ))
                                                         ) : (
-                                                            <span className="font-size-small text-color-secondary">
-                                                                N/A
-                                                            </span>
+                                                            <span className="font-size-small text-secondary">N/A</span>
                                                         )}
                                                     </td>
                                                 </tr>

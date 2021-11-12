@@ -20,6 +20,10 @@ module.exports = {
                 'sans-serif',
             ],
         },
+        textColor: {
+            primary: '#17171b',
+            secondary: '#718096',
+        },
     },
     variants: {
         extend: {},

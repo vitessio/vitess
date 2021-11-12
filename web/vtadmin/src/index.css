@@ -76,9 +76,9 @@
     --colorScaffoldingHighlight: var(--grey400);
     --colorScaffoldingForeground: var(--grey600);
     --tableBorderColor: var(--grey400);
-    --textColorPrimary: #17171b;
+    --textColorPrimary: theme('textColor.primary');
     --textColorInverted: #fff;
-    --textColorSecondary: #718096;
+    --textColorSecondary: theme('textColor.secondary');
     --textColorDisabled: #cbd5e0;
 
     /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
@@ -226,10 +226,6 @@ table tbody td[rowSpan] {
 
 .max-width-content {
     max-width: var(--contentWidth);
-}
-
-.text-color-secondary {
-    color: var(--textColorSecondary);
 }
 
 .white-space-nowrap {

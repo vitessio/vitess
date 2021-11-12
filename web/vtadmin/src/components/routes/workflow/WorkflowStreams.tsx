@@ -70,7 +70,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
-                        <div className="font-size-small text-color-secondary">
+                        <div className="font-size-small text-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
                     </DataCell>
@@ -84,7 +84,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                                 {source}
                             </ShardLink>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
@@ -93,7 +93,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                                 {target}
                             </ShardLink>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
