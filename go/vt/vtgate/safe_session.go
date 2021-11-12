@@ -122,6 +122,13 @@ func (session *SafeSession) Reset() {
 	session.PostSessions = nil
 }
 
+// SavePoints returns the save points of the session. It's safe to use concurrently
+func (session *SafeSession) SavePoints() []string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.GetSavepoints()
+}
+
 // SetAutocommittable sets the state to autocommitable if true.
 // Otherwise, it's notAutocommitable.
 func (session *SafeSession) SetAutocommittable(flag bool) {

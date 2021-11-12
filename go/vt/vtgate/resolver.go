@@ -118,36 +118,6 @@ func (res *Resolver) Execute(
 	}
 }
 
-// StreamExecute executes a streaming query on shards resolved by given func.
-// This function currently temporarily enforces the restriction of executing on
-// one shard since it cannot merge-sort the results to guarantee ordering of
-// response which is needed for checkpointing.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines.
-func (res *Resolver) StreamExecute(
-	ctx context.Context,
-	sql string,
-	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	tabletType topodatapb.TabletType,
-	destination key.Destination,
-	options *querypb.ExecuteOptions,
-	callback func(*sqltypes.Result) error,
-) error {
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
-	if err != nil {
-		return err
-	}
-	err = res.scatterConn.StreamExecute(
-		ctx,
-		sql,
-		bindVars,
-		rss,
-		options,
-		callback)
-	return err
-}
-
 // MessageStream streams messages.
 func (res *Resolver) MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error {
 	var destination key.Destination
