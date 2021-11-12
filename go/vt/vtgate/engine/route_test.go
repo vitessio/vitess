@@ -877,7 +877,7 @@ func TestRouteSort(t *testing.T) {
 		},
 	}
 	_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+	require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 }
 
 func TestRouteSortWeightStrings(t *testing.T) {
@@ -978,7 +978,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+		require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 	})
 }
 
@@ -1083,7 +1083,7 @@ func TestRouteSortCollation(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, "types are not comparable: VARCHAR vs VARCHAR")
+		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)")
 	})
 
 	t.Run("Error when Unsupported Collation", func(t *testing.T) {
@@ -1109,7 +1109,7 @@ func TestRouteSortCollation(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, "comparison using collation 1111 isn't possible")
+		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)")
 	})
 }
 
