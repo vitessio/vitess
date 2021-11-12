@@ -165,6 +165,10 @@ code {
     margin: 0 2px;
 }
 
+p {
+    margin: 1.2rem 0;
+}
+
 /* Links */
 a,
 a:visited,
