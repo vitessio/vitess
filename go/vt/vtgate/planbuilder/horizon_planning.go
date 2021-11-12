@@ -891,7 +891,6 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 			return nil, err
 		}
 		hp.haveToTruncate(added)
-		// TODO(king-11) add tests for this.
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   weightStringOffset,
