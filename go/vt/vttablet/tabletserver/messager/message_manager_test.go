@@ -17,6 +17,7 @@ limitations under the License.
 package messager
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,8 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/test/utils"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 
@@ -849,7 +848,7 @@ func (fts *fakeTabletServer) SetChannel(ch chan string) {
 	fts.mu.Unlock()
 }
 
-func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, gen QueryGenerator, ids []string) (count int64, err error) {
 	fts.postponeCount.Add(1)
 	fts.mu.Lock()
 	ch := fts.ch
@@ -860,7 +859,7 @@ func (fts *fakeTabletServer) PostponeMessages(ctx context.Context, target *query
 	return 0, nil
 }
 
-func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, gen QueryGenerator, timeCutoff int64) (count int64, err error) {
 	fts.purgeCount.Add(1)
 	fts.mu.Lock()
 	ch := fts.ch
