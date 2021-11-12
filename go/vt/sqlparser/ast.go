@@ -1802,7 +1802,7 @@ type (
 
 	// BetweenExpr represents a BETWEEN or a NOT BETWEEN expression.
 	BetweenExpr struct {
-		isBetween bool
+		IsBetween bool
 		Left      Expr
 		From, To  Expr
 	}
