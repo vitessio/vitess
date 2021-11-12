@@ -409,7 +409,7 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	// when creating a connection to the database, we send an initial query to set the connection's
 	// collation, we want to skip the query check if we get such initial query.
 	// this is done to ease the test readability.
-	if query == "SET collation_connection = utf8mb4_general_ci" {
+	if strings.HasPrefix(query, "SET collation_connection =") {
 		return &sqltypes.Result{}, nil
 	}
 
