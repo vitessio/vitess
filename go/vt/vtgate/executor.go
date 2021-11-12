@@ -222,10 +222,13 @@ func (e *Executor) StreamExecute(
 		stmtType = plan.Type
 
 		var seenResults sync2.AtomicBool
+		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
 		callbackGen := callback
 		if canReturnRows(stmtType) {
 			callbackGen = func(qr *sqltypes.Result) error {
+				resultMu.Lock()
+				defer resultMu.Unlock()
 				// If the row has field info, send it separately.
 				// TODO(sougou): this behavior is for handling tests because
 				// the framework currently sends all results as one packet.
