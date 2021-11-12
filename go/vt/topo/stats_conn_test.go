@@ -102,8 +102,8 @@ func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchD
 	return current, changes, cancel
 }
 
-// NewMasterParticipation is part of the Conn interface
-func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipation, err error) {
+// NewLeaderParticipation is part of the Conn interface
+func (st *fakeConn) NewLeaderParticipation(name, id string) (mp LeaderParticipation, err error) {
 	if name == "error" {
 		return mp, fmt.Errorf("dummy error")
 
@@ -301,13 +301,18 @@ func TestStatsConnTopoWatch(t *testing.T) {
 
 }
 
-//TestStatsConnTopoNewMasterParticipation emits stats on NewMasterParticipation
-func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
+//TestStatsConnTopoNewLeaderParticipation emits stats on NewLeaderParticipation
+func TestStatsConnTopoNewLeaderParticipation(t *testing.T) {
 	conn := &fakeConn{}
 	statsConn := NewStatsConn("global", conn)
 
-	statsConn.NewMasterParticipation("", "")
+	_, _ = statsConn.NewLeaderParticipation("", "")
+	// TODO(deepthi): delete "Master" stats after v13.0
 	timingCounts := topoStatsConnTimings.Counts()["NewMasterParticipation.global"]
+	if got, want := timingCounts, int64(1); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+	timingCounts = topoStatsConnTimings.Counts()["NewLeaderParticipation.global"]
 	if got, want := timingCounts, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
@@ -317,11 +322,22 @@ func TestStatsConnTopoNewMasterParticipation(t *testing.T) {
 	if got, want := errorCount, int64(0); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}
+	// error is zero before getting an error
+	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
+	if got, want := errorCount, int64(0); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
 
-	statsConn.NewMasterParticipation("error", "")
+	_, _ = statsConn.NewLeaderParticipation("error", "")
 
 	// error stats gets emitted
 	errorCount = topoStatsConnErrors.Counts()["NewMasterParticipation.global"]
+	if got, want := errorCount, int64(1); got != want {
+		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
+	}
+
+	// error stats gets emitted
+	errorCount = topoStatsConnErrors.Counts()["NewLeaderParticipation.global"]
 	if got, want := errorCount, int64(1); got != want {
 		t.Errorf("stats were not properly recorded: got = %d, want = %d", got, want)
 	}

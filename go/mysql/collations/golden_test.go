@@ -60,7 +60,7 @@ func TestGoldenWeights(t *testing.T) {
 }
 
 func TestCollationsForLanguage(t *testing.T) {
-	allCollations := All()
+	allCollations := testall()
 	langCounts := make(map[testutil.Lang][]string)
 
 	for lang := range testutil.KnownLanguages {
@@ -79,5 +79,53 @@ func TestCollationsForLanguage(t *testing.T) {
 			t.Errorf("no collations found for %q", lang)
 		}
 		t.Logf("%s: %v", lang, langCounts[lang])
+	}
+}
+
+func TestAllCollationsByCharset(t *testing.T) {
+	var defaults1 = map[string][2]string{
+		"utf8mb4": {"utf8mb4_general_ci", "utf8mb4_bin"},
+	}
+	var defaults2 = map[string][2]string{
+		"utf8mb4": {"utf8mb4_0900_ai_ci", "utf8mb4_0900_bin"},
+	}
+
+	for _, tc := range []struct {
+		version  collver
+		defaults map[string][2]string
+	}{
+		{collverMariaDB100, defaults1},
+		{collverMariaDB101, defaults1},
+		{collverMariaDB102, defaults1},
+		{collverMariaDB103, defaults1},
+		{collverMySQL57, defaults1},
+		{collverMySQL80, defaults2},
+	} {
+		t.Run(tc.version.String(), func(t *testing.T) {
+			env := makeEnv(tc.version)
+			for csname, cset := range env.byCharset {
+				switch csname {
+				case "gb18030":
+					// this doesn't work yet
+					continue
+				}
+				if cset.Default == nil {
+					t.Fatalf("charset %s has no default", csname)
+				}
+				if cset.Binary == nil {
+					t.Fatalf("charset %s has no binary", csname)
+				}
+			}
+
+			for charset, expected := range tc.defaults {
+				expectedDefault, expectedBinary := expected[0], expected[1]
+				if def := env.DefaultCollationForCharset(charset); def.Name() != expectedDefault {
+					t.Fatalf("bad default for utf8mb4: %s (expected %s)", def.Name(), expectedDefault)
+				}
+				if def := env.BinaryCollationForCharset(charset); def.Name() != expectedBinary {
+					t.Fatalf("bad binary for utf8mb4: %s (expected %s)", def.Name(), expectedBinary)
+				}
+			}
+		})
 	}
 }

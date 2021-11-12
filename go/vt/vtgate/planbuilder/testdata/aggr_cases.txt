@@ -808,7 +808,7 @@ Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains non
       "Sharded": true
     },
     "FieldQuery": "select id, count(*) as c from `user` where 1 != 1 group by id",
-    "Query": "select id, count(*) as c from `user` where id = 1 group by id having count(*) = 10",
+    "Query": "select id, count(*) as c from `user` where id = 1 group by id having c = 10",
     "Table": "`user`",
     "Values": [
       1
@@ -1696,11 +1696,6 @@ Gen4 plan same as above
   }
 }
 
-# scatter aggregate with complex select list (can't build order by)
-"select distinct a+1 from user"
-"generating order by clause: cannot reference a complex expression"
-Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
-
 # scatter aggregate with numbered order by columns
 "select a, b, c, d, count(*) from user group by 1, 2, 3 order by 1, 2, 3"
 {
@@ -2341,59 +2336,6 @@ Gen4 plan same as above
   }
 }
 
-# Aggregate on join
-"select user.a, count(*) from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
-Gen4 plan same as above
-
-# Aggregate on other table in join
-"select user.a, count(user_extra.a) from user join user_extra group by user.a"
-"unsupported: cross-shard query with aggregates"
-{
-  "QueryType": "SELECT",
-  "Original": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "Aggregates": "count(1) AS count(user_extra.a)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
-    "Inputs": [
-      {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "-1,1,-2",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.a, weight_string(`user`.a) from `user` where 1 != 1",
-            "OrderBy": "(0|1) ASC",
-            "Query": "select `user`.a, weight_string(`user`.a) from `user` order by `user`.a asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "SelectScatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(user_extra.a) from user_extra where 1 != 1",
-            "Query": "select count(user_extra.a) from user_extra",
-            "Table": "user_extra"
-          }
-        ]
-      }
-    ]
-  }
-}
-
 # Cannot have more than one aggr(distinct...
 "select count(distinct a), count(distinct b) from user"
 "unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
@@ -2825,3 +2767,258 @@ Gen4 plan same as above
   }
 }
 
+# Column and Literal equality filter on scatter aggregates
+"select count(*) a from user having a = 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a = 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a = 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Equality filtering with column and string literal on scatter aggregates
+"select count(*) a from user having a = '1'"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a = '1'",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a = '1'",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Column and Literal not equal filter on scatter aggregates
+"select count(*) a from user having a != 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a != 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a != 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Not equal filter with column and string literal on scatter aggregates
+"select count(*) a from user having a != '1'"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a != '1'",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a != '1'",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Greater than filter on scatter aggregates
+"select count(*) a from user having a > 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a \u003e 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003e 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Greater Equal filter on scatter aggregates
+"select count(*) a from user having a >= 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a \u003e= 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003e= 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Less than filter on scatter aggregates
+"select count(*) a from user having a < 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a \u003c 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003c 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# Less Equal filter on scatter aggregates
+"select count(*) a from user having a <= 10"
+"unsupported: filtering on results of aggregates"
+{
+  "QueryType": "SELECT",
+  "Original": "select count(*) a from user having a \u003c= 10",
+  "Instructions": {
+    "OperatorType": "Filter",
+    "Predicate": "a \u003c= 10",
+    "Inputs": [
+      {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count(0) AS a",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select count(*) as a from `user` where 1 != 1",
+            "Query": "select count(*) as a from `user`",
+            "Table": "`user`"
+          }
+        ]
+      }
+    ]
+  }
+}

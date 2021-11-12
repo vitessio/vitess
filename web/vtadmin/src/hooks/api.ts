@@ -29,6 +29,7 @@ import {
     fetchTablets,
     fetchVSchema,
     FetchVSchemaParams,
+    fetchVtctlds,
     fetchVTExplain,
     fetchWorkflow,
     fetchWorkflows,
@@ -91,6 +92,12 @@ export const useSchemas = (options?: UseQueryOptions<pb.Schema[], Error> | undef
  */
 export const useTablets = (options?: UseQueryOptions<pb.Tablet[], Error> | undefined) =>
     useQuery(['tablets'], fetchTablets, options);
+
+/**
+ * useVtctlds is a query hook that fetches all vtctlds across every cluster.
+ */
+export const useVtctlds = (options?: UseQueryOptions<pb.Vtctld[], Error> | undefined) =>
+    useQuery(['vtctlds'], fetchVtctlds, options);
 
 /**
  * useTablet is a query hook that fetches a single tablet by alias.

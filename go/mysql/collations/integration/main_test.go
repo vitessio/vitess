@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -36,6 +37,8 @@ var (
 )
 
 var waitmysql = flag.Bool("waitmysql", false, "")
+
+var defaultenv = collations.Default()
 
 func mysqlconn(t *testing.T) *mysql.Conn {
 	conn, err := mysql.Connect(context.Background(), &connParams)
