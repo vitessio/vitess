@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/json2"
@@ -625,6 +627,7 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 func initializeCluster() (int, error) {
 	var mysqlProcesses []*exec.Cmd
 	clusterInstance = cluster.NewCluster(cellj, hostname)
+	clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {

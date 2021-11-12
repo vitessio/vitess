@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,11 +27,21 @@ import (
 
 var _ selectPlanner = gen4Planner
 
-func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
+func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
+		}
+		switch node := selStatement.(type) {
+		case *sqlparser.Select:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			}
+		case *sqlparser.Union:
+			if node.With != nil {
+				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			}
 		}
 
 		sel, isSel := selStatement.(*sqlparser.Select)
@@ -41,6 +51,12 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 			if err != nil || p != nil {
 				return p, err
 			}
+
+			if sel.SQLCalcFoundRows && sel.Limit != nil {
+				return gen4planSQLCalcFoundRows(vschema, sel, query, reservedVars)
+			}
+			// if there was no limit, we can safely ignore the SQLCalcFoundRows directive
+			sel.SQLCalcFoundRows = false
 		}
 
 		getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, error) {
@@ -63,6 +79,37 @@ func gen4Planner(_ string) func(sqlparser.Statement, *sqlparser.ReservedVars, Co
 	}
 }
 
+func gen4planSQLCalcFoundRows(vschema ContextVSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (engine.Primitive, error) {
+	ksName := ""
+	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
+		ksName = ks.Name
+	}
+	semTable, err := semantics.Analyze(sel, ksName, vschema)
+	if err != nil {
+		return nil, err
+	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
+
+	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
+	if err != nil {
+		return nil, err
+	}
+	err = plan.WireupGen4(semTable)
+	if err != nil {
+		return nil, err
+	}
+	return plan.Primitive(), nil
+}
+
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema ContextVSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+	plan, err := newBuildSelectPlan(sel, reservedVars, vschema)
+	if err != nil {
+		return nil, nil, err
+	}
+	return nil, plan, nil
+}
+
 func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, error)) engine.Primitive {
 	rewritten, isSel := sqlparser.RewriteToCNF(stmt).(sqlparser.SelectStatement)
 	if !isSel {
@@ -77,23 +124,7 @@ func gen4CNFRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparse
 	return nil
 }
 
-// TODO this is needed because our parser creates weird AST structs around parenthesis and SELECT
-// should be removed once the parser parses UNION and parenthesised SELECTs better
-func fixUnionWithSingleSelect(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.Union:
-		if len(node.UnionSelects) == 0 {
-			cursor.Replace(&sqlparser.ParenSelect{
-				Select: node.FirstStatement,
-			})
-		}
-	}
-	return true
-}
-
 func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (logicalPlan, error) {
-	selStmt = sqlparser.Rewrite(selStmt, nil, fixUnionWithSingleSelect).(sqlparser.SelectStatement)
-
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
@@ -102,6 +133,8 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	if err != nil {
 		return nil, err
 	}
+	// record any warning as planner warning.
+	vschema.PlannerWarning(semTable.Warning)
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
@@ -110,6 +143,10 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
 	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+	if err != nil {
+		return nil, err
+	}
+	err = opTree.CheckValid()
 	if err != nil {
 		return nil, err
 	}
@@ -140,15 +177,9 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 		return nil, err
 	}
 
-	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(selStmt).Comments)
-	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
-		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
-			switch plan := logicalPlan.(type) {
-			case *route:
-				plan.eroute.ScatterErrorsAsWarnings = true
-			}
-			return true, logicalPlan, nil
-		})
+	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
+	if err != nil {
+		return nil, err
 	}
 
 	return plan, nil
@@ -159,7 +190,6 @@ func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantic
 		reservedVars: reservedVars,
 		semTable:     semTable,
 		vschema:      vschema,
-		sqToReplace:  map[string]*sqlparser.Select{},
 	}
 	return ctx
 }
@@ -187,13 +217,6 @@ func planLimit(limit *sqlparser.Limit, plan logicalPlan) (logicalPlan, error) {
 	return lPlan, nil
 }
 
-func checkUnsupportedConstructs(sel *sqlparser.Select) error {
-	if sel.SQLCalcFoundRows {
-		return semantics.Gen4NotSupportedF("sql_calc_found_rows")
-	}
-	return nil
-}
-
 func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStatement) (logicalPlan, error) {
 	switch node := in.(type) {
 	case *sqlparser.Select:
@@ -201,7 +224,7 @@ func planHorizon(ctx *planningContext, plan logicalPlan, in sqlparser.SelectStat
 			sel: node,
 		}
 
-		replaceSubQuery(ctx.sqToReplace, node)
+		replaceSubQuery(ctx, node)
 		var err error
 		plan, err = hp.planHorizon(ctx, plan)
 		if err != nil {
@@ -249,5 +272,26 @@ func planOrderByOnUnion(ctx *planningContext, plan logicalPlan, union *sqlparser
 			return nil, err
 		}
 	}
+	return plan, nil
+}
+
+func pushCommentDirectivesOnPlan(plan logicalPlan, stmt sqlparser.SelectStatement) (logicalPlan, error) {
+	directives := sqlparser.ExtractCommentDirectives(sqlparser.GetFirstSelect(stmt).Comments)
+	scatterAsWarns := false
+	if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
+		scatterAsWarns = true
+	}
+	queryTimeout := queryTimeout(directives)
+	if scatterAsWarns || queryTimeout > 0 {
+		_, _ = visit(plan, func(logicalPlan logicalPlan) (bool, logicalPlan, error) {
+			switch plan := logicalPlan.(type) {
+			case *route:
+				plan.eroute.ScatterErrorsAsWarnings = scatterAsWarns
+				plan.eroute.QueryTimeout = queryTimeout
+			}
+			return true, logicalPlan, nil
+		})
+	}
+
 	return plan, nil
 }

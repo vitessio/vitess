@@ -19,7 +19,6 @@ package cluster
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -196,7 +195,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 		return
 	}
 
-	err = ioutil.WriteFile(configFile, config, 0666)
+	err = os.WriteFile(configFile, config, 0666)
 	if err != nil {
 		return
 	}

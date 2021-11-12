@@ -70,7 +70,7 @@ func (c *concatenate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 	panic("implement me")
 }
 
-func (c *concatenate) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+func (c *concatenate) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weightcolNumber int, err error) {
 	panic("implement me")
 }
 

@@ -29,17 +29,13 @@ var (
 	// ErrNilUnderlyingServer is returned when attempting to create a new keyspace
 	// filtering server if a nil underlying server implementation is provided.
 	ErrNilUnderlyingServer = fmt.Errorf("unable to construct filtering server without an underlying server")
-
-	// ErrTopoServerNotAvailable is returned if a caller tries to access the
-	// topo.Server supporting this srvtopo.Server.
-	ErrTopoServerNotAvailable = fmt.Errorf("cannot access underlying topology server when keyspace filtering is enabled")
 )
 
 // NewKeyspaceFilteringServer constructs a new server based on the provided
 // implementation that prevents the specified keyspaces from being exposed
 // to consumers of the new Server.
 //
-// A filtering server will not allow access to the topo.Server to prevent
+// A filtering server will only allow read-only access to the topo.Server to prevent
 // updates that may corrupt the global VSchema keyspace.
 func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (Server, error) {
 	if underlying == nil {
@@ -51,8 +47,13 @@ func NewKeyspaceFilteringServer(underlying Server, selectedKeyspaces []string) (
 		keyspaces[ks] = true
 	}
 
+	readOnlyServer, err := NewReadOnlyServer(underlying)
+	if err != nil {
+		return nil, err
+	}
+
 	return keyspaceFilteringServer{
-		server:          underlying,
+		server:          readOnlyServer,
 		selectKeyspaces: keyspaces,
 	}, nil
 }
@@ -62,10 +63,9 @@ type keyspaceFilteringServer struct {
 	selectKeyspaces map[string]bool
 }
 
-// GetTopoServer returns an error; filtering srvtopo.Server consumers may not
-// access the underlying topo.Server.
+// GetTopoServer returns a read-only topo server
 func (ksf keyspaceFilteringServer) GetTopoServer() (*topo.Server, error) {
-	return nil, ErrTopoServerNotAvailable
+	return ksf.server.GetTopoServer()
 }
 
 func (ksf keyspaceFilteringServer) GetSrvKeyspaceNames(

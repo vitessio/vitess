@@ -30,7 +30,7 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql80, mariadb102"
+	unitTestDatabases = "mysql80, mariadb102"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
@@ -41,6 +41,8 @@ const (
 )
 
 var (
+	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
+	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"11",
 		"12",
@@ -60,6 +62,7 @@ var (
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
+		"vstream_with_keyspaces_to_watch",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
@@ -72,18 +75,24 @@ var (
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
+		"tabletmanager_consul",
 		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
+		"vtgate_godriver",
 		"vtgate_gen4",
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
 		"vtgate_schema",
 		"vtgate_topo",
+		"vtgate_topo_consul",
+		"vtgate_topo_etcd",
 		"vtgate_transaction",
 		"vtgate_unsharded",
 		"vtgate_vindex",
 		"vtgate_vschema",
+		"vtgate_queries",
+		"vtgate_schema_tracker",
 		"xb_recovery",
 		"resharding",
 		"resharding_bytes",
@@ -102,6 +111,8 @@ var (
 	clustersRequiringMakeTools  = []string{
 		"18",
 		"24",
+		"vtgate_topo_consul",
+		"tabletmanager_consul",
 	}
 	clustersRequiringMySQL80 = []string{
 		"mysql80",

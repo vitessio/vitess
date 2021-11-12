@@ -58,6 +58,9 @@ type Options struct {
 	// NumShards indicates the number of shards in the topology
 	NumShards int
 
+	// PlannerVersion indicates whether or not we should use the Gen4 planner
+	PlannerVersion querypb.ExecuteOptions_PlannerVersion
+
 	// ReplicationMode must be set to either "ROW" or "STATEMENT" before
 	// initialization
 	ReplicationMode string

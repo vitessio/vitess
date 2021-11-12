@@ -215,6 +215,45 @@ func TestRewrites(in *testing.T) {
 		expected: "CALL proc(:__vtudvfoo)",
 		udv:      1,
 	}, {
+		in:       "SELECT * FROM tbl WHERE NOT id = 42",
+		expected: "SELECT * FROM tbl WHERE id != 42",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id < 12",
+		expected: "SELECT * FROM tbl WHERE id >= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id > 12",
+		expected: "SELECT * FROM tbl WHERE id <= 12",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id <= 33",
+		expected: "SELECT * FROM tbl WHERE id > 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id >= 33",
+		expected: "SELECT * FROM tbl WHERE id < 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id != 33",
+		expected: "SELECT * FROM tbl WHERE id = 33",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id not in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not in (1,2,3)",
+		expected: "SELECT * FROM tbl WHERE id in (1,2,3)",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not like '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id like '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id regexp '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id not regexp '%foobar'",
+	}, {
+		in:       "SELECT * FROM tbl WHERE not id not regexp '%foobar'",
+		expected: "SELECT * FROM tbl WHERE id regexp '%foobar'",
+	}, {
 		in:                          "SHOW VARIABLES",
 		expected:                    "SHOW VARIABLES",
 		autocommit:                  true,
@@ -258,7 +297,7 @@ func TestRewrites(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "ks") // passing `ks` just to test that no rewriting happens as it is not system schema
+			result, err := RewriteAST(stmt, "ks", SQLSelectLimitUnset) // passing `ks` just to test that no rewriting happens as it is not system schema
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)
@@ -330,7 +369,7 @@ func TestRewritesWithDefaultKeyspace(in *testing.T) {
 			stmt, err := Parse(tc.in)
 			require.NoError(err)
 
-			result, err := RewriteAST(stmt, "sys")
+			result, err := RewriteAST(stmt, "sys", SQLSelectLimitUnset)
 			require.NoError(err)
 
 			expected, err := Parse(tc.expected)

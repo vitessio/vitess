@@ -79,7 +79,7 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
-	case IsQuoted(typ) || typ == Bit || typ == Null:
+	case IsQuoted(typ) || typ == Bit || typ == HexNum || typ == HexVal || typ == Null:
 		return MakeTrusted(typ, val), nil
 	}
 	// All other types are unsafe or invalid.
@@ -100,6 +100,16 @@ func MakeTrusted(typ querypb.Type, val []byte) Value {
 	}
 
 	return Value{typ: typ, val: val}
+}
+
+// NewHexNum builds an Hex Value.
+func NewHexNum(v []byte) Value {
+	return MakeTrusted(HexNum, v)
+}
+
+// NewHexVal builds a HexVal Value.
+func NewHexVal(v []byte) Value {
+	return MakeTrusted(HexVal, v)
 }
 
 // NewInt64 builds an Int64 Value.
@@ -141,6 +151,31 @@ func NewVarChar(v string) Value {
 // The input is a string because it's the most common use case.
 func NewVarBinary(v string) Value {
 	return MakeTrusted(VarBinary, []byte(v))
+}
+
+// NewDate builds a Date value.
+func NewDate(v string) Value {
+	return MakeTrusted(Date, []byte(v))
+}
+
+// NewTime builds a Time value.
+func NewTime(v string) Value {
+	return MakeTrusted(Time, []byte(v))
+}
+
+// NewTimestamp builds a Timestamp value.
+func NewTimestamp(v string) Value {
+	return MakeTrusted(Timestamp, []byte(v))
+}
+
+// NewDatetime builds a Datetime value.
+func NewDatetime(v string) Value {
+	return MakeTrusted(Datetime, []byte(v))
+}
+
+// NewDecimal builds a Decimal value.
+func NewDecimal(v string) Value {
+	return MakeTrusted(Decimal, []byte(v))
 }
 
 // NewIntegral builds an integral type from a string representation.

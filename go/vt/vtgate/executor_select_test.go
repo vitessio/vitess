@@ -1279,7 +1279,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -1650,7 +1650,7 @@ func TestSelectScatterAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -1709,7 +1709,7 @@ func TestStreamSelectScatterAggregate(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col order by col asc",
+		Sql:           "select col, sum(foo), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	for _, conn := range conns {
@@ -2604,7 +2604,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2638,7 +2638,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2674,4 +2674,37 @@ func TestSelectScatterFails(t *testing.T) {
 
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
+}
+
+func TestGen4SelectStraightJoin(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4SelectStraightJoin",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select u.id from `user` as u, user2 as u2 where u.id = u2.id",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	wantWarnings := []*querypb.QueryWarning{
+		{
+			Code:    1235,
+			Message: "straight join is converted to normal join",
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, wantWarnings, session.Warnings)
 }

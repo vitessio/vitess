@@ -19,7 +19,7 @@ package vrepl
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -223,7 +223,7 @@ func throttleResponse(tablet *cluster.Vttablet, path string) (resp *http.Respons
 	if err != nil {
 		return resp, respBody, err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
 	return resp, respBody, err
 }
@@ -259,6 +259,14 @@ func TestSchemaChange(t *testing.T) {
 		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
+			assert.Equal(t, int64(86400), retainArtifactSeconds)
+		}
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
 		insertRows(t, 2)
@@ -268,6 +276,7 @@ func TestSchemaChange(t *testing.T) {
 		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
 		insertRows(t, 2)
@@ -312,6 +321,7 @@ func TestSchemaChange(t *testing.T) {
 		testRows(t)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		// migration will fail again
 	})
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {

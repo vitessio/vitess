@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -75,7 +75,7 @@ func Init() {
 	data := []byte(*ldapAuthConfigString)
 	if *ldapAuthConfigFile != "" {
 		var err error
-		data, err = ioutil.ReadFile(*ldapAuthConfigFile)
+		data, err = os.ReadFile(*ldapAuthConfigFile)
 		if err != nil {
 			log.Exitf("Failed to read mysql_ldap_auth_config_file: %v", err)
 		}
@@ -215,6 +215,7 @@ type ServerConfig struct {
 	LdapCert          string
 	LdapKey           string
 	LdapCA            string
+	LdapCRL           string
 	LdapTLSMinVersion string
 }
 
@@ -250,7 +251,7 @@ func (lci *ClientImpl) Connect(network string, config *ServerConfig) error {
 		return err
 	}
 
-	tlsConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, config.LdapCert, config.LdapKey, config.LdapCA, serverName, tlsVersion)
+	tlsConfig, err := vttls.ClientConfig(vttls.VerifyIdentity, config.LdapCert, config.LdapKey, config.LdapCA, config.LdapCRL, serverName, tlsVersion)
 	if err != nil {
 		return err
 	}

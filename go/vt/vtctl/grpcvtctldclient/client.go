@@ -35,7 +35,7 @@ type gRPCVtctldClient struct {
 	c  vtctlservicepb.VtctldClient
 }
 
-//go:generate -command grpcvtctldclient go run ./codegen
+//go:generate -command grpcvtctldclient go run ../vtctldclient/codegen
 //go:generate grpcvtctldclient -out client_gen.go
 
 func gRPCVtctldClientFactory(addr string) (vtctldclient.VtctldClient, error) {

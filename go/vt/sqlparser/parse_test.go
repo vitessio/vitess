@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -45,7 +44,146 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "SELECT EXTRACT(YEAR FROM '2019-07-02')",
+		output: "select extract(year from '2019-07-02') from dual",
+	}, {
+		input:  "SELECT EXTRACT(YEAR_MONTH FROM '2019-07-02 01:02:03')",
+		output: "select extract(year_month from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "select extract(year from \"21-10-22 12:00:00\")",
+		output: "select extract(year from '21-10-22 12:00:00') from dual",
+	}, {
+		input:  "SELECT EXTRACT(DAY_MINUTE FROM '2019-07-02 01:02:03')",
+		output: "select extract(day_minute from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "SELECT EXTRACT(MICROSECOND FROM '2003-01-02 10:30:00.000123')",
+		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
+		output: "create table t2 (\n\tb blob default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT 7.0)",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT (7.0))",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
+		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
+	}, {
+		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
+		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	}, {
 		input: "select 1 from t",
+	}, {
+		input:  "select * from (select 1) as x(user)",
+		output: "select * from (select 1 from dual) as x(`user`)",
+	}, {
+		input:  "select user from (select id from users ) as x(user)",
+		output: "select `user` from (select id from users) as x(`user`)",
+	}, {
+		input: "select n, d from something",
+	}, {
+		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
+	}, {
+		input:  "select name, numbers from (select * from users) as x(name, numbers)",
+		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
 	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
@@ -133,69 +271,65 @@ var (
 		input:  "select 1 /* drop this comment */ from t",
 		output: "select 1 from t",
 	}, {
-		input:  "select /* union */ 1 from t union select 1 from t",
-		output: "(select /* union */ 1 from t) union (select 1 from t)",
+		input: "select /* union */ 1 from t union select 1 from t",
 	}, {
-		input:  "select /* double union */ 1 from t union select 1 from t union select 1 from t",
-		output: "(select /* double union */ 1 from t) union (select 1 from t) union (select 1 from t)",
+		input: "select /* double union */ 1 from t union select 1 from t union select 1 from t",
 	}, {
-		input:  "select /* union all */ 1 from t union all select 1 from t",
-		output: "(select /* union all */ 1 from t) union all (select 1 from t)",
+		input: "select /* union all */ 1 from t union all select 1 from t",
 	}, {
 		input:  "select /* union distinct */ 1 from t union distinct select 1 from t",
-		output: "(select /* union distinct */ 1 from t) union (select 1 from t)",
+		output: "select /* union distinct */ 1 from t union select 1 from t",
 	}, {
 		input:  "(select /* union parenthesized select */ 1 from t order by a) union select 1 from t",
-		output: "(select /* union parenthesized select */ 1 from t order by a asc) union (select 1 from t)",
+		output: "(select /* union parenthesized select */ 1 from t order by a asc) union select 1 from t",
 	}, {
 		input:  "select /* union parenthesized select 2 */ 1 from t union (select 1 from t)",
-		output: "(select /* union parenthesized select 2 */ 1 from t) union (select 1 from t)",
+		output: "select /* union parenthesized select 2 */ 1 from t union select 1 from t",
 	}, {
 		input:  "select /* union order by */ 1 from t union select 1 from t order by a",
-		output: "(select /* union order by */ 1 from t) union (select 1 from t) order by a asc",
+		output: "select /* union order by */ 1 from t union select 1 from t order by a asc",
 	}, {
 		input:  "select /* union order by limit lock */ 1 from t union select 1 from t order by a limit 1 for update",
-		output: "(select /* union order by limit lock */ 1 from t) union (select 1 from t) order by a asc limit 1 for update",
-	}, {
-		input:  "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
-		output: "(select /* union with limit on lhs */ 1 from t limit 1) union (select 1 from t)",
+		output: "select /* union order by limit lock */ 1 from t union select 1 from t order by a asc limit 1 for update",
 	}, {
 		input:  "(select id, a from t order by id limit 1) union (select id, b as a from s order by id limit 1) order by a limit 1",
 		output: "(select id, a from t order by id asc limit 1) union (select id, b as a from s order by id asc limit 1) order by a asc limit 1",
 	}, {
 		input:  "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
-		output: "select a from ((select 1 as a from tbl1) union (select 2 from tbl2)) as t",
+		output: "select a from (select 1 as a from tbl1 union select 2 from tbl2) as t",
 	}, {
-		input:  "select * from t1 join (select * from t2 union select * from t3) as t",
-		output: "select * from t1 join ((select * from t2) union (select * from t3)) as t",
+		input: "select * from t1 join (select * from t2 union select * from t3) as t",
 	}, {
 		// Ensure this doesn't generate: ""select * from t1 join t2 on a = b join t3 on a = b".
 		input: "select * from t1 join t2 on a = b join t3",
 	}, {
 		input:  "select * from t1 where col in (select 1 from dual union select 2 from dual)",
-		output: "select * from t1 where col in ((select 1 from dual) union (select 2 from dual))",
+		output: "select * from t1 where col in (select 1 from dual union select 2 from dual)",
 	}, {
-		input:  "select * from t1 where exists (select a from t2 union select b from t3)",
-		output: "select * from t1 where exists ((select a from t2) union (select b from t3))",
+		input: "select * from t1 where exists (select a from t2 union select b from t3)",
 	}, {
 		input:  "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
-		output: "(select 1 from dual) union (select 2 from dual) union all (select 3 from dual) union (select 4 from dual) union all (select 5 from dual)",
+		output: "select 1 from dual union select 2 from dual union all select 3 from dual union select 4 from dual union all select 5 from dual",
 	}, {
-		input: "(select 1 from dual) order by 1 asc limit 2",
+		input:  "(select 1 from dual) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
-		input: "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+		input:  "(select 1 from dual order by 1 desc) order by 1 asc limit 2",
+		output: "select 1 from dual order by 1 asc limit 2",
 	}, {
-		input: "(select 1 from dual)",
+		input:  "(select 1 from dual)",
+		output: "select 1 from dual",
 	}, {
-		input: "((select 1 from dual))",
+		input:  "((select 1 from dual))",
+		output: "select 1 from dual",
 	}, {
 		input: "select 1 from (select 1 from dual) as t",
 	}, {
 		input:  "select 1 from (select 1 from dual union select 2 from dual) as t",
-		output: "select 1 from ((select 1 from dual) union (select 2 from dual)) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input:  "select 1 from ((select 1 from dual) union select 2 from dual) as t",
-		output: "select 1 from ((select 1 from dual) union (select 2 from dual)) as t",
+		output: "select 1 from (select 1 from dual union select 2 from dual) as t",
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
@@ -502,7 +636,7 @@ var (
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
 		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
-		output: "select count(distinct 1) from ((select 1 from dual) union all (select 1 from dual)) as a",
+		output: "select count(distinct 1) from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
@@ -630,6 +764,9 @@ var (
 		input:  "select /* simple order by */ 1 from t order by a",
 		output: "select /* simple order by */ 1 from t order by a asc",
 	}, {
+		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
+		output: "select * from t where id = (select a from t1 union select b from t2 order by a asc limit 1)",
+	}, {
 		input: "select /* order by asc */ 1 from t order by a asc",
 	}, {
 		input: "select /* order by desc */ 1 from t order by a desc",
@@ -751,11 +888,14 @@ var (
 		input:  "insert /* it accepts columns with keyword action */ into a(action, b) values (1, 2)",
 		output: "insert /* it accepts columns with keyword action */ into a(`action`, b) values (1, 2)",
 	}, {
-		input: "insert /* no cols & paren select */ into a (select * from t)",
+		input:  "insert /* no cols & paren select */ into a (select * from t)",
+		output: "insert /* no cols & paren select */ into a select * from t",
 	}, {
-		input: "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
+		input:  "insert /* cols & paren select */ into a(a, b, c) (select * from t)",
+		output: "insert /* cols & paren select */ into a(a, b, c) select * from t",
 	}, {
-		input: "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		input:  "insert /* cols & union with paren select */ into a(b, c) (select d, e from f) union (select g from h)",
+		output: "insert /* cols & union with paren select */ into a(b, c) select d, e from f union select g from h",
 	}, {
 		input: "insert /* on duplicate */ into a values (1, 2) on duplicate key update b = func(a), c = d",
 	}, {
@@ -1653,6 +1793,10 @@ var (
 		input:  "show vitess_keyspaces like '%'",
 		output: "show keyspaces like '%'",
 	}, {
+		input: "show vitess_replication_status",
+	}, {
+		input: "show vitess_replication_status like '%'",
+	}, {
 		input: "show vitess_shards",
 	}, {
 		input: "show vitess_shards like '%'",
@@ -1963,7 +2107,7 @@ var (
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.`name` = 'test'",
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
-		output: "select distinct a.* from ((select 1 from dual) union all (select 1 from dual)) as a",
+		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select `weird function name`() from t",
 	}, {
@@ -2141,6 +2285,33 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "/*!*/",
 		err:   "query was empty",
+	}, {
+		input: "select /* union with limit on lhs */ 1 from t limit 1 union select 1 from t",
+		err:   "syntax error at position 60 near 'union'",
+	}, {
+		input: "(select * from t limit 100 into outfile s3 'out_file_name') union (select * from t2)",
+		err:   "syntax error",
+	}, {
+		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+		err:   "syntax error at position 36 near 'into'",
+	}, {
+		input: "select a from x order by y union select a from c",
+		err:   "syntax error",
+	}, {
+		input: "select `name`, numbers from (select * from users) as x()",
+		err:   "syntax error at position 57",
+	}, {
+		input: "select next 2 values from seq union select next value from seq",
+		err:   "syntax error at position 36 near 'union'",
+	}, {
+		input: "select next 2 values from user where id = 1",
+		err:   "syntax error at position 37 near 'where'",
+	}, {
+		input: "select next 2 values from seq, seq",
+		err:   "syntax error at position 31",
+	}, {
+		input: "select 1, next value from seq",
+		err:   "syntax error",
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -2491,12 +2662,7 @@ func TestSelectInto(t *testing.T) {
 		input: "select * from t into outfile s3 'out_file_name' character set binary lines terminated by '\\n' starting by 'a' manifest on overwrite off",
 	}, {
 		input:  "select * from (select * from t union select * from t2) as t3 where t3.name in (select col from t4) into outfile s3 'out_file_name'",
-		output: "select * from ((select * from t) union (select * from t2)) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
-	}, {
-		// Invalid queries but these are parsed and errors caught in planbuilder
-		input: "(select * from t limit 100 into outfile s3 'out_file_name') union (select * from t2)",
-	}, {
-		input: "select * from (select * from t into outfile s3 'inner_outfile') as t2 into outfile s3 'out_file_name'",
+		output: "select * from (select * from t union select * from t2) as t3 where t3.`name` in (select col from t4) into outfile s3 'out_file_name'",
 	}, {
 		input: `select * from TestPerson into outfile s3 's3://test-bucket/export_import/export/users.csv' character set 'utf8' overwrite on`,
 	}, {
@@ -3321,9 +3487,6 @@ var (
 		input:  "select /* vitess-reserved keyword as unqualified column */ * from t where escape = 'test'",
 		output: "syntax error at position 81 near 'escape'",
 	}, {
-		input:  "select * from t where id = ((select a from t1 union select b from t2) order by a limit 1)",
-		output: "syntax error at position 76 near 'order'",
-	}, {
 		input:  "select /* straight_join using */ 1 from t1 straight_join t2 using (a)",
 		output: "syntax error at position 66 near 'using'",
 	}, {
@@ -3521,7 +3684,7 @@ func BenchmarkParse3(b *testing.B) {
 }
 
 func TestValidUnionCases(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -3533,7 +3696,7 @@ func TestValidUnionCases(t *testing.T) {
 }
 
 func TestValidSelectCases(t *testing.T) {
-	testOutputTempDir, err := ioutil.TempDir("", "parse_test")
+	testOutputTempDir, err := os.MkdirTemp("", "parse_test")
 	require.NoError(t, err)
 	defer func() {
 		if !t.Failed() {
@@ -3569,10 +3732,14 @@ func testFile(t *testing.T, filename, tempDir string) {
 				expected.WriteString(fmt.Sprintf("%sINPUT\n%s\nEND\n", tcase.comments, escapeNewLines(tcase.input)))
 				tree, err := Parse(tcase.input)
 				if tcase.errStr != "" {
-					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(err.Error())))
+					errPresent := ""
+					if err != nil {
+						errPresent = err.Error()
+					}
+					expected.WriteString(fmt.Sprintf("ERROR\n%s\nEND\n", escapeNewLines(errPresent)))
 					if err == nil || tcase.errStr != err.Error() {
 						fail = true
-						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, err.Error()), tcase.errStr, err.Error())
+						t.Errorf("File: %s, Line: %d\nDiff:\n%s\n[%s] \n[%s]", filename, tcase.lineno, cmp.Diff(tcase.errStr, errPresent), tcase.errStr, errPresent)
 					}
 				} else {
 					if err != nil {
@@ -3593,7 +3760,7 @@ func testFile(t *testing.T, filename, tempDir string) {
 
 		if fail && tempDir != "" {
 			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
-			_ = ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			_ = os.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
 			fmt.Println(fmt.Sprintf("Errors found in parse tests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir)) // nolint
 		}
 	})
@@ -3613,12 +3780,15 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 
 		r := bufio.NewReader(fd)
 		lineno := 0
+		var output string
+		var returnTypeNumber int
+		var input string
 		for {
-			input, lineno, _ := parsePartial(r, []string{"INPUT"}, lineno, name)
+			input, lineno, _ = parsePartial(r, []string{"INPUT"}, lineno, name)
 			if input == "" && lineno == 0 {
 				break
 			}
-			output, lineno, returnTypeNumber := parsePartial(r, []string{"OUTPUT", "ERROR"}, lineno, name)
+			output, lineno, returnTypeNumber = parsePartial(r, []string{"OUTPUT", "ERROR"}, lineno, name)
 			var errStr string
 			if returnTypeNumber == 1 {
 				errStr = output

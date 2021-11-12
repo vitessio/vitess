@@ -37,6 +37,12 @@ type (
 		cost() int
 
 		pushOutputColumns([]*sqlparser.ColName, *semantics.SemTable) ([]int, error)
+
+		// pushPredicate pushes a predicate to the closest possible operator
+		pushPredicate(ctx *planningContext, expr sqlparser.Expr) error
+
+		// removePredicate removes a predicate from the closest possible operator
+		removePredicate(ctx *planningContext, expr sqlparser.Expr) error
 	}
 )
 
@@ -129,9 +135,9 @@ func (p parenTables) tableNames() []string {
 }
 
 func (p parenTables) tableID() semantics.TableSet {
-	res := semantics.TableSet(0)
+	var res semantics.TableSet
 	for _, r := range p {
-		res = res.Merge(r.tableID())
+		res.MergeInPlace(r.tableID())
 	}
 	return res
 }

@@ -94,6 +94,7 @@ var (
 	enableDirectDDL = flag.Bool("enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
+	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -204,7 +205,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	var si SchemaInfo = nil
 	var st *vtschema.Tracker
 	if *enableSchemaChangeSignal {
-		st = vtschema.NewTracker(gw.hc.Subscribe())
+		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
 		addKeyspaceToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
@@ -305,11 +306,12 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 		log.Warningf("Unable to resolve destination: %v", err)
 		return
 	}
+
 	timeout := time.After(5 * time.Second)
 	for {
 		select {
 		case <-timeout:
-			log.Warningf("Unable to get initial schema reload")
+			log.Warningf("Unable to get initial schema reload for keyspace: %s", keyspace)
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
@@ -317,7 +319,6 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 				if err == nil {
 					return
 				}
-				log.Warningf("Unable to add keyspace to tracker: %v", err)
 			}
 		}
 	}

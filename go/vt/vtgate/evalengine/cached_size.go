@@ -23,7 +23,7 @@ type cachedObject interface {
 	CachedSize(alloc bool) int64
 }
 
-func (cached *BinaryOp) CachedSize(alloc bool) int64 {
+func (cached *BinaryExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -31,8 +31,8 @@ func (cached *BinaryOp) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field Expr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
-	if cc, ok := cached.Expr.(cachedObject); ok {
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.BinaryOp
+	if cc, ok := cached.Op.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/evalengine.Expr
@@ -51,7 +51,7 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
@@ -63,7 +63,29 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(8)
+		size += int64(16)
+	}
+	return size
+}
+func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.ComparisonOp
+	if cc, ok := cached.Op.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Left vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Left.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Right vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Right.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

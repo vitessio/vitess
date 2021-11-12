@@ -93,10 +93,12 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.ColIdent
 	size += cached.Name.CachedSize(false)
+	// field CollationName string
+	size += hack.RuntimeAllocSize(int64(len(cached.CollationName)))
 	return size
 }
 func (cached *ColumnVindex) CachedSize(alloc bool) int64 {
@@ -396,7 +398,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	size += cached.AutoIncrement.CachedSize(true)
 	// field Columns []vitess.io/vitess/go/vt/vtgate/vindexes.Column
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(44))
+		size += hack.RuntimeAllocSize(int64(cap(cached.Columns)) * int64(64))
 		for _, elem := range cached.Columns {
 			size += elem.CachedSize(false)
 		}

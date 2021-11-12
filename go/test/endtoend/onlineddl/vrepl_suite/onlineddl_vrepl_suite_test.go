@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -59,7 +58,7 @@ var (
 
 const (
 	testDataPath   = "testdata"
-	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION"
+	defaultSQLMode = "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
 )
 
 func TestMain(m *testing.M) {
@@ -136,7 +135,7 @@ func TestSchemaChange(t *testing.T) {
 	shards := clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
-	files, err := ioutil.ReadDir(testDataPath)
+	files, err := os.ReadDir(testDataPath)
 	require.NoError(t, err)
 	for _, f := range files {
 		if !f.IsDir() {
@@ -156,7 +155,7 @@ func readTestFile(t *testing.T, testName string, fileName string) (content strin
 		return "", false
 	}
 	require.NoError(t, err)
-	b, err := ioutil.ReadFile(filePath)
+	b, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	return strings.TrimSpace(string(b)), true
 }
@@ -214,6 +213,11 @@ func testSingle(t *testing.T, testName string) {
 		expectQueryFailure = content
 	}
 
+	singleDDLStrategy := ddlStrategy
+	if extra, exists := readTestFile(t, testName, "ddl_strategy"); exists {
+		singleDDLStrategy = fmt.Sprintf("%s %s", singleDDLStrategy, extra)
+	}
+
 	var migrationMessage string
 	var migrationStatus string
 	// Run test
@@ -223,7 +227,7 @@ func testSingle(t *testing.T, testName string) {
 	}
 	alterStatement := fmt.Sprintf("alter table %s %s", tableName, alterClause)
 	// Run the DDL!
-	uuid := testOnlineDDLStatement(t, alterStatement, ddlStrategy, expectQueryFailure)
+	uuid := testOnlineDDLStatement(t, alterStatement, singleDDLStrategy, expectQueryFailure)
 
 	if expectQueryFailure != "" {
 		// Nothing further to do. Migration isn't actually running

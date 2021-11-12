@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -38,7 +39,8 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	} else {
 		colIndex = c.orderBy
 	}
-	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex])
+	// TODO(king-11) make collation aware
+	cmp, err := evalengine.NullsafeCompare(r1[colIndex], r2[colIndex], collations.Unknown)
 	if err != nil {
 		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 		if !(isComparisonErr && c.weightString != -1) {
@@ -47,7 +49,8 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 		// in case of a comparison error switch to using the weight string column for ordering
 		c.orderBy = c.weightString
 		c.weightString = -1
-		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy])
+		// TODO(king-11) make collation aware
+		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy], collations.Unknown)
 		if err != nil {
 			return 0, err
 		}

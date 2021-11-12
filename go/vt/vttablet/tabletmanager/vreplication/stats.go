@@ -60,37 +60,6 @@ type vrStats struct {
 }
 
 func (st *vrStats) register() {
-	// DEPRECATED
-	//TODO(rohit) : remove this metric and related parameter in V13
-
-	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
-	stats.NewGaugesFuncWithMultiLabels(
-		"VReplicationSecondsBehindMaster",
-		"vreplication seconds behind primary per stream",
-		[]string{"source_keyspace", "source_shard", "workflow", "counts"},
-		func() map[string]int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := make(map[string]int64, len(st.controllers))
-			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
-			}
-			return result
-		})
-
-	stats.NewCounterFunc(
-		"VReplicationSecondsBehindMasterTotal",
-		"vreplication seconds behind primary aggregated across all streams",
-		func() int64 {
-			st.mu.Lock()
-			defer st.mu.Unlock()
-			result := int64(0)
-			for _, ct := range st.controllers {
-				result += ct.blpStats.ReplicationLagSeconds.Get()
-			}
-			return result
-		})
-
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationLagSecondsMax", "Max vreplication seconds behind primary", st.maxReplicationLagSeconds)
 	stats.Publish("VReplicationStreamState", stats.StringMapFunc(func() map[string]string {

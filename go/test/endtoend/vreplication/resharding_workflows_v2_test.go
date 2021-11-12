@@ -235,6 +235,10 @@ func TestBasicV2Workflows(t *testing.T) {
 	defer vtgateConn.Close()
 	defer vc.TearDown(t)
 
+	// Internal tables like the lifecycle ones for OnlineDDL should be ignored
+	ddlSQL := "ALTER TABLE customer MODIFY cid bigint UNSIGNED"
+	tstApplySchemaOnlineDDL(t, ddlSQL, sourceKs)
+
 	testMoveTablesV2Workflow(t)
 	testReshardV2Workflow(t)
 	log.Flush()
@@ -564,4 +568,10 @@ func createAdditionalCustomerShards(t *testing.T, shards string) {
 
 	sourceReplicaTab = custKs.Shards["-80"].Tablets["zone1-201"].Vttablet
 	sourceTab = custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
+}
+
+func tstApplySchemaOnlineDDL(t *testing.T, sql string, keyspace string) {
+	err := vc.VtctlClient.ExecuteCommand("ApplySchema", "-skip_preflight", "-ddl_strategy=online",
+		"-sql", sql, keyspace)
+	require.NoError(t, err, fmt.Sprintf("ApplySchema Error: %s", err))
 }

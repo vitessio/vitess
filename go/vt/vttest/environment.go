@@ -18,7 +18,6 @@ package vttest
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path"
@@ -206,7 +205,7 @@ func (env *LocalTestEnv) TearDown() error {
 }
 
 func tmpdir(dataroot string) (dir string, err error) {
-	dir, err = ioutil.TempDir(dataroot, "vttest")
+	dir, err = os.MkdirTemp(dataroot, "vttest")
 	return
 }
 

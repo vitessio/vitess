@@ -19,7 +19,6 @@ package vtgate
 import (
 	"crypto/tls"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -76,7 +75,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 
 	// Use tmp file to reserve a path, remove it immediately, we only care about
 	// name in this context
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -109,7 +108,7 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 
 	// First let's create a file. In this way, we simulate
 	// having a stale socket on disk that needs to be cleaned up.
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -139,7 +138,7 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 
 	authServer := newTestAuthServerStatic()
 
-	unixSocket, err := ioutil.TempFile("", "mysql_vitess_test.sock")
+	unixSocket, err := os.CreateTemp("", "mysql_vitess_test.sock")
 	if err != nil {
 		t.Fatalf("Failed to create temp file")
 	}
@@ -259,12 +258,13 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func testInitTLSConfig(t *testing.T, serverCA bool) {
 	// Create the certs.
-	root, err := ioutil.TempDir("", "TestInitTLSConfig")
+	root, err := os.MkdirTemp("", "TestInitTLSConfig")
 	if err != nil {
 		t.Fatalf("TempDir failed: %v", err)
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
+	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
 	serverCACert := ""
@@ -273,7 +273,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

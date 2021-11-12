@@ -21,7 +21,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -526,7 +525,7 @@ func tlsLaunchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, tabletForBi
 }
 
 func getCNFromCertPEM(filename string) string {
-	pemBytes, _ := ioutil.ReadFile(filename)
+	pemBytes, _ := os.ReadFile(filename)
 	block, _ := pem.Decode(pemBytes)
 	cert, _ := x509.ParseCertificate(block.Bytes)
 	rdn := cert.Subject.ToRDNSequence()[0][0]

@@ -81,7 +81,7 @@ func (s *Send) GetTableName() string {
 	return ""
 }
 
-// Execute implements Primitive interface
+// TryExecute implements Primitive interface
 func (s *Send) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
@@ -131,7 +131,7 @@ func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindV
 	return out
 }
 
-// StreamExecute implements Primitive interface
+// TryStreamExecute implements Primitive interface
 func (s *Send) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	rss, _, err := vcursor.ResolveDestinations(s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {

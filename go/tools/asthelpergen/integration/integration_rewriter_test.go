@@ -164,6 +164,46 @@ func TestRewriteVisitInterfaceSlice(t *testing.T) {
 	})
 }
 
+func TestRewriteAndRevisitInterfaceSlice(t *testing.T) {
+	leaf1 := &Leaf{2}
+	leaf2 := &Leaf{3}
+	ast := InterfaceSlice{
+		leaf1,
+		leaf2,
+	}
+	ast2 := InterfaceSlice{
+		leaf2,
+		leaf1,
+	}
+
+	tv := &rewriteTestVisitor{}
+
+	a := false
+	_ = Rewrite(ast, func(cursor *Cursor) bool {
+		tv.pre(cursor)
+		switch cursor.node.(type) {
+		case InterfaceSlice:
+			if a {
+				break
+			}
+			a = true
+			cursor.ReplaceAndRevisit(ast2)
+		}
+		return true
+	}, tv.post)
+
+	tv.assertEquals(t, []step{
+		Pre{ast}, // when we visit ast, we want to replace and revisit,
+		// which means that we don't do a post on this node, or visit the children
+		Pre{ast2},
+		Pre{leaf2},
+		Post{leaf2},
+		Pre{leaf1},
+		Post{leaf1},
+		Post{ast2},
+	})
+}
+
 func TestRewriteVisitRefContainerReplace(t *testing.T) {
 	ast := &RefContainer{
 		ASTType:               &RefContainer{NotASTType: 12},

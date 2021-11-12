@@ -33,6 +33,7 @@ import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
+import { ShardLink } from '../links/ShardLink';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -56,10 +57,10 @@ export const Tablets = () => {
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell>
-                        <KeyspaceLink
+                        <ShardLink
                             className="white-space-nowrap"
                             clusterID={t._raw.cluster?.id}
-                            name={t.keyspace}
+                            keyspace={t.keyspace}
                             shard={t.shard}
                         >
                             <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
@@ -68,7 +69,7 @@ export const Tablets = () => {
                                     {!t.isShardServing && 'NOT SERVING'}
                                 </div>
                             )}
-                        </KeyspaceLink>
+                        </ShardLink>
                     </DataCell>
                     <DataCell>
                         <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>

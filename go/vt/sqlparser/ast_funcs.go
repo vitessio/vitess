@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"strings"
@@ -480,6 +481,28 @@ func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
 }
 
+// EncodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// for passing on to MySQL as a bind var
+func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
+	nb := node.Bytes()
+	if node.Type != HexVal {
+		return nb, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Literal value is not a HexVal")
+	}
+
+	// Let's make this idempotent in case it's called more than once
+	if nb[0] == 'x' && nb[1] == '0' && nb[len(nb)-1] == '\'' {
+		return nb, nil
+	}
+
+	var bb bytes.Buffer
+	bb.WriteByte('x')
+	bb.WriteByte('\'')
+	bb.WriteString(string(nb))
+	bb.WriteByte('\'')
+	nb = bb.Bytes()
+	return nb, nil
+}
+
 // Equal returns true if the column names match.
 func (node *ColName) Equal(c *ColName) bool {
 	// Failsafe: ColName should not be empty.
@@ -540,7 +563,7 @@ func NewColNameWithQualifier(identifier string, table TableName) *ColName {
 }
 
 //NewSelect is used to create a select statement
-func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
+func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, into *SelectInto, from TableExprs, where *Where, groupBy GroupBy, having *Where) *Select {
 	var cache *bool
 	var distinct, straightJoinHint, sqlFoundRows bool
 
@@ -567,6 +590,7 @@ func NewSelect(comments Comments, exprs SelectExprs, selectOptions []string, fro
 		StraightJoinHint: straightJoinHint,
 		SQLCalcFoundRows: sqlFoundRows,
 		SelectExprs:      exprs,
+		Into:             into,
 		From:             from,
 		Where:            where,
 		GroupBy:          groupBy,
@@ -744,6 +768,11 @@ func (node *Select) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Select) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Select) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -752,6 +781,16 @@ func (node *Select) SetLimit(limit *Limit) {
 // SetLock sets the lock clause
 func (node *Select) SetLock(lock Lock) {
 	node.Lock = lock
+}
+
+// SetInto sets the into clause
+func (node *Select) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
+// SetWith sets the with clause to a select statement
+func (node *Select) SetWith(with *With) {
+	node.With = with
 }
 
 // MakeDistinct makes the statement distinct
@@ -806,41 +845,6 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
-// AddOrder adds an order by element
-func (node *ParenSelect) AddOrder(order *Order) {
-	node.Select.AddOrder(order)
-}
-
-// SetLimit sets the limit clause
-func (node *ParenSelect) SetLimit(limit *Limit) {
-	node.Select.SetLimit(limit)
-}
-
-// SetLock sets the lock clause
-func (node *ParenSelect) SetLock(lock Lock) {
-	node.Select.SetLock(lock)
-}
-
-// MakeDistinct implements the SelectStatement interface
-func (node *ParenSelect) MakeDistinct() {
-	node.Select.MakeDistinct()
-}
-
-// GetColumnCount implements the SelectStatement interface
-func (node *ParenSelect) GetColumnCount() int {
-	return node.Select.GetColumnCount()
-}
-
-// SetComments implements the SelectStatement interface
-func (node *ParenSelect) SetComments(comments Comments) {
-	node.Select.SetComments(comments)
-}
-
-// GetComments implements the SelectStatement interface
-func (node *ParenSelect) GetComments() Comments {
-	return node.Select.GetComments()
-}
-
 // AddWhere adds the boolean expression to the
 // WHERE clause as an AND condition.
 func (node *Update) AddWhere(expr Expr) {
@@ -862,6 +866,11 @@ func (node *Union) AddOrder(order *Order) {
 	node.OrderBy = append(node.OrderBy, order)
 }
 
+// SetOrderBy sets the order by clause
+func (node *Union) SetOrderBy(orderBy OrderBy) {
+	node.OrderBy = orderBy
+}
+
 // SetLimit sets the limit clause
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
@@ -872,38 +881,49 @@ func (node *Union) SetLock(lock Lock) {
 	node.Lock = lock
 }
 
+// SetInto sets the into clause
+func (node *Union) SetInto(into *SelectInto) {
+	node.Into = into
+}
+
+// SetWith sets the with clause to a union statement
+func (node *Union) SetWith(with *With) {
+	node.With = with
+}
+
 // MakeDistinct implements the SelectStatement interface
 func (node *Union) MakeDistinct() {
-	node.UnionSelects[len(node.UnionSelects)-1].Distinct = true
+	node.Distinct = true
 }
 
 // GetColumnCount implements the SelectStatement interface
 func (node *Union) GetColumnCount() int {
-	return node.FirstStatement.GetColumnCount()
+	return node.Left.GetColumnCount()
 }
 
 // SetComments implements the SelectStatement interface
 func (node *Union) SetComments(comments Comments) {
-	node.FirstStatement.SetComments(comments)
+	node.Left.SetComments(comments)
 }
 
 // GetComments implements the SelectStatement interface
 func (node *Union) GetComments() Comments {
-	return node.FirstStatement.GetComments()
+	return node.Left.GetComments()
 }
 
-//Unionize returns a UNION, either creating one or adding SELECT to an existing one
-func Unionize(lhs, rhs SelectStatement, distinct bool, by OrderBy, limit *Limit, lock Lock) *Union {
-	union, isUnion := lhs.(*Union)
-	if isUnion {
-		union.UnionSelects = append(union.UnionSelects, &UnionSelect{Distinct: distinct, Statement: rhs})
-		union.OrderBy = by
-		union.Limit = limit
-		union.Lock = lock
-		return union
+func requiresParen(stmt SelectStatement) bool {
+	switch node := stmt.(type) {
+	case *Union:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
+	case *Select:
+		return len(node.OrderBy) != 0 || node.Lock != 0 || node.Into != nil || node.Limit != nil
 	}
 
-	return &Union{FirstStatement: lhs, UnionSelects: []*UnionSelect{{Distinct: distinct, Statement: rhs}}, OrderBy: by, Limit: limit, Lock: lock}
+	return false
+}
+
+func setLockInSelect(stmt SelectStatement, lock Lock) {
+	stmt.SetLock(lock)
 }
 
 // ToString returns the string associated with the DDLAction Enum
@@ -1137,6 +1157,8 @@ func (op UnaryExprOperator) ToString() string {
 		return Utf8Str
 	case Latin1Op:
 		return Latin1Str
+	case NStringOp:
+		return NStringStr
 	default:
 		return "Unknown UnaryExprOperator"
 	}
@@ -1215,6 +1237,54 @@ func (ty ExplainType) ToString() string {
 		return AnalyzeStr
 	default:
 		return "Unknown ExplainType"
+	}
+}
+
+// ToString returns the type as a string
+func (ty IntervalTypes) ToString() string {
+	switch ty {
+	case IntervalYear:
+		return YearStr
+	case IntervalQuarter:
+		return QuarterStr
+	case IntervalMonth:
+		return MonthStr
+	case IntervalWeek:
+		return WeekStr
+	case IntervalDay:
+		return DayStr
+	case IntervalHour:
+		return HourStr
+	case IntervalMinute:
+		return MinuteStr
+	case IntervalSecond:
+		return SecondStr
+	case IntervalMicrosecond:
+		return MicrosecondStr
+	case IntervalYearMonth:
+		return YearMonthStr
+	case IntervalDayHour:
+		return DayHourStr
+	case IntervalDayMinute:
+		return DayMinuteStr
+	case IntervalDaySecond:
+		return DaySecondStr
+	case IntervalHourMinute:
+		return HourMinuteStr
+	case IntervalHourSecond:
+		return HourSecondStr
+	case IntervalMinuteSecond:
+		return MinuteSecondStr
+	case IntervalDayMicrosecond:
+		return DayMicrosecondStr
+	case IntervalHourMicrosecond:
+		return HourMicrosecondStr
+	case IntervalMinuteMicrosecond:
+		return MinuteMicrosecondStr
+	case IntervalSecondMicrosecond:
+		return SecondMicrosecondStr
+	default:
+		return "Unknown IntervalType"
 	}
 }
 
@@ -1453,9 +1523,106 @@ func GetFirstSelect(selStmt SelectStatement) *Select {
 	case *Select:
 		return node
 	case *Union:
-		return GetFirstSelect(node.FirstStatement)
-	case *ParenSelect:
-		return GetFirstSelect(node.Select)
+		return GetFirstSelect(node.Left)
 	}
 	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// GetAllSelects gets all the select statement s
+func GetAllSelects(selStmt SelectStatement) []*Select {
+	switch node := selStmt.(type) {
+	case *Select:
+		return []*Select{node}
+	case *Union:
+		return append(GetAllSelects(node.Left), GetAllSelects(node.Right)...)
+	}
+	panic("[BUG]: unknown type for SelectStatement")
+}
+
+// SetArgName sets argument name.
+func (es *ExtractedSubquery) SetArgName(n string) {
+	es.argName = n
+	es.updateAlternative()
+}
+
+// SetHasValuesArg sets has_values argument.
+func (es *ExtractedSubquery) SetHasValuesArg(n string) {
+	es.hasValuesArg = n
+	es.updateAlternative()
+}
+
+// GetArgName returns argument name.
+func (es *ExtractedSubquery) GetArgName() string {
+	return es.argName
+}
+
+// GetHasValuesArg returns has values argument.
+func (es *ExtractedSubquery) GetHasValuesArg() string {
+	return es.hasValuesArg
+
+}
+
+func (es *ExtractedSubquery) updateAlternative() {
+	switch original := es.Original.(type) {
+	case *ExistsExpr:
+		es.alternative = NewArgument(es.argName)
+	case *Subquery:
+		es.alternative = NewArgument(es.argName)
+	case *ComparisonExpr:
+		// other_side = :__sq
+		cmp := &ComparisonExpr{
+			Left:     es.OtherSide,
+			Right:    NewArgument(es.argName),
+			Operator: original.Operator,
+		}
+		var expr Expr = cmp
+		switch original.Operator {
+		case InOp:
+			// :__sq_has_values = 1 and other_side in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("1"), Operator: EqualOp}
+			expr = AndExpressions(hasValue, cmp)
+		case NotInOp:
+			// :__sq_has_values = 0 or other_side not in ::__sq
+			cmp.Right = NewListArg(es.argName)
+			hasValue := &ComparisonExpr{Left: NewArgument(es.hasValuesArg), Right: NewIntLiteral("0"), Operator: EqualOp}
+			expr = &OrExpr{hasValue, cmp}
+		}
+		es.alternative = expr
+	}
+}
+
+func defaultRequiresParens(ct *ColumnType) bool {
+	switch strings.ToUpper(ct.Type) {
+	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
+		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
+		"LINESTRING", "POLYGON", "MULTIPOINT", "MULTILINESTRING",
+		"MULTIPOLYGON", "GEOMETRYCOLLECTION":
+		return true
+	}
+
+	_, isLiteral := ct.Options.Default.(*Literal)
+	_, isBool := ct.Options.Default.(BoolVal)
+	_, isNullVal := ct.Options.Default.(*NullVal)
+
+	if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+		return false
+	}
+
+	return true
+}
+
+// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
+func RemoveKeyspaceFromColName(expr Expr) Expr {
+	Rewrite(expr, nil, func(cursor *Cursor) bool {
+		switch col := cursor.Node().(type) {
+		case *ColName:
+			if !col.Qualifier.Qualifier.IsEmpty() {
+				col.Qualifier.Qualifier = NewTableIdent("")
+			}
+		}
+		return true
+	}) // This hard cast is safe because we do not change the type the input
+
+	return expr
 }

@@ -79,6 +79,7 @@ export enum Icons {
     keyR = 'keyR',
     keyS = 'keyS',
     keyT = 'keyT',
+    keyV = 'keyV',
     keyboard = 'keyboard',
     link = 'link',
     pageFirst = 'pageFirst',

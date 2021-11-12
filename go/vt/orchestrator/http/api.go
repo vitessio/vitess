@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/orchestrator/metrics/query"
 	"vitess.io/vitess/go/vt/orchestrator/process"
 	orcraft "vitess.io/vitess/go/vt/orchestrator/raft"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 )
 
 // APIResponseCode is an OK/ERROR response code
@@ -216,7 +217,7 @@ func (this *HttpAPI) Discover(params martini.Params, r render.Render, req *http.
 	if orcraft.IsRaftEnabled() {
 		orcraft.PublishCommand("discover", instanceKey)
 	} else {
-		logic.DiscoverInstance(instanceKey)
+		logic.DiscoverInstance(instanceKey, false /* forceDiscovery */)
 	}
 
 	Respond(r, &APIResponse{Code: OK, Message: fmt.Sprintf("Instance discovered: %+v", instance.Key), Details: instance})
@@ -2386,7 +2387,7 @@ func (this *HttpAPI) RegisterCandidate(params martini.Params, r render.Render, r
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
 	}
-	promotionRule, err := inst.ParseCandidatePromotionRule(params["promotionRule"])
+	promotionRule, err := promotionrule.Parse(params["promotionRule"])
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error()})
 		return
