@@ -445,5 +445,5 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 // collation matches with the given collation ID.
 // If it does not match an error will be returned explaining why.
 func (dbc *DBConn) MatchCollation(collationID collations.ID) error {
-	return dbc.info.MatchCollation(collationID)
+	return dbc.conn.MatchCollation(collationID)
 }

@@ -218,8 +218,6 @@ func (c *Conn) Ping() error {
 // allows us to make informed decisions around charset's default collation
 // depending on the MySQL/MariaDB version we are using.
 func setCollationForConnection(c *Conn, params *ConnParams) error {
-	var collStr string
-
 	// Once we have done the initial handshake with MySQL, we receive the server version
 	// string. This string is critical as it enables the instantiation of a new collation
 	// environment variable.
@@ -230,21 +228,18 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 		return err
 	}
 
-	// The collation environment is stored inside the connection parameters struct.
-	// We will use it to verify that execution requests issued by VTGate match the
-	// same collation as the one used to communicate with MySQL.
-	params.CollationEnvironment = env
+	var coll collations.Collation
+	charset := params.Charset
 
 	// if there is no collation or charset, we default to utf8mb4
-	if params.Collation == "" && params.Charset == "" {
-		params.Charset = "utf8mb4"
+	if params.Collation == "" && charset == "" {
+		charset = "utf8mb4"
 	}
-	var coll collations.Collation
 
 	if params.Collation == "" {
 		// If there is no collation we will just use the charset's default collation
 		// otherwise we directly use the given collation.
-		coll = env.DefaultCollationForCharset(params.Charset)
+		coll = env.DefaultCollationForCharset(charset)
 	} else {
 		// Here we call the collations API to ensure the collation/charset exist
 		// and is supported by Vitess.
@@ -254,16 +249,19 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 		// The given collation is most likely unknown or unsupported, we need to fail.
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation: '%s'", params.Collation)
 	}
-	collStr = coll.Name()
-	params.Collation = collStr
 
 	// We send a query to MySQL to set the connection's collation.
 	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
-	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", collStr)
+	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", coll.Name())
 	_, err = c.ExecuteFetch(querySetCollation, 1, false)
 	if err != nil {
 		return err
 	}
+	// The collation environment is stored inside the connection parameters struct.
+	// We will use it to verify that execution requests issued by VTGate match the
+	// same collation as the one used to communicate with MySQL.
+	c.CollationEnvironment = env
+	c.Collation = coll.ID()
 	return nil
 }
 

@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"flag"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vttls"
 
 	"vitess.io/vitess/go/mysql"
@@ -186,38 +185,6 @@ func New(mcp *mysql.ConnParams) Connector {
 	}
 }
 
-// SetCollationInformation sets the charset, collation and collation environment of the
-// connection.
-func (c *Connector) SetCollationInformation(charset, collation string, env *collations.Environment) {
-	if c.connParams.Charset != charset && c.connParams.Collation != collation {
-		c.connParams.Collation = collation
-		c.connParams.Charset = charset
-		c.connParams.CollationEnvironment = env
-	}
-}
-
-// MatchCollation returns nil if the given collations.ID matches with the connection's
-// collation, otherwise it returns an error explaining why it does not match.
-// We do the comparison all the way down in the Connector to use mysql.ConnParams
-// collations environment to achieve the collation lookup using the same server version.
-func (c Connector) MatchCollation(collationID collations.ID) error {
-
-	// The collation environment of a connection parameter should never be nil, if we fail
-	// to create it we already errored out when initializing the connection with MySQL.
-	if c.connParams.CollationEnvironment == nil {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "No collation environment for this connection")
-	}
-
-	coll := c.connParams.CollationEnvironment.LookupByID(collationID)
-	if coll == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
-	}
-	if coll.Name() != c.connParams.Collation {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.connParams.Collation)
-	}
-	return nil
-}
-
 // Connect will invoke the mysql.connect method and return a connection
 func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	params, err := c.MysqlParams()
@@ -228,7 +195,6 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.SetCollationInformation(params.Charset, params.Collation, params.CollationEnvironment)
 	return conn, nil
 }
 
