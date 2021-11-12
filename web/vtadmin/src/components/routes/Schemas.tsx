@@ -35,7 +35,7 @@ import { HelpTooltip } from '../tooltip/HelpTooltip';
 const TABLE_COLUMNS = [
     'Keyspace',
     'Table',
-    <div className="text-align-right">
+    <div className="text-right">
         Approx. Size{' '}
         <HelpTooltip
             text={
@@ -45,7 +45,7 @@ const TABLE_COLUMNS = [
             }
         />
     </div>,
-    <div className="text-align-right">
+    <div className="text-right">
         Approx. Rows{' '}
         <HelpTooltip
             text={
@@ -97,15 +97,13 @@ export const Schemas = () => {
                     <DataCell className="font-weight-bold">
                         {href ? <Link to={href}>{row.table}</Link> : row.table}
                     </DataCell>
-                    <DataCell className="text-align-right">
+                    <DataCell className="text-right">
                         <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
                         <div className="font-size-small text-color-secondary">
                             {formatBytes(row._raw.tableSize?.data_length, 'B')}
                         </div>
                     </DataCell>
-                    <DataCell className="text-align-right">
-                        {(row._raw.tableSize?.row_count || 0).toLocaleString()}
-                    </DataCell>
+                    <DataCell className="text-right">{(row._raw.tableSize?.row_count || 0).toLocaleString()}</DataCell>
                 </tr>
             );
         });

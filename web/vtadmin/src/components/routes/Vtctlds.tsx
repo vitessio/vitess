@@ -83,7 +83,7 @@ export const Vtctlds = () => {
                 <DataTable columns={['Hostname', 'Cluster']} data={data} renderRows={renderRows} />
 
                 {/* TODO skeleton placeholder */}
-                {!!q.isLoading && <div className="text-align-center">Loading</div>}
+                {!!q.isLoading && <div className="text-center">Loading</div>}
             </ContentContainer>
         </div>
     );
