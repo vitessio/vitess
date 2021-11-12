@@ -76,7 +76,7 @@ export const Tablet = () => {
                     <Link to="/tablets">Tablets</Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{alias}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{alias}</WorkspaceTitle>
 
                 <div className={style.headingMeta}>
                     <span>
@@ -84,12 +84,12 @@ export const Tablet = () => {
                     </span>
                     {!!tablet && (
                         <>
-                            <span className="font-family-monospace">
+                            <span className="font-mono">
                                 <TabletServingPip state={tablet.state} /> {formatDisplayType(tablet)}
                             </span>
-                            <span className="font-family-monospace">{formatState(tablet)}</span>
+                            <span className="font-mono">{formatState(tablet)}</span>
                             <span>
-                                <ExternalTabletLink className="font-family-monospace" fqdn={tablet.FQDN}>
+                                <ExternalTabletLink className="font-mono" fqdn={tablet.FQDN}>
                                     {tablet.tablet?.hostname}
                                 </ExternalTabletLink>
                             </span>

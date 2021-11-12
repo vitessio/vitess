@@ -78,7 +78,7 @@ export const DataTable = <T extends object>({
 
             <PaginationNav currentPage={page} formatLink={formatPageLink} totalPages={totalPages} />
             {!!data.length && (
-                <p className="text-color-secondary">
+                <p className="text-secondary">
                     Showing {startRow} {lastRow > startRow ? `- ${lastRow}` : null} of {data.length}
                 </p>
             )}
