@@ -3,6 +3,9 @@ module.exports = {
     darkMode: false,
     theme: {
         extend: {},
+        fontFamily: {
+            mono: ['NotoMono', 'source-code-pro', 'menlo', 'monaco', 'consolas', 'Courier New', 'monospace'],
+        },
     },
     variants: {
         extend: {},
