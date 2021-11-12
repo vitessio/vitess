@@ -54,7 +54,7 @@ type UnsupportedCollationError struct {
 
 // Error function implements the error interface
 func (err UnsupportedCollationError) Error() string {
-	return fmt.Sprintf("comparison using collation %d isn't possible", err.ID)
+	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
 }
 
 func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
@@ -237,7 +237,12 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	if sqltypes.IsNumber(typ) {
 		return compareNumeric(v1cast, v2cast)
 	}
-	if (sqltypes.IsText(typ) || sqltypes.IsBinary(typ)) && collationID != collations.Unknown {
+	if sqltypes.IsText(typ) || sqltypes.IsBinary(typ) {
+		if collationID == collations.Unknown {
+			return 0, UnsupportedCollationError{
+				ID: collationID,
+			}
+		}
 		collation := collations.Default().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
