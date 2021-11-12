@@ -84,9 +84,6 @@
     /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
     --tooltipBackground: rgba(0, 0, 0, 0.85);
 
-    /* A common bounding width for views that don't require the full viewport. */
-    --contentWidth: 1400px;
-
     /* Z-index */
     --zIndexDefault: 0;
     --zIndexLow: 10;
@@ -222,8 +219,4 @@ table tbody td[rowSpan] {
 /* One-liner utilities */
 .font-size-small {
     font-size: var(--fontSizeSmall);
-}
-
-.max-width-content {
-    max-width: var(--contentWidth);
 }
