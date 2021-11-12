@@ -2669,6 +2669,9 @@ func TestSelectInto(t *testing.T) {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by 'c' terminated by '\n' enclosed by '\t'`,
+	}, {
+		input:  `alter vschema create vindex my_vdx using hash`,
+		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
 	for _, tcase := range validSQL {

@@ -969,7 +969,7 @@ vindex_type_opt:
   }
 
 vindex_type:
-  id_or_var
+  sql_id
   {
     $$ = $1
   }
