@@ -28,7 +28,7 @@ import (
 const (
 	keyspaceName = "ks"
 	shardName    = "0"
-	hostname     = "localhost"
+	Hostname     = "localhost"
 	Cell1        = "zone1"
 	Cell2        = "zone2"
 )
@@ -54,7 +54,7 @@ type VtOrcClusterInfo struct {
 
 // CreateClusterAndStartTopo starts the cluster and topology service
 func CreateClusterAndStartTopo(cellInfos []*CellInfo) (*VtOrcClusterInfo, error) {
-	clusterInstance := cluster.NewCluster(Cell1, hostname)
+	clusterInstance := cluster.NewCluster(Cell1, Hostname)
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -418,11 +418,13 @@ func CheckReplication(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *clus
 // VerifyWritesSucceed inserts more data into the table vt_insert_test and checks that it is replicated too
 // Call this function only after CheckReplication has been executed once, since that function creates the table that this function uses.
 func VerifyWritesSucceed(t *testing.T, clusterInfo *VtOrcClusterInfo, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration) {
+	t.Helper()
 	confirmReplication(t, primary, replicas, timeToWait, clusterInfo.lastUsedValue)
 	clusterInfo.lastUsedValue++
 }
 
 func confirmReplication(t *testing.T, primary *cluster.Vttablet, replicas []*cluster.Vttablet, timeToWait time.Duration, valueToInsert int) {
+	t.Helper()
 	log.Infof("Insert data into primary and check that it is replicated to replica")
 	// insert data into the new primary, check the connected replica work
 	insertSQL := fmt.Sprintf("insert into vt_insert_test(id, msg) values (%d, 'test %d')", valueToInsert, valueToInsert)
@@ -653,4 +655,36 @@ func ResetPrimaryLogs(t *testing.T, curPrimary *cluster.Vttablet) {
 
 	_, err = RunSQL(t, "PURGE BINARY LOGS TO '"+lastLogFile+"'", curPrimary, "")
 	require.NoError(t, err)
+}
+
+// CheckSourcePort is used to check that the replica has the given source port set in its MySQL instance
+func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vttablet, timeToWait time.Duration) {
+	timeout := time.After(timeToWait)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timedout waiting for correct primary to be setup")
+			return
+		default:
+			res, err := RunSQL(t, "SHOW SLAVE STATUS", replica, "")
+			require.NoError(t, err)
+
+			if len(res.Rows) != 1 {
+				log.Warningf("no replication status yet, will retry")
+				break
+			}
+
+			for idx, field := range res.Fields {
+				if strings.EqualFold(field.Name, "MASTER_PORT") || strings.EqualFold(field.Name, "SOURCE_PORT") {
+					port, err := res.Rows[0][idx].ToInt64()
+					require.NoError(t, err)
+					if port == int64(source.MySQLPort) {
+						return
+					}
+				}
+			}
+			log.Warningf("source port not set correctly yet, will retry")
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 }
