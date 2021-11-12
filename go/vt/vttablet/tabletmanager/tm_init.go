@@ -79,7 +79,7 @@ var (
 	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
 	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
-	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
+	skipBuildInfoTags  = flag.String("vttablet_skip_buildinfo_tags", "/.*/", "comma-separated list of buildinfo tags to skip from merging with -init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	initTags           flagutil.StringMapValue
 
 	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
