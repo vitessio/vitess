@@ -40,9 +40,8 @@
     --colorError200: #9a0007;
 
     /* Fonts */
-    --fontFamilyPrimary: 'NotoSans', -apple-system, blinkmacsystemfont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-    --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+    --fontFamilyPrimary: theme('fontFamily.sans');
+    --fontFamilyMonospace: theme('fontFamily.mono');
 
     /* Body text */
     --fontSizeDefault: 1.4rem;
