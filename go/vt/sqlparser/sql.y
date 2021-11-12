@@ -3871,6 +3871,10 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
   }
+| FORMAT openb argument_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent(string($1)), Exprs: $3}
+  }
 | SCHEMA openb closeb
   {
     $$ = &FuncExpr{Name: NewColIdent(string($1))}

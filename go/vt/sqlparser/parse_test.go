@@ -2057,6 +2057,14 @@ var (
 			input:  "create definer = me procedure p1(v1 int) comment 'some_comment' not deterministic select now()",
 			output: "create definer = me procedure p1 (in v1 int) comment 'some_comment' not deterministic select now() from dual",
 		},
+		{
+			input:  "SELECT FORMAT(45124,2) FROM test",
+			output: "select FORMAT(45124,2) from test",
+		},
+		{
+			input:  "SELECT FORMAT(45124,2,'de_DE') FROM test",
+			output: "select FORMAT(45124,2,'de_DE') from test",
+		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
