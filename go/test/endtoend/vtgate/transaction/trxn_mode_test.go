@@ -167,8 +167,7 @@ func TestTransactionModes(t *testing.T) {
 	clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "TWOPC"}
 
 	// Restart VtGate
-	require.NoError(t,
-		clusterInstance.RestartVtgate())
+	require.NoError(t, clusterInstance.RestartVtgate())
 
 	// Make a new mysql connection to vtGate
 	vtParams = mysql.ConnParams{

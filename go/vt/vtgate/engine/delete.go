@@ -99,7 +99,6 @@ func (del *Delete) TryStreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		return err
 	}
 	return callback(res)
-
 }
 
 // GetFields fetches the field info.
