@@ -2530,16 +2530,16 @@ func TestGetSrvVSchema(t *testing.T) {
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{
 							{
-								FromTable: "customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 							{
-								FromTable: "customer@rdonly",
-								ToTables:  []string{"customer.customer"},
+								FromTable: "`customer`@rdonly",
+								ToTables:  []string{"`customer`.`customer`"},
 							},
 							{
-								FromTable: "customer.customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`.`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 						},
 					},
@@ -2571,16 +2571,16 @@ func TestGetSrvVSchema(t *testing.T) {
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{
 							{
-								FromTable: "customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 							{
-								FromTable: "customer@rdonly",
-								ToTables:  []string{"customer.customer"},
+								FromTable: "`customer`@rdonly",
+								ToTables:  []string{"`customer`.`customer`"},
 							},
 							{
-								FromTable: "customer.customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`.`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 						},
 					},
@@ -2691,16 +2691,16 @@ func TestGetSrvVSchemas(t *testing.T) {
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{
 							{
-								FromTable: "customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 							{
-								FromTable: "customer@rdonly",
-								ToTables:  []string{"customer.customer"},
+								FromTable: "`customer`@rdonly",
+								ToTables:  []string{"`customer`.`customer`"},
 							},
 							{
-								FromTable: "customer.customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`.`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 						},
 					},
@@ -2735,16 +2735,16 @@ func TestGetSrvVSchemas(t *testing.T) {
 							RoutingRules: &vschemapb.RoutingRules{
 								Rules: []*vschemapb.RoutingRule{
 									{
-										FromTable: "customer",
-										ToTables:  []string{"commerce.customer"},
+										FromTable: "`customer`",
+										ToTables:  []string{"`commerce`.`customer`"},
 									},
 									{
-										FromTable: "customer@rdonly",
-										ToTables:  []string{"customer.customer"},
+										FromTable: "`customer`@rdonly",
+										ToTables:  []string{"`customer`.`customer`"},
 									},
 									{
-										FromTable: "customer.customer",
-										ToTables:  []string{"commerce.customer"},
+										FromTable: "`customer`.`customer`",
+										ToTables:  []string{"`commerce`.`customer`"},
 									},
 								},
 							},
@@ -2783,16 +2783,16 @@ func TestGetSrvVSchemas(t *testing.T) {
 					RoutingRules: &vschemapb.RoutingRules{
 						Rules: []*vschemapb.RoutingRule{
 							{
-								FromTable: "customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 							{
-								FromTable: "customer@rdonly",
-								ToTables:  []string{"customer.customer"},
+								FromTable: "`customer`@rdonly",
+								ToTables:  []string{"`customer`.`customer`"},
 							},
 							{
-								FromTable: "customer.customer",
-								ToTables:  []string{"commerce.customer"},
+								FromTable: "`customer`.`customer`",
+								ToTables:  []string{"`commerce`.`customer`"},
 							},
 						},
 					},

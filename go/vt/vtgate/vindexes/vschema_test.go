@@ -659,32 +659,32 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{
 			Rules: []*vschemapb.RoutingRule{{
-				FromTable: "rt1",
-				ToTables:  []string{"ks1.t1", "ks2.t2"},
+				FromTable: "`rt1`",
+				ToTables:  []string{"`ks1`.`t1`", "`ks2`.`t2`"},
 			}, {
-				FromTable: "rt2",
-				ToTables:  []string{"ks2.t2"},
-			}, {
-				FromTable: "escaped",
+				FromTable: "`rt2`",
 				ToTables:  []string{"`ks2`.`t2`"},
 			}, {
-				FromTable: "dup",
-				ToTables:  []string{"ks1.t1"},
+				FromTable: "`escaped`",
+				ToTables:  []string{"`ks2`.`t2`"},
 			}, {
-				FromTable: "dup",
-				ToTables:  []string{"ks1.t1"},
+				FromTable: "`dup`",
+				ToTables:  []string{"`ks1`.`t1`"},
 			}, {
-				FromTable: "badname",
-				ToTables:  []string{"t1.t2.t3"},
+				FromTable: "`dup`",
+				ToTables:  []string{"`ks1`.`t1`"},
 			}, {
-				FromTable: "unqualified",
-				ToTables:  []string{"t1"},
+				FromTable: "`badname`",
+				ToTables:  []string{"`t1`.`t2`.`t3`"},
 			}, {
-				FromTable: "badkeyspace",
-				ToTables:  []string{"ks3.t1"},
+				FromTable: "`unqualified`",
+				ToTables:  []string{"`t1`"},
 			}, {
-				FromTable: "notfound",
-				ToTables:  []string{"ks1.t2"},
+				FromTable: "`badkeyspace`",
+				ToTables:  []string{"`ks3`.`t1`"},
+			}, {
+				FromTable: "`notfound`",
+				ToTables:  []string{"`ks1`.`t2`"},
 			}},
 		},
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -753,28 +753,28 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{
-			"rt1": {
+			"`rt1`": {
 				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
 			},
-			"rt2": {
+			"`rt2`": {
 				Tables: []*Table{t2},
 			},
-			"escaped": {
+			"`escaped`": {
 				Tables: []*Table{t2},
 			},
-			"dup": {
+			"`dup`": {
 				Error: errors.New("duplicate rule for entry dup"),
 			},
-			"badname": {
+			"`badname`": {
 				Error: errors.New("invalid table name: t1.t2.t3"),
 			},
-			"unqualified": {
+			"`unqualified`": {
 				Error: errors.New("table t1 must be qualified"),
 			},
-			"badkeyspace": {
+			"`badkeyspace`": {
 				Error: errors.New("Unknown database 'ks3' in vschema"),
 			},
-			"notfound": {
+			"`notfound`": {
 				Error: errors.New("table t2 not found"),
 			},
 		},
@@ -2193,19 +2193,19 @@ func TestFindTableOrVindex(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		RoutingRules: &vschemapb.RoutingRules{
 			Rules: []*vschemapb.RoutingRule{{
-				FromTable: "unqualified",
-				ToTables:  []string{"ksa.ta"},
+				FromTable: "`unqualified`",
+				ToTables:  []string{"`ksa`.`ta`"},
 			}, {
-				FromTable: "unqualified@replica",
-				ToTables:  []string{"ksb.t1"},
+				FromTable: "`unqualified`@replica",
+				ToTables:  []string{"`ksb`.`t1`"},
 			}, {
-				FromTable: "newks.qualified",
-				ToTables:  []string{"ksa.ta"},
+				FromTable: "`newks`.`qualified`",
+				ToTables:  []string{"`ksa`.`ta`"},
 			}, {
-				FromTable: "newks.qualified@replica",
-				ToTables:  []string{"ksb.t1"},
+				FromTable: "`newks`.`qualified`@replica",
+				ToTables:  []string{"`ksb`.`t1`"},
 			}, {
-				FromTable: "notarget",
+				FromTable: "`notarget`",
 				ToTables:  []string{},
 			}},
 		},

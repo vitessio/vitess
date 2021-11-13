@@ -3316,16 +3316,16 @@ func TestGetRoutingRules(t *testing.T) {
 			rrIn: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t2", "t3"},
+						FromTable: "`t1`",
+						ToTables:  []string{"`t2`", "`t3`"},
 					},
 				},
 			},
 			expected: &vschemapb.RoutingRules{
 				Rules: []*vschemapb.RoutingRule{
 					{
-						FromTable: "t1",
-						ToTables:  []string{"t2", "t3"},
+						FromTable: "`t1`",
+						ToTables:  []string{"`t2`", "`t3`"},
 					},
 				},
 			},
