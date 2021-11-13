@@ -119,7 +119,7 @@ type Collation interface {
 	// the hash will interpret the source string as if it were stored in a `CHAR(n)` column. If the value of
 	// numCodepoints is 0, this is equivalent to setting `numCodepoints = RuneCount(src)`.
 	// For collations with NO PAD, the numCodepoint argument is ignored.
-	Hash(src []byte, numCodepoints int) uintptr
+	Hash(src []byte, numCodepoints int) HashCode
 
 	// Charset returns the Charset with which this collation is encoded
 	Charset() charset.Charset
@@ -127,6 +127,8 @@ type Collation interface {
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
 }
+
+type HashCode = uintptr
 
 const PadToMax = math.MaxInt32
 

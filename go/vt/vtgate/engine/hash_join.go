@@ -51,9 +51,9 @@ type HashJoin struct {
 	LHSKey, RHSKey int
 
 	ASTPred sqlparser.Expr
-}
 
-type hashKey = int64
+	Collation collations.ID
+}
 
 // TryExecute implements the Primitive interface
 func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -63,13 +63,13 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	}
 
 	// build the probe table from the LHS result
-	probeTable := map[hashKey][]row{}
+	probeTable := map[evalengine.HashCode][]row{}
 	for _, current := range lresult.Rows {
 		joinVal := current[hj.LHSKey]
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +90,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +116,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
-	probeTable := map[hashKey][]row{}
+	probeTable := map[evalengine.HashCode][]row{}
 	var lfields []*querypb.Field
 	err := vcursor.StreamExecutePrimitive(hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
 		if len(lfields) == 0 && len(result.Fields) != 0 {
@@ -127,7 +127,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
 			if err != nil {
 				return err
 			}
@@ -151,7 +151,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
 			if err != nil {
 				return err
 			}

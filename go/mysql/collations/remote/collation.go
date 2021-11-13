@@ -169,7 +169,7 @@ func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	return dst
 }
 
-func (c *Collation) Hash(_ []byte, _ int) uintptr {
+func (c *Collation) Hash(_ []byte, _ int) collations.HashCode {
 	panic("unsupported: Hash for remote collations")
 }
 

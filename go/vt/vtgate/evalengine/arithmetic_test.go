@@ -1326,8 +1326,8 @@ func TestCompareNumeric(t *testing.T) {
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					aHash := hashCode(aVal)
-					bHash := hashCode(bVal)
+					aHash := numericalHashCode(aVal)
+					bHash := numericalHashCode(bVal)
 					assert.Equal(t, aHash, bHash, "hash code does not match")
 				}
 			})
@@ -1552,20 +1552,22 @@ func TestMaxCollate(t *testing.T) {
 func TestHashCodes(t *testing.T) {
 	n1 := sqltypes.NULL
 	n2 := sqltypes.Value{}
-
-	h1, err := NullsafeHashcode(n1)
+	collation := collations.Default().DefaultCollationForCharset("utf8mb4")
+	h1, err := NullsafeHashcode(n1, collation.ID())
 	require.NoError(t, err)
-	h2, err := NullsafeHashcode(n2)
+	h2, err := NullsafeHashcode(n2, collation.ID())
 	require.NoError(t, err)
 	assert.Equal(t, h1, h2)
 
-	char := TestValue(querypb.Type_VARCHAR, "aa")
-	_, err = NullsafeHashcode(char)
-	require.Error(t, err)
-
-	num := TestValue(querypb.Type_INT64, "123")
-	_, err = NullsafeHashcode(num)
+	char := TestValue(querypb.Type_VARCHAR, "1")
+	h1, err = NullsafeHashcode(char, collation.ID())
 	require.NoError(t, err)
+
+	num := TestValue(querypb.Type_INT64, "1")
+	h2, err = NullsafeHashcode(num, collation.ID())
+	require.NoError(t, err)
+
+	require.Equal(t, h1, h2)
 }
 
 func printValue(v sqltypes.Value) string {

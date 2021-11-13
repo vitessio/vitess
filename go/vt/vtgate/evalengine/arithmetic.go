@@ -251,23 +251,39 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 }
 
+// HashCode is a type alias to the code easier to read
+type HashCode = uintptr
+
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-// TODO: should be extended to support all possible types
-func NullsafeHashcode(v sqltypes.Value) (int64, error) {
-	if v.IsNull() {
-		return math.MaxInt64, nil
-	}
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID) (HashCode, error) {
 
-	if sqltypes.IsNumber(v.Type()) {
+	typ := v.Type()
+	switch {
+	case v.IsNull():
+		return HashCode(math.MaxInt64), nil
+	case sqltypes.IsNumber(typ):
 		result, err := newEvalResult(v)
 		if err != nil {
 			return 0, err
 		}
-		return hashCode(result), nil
+		return numericalHashCode(result), nil
+	case sqltypes.IsText(typ):
+		coll := collations.Default().LookupByID(collation)
+		return coll.Hash(v.Raw(), 0), nil
+	case sqltypes.IsDate(typ):
+		result, err := newEvalResult(v)
+		if err != nil {
+			return 0, err
+		}
+		time, err := parseDate(result)
+		if err != nil {
+			return 0, err
+		}
+		return uintptr(time.UnixNano()), nil
 	}
 
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", v.Type())
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", typ)
 }
 
 // isByteComparable returns true if the type is binary or date/time.
