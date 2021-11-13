@@ -34,14 +34,15 @@ type Distinct struct {
 type row = []sqltypes.Value
 
 type probeTable struct {
-	m map[int64][]row
+	m map[evalengine.HashCode][]row
 }
 
 func (pt *probeTable) exists(inputRow row) (bool, error) {
 	// calculate hashcode from all column values in the input row
-	code := int64(17)
+	code := evalengine.HashCode(17)
 	for _, value := range inputRow {
-		hashcode, err := evalengine.NullsafeHashcode(value)
+		// TODO: fetch the correct collation from the semantic table
+		hashcode, err := evalengine.NullsafeHashcode(value, collations.Unknown)
 		if err != nil {
 			return false, err
 		}
@@ -87,7 +88,7 @@ func equal(a, b []sqltypes.Value) (bool, error) {
 }
 
 func newProbeTable() *probeTable {
-	return &probeTable{m: map[int64][]row{}}
+	return &probeTable{m: map[uintptr][]row{}}
 }
 
 // TryExecute implements the Primitive interface
