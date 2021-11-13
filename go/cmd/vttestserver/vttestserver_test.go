@@ -27,6 +27,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/test"
+
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -306,6 +309,39 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
+}
+
+func TestExternalTopoServerConsul(t *testing.T) {
+	// Start a single consul in the background.
+	cmd, configFilename, serverAddr := test.StartConsul(t, "")
+	defer func() {
+		// Alerts command did not run successful
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
+		}
+		// Alerts command did not run successful
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd process wait has an error: %v", err)
+		}
+		os.Remove(configFilename)
+	}()
+
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
+
+	cluster, err := startCluster("-external_topo_implementation=consul",
+		fmt.Sprintf("-external_topo_global_server_address=%s", serverAddr), "-external_topo_global_root=consul_test/global")
+	defer cluster.TearDown()
+
+	assert.NoError(t, err)
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
+
+	// Add Hash vindex via vtgate execution on table
+	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
+	assert.NoError(t, err)
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
 }
 
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
