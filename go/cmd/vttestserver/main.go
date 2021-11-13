@@ -152,10 +152,10 @@ func init() {
 	flag.BoolVar(&config.EnableOnlineDDL, "enable_online_ddl", true, "Allow users to submit, review and control Online DDL")
 	flag.BoolVar(&config.EnableDirectDDL, "enable_direct_ddl", true, "Allow users to submit direct DDL statements")
 
-	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where topo server is shared across multiple vtcombo processes or other components
-	flag.StringVar(&config.RemoteTopoImplementation, "remote_topo_implementation", "", "the topology implementation to use for vtcombo process")
-	flag.StringVar(&config.RemoteTopoGlobalServerAddress, "remote_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
-	flag.StringVar(&config.RemoteTopoGlobalRoot, "remote_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
+	// flags for using an actual topo implementation for vtcombo instead of in-memory topo. useful for test setup where an external topo server is shared across multiple vtcombo processes or other components
+	flag.StringVar(&config.ExternalTopoImplementation, "external_topo_implementation", "", "the topology implementation to use for vtcombo process")
+	flag.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
+	flag.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
 }
 
 func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {

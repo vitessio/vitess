@@ -127,11 +127,11 @@ type Config struct {
 	EnableDirectDDL bool
 
 	// Allow users to start a local cluster using a remote topo server
-	RemoteTopoImplementation string
+	ExternalTopoImplementation string
 
-	RemoteTopoGlobalServerAddress string
+	ExternalTopoGlobalServerAddress string
 
-	RemoteTopoGlobalRoot string
+	ExternalTopoGlobalRoot string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -246,11 +246,11 @@ func (db *LocalCluster) Setup() error {
 	log.Infof("LocalCluster environment: %+v", db.Env)
 
 	// Set up topo manager if we are using a remote topo server
-	if db.RemoteTopoImplementation != "" {
-		db.topo = db.Env.TopoManager(db.RemoteTopoImplementation, db.RemoteTopoGlobalServerAddress, db.RemoteTopoGlobalRoot, db.Topology)
-		log.Infof("Initializing Topo Manager (%T)...", db.topo)
+	if db.ExternalTopoImplementation != "" {
+		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
+		log.Infof("Initializing Topo Manager: %+v", db.topo)
 		if err := db.topo.Setup(); err != nil {
-			log.Errorf("Failed to set up Topo Manager: %s", err)
+			log.Errorf("Failed to set up Topo Manager: %v", err)
 			return err
 		}
 	}

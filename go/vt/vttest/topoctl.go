@@ -36,7 +36,7 @@ func (ctl *Topoctl) Setup() error {
 	// Create cells if it doesn't exist to be idempotent. Should work when we share the same topo server across multiple local clusters.
 	for _, cell := range ctl.Topology.Cells {
 		_, err := topoServer.GetCellInfo(ctx, cell, true)
-		// Cell already exists. no-op
+		// Cell info already exists. no-op
 		if err == nil {
 			continue
 		}
@@ -46,9 +46,11 @@ func (ctl *Topoctl) Setup() error {
 			return err
 		}
 
-		// try to create the cell that doesn't exist
-		// Use empty cell info till we have a use case to set up local cell properly
-		err = topoServer.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{})
+		// Use the same topo server address in cell info, or else it would cause error when talking to local cell topo
+		// Use dummy (empty) cell root till we have a use case to set up local cells properly
+		cellInfo := &topodatapb.CellInfo{ServerAddress: ctl.TopoGlobalServerAddress}
+
+		err = topoServer.CreateCellInfo(ctx, cell, cellInfo)
 		if err != nil {
 			return err
 		}
