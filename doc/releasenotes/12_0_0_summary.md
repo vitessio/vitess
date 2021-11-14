@@ -46,9 +46,9 @@ If you have reserved connections disabled, you will get the `old` Vitess behavio
 ## Deprecations
 
 ### CLI commands
-`VExec` is deprecated and removed. All Online DDL commands should be run through `OnlineDDL`.
+`vtctl VExec` does not support Online DDL queries. All Online DDL commands should be run through `OnlineDDL`.
 
-`OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `ApplySchema` or via `vtgate`.
+`vtctl OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `ApplySchema` or via `vtgate`.
 
 `InitShardMaster` is deprecated, use `InitShardPrimary` instead.
 
