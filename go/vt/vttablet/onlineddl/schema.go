@@ -282,7 +282,10 @@ const (
 			AND liveness_timestamp < NOW() - INTERVAL %a MINUTE
 	`
 	sqlSelectPendingMigrations = `SELECT
-			migration_uuid
+			migration_uuid,
+			keyspace,
+			mysq_table,
+			migration_status
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
