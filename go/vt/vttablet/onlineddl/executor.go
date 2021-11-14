@@ -74,8 +74,6 @@ var (
 	ErrMigrationNotFound = errors.New("migration not found")
 )
 
-var vexecUpdateTemplates = []string{}
-
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
 
@@ -250,11 +248,6 @@ func (e *Executor) Open() error {
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
-
-	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
-		// this validates vexecUpdateTemplates
-		return err
-	}
 
 	e.isOpen = true
 
