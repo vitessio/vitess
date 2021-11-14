@@ -250,8 +250,6 @@ const (
 	`
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
-			strategy,
-			options,
 			postpone_completion,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
