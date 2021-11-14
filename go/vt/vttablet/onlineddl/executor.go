@@ -3067,6 +3067,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
+		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsAllowConcurrent()),
 	)
 	if err != nil {
 		return nil, err

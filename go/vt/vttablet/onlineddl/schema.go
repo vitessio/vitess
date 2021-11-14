@@ -63,6 +63,7 @@ const (
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTablePostponeCompletion = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAllowConcurrent    = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -79,9 +80,10 @@ const (
 		migration_status,
 		tablet,
 		retain_artifacts_seconds,
-		postpone_completion
+		postpone_completion,
+		allow_concurrent
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -536,4 +538,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableLogFile,
 	alterSchemaMigrationsTableRetainArtifacts,
 	alterSchemaMigrationsTablePostponeCompletion,
+	alterSchemaMigrationsTableAllowConcurrent,
 }
