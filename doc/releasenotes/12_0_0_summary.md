@@ -38,6 +38,21 @@ If you have reserved connections disabled, you will get the `old` Vitess behavio
 
 ## Deprecations
 
-The command `vtctl VExec` is deprecated and removed. All Online DDL commands should run through `vtctl OnlineDDL`.
+`vtctl VExec` does not support Online DDL queries. All Online DDL commands should be run through `OnlineDDL`.
 
-The command `vtctl OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `vtctl ApplySchema` or via `vtgate`.
+`vtctl OnlineDDL revert` is deprecated. Use `REVERT VITESS_MIGRATION '...'` SQL command either via `ApplySchema` or via `vtgate`.
+
+`InitShardMaster` is deprecated, use `InitShardPrimary` instead.
+
+`SetShardIsMasterServing` is deprecated, use `SetShardIsPrimaryServing` instead.
+
+Various command flags have been deprecated and new variants provided.
+* `DeleteTablet` flag `allow_master` replaced with `allow_primary`
+* `PlannedReparentShard` flag `avoid_master` replaced with `avoid_tablet`
+* `PlannedReparentShard` flag `new_master` replaced with `new_primary`
+* `BackupShard` flag `allow_master` replaced with `allow_primary`
+* `Backup` flag `allow_master` replaced with `allow_primary`
+* `EmergencyReparentShard` flag `new_master` replaced with `new_primary`
+* `ReloadSchemeShard` flag `include_master` replaced with `include_primary`
+* `ReloadSchemaKeyspace` flag `include_master` replaced with `include_primary`
+* `ValidateSchemaKeyspace` flag `skip-no-master` replaced with `skip-no-primary`

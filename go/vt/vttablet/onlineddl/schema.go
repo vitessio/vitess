@@ -487,12 +487,6 @@ const (
 	sqlRenameTable = "RENAME TABLE `%a` TO `%a`"
 )
 
-const (
-	retryMigrationHint     = "retry"
-	cancelMigrationHint    = "cancel"
-	cancelAllMigrationHint = "cancel-all"
-)
-
 var (
 	sqlCreateOnlineDDLUser = []string{
 		`CREATE USER IF NOT EXISTS %s IDENTIFIED BY '%s'`,

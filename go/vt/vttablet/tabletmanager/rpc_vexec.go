@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	"context"
@@ -33,8 +32,6 @@ func (tm *TabletManager) VExec(ctx context.Context, query, workflow, keyspace st
 		return nil, err
 	}
 	switch vx.TableName {
-	case fmt.Sprintf("%s.%s", vexec.TableQualifier, schema.SchemaMigrationsTableName):
-		return tm.QueryServiceControl.OnlineDDLExecutor().VExec(ctx, vx)
 	default:
 		return nil, fmt.Errorf("table not supported by vexec: %v", vx.TableName)
 	}

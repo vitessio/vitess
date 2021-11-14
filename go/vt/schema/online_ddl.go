@@ -52,8 +52,7 @@ var (
 )
 
 const (
-	SchemaMigrationsTableName = "schema_migrations"
-	RevertActionStr           = "revert"
+	RevertActionStr = "revert"
 )
 
 func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
