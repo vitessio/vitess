@@ -1714,7 +1714,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 	return nil
 }
 
-func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigration *schema.OnlineDDL, revertingUUID string) (err error) {
+func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigration *schema.OnlineDDL, revertingMigrationUUID string) (err error) {
 	// Validation: migration to revert exists and is in complete state
 	action, actionStr, err := revertMigration.GetActionStr()
 	if err != nil {
@@ -1743,7 +1743,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 		// we identify running migrations on requested table
 		for _, row := range r.Named().Rows {
 			pendingUUID := row["migration_uuid"].ToString()
-			if pendingUUID == revertingUUID {
+			if pendingUUID == revertingMigrationUUID {
 				// that's fine; the migration we're looking at is the very one that's trying to issue this revert
 				continue
 			}
