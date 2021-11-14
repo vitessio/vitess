@@ -74,6 +74,9 @@ var (
 	dropT3Statement = `
 		DROP TABLE IF EXISTS t3_test
 	`
+	dropT4Statement = `
+		DROP TABLE IF EXISTS t3_test
+	`
 )
 
 func TestMain(m *testing.M) {
@@ -283,7 +286,7 @@ func TestSchemaChange(t *testing.T) {
 			// let's cancel it
 			onlineddl.CheckCancelMigration(t, &vtParams, shards, drop1uuid, true)
 			time.Sleep(2 * time.Second)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusCancelled)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusFailed)
 		}
 		{
 			// t1 should be still running!
@@ -296,132 +299,62 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		}
 	})
+	t.Run("one non-concurrent REVERT, one concurrent conflicting DROP, one concurrent non-conflicting DROP, one concurrent postponed DROP", func(t *testing.T) {
+		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true)
+		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)                      // skip wait
+		drop4uuid := testOnlineDDLStatement(t, dropT4Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
-	// t.Run("revert CREATE TABLE", func(t *testing.T) {
-	// 	// The table existed, so it will now be dropped (renamed)
-	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, tableName, false)
-	// })
-	// t.Run("revert revert CREATE TABLE", func(t *testing.T) {
-	// 	// Table was dropped (renamed) so it will now be restored
-	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], "vtgate", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, tableName, true)
-	// })
-
-	// var throttledUUID string
-	// t.Run("throttled migration", func(t *testing.T) {
-	// 	throttledUUID = testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "", false)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
-	// })
-	// t.Run("failed singleton migration, vtgate", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtgate", "hint_col", "rejected", true)
-	// 	assert.Empty(t, uuid)
-	// })
-	// t.Run("failed singleton migration, vtctl", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost -singleton --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", true)
-	// 	assert.Empty(t, uuid)
-	// })
-	// t.Run("failed revert migration", func(t *testing.T) {
-	// 	uuid := testRevertMigration(t, throttledUUID, "vtgate", "rejected", true)
-	// 	assert.Empty(t, uuid)
-	// })
-	// t.Run("terminate throttled migration", func(t *testing.T) {
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
-	// 	onlineddl.CheckCancelMigration(t, &vtParams, shards, throttledUUID, true)
-	// 	time.Sleep(2 * time.Second)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusFailed)
-	// })
-	// t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtctl", "hint_col", "", false)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
-	// 	onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
-	// })
-	// t.Run("successful gh-ost alter, vtgate", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", false)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
-	// 	onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
-	// })
-
-	// t.Run("successful online alter, vtgate", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, onlineSingletonDDLStrategy, "vtgate", "hint_col", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
-	// 	onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
-	// 	checkTable(t, tableName, true)
-	// })
-	// t.Run("revert ALTER TABLE, vttablet", func(t *testing.T) {
-	// 	// The table existed, so it will now be dropped (renamed)
-	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, tableName, true)
-	// })
-
-	// var throttledUUIDs []string
-	// // singleton-context
-	// t.Run("throttled migrations, singleton-context", func(t *testing.T) {
-	// 	uuidList := testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "", false)
-	// 	throttledUUIDs = strings.Split(uuidList, "\n")
-	// 	assert.Equal(t, 3, len(throttledUUIDs))
-	// 	for _, uuid := range throttledUUIDs {
-	// 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusQueued)
-	// 	}
-	// })
-	// t.Run("failed migrations, singleton-context", func(t *testing.T) {
-	// 	_ = testOnlineDDLStatement(t, multiAlterTableThrottlingStatement, "gh-ost -singleton-context --max-load=Threads_running=1", "vtctl", "hint_col", "rejected", false)
-	// })
-	// t.Run("terminate throttled migrations", func(t *testing.T) {
-	// 	for _, uuid := range throttledUUIDs {
-	// 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning, schema.OnlineDDLStatusQueued)
-	// 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-	// 	}
-	// 	time.Sleep(2 * time.Second)
-	// 	for _, uuid := range throttledUUIDs {
-	// 		uuid = strings.TrimSpace(uuid)
-	// 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
-	// 	}
-	// })
-
-	// t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
-	// 	uuidList := testOnlineDDLStatement(t, multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", false)
-	// 	uuidSlice := strings.Split(uuidList, "\n")
-	// 	assert.Equal(t, 3, len(uuidSlice))
-	// 	for _, uuid := range uuidSlice {
-	// 		uuid = strings.TrimSpace(uuid)
-	// 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	}
-	// })
-
-	// //DROP
-
-	// t.Run("online DROP TABLE", func(t *testing.T) {
-	// 	uuid := testOnlineDDLStatement(t, dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, tableName, false)
-	// })
-	// t.Run("revert DROP TABLE", func(t *testing.T) {
-	// 	// This will recreate the table (well, actually, rename it back into place)
-	// 	uuid := testRevertMigration(t, uuids[len(uuids)-1], "vttablet", "", false)
-	// 	uuids = append(uuids, uuid)
-	// 	onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
-	// 	checkTable(t, tableName, true)
-	// })
-
-	// // Last two tests (we run an incomplete migration)
-	// t.Run("submit successful migration, no wait, vtgate", func(t *testing.T) {
-	// 	_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "", true)
-	// })
-	// t.Run("fail submit migration, no wait, vtgate", func(t *testing.T) {
-	// 	_ = testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -singleton", "vtgate", "hint_col", "rejected", true)
-	// })
+		t.Run("expect t1 migration to run", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+		})
+		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
+		t.Run("t3drop complete", func(t *testing.T) {
+			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop3uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("t1drop blocked", func(t *testing.T) {
+			// drop1 migration should block. It can run concurrently to t1, but conflicts on table name
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+		})
+		t.Run("t4 postponed", func(t *testing.T) {
+			// drop4 migration should postpone.
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop4uuid, schema.OnlineDDLStatusQueued)
+			// Issue a complete and wait for successful completion. drop4 is non-conflicting and should be able to proceed
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, drop4uuid, true)
+			// This part may take a while, because we depend on vreplicatoin polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop4uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop4uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("complete t1", func(t *testing.T) {
+			// t1 should be still running!
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
+			// Issue a complete and wait for successful completion
+			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+			// This part may take a while, because we depend on vreplicatoin polling
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("t1drop unblocked", func(t *testing.T) {
+			// t1drop should now be unblocked!
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop1uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, t1Name, false)
+		})
+		t.Run("revert t1 drop", func(t *testing.T) {
+			revertDrop3uuid := testRevertMigration(t, drop1uuid, ddlStrategy+" -allow-concurrent", "vtgate", "", true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertDrop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertDrop3uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, t1Name, true)
+		})
+	})
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
