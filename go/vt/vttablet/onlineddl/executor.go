@@ -305,15 +305,86 @@ func (e *Executor) triggerNextCheckInterval() {
 	}
 }
 
-// isAnyMigrationRunning sees if there's any migration running right now
-func (e *Executor) isAnyMigrationRunning() bool {
-	migrationFound := false
+// allowConcurrentMigration checks if the given migration is allowed to run concurrently.
+// First, the migration itself must declare --allow-concurrent. But then, there's also some
+// restrictions on which migrations exactly are allowed such concurrency.
+func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) bool {
+	if !onlineDDL.StrategySetting().IsAllowConcurrent() {
+		return false
+	}
 
-	e.ownedRunningMigrations.Range(func(_, _ interface{}) bool {
-		migrationFound = true
-		return false // stop iteration
+	action, err := onlineDDL.GetAction()
+	if err != nil {
+		return false
+	}
+	switch action {
+	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction:
+		// CREATE TABLE, DROP TABLE are allowed to run concurrently.
+		return true
+	case sqlparser.RevertDDLAction:
+		// REVERT is allowed to run concurrently.
+		// Reminder that REVERT is supported for CREATE, DROP and for 'online' ALTER, but never for
+		// 'gh-ost' or 'pt-osc' ALTERs
+		return true
+	}
+	return false
+}
+
+// isAnyNonConcurrentMigrationRunning sees if there's any migration running right now
+// that does not have -allow-concurrent.
+// such a running migration will for example prevent a new non-concurrent migration from running.
+func (e *Executor) isAnyNonConcurrentMigrationRunning() bool {
+	nonConcurrentMigrationFound := false
+
+	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+		onlineDDL, ok := val.(*schema.OnlineDDL)
+		if !ok {
+			return true
+		}
+		if !e.allowConcurrentMigration(onlineDDL) {
+			// The migratoin may have declared itself to be --allow-concurrent, but our scheduler
+			// reserves the right to say "no, you're NOT in fact allowed to run concurrently"
+			// (as example, think a `gh-ost` ALTER migration that says --allow-concurrent)
+			nonConcurrentMigrationFound = true
+			return false // stop iteration, no need to review other migrations
+		}
+		return true
 	})
-	return migrationFound
+
+	return nonConcurrentMigrationFound
+}
+
+// isAnyMigrationRunningOnTable sees if there's any migration running right now
+// operating on given table.
+func (e *Executor) isAnyMigrationRunningOnTable(tableName string) bool {
+	sameTableMigrationFound := false
+	e.ownedRunningMigrations.Range(func(_, val interface{}) bool {
+		onlineDDL, ok := val.(*schema.OnlineDDL)
+		if !ok {
+			return true
+		}
+		if onlineDDL.Table == tableName {
+			sameTableMigrationFound = true
+			return false // stop iteration, no need to review other migrations
+		}
+		return true
+	})
+	return sameTableMigrationFound
+}
+
+// isAnyNonConcurrentMigrationRunning sees if there's any migration running right now
+// that does not have -allow-concurrent.
+// such a running migration will for example prevent a new non-concurrent migration from running.
+func (e *Executor) isAnyConflictingMigrationRunning(onlineDDL *schema.OnlineDDL) bool {
+
+	if e.isAnyNonConcurrentMigrationRunning() && !e.allowConcurrentMigration(onlineDDL) {
+		return true
+	}
+	if e.isAnyMigrationRunningOnTable(onlineDDL.Table) {
+		return true
+	}
+
+	return false
 }
 
 func (e *Executor) ghostPanicFlagFileName(uuid string) string {
@@ -848,7 +919,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	// make sure there's no vreplication workflow running under same name
 	_ = e.terminateVReplMigration(ctx, onlineDDL.UUID)
 
-	if e.isAnyMigrationRunning() {
+	if e.isAnyConflictingMigrationRunning(onlineDDL) {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -862,7 +933,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	defer conn.Close()
 
-	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
 	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown); err != nil {
 		return err
 	}
@@ -937,7 +1008,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 // Validation included testing the backend MySQL server and the gh-ost binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithGhost(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyMigrationRunning() {
+	if e.isAnyConflictingMigrationRunning(onlineDDL) {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -1111,7 +1182,7 @@ exit $exit_code
 		return err
 	}
 
-	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
 
 	go func() error {
 		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
@@ -1152,7 +1223,7 @@ exit $exit_code
 // Validation included testing the backend MySQL server and the pt-online-schema-change binary itself
 // Execution runs first a dry run, then an actual migration
 func (e *Executor) ExecuteWithPTOSC(ctx context.Context, onlineDDL *schema.OnlineDDL) error {
-	if e.isAnyMigrationRunning() {
+	if e.isAnyConflictingMigrationRunning(onlineDDL) {
 		return ErrExecutorMigrationAlreadyRunning
 	}
 
@@ -1332,7 +1403,7 @@ export MYSQL_PWD
 		return err
 	}
 
-	e.ownedRunningMigrations.Store(onlineDDL.UUID, true)
+	e.ownedRunningMigrations.Store(onlineDDL.UUID, onlineDDL)
 
 	go func() error {
 		defer e.ownedRunningMigrations.Delete(onlineDDL.UUID)
@@ -1550,10 +1621,6 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-
-	if e.isAnyMigrationRunning() {
-		return ErrExecutorMigrationAlreadyRunning
-	}
 
 	{
 		r, err := e.execQuery(ctx, sqlSelectCountReadyMigrations)
@@ -2182,26 +2249,32 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if e.isAnyMigrationRunning() {
-		return ErrExecutorMigrationAlreadyRunning
+	getNonConflictingMigration := func() (*schema.OnlineDDL, error) {
+		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range r.Named().Rows {
+			uuid := row["migration_uuid"].ToString()
+			onlineDDL, _, err := e.readMigration(ctx, uuid)
+			if err != nil {
+				return nil, err
+			}
+			if !e.isAnyConflictingMigrationRunning(onlineDDL) {
+				// This migration seems good to go
+				return onlineDDL, err
+			}
+		}
+		// no non-conflicting migration found...
+		// Either all ready migrations are conflicting, or there's no ready migrations...
+		return nil, nil
 	}
-
-	r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
+	onlineDDL, err := getNonConflictingMigration()
 	if err != nil {
 		return err
 	}
-	var onlineDDL *schema.OnlineDDL
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		onlineDDL, _, err = e.readMigration(ctx, uuid)
-		if err != nil {
-			return err
-		}
-		if onlineDDL != nil {
-			break
-		}
-	}
 	if onlineDDL == nil {
+		// nothing to do
 		return nil
 	}
 	{
@@ -2411,14 +2484,16 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	uuidsFoundRunning := map[string]bool{}
 	for _, row := range r.Named().Rows {
 		uuid := row["migration_uuid"].ToString()
-		strategy := schema.DDLStrategy(row["strategy"].ToString())
-		strategySettings := schema.NewDDLStrategySetting(strategy, row["options"].ToString())
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
+		if err != nil {
+			return countRunnning, cancellable, err
+		}
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
 
 		uuidsFoundRunning[uuid] = true
 
-		switch strategy {
+		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline:
 			{
 				// We check the _vt.vreplication table
@@ -2426,7 +2501,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 				if err != nil {
 					return countRunnning, cancellable, err
 				}
-				isVreplicationTestSuite := strategySettings.IsVreplicationTestSuite()
+				isVreplicationTestSuite := onlineDDL.StrategySetting().IsVreplicationTestSuite()
 				if isVreplicationTestSuite {
 					e.triggerNextCheckInterval()
 				}
@@ -2435,7 +2510,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					// this executor may not own the migration _yet_. We make sure to own it.
 					// VReplication migrations are unique in this respect: we are able to complete
 					// a vreplicaiton migration started by another tablet.
-					e.ownedRunningMigrations.Store(uuid, true)
+					e.ownedRunningMigrations.Store(uuid, onlineDDL)
 					_ = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 					_ = e.updateMigrationTablet(ctx, uuid)
 					_ = e.updateRowsCopied(ctx, uuid, s.rowsCopied)
