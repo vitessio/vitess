@@ -1,1 +1,0 @@
-F1112 11:51:50.779321   98440 vttablet.go:96] failed to parse -tablet-path: FullyQualifiedHostname: failed to lookup the IP of this machine's hostname (Francess-MacBook-Pro-2.local): lookup Francess-MacBook-Pro-2.local on 192.168.0.1:53: no such host

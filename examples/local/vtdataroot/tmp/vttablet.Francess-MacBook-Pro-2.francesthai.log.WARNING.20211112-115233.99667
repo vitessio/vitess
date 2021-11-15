@@ -1,5 +1,0 @@
-Log file created at: 2021/11/12 11:52:33
-Running on machine: Francess-MacBook-Pro-2
-Binary: Built with gc go1.17.1 for darwin/amd64
-Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
-F1112 11:52:33.081874   99667 vttablet.go:96] failed to parse -tablet-path: FullyQualifiedHostname: failed to lookup the IP of this machine's hostname (Francess-MacBook-Pro-2.local): lookup Francess-MacBook-Pro-2.local on 192.168.0.1:53: no such host

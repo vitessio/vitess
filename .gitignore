@@ -73,6 +73,8 @@ releases
 /web/vtctld2/bower.json~
 /web/vtctld2/public/bower_components/
 
+# Local examples
+/examples/local/vtdataroot
 
 # Vagrant
 .vagrant
