@@ -1527,8 +1527,6 @@ func (c *Conn) GetRawConn() net.Conn {
 
 // MatchCollation returns nil if the given collations.ID matches with the connection's
 // collation, otherwise it returns an error explaining why it does not match.
-// We do the comparison all the way down in the Connector to use mysql.ConnParams
-// collations environment to achieve the collation lookup using the same server version.
 func (c *Conn) MatchCollation(collationID collations.ID) error {
 	// The collation environment of a connection parameter should never be nil, if we fail
 	// to create it we already errored out when initializing the connection with MySQL.

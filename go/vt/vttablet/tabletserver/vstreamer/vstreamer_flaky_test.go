@@ -2022,7 +2022,7 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	timer := time.NewTimer(1 * time.Minute)
 	defer timer.Stop()
-	for i, wantset := range output {
+	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
 		for {
 			select {
@@ -2047,7 +2047,6 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			}
 		}
 		if len(wantset) != len(evs) {
-			fmt.Println(i)
 			t.Fatalf("%v: evs\n%v, want\n%v, >> got length %d, wanted length %d", input, evs, wantset, len(evs), len(wantset))
 		}
 		for i, want := range wantset {
