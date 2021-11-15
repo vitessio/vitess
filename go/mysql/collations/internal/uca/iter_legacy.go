@@ -44,8 +44,8 @@ func (it *codepointIteratorLegacy) next() (uint16, bool) {
 	return weight, weight != 0x0
 }
 
-func (it *codepointIteratorLegacy) init(table WeightTable, cp rune) {
-	p, offset := pageOffset(cp)
+func (it *codepointIteratorLegacy) init(table Weights, cp rune) {
+	p, offset := PageOffset(cp)
 	page := table[p]
 	if page == nil {
 		UnicodeImplicitWeightsLegacy(it.scratch[:2], cp)

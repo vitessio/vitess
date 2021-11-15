@@ -1611,3 +1611,18 @@ func defaultRequiresParens(ct *ColumnType) bool {
 
 	return true
 }
+
+// RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
+func RemoveKeyspaceFromColName(expr Expr) Expr {
+	Rewrite(expr, nil, func(cursor *Cursor) bool {
+		switch col := cursor.Node().(type) {
+		case *ColName:
+			if !col.Qualifier.Qualifier.IsEmpty() {
+				col.Qualifier.Qualifier = NewTableIdent("")
+			}
+		}
+		return true
+	}) // This hard cast is safe because we do not change the type the input
+
+	return expr
+}

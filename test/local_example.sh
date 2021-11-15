@@ -49,7 +49,7 @@ sleep 3 # required for now
 ./203_switch_reads.sh
 
 ./204_switch_writes.sh
-exit
+
 mysql --table < ../common/select_customer0_data.sql
 # Expected to fail!
 mysql --table < ../common/select_commerce_data.sql || echo "DenyList working as expected"

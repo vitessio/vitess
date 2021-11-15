@@ -18,11 +18,10 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
+	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
 )
 
 func sortContractionTrie(trie map[rune][]uca.Contraction) (sorted []rune) {
@@ -46,15 +45,11 @@ func (wa *weightarray) push(weights []uint16) string {
 	return fmt.Sprintf("%s[%d:%d]", wa.name, start, len(wa.ary))
 }
 
-func (wa *weightarray) print(out io.Writer) {
-	fmt.Fprintf(out, "var %s = [...]uint16{", wa.name)
-	for _, w := range wa.ary {
-		fmt.Fprintf(out, "0x%04x, ", w)
-	}
-	fmt.Fprintf(out, "}\n\n")
+func (wa *weightarray) print(g *codegen.Generator) {
+	g.P("var ", wa.name, " = ", codegen.Array16(wa.ary))
 }
 
-func printContraction1(w io.Writer, wa *weightarray, incont []uca.Contraction, depth int) {
+func printContraction1(g *codegen.Generator, wa *weightarray, incont []uca.Contraction, depth int) {
 	trie := make(map[rune][]uca.Contraction)
 	var leaf *uca.Contraction
 	for _, cont := range incont {
@@ -68,73 +63,73 @@ func printContraction1(w io.Writer, wa *weightarray, incont []uca.Contraction, d
 	}
 
 	if depth > 1 {
-		fmt.Fprintf(w, "b%d := b%d[width%d:]\n", depth-1, depth-2, depth-1)
+		g.P("b", depth-1, " := b", depth-2, "[width", depth-1, ":]")
 	}
 	if depth > 0 {
-		fmt.Fprintf(w, "cp%d, width%d := cs.DecodeRune(b%d)\n", depth, depth, depth-1)
+		g.P("cp", depth, ", width", depth, " := cs.DecodeRune(b", depth-1, ")")
 	}
 
-	fmt.Fprintf(w, "switch cp%d {\n", depth)
+	g.P("switch cp", depth, " {")
 
 	for _, cp := range sortContractionTrie(trie) {
-		fmt.Fprintf(w, "case %d:\n", cp)
+		g.P("case ", cp, ":")
 		cnt := trie[cp]
 
 		if len(cnt) == 1 && len(cnt[0].Path) == depth+1 {
 			weights := wa.push(cnt[0].Weights)
-			fmt.Fprintf(w, "return %s, b%d[width%d:], %d\n", weights, depth-1, depth, depth+1)
+			g.P("return ", weights, ", b", depth-1, "[width", depth, ":], ", depth+1)
 		} else {
-			printContraction1(w, wa, cnt, depth+1)
+			printContraction1(g, wa, cnt, depth+1)
 		}
 	}
 
-	fmt.Fprintf(w, "}\n")
+	g.P("}")
 
 	if leaf != nil {
 		weights := wa.push(incont[0].Weights)
-		fmt.Fprintf(w, "return %s, b%d, %d\n", weights, depth-1, depth)
+		g.P("return ", weights, ", b", depth-1, ", ", depth)
 	}
 }
 
-func (out *output) printFastContractionsCtx(name string, allContractions []uca.Contraction) {
+func (g *TableGenerator) printFastContractionsCtx(name string, allContractions []uca.Contraction) {
 	trie := make(map[rune][]uca.Contraction)
 	for _, cont := range allContractions {
 		cp := cont.Path[0]
 		trie[cp] = append(trie[cp], cont)
 	}
 
-	fmt.Fprintf(out.tables, "func (%s) Find(charset.Charset, rune, []byte) ([]uint16, []byte, int) {\n", name)
-	fmt.Fprintf(out.tables, "return nil, nil, 0\n")
-	fmt.Fprintf(out.tables, "}\n\n")
+	g.P("func (", name, ") Find(", PkgCharset, ".Charset, rune, []byte) ([]uint16, []byte, int) {")
+	g.P("return nil, nil, 0")
+	g.P("}")
 
-	fmt.Fprintf(out.tables, "var %s_weights = map[uint32][]uint16{\n", name)
+	var mapping = make(map[uint32][]uint16)
 	var cp0min, cp1min rune = 0xFFFF, 0xFFFF
 	for _, cp1 := range sortContractionTrie(trie) {
 		for _, cnt := range trie[cp1] {
 			cp0 := cnt.Path[1]
-			mask := uint32(cp1)<<16 | uint32(cp0)
-			weights := fmt.Sprintf("%#v", cnt.Weights)
-			fmt.Fprintf(out.tables, "0x%x: %s,\n", mask, strings.TrimPrefix(weights, "[]uint16"))
-
 			if cp0 < cp0min {
 				cp0min = cp0
 			}
 			if cp1 < cp1min {
 				cp1min = cp1
 			}
+
+			mask := uint32(cp1)<<16 | uint32(cp0)
+			mapping[mask] = cnt.Weights
 		}
 	}
-	fmt.Fprintf(out.tables, "}\n\n")
 
-	fmt.Fprintf(out.tables, "func (%s) FindContextual(cp1, cp0 rune) []uint16 {\n", name)
-	fmt.Fprintf(out.tables, "if cp0 < %d || cp1 < %d || cp0 > 0xFFFF || cp1 > 0xFFFF {\n", cp0min, cp1min)
-	fmt.Fprintf(out.tables, "return nil\n")
-	fmt.Fprintf(out.tables, "}\n")
-	fmt.Fprintf(out.tables, "return %s_weights[uint32(cp1) << 16 | uint32(cp0)]\n", name)
-	fmt.Fprintf(out.tables, "}\n\n")
+	g.P("var ", name, "_weights = ", mapping)
+
+	g.P("func (", name, ") FindContextual(cp1, cp0 rune) []uint16 {")
+	g.P("if cp0 < ", cp0min, " || cp1 < ", cp1min, " || cp0 > 0xFFFF || cp1 > 0xFFFF {")
+	g.P("return nil")
+	g.P("}")
+	g.P("return ", name, "_weights[uint32(cp1) << 16 | uint32(cp0)]")
+	g.P("}")
 }
 
-func (out *output) printContractionsFast(name string, allContractions []uca.Contraction) {
+func (g *TableGenerator) printContractionsFast(name string, allContractions []uca.Contraction) {
 	contextual := false
 	for i := range allContractions {
 		ctr := &allContractions[i]
@@ -149,31 +144,31 @@ func (out *output) printContractionsFast(name string, allContractions []uca.Cont
 		}
 		if contextual {
 			if !ctr.Contextual {
-				panic("mixed Contextual and non-contextual contractions")
+				g.Fail("mixed Contextual and non-contextual contractions")
 			}
 			if len(ctr.Path) != 2 {
-				panic("Contextual contraction with Path != 2")
+				g.Fail("Contextual contraction with Path != 2")
 			}
 		}
 	}
 
-	fmt.Fprintf(out.tables, "type %s struct{}\n\n", name)
+	g.P("type ", name, " struct{}")
+	g.P()
 
 	if contextual {
-		out.printFastContractionsCtx(name, allContractions)
+		g.printFastContractionsCtx(name, allContractions)
 		return
 	}
 
 	var wa = &weightarray{name: name + "_weights"}
 
-	fmt.Fprintf(out.tables, "func (%s) Find(cs charset.Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {\n", name)
-	printContraction1(out.tables, wa, allContractions, 0)
-	fmt.Fprintf(out.tables, "return nil, nil, 0\n")
-	fmt.Fprintf(out.tables, "}\n\n")
+	g.P("func (", name, ") Find(cs ", PkgCharset, ".Charset, cp0 rune, b0 []byte) ([]uint16, []byte, int) {")
+	printContraction1(g.Generator, wa, allContractions, 0)
+	g.P("return nil, nil, 0")
+	g.P("}")
+	g.P("func (", name, ") FindContextual(cp1, cp0 rune) []uint16 {")
+	g.P("return nil")
+	g.P("}")
 
-	fmt.Fprintf(out.tables, "func (%s) FindContextual(cp1, cp0 rune) []uint16 {\n", name)
-	fmt.Fprintf(out.tables, "return nil\n")
-	fmt.Fprintf(out.tables, "}\n\n")
-
-	wa.print(out.tables)
+	wa.print(g.Generator)
 }
