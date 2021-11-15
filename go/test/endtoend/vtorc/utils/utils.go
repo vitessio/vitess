@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	// This imports toposervers to register their implementations of TopoServer.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/k8stopo"
