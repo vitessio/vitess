@@ -130,9 +130,9 @@ var (
 <!-- The div in the next line will be overwritten by the JavaScript graph. -->
 <div id="qps_chart">QPS: {{.CurrentQPS}}</div>
 <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 <script type="text/javascript">
 
-google.load("jquery", "1.4.0");
 google.load("visualization", "1", {packages:["corechart"]});
 
 function sampleDate(d, i) {
@@ -202,7 +202,7 @@ function drawQPSChart() {
 }
 google.setOnLoadCallback(drawQPSChart);
 </script>
-
+<script src="https://code.jquery.com/jquery-migrate-3.3.2.js"></script>
 `
 )
 
