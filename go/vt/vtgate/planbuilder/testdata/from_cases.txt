@@ -2044,8 +2044,11 @@ Gen4 error: Duplicate column name 'id'
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
+    "Variant": "Join",
     "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "t_id": 0
+    },
     "Predicate": "t.id = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -2071,8 +2074,8 @@ Gen4 error: Duplicate column name 'id'
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-        "Query": "select user_extra.col from user_extra",
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.col = :t_id",
         "Table": "user_extra"
       }
     ]
@@ -2600,6 +2603,7 @@ Gen4 plan same as above
       {
         "OperatorType": "Join",
         "Variant": "HashJoin",
+        "ComparisonType": "INT16",
         "JoinColumnIndexes": "-2,-3",
         "Predicate": "user_extra.col = `user`.col",
         "TableName": "`user`_user_extra",
@@ -2705,8 +2709,11 @@ Gen4 plan same as above
   "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t on t.id = ua.id",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "JoinColumnIndexes": "2",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "ua_id": 0
+    },
     "Predicate": "t.id = ua.id",
     "TableName": "unsharded_a_`user`_user_extra",
     "Inputs": [
@@ -2724,7 +2731,6 @@ Gen4 plan same as above
       {
         "OperatorType": "SimpleProjection",
         "Columns": [
-          0,
           1
         ],
         "Inputs": [
@@ -2732,18 +2738,23 @@ Gen4 plan same as above
             "OperatorType": "Join",
             "Variant": "Join",
             "JoinColumnIndexes": "-1,-2",
+            "Predicate": "`user`.id = :ua_id",
             "TableName": "`user`_user_extra",
             "Inputs": [
               {
                 "OperatorType": "Route",
-                "Variant": "SelectScatter",
+                "Variant": "SelectEqualUnique",
                 "Keyspace": {
                   "Name": "user",
                   "Sharded": true
                 },
                 "FieldQuery": "select `user`.id, `user`.col1 from `user` where 1 != 1",
-                "Query": "select `user`.id, `user`.col1 from `user`",
-                "Table": "`user`"
+                "Query": "select `user`.id, `user`.col1 from `user` where `user`.id = :ua_id",
+                "Table": "`user`",
+                "Values": [
+                  ":ua_id"
+                ],
+                "Vindex": "user_index"
               },
               {
                 "OperatorType": "Route",
@@ -4407,6 +4418,82 @@ Gen4 plan same as above
             "Vindex": "user_index"
           }
         ]
+      }
+    ]
+  }
+}
+
+# hash join on int columns
+"select u.id from user as u join user as uu on u.intcol = uu.intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_intcol": 1
+    },
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, u.intcol from `user` as u where 1 != 1",
+        "Query": "select u.id, u.intcol from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as uu where 1 != 1",
+        "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "HashJoin",
+    "ComparisonType": "INT16",
+    "JoinColumnIndexes": "-2",
+    "Predicate": "u.intcol = uu.intcol",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.intcol, u.id from `user` as u where 1 != 1",
+        "Query": "select u.intcol, u.id from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select uu.intcol from `user` as uu where 1 != 1",
+        "Query": "select uu.intcol from `user` as uu",
+        "Table": "`user`"
       }
     ]
   }

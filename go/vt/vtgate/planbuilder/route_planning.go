@@ -610,9 +610,7 @@ func breakExpressionInLHSandRHS(
 				bvName := node.CompliantName()
 				bvNames = append(bvNames, bvName)
 				arg := sqlparser.NewArgument(bvName)
-				if err = semTable.CopyExprTypeValue(node, arg); err != nil {
-					return false
-				}
+				semTable.CopyExprTypeValue(node, arg)
 				cursor.Replace(arg)
 			}
 		}

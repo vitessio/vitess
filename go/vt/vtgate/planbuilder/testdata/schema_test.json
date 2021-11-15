@@ -108,6 +108,10 @@
           },
           "columns": [
             {
+              "name": "col",
+              "type": "INT16"
+            },
+            {
               "name": "predef1"
             },
             {
@@ -157,7 +161,13 @@
           "auto_increment": {
             "column": "extra_id",
             "sequence": "seq"
-          }
+          },
+          "columns": [
+            {
+              "name": "col",
+              "type": "INT16"
+            }
+          ]
         },
         "music": {
           "column_vindexes": [

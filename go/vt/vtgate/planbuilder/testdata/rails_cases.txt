@@ -121,6 +121,7 @@
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
+    "ComparisonType": "INT64",
     "JoinColumnIndexes": "2,3,4,5",
     "Predicate": "order2s.id = book6s_order2s.order2_id",
     "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",

@@ -739,6 +739,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
+    "ComparisonType": "INT16",
     "JoinColumnIndexes": "2",
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
@@ -971,6 +972,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
+    "ComparisonType": "INT16",
     "JoinColumnIndexes": "2",
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
@@ -3245,6 +3247,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
+    "ComparisonType": "INT16",
     "JoinColumnIndexes": "-2",
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
@@ -3324,7 +3327,7 @@ Gen4 plan same as above
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|2), (1|3)",
+    "GroupBy": "(0|2), 1",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -3353,9 +3356,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where 1 != 1",
-            "OrderBy": "(0|2) ASC, (1|3) ASC",
-            "Query": "select `user`.id, `user`.col, weight_string(`user`.id), weight_string(`user`.col) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
+            "FieldQuery": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where 1 != 1",
+            "OrderBy": "(0|2) ASC, 1 ASC",
+            "Query": "select `user`.id, `user`.col, weight_string(`user`.id) from `user` where :__sq_has_values1 = 1 and `user`.col in ::__sq1 order by `user`.id asc, `user`.col asc",
             "Table": "`user`"
           }
         ]
