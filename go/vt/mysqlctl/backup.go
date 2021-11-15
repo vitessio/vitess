@@ -334,6 +334,16 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	// We disable super_read_only, in case it is in the default MySQL startup
+	// parameters and will be blocking the writes we need to do in
+	// PopulateMetadataTables().  We do it blindly, since
+	// this will fail on MariaDB, which doesn't have super_read_only
+	// This is safe, since we're restarting MySQL after the restore anyway
+	params.Logger.Infof("Restore: disabling super_read_only")
+	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+		params.Logger.Warningf("Restore: setting super_read_only failed, continuing anyway: %v", err)
+	}
+
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
