@@ -31,23 +31,21 @@ import (
 func TestHashCodesRandom(t *testing.T) {
 	tested := 0
 	equal := 0
+	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
 	endTime := time.Now().Add(1 * time.Second) // run the test for 10 seconds
 	for time.Now().Before(endTime) {
-		t.Run(fmt.Sprintf("%d", tested), func(t *testing.T) {
+		t.Run(fmt.Sprintf("test %d, nb equals %d", tested, equal), func(t *testing.T) {
 			tested++
 			v1, v2 := randomValues()
-			cmp, err := NullsafeCompare(v1, v2, collations.Unknown)
+			cmp, err := NullsafeCompare(v1, v2, collation)
 			require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
 			typ, err := CoerceTo(v1.Type(), v2.Type())
 			require.NoError(t, err)
 
-			v1r, err := castTo(v1, typ)
+			hash1, err := NullsafeHashcode(v1, collation, typ)
 			require.NoError(t, err)
-			v2r, err := castTo(v2, typ)
+			hash2, err := NullsafeHashcode(v2, collation, typ)
 			require.NoError(t, err)
-
-			hash1 := numericalHashCode(v1r)
-			hash2 := numericalHashCode(v2r)
 			if cmp == 0 {
 				equal++
 				require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d", v1.String(), v2.String(), hash1, hash2)
@@ -82,6 +80,7 @@ var numericTypes = []func(int) sqltypes.Value{
 	func(i int) sqltypes.Value { return sqltypes.NewUint32(uint32(i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewFloat64(float64(i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewDecimal(fmt.Sprintf("%d", i)) },
+	func(i int) sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", i)) },
 }
 
 var randomGenerators = []func() sqltypes.Value{
@@ -90,6 +89,7 @@ var randomGenerators = []func() sqltypes.Value{
 	randomInt64,
 	randomUint64,
 	randomUint32,
+	randomVarChar,
 }
 
 func randomValue() sqltypes.Value {
@@ -97,8 +97,9 @@ func randomValue() sqltypes.Value {
 	return randomGenerators[r]()
 }
 
-func randomInt8() sqltypes.Value   { return sqltypes.NewInt8(int8(rand.Intn(255))) }
-func randomInt32() sqltypes.Value  { return sqltypes.NewInt32(rand.Int31()) }
-func randomInt64() sqltypes.Value  { return sqltypes.NewInt64(rand.Int63()) }
-func randomUint32() sqltypes.Value { return sqltypes.NewUint32(rand.Uint32()) }
-func randomUint64() sqltypes.Value { return sqltypes.NewUint64(rand.Uint64()) }
+func randomInt8() sqltypes.Value    { return sqltypes.NewInt8(int8(rand.Intn(255))) }
+func randomInt32() sqltypes.Value   { return sqltypes.NewInt32(rand.Int31()) }
+func randomInt64() sqltypes.Value   { return sqltypes.NewInt64(rand.Int63()) }
+func randomUint32() sqltypes.Value  { return sqltypes.NewUint32(rand.Uint32()) }
+func randomUint64() sqltypes.Value  { return sqltypes.NewUint64(rand.Uint64()) }
+func randomVarChar() sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }

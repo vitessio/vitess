@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -257,35 +258,29 @@ type HashCode = uintptr
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
-	typ := v.Type()
+	castValue, err := castTo(v, coerceType)
+	if err != nil {
+		return 0, err
+	}
 	switch {
-	case v.IsNull():
+	case sqltypes.IsNull(castValue.typ):
 		return HashCode(math.MaxInt64), nil
-	case sqltypes.IsNumber(coerceType):
-		result, err := newEvalResult(v)
-		if err != nil {
-			return 0, err
-		}
-		return numericalHashCode(result), nil
-	case sqltypes.IsText(coerceType):
+	case sqltypes.IsNumber(castValue.typ):
+		return numericalHashCode(castValue), nil
+	case sqltypes.IsText(castValue.typ):
 		coll := collations.Default().LookupByID(collation)
 		if coll == nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 		}
-		return coll.Hash(v.Raw(), 0), nil
-	case sqltypes.IsDate(coerceType):
-		result, err := newEvalResult(v)
-		if err != nil {
-			return 0, err
-		}
-		time, err := parseDate(result)
+		return coll.Hash(castValue.bytes, 0), nil
+	case sqltypes.IsDate(castValue.typ):
+		time, err := parseDate(castValue)
 		if err != nil {
 			return 0, err
 		}
 		return uintptr(time.UnixNano()), nil
 	}
-
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", typ)
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", castValue.typ)
 }
 
 func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
@@ -312,8 +307,11 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 			}
 			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		case v.IsText() || v.IsBinary():
+			fval := parseStringToFloat(string(v.Raw()))
+			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
 		default:
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
 
 	case sqltypes.IsSigned(typ):
@@ -331,8 +329,9 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 			}
 			return EvalResult{ival: int64(uval), typ: sqltypes.Int64}, nil
 		default:
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
 		}
+
 	case sqltypes.IsUnsigned(typ):
 		switch {
 		case v.IsSigned():
@@ -348,10 +347,18 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 			}
 			return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
 		default:
-			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+		}
+
+	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
+		switch {
+		case v.IsText() || v.IsBinary():
+			return EvalResult{bytes: v.Raw(), typ: v.Type()}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a text: %v", v)
 		}
 	}
-	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
 func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
@@ -361,12 +368,15 @@ func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
 	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
 		return sqltypes.Null, nil
 	}
+	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+		return sqltypes.VarChar, nil
+	}
 	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
-
 		switch {
+		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+			return sqltypes.Float64, nil
 		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
 			return sqltypes.Float64, nil
-
 		case sqltypes.IsSigned(v1):
 			switch {
 			case sqltypes.IsUnsigned(v2):
@@ -747,4 +757,40 @@ func anyMinusFloat(v1 EvalResult, v2 float64) EvalResult {
 		v1.fval = float64(v1.uval)
 	}
 	return EvalResult{typ: sqltypes.Float64, fval: v1.fval - v2}
+}
+
+func parseStringToFloat(str string) float64 {
+	// removing all whitespace in the left
+	// we keep '.', '+', '-'
+	str = strings.TrimLeftFunc(str, func(r rune) bool {
+		return (r < '0' || r > '9') && r != '-' && r != '+' && r != '.'
+	})
+
+	// removeRightIdx indicates the index where the numeric value ends
+	// if there is a '.', it ends after the first suite of numbers past the first '.'
+	// if there are no '.', it ends after the first suite of numbers
+	removeRightIdx := 0
+	dotIdx := strings.Index(str, ".")
+	if dotIdx != -1 {
+		// iterating on the string starting after the first '.' and finishing after
+		// the first suite of numbers
+		for i := dotIdx + 1; i < len(str) && str[i] >= '0' && str[i] <= '9'; i++ {
+			removeRightIdx = i
+		}
+	} else {
+		removeRightIdx = strings.LastIndexFunc(str, func(r rune) bool {
+			return r >= '0' && r <= '9'
+		})
+	}
+
+	// trim the RHS of the string
+	str = str[:removeRightIdx+1]
+
+	// parse, note that we're okay with ParseFloat returning an error
+	// MySQL treats non-parsable strings as float64(0.00)
+	val, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return 0
+	}
+	return val
 }
