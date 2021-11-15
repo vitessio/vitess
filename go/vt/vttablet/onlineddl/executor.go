@@ -157,8 +157,9 @@ type Executor struct {
 	// - be adopted by this executor (possible for vreplication migrations), or
 	// - be terminated (example: pt-osc migration gone rogue, process still running even as the migration failed)
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
-	ownedRunningMigrations sync.Map
-	tickReentranceFlag     int64
+	ownedRunningMigrations        sync.Map
+	tickReentranceFlag            int64
+	reviewedRunningMigrationsFlag int64
 
 	ticks             *timer.Timer
 	isOpen            bool
@@ -271,6 +272,7 @@ func (e *Executor) Open() error {
 	if e.isOpen || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
+	atomic.StoreInt64(&e.reviewedRunningMigrationsFlag, 0) // will be set as "1" by reviewRunningMigrations()
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
@@ -2253,6 +2255,16 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
+	if atomic.LoadInt64(&e.reviewedRunningMigrationsFlag) == 0 {
+		// Since Open(), we havent's once executed reviewRunningMigrations() successfully.
+		// This means we may not have a good picture of what is actually running. Perhaps there's
+		// a vreplicatoin migration from a pre-PRS/ERS that we still need to learn about?
+		// We're going to be careful here, and avoid running new migrations until we have
+		// a better picture. It will likely take a couple seconds till next iteration.
+		// execution. This delay ony takes place shortly after Open().
+		return nil
+	}
+
 	getNonConflictingMigration := func() (*schema.OnlineDDL, error) {
 		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
 		if err != nil {
@@ -2591,7 +2603,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		})
 	}
 
-	return countRunnning, cancellable, err
+	atomic.StoreInt64(&e.reviewedRunningMigrationsFlag, 1)
+	return countRunnning, cancellable, nil
 }
 
 // reviewStaleMigrations marks as 'failed' migrations whose status is 'running' but which have
