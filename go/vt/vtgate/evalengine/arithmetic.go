@@ -256,22 +256,21 @@ type HashCode = uintptr
 
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-func NullsafeHashcode(v sqltypes.Value, collation collations.ID) (HashCode, error) {
-
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
 	typ := v.Type()
 	switch {
 	case v.IsNull():
 		return HashCode(math.MaxInt64), nil
-	case sqltypes.IsNumber(typ):
+	case sqltypes.IsNumber(coerceType):
 		result, err := newEvalResult(v)
 		if err != nil {
 			return 0, err
 		}
 		return numericalHashCode(result), nil
-	case sqltypes.IsText(typ):
+	case sqltypes.IsText(coerceType):
 		coll := collations.Default().LookupByID(collation)
 		return coll.Hash(v.Raw(), 0), nil
-	case sqltypes.IsDate(typ):
+	case sqltypes.IsDate(coerceType):
 		result, err := newEvalResult(v)
 		if err != nil {
 			return 0, err
@@ -284,6 +283,106 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID) (HashCode, erro
 	}
 
 	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", typ)
+}
+
+func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
+	switch {
+	case typ == sqltypes.Null:
+		return EvalResult{}, nil
+	case sqltypes.IsFloat(typ) || typ == sqltypes.Decimal:
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{fval: float64(ival), typ: sqltypes.Float64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{fval: float64(uval), typ: sqltypes.Float64}, nil
+		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+			fval, err := strconv.ParseFloat(string(v.Raw()), 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+		}
+
+	case sqltypes.IsSigned(typ):
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{ival: int64(uval), typ: sqltypes.Int64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+		}
+	case sqltypes.IsUnsigned(typ):
+		switch {
+		case v.IsSigned():
+			uval, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{uval: uint64(uval), typ: sqltypes.Uint64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+			}
+			return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+		}
+	}
+	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coersion should not try to coerce this value to a signed int %v", v)
+}
+
+func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
+	if v1 == v2 {
+		return v1, nil
+	}
+	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
+		return sqltypes.Null, nil
+	}
+	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
+
+		switch {
+		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
+			return sqltypes.Float64, nil
+
+		case sqltypes.IsSigned(v1):
+			switch {
+			case sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			case sqltypes.IsSigned(v2):
+				return sqltypes.Int64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		case sqltypes.IsUnsigned(v1):
+			switch {
+			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
 }
 
 // isByteComparable returns true if the type is binary or date/time.

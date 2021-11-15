@@ -69,7 +69,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +90,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
 			if err != nil {
 				return err
 			}
@@ -151,7 +151,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation)
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
 			if err != nil {
 				return err
 			}
