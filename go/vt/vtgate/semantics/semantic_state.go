@@ -305,12 +305,11 @@ func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	return res
 }
 
-// CopyExprTypeValue assign the Type value of src to dest
-func (st *SemTable) CopyExprTypeValue(src, dest sqlparser.Expr) error {
+// CopyExprTypeValue lookups src in the ExprTypes map and, if a key is found, assign
+// the corresponding Type value of src to dest.
+func (st *SemTable) CopyExprTypeValue(src, dest sqlparser.Expr) {
 	fromType, found := st.ExprTypes[src]
-	if !found {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "the expression is missing from the semantic table's expression types map")
+	if found {
+		st.ExprTypes[dest] = fromType
 	}
-	st.ExprTypes[dest] = fromType
-	return nil
 }
