@@ -15,7 +15,7 @@ function visualizeInstances(nodesMap, onSvgInstanceWrapper, clusterControl) {
       pseudoChild.children.forEach(function(child) {
         child.parent = pseudoChild;
       });
-      pseudoChild.hasMaster = true;
+      pseudoChild.hasPrimary = true;
       pseudoChild.parent = node;
       pseudoChild.isAnchor = true;
       pseudoChild.id += "__virtualnode";
@@ -28,9 +28,9 @@ function visualizeInstances(nodesMap, onSvgInstanceWrapper, clusterControl) {
   // Calculate tree dimensions
   var maxNodeDepth = 20;
   // virtualDepth is the depth in tree excluding virtual nodes.
-  // Virtual nodes are introduced as a means to present co-masters on same depth while retaining tree structure. This is
-  // merely for visualization purposes. In such case, a virtual node is introduced which is the parent (though not master) of
-  // said co-masters. But the virtual node is not displayed, and does not affect the visualized depth positioning of the nodes
+  // Virtual nodes are introduced as a means to present co-primaries on same depth while retaining tree structure. This is
+  // merely for visualization purposes. In such case, a virtual node is introduced which is the parent (though not primary) of
+  // said co-primaries. But the virtual node is not displayed, and does not affect the visualized depth positioning of the nodes
   // underneath it.
   function getNodeDepth(node, recursiveLevel) {
     if (recursiveLevel > maxNodeDepth)
@@ -94,13 +94,13 @@ function visualizeInstances(nodesMap, onSvgInstanceWrapper, clusterControl) {
 
   var root = null;
   nodesList.forEach(function(node) {
-    if (!node.hasMaster) {
+    if (!node.hasPrimary) {
       root = node;
     }
   });
   if (root == null) {
     nodesList.forEach(function(node) {
-      if (node.isCoMaster) {
+      if (node.isCoPrimary) {
         root = node;
       }
     });
