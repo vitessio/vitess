@@ -18,12 +18,10 @@ package gracefulTakeover
 
 import (
 	"fmt"
-	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
@@ -31,7 +29,7 @@ import (
 
 // make an api call to graceful primary takeover and let vtorc fix it
 // covers the test case graceful-master-takeover from orchestrator
-func TestGracefulTakeover(t *testing.T) {
+func TestGracefulPrimaryTakeover(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 0, nil, "test_config.json")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -54,11 +52,44 @@ func TestGracefulTakeover(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	response, err := http.Get(fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
-	require.NoError(t, err)
-	assert.Equal(t, 200, response.StatusCode)
+	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
+	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
 	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{curPrimary}, 10*time.Second)
+}
+
+// make an api call to graceful primary takeover without specifying the primary tablet to promote
+// covers the test case graceful-master-takeover-fail-no-target from orchestrator
+func TestGracefulPrimaryTakeoverFailNoTarget(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 3, 0, nil, "test_config.json")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	curPrimary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, curPrimary, "should have elected a primary")
+
+	// find the replica tablet
+	var replicas []*cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two tablets, so the one not the primary must be the replica
+		if tablet.Alias != curPrimary.Alias {
+			replicas = append(replicas, tablet)
+		}
+	}
+	assert.Equal(t, 2, len(replicas), "could not find replica tablets")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, curPrimary, replicas, 10*time.Second)
+
+	status, response := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/", curPrimary.MySQLPort))
+	assert.Equal(t, 500, status)
+	assert.Contains(t, response, "GracefulPrimaryTakeover: target instance not indicated")
+
+	// check that the replica doesn't get promoted and the previous primary is still the primary
+	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, replicas, 10*time.Second)
 }

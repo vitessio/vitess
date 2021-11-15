@@ -19,6 +19,8 @@ package utils
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
@@ -709,4 +711,15 @@ func CheckSourcePort(t *testing.T, replica *cluster.Vttablet, source *cluster.Vt
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
+}
+
+// MakeAPICall is used make an API call given the url. It returns the status and the body of the response received
+func MakeAPICall(t *testing.T, url string) (status int, response string) {
+	t.Helper()
+	res, err := http.Get(url)
+	require.NoError(t, err)
+	bodyBytes, err := ioutil.ReadAll(res.Body)
+	require.NoError(t, err)
+	body := string(bodyBytes)
+	return res.StatusCode, body
 }
