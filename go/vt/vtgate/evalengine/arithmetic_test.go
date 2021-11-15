@@ -511,6 +511,7 @@ func TestNullSafeAdd(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
+	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -534,7 +535,7 @@ func TestNullsafeCompare(t *testing.T) {
 		// LHS Text
 		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
 		v2:  TestValue(querypb.Type_VARCHAR, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		out: 0,
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -597,9 +598,9 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.Unknown)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
+		if tcase.err != nil {
+			require.EqualError(t, err, tcase.err.Error())
 		}
 		if tcase.err != nil {
 			continue
@@ -1677,6 +1678,7 @@ func TestParseStringToFloat(t *testing.T) {
 		{str: "0.", val: 0},
 		{str: "8794354", val: 8794354},
 		{str: "    10  ", val: 10},
+		{str: "2266951196291479516", val: 2266951196291479516},
 	}
 
 	for _, tc := range tcs {

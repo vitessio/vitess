@@ -216,21 +216,28 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	if v2.IsNull() {
 		return 1, nil
 	}
-	if sqltypes.IsNumber(v1.Type()) || sqltypes.IsNumber(v2.Type()) {
-		lv1, err := newEvalResult(v1)
-		if err != nil {
-			return 0, err
-		}
-		lv2, err := newEvalResult(v2)
-		if err != nil {
-			return 0, err
-		}
-		return compareNumeric(lv1, lv2)
-	}
-	if isByteComparable(v1) && isByteComparable(v2) {
+
+	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
-	if v1.IsText() && v2.IsText() && collationID != collations.Unknown {
+
+	typ, err := CoerceTo(v1.Type(), v2.Type())
+	if err != nil {
+		return 0, err
+	}
+	v1cast, err := castTo(v1, typ)
+	if err != nil {
+		return 0, err
+	}
+	v2cast, err := castTo(v2, typ)
+	if err != nil {
+		return 0, err
+	}
+
+	if sqltypes.IsNumber(typ) {
+		return compareNumeric(v1cast, v2cast)
+	}
+	if (sqltypes.IsText(typ) || sqltypes.IsBinary(typ)) && collationID != collations.Unknown {
 		collation := collations.Default().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
@@ -292,19 +299,19 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 		case v.IsSigned():
 			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: float64(ival), typ: sqltypes.Float64}, nil
 		case v.IsUnsigned():
 			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: float64(uval), typ: sqltypes.Float64}, nil
 		case v.IsFloat() || v.Type() == sqltypes.Decimal:
 			fval, err := strconv.ParseFloat(string(v.Raw()), 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
 		case v.IsText() || v.IsBinary():
@@ -319,13 +326,13 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 		case v.IsSigned():
 			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
 		case v.IsUnsigned():
 			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{ival: int64(uval), typ: sqltypes.Int64}, nil
 		default:
@@ -337,13 +344,13 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 		case v.IsSigned():
 			uval, err := strconv.ParseInt(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{uval: uint64(uval), typ: sqltypes.Uint64}, nil
 		case v.IsUnsigned():
 			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
 			if err != nil {
-				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
 		default:
@@ -399,11 +406,11 @@ func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
 }
 
 // isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(v sqltypes.Value) bool {
-	if v.IsBinary() {
+func isByteComparable(typ querypb.Type) bool {
+	if sqltypes.IsBinary(typ) {
 		return true
 	}
-	switch v.Type() {
+	switch typ {
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
 		return true
 	}
