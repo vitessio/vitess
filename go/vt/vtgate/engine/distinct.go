@@ -28,7 +28,8 @@ var _ Primitive = (*Distinct)(nil)
 
 // Distinct Primitive is used to uniqueify results
 type Distinct struct {
-	Source Primitive
+	Source   Primitive
+	ColTypes []querypb.Type
 }
 
 type row = []sqltypes.Value
@@ -42,7 +43,7 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 	code := evalengine.HashCode(17)
 	for _, value := range inputRow {
 		// TODO: fetch the correct collation from the semantic table
-		hashcode, err := evalengine.NullsafeHashcode(value, collations.Unknown)
+		hashcode, err := evalengine.NullsafeHashcode(value, collations.Unknown, value.Type())
 		if err != nil {
 			return false, err
 		}
