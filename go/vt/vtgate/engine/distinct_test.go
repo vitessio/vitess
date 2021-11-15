@@ -59,7 +59,7 @@ func TestDistinct(t *testing.T) {
 	}, {
 		testName:      "varchar columns",
 		inputs:        r("myid", "varchar", "monkey", "horse"),
-		expectedError: "types does not support hashcode yet: VARCHAR",
+		expectedError: "text type with an unknown/unsupported collation cannot be hashed",
 	}}
 
 	for _, tc := range testCases {

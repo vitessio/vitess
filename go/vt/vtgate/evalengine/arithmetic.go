@@ -269,6 +269,9 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType quer
 		return numericalHashCode(result), nil
 	case sqltypes.IsText(coerceType):
 		coll := collations.Default().LookupByID(collation)
+		if coll == nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+		}
 		return coll.Hash(v.Raw(), 0), nil
 	case sqltypes.IsDate(coerceType):
 		result, err := newEvalResult(v)

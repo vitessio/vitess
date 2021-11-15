@@ -589,7 +589,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "types does not support hashcode yet: VARCHAR")
+	assert.Contains(t, err.Error(), "text type with an unknown/unsupported collation cannot be hashed")
 }
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
