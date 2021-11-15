@@ -381,7 +381,6 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := hc.keyFromTablet(tablet)
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
@@ -393,14 +392,18 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// which will call finalizeConn, which will close the connection.
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
-	// delete from map by keyspace.shard.tabletType
-	ths, ok := hc.healthData[key]
-	if !ok {
-		log.Warningf("We have no health data for target: %v", key)
-		return
+
+	// the tablet has been deleted from the authoritative healthByAlias map so let's ensure it's deleted
+	// from the healthData map as well, which means we need to delete any existing combinations of
+	// keyspace.shard.tabletType we may have had for the tablet
+	for _, key := range hc.keysFromTablet(tablet) {
+		if ths, ok := hc.healthData[key]; ok {
+			delete(ths, tabletAlias)
+		}
 	}
-	delete(ths, tabletAlias)
-	// delete from healthy list
+
+	// We only need to recompute the healthy record for the current state of the tablet
+	key := hc.keyFromTablet(tablet)
 	healthy, ok := hc.healthy[key]
 	if ok && len(healthy) > 0 {
 		hc.recomputeHealthy(key)
@@ -413,6 +416,15 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	defer hc.mu.Unlock()
 
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
+	// let's be sure that this tablet hasn't been deleted from the authortative map
+	// so that we're not racing to update it and in effect re-adding a copy of the
+	// tablet record that was deleted
+	_, ok := hc.healthByAlias[tabletAlias]
+	if !ok {
+		log.Infof("Tablet %s has been deleted, skipping health update", tabletAlias)
+		return
+	}
+
 	targetKey := hc.keyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
@@ -721,6 +733,15 @@ func (hc *HealthCheckImpl) keyFromTarget(target *query.Target) keyspaceShardTabl
 
 func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
 	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
+}
+
+// keysFromTablet returns a slice of potential type based keys for a tablet
+func (hc *HealthCheckImpl) keysFromTablet(tablet *topodata.Tablet) []keyspaceShardTabletType {
+	tabletTypeKeys := make([]keyspaceShardTabletType, len(topoproto.AllTabletTypes))
+	for i, tabletType := range topoproto.AllTabletTypes {
+		tabletTypeKeys[i] = keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
+	}
+	return tabletTypeKeys
 }
 
 // getAliasByCell should only be called while holding hc.mu
