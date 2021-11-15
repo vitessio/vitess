@@ -120,6 +120,18 @@ func TestGetSharedUniqueKeys(t *testing.T) {
 			expectTargetUK: nil,
 		},
 		{
+			name: "single identical, source has FLOAT",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1, HasFloat: true},
+			},
+			targetUKs: []*vrepl.UniqueKey{
+				{Name: "uidx", Columns: *columns1},
+			},
+			renameMap:      map[string]string{},
+			expectSourceUK: nil,
+			expectTargetUK: nil,
+		},
+		{
 			name: "exact match",
 			sourceUKs: []*vrepl.UniqueKey{
 				{Name: "uidx", Columns: *columns1},

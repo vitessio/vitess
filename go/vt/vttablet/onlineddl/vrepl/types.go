@@ -226,6 +226,7 @@ type UniqueKey struct {
 	Name            string
 	Columns         ColumnList
 	HasNullable     bool
+	HasFloat        bool
 	IsAutoIncrement bool
 }
 
