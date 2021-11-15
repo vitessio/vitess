@@ -47,7 +47,7 @@ export const Vtctlds = () => {
             return (
                 <tr key={row.hostname}>
                     <DataCell>
-                        <div className="font-weight-bold">
+                        <div className="font-bold">
                             {row.fqdn ? (
                                 <a href={`//${row.fqdn}`} rel="noopener noreferrer" target="_blank">
                                     {row.hostname}
@@ -59,7 +59,7 @@ export const Vtctlds = () => {
                     </DataCell>
                     <DataCell>
                         {row.cluster}
-                        <div className="font-size-small text-color-secondary">{row.clusterID}</div>
+                        <div className="font-size-small text-secondary">{row.clusterID}</div>
                     </DataCell>
                 </tr>
             );
@@ -83,7 +83,7 @@ export const Vtctlds = () => {
                 <DataTable columns={['Hostname', 'Cluster']} data={data} renderRows={renderRows} />
 
                 {/* TODO skeleton placeholder */}
-                {!!q.isLoading && <div className="text-align-center">Loading</div>}
+                {!!q.isLoading && <div className="text-center">Loading</div>}
             </ContentContainer>
         </div>
     );

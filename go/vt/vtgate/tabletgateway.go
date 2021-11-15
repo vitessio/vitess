@@ -98,7 +98,6 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		}
 		hc = createHealthCheck(ctx, *HealthCheckRetryDelay, *HealthCheckTimeout, topoServer, localCell, *CellsToWatch)
 	}
-	vtgateHealthCheck = hc
 	gw := &TabletGateway{
 		hc:                hc,
 		srvTopoServer:     serv,

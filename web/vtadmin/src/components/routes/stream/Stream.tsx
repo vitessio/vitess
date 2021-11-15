@@ -61,7 +61,7 @@ export const Stream = () => {
                     </Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{streamKey}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{streamKey}</WorkspaceTitle>
                 <div className={style.headingMeta}>
                     <span>
                         Cluster: <code>{params.clusterID}</code>

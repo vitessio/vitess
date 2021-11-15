@@ -2093,3 +2093,81 @@ func TestReservedConnDML(t *testing.T) {
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "commit", nil)
 	require.NoError(t, err)
 }
+
+func TestStreamingDML(t *testing.T) {
+	method := "TestStreamingDML"
+
+	executor, _, _, sbc := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe(method)
+	defer QueryLogger.Unsubscribe(logChan)
+
+	ctx := context.Background()
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	tcases := []struct {
+		query  string
+		result *sqltypes.Result
+
+		inTx        bool
+		openTx      bool
+		changedRows int
+		commitCount int
+		expQuery    []string
+	}{{
+		query: "begin",
+
+		inTx:     true,
+		expQuery: []string{},
+	}, {
+		query:  "insert into simple() values ()",
+		result: &sqltypes.Result{RowsAffected: 1},
+
+		inTx:        true,
+		openTx:      true,
+		changedRows: 1,
+		expQuery:    []string{"insert into simple values ()"},
+	}, {
+		query:  "update simple set name = 'V' where col = 2",
+		result: &sqltypes.Result{RowsAffected: 3},
+
+		inTx:        true,
+		openTx:      true,
+		changedRows: 3,
+		expQuery:    []string{"update simple set `name` = 'V' where col = 2"},
+	}, {
+		query:  "delete from simple",
+		result: &sqltypes.Result{RowsAffected: 12},
+
+		inTx:        true,
+		openTx:      true,
+		changedRows: 12,
+		expQuery:    []string{"delete from simple"},
+	}, {
+		query: "commit",
+
+		commitCount: 1,
+		expQuery:    []string{},
+	}}
+
+	var qr *sqltypes.Result
+	for _, tcase := range tcases {
+		sbc.Queries = nil
+		sbc.SetResults([]*sqltypes.Result{tcase.result})
+		err := executor.StreamExecute(ctx, method, session, tcase.query, nil, func(result *sqltypes.Result) error {
+			qr = result
+			return nil
+		})
+		require.NoError(t, err)
+		// should tx start
+		assert.Equal(t, tcase.inTx, session.GetInTransaction())
+		// open transaction
+		assert.Equal(t, tcase.openTx, len(session.ShardSessions) > 0)
+		// row affected as returned by result
+		assert.EqualValues(t, tcase.changedRows, qr.RowsAffected)
+		// match the query received on tablet
+		utils.MustMatch(t, tcase.expQuery, sbc.StringQueries())
+
+		assert.EqualValues(t, tcase.commitCount, sbc.CommitCount.Get())
+	}
+}

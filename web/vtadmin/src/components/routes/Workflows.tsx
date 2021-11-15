@@ -66,8 +66,8 @@ export const Workflows = () => {
             return (
                 <tr key={idx}>
                     <DataCell>
-                        <div className="font-weight-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
-                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
+                        <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        <div className="font-size-small text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>
                         {row.source ? (
@@ -78,7 +78,7 @@ export const Workflows = () => {
                                 <div className={style.shardList}>{(row.sourceShards || []).join(', ')}</div>
                             </>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
@@ -90,7 +90,7 @@ export const Workflows = () => {
                                 <div className={style.shardList}>{(row.targetShards || []).join(', ')}</div>
                             </>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
 
@@ -124,8 +124,8 @@ export const Workflows = () => {
                     </DataCell>
 
                     <DataCell>
-                        <div className="font-family-primary white-space-nowrap">{formatDateTime(row.timeUpdated)}</div>
-                        <div className="font-family-primary font-size-small text-color-secondary">
+                        <div className="font-sans whitespace-nowrap">{formatDateTime(row.timeUpdated)}</div>
+                        <div className="font-sans font-size-small text-secondary">
                             {formatRelativeTime(row.timeUpdated)}
                         </div>
                     </DataCell>
