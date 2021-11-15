@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -41,6 +43,10 @@ type hashJoin struct {
 
 	Predicate sqlparser.Expr
 
+	ComparisonType querypb.Type
+
+	Collation collations.ID
+
 	gen4Plan
 }
 
@@ -54,13 +60,15 @@ func (hj *hashJoin) WireupGen4(semTable *semantics.SemTable) error {
 
 func (hj *hashJoin) Primitive() engine.Primitive {
 	return &engine.HashJoin{
-		Left:    hj.Left.Primitive(),
-		Right:   hj.Right.Primitive(),
-		Cols:    hj.Cols,
-		Opcode:  hj.Opcode,
-		LHSKey:  hj.LHSKey,
-		RHSKey:  hj.RHSKey,
-		ASTPred: hj.Predicate,
+		Left:           hj.Left.Primitive(),
+		Right:          hj.Right.Primitive(),
+		Cols:           hj.Cols,
+		Opcode:         hj.Opcode,
+		LHSKey:         hj.LHSKey,
+		RHSKey:         hj.RHSKey,
+		ASTPred:        hj.Predicate,
+		ComparisonType: hj.ComparisonType,
+		Collation:      hj.Collation,
 	}
 }
 

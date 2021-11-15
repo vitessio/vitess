@@ -53,6 +53,8 @@ type HashJoin struct {
 	ASTPred sqlparser.Expr
 
 	Collation collations.ID
+
+	ComparisonType querypb.Type
 }
 
 // TryExecute implements the Primitive interface
@@ -69,7 +71,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +92,7 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 		if joinVal.IsNull() {
 			continue
 		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +129,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
 			if err != nil {
 				return err
 			}
@@ -151,7 +153,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 			if joinVal.IsNull() {
 				continue
 			}
-			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, joinVal.Type()) //TODO fish out the correct type
+			hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
 			if err != nil {
 				return err
 			}
@@ -227,6 +229,11 @@ func (hj *HashJoin) description() PrimitiveDescription {
 		"TableName":         hj.GetTableName(),
 		"JoinColumnIndexes": strings.Trim(strings.Join(strings.Fields(fmt.Sprint(hj.Cols)), ","), "[]"),
 		"Predicate":         sqlparser.String(hj.ASTPred),
+		"ComparisonType":    hj.ComparisonType.String(),
+	}
+	coll := collations.Default().LookupByID(hj.Collation)
+	if coll != nil {
+		other["Collation"] = coll.Name()
 	}
 	return PrimitiveDescription{
 		OperatorType: "Join",
