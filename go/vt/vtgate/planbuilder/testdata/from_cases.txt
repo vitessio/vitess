@@ -461,6 +461,7 @@ Gen4 plan same as above
     "JoinVars": {
       "music_id": 0
     },
+    "Predicate": "music.id = `user`.id",
     "TableName": "music_`user`",
     "Inputs": [
       {
