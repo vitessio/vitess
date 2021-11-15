@@ -73,6 +73,7 @@ func randomNumericType(i int) sqltypes.Value {
 }
 
 var numericTypes = []func(int) sqltypes.Value{
+	func(i int) sqltypes.Value { return sqltypes.NULL },
 	func(i int) sqltypes.Value { return sqltypes.NewInt8(int8(i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewInt32(int32(i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewInt64(int64(i)) },
@@ -81,15 +82,18 @@ var numericTypes = []func(int) sqltypes.Value{
 	func(i int) sqltypes.Value { return sqltypes.NewFloat64(float64(i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewDecimal(fmt.Sprintf("%d", i)) },
 	func(i int) sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", i)) },
+	func(i int) sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("  %f aa", float64(i))) },
 }
 
 var randomGenerators = []func() sqltypes.Value{
+	randomNull,
 	randomInt8,
 	randomInt32,
 	randomInt64,
 	randomUint64,
 	randomUint32,
 	randomVarChar,
+	randomComplexVarChar,
 }
 
 func randomValue() sqltypes.Value {
@@ -97,9 +101,13 @@ func randomValue() sqltypes.Value {
 	return randomGenerators[r]()
 }
 
+func randomNull() sqltypes.Value    { return sqltypes.NULL }
 func randomInt8() sqltypes.Value    { return sqltypes.NewInt8(int8(rand.Intn(255))) }
 func randomInt32() sqltypes.Value   { return sqltypes.NewInt32(rand.Int31()) }
 func randomInt64() sqltypes.Value   { return sqltypes.NewInt64(rand.Int63()) }
 func randomUint32() sqltypes.Value  { return sqltypes.NewUint32(rand.Uint32()) }
 func randomUint64() sqltypes.Value  { return sqltypes.NewUint64(rand.Uint64()) }
 func randomVarChar() sqltypes.Value { return sqltypes.NewVarChar(fmt.Sprintf("%d", rand.Int63())) }
+func randomComplexVarChar() sqltypes.Value {
+	return sqltypes.NewVarChar(fmt.Sprintf(" \t %f apa", float64(rand.Intn(1000))*1.10))
+}
