@@ -29,6 +29,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	_ "vitess.io/vitess/go/vt/topo/consultopo"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
+	_ "vitess.io/vitess/go/vt/topo/k8stopo"
+	_ "vitess.io/vitess/go/vt/topo/zk2topo"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
