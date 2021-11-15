@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -453,7 +455,7 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 }
 
 func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
-	canHashJoin, lhsKey, rhsKey, err := canHashJoin(ctx, n)
+	canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
 	if err != nil {
 		return nil, err
 	}
@@ -471,15 +473,25 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 		opCode = engine.LeftJoin
 	}
 
+	if lhsInfo.typ.Collation != rhsInfo.typ.Collation {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "joins with different collations are not yet supported")
+	}
+	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
+	if err != nil {
+		return nil, err
+	}
+
 	if canHashJoin {
 		return &hashJoin{
-			Left:      lhs,
-			Right:     rhs,
-			Cols:      n.columns,
-			Opcode:    opCode,
-			LHSKey:    lhsKey,
-			RHSKey:    rhsKey,
-			Predicate: sqlparser.AndExpressions(n.predicates...),
+			Left:           lhs,
+			Right:          rhs,
+			Cols:           n.columns,
+			Opcode:         opCode,
+			LHSKey:         lhsInfo.offset,
+			RHSKey:         rhsInfo.offset,
+			Predicate:      sqlparser.AndExpressions(n.predicates...),
+			ComparisonType: coercedType,
+			Collation:      lhsInfo.typ.Collation,
 		}, nil
 	}
 	return &joinGen4{
@@ -497,7 +509,7 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 // join predicate living in the right-hand side.
 // Hash joins are only supporting equality join predicates, which is why the join predicate
 // has to be an EqualOp.
-func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhsKey, rhsKey int, err error) {
+func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
 	if len(n.predicatesToRemove) != 1 || n.rhs.cost() <= 5 || n.leftJoin {
 		return
 	}
@@ -505,25 +517,44 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhsKey, rhsKe
 	if !isCmp || cmp.Operator != sqlparser.EqualOp {
 		return
 	}
+	var colOnLeft bool
 	var col *sqlparser.ColName
-	var arg string
+	var arg sqlparser.Argument
 	if lCol, isCol := cmp.Left.(*sqlparser.ColName); isCol {
 		col = lCol
 		if rArg, isArg := cmp.Right.(sqlparser.Argument); isArg {
-			arg = string(rArg)
+			arg = rArg
 		}
+		colOnLeft = true
 	} else if rCol, isCol := cmp.Right.(*sqlparser.ColName); isCol {
 		col = rCol
 		if lArg, isArg := cmp.Left.(sqlparser.Argument); isArg {
-			arg = string(lArg)
+			arg = lArg
 		}
 	} else {
 		return
 	}
 
-	lhsKey, found := n.vars[arg]
+	lhsKey, found := n.vars[string(arg)]
 	if !found {
 		return
+	}
+	lhs.offset = lhsKey
+
+	colType, found := ctx.semTable.ExprTypes[col]
+	if !found {
+		return
+	}
+	argType, found := ctx.semTable.ExprTypes[arg]
+	if !found {
+		return
+	}
+	if colOnLeft {
+		lhs.typ = colType
+		rhs.typ = argType
+	} else {
+		lhs.typ = argType
+		rhs.typ = colType
 	}
 
 	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.semTable)
@@ -533,7 +564,7 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhsKey, rhsKe
 	if len(columns) != 1 {
 		return
 	}
-	rhsKey = columns[0]
+	rhs.offset = columns[0]
 	canHash = true
 
 	err = n.rhs.removePredicate(ctx, cmp)

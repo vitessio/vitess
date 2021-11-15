@@ -23,6 +23,11 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
+type joinColumnInfo struct {
+	offset int
+	typ    semantics.Type
+}
+
 type joinTree struct {
 	// columns needed to feed other plans
 	columns []int
