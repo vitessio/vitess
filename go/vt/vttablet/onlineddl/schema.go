@@ -268,12 +268,6 @@ const (
 			completed_timestamp DESC
 		LIMIT 1
 	`
-	sqlSelectCountReadyMigrations = `SELECT
-			count(*) as count_ready
-		FROM _vt.schema_migrations
-		WHERE
-			migration_status='ready'
-	`
 	sqlSelectStaleMigrations = `SELECT
 			migration_uuid
 		FROM _vt.schema_migrations

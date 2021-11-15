@@ -159,7 +159,7 @@ type Executor struct {
 	// The Executor auto-reviews the map and cleans up migrations thought to be running which are not running.
 	ownedRunningMigrations        sync.Map
 	tickReentranceFlag            int64
-	reviewedRunningMigrationsFlag int64
+	reviewedRunningMigrationsFlag bool
 
 	ticks             *timer.Timer
 	isOpen            bool
@@ -272,7 +272,7 @@ func (e *Executor) Open() error {
 	if e.isOpen || !e.env.Config().EnableOnlineDDL {
 		return nil
 	}
-	atomic.StoreInt64(&e.reviewedRunningMigrationsFlag, 0) // will be set as "1" by reviewRunningMigrations()
+	e.reviewedRunningMigrationsFlag = false // will be set as "true" by reviewRunningMigrations()
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
@@ -1620,30 +1620,13 @@ func (e *Executor) CancelPendingMigrations(ctx context.Context, message string) 
 // scheduleNextMigration attemps to schedule a single migration to run next.
 // possibly there's no migrations to run.
 // The effect of this function is to move a migration from 'queued' state to 'ready' state, is all.
+// Notice that the query sqlScheduleSingleMigration embeds some logic inside. We may choose
+// to refactor the logic into the app
 func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	r, err := e.execQuery(ctx, sqlSelectCountReadyMigrations)
-	if err != nil {
-		return err
-	}
-	row := r.Named().Row()
-	countReady, err := row.ToInt64("count_ready")
-	if err != nil {
-		return err
-	}
-
-	if countReady > 0 {
-		// seems like there's already one migration that's good to go.
-		// In this case, and to simplify the algorithm, we do not "promote" any migration to 'ready'.
-		// Instead, we wait for those migrations to be executed. Once that/those migrations are 'running'
-		// (or maybe even 'failed'/'completed'), we can promote a next migration
-		return nil
-	}
-	// Cool, seems like no migration is ready. Let's try and make a single 'queued' migration 'ready'
-	_, err = e.execQuery(ctx, sqlScheduleSingleMigration)
-
+	_, err := e.execQuery(ctx, sqlScheduleSingleMigration)
 	return err
 }
 
@@ -2261,10 +2244,10 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if atomic.LoadInt64(&e.reviewedRunningMigrationsFlag) == 0 {
+	if !e.reviewedRunningMigrationsFlag {
 		// Since Open(), we havent's once executed reviewRunningMigrations() successfully.
 		// This means we may not have a good picture of what is actually running. Perhaps there's
-		// a vreplicatoin migration from a pre-PRS/ERS that we still need to learn about?
+		// a vreplication migration from a pre-PRS/ERS that we still need to learn about?
 		// We're going to be careful here, and avoid running new migrations until we have
 		// a better picture. It will likely take a couple seconds till next iteration.
 		// execution. This delay ony takes place shortly after Open().
@@ -2613,7 +2596,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		})
 	}
 
-	atomic.StoreInt64(&e.reviewedRunningMigrationsFlag, 1)
+	e.reviewedRunningMigrationsFlag = true
 	return countRunnning, cancellable, nil
 }
 
@@ -3169,7 +3152,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeCompletion()),
-		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsAllowConcurrent()),
+		sqltypes.BoolBindVariable(e.allowConcurrentMigration(onlineDDL)),
 	)
 	if err != nil {
 		return nil, err
