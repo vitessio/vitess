@@ -213,6 +213,14 @@ func TestSchemaChange(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
 
+		t.Run("test allow-concurrent", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(0), allowConcurrent)
+			}
+		})
 		t.Run("expect t1 running, t2 queued", func(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			// now that t1 is running, let's unblock t2. We expect it to remain queued.
@@ -244,6 +252,14 @@ func TestSchemaChange(t *testing.T) {
 		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
+		t.Run("test allow-concurrent", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(0), allowConcurrent)
+			}
+		})
 		t.Run("expect t1 running, t2 queued", func(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			// now that t1 is running, let's unblock t2. We expect it to remain queued.
@@ -274,6 +290,14 @@ func TestSchemaChange(t *testing.T) {
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 		t2uuid = testRevertMigration(t, t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 
+		t.Run("test allow-concurrent", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(1), allowConcurrent)
+			}
+		})
 		t.Run("expect both migrations to run", func(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
@@ -302,6 +326,22 @@ func TestSchemaChange(t *testing.T) {
 		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
 		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
 
+		t.Run("test allow-concurrent", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(1), allowConcurrent)
+			}
+		})
+		t.Run("test allow-concurrent for drop3", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, drop3uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(0), allowConcurrent)
+			}
+		})
 		t.Run("expect t1 migration to run", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -338,12 +378,28 @@ func TestSchemaChange(t *testing.T) {
 		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)                      // skip wait
 		drop4uuid := testOnlineDDLStatement(t, dropT4Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
 
+		t.Run("test allow-concurrent for drop3", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, drop3uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(1), allowConcurrent)
+			}
+		})
 		t.Run("expect t1 migration to run", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, 20*time.Second, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
 		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
+		t.Run("test allow-concurrent for drop1", func(t *testing.T) {
+			rs := onlineddl.ReadMigrations(t, &vtParams, drop1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				allowConcurrent := row.AsInt64("allow_concurrent", 0)
+				assert.Equal(t, int64(1), allowConcurrent)
+			}
+		})
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
