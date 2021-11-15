@@ -1,5 +1,0 @@
-Log file created at: 2021/11/12 11:53:08
-Running on machine: Francess-MacBook-Pro-2
-Binary: Built with gc go1.17.1 for darwin/amd64
-Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
-E1112 11:53:08.401298   96751 schemamanager.go:114] failed to open executor: unable to get shard names for keyspace: commerce, error: node doesn't exist: /vitess/global/keyspaces/commerce/shards/

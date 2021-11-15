@@ -1,5 +1,0 @@
-Log file created at: 2021/11/12 11:53:09
-Running on machine: Francess-MacBook-Pro-2
-Binary: Built with gc go1.17.1 for darwin/amd64
-Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
-F1112 11:53:09.014395     541 plugin_mysql_server.go:460] mysql.NewListener failed: listen unix /tmp/mysql.sock: bind: address already in use
