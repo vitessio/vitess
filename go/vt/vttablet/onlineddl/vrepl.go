@@ -106,12 +106,34 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 	}
 }
 
+// uniqueKeyValidForIteration returns 'false' if we should not use this unique key as the main
+// iteration key in vreplication.
+func uniqueKeyValidForIteration(uniqueKey *vrepl.UniqueKey) bool {
+	if uniqueKey.HasNullable {
+		// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
+		// Thus, we cannot use this unique key for iteration.
+		return false
+	}
+	if uniqueKey.HasFloat {
+		// float & double data types are imprecise and we cannot use them while iterating unique keys
+		return false
+	}
+	return true // good to go!
+}
+
 // getSharedUniqueKeys returns the unique keys shared between the two source&target tables
 func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *vrepl.UniqueKey) {
 	type ukPair struct{ source, target *vrepl.UniqueKey }
 	var sharedUKPairs []*ukPair
+
 	for _, sourceUniqueKey := range sourceUniqueKeys {
+		if !uniqueKeyValidForIteration(sourceUniqueKey) {
+			continue
+		}
 		for _, targetUniqueKey := range targetUniqueKeys {
+			if !uniqueKeyValidForIteration(targetUniqueKey) {
+				continue
+			}
 			uniqueKeyMatches := func() bool {
 				// Compare two unique keys
 				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
@@ -225,6 +247,9 @@ func removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), 
 // in given column list.
 func getUniqueKeyCoveredByColumns(uniqueKeys [](*vrepl.UniqueKey), columns *vrepl.ColumnList) (chosenUniqueKey *vrepl.UniqueKey) {
 	for _, uniqueKey := range uniqueKeys {
+		if !uniqueKeyValidForIteration(uniqueKey) {
+			continue
+		}
 		if uniqueKey.Columns.IsSubsetOf(columns) {
 			return uniqueKey
 		}
@@ -299,20 +324,11 @@ func (v *VRepl) readTableUniqueKeys(ctx context.Context, conn *dbconnpool.DBConn
 		return nil, err
 	}
 	for _, row := range rs.Named().Rows {
-		if row.AsBool("is_float", false) {
-			// float & double data types are imprecise and we cannot use them while iterating unique keys
-			continue
-		}
-		if row.AsBool("has_nullable", false) {
-			// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
-			// Thus, we cannot use this unique key for iteration.
-			continue
-		}
-
 		uniqueKey := &vrepl.UniqueKey{
 			Name:            row.AsString("index_name", ""),
 			Columns:         *vrepl.ParseColumnList(row.AsString("column_names", "")),
 			HasNullable:     row.AsBool("has_nullable", false),
+			HasFloat:        row.AsBool("is_float", false),
 			IsAutoIncrement: row.AsBool("is_auto_increment", false),
 		}
 		uniqueKeys = append(uniqueKeys, uniqueKey)
