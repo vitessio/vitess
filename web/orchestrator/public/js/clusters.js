@@ -126,11 +126,11 @@ $(document).ready(function() {
 
       }
       popoverElement.find("h3 .pull-right").append('<a href="' + compactClusterUri + '"><span class="glyphicon glyphicon-compressed" title="Compact display"></span></a>');
-      if (cluster.HasAutomatedIntermediateMasterRecovery === true) {
-        popoverElement.find("h3 .pull-right").prepend('<span class="glyphicon glyphicon-heart-empty text-info" title="Automated intermediate master recovery for this cluster ENABLED"></span>');
+      if (cluster.HasAutomatedIntermediatePrimaryRecovery === true) {
+        popoverElement.find("h3 .pull-right").prepend('<span class="glyphicon glyphicon-heart-empty text-info" title="Automated intermediate primary recovery for this cluster ENABLED"></span>');
       }
-      if (cluster.HasAutomatedMasterRecovery === true) {
-        popoverElement.find("h3 .pull-right").prepend('<span class="glyphicon glyphicon-heart text-info" title="Automated master recovery for this cluster ENABLED"></span>');
+      if (cluster.HasAutomatedPrimaryRecovery === true) {
+        popoverElement.find("h3 .pull-right").prepend('<span class="glyphicon glyphicon-heart text-info" title="Automated primary recovery for this cluster ENABLED"></span>');
       }
 
       var contentHtml = '' + '<div>Instances: <div class="pull-right"></div></div>';
