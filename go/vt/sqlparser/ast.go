@@ -1936,7 +1936,7 @@ type (
 	// In this case StrVal will be set instead of Name.
 	SubstrExpr struct {
 		Name   Expr
-		StrVal *Literal
+		StrVal Expr
 		From   Expr
 		To     Expr
 	}

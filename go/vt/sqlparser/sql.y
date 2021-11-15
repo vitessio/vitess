@@ -1242,6 +1242,7 @@ column_attribute_list_opt:
 	$1.Collate = string($3.String())
 	$$ = $1
   }
+
 column_storage:
   VIRTUAL
 {
