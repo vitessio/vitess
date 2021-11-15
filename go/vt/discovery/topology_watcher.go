@@ -228,6 +228,10 @@ func (tw *TopologyWatcher) loadTablets() {
 				// a different address key.
 				tw.tabletRecorder.ReplaceTablet(val.tablet, newVal.tablet)
 				topologyWatcherOperations.Add(topologyWatcherOpReplaceTablet, 1)
+			} else {
+				// The tablet is in our cache so let's ensure that the healthcheck record exists
+				// as it is critical for query serving
+				tw.tabletRecorder.AddTabletIfNotPresent(newVal.tablet)
 			}
 		}
 	}

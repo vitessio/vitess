@@ -156,6 +156,8 @@ func FilteringKeyspaces() bool {
 type TabletRecorder interface {
 	// AddTablet adds the tablet.
 	AddTablet(tablet *topodata.Tablet)
+	// AddTabletIfNotPresent idempotently adds the tablet.
+	AddTabletIfNotPresent(tablet *topodata.Tablet)
 	// RemoveTablet removes the tablet.
 	RemoveTablet(tablet *topodata.Tablet)
 	// ReplaceTablet does an AddTablet and RemoveTablet in one call, effectively replacing the old tablet with the new.
@@ -362,6 +364,18 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
 	go thc.checkConn(hc)
+}
+
+// AddTabletIfNotPresent adds the tablet, if not present.
+// This adds idempotency to AddTablet
+func (hc *HealthCheckImpl) AddTabletIfNotPresent(tablet *topodata.Tablet) {
+	tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+	hc.mu.Lock()
+	_, exists := hc.healthByAlias[tabletAliasString(tabletAlias)]
+	hc.mu.Unlock()
+	if !exists {
+		hc.AddTablet(tablet)
+	}
 }
 
 // RemoveTablet removes the tablet, and stops the health check.

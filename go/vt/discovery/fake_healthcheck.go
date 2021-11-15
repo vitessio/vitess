@@ -181,6 +181,17 @@ func (fhc *FakeHealthCheck) AddTablet(tablet *topodatapb.Tablet) {
 	fhc.items[key] = item
 }
 
+// AddTabletIfNotPresent adds the tablet, if not present.
+// This adds idempotency to AddTablet
+func (fhc *FakeHealthCheck) AddTabletIfNotPresent(tablet *topodatapb.Tablet) {
+	fhc.mu.Lock()
+	_, exists := fhc.items[TabletToMapKey(tablet)]
+	fhc.mu.Unlock()
+	if !exists {
+		fhc.AddTablet(tablet)
+	}
+}
+
 // RemoveTablet removes the tablet.
 func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
