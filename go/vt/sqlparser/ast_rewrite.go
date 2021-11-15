@@ -4028,8 +4028,8 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}) {
 		return false
 	}
-	if !a.rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
-		parent.(*SubstrExpr).StrVal = newNode.(*Literal)
+	if !a.rewriteExpr(node, node.StrVal, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).StrVal = newNode.(Expr)
 	}) {
 		return false
 	}

@@ -1592,7 +1592,7 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 	}
 	out := *n
 	out.Name = CloneExpr(n.Name)
-	out.StrVal = CloneRefOfLiteral(n.StrVal)
+	out.StrVal = CloneExpr(n.StrVal)
 	out.From = CloneExpr(n.From)
 	out.To = CloneExpr(n.To)
 	return &out
