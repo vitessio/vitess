@@ -42,6 +42,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isDeclarative        bool
 		isSingleton          bool
 		isPostponeCompletion bool
+		isAllowConcurrent    bool
 		runtimeOptions       string
 		err                  error
 	}{
@@ -99,6 +100,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:       "",
 			isPostponeCompletion: true,
 		},
+		{
+			strategyVariable:  "online -allow-concurrent",
+			strategy:          DDLStrategyOnline,
+			options:           "-allow-concurrent",
+			runtimeOptions:    "",
+			isAllowConcurrent: true,
+		},
 	}
 	for _, ts := range tt {
 		setting, err := ParseDDLStrategy(ts.strategyVariable)
@@ -108,6 +116,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
 		assert.Equal(t, ts.isSingleton, setting.IsSingleton())
 		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
+		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
 
 		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
 		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
