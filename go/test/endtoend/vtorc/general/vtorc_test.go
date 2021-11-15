@@ -23,11 +23,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 
-	_ "vitess.io/vitess/go/vt/topo/consultopo"
-	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
-	_ "vitess.io/vitess/go/vt/topo/k8stopo"
-	_ "vitess.io/vitess/go/vt/topo/zk2topo"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
