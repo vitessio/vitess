@@ -368,7 +368,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {

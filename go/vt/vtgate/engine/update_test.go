@@ -467,6 +467,33 @@ func TestUpdateIn(t *testing.T) {
 	})
 }
 
+func TestUpdateInStreamExecute(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{DML: DML{
+		Opcode:   In,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_update",
+		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
+		Values: []sqltypes.PlanValue{{
+			Values: []sqltypes.PlanValue{
+				{Value: sqltypes.NewInt64(1)},
+				{Value: sqltypes.NewInt64(2)},
+			}},
+		}},
+	}
+
+	vc := newDMLTestVCursor("-20", "20-")
+	err := upd.TryStreamExecute(vc, map[string]*querypb.BindVariable{}, false, func(result *sqltypes.Result) error {
+		return nil
+	})
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6),DestinationKeyspaceID(06e7ea22ce92708f)`,
+		// ResolveDestinations is hard-coded to return -20.
+		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
+	})
+}
+
 func TestUpdateInChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
@@ -593,12 +620,6 @@ func TestUpdateInChangedVindex(t *testing.T) {
 		// Finally, the actual update, which is also sent to -20, same route as the subquery.
 		`ExecuteMultiShard sharded.-20: dummy_update {} true true`,
 	})
-}
-
-func TestUpdateNoStream(t *testing.T) {
-	upd := &Update{}
-	err := upd.TryStreamExecute(nil, nil, false, nil)
-	require.EqualError(t, err, `query "" cannot be used for streaming`)
 }
 
 func buildTestVSchema() *vindexes.VSchema {
