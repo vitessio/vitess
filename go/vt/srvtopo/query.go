@@ -78,7 +78,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	cacheValid := entry.value != nil
+	cacheValid := entry.value != nil && time.Since(entry.lastQueryTime) < q.cacheRefreshInterval*2
 	shouldRefresh := time.Since(entry.lastQueryTime) > q.cacheRefreshInterval
 
 	// If it is not time to check again, then return either the cached
@@ -129,9 +129,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 				} else if newCtx.Err() == context.DeadlineExceeded {
 					log.Errorf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value)
 				} else {
-					log.Errorf("ResilientQuery(%v, %v) failed: %v (no cached value)", ctx, wkey, err)
-					entry.insertionTime = time.Time{}
-					entry.value = nil
+					log.Errorf("ResilientQuery(%v, %v) failed: %v (using cached value)", ctx, wkey, err)
 				}
 			}
 
