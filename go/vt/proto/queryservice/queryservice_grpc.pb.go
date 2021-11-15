@@ -57,6 +57,8 @@ type QueryClient interface {
 	BeginExecute(ctx context.Context, in *query.BeginExecuteRequest, opts ...grpc.CallOption) (*query.BeginExecuteResponse, error)
 	// BeginExecuteBatch executes a begin and a list of queries.
 	BeginExecuteBatch(ctx context.Context, in *query.BeginExecuteBatchRequest, opts ...grpc.CallOption) (*query.BeginExecuteBatchResponse, error)
+	// BeginStreamExecute executes a begin and the specified SQL query.
+	BeginStreamExecute(ctx context.Context, in *query.BeginStreamExecuteRequest, opts ...grpc.CallOption) (Query_BeginStreamExecuteClient, error)
 	// MessageStream streams messages from a message table.
 	MessageStream(ctx context.Context, in *query.MessageStreamRequest, opts ...grpc.CallOption) (Query_MessageStreamClient, error)
 	// MessageAck acks messages for a table.
@@ -250,8 +252,40 @@ func (c *queryClient) BeginExecuteBatch(ctx context.Context, in *query.BeginExec
 	return out, nil
 }
 
+func (c *queryClient) BeginStreamExecute(ctx context.Context, in *query.BeginStreamExecuteRequest, opts ...grpc.CallOption) (Query_BeginStreamExecuteClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[1], "/queryservice.Query/BeginStreamExecute", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryBeginStreamExecuteClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_BeginStreamExecuteClient interface {
+	Recv() (*query.BeginStreamExecuteResponse, error)
+	grpc.ClientStream
+}
+
+type queryBeginStreamExecuteClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryBeginStreamExecuteClient) Recv() (*query.BeginStreamExecuteResponse, error) {
+	m := new(query.BeginStreamExecuteResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 func (c *queryClient) MessageStream(ctx context.Context, in *query.MessageStreamRequest, opts ...grpc.CallOption) (Query_MessageStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[1], "/queryservice.Query/MessageStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[2], "/queryservice.Query/MessageStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +353,7 @@ func (c *queryClient) Release(ctx context.Context, in *query.ReleaseRequest, opt
 }
 
 func (c *queryClient) StreamHealth(ctx context.Context, in *query.StreamHealthRequest, opts ...grpc.CallOption) (Query_StreamHealthClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[2], "/queryservice.Query/StreamHealth", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[3], "/queryservice.Query/StreamHealth", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -351,7 +385,7 @@ func (x *queryStreamHealthClient) Recv() (*query.StreamHealthResponse, error) {
 }
 
 func (c *queryClient) VStream(ctx context.Context, in *binlogdata.VStreamRequest, opts ...grpc.CallOption) (Query_VStreamClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[3], "/queryservice.Query/VStream", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[4], "/queryservice.Query/VStream", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +417,7 @@ func (x *queryVStreamClient) Recv() (*binlogdata.VStreamResponse, error) {
 }
 
 func (c *queryClient) VStreamRows(ctx context.Context, in *binlogdata.VStreamRowsRequest, opts ...grpc.CallOption) (Query_VStreamRowsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[4], "/queryservice.Query/VStreamRows", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[5], "/queryservice.Query/VStreamRows", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +449,7 @@ func (x *queryVStreamRowsClient) Recv() (*binlogdata.VStreamRowsResponse, error)
 }
 
 func (c *queryClient) VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[5], "/queryservice.Query/VStreamResults", opts...)
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[6], "/queryservice.Query/VStreamResults", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -487,6 +521,8 @@ type QueryServer interface {
 	BeginExecute(context.Context, *query.BeginExecuteRequest) (*query.BeginExecuteResponse, error)
 	// BeginExecuteBatch executes a begin and a list of queries.
 	BeginExecuteBatch(context.Context, *query.BeginExecuteBatchRequest) (*query.BeginExecuteBatchResponse, error)
+	// BeginStreamExecute executes a begin and the specified SQL query.
+	BeginStreamExecute(*query.BeginStreamExecuteRequest, Query_BeginStreamExecuteServer) error
 	// MessageStream streams messages from a message table.
 	MessageStream(*query.MessageStreamRequest, Query_MessageStreamServer) error
 	// MessageAck acks messages for a table.
@@ -557,6 +593,9 @@ func (UnimplementedQueryServer) BeginExecute(context.Context, *query.BeginExecut
 }
 func (UnimplementedQueryServer) BeginExecuteBatch(context.Context, *query.BeginExecuteBatchRequest) (*query.BeginExecuteBatchResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BeginExecuteBatch not implemented")
+}
+func (UnimplementedQueryServer) BeginStreamExecute(*query.BeginStreamExecuteRequest, Query_BeginStreamExecuteServer) error {
+	return status.Errorf(codes.Unimplemented, "method BeginStreamExecute not implemented")
 }
 func (UnimplementedQueryServer) MessageStream(*query.MessageStreamRequest, Query_MessageStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method MessageStream not implemented")
@@ -889,6 +928,27 @@ func _Query_BeginExecuteBatch_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Query_BeginStreamExecute_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(query.BeginStreamExecuteRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).BeginStreamExecute(m, &queryBeginStreamExecuteServer{stream})
+}
+
+type Query_BeginStreamExecuteServer interface {
+	Send(*query.BeginStreamExecuteResponse) error
+	grpc.ServerStream
+}
+
+type queryBeginStreamExecuteServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryBeginStreamExecuteServer) Send(m *query.BeginStreamExecuteResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 func _Query_MessageStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(query.MessageStreamRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -1154,6 +1214,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "StreamExecute",
 			Handler:       _Query_StreamExecute_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "BeginStreamExecute",
+			Handler:       _Query_BeginStreamExecute_Handler,
 			ServerStreams: true,
 		},
 		{
