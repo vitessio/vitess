@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/mysql/collations"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -978,6 +979,137 @@ func TestRouteSortWeightStrings(t *testing.T) {
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
 		require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+	})
+}
+
+func TestRouteSortCollation(t *testing.T) {
+	sel := NewRoute(
+		SelectUnsharded,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: false,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+
+	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+
+	sel.OrderBy = []OrderByParams{{
+		Col:         0,
+		CollationID: collationID,
+	}}
+
+	vc := &loggingVCursor{
+		shards: []string{"0"},
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"normal",
+					"varchar",
+				),
+				"c",
+				"d",
+				"cs",
+				"cs",
+				"c",
+			),
+		},
+	}
+
+	var result *sqltypes.Result
+	var wantResult *sqltypes.Result
+	var err error
+	t.Run("Sort using Collation", func(t *testing.T) {
+		result, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+		vc.ExpectLog(t, []string{
+			`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+			`ExecuteMultiShard ks.0: dummy_select {} false false`,
+		})
+		wantResult = sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"normal",
+				"varchar",
+			),
+			"c",
+			"c",
+			"cs",
+			"cs",
+			"d",
+		)
+		expectResult(t, "sel.Execute", result, wantResult)
+	})
+
+	t.Run("Descending ordering using Collation", func(t *testing.T) {
+		sel.OrderBy[0].Desc = true
+		vc.Rewind()
+		result, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+		require.NoError(t, err)
+		wantResult = sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"normal",
+				"varchar",
+			),
+			"d",
+			"cs",
+			"cs",
+			"c",
+			"c",
+		)
+		expectResult(t, "sel.Execute", result, wantResult)
+	})
+
+	t.Run("Error when Unknown Collation", func(t *testing.T) {
+		sel.OrderBy = []OrderByParams{{
+			Col:         0,
+			CollationID: collations.Unknown,
+		}}
+
+		vc := &loggingVCursor{
+			shards: []string{"0"},
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"normal",
+						"varchar",
+					),
+					"c",
+					"d",
+					"cs",
+					"cs",
+					"c",
+				),
+			},
+		}
+		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, "types are not comparable: VARCHAR vs VARCHAR")
+	})
+
+	t.Run("Error when Unsupported Collation", func(t *testing.T) {
+		sel.OrderBy = []OrderByParams{{
+			Col:         0,
+			CollationID: 1111,
+		}}
+
+		vc := &loggingVCursor{
+			shards: []string{"0"},
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields(
+						"normal",
+						"varchar",
+					),
+					"c",
+					"d",
+					"cs",
+					"cs",
+					"c",
+				),
+			},
+		}
+		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
+		require.EqualError(t, err, "comparison using collation 1111 isn't possible")
 	})
 }
 

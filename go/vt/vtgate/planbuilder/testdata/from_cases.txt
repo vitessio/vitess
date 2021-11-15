@@ -493,7 +493,6 @@ Gen4 plan same as above
   }
 }
 
-
 # ',' join
 "select music.col from user, music"
 {
