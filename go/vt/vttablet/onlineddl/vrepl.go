@@ -74,6 +74,7 @@ type VRepl struct {
 	targetSharedColumns              *vrepl.ColumnList
 	droppedSourceNonGeneratedColumns *vrepl.ColumnList
 	droppedNoDefaultColumnNames      []string
+	expandedColumnNames              []string
 	sharedColumnsMap                 map[string]string
 	sourceAutoIncrement              uint64
 
@@ -368,12 +369,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		}
 	}
 
-	v.droppedNoDefaultColumnNames = []string{}
-	for _, col := range v.droppedSourceNonGeneratedColumns.Columns() {
-		if !col.HasDefault() {
-			v.droppedNoDefaultColumnNames = append(v.droppedNoDefaultColumnNames, col.Name)
-		}
-	}
+	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
 
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
 	if err != nil {

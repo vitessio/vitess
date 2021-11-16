@@ -76,3 +76,14 @@ func GetSharedColumns(
 	}
 	return NewColumnList(sharedColumnNames), NewColumnList(mappedSharedColumnNames), NewColumnList(droppedSourceNonGeneratedColumnsNames), sharedColumnsMap
 }
+
+// GetNoDefaultColumnNames returns names of columns which have no default value, out of given list of columns
+func GetNoDefaultColumnNames(columns *ColumnList) (names []string) {
+	names = []string{}
+	for _, col := range columns.Columns() {
+		if !col.HasDefault() {
+			names = append(names, col.Name)
+		}
+	}
+	return names
+}
