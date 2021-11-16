@@ -19,4 +19,12 @@ if [ $? -eq 1 ]; then
   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.42.1
 fi
 
-golangci-lint run --new -E revive ./go/...
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+if [ -z "$gofiles" ]; then
+  exit 0
+fi
+
+gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ')
+
+echo "Linting $gopackages"
+golangci-lint run -E revive $gopackages
