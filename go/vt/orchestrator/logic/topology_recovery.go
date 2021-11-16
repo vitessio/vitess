@@ -1725,9 +1725,9 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
 		switch level {
 		case logutilpb.Level_WARNING:
-			log.Warningf("ERS - %s", value)
+			log.Warningf("PRS - %s", value)
 		case logutilpb.Level_ERROR:
-			log.Errorf("ERS - %s", value)
+			log.Errorf("PRS - %s", value)
 		}
 		AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(context.Background(),
