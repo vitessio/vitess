@@ -22,17 +22,7 @@ limitations under the License.
 package test
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
-	"os/exec"
-	"path"
 	"testing"
-	"time"
-
-	"github.com/hashicorp/consul/api"
-
-	"vitess.io/vitess/go/testfiles"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -121,91 +111,4 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkWatch(t, ts)
 	checkWatchInterrupt(t, ts)
 	ts.Close()
-}
-
-// StartConsul starts a consul subprocess, and waits for it to be ready.
-// Returns the exec.Cmd forked, the config file to remove after the test,
-// and the server address to RPC-connect to.
-func StartConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
-	// Create a temporary config file, as ports cannot all be set
-	// via command line. The file name has to end with '.json' so
-	// we're not using TempFile.
-	configDir, err := os.MkdirTemp("", "consul")
-	if err != nil {
-		t.Fatalf("cannot create temp dir: %v", err)
-	}
-	defer os.RemoveAll(configDir)
-
-	configFilename := path.Join(configDir, "consul.json")
-	configFile, err := os.OpenFile(configFilename, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		t.Fatalf("cannot create tempfile: %v", err)
-	}
-
-	// Create the JSON config, save it.
-	port := testfiles.GoVtTopoConsultopoPort
-	config := map[string]interface{}{
-		"ports": map[string]int{
-			"dns":      port,
-			"http":     port + 1,
-			"serf_lan": port + 2,
-			"serf_wan": port + 3,
-		},
-	}
-
-	if authToken != "" {
-		config["datacenter"] = "vitess"
-		config["acl_datacenter"] = "vitess"
-		config["acl_master_token"] = authToken
-		config["acl_default_policy"] = "deny"
-		config["acl_down_policy"] = "extend-cache"
-	}
-
-	data, err := json.Marshal(config)
-	if err != nil {
-		t.Fatalf("cannot json-encode config: %v", err)
-	}
-	if _, err := configFile.Write(data); err != nil {
-		t.Fatalf("cannot write config: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("cannot close config: %v", err)
-	}
-
-	cmd := exec.Command("consul",
-		"agent",
-		"-dev",
-		"-config-file", configFilename)
-	err = cmd.Start()
-	if err != nil {
-		t.Fatalf("failed to start consul: %v", err)
-	}
-
-	// Create a client to connect to the created consul.
-	serverAddr := fmt.Sprintf("localhost:%v", port+1)
-	cfg := api.DefaultConfig()
-	cfg.Address = serverAddr
-	if authToken != "" {
-		cfg.Token = authToken
-	}
-	c, err := api.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
-	}
-
-	// Wait until we can list "/", or timeout.
-	start := time.Now()
-	kv := c.KV()
-	for {
-		_, _, err := kv.List("/", nil)
-		if err == nil {
-			break
-		}
-		if time.Since(start) > 10*time.Second {
-			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	return cmd, configFilename, serverAddr
 }

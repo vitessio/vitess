@@ -22,15 +22,16 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path"
 	"strings"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/topo/test"
-
+	"github.com/hashicorp/consul/api"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -313,7 +314,7 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 
 func TestExternalTopoServerConsul(t *testing.T) {
 	// Start a single consul in the background.
-	cmd, configFilename, serverAddr := test.StartConsul(t, "")
+	cmd, serverAddr := startConsul(t)
 	defer func() {
 		// Alerts command did not run successful
 		if err := cmd.Process.Kill(); err != nil {
@@ -323,7 +324,6 @@ func TestExternalTopoServerConsul(t *testing.T) {
 		if err := cmd.Wait(); err != nil {
 			log.Errorf("cmd process wait has an error: %v", err)
 		}
-		os.Remove(configFilename)
 	}()
 
 	args := os.Args
@@ -422,4 +422,45 @@ func resetFlags(args []string, conf vttest.Config) {
 func randomPort() int {
 	v := rand.Int31n(20000)
 	return int(v + 10000)
+}
+
+// startConsul starts a consul subprocess, and waits for it to be ready.
+// Returns the exec.Cmd forked, and the server address to RPC-connect to.
+func startConsul(t *testing.T) (*exec.Cmd, string) {
+	// pick a random port to make sure things work with non-default port
+	port := randomPort()
+
+	cmd := exec.Command("consul",
+		"agent",
+		"-dev",
+		"-http-port", fmt.Sprintf("%d", port))
+	err := cmd.Start()
+	if err != nil {
+		t.Fatalf("failed to start consul: %v", err)
+	}
+
+	// Create a client to connect to the created consul.
+	serverAddr := fmt.Sprintf("localhost:%v", port)
+	cfg := api.DefaultConfig()
+	cfg.Address = serverAddr
+	c, err := api.NewClient(cfg)
+	if err != nil {
+		t.Fatalf("api.NewClient(%v) failed: %v", serverAddr, err)
+	}
+
+	// Wait until we can list "/", or timeout.
+	start := time.Now()
+	kv := c.KV()
+	for {
+		_, _, err := kv.List("/", nil)
+		if err == nil {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			t.Fatalf("Failed to start consul daemon in time. Consul is returning error: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	return cmd, serverAddr
 }
