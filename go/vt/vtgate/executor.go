@@ -383,23 +383,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
 	ec.once.Do(func() {
 		t := th.Tablet
-		env := collations.Default()
-
-		// if the tablet health does not contain a proper database server version string,
-		// we will use the default collation environment (MySQL80) and warn the user.
-		if t == nil || t.DbServerVersion == "" || t.DbServerVersion == "0.0.0" {
-			log.Warning("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults.")
-		} else {
-			// otherwise, we try to create a new environment with the database server version
-			// string. again, we fall back to the default environment and warn the user if
-			// we cannot create the environment.
-			newEnv, err := collations.NewEnvironment(t.DbServerVersion)
-			if err != nil {
-				log.Warningf("unable to get the database flavor from the tablets, MySQL80 will be use to resolve collations' defaults: %v", err)
-			} else {
-				env = newEnv
-			}
-		}
+		env := collations.NewEnvironment(t.DbServerVersion)
 
 		// if VTGate's -collation flag was not specified, we use the default collation of utf8mb4
 		// given our collation environment.

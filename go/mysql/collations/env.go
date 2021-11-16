@@ -17,7 +17,6 @@ limitations under the License.
 package collations
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 )
@@ -124,9 +123,13 @@ func fetchCacheEnvironment(version collver) *Environment {
 // NewEnvironment creates a collation Environment for the given MySQL version string.
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
-func NewEnvironment(serverVersion string) (*Environment, error) {
-	var version collver
+func NewEnvironment(serverVersion string) *Environment {
+	var version collver = collverMySQL56
 	switch {
+	case strings.HasSuffix(serverVersion, "-ripple"):
+		// the ripple binlog server can mask the actual version of mysqld;
+		// assume we have the highest
+		version = collverMySQL80
 	case strings.Contains(serverVersion, "MariaDB"):
 		switch {
 		case strings.Contains(serverVersion, "10.0."):
@@ -138,15 +141,14 @@ func NewEnvironment(serverVersion string) (*Environment, error) {
 		case strings.Contains(serverVersion, "10.3."):
 			version = collverMariaDB103
 		}
+	case strings.HasPrefix(serverVersion, "5.6."):
+		version = collverMySQL56
 	case strings.HasPrefix(serverVersion, "5.7."):
 		version = collverMySQL57
 	case strings.HasPrefix(serverVersion, "8.0."):
 		version = collverMySQL80
 	}
-	if version == collverInvalid {
-		return nil, fmt.Errorf("unsupported ServerVersion value: %q", serverVersion)
-	}
-	return fetchCacheEnvironment(version), nil
+	return fetchCacheEnvironment(version)
 }
 
 func makeEnv(version collver) *Environment {

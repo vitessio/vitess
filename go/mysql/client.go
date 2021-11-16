@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
@@ -223,19 +222,15 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 	// environment variable.
 	// Certain MySQL or MariaDB versions might have different default collations for some
 	// charsets, so it is important to use a database-version-aware collation system/API.
-	env, err := collations.NewEnvironment(c.ServerVersion)
-	if err != nil {
-		return err
-	}
-
-	var coll collations.Collation
-	charset := params.Charset
+	env := collations.NewEnvironment(c.ServerVersion)
 
 	// if there is no collation or charset, we default to utf8mb4
+	charset := params.Charset
 	if params.Collation == "" && charset == "" {
 		charset = "utf8mb4"
 	}
 
+	var coll collations.Collation
 	if params.Collation == "" {
 		// If there is no collation we will just use the charset's default collation
 		// otherwise we directly use the given collation.
@@ -253,10 +248,10 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 	// We send a query to MySQL to set the connection's collation.
 	// See: https://dev.mysql.com/doc/refman/8.0/en/charset-connection.html
 	querySetCollation := fmt.Sprintf("SET collation_connection = %s;", coll.Name())
-	_, err = c.ExecuteFetch(querySetCollation, 1, false)
-	if err != nil {
+	if _, err := c.ExecuteFetch(querySetCollation, 1, false); err != nil {
 		return err
 	}
+
 	// The collation environment is stored inside the connection parameters struct.
 	// We will use it to verify that execution requests issued by VTGate match the
 	// same collation as the one used to communicate with MySQL.
