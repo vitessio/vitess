@@ -610,6 +610,8 @@ func breakExpressionInLHSandRHS(
 				bvName := node.CompliantName()
 				bvNames = append(bvNames, bvName)
 				arg := sqlparser.NewArgument(bvName)
+				// we are replacing one of the sides of the comparison with an argument,
+				// but we don't want to lose the type information we have, so we copy it over
 				semTable.CopyExprTypeValue(node, arg)
 				cursor.Replace(arg)
 			}
