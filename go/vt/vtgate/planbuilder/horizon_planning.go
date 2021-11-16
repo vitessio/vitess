@@ -140,7 +140,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	switch p := plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
-	case *joinGen4, *semiJoin:
+	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
@@ -444,7 +444,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	newPlan := plan
 	var oa *orderedAggregate
 	uniqVindex := hasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.GroupByExprs)
-	_, joinPlan := plan.(*joinGen4)
+	joinPlan := isJoin(plan)
 	if !uniqVindex || joinPlan {
 		if hp.qp.ProjectionError != nil {
 			return nil, hp.qp.ProjectionError
@@ -621,7 +621,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
 		}
 		return false, nil
-	case *joinGen4:
+	case *joinGen4, *hashJoin:
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
 		return added, err
 	case *orderedAggregate:
@@ -1192,4 +1192,13 @@ func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTa
 		return newFilter(semTable, plan, expr)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
+}
+
+func isJoin(plan logicalPlan) bool {
+	switch plan.(type) {
+	case *joinGen4, *hashJoin:
+		return true
+	default:
+		return false
+	}
 }
