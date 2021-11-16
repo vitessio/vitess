@@ -137,3 +137,37 @@ func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, primary, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
 }
+
+// make an api call to graceful primary takeover with a cross-cell replica and check that it errors out
+// covers the test case graceful-master-takeover-fail-cross-region from orchestrator
+func TestGracefulPrimaryTakeoverFailCrossCell(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 1, 1, nil, "test_config.json")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+
+	// find the rdonly tablet
+	var rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	crossCellReplica1 := utils.StartVttablet(t, clusterInfo, utils.Cell2, false)
+	// newly started tablet does not replicate from anyone yet, we will allow orchestrator to fix this too
+	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{crossCellReplica1, rdonly}, 25*time.Second)
+
+	status, response := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", primary.MySQLPort, crossCellReplica1.MySQLPort))
+	assert.Equal(t, 500, status)
+	assert.Contains(t, response, "GracefulPrimaryTakeover: constraint failure")
+
+	// check that the cross-cell replica doesn't get promoted and the previous primary is still the primary
+	utils.CheckPrimaryTablet(t, clusterInfo, primary, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, primary, []*cluster.Vttablet{crossCellReplica1, rdonly}, 10*time.Second)
+}
