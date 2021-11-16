@@ -40,9 +40,9 @@ type joinTree struct {
 
 	leftJoin bool
 
-	// predicatesToRemove lists all the predicates that needs to be removed
+	// predicatesToRemoveFromHashJoin lists all the predicates that needs to be removed
 	// from the right-hand side if we decide to do a hash join.
-	predicatesToRemove []sqlparser.Expr
+	predicatesToRemoveFromHashJoin []sqlparser.Expr
 
 	predicates []sqlparser.Expr
 }
@@ -55,13 +55,13 @@ func (jp *joinTree) tableID() semantics.TableSet {
 
 func (jp *joinTree) clone() queryTree {
 	result := &joinTree{
-		columns:            jp.columns,
-		vars:               jp.vars,
-		lhs:                jp.lhs.clone(),
-		rhs:                jp.rhs.clone(),
-		leftJoin:           jp.leftJoin,
-		predicatesToRemove: jp.predicatesToRemove,
-		predicates:         jp.predicates,
+		columns:                        jp.columns,
+		vars:                           jp.vars,
+		lhs:                            jp.lhs.clone(),
+		rhs:                            jp.rhs.clone(),
+		leftJoin:                       jp.leftJoin,
+		predicatesToRemoveFromHashJoin: jp.predicatesToRemoveFromHashJoin,
+		predicates:                     jp.predicates,
 	}
 	return result
 }

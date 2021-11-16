@@ -30,6 +30,8 @@ var _ logicalPlan = (*hashJoin)(nil)
 
 // hashJoin is used to build a HashJoin primitive.
 type hashJoin struct {
+	gen4Plan
+
 	// Left and Right are the nodes for the join.
 	Left, Right logicalPlan
 
@@ -46,10 +48,9 @@ type hashJoin struct {
 	ComparisonType querypb.Type
 
 	Collation collations.ID
-
-	gen4Plan
 }
 
+// WireupGen4 implements the logicalPlan interface
 func (hj *hashJoin) WireupGen4(semTable *semantics.SemTable) error {
 	err := hj.Left.WireupGen4(semTable)
 	if err != nil {
@@ -58,6 +59,7 @@ func (hj *hashJoin) WireupGen4(semTable *semantics.SemTable) error {
 	return hj.Right.WireupGen4(semTable)
 }
 
+// Primitive implements the logicalPlan interface
 func (hj *hashJoin) Primitive() engine.Primitive {
 	return &engine.HashJoin{
 		Left:           hj.Left.Primitive(),
@@ -72,10 +74,12 @@ func (hj *hashJoin) Primitive() engine.Primitive {
 	}
 }
 
+// Inputs implements the logicalPlan interface
 func (hj *hashJoin) Inputs() []logicalPlan {
 	return []logicalPlan{hj.Left, hj.Right}
 }
 
+// Rewrite implements the logicalPlan interface
 func (hj *hashJoin) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
@@ -85,6 +89,7 @@ func (hj *hashJoin) Rewrite(inputs ...logicalPlan) error {
 	return nil
 }
 
+// ContainsTables implements the logicalPlan interface
 func (hj *hashJoin) ContainsTables() semantics.TableSet {
 	return hj.Left.ContainsTables().Merge(hj.Right.ContainsTables())
 }

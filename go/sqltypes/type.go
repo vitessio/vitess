@@ -91,6 +91,7 @@ func IsDate(t querypb.Type) bool {
 	return t == Datetime || t == Date || t == Timestamp || t == Time
 }
 
+// IsNull returns true if the type is NULL type
 func IsNull(t querypb.Type) bool {
 	return t == Null
 }
