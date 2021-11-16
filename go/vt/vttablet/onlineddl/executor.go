@@ -883,10 +883,11 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	for _, uniqueKey := range v.removedUniqueKeys {
 		removedUniqueKeyNames = append(removedUniqueKeyNames, uniqueKey.Name)
 	}
-	if err := e.updateMigrationAddedRemovedUniqueKeys(ctx, onlineDDL.UUID,
+	if err := e.updateSchemaAnalysis(ctx, onlineDDL.UUID,
 		len(v.addedUniqueKeys),
 		len(v.removedUniqueKeys),
 		strings.Join(removedUniqueKeyNames, ","),
+		strings.Join(v.droppedNoDefaultColumnNames, ","),
 	); err != nil {
 		return err
 	}
@@ -2744,11 +2745,12 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 	return err
 }
 
-func (e *Executor) updateMigrationAddedRemovedUniqueKeys(ctx context.Context, uuid string, addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateAddedRemovedUniqueKeys,
+func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string, addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string, droppedNoDefaultColumnNames string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
 		sqltypes.StringBindVariable(removedUniqueKeyNames),
+		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
