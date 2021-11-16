@@ -296,6 +296,18 @@ func TestAddedUniqueKeys(t *testing.T) {
 			},
 		},
 		{
+			name: "NULLable UK removed",
+			sourceUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1, HasNullable: true},
+			},
+			targetUKs:      emptyUniqueKeys,
+			renameMap:      map[string]string{},
+			expectAddedUKs: emptyUniqueKeys,
+			expectRemovedUKs: []*vrepl.UniqueKey{
+				{Name: "PRIMARY", Columns: *columns1, HasNullable: true},
+			},
+		},
+		{
 			name:      "UK added",
 			sourceUKs: emptyUniqueKeys,
 			targetUKs: []*vrepl.UniqueKey{
