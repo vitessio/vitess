@@ -96,6 +96,21 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 		require.NoError(t, err, "vtexplain error")
 		require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
+		// We want to remove the additional `set collation_connection` queries that happen
+		// when the tablet connects to MySQL to set the default collation.
+		// Removing them lets us keep simpler expected output files.
+		for _, e := range explains {
+			for i, action := range e.TabletActions {
+				var mysqlQueries []*MysqlQuery
+				for _, query := range action.MysqlQueries {
+					if !strings.Contains(strings.ToLower(query.SQL), "set collation_connection") {
+						mysqlQueries = append(mysqlQueries, query)
+					}
+				}
+				e.TabletActions[i].MysqlQueries = mysqlQueries
+			}
+		}
+
 		explainText := ExplainsAsText(explains)
 		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
 			// Print the Text that was actually returned and also dump to a
@@ -188,6 +203,17 @@ func TestJSONOutput(t *testing.T) {
 	require.NoError(t, err, "vtexplain error")
 	require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
+	for _, e := range explains {
+		for i, action := range e.TabletActions {
+			var mysqlQueries []*MysqlQuery
+			for _, query := range action.MysqlQueries {
+				if !strings.Contains(strings.ToLower(query.SQL), "set collation_connection") {
+					mysqlQueries = append(mysqlQueries, query)
+				}
+			}
+			e.TabletActions[i].MysqlQueries = mysqlQueries
+		}
+	}
 	explainJSON := ExplainsAsJSON(explains)
 
 	var data interface{}

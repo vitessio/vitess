@@ -463,8 +463,11 @@ func (er *expressionRewriter) sysVarRewrite(cursor *Cursor, node *ColName) {
 	lowered := node.Name.Lowered()
 	switch lowered {
 	case sysvars.Autocommit.Name,
+		sysvars.Charset.Name,
+		sysvars.Collation.Name,
 		sysvars.ClientFoundRows.Name,
 		sysvars.DDLStrategy.Name,
+		sysvars.Names.Name,
 		sysvars.TransactionMode.Name,
 		sysvars.ReadAfterWriteGTID.Name,
 		sysvars.ReadAfterWriteTimeOut.Name,
