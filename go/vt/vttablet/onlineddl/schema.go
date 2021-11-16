@@ -45,24 +45,25 @@ const (
 		KEY status_idx (migration_status, liveness_timestamp),
 		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
 	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries            = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet             = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableArtifacts          = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
-	alterSchemaMigrationsTableTabletFailure      = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTabletFailureIndex = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
-	alterSchemaMigrationsTableProgress           = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableContext            = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableDDLAction          = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableMessage            = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
-	alterSchemaMigrationsTableTableCompleteIndex = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
-	alterSchemaMigrationsTableETASeconds         = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
-	alterSchemaMigrationsTableRowsCopied         = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTableRows          = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableRemovedUniqueNames = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
+	alterSchemaMigrationsTableRetries                  = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTablet                   = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableArtifacts                = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
+	alterSchemaMigrationsTableTabletFailure            = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTabletFailureIndex       = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
+	alterSchemaMigrationsTableProgress                 = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableContext                  = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableDDLAction                = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableMessage                  = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
+	alterSchemaMigrationsTableTableCompleteIndex       = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
+	alterSchemaMigrationsTableETASeconds               = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
+	alterSchemaMigrationsTableRowsCopied               = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableTableRows                = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableAddedUniqueKeys          = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueKeys        = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableLogFile                  = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetainArtifacts          = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableRemovedUniqueNames       = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
+	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -164,8 +165,9 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateAddedRemovedUniqueKeys = `UPDATE _vt.schema_migrations
-			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a
+	sqlUpdateSchemaAnalysis = `UPDATE _vt.schema_migrations
+			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a,
+			dropped_no_default_column_names=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -532,4 +534,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableLogFile,
 	alterSchemaMigrationsTableRetainArtifacts,
 	alterSchemaMigrationsTableRemovedUniqueNames,
+	alterSchemaMigrationsTableRemovedNoDefaultColNames,
 }

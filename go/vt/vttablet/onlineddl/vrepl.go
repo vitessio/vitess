@@ -73,6 +73,7 @@ type VRepl struct {
 	sourceSharedColumns              *vrepl.ColumnList
 	targetSharedColumns              *vrepl.ColumnList
 	droppedSourceNonGeneratedColumns *vrepl.ColumnList
+	droppedNoDefaultColumnNames      []string
 	sharedColumnsMap                 map[string]string
 	sourceAutoIncrement              uint64
 
@@ -364,6 +365,13 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			// A column is converted from ENUM type to textual type
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
 			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
+		}
+	}
+
+	v.droppedNoDefaultColumnNames = []string{}
+	for _, col := range v.droppedSourceNonGeneratedColumns.Columns() {
+		if !col.HasDefault() {
+			v.droppedNoDefaultColumnNames = append(v.droppedNoDefaultColumnNames, col.Name)
 		}
 	}
 
