@@ -677,9 +677,9 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	// collation.
 	// We encapsulate this check in a parent if that verifies that the execute options
 	// we receive is not nil, this situation can happen in tests for instance.
-	if qre.options != nil { // nolint
-		if err := conn.MatchCollation(collations.ID(qre.options.Collation)); err != nil { // nolint
-			// TODO: fail the query here
+	if qre.options != nil {
+		if err := conn.MatchCollation(collations.ID(qre.options.Collation)); err != nil {
+			return nil, err
 		}
 	}
 

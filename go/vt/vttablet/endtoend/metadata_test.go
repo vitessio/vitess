@@ -19,6 +19,8 @@ package endtoend
 import (
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -55,14 +57,14 @@ func TestMetadataSpecificExecOptions(t *testing.T) {
 
 	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: int32(collations.Default().LookupByName("utf8mb4_general_ci").ID())})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
 		nil,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL, Collation: int32(collations.Default().LookupByName("utf8mb4_general_ci").ID())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,11 +106,19 @@ func TestMetadataDefaultExecOptions(t *testing.T) {
 	client := getAndSetup(t)
 	defer cleanup(client)
 
-	qr, err := client.ExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, &querypb.ExecuteOptions{})
+	qr, err := client.ExecuteWithOptions(
+		"select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
+		nil,
+		&querypb.ExecuteOptions{Collation: int32(collations.Default().LookupByName("utf8mb4_general_ci").ID())},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	streamQr, err := client.StreamExecuteWithOptions("select * from vitess_b where id = -2147483648 and eid = -9223372036854775808", nil, nil)
+	streamQr, err := client.StreamExecuteWithOptions(
+		"select * from vitess_b where id = -2147483648 and eid = -9223372036854775808",
+		nil,
+		&querypb.ExecuteOptions{Collation: int32(collations.Default().LookupByName("utf8mb4_general_ci").ID())},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

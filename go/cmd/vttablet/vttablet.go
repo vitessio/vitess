@@ -158,7 +158,7 @@ func initConfig(tabletAlias *topodatapb.TabletAlias) (*tabletenv.TabletConfig, *
 
 	// If connection parameters were specified, socketFile will be empty.
 	// Otherwise, the socketFile (read from mycnf) will be used to initialize
-	// dbconfigs.
+	// dbconfigs.ma
 	config.DB.InitWithSocket(socketFile)
 	for _, cfg := range config.ExternalConnections {
 		cfg.InitWithSocket("")

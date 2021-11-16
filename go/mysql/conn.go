@@ -1534,12 +1534,13 @@ func (c *Conn) MatchCollation(collationID collations.ID) error {
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "No collation environment for this connection")
 	}
 
+	vttabletCollString := c.CollationEnvironment.LookupByID(c.Collation).Name()
 	coll := c.CollationEnvironment.LookupByID(collationID)
 	if coll == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation could not be looked up: (Collation ID %d), VTTablet has (Collation: '%v')", collationID, vttabletCollString)
 	}
 	if coll.ID() != c.Collation {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.CollationEnvironment.LookupByID(c.Collation).Name())
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), vttabletCollString)
 	}
 	return nil
 }

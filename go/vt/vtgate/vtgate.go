@@ -304,9 +304,11 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 }
 
 func setVTGateCollation(ch chan *discovery.TabletHealth, set func(*discovery.TabletHealth)) {
+	log.Warning("entering set vtgate collation")
 	go func() {
 		th := <-ch
 		set(th)
+		log.Warning("done with set vtgate collation")
 	}()
 }
 
