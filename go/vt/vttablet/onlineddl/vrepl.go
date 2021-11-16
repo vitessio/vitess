@@ -70,10 +70,11 @@ type VRepl struct {
 	alterOptions string
 	tableRows    int64
 
-	sourceSharedColumns *vrepl.ColumnList
-	targetSharedColumns *vrepl.ColumnList
-	sharedColumnsMap    map[string]string
-	sourceAutoIncrement uint64
+	sourceSharedColumns              *vrepl.ColumnList
+	targetSharedColumns              *vrepl.ColumnList
+	droppedSourceNonGeneratedColumns *vrepl.ColumnList
+	sharedColumnsMap                 map[string]string
+	sourceAutoIncrement              uint64
 
 	chosenSourceUniqueKey *vrepl.UniqueKey
 	chosenTargetUniqueKey *vrepl.UniqueKey
@@ -266,62 +267,6 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 	return nil
 }
 
-// getSharedColumns returns the intersection of two lists of columns in same order as the first list
-func (v *VRepl) getSharedColumns(sourceColumns, targetColumns *vrepl.ColumnList, sourceVirtualColumns, targetVirtualColumns *vrepl.ColumnList, columnRenameMap map[string]string) (
-	sourceSharedColumns *vrepl.ColumnList, targetSharedColumns *vrepl.ColumnList, sharedColumnsMap map[string]string,
-) {
-	sharedColumnNames := []string{}
-	for _, sourceColumn := range sourceColumns.Names() {
-		isSharedColumn := false
-		for _, targetColumn := range targetColumns.Names() {
-			if strings.EqualFold(sourceColumn, targetColumn) {
-				// both tables have this column. Good start.
-				isSharedColumn = true
-				break
-			}
-			if strings.EqualFold(columnRenameMap[sourceColumn], targetColumn) {
-				// column in source is renamed in target
-				isSharedColumn = true
-				break
-			}
-		}
-		for droppedColumn := range v.parser.DroppedColumnsMap() {
-			if strings.EqualFold(sourceColumn, droppedColumn) {
-				isSharedColumn = false
-				break
-			}
-		}
-		for _, virtualColumn := range sourceVirtualColumns.Names() {
-			// virtual/generated columns on source are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		for _, virtualColumn := range targetVirtualColumns.Names() {
-			// virtual/generated columns on target are silently skipped
-			if strings.EqualFold(sourceColumn, virtualColumn) {
-				isSharedColumn = false
-			}
-		}
-		if isSharedColumn {
-			sharedColumnNames = append(sharedColumnNames, sourceColumn)
-		}
-	}
-	sharedColumnsMap = map[string]string{}
-	for _, columnName := range sharedColumnNames {
-		if mapped, ok := columnRenameMap[columnName]; ok {
-			sharedColumnsMap[columnName] = mapped
-		} else {
-			sharedColumnsMap[columnName] = columnName
-		}
-	}
-	mappedSharedColumnNames := []string{}
-	for _, columnName := range sharedColumnNames {
-		mappedSharedColumnNames = append(mappedSharedColumnNames, sharedColumnsMap[columnName])
-	}
-	return vrepl.NewColumnList(sharedColumnNames), vrepl.NewColumnList(mappedSharedColumnNames), sharedColumnsMap
-}
-
 func (v *VRepl) analyzeAlter(ctx context.Context) error {
 	if err := v.parser.ParseAlterStatement(v.alterOptions); err != nil {
 		return err
@@ -346,7 +291,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if err != nil {
 		return err
 	}
-	v.sourceSharedColumns, v.targetSharedColumns, v.sharedColumnsMap = v.getSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser.ColumnRenameMap())
+	v.sourceSharedColumns, v.targetSharedColumns, v.droppedSourceNonGeneratedColumns, v.sharedColumnsMap = vrepl.GetSharedColumns(sourceColumns, targetColumns, sourceVirtualColumns, targetVirtualColumns, v.parser)
 
 	// unique keys
 	sourceUniqueKeys, err := v.readTableUniqueKeys(ctx, conn, v.sourceTable)
@@ -393,7 +338,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
 
-	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns); err != nil {
+	if err := v.applyColumnTypes(ctx, conn, v.sourceTable, sourceColumns, sourceVirtualColumns, sourcePKColumns, v.sourceSharedColumns, sharedPKColumns, v.droppedSourceNonGeneratedColumns); err != nil {
 		return err
 	}
 	if err := v.applyColumnTypes(ctx, conn, v.targetTable, targetColumns, targetVirtualColumns, targetPKColumns, v.targetSharedColumns); err != nil {

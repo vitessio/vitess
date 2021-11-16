@@ -56,7 +56,7 @@ type Column struct {
 	EnumToTextConversion bool
 
 	IsNullable    bool
-	DefaultIsNull bool
+	IsDefaultNull bool
 
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
