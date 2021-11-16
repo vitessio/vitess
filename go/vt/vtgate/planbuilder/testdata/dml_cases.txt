@@ -2610,3 +2610,25 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+#delete with alias table
+"delete from user u where u.col > 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from user u where u.col \u003e 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col \u003e 20 for update",
+    "Query": "delete from `user` as u where u.col \u003e 20",
+    "Table": "user"
+  }
+}
+Gen4 plan same as above
