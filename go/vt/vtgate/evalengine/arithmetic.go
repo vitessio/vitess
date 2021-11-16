@@ -221,7 +221,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
 
-	typ, err := CoerceTo(v1.Type(), v2.Type())
+	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
 	if err != nil {
 		return 0, err
 	}
