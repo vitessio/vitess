@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,13 +28,15 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+// The following test tries to produce lots of different values and compares them both using hash code and compare,
+// to make sure that these two methods agree on what values are equal
 func TestHashCodesRandom(t *testing.T) {
 	tested := 0
 	equal := 0
 	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
-	endTime := time.Now().Add(1 * time.Second) // run the test for 10 seconds
+	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
-		t.Run(fmt.Sprintf("test %d, nb equals %d", tested, equal), func(t *testing.T) {
+		t.Run(fmt.Sprintf("test %d", tested), func(t *testing.T) {
 			tested++
 			v1, v2 := randomValues()
 			cmp, err := NullsafeCompare(v1, v2, collation)

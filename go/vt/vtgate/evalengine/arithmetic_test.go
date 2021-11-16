@@ -1550,27 +1550,6 @@ func TestMaxCollate(t *testing.T) {
 	}
 }
 
-// func TestHashCodes(t *testing.T) {
-// 	n1 := sqltypes.NULL
-// 	n2 := sqltypes.Value{}
-// 	collation := collations.Default().DefaultCollationForCharset("utf8mb4")
-// 	h1, err := NullsafeHashcode(n1, collation.ID())
-// 	require.NoError(t, err)
-// 	h2, err := NullsafeHashcode(n2, collation.ID(), abi.ABIParamAssignment{})
-// 	require.NoError(t, err)
-// 	assert.Equal(t, h1, h2)
-//
-// 	char := TestValue(querypb.Type_VARCHAR, "1")
-// 	h1, err = NullsafeHashcode(char, collation.ID(), abi.ABIParamAssignment{})
-// 	require.NoError(t, err)
-//
-// 	num := TestValue(querypb.Type_INT64, "1")
-// 	h2, err = NullsafeHashcode(num, collation.ID(), abi.ABIParamAssignment{})
-// 	require.NoError(t, err)
-//
-// 	require.Equal(t, h1, h2)
-// }
-
 func printValue(v sqltypes.Value) string {
 	return fmt.Sprintf("%v:%q", v.Type(), v.ToBytes())
 }

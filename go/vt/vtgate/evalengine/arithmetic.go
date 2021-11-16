@@ -368,6 +368,7 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
 }
 
+// CoerceTo takes two input types, and decides how they should be coerced before compared
 func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
 	if v1 == v2 {
 		return v1, nil
