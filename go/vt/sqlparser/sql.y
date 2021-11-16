@@ -3734,6 +3734,10 @@ condition:
   {
     $$ = &RangeCond{Left: $1, Operator: NotBetweenOp, From: $4, To: $6}
   }
+| EXISTS subquery compare value_expression
+  {
+    $$ = &ComparisonExpr{Left: &ExistsExpr{Subquery: $2}, Operator: $3, Right: $4}
+  }
 | EXISTS subquery
   {
     $$ = &ExistsExpr{Subquery: $2}

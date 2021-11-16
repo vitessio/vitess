@@ -40,6 +40,15 @@ func TestSubqueryRewrite(t *testing.T) {
 		input:  "select 1 from t1 where exists (select 1)",
 		output: "select 1 from t1 where :__sq_has_values1",
 	}, {
+		input:  "select 1 from t1 where exists (select 1) = TRUE",
+		output: "select 1 from t1 where :__sq_has_values1 = true",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = FALSE",
+		output: "select 1 from t1 where :__sq_has_values1 = false",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = 1",
+		output: "select 1 from t1 where :__sq_has_values1 = 1",
+	}, {
 		input:  "select id from t1 where id in (select 1)",
 		output: "select id from t1 where :__sq_has_values1 = 1 and id in ::__sq1",
 	}, {
