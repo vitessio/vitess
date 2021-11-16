@@ -363,7 +363,8 @@ const (
 		`
 	sqlSelectColumnTypes = `
 		select
-				*
+				*,
+				COLUMN_DEFAULT IS NULL AS is_default_null
 			from
 				information_schema.columns
 			where
