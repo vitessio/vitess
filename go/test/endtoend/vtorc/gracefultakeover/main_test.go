@@ -36,6 +36,12 @@ func TestMain(m *testing.M) {
 		NumRdonly:   2,
 		UIDBase:     100,
 	})
+	cellInfos = append(cellInfos, &utils.CellInfo{
+		CellName:    utils.Cell2,
+		NumReplicas: 2,
+		NumRdonly:   0,
+		UIDBase:     200,
+	})
 
 	exitcode, err := func() (int, error) {
 		var err error
