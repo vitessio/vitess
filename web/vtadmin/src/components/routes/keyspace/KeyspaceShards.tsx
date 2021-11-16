@@ -85,7 +85,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                     <tr key={row.name}>
                         <DataCell>
                             <ShardLink
-                                className="font-weight-bold"
+                                className="font-bold"
                                 clusterID={keyspace?.cluster?.id}
                                 keyspace={keyspace?.keyspace?.name}
                                 shard={row.name}
@@ -122,7 +122,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                         })}
                                 </div>
                             ) : (
-                                <span className="text-color-secondary">No tablets</span>
+                                <span className="text-secondary">No tablets</span>
                             )}
                         </DataCell>
                         <DataCell>
@@ -131,10 +131,10 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                     <TabletLink alias={row.primaryAlias} clusterID={keyspace?.cluster?.id}>
                                         <TabletServingPip state={row._primaryTablet.state} /> {row.primaryAlias}
                                     </TabletLink>
-                                    <div className="font-size-small text-color-secondary">{row.primaryHostname}</div>
+                                    <div className="font-size-small text-secondary">{row.primaryHostname}</div>
                                 </div>
                             ) : (
-                                <span className="text-color-secondary">No primary tablet</span>
+                                <span className="text-secondary">No primary tablet</span>
                             )}
                         </DataCell>
                     </tr>

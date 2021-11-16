@@ -470,7 +470,7 @@ func TestConsistentLookupUpdate(t *testing.T) {
 	3 3 3
 	3 4 4
 	*/
-	utils.Exec(t, conn, "update t4 set id2 = '42' where id1 = 1")
+	utils.Exec(t, conn, "update t4 a set a.id2 = '42' where a.id1 = 1")
 	qr = utils.Exec(t, conn, "select id1, id2 from t4 order by id1")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("42")] [INT64(2) VARCHAR("2")] [INT64(3) VARCHAR("3")] [INT64(4) VARCHAR("3")]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)

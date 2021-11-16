@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -437,4 +439,11 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
+}
+
+// MatchCollation uses the Connector MatchCollation method to tells whether this connection's
+// collation matches with the given collation ID.
+// If it does not match an error will be returned explaining why.
+func (dbc *DBConn) MatchCollation(collationID collations.ID) error {
+	return dbc.conn.MatchCollation(collationID)
 }

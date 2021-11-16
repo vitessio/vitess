@@ -26,6 +26,13 @@ access to Vitess.
    1. `crontab -e`
    2. Within the file add a line `8 5 * * 6 docker system prune -f --volumes --all`
 
+### Moving a test to a self-hosted runner
+Most of the code for running the tests is generated code by `make generate_ci_workflows` which uses the file `ci_workflow_gen.go`
+
+To move a unit test from GitHub runners to self-hosted runners, just move the test from `unitTestDatabases` to `unitTestSelfHostedDatabases` in `ci_workflow_gen.go` and call `make generate_ci_workflows`
+
+To move a cluster test from GitHub runners to self-hosted runners, just move the test from `clusterList` to `clusterSelfHostedList` in `ci_workflow_gen.go` and call `make generate_ci_workflows`
+
 ### Using a self-hosted runner to debug a flaky test
 You will need access to the self-hosted runner machine to be able to connect to it via SSH.
 1. From the output of the run on GitHub Actions, find the `Machine name` in the `Set up job` step 
