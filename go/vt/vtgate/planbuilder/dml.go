@@ -179,7 +179,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	return edml, ksidVindex, ksidCol, nil
 }
 
-func generateDMLSubquery(where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCol string) string {
+func generateDMLSubquery(tblExpr sqlparser.TableExpr, where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCol string) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("select %s", ksidCol)
 	for _, cv := range table.Owned {
@@ -187,7 +187,7 @@ func generateDMLSubquery(where *sqlparser.Where, orderBy sqlparser.OrderBy, limi
 			buf.Myprintf(", %v", column)
 		}
 	}
-	buf.Myprintf(" from %v%v%v%v for update", table.Name, where, orderBy, limit)
+	buf.Myprintf(" from %v%v%v%v for update", tblExpr, where, orderBy, limit)
 	return buf.String()
 }
 
