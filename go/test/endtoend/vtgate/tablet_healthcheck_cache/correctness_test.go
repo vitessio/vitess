@@ -130,7 +130,7 @@ func TestMain(m *testing.M) {
 // conditions with these operations and their interactions with the cache.
 func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 	ctx := context.Background()
-	tries := 10
+	tries := 5
 	numShards := len(shards)
 	// 1 for primary,replica
 	expectedTabletHCcacheEntries := numShards * 2
@@ -155,8 +155,13 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 		qr, _ := vtgateConn.ExecuteFetch(query, 100, true)
 		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
 
-		killTablet(t, tablet)
+		deleteTablet(t, tablet)
 		expectedTabletHCcacheEntries--
+
+		// We need to sleep for at least vtgate's -tablet_refresh_interval to be sure we
+		// have resynchronized the healthcheck cache with the topo server via the topology
+		// watcher and pruned the deleted tablet from the healthcheck cache.
+		time.Sleep(1 * time.Minute)
 
 		qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
 		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
@@ -213,8 +218,7 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 	return tablet
 }
 
-func killTablet(t *testing.T, tablet *cluster.Vttablet) {
-	t.Logf("Killing tablet: %s", tablet.Alias)
+func deleteTablet(t *testing.T, tablet *cluster.Vttablet) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func(tablet *cluster.Vttablet) {
@@ -225,6 +229,8 @@ func killTablet(t *testing.T, tablet *cluster.Vttablet) {
 	}(tablet)
 	wg.Wait()
 
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
 	require.Nil(t, err)
+
+	t.Logf("Deleted tablet: %s", tablet.Alias)
 }
