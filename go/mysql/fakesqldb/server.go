@@ -270,9 +270,9 @@ func (db *DB) ConnParams() dbconfigs.Connector {
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
-		Charset:    "utf8",
+		Charset:    "utf8mb4",
+		Collation:  "utf8mb4_general_ci",
 	})
-
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
@@ -359,10 +359,10 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return nil
 	}
 
-	// Using special handling for 'SET NAMES utf8'.  The driver
-	// may send this at connection time, and we don't want it to
+	// Using special handling for setting the charset and connection collation.
+	// The driver may send this at connection time, and we don't want it to
 	// interfere.
-	if key == "set names utf8" {
+	if key == "set names utf8" || strings.HasPrefix(key, "set collation_connection = ") {
 		//log error
 		if err := callback(&sqltypes.Result{}); err != nil {
 			log.Errorf("callback failed : %v", err)
@@ -405,6 +405,13 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
+
+	// when creating a connection to the database, we send an initial query to set the connection's
+	// collation, we want to skip the query check if we get such initial query.
+	// this is done to ease the test readability.
+	if strings.HasPrefix(query, "SET collation_connection =") {
+		return &sqltypes.Result{}, nil
+	}
 
 	index := db.expectedExecuteFetchIndex
 	if db.infinite && index == len(db.expectedExecuteFetch) {

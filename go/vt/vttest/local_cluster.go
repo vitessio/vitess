@@ -79,6 +79,11 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
+	// Collation is the default collation used by MySQL
+	// If Collation is set and Charset is not set, Collation will be used
+	// to define the value of Charset
+	Collation string
+
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 

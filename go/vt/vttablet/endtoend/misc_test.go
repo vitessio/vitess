@@ -344,8 +344,8 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
 			Type:         sqltypes.VarChar,
-			ColumnLength: 12,
-			Charset:      33,
+			ColumnLength: 16,
+			Charset:      45,
 			Flags:        1,
 		}},
 		Rows: [][]sqltypes.Value{
@@ -373,8 +373,8 @@ func TestBindInSelect(t *testing.T) {
 		Fields: []*querypb.Field{{
 			Name:         "",
 			Type:         sqltypes.VarChar,
-			ColumnLength: 6,
-			Charset:      33,
+			ColumnLength: 8,
+			Charset:      45,
 			Flags:        1,
 		}},
 		Rows: [][]sqltypes.Value{
