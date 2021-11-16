@@ -29,7 +29,11 @@ import (
 
 var _ Primitive = (*HashJoin)(nil)
 
-// HashJoin specifies the parameters for a join primitive.
+// HashJoin specifies the parameters for a join primitive
+// Hash joins work by fetch all the input from the LHS, and building a hash map, known as the probe table, for this input.
+// The key to the map is the hashcode of the value for column that we are joining by.
+// Then the RHS is fetched, and we can check if the rows from the RHS matches any from the LHS.
+// When they match by hash code, we double-check that we are not working with a false positive by comparing the values.
 type HashJoin struct {
 	Opcode JoinOpcode
 
@@ -50,10 +54,11 @@ type HashJoin struct {
 	// the join columns can be found
 	LHSKey, RHSKey int
 
+	// The join condition. Used for plan descriptions
 	ASTPred sqlparser.Expr
 
-	Collation collations.ID
-
+	// collation and type are used to hash the incoming values correctly
+	Collation      collations.ID
 	ComparisonType querypb.Type
 }
 
@@ -65,17 +70,9 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	}
 
 	// build the probe table from the LHS result
-	probeTable := map[evalengine.HashCode][]row{}
-	for _, current := range lresult.Rows {
-		joinVal := current[hj.LHSKey]
-		if joinVal.IsNull() {
-			continue
-		}
-		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
-		if err != nil {
-			return nil, err
-		}
-		probeTable[hashcode] = append(probeTable[hashcode], current)
+	probeTable, err := hj.buildProbeTable(lresult)
+	if err != nil {
+		return nil, err
 	}
 
 	rresult, err := vcursor.ExecutePrimitive(hj.Right, bindVars, wantfields)
@@ -115,6 +112,22 @@ func (hj *HashJoin) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bin
 	return result, nil
 }
 
+func (hj *HashJoin) buildProbeTable(lresult *sqltypes.Result) (map[evalengine.HashCode][]row, error) {
+	probeTable := map[evalengine.HashCode][]row{}
+	for _, current := range lresult.Rows {
+		joinVal := current[hj.LHSKey]
+		if joinVal.IsNull() {
+			continue
+		}
+		hashcode, err := evalengine.NullsafeHashcode(joinVal, hj.Collation, hj.ComparisonType)
+		if err != nil {
+			return nil, err
+		}
+		probeTable[hashcode] = append(probeTable[hashcode], current)
+	}
+	return probeTable, nil
+}
+
 // TryStreamExecute implements the Primitive interface
 func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	// build the probe table from the LHS result
@@ -142,6 +155,7 @@ func (hj *HashJoin) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	return vcursor.StreamExecutePrimitive(hj.Right, bindVars, wantfields, func(result *sqltypes.Result) error {
+		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
 		if len(result.Fields) != 0 {
 			res = &sqltypes.Result{
