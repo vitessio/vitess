@@ -28,39 +28,46 @@ var _ Primitive = (*Distinct)(nil)
 
 // Distinct Primitive is used to uniqueify results
 type Distinct struct {
-	Source   Primitive
-	ColTypes []querypb.Type
+	Source        Primitive
+	ColCollations []collations.ID
 }
 
 type row = []sqltypes.Value
 
 type probeTable struct {
-	m map[evalengine.HashCode][]row
+	seenRows      map[evalengine.HashCode][]row
+	colCollations []collations.ID
 }
 
 func (pt *probeTable) exists(inputRow row) (bool, error) {
 	// calculate hashcode from all column values in the input row
 	code := evalengine.HashCode(17)
-	for _, value := range inputRow {
-		// TODO: fetch the correct collation from the semantic table
-		hashcode, err := evalengine.NullsafeHashcode(value, collations.Unknown, value.Type())
+	for idx, value := range inputRow {
+		// We use unknown collations when we do not have collation information
+		// This is safe for types which do not require collation information like
+		// numeric types. It will fail at runtime for text types.
+		collation := collations.Unknown
+		if len(pt.colCollations) > idx {
+			collation = pt.colCollations[idx]
+		}
+		hashcode, err := evalengine.NullsafeHashcode(value, collation, value.Type())
 		if err != nil {
 			return false, err
 		}
 		code = code*31 + hashcode
 	}
 
-	existingRows, found := pt.m[code]
+	existingRows, found := pt.seenRows[code]
 	if !found {
 		// nothing with this hash code found, we can be sure it's a not seen row
-		pt.m[code] = []row{inputRow}
+		pt.seenRows[code] = []row{inputRow}
 		return false, nil
 	}
 
 	// we found something in the map - still need to check all individual values
 	// so we don't just fall for a hash collision
 	for _, existingRow := range existingRows {
-		exists, err := equal(existingRow, inputRow)
+		exists, err := equal(existingRow, inputRow, pt.colCollations)
 		if err != nil {
 			return false, err
 		}
@@ -69,15 +76,18 @@ func (pt *probeTable) exists(inputRow row) (bool, error) {
 		}
 	}
 
-	pt.m[code] = append(existingRows, inputRow)
+	pt.seenRows[code] = append(existingRows, inputRow)
 
 	return false, nil
 }
 
-func equal(a, b []sqltypes.Value) (bool, error) {
+func equal(a, b []sqltypes.Value, colCollations []collations.ID) (bool, error) {
 	for i, aVal := range a {
-		// TODO(king-11) make collation aware
-		cmp, err := evalengine.NullsafeCompare(aVal, b[i], collations.Unknown)
+		collation := collations.Unknown
+		if len(colCollations) > i {
+			collation = colCollations[i]
+		}
+		cmp, err := evalengine.NullsafeCompare(aVal, b[i], collation)
 		if err != nil {
 			return false, err
 		}
@@ -88,8 +98,11 @@ func equal(a, b []sqltypes.Value) (bool, error) {
 	return true, nil
 }
 
-func newProbeTable() *probeTable {
-	return &probeTable{m: map[uintptr][]row{}}
+func newProbeTable(colCollations []collations.ID) *probeTable {
+	return &probeTable{
+		seenRows:      map[uintptr][]row{},
+		colCollations: colCollations,
+	}
 }
 
 // TryExecute implements the Primitive interface
@@ -104,7 +117,7 @@ func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 		InsertID: input.InsertID,
 	}
 
-	pt := newProbeTable()
+	pt := newProbeTable(d.ColCollations)
 
 	for _, row := range input.Rows {
 		exists, err := pt.exists(row)
@@ -121,7 +134,7 @@ func (d *Distinct) TryExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 // TryStreamExecute implements the Primitive interface
 func (d *Distinct) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	pt := newProbeTable()
+	pt := newProbeTable(d.ColCollations)
 
 	err := vcursor.StreamExecutePrimitive(d.Source, bindVars, wantfields, func(input *sqltypes.Result) error {
 		result := &sqltypes.Result{
