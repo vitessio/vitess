@@ -217,7 +217,7 @@ var commands = []commandGroup{
 			{
 				name:   "ChangeTabletType",
 				method: commandChangeTabletType,
-				params: "[-dry-run] <tablet alias> <tablet type>",
+				params: "[-dry_run] <tablet alias> <tablet type>",
 				help: "Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a primary.\n" +
 					"NOTE: This command automatically updates the serving graph.\n",
 			},
@@ -522,13 +522,13 @@ var commands = []commandGroup{
 			{
 				name:   "SwitchReads",
 				method: commandSwitchReads,
-				params: "[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
+				params: "[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry_run] <keyspace.workflow>",
 				help:   "Switch read traffic for the specified workflow.",
 			},
 			{
 				name:   "SwitchWrites",
 				method: commandSwitchWrites,
-				params: "[-timeout=30s] [-reverse] [-reverse_replication=true] [-dry-run] <keyspace.workflow>",
+				params: "[-timeout=30s] [-reverse] [-reverse_replication=true] [-dry_run] <keyspace.workflow>",
 				help:   "Switch write traffic for the specified workflow.",
 			},
 			{
@@ -702,7 +702,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplyVSchema",
 				method: commandApplyVSchema,
-				params: "{-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run] <keyspace>",
+				params: "{-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry_run] <keyspace>",
 				help:   "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
 			},
 			{
@@ -714,7 +714,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplyRoutingRules",
 				method: commandApplyRoutingRules,
-				params: "{-rules=<rules> || -rules_file=<rules_file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
+				params: "{-rules=<rules> || -rules_file=<rules_file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry_run]",
 				help:   "Applies the VSchema routing rules.",
 			},
 			{
