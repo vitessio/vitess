@@ -75,6 +75,7 @@ type DBConfigs struct {
 	Host                       string        `json:"host,omitempty"`
 	Port                       int           `json:"port,omitempty"`
 	Charset                    string        `json:"charset,omitempty"`
+	Collation                  string        `json:"collation,omitempty"`
 	Flags                      uint64        `json:"flags,omitempty"`
 	Flavor                     string        `json:"flavor,omitempty"`
 	SslMode                    vttls.SslMode `json:"sslMode,omitempty"`
@@ -127,7 +128,8 @@ func registerBaseFlags() {
 	flag.StringVar(&GlobalDBConfigs.Socket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	flag.StringVar(&GlobalDBConfigs.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&GlobalDBConfigs.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&GlobalDBConfigs.Charset, "db_charset", "utf8mb4", "Character set used for this tablet.")
+	flag.StringVar(&GlobalDBConfigs.Collation, "db_collation", "", "Collation used for this tablet. If this flag is empty, the default collation for the character set will be used.")
 	flag.Uint64Var(&GlobalDBConfigs.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&GlobalDBConfigs.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
 	flag.Var(&GlobalDBConfigs.SslMode, "db_ssl_mode", "SSL mode to connect with. One of disabled, preferred, required, verify_ca & verify_identity.")
@@ -156,7 +158,7 @@ func registerPerUserFlags(userKey string, uc *UserConfig, cp *mysql.ConnParams) 
 	flag.StringVar(&cp.Host, "db-config-"+userKey+"-host", "", "deprecated: use db_host")
 	flag.IntVar(&cp.Port, "db-config-"+userKey+"-port", 0, "deprecated: use db_port")
 	flag.StringVar(&cp.UnixSocket, "db-config-"+userKey+"-unixsocket", "", "deprecated: use db_socket")
-	flag.StringVar(&cp.Charset, "db-config-"+userKey+"-charset", "utf8", "deprecated: use db_charset")
+	flag.StringVar(&cp.Charset, "db-config-"+userKey+"-charset", "utf8mb4", "deprecated: use db_charset")
 	flag.Uint64Var(&cp.Flags, "db-config-"+userKey+"-flags", 0, "deprecated: use db_flags")
 	flag.StringVar(&cp.SslCa, "db-config-"+userKey+"-ssl-ca", "", "deprecated: use db_ssl_ca")
 	flag.StringVar(&cp.SslCaPath, "db-config-"+userKey+"-ssl-ca-path", "", "deprecated: use db_ssl_ca_path")
@@ -184,7 +186,7 @@ func New(mcp *mysql.ConnParams) Connector {
 }
 
 // Connect will invoke the mysql.connect method and return a connection
-func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
+func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	params, err := c.MysqlParams()
 	if err != nil {
 		return nil, err
@@ -355,9 +357,21 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string) {
 			cp.UnixSocket = defaultSocketFile
 		}
 
-		if dbcfgs.Charset != "" {
+		// If the connection params has a charset defined, it will not be overridden by the
+		// global configuration, same thing applies to the collation field.
+		// At a later stage, when we establish a connection with MySQL, we will receive the
+		// server name back, and we will be able to create a collation environment which is
+		// required to figure out the default collation of a charset or if a collation is valid.
+		// This collation environment will be stored directly in the connection parameters as
+		// only the individual connection parameters are used to talk with MySQL, not the global
+		// connection parameter (DBConfigs).
+		if dbcfgs.Charset != "" && cp.Charset == "" {
 			cp.Charset = dbcfgs.Charset
 		}
+		if dbcfgs.Collation != "" && cp.Collation == "" {
+			cp.Collation = dbcfgs.Collation
+		}
+
 		if dbcfgs.Flags != 0 {
 			cp.Flags = dbcfgs.Flags
 		}
@@ -430,5 +444,7 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
+		Collation:          genParams.Collation,
+		Charset:            genParams.Charset,
 	}
 }

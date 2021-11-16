@@ -135,7 +135,8 @@ func init() {
 	flag.IntVar(&topo.rdonly, "rdonly_count", 1,
 		"Rdonly tablets per shard")
 
-	flag.StringVar(&config.Charset, "charset", "utf8", "MySQL charset")
+	flag.StringVar(&config.Charset, "charset", "utf8mb4", "MySQL charset")
+	flag.StringVar(&config.Collation, "collation", "", "MySQL collation")
 	flag.StringVar(&config.SnapshotFile, "snapshot_file", "",
 		"A MySQL DB snapshot file")
 
