@@ -106,157 +106,6 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 	}
 }
 
-// uniqueKeyValidForIteration returns 'false' if we should not use this unique key as the main
-// iteration key in vreplication.
-func uniqueKeyValidForIteration(uniqueKey *vrepl.UniqueKey) bool {
-	if uniqueKey.HasNullable {
-		// NULLable columns in a unique key means the set of values is not really unique (two identical rows with NULLs are allowed).
-		// Thus, we cannot use this unique key for iteration.
-		return false
-	}
-	if uniqueKey.HasFloat {
-		// float & double data types are imprecise and we cannot use them while iterating unique keys
-		return false
-	}
-	return true // good to go!
-}
-
-// getSharedUniqueKeys returns the unique keys shared between the two source&target tables
-func getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (chosenSourceUniqueKey, chosenTargetUniqueKey *vrepl.UniqueKey) {
-	type ukPair struct{ source, target *vrepl.UniqueKey }
-	var sharedUKPairs []*ukPair
-
-	for _, sourceUniqueKey := range sourceUniqueKeys {
-		if !uniqueKeyValidForIteration(sourceUniqueKey) {
-			continue
-		}
-		for _, targetUniqueKey := range targetUniqueKeys {
-			if !uniqueKeyValidForIteration(targetUniqueKey) {
-				continue
-			}
-			uniqueKeyMatches := func() bool {
-				// Compare two unique keys
-				if sourceUniqueKey.Columns.Len() != targetUniqueKey.Columns.Len() {
-					return false
-				}
-				// Expect same columns, same order, potentially column name mapping
-				sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
-				targetUniqueKeyNames := targetUniqueKey.Columns.Names()
-				for i := range sourceUniqueKeyNames {
-					sourceColumnName := sourceUniqueKeyNames[i]
-					targetColumnName := targetUniqueKeyNames[i]
-					mappedSourceColumnName := sourceColumnName
-					if mapped, ok := columnRenameMap[sourceColumnName]; ok {
-						mappedSourceColumnName = mapped
-					}
-					if !strings.EqualFold(mappedSourceColumnName, targetColumnName) {
-						return false
-					}
-				}
-				return true
-			}
-			if uniqueKeyMatches() {
-				sharedUKPairs = append(sharedUKPairs, &ukPair{source: sourceUniqueKey, target: targetUniqueKey})
-			}
-		}
-	}
-	// Now that we know what the shared unique keys are, let's find the "best" shared one.
-	// Source and target unique keys can have different name, even though they cover the exact same
-	// columns and in same order.
-	for _, pair := range sharedUKPairs {
-		if pair.source.HasNullable {
-			continue
-		}
-		if pair.target.HasNullable {
-			continue
-		}
-		return pair.source, pair.target
-	}
-	return nil, nil
-}
-
-// sourceUniqueKeyAsOrMoreConstrainedThanTarget returns 'true' when sourceUniqueKey is at least as constrained as targetUniqueKey.
-// "More constrained" means the uniqueness constraint is "stronger". Thus, if sourceUniqueKey is as-or-more constrained than targetUniqueKey, then
-// rows valid under sourceUniqueKey must also be valid in targetUniqueKey. The opposite is not necessarily so: rows that are valid in targetUniqueKey
-// may cause a unique key violation under sourceUniqueKey
-func sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey *vrepl.UniqueKey, columnRenameMap map[string]string) bool {
-	// Compare two unique keys
-	if sourceUniqueKey.Columns.Len() > targetUniqueKey.Columns.Len() {
-		// source can't be more constrained if it covers *more* columns
-		return false
-	}
-	// we know that len(sourceUniqueKeyNames) <= len(targetUniqueKeyNames)
-	sourceUniqueKeyNames := sourceUniqueKey.Columns.Names()
-	targetUniqueKeyNames := targetUniqueKey.Columns.Names()
-	// source is more constrained than target if every column in source is also in target, order is immaterial
-	for i := range sourceUniqueKeyNames {
-		sourceColumnName := sourceUniqueKeyNames[i]
-		mappedSourceColumnName := sourceColumnName
-		if mapped, ok := columnRenameMap[sourceColumnName]; ok {
-			mappedSourceColumnName = mapped
-		}
-		columnFoundInTarget := func() bool {
-			for _, targetColumnName := range targetUniqueKeyNames {
-				if strings.EqualFold(mappedSourceColumnName, targetColumnName) {
-					return true
-				}
-			}
-			return false
-		}
-		if !columnFoundInTarget() {
-			return false
-		}
-	}
-	return true
-}
-
-// addedUniqueKeys returns the unique key constraints added in target. This does not necessarily mean that the unique key itself is new,
-// rather that there's a new, stricter constraint on a set of columns, that didn't exist before. Example:
-//   before: unique key `my_key`(c1, c2, c3); after: unique key `my_key`(c1, c2)
-//   The constraint on (c1, c2) is new; and `my_key` in target table ("after") is considered a new key
-// Order of columns is immaterial to uniqueness of column combination.
-func addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (addedUKs [](*vrepl.UniqueKey)) {
-	addedUKs = [](*vrepl.UniqueKey){}
-	for _, targetUniqueKey := range targetUniqueKeys {
-		foundAsOrMoreConstrainingSourceKey := func() bool {
-			for _, sourceUniqueKey := range sourceUniqueKeys {
-				if sourceUniqueKeyAsOrMoreConstrainedThanTarget(sourceUniqueKey, targetUniqueKey, columnRenameMap) {
-					// target key does not add a new constraint
-					return true
-				}
-			}
-			return false
-		}
-		if !foundAsOrMoreConstrainingSourceKey() {
-			addedUKs = append(addedUKs, targetUniqueKey)
-		}
-	}
-	return addedUKs
-}
-
-// removedUniqueKeys returns the list of unique key constraints _removed_ going from source to target.
-func removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys [](*vrepl.UniqueKey), columnRenameMap map[string]string) (removedUKs [](*vrepl.UniqueKey)) {
-	reverseColumnRenameMap := map[string]string{}
-	for k, v := range columnRenameMap {
-		reverseColumnRenameMap[v] = k
-	}
-	return addedUniqueKeys(targetUniqueKeys, sourceUniqueKeys, reverseColumnRenameMap)
-}
-
-// getUniqueKeyCoveredByColumns returns the first unique key from given list, whose columns all appear
-// in given column list.
-func getUniqueKeyCoveredByColumns(uniqueKeys [](*vrepl.UniqueKey), columns *vrepl.ColumnList) (chosenUniqueKey *vrepl.UniqueKey) {
-	for _, uniqueKey := range uniqueKeys {
-		if !uniqueKeyValidForIteration(uniqueKey) {
-			continue
-		}
-		if uniqueKey.Columns.IsSubsetOf(columns) {
-			return uniqueKey
-		}
-	}
-	return nil
-}
-
 // readAutoIncrement reads the AUTO_INCREMENT vlaue, if any, for a give ntable
 func (v *VRepl) readAutoIncrement(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (autoIncrement uint64, err error) {
 	query, err := sqlparser.ParseAndBind(sqlGetAutoIncrement,
@@ -511,12 +360,12 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if len(targetUniqueKeys) == 0 {
 		return fmt.Errorf("Found no possible unique key on `%s`", v.targetTable)
 	}
-	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = getSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.chosenSourceUniqueKey, v.chosenTargetUniqueKey = vrepl.GetSharedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 	if v.chosenSourceUniqueKey == nil {
 		// VReplication supports completely different unique keys on source and target, covering
 		// some/completely different columns. The condition is that the key on source
 		// must use columns which all exist on target table.
-		v.chosenSourceUniqueKey = getUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
+		v.chosenSourceUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(sourceUniqueKeys, v.sourceSharedColumns)
 		if v.chosenSourceUniqueKey == nil {
 			// Still no luck.
 			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in target table `%s`", v.sourceTable, v.targetTable)
@@ -526,7 +375,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 		// VReplication supports completely different unique keys on source and target, covering
 		// some/completely different columns. The condition is that the key on target
 		// must use columns which all exist on source table.
-		v.chosenTargetUniqueKey = getUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
+		v.chosenTargetUniqueKey = vrepl.GetUniqueKeyCoveredByColumns(targetUniqueKeys, v.targetSharedColumns)
 		if v.chosenTargetUniqueKey == nil {
 			// Still no luck.
 			return fmt.Errorf("Found no possible unique key on `%s` whose columns are in source table `%s`", v.targetTable, v.sourceTable)
@@ -535,8 +384,8 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	if v.chosenSourceUniqueKey == nil || v.chosenTargetUniqueKey == nil {
 		return fmt.Errorf("Found no shared, not nullable, unique keys between `%s` and `%s`", v.sourceTable, v.targetTable)
 	}
-	v.addedUniqueKeys = addedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
-	v.removedUniqueKeys = removedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.addedUniqueKeys = vrepl.AddedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
+	v.removedUniqueKeys = vrepl.RemovedUniqueKeys(sourceUniqueKeys, targetUniqueKeys, v.parser.ColumnRenameMap())
 
 	// chosen source & target unique keys have exact columns in same order
 	sharedPKColumns := &v.chosenSourceUniqueKey.Columns
