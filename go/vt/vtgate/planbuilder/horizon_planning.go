@@ -401,6 +401,9 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	uniqVindex := hasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.GroupByExprs)
 	_, joinPlan := plan.(*joinGen4)
 	if !uniqVindex || joinPlan {
+		if hp.qp.ProjectionError != nil {
+			return nil, hp.qp.ProjectionError
+		}
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
