@@ -48,7 +48,7 @@ func (lcr *lineCountingReader) nextLine() (string, error) {
 func readTestCase(lcr *lineCountingReader) (testCase, error) {
 	query := ""
 	var err error
-	for query == "" || query == "\n" {
+	for query == "" || query == "\n" || strings.HasPrefix(query, "#") {
 		query, err = lcr.nextLine()
 		if err != nil {
 			return testCase{}, err
@@ -61,9 +61,9 @@ func readTestCase(lcr *lineCountingReader) (testCase, error) {
 		jsonPart, err := lcr.nextLine()
 		if err != nil {
 			if err == io.EOF {
-				return testCase{}, fmt.Errorf("test data is bad. expectation not finished")
+				return tc, fmt.Errorf("test data is bad. expectation not finished")
 			}
-			return testCase{}, err
+			return tc, err
 		}
 		if jsonPart == "}\n" {
 			tc.expected += "}"
@@ -93,6 +93,7 @@ func TestOperator(t *testing.T) {
 			break
 		}
 		t.Run(fmt.Sprintf("%d:%s", tc.line, tc.query), func(t *testing.T) {
+			require.NoError(t, err)
 			tree, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 			stmt := tree.(sqlparser.SelectStatement)

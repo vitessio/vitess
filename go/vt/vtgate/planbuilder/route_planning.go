@@ -333,18 +333,18 @@ func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
 		return err
 	}
 	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
-		if aliasedExpr, ok := cursor.Node().(*sqlparser.AliasedExpr); ok {
-			cursor.Replace(removeKeyspaceFromColName(aliasedExpr))
+		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
 		return true
 	}, nil)
 	return nil
 }
 
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr, ast *sqlparser.Select, i int) {
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		ast.SelectExprs[i] = removeKeyspaceFromColName(expr)
+		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
 	}
@@ -365,8 +365,8 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
 		toNode.SelectExprs = node.SelectExprs
-		for i, expr := range toNode.SelectExprs {
-			removeKeyspaceFromSelectExpr(expr, toNode, i)
+		for _, expr := range toNode.SelectExprs {
+			removeKeyspaceFromSelectExpr(expr)
 		}
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)

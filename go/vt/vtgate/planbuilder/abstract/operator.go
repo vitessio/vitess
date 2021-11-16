@@ -99,7 +99,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			op := createJoin(lhs, rhs)
 			if tableExpr.Condition.On != nil {
-				err = op.PushPredicate(tableExpr.Condition.On, semTable)
+				err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
 				if err != nil {
 					return nil, err
 				}
@@ -117,7 +117,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if tableExpr.Join == sqlparser.RightJoinType {
 				lhs, rhs = rhs, lhs
 			}
-			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
+			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
 		case sqlparser.StraightJoinType:
 			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
 		default:
@@ -227,7 +227,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			err := op.PushPredicate(expr, semTable)
+			err := op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
 			if err != nil {
 				return nil, err
 			}

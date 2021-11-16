@@ -174,7 +174,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 				return i, false, nil
 			}
 		}
-		expr = removeKeyspaceFromColName(expr)
+		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 		sel, isSel := node.Select.(*sqlparser.Select)
 		if !isSel {
 			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
@@ -263,15 +263,6 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
-}
-
-func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
-	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
-		expr = sqlparser.CloneRefOfAliasedExpr(expr)
-		col := expr.Expr.(*sqlparser.ColName)
-		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-	}
-	return expr
 }
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
