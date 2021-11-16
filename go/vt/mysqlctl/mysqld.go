@@ -663,7 +663,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// user is created yet.
 	params := &mysql.ConnParams{
 		Uname:      "root",
-		Charset:    "utf8",
+		Charset:    "utf8mb4",
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
@@ -1142,4 +1142,9 @@ func buildLdPaths() ([]string, error) {
 	}
 
 	return ldPaths, nil
+}
+
+// GetVersionString is part of the MysqlDeamon interface.
+func (m *Mysqld) GetVersionString() string {
+	return fmt.Sprintf("%d.%d.%d", m.capabilities.version.Major, m.capabilities.version.Minor, m.capabilities.version.Patch)
 }

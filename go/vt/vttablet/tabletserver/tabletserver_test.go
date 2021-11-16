@@ -2100,7 +2100,10 @@ func TestReserveBeginExecute(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, transactionID, reservedID)
 	require.NoError(t, err)
 }
@@ -2120,7 +2123,10 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, 0, reservedID)
 	require.NoError(t, err)
 }
@@ -2145,7 +2151,10 @@ func TestReserveExecute_WithTx(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, transactionID, reservedID)
 	require.NoError(t, err)
 }
@@ -2298,7 +2307,9 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	// Testing Execute Method
 	transactionID, _, err := tsv.Begin(ctx, target, nil)
 	require.NoError(t, err)
-	res, err := tsv.Execute(ctx, target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, err := tsv.Execute(ctx, target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2338,7 +2349,9 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 		}
 		return nil
 	}
-	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback)
+	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	}, callback)
 	require.NoError(t, err)
 }
 
@@ -2374,7 +2387,9 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 			Sql:           executeSQL,
 			BindVariables: nil,
 		},
-	}, true, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	}, true, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, res := range results {
 		for _, field := range res.Fields {
@@ -2406,7 +2421,9 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test BeginExecute Method
-	res, transactionID, _, err := tsv.BeginExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, _, err := tsv.BeginExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2486,7 +2503,9 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test ReserveExecute
-	res, rID, _, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, rID, _, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2518,7 +2537,9 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
-	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, nil, executeSQL, nil, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)

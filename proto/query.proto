@@ -322,6 +322,11 @@ message ExecuteOptions {
   // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
   // The current session can still use other sessions cached plans.
   bool has_created_temp_tables = 12;
+
+  // collation defines the collation that will be used between VTGate <=> VTTablet <=> MySQL to execute this query.
+  // since collations.ID takes 2 bytes, this field uses the smallest integer (4 bytes) where only the first 2 bytes
+  // will be used.
+  int32 collation = 13;
 }
 
 // Field describes a single column returned by a query
