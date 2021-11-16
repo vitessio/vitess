@@ -1327,9 +1327,12 @@ func TestCompareNumeric(t *testing.T) {
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					aHash := numericalHashCode(aVal)
-					bHash := numericalHashCode(bVal)
-					assert.Equal(t, aHash, bHash, "hash code does not match")
+					if aVal.typ == bVal.typ {
+						// hash codes can only be compared if they are coerced to the same type first
+						aHash := numericalHashCode(aVal)
+						bHash := numericalHashCode(bVal)
+						assert.Equal(t, aHash, bHash, "hash code does not match")
+					}
 				}
 			})
 		}
