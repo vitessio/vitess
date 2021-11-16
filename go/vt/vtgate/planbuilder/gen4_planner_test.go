@@ -308,7 +308,7 @@ func getQueryTreeString(tree queryTree) string {
 		if tree.leftJoin {
 			joinType = "OuterJoin"
 		}
-		expressions := sqlparser.String(sqlparser.AndExpressions(tree.predicatesToRemove...))
+		expressions := sqlparser.String(sqlparser.AndExpressions(tree.predicatesToRemoveFromHashJoin...))
 		return fmt.Sprintf(`%s: {
 	JoinVars: %v
 	Columns: %v

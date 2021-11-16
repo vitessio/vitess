@@ -581,12 +581,12 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	}
 
 	return &joinTree{
-		lhs:                lhsPlan,
-		rhs:                rhsPlan,
-		leftJoin:           node.leftJoin,
-		vars:               node.vars,
-		predicatesToRemove: append(node.predicatesToRemove, rhsPreds...),
-		predicates:         append(node.predicates, exprs...),
+		lhs:                            lhsPlan,
+		rhs:                            rhsPlan,
+		leftJoin:                       node.leftJoin,
+		vars:                           node.vars,
+		predicatesToRemoveFromHashJoin: append(node.predicatesToRemoveFromHashJoin, rhsPreds...),
+		predicates:                     append(node.predicates, exprs...),
 	}, nil
 }
 

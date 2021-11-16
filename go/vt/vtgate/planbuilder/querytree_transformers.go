@@ -521,10 +521,10 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 // Hash joins are only supporting equality join predicates, which is why the join predicate
 // has to be an EqualOp.
 func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
-	if len(n.predicatesToRemove) != 1 || n.rhs.cost() <= 5 || n.leftJoin {
+	if len(n.predicatesToRemoveFromHashJoin) != 1 || n.rhs.cost() <= 5 || n.leftJoin {
 		return
 	}
-	cmp, isCmp := n.predicatesToRemove[0].(*sqlparser.ComparisonExpr)
+	cmp, isCmp := n.predicatesToRemoveFromHashJoin[0].(*sqlparser.ComparisonExpr)
 	if !isCmp || cmp.Operator != sqlparser.EqualOp {
 		return
 	}
