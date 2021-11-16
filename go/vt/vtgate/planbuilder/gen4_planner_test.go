@@ -258,7 +258,7 @@ func TestOptimizeQuery(t *testing.T) {
 	}
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 	}
 
 	for _, testcase := range testcases {

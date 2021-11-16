@@ -184,7 +184,7 @@ const (
 
 func TestPlan(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -227,7 +227,7 @@ func TestPlan(t *testing.T) {
 
 func TestSysVarSetDisabled(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "schema_test.json"),
+		v:             loadSchema(t, "schema_test.json", true),
 		sysVarEnabled: false,
 	}
 
@@ -239,7 +239,7 @@ func TestSysVarSetDisabled(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
@@ -247,7 +247,7 @@ func TestOne(t *testing.T) {
 
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "rails_schema_test.json"),
+		v:             loadSchema(t, "rails_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -264,7 +264,7 @@ func TestRubyOnRailsQueries(t *testing.T) {
 
 func TestOLTP(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "oltp_schema_test.json"),
+		v:             loadSchema(t, "oltp_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -281,7 +281,7 @@ func TestOLTP(t *testing.T) {
 
 func TestTPCC(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpcc_schema_test.json"),
+		v:             loadSchema(t, "tpcc_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -298,7 +298,7 @@ func TestTPCC(t *testing.T) {
 
 func TestTPCH(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(t, "tpch_schema_test.json"),
+		v:             loadSchema(t, "tpch_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -327,7 +327,7 @@ func BenchmarkTPCH(b *testing.B) {
 
 func benchmarkWorkload(b *testing.B, name string) {
 	vschemaWrapper := &vschemaWrapper{
-		v:             loadSchema(b, name+"_schema_test.json"),
+		v:             loadSchema(b, name+"_schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -349,7 +349,7 @@ func TestBypassPlanningShardTargetFromFile(t *testing.T) {
 	defer os.RemoveAll(testOutputTempDir)
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -367,7 +367,7 @@ func TestBypassPlanningKeyrangeTargetFromFile(t *testing.T) {
 	keyRange, _ := key.ParseShardingSpec("-")
 
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -389,7 +389,7 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		}
 	}()
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -411,7 +411,7 @@ func TestWithSystemSchemaAsDefaultKeyspace(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(testOutputTempDir)
 	vschema := &vschemaWrapper{
-		v:          loadSchema(t, "schema_test.json"),
+		v:          loadSchema(t, "schema_test.json", true),
 		keyspace:   &vindexes.Keyspace{Name: "information_schema"},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
@@ -425,7 +425,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 	defer os.RemoveAll(testOutputTempDir)
 	require.NoError(t, err)
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v: loadSchema(t, "schema_test.json", true),
 		keyspace: &vindexes.Keyspace{
 			Name:    "main",
 			Sharded: false,
@@ -437,7 +437,7 @@ func TestOtherPlanningFromFile(t *testing.T) {
 	testFile(t, "other_admin_cases.txt", testOutputTempDir, vschema)
 }
 
-func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
+func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSchema {
 	formal, err := vindexes.LoadFormal(locateFile(filename))
 	if err != nil {
 		t.Fatal(err)
@@ -454,10 +454,12 @@ func loadSchema(t testing.TB, filename string) *vindexes.VSchema {
 		// setting a default value to all the text columns in the tables of this keyspace
 		// so that we can "simulate" a real case scenario where the vschema is aware of
 		// columns' collations.
-		for _, table := range ks.Tables {
-			for i, col := range table.Columns {
-				if sqltypes.IsText(col.Type) {
-					table.Columns[i].CollationName = "latin1_swedish_ci"
+		if setCollation {
+			for _, table := range ks.Tables {
+				for i, col := range table.Columns {
+					if sqltypes.IsText(col.Type) {
+						table.Columns[i].CollationName = "latin1_swedish_ci"
+					}
 				}
 			}
 		}
@@ -821,7 +823,7 @@ var benchMarkFiles = []string{"from_cases.txt", "filter_cases.txt", "large_cases
 
 func BenchmarkPlanner(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
 	for _, filename := range benchMarkFiles {
@@ -843,7 +845,7 @@ func BenchmarkPlanner(b *testing.B) {
 
 func BenchmarkSemAnalysis(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 	}
 
@@ -876,7 +878,7 @@ func exerciseAnalyzer(query, database string, s semantics.SchemaInformation) {
 
 func BenchmarkSelectVsDML(b *testing.B) {
 	vschema := &vschemaWrapper{
-		v:             loadSchema(b, "schema_test.json"),
+		v:             loadSchema(b, "schema_test.json", true),
 		sysVarEnabled: true,
 		version:       V3,
 	}
