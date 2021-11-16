@@ -484,6 +484,8 @@ func transformRoutePlan(ctx *planningContext, n *routeTree) (*route, error) {
 }
 
 func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
+	// TODO systay we should move the decision of which join to use to the greedy algorithm,
+	// and thus represented as a queryTree
 	canHashJoin, lhsInfo, rhsInfo, err := canHashJoin(ctx, n)
 	if err != nil {
 		return nil, err
