@@ -93,3 +93,47 @@ func TestGracefulPrimaryTakeoverFailNoTarget(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInfo, curPrimary, true)
 	utils.VerifyWritesSucceed(t, clusterInfo, curPrimary, replicas, 10*time.Second)
 }
+
+// make an api call to graceful primary takeover auto and let vtorc fix it
+// covers the test case graceful-master-takeover-auto from orchestrator
+func TestGracefulPrimaryTakeoverAuto(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	utils.SetupVttabletsAndVtorc(t, clusterInfo, 2, 1, nil, "test_config.json")
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	// find primary from topo
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	assert.NotNil(t, primary, "should have elected a primary")
+
+	// find the replica tablet and the rdonly tablet
+	var replica, rdonly *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		// we know we have only two replcia tablets, so the one not the primary must be the other replica
+		if tablet.Alias != primary.Alias && tablet.Type == "replica" {
+			replica = tablet
+		}
+		if tablet.Type == "rdonly" {
+			rdonly = tablet
+		}
+	}
+	assert.NotNil(t, replica, "could not find replica tablet")
+	assert.NotNil(t, rdonly, "could not find rdonly tablet")
+
+	// check that the replication is setup correctly before we failover
+	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
+
+	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/localhost/%d", primary.MySQLPort, replica.MySQLPort))
+	assert.Equal(t, 200, status)
+
+	// check that the replica gets promoted
+	utils.CheckPrimaryTablet(t, clusterInfo, replica, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, replica, []*cluster.Vttablet{primary, rdonly}, 10*time.Second)
+
+	status, _ = utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover-auto/localhost/%d/", replica.MySQLPort))
+	assert.Equal(t, 200, status)
+
+	// check that the primary gets promoted back
+	utils.CheckPrimaryTablet(t, clusterInfo, primary, true)
+	utils.VerifyWritesSucceed(t, clusterInfo, primary, []*cluster.Vttablet{replica, rdonly}, 10*time.Second)
+}
