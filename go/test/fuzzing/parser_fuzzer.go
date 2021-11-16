@@ -46,3 +46,8 @@ func FuzzParser(data []byte) int {
 	}
 	return 1
 }
+
+func FuzzSplitStatementToPieces(data []byte) int {
+	_, _ = sqlparser.SplitStatementToPieces(string(data))
+	return 1
+}
