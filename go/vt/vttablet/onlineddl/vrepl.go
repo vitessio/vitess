@@ -224,8 +224,8 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				continue
 			}
 
-			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "NO")
-			column.DefaultIsNull = row.AsBool("is_default_null", false)
+			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "YES")
+			column.IsDefaultNull = row.AsBool("is_default_null", false)
 
 			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
