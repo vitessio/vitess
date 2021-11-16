@@ -80,7 +80,7 @@ func (c *Concatenate) TryExecute(vcursor VCursor, bindVars map[string]*querypb.B
 		return nil, err
 	}
 
-	var rowsAffected uint64 = 0
+	var rowsAffected uint64
 	var rows [][]sqltypes.Value
 
 	for _, r := range res {
