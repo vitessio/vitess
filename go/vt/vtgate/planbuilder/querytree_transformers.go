@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -242,9 +244,25 @@ func transformConcatenatePlan(ctx *planningContext, n *concatenateTree) (logical
 		result = &concatenateGen4{sources: sources}
 	}
 	if n.distinct {
-		return newDistinct(result), nil
+		return newDistinct(result, getCollationsFor(ctx, n)), nil
 	}
 	return result, nil
+}
+
+func getCollationsFor(ctx *planningContext, n *concatenateTree) []collations.ID {
+	var colls []collations.ID
+	for _, expr := range n.selectStmts[0].SelectExprs {
+		aliasedE, ok := expr.(*sqlparser.AliasedExpr)
+		if !ok {
+			return nil
+		}
+		typ, ok := ctx.semTable.ExprTypes[aliasedE.Expr]
+		if !ok {
+			return nil
+		}
+		colls = append(colls, typ.Collation)
+	}
+	return colls
 }
 
 func transformAndMergeInOrder(ctx *planningContext, n *concatenateTree) (sources []logicalPlan, err error) {

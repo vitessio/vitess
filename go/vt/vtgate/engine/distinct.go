@@ -187,7 +187,26 @@ func (d *Distinct) Inputs() []Primitive {
 }
 
 func (d *Distinct) description() PrimitiveDescription {
+	var other map[string]interface{}
+	if d.ColCollations != nil {
+		allUnknown := true
+		other = map[string]interface{}{}
+		var colls []string
+		for _, collation := range d.ColCollations {
+			coll := collations.Default().LookupByID(collation)
+			if coll == nil {
+				colls = append(colls, "UNKNOWN")
+			} else {
+				colls = append(colls, coll.Name())
+				allUnknown = false
+			}
+		}
+		if !allUnknown {
+			other["Collations"] = colls
+		}
+	}
 	return PrimitiveDescription{
+		Other:        other,
 		OperatorType: "Distinct",
 	}
 }
