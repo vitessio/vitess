@@ -444,7 +444,7 @@ func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbname string)
 		replParams:         genParams,
 		externalReplParams: genParams,
 		DBName:             dbname,
-		Collation:          genParams.Collation,
-		Charset:            genParams.Charset,
+		Collation:          "utf8mb4_general_ci",
+		Charset:            "utf8mb4",
 	}
 }
