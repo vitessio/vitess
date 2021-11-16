@@ -570,3 +570,112 @@ func TestSavepointInReservedConn(t *testing.T) {
 	defer utils.Exec(t, conn, `delete from t7_xxhash`)
 	utils.AssertMatches(t, conn, "select uid from t7_xxhash", `[[VARCHAR("2")]]`)
 }
+
+func TestUnionWithManyInfSchemaQueries(t *testing.T) {
+	// trying to reproduce the problems in https://github.com/vitessio/vitess/issues/9139
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company_invite_code'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_role'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_urgent'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_event'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user_company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user'`)
+}
