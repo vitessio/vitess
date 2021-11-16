@@ -36,8 +36,8 @@ import (
 // that the messager needs for callback.
 type TabletService interface {
 	tabletenv.Env
-	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
-	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
+	PostponeMessages(ctx context.Context, target *querypb.Target, querygen QueryGenerator, ids []string) (count int64, err error)
+	PurgeMessages(ctx context.Context, target *querypb.Target, querygen QueryGenerator, timeCutoff int64) (count int64, err error)
 }
 
 // VStreamer defines  the functions of VStreamer
@@ -101,6 +101,16 @@ func (me *Engine) Close() {
 	log.Info("Messager: closed")
 }
 
+func (me *Engine) GetGenerator(name string) (QueryGenerator, error) {
+	me.mu.Lock()
+	defer me.mu.Unlock()
+	mm := me.managers[name]
+	if mm == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
+	}
+	return mm, nil
+}
+
 // Subscribe subscribes to messages from the requested table.
 // The function returns a done channel that will be closed when
 // the subscription ends, which can be initiated by the send function
@@ -119,42 +129,6 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	return mm.Subscribe(ctx, send), nil
-}
-
-// GenerateAckQuery returns the query and bind vars for acking a message.
-func (me *Engine) GenerateAckQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GenerateAckQuery(ids)
-	return query, bv, nil
-}
-
-// GeneratePostponeQuery returns the query and bind vars for postponing a message.
-func (me *Engine) GeneratePostponeQuery(name string, ids []string) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GeneratePostponeQuery(ids)
-	return query, bv, nil
-}
-
-// GeneratePurgeQuery returns the query and bind vars for purging messages.
-func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map[string]*querypb.BindVariable, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return "", nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	query, bv := mm.GeneratePurgeQuery(timeCutoff)
-	return query, bv, nil
 }
 
 func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {

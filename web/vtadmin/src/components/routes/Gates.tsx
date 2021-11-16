@@ -48,12 +48,12 @@ export const Gates = () => {
     const renderRows = (gates: typeof rows) =>
         gates.map((gate, idx) => (
             <tr key={idx}>
-                <DataCell className="white-space-nowrap">
+                <DataCell className="whitespace-nowrap">
                     <div>{gate.pool}</div>
-                    <div className="font-size-small text-color-secondary">{gate.cluster}</div>
+                    <div className="font-size-small text-secondary">{gate.cluster}</div>
                 </DataCell>
-                <DataCell className="white-space-nowrap">{gate.hostname}</DataCell>
-                <DataCell className="white-space-nowrap">{gate.cell}</DataCell>
+                <DataCell className="whitespace-nowrap">{gate.hostname}</DataCell>
+                <DataCell className="whitespace-nowrap">{gate.cell}</DataCell>
                 <DataCell>{(gate.keyspaces || []).join(', ')}</DataCell>
             </tr>
         ));

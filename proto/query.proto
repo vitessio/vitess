@@ -322,6 +322,11 @@ message ExecuteOptions {
   // if the user has created temp tables, Vitess will not reuse plans created for this session in other sessions.
   // The current session can still use other sessions cached plans.
   bool has_created_temp_tables = 12;
+
+  // collation defines the collation that will be used between VTGate <=> VTTablet <=> MySQL to execute this query.
+  // since collations.ID takes 2 bytes, this field uses the smallest integer (4 bytes) where only the first 2 bytes
+  // will be used.
+  int32 collation = 13;
 }
 
 // Field describes a single column returned by a query
@@ -660,6 +665,30 @@ message BeginExecuteBatchResponse {
   vtrpc.RPCError error = 1;
 
   repeated QueryResult results = 2;
+
+  // transaction_id might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
+}
+
+// BeginStreamExecuteRequest is the payload to BeginStreamExecute
+message BeginStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+}
+
+// BeginStreamExecuteResponse is the returned value from BeginStreamExecute
+message BeginStreamExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  QueryResult result = 2;
 
   // transaction_id might be non-zero even if an error is present.
   int64 transaction_id = 3;
