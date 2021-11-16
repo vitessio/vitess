@@ -574,3 +574,8 @@ func (fmd *FakeMysqlDaemon) SemiSyncReplicationStatus() (bool, error) {
 	// The fake assumes the status worked.
 	return fmd.SemiSyncReplicaEnabled, nil
 }
+
+// GetVersionString is part of the MysqlDeamon interface.
+func (fmd *FakeMysqlDaemon) GetVersionString() string {
+	return ""
+}

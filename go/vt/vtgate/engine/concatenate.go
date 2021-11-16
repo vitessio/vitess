@@ -19,6 +19,8 @@ package engine
 import (
 	"sync"
 
+	"vitess.io/vitess/go/sync2"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -149,7 +151,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 
 	g, restoreCtx := vcursor.ErrorGroupCancellableContext()
 	defer restoreCtx()
-	fieldsSent := false
+	var fieldsSent sync2.AtomicBool
 	fieldset.Add(1)
 
 	for i, source := range c.Sources {
@@ -158,10 +160,10 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 		g.Go(func() error {
 			err := vcursor.StreamExecutePrimitive(currSource, bindVars, wantfields, func(resultChunk *sqltypes.Result) error {
 				// if we have fields to compare, make sure all the fields are all the same
-				if currIndex == 0 && !fieldsSent {
+				if currIndex == 0 && !fieldsSent.Get() {
 					defer fieldset.Done()
 					seenFields = resultChunk.Fields
-					fieldsSent = true
+					fieldsSent.Set(true)
 					// No other call can happen before this call.
 					return callback(resultChunk)
 				}
@@ -183,7 +185,7 @@ func (c *Concatenate) TryStreamExecute(vcursor VCursor, bindVars map[string]*que
 				}
 			})
 			// This is to ensure other streams complete if the first stream failed to unlock the wait.
-			if currIndex == 0 && !fieldsSent {
+			if currIndex == 0 && !fieldsSent.Get() {
 				fieldset.Done()
 			}
 			return err

@@ -788,9 +788,9 @@ update_statement:
   }
 
 delete_statement:
-  with_clause_opt DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$6}}, Partitions: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {

@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/sqlescape"
 
 	"vitess.io/vitess/go/bucketpool"
@@ -36,7 +38,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -185,6 +187,17 @@ type Conn struct {
 	// It is set during the initial handshake.
 	// See the values in constants.go.
 	CharacterSet uint8
+
+	// Collation defines the collation for this connection, it has the same
+	// value as the collation_connection variable of MySQL.
+	// Its value is set after we send the initial "SET collation_connection"
+	// query to MySQL after the handshake is done.
+	Collation collations.ID
+
+	// CollationEnvironment defines the collation environment used by this
+	// connection. We set its value using the ServerVersion we receive from
+	// MySQL after the handshake.
+	CollationEnvironment *collations.Environment
 
 	// Packet encoding variables.
 	sequence uint8
@@ -346,7 +359,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 
 	sequence := uint8(c.header[3])
 	if sequence != c.sequence {
-		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid sequence, expected %v got %v", c.sequence, sequence)
 	}
 
 	c.sequence++
@@ -364,7 +377,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 // it most likely will be io.EOF.
 func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacket: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	r := c.getReader()
@@ -424,7 +437,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 // This function usually shouldn't be used - use readEphemeralPacket.
 func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 	if c.currentEphemeralPolicy != ephemeralUnused {
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacketDirect: unexpected currentEphemeralPolicy: %v", c.currentEphemeralPolicy))
 	}
 
 	var r io.Reader = c.conn
@@ -449,7 +462,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 		return *c.currentEphemeralBuffer, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "readEphemeralPacketDirect doesn't support more than one packet")
 }
 
 // recycleReadPacket recycles the read packet. It needs to be called
@@ -457,7 +470,7 @@ func (c *Conn) readEphemeralPacketDirect() ([]byte, error) {
 func (c *Conn) recycleReadPacket() {
 	if c.currentEphemeralPolicy != ephemeralRead {
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "trying to call recycleReadPacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	if c.currentEphemeralBuffer != nil {
 		// We are using the pool, put the buffer back in.
@@ -570,7 +583,7 @@ func (c *Conn) writePacket(data []byte) error {
 		if n, err := w.Write(data[index : index+toBeSent+packetHeaderSize]); err != nil {
 			return vterrors.Wrapf(err, "Write(packet) failed")
 		} else if n != (toBeSent + packetHeaderSize) {
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + packetHeaderSize))
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(packet) returned a short write: %v < %v", n, (toBeSent + packetHeaderSize))
 		}
 
 		// restore the first 4 bytes once the network send is done
@@ -591,7 +604,7 @@ func (c *Conn) writePacket(data []byte) error {
 				if n, err := w.Write(header[:]); err != nil {
 					return vterrors.Wrapf(err, "Write(empty header) failed")
 				} else if n != packetHeaderSize {
-					return vterrors.Errorf(vtrpc.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
+					return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Write(empty header) returned a short write: %v < 4", n)
 				}
 				c.sequence++
 			}
@@ -624,7 +637,7 @@ func (c *Conn) writeEphemeralPacket() error {
 		}
 	case ephemeralUnused, ephemeralRead:
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "conn %v: trying to call writeEphemeralPacket while currentEphemeralPolicy is %v", c.ID(), c.currentEphemeralPolicy))
 	}
 
 	return nil
@@ -635,7 +648,7 @@ func (c *Conn) writeEphemeralPacket() error {
 func (c *Conn) recycleWritePacket() {
 	if c.currentEphemeralPolicy != ephemeralWrite {
 		// Programming error.
-		panic(vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
+		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "trying to call recycleWritePacket while currentEphemeralPolicy is %d", c.currentEphemeralPolicy))
 	}
 	// Release our reference so the buffer can be gced
 	bufPool.Put(c.currentEphemeralBuffer)
@@ -1359,7 +1372,7 @@ func parseEOFPacket(data []byte) (warnings uint16, statusFlags uint16, err error
 	// The status flag is in position 4 & 5
 	statusFlags, _, ok := readUint16(data, 3)
 	if !ok {
-		return 0, 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
+		return 0, 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid EOF packet statusFlags: %v", data)
 	}
 	return warnings, statusFlags, nil
 }
@@ -1384,7 +1397,7 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	packetOK := &PacketOK{}
 
 	fail := func(format string, args ...interface{}) (*PacketOK, error) {
-		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, format, args...)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, format, args...)
 	}
 
 	// Affected rows.
@@ -1510,4 +1523,23 @@ func (c *Conn) IsUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
+}
+
+// MatchCollation returns nil if the given collations.ID matches with the connection's
+// collation, otherwise it returns an error explaining why it does not match.
+func (c *Conn) MatchCollation(collationID collations.ID) error {
+	// The collation environment of a connection parameter should never be nil, if we fail
+	// to create it we already errored out when initializing the connection with MySQL.
+	if c.CollationEnvironment == nil {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "No collation environment for this connection")
+	}
+
+	coll := c.CollationEnvironment.LookupByID(collationID)
+	if coll == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation is unknown (collation ID: %d)", collationID)
+	}
+	if coll.ID() != c.Collation {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), c.CollationEnvironment.LookupByID(c.Collation).Name())
+	}
+	return nil
 }

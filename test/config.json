@@ -1049,13 +1049,22 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtorc": {
+		"vtorc_primary_failure": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryFailure"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 2,
+			"RetryMax": 3,
+			"Tags": []
+		},
+		"vtorc_general": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtorc",
+			"RetryMax": 3,
 			"Tags": []
 		},
 		"vault": {
