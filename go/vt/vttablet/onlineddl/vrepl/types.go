@@ -70,6 +70,15 @@ func (c *Column) SetTypeIfUnknown(t ColumnType) {
 	}
 }
 
+// HasDefault returns true if the column at all has a default value (possibly NULL)
+func (c *Column) HasDefault() bool {
+	if c.IsDefaultNull && !c.IsNullable {
+		// based on INFORMATION_SCHEMA.COLUMNS, this is the indicator for a 'NOT NULL' column with no default value.
+		return false
+	}
+	return true
+}
+
 // NewColumns creates a new column array from non empty names
 func NewColumns(names []string) []Column {
 	result := []Column{}
