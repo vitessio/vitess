@@ -385,7 +385,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tabletAlias)
+		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tablet)
 		return
 	}
 	// Calling this will end the context associated with th.checkConn,
@@ -421,7 +421,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	// tablet record that was deleted
 	_, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Infof("Tablet %s has been deleted, skipping health update", tabletAlias)
+		log.Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
 		return
 	}
 
