@@ -561,6 +561,16 @@ func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Targ
 	return result, reservedID, sbc.tablet.Alias, nil
 }
 
+// ReserveStreamExecute is part of the QueryService interface.
+func (sbc *SandboxConn) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
+	err := sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
+	if transactionID != 0 {
+		sbc.setTxReservedID(transactionID, reservedID)
+	}
+	return reservedID, sbc.tablet.Alias, err
+}
+
 func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, preQueries []string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) int64 {
 	sbc.ReserveCount.Add(1)
 	for _, query := range preQueries {
