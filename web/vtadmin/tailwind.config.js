@@ -2,7 +2,12 @@ module.exports = {
     purge: ['./src/**/*.{js,jsx,ts,tsx}', './public/index.html'],
     darkMode: false,
     theme: {
-        extend: {},
+        extend: {
+            textColor: {
+                primary: '#17171b',
+                secondary: '#718096',
+            },
+        },
         fontFamily: {
             mono: ['NotoMono', 'source-code-pro', 'menlo', 'monaco', 'consolas', 'Courier New', 'monospace'],
             sans: [
@@ -19,10 +24,6 @@ module.exports = {
                 'Helvetica Neue',
                 'sans-serif',
             ],
-        },
-        textColor: {
-            primary: '#17171b',
-            secondary: '#718096',
         },
     },
     variants: {
