@@ -1635,43 +1635,6 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	return topologyRecovery, nil
 }
 
-func getGracefulPrimaryTakeoverDesignatedInstance(clusterPrimaryKey *inst.InstanceKey, designatedKey *inst.InstanceKey, clusterPrimaryDirectReplicas [](*inst.Instance), auto bool) (designatedInstance *inst.Instance, err error) {
-	if designatedKey == nil {
-		// User did not specify a replica to promote
-		if len(clusterPrimaryDirectReplicas) == 1 {
-			// Single replica. That's the one we'll promote
-			return clusterPrimaryDirectReplicas[0], nil
-		}
-		// More than one replica.
-		if !auto {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: target instance not indicated, auto=false, and primary %+v has %+v replicas. orchestrator cannot choose where to failover to. Aborting", *clusterPrimaryKey, len(clusterPrimaryDirectReplicas))
-		}
-		log.Debugf("GracefulPrimaryTakeover: request takeover for primary %+v, no designated replica indicated. orchestrator will attempt to auto deduce replica.", *clusterPrimaryKey)
-		designatedInstance, _, _, _, _, err = inst.GetCandidateReplica(clusterPrimaryKey, false)
-		if err != nil || designatedInstance == nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: no target instance indicated, failed to auto-detect candidate replica for primary %+v. Aborting", *clusterPrimaryKey)
-		}
-		log.Debugf("GracefulPrimaryTakeover: candidateReplica=%+v", designatedInstance.Key)
-		if _, err := inst.StartReplication(&designatedInstance.Key); err != nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover:cannot start replication on designated replica %+v. Aborting", designatedKey)
-		}
-		log.Infof("GracefulPrimaryTakeover: designated primary deduced to be %+v", designatedInstance.Key)
-		return designatedInstance, nil
-	}
-
-	// Verify designated instance is a direct replica of primary
-	for _, directReplica := range clusterPrimaryDirectReplicas {
-		if directReplica.Key.Equals(designatedKey) {
-			designatedInstance = directReplica
-		}
-	}
-	if designatedInstance == nil {
-		return nil, fmt.Errorf("GracefulPrimaryTakeover: indicated designated instance %+v must be directly replicating from the primary %+v", *designatedKey, *clusterPrimaryKey)
-	}
-	log.Infof("GracefulPrimaryTakeover: designated primary instructed to be %+v", designatedInstance.Key)
-	return designatedInstance, nil
-}
-
 // GracefulPrimaryTakeover will demote primary of existing topology and promote its
 // direct replica instead.
 // It expects that replica to have no siblings.
