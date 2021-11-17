@@ -90,8 +90,8 @@ func AuthenticationUnaryInterceptor(authn Authenticator) grpc.UnaryServerInterce
 // Actor represents the subject in the "subject action resource" of an
 // authorization check. It has a name and many roles.
 type Actor struct {
-	Name  string
-	Roles []string
+	Name  string   `json:"name"`
+	Roles []string `json:"roles"`
 }
 
 type actorkey struct{}

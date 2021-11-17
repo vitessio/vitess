@@ -23,9 +23,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// This file tests the keyspace related object functionnalities.
+// This file tests the keyspace related object functionalities.
 
 func TestUpdateServedFromMap(t *testing.T) {
+	// TODO(deepthi): delete this test once legacy resharding code is deleted
 	ki := &KeyspaceInfo{
 		keyspace: "ks",
 		version:  nil,

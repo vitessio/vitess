@@ -19,10 +19,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"os"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -91,7 +90,7 @@ func main() {
 	if servenv.GRPCPort != nil {
 		gRPCPort = int32(*servenv.GRPCPort)
 	}
-	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort)
+	tablet, err := tabletmanager.BuildTabletFromInput(tabletAlias, int32(*servenv.Port), gRPCPort, mysqld.GetVersionString())
 	if err != nil {
 		log.Exitf("failed to parse -tablet-path: %v", err)
 	}

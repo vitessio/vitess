@@ -62,9 +62,8 @@ func TestMain(m *testing.M) {
 
 		// Collect tablet paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		// TODO(deepthi): can remove master after 12.0
 		for _, tablet := range tablets {
-			if tablet.Type == "master" || tablet.Type == "primary" {
+			if tablet.Type == "primary" {
 				primaryTablet = *tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = *tablet
@@ -107,7 +106,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -119,7 +119,8 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
 			shard.Vttablets = append(shard.Vttablets, tablet)

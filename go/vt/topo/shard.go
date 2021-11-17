@@ -423,7 +423,7 @@ func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType to
 	}
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		if err := si.updateMasterTabletControl(tc, remove, tables); err != nil {
+		if err := si.updatePrimaryTabletControl(tc, remove, tables); err != nil {
 			return err
 		}
 		return nil
@@ -442,7 +442,7 @@ func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType to
 	return nil
 }
 
-func (si *ShardInfo) updateMasterTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
+func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string) error {
 	var newTables []string
 	for _, table := range tables {
 		exists := false
