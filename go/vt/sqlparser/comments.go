@@ -306,36 +306,6 @@ func (d CommentDirectives) GetString(key string, defaultVal string) string {
 	return stringVal
 }
 
-// HashJoinDirective looks for DirectiveAllowHashJoin in the comments of the given
-// statement and returns a slice of strings containing the table names that can be hash joined
-func HashJoinDirective(stmt Statement) []string {
-	var directives CommentDirectives
-	switch stmt := stmt.(type) {
-	case *Select:
-		directives = ExtractCommentDirectives(stmt.Comments)
-	case *Union:
-		directives = ExtractCommentDirectives(stmt.GetComments())
-	default:
-		return nil
-	}
-	vals, found := directives[DirectiveAllowHashJoin]
-	if !found {
-		return nil
-	}
-	str, isStr := vals.(string)
-	if !isStr {
-		return nil
-	}
-	str = strings.TrimFunc(str, func(r rune) bool {
-		return r == '(' || r == ')'
-	})
-	tables := strings.Split(str, ",")
-	for i, table := range tables {
-		tables[i] = strings.TrimSpace(table)
-	}
-	return tables
-}
-
 // MultiShardAutocommitDirective returns true if multishard autocommit directive is set to true in query.
 func MultiShardAutocommitDirective(stmt Statement) bool {
 	switch stmt := stmt.(type) {

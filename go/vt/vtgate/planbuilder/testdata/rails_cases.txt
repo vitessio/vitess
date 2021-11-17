@@ -1,8 +1,8 @@
 # Author5.joins(books: [{orders: :customer}, :supplier])
-"select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id"
+"select /*vt+ ALLOW_HASH_JOIN */ author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id"
 {
   "QueryType": "SELECT",
-  "Original": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -47,7 +47,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s join book6s on book6s.author5_id = author5s.id where 1 != 1",
-                    "Query": "select author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s join book6s on book6s.author5_id = author5s.id",
+                    "Query": "select /*vt+ ALLOW_HASH_JOIN */ author5s.id, author5s.`name`, author5s.created_at, author5s.updated_at, book6s.supplier5_id, book6s.id from author5s join book6s on book6s.author5_id = author5s.id",
                     "Table": "author5s, book6s"
                   },
                   {
@@ -58,7 +58,7 @@
                       "Sharded": true
                     },
                     "FieldQuery": "select book6s_order2s.order2_id from book6s_order2s where 1 != 1",
-                    "Query": "select book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
+                    "Query": "select /*vt+ ALLOW_HASH_JOIN */ book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
                     "Table": "book6s_order2s",
                     "Values": [
                       ":book6s_id"
@@ -75,7 +75,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select order2s.customer2_id from order2s where 1 != 1",
-                "Query": "select order2s.customer2_id from order2s where order2s.id = :book6s_order2s_order2_id",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ order2s.customer2_id from order2s where order2s.id = :book6s_order2s_order2_id",
                 "Table": "order2s"
               }
             ]
@@ -88,7 +88,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from customer2s where 1 != 1",
-            "Query": "select 1 from customer2s where customer2s.id = :order2s_customer2_id",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from customer2s where customer2s.id = :order2s_customer2_id",
             "Table": "customer2s",
             "Values": [
               ":order2s_customer2_id"
@@ -105,7 +105,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from supplier5s where 1 != 1",
-        "Query": "select 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
         "Table": "supplier5s",
         "Values": [
           ":book6s_supplier5_id"
@@ -117,7 +117,7 @@
 }
 {
   "QueryType": "SELECT",
-  "Original": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
@@ -134,7 +134,7 @@
           "Sharded": true
         },
         "FieldQuery": "select order2s.id from order2s, customer2s where 1 != 1",
-        "Query": "select order2s.id from order2s, customer2s where customer2s.id = order2s.customer2_id",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ order2s.id from order2s, customer2s where customer2s.id = order2s.customer2_id",
         "Table": "customer2s, order2s"
       },
       {
@@ -165,7 +165,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select book6s.id, book6s.supplier5_id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where 1 != 1",
-                "Query": "select book6s.id, book6s.supplier5_id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where book6s.author5_id = author5s.id",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ book6s.id, book6s.supplier5_id, author5s.id as id, author5s.`name` as `name`, author5s.created_at as created_at, author5s.updated_at as updated_at from author5s, book6s where book6s.author5_id = author5s.id",
                 "Table": "author5s, book6s"
               },
               {
@@ -176,7 +176,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select book6s_order2s.order2_id from book6s_order2s where 1 != 1",
-                "Query": "select book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
                 "Table": "book6s_order2s",
                 "Values": [
                   ":book6s_id"
@@ -193,7 +193,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from supplier5s where 1 != 1",
-            "Query": "select 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
             "Table": "supplier5s",
             "Values": [
               ":book6s_supplier5_id"

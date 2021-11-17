@@ -1227,9 +1227,11 @@ Gen4 plan same as above
   "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "ComparisonType": "INT16",
-    "JoinColumnIndexes": "-2,2",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2,1",
+    "JoinVars": {
+      "u_col": 0
+    },
     "Predicate": "u.col = e.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -1251,8 +1253,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select e.col, e.id from user_extra as e where 1 != 1",
-        "Query": "select e.col, e.id from user_extra as e",
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "Query": "select e.id from user_extra as e where e.col = :u_col",
         "Table": "user_extra"
       }
     ]

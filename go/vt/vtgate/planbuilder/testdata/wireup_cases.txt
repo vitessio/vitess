@@ -242,9 +242,11 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "HashJoin",
-        "ComparisonType": "INT16",
+        "Variant": "Join",
         "JoinColumnIndexes": "-2",
+        "JoinVars": {
+          "u1_col": 0
+        },
         "Predicate": "u3.col = u1.col",
         "TableName": "`user`_`user`",
         "Inputs": [
@@ -266,8 +268,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
-            "Query": "select u3.col from `user` as u3",
+            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
+            "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
             "Table": "`user`"
           }
         ]
@@ -356,8 +358,10 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "HashJoin",
-        "ComparisonType": "INT16",
+        "Variant": "Join",
+        "JoinVars": {
+          "u2_col": 0
+        },
         "Predicate": "u3.col = u2.col",
         "TableName": "`user`_`user`",
         "Inputs": [
@@ -379,8 +383,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
-            "Query": "select u3.col from `user` as u3",
+            "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
+            "Query": "select 1 from `user` as u3 where u3.col = :u2_col",
             "Table": "`user`"
           }
         ]
@@ -390,10 +394,10 @@
 }
 
 # wire-up join with join, reuse existing result from a lower join
-"select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
+"select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col"
 {
   "QueryType": "SELECT",
-  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -420,7 +424,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-            "Query": "select u1.id, u1.col from `user` as u1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ u1.id, u1.col from `user` as u1",
             "Table": "`user`"
           },
           {
@@ -431,7 +435,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-            "Query": "select 1 from `user` as u2 where u2.col = :u1_col",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u2 where u2.col = :u1_col",
             "Table": "`user`"
           }
         ]
@@ -444,7 +448,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-        "Query": "select 1 from `user` as u3 where u3.col = :u1_col",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u3 where u3.col = :u1_col",
         "Table": "`user`"
       }
     ]
@@ -452,7 +456,7 @@
 }
 {
   "QueryType": "SELECT",
-  "Original": "select u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 on u2.col = u1.col join user u3 where u3.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
@@ -469,7 +473,7 @@
           "Sharded": true
         },
         "FieldQuery": "select u3.col from `user` as u3 where 1 != 1",
-        "Query": "select u3.col from `user` as u3",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ u3.col from `user` as u3",
         "Table": "`user`"
       },
       {
@@ -488,7 +492,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-            "Query": "select u1.col, u1.id from `user` as u1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ u1.col, u1.id from `user` as u1",
             "Table": "`user`"
           },
           {
@@ -499,7 +503,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u2.col from `user` as u2 where 1 != 1",
-            "Query": "select u2.col from `user` as u2",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ u2.col from `user` as u2",
             "Table": "`user`"
           }
         ]
@@ -512,10 +516,10 @@
 # You need two levels of join nesting to test this: when u3 requests
 # col from u1, the u1-u2 joins exports the column to u2-u3. When
 # u4 requests it, it should be reused from the u1-u2 join.
-"select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col"
+"select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col"
 {
   "QueryType": "SELECT",
-  "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -548,7 +552,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.id, u1.col from `user` as u1 where 1 != 1",
-                "Query": "select u1.id, u1.col from `user` as u1",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ u1.id, u1.col from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -559,7 +563,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-                "Query": "select 1 from `user` as u2",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u2",
                 "Table": "`user`"
               }
             ]
@@ -572,7 +576,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-            "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u3 where u3.id = :u1_col",
             "Table": "`user`",
             "Values": [
               ":u1_col"
@@ -589,7 +593,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u4 where 1 != 1",
-        "Query": "select 1 from `user` as u4 where u4.col = :u1_col",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u4 where u4.col = :u1_col",
         "Table": "`user`"
       }
     ]
@@ -597,7 +601,7 @@
 }
 {
   "QueryType": "SELECT",
-  "Original": "select u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ u1.id from user u1 join user u2 join user u3 on u3.id = u1.col join user u4 where u4.col = u1.col",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -612,7 +616,7 @@
           "Sharded": true
         },
         "FieldQuery": "select 1 from `user` as u2 where 1 != 1",
-        "Query": "select 1 from `user` as u2",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u2",
         "Table": "`user`"
       },
       {
@@ -631,7 +635,7 @@
               "Sharded": true
             },
             "FieldQuery": "select u4.col from `user` as u4 where 1 != 1",
-            "Query": "select u4.col from `user` as u4",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ u4.col from `user` as u4",
             "Table": "`user`"
           },
           {
@@ -652,7 +656,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select u1.col, u1.id from `user` as u1 where 1 != 1",
-                "Query": "select u1.col, u1.id from `user` as u1",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ u1.col, u1.id from `user` as u1",
                 "Table": "`user`"
               },
               {
@@ -663,7 +667,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select 1 from `user` as u3 where 1 != 1",
-                "Query": "select 1 from `user` as u3 where u3.id = :u1_col",
+                "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from `user` as u3 where u3.id = :u1_col",
                 "Table": "`user`",
                 "Values": [
                   ":u1_col"
