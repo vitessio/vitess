@@ -50,7 +50,12 @@ func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
-	return nil
+	// when creating a connection, we send a query to MySQL to set the connection's collation,
+	// this query usually returns us something. however, we use testHandler which is a fake
+	// implementation of MySQL that returns no results and no error for set queries, Vitess
+	// interprets this as an error, we do not want to fail if we see such error.
+	// for this reason, we send back an empty result to the caller.
+	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
 func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
