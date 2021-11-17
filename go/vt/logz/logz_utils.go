@@ -64,19 +64,22 @@ func StartHTMLTable(w http.ResponseWriter) {
 			padding: 4px;
 			border-style: solid;
 		}
-                table.gridtable th {
-                  padding-left: 2em;
-                  padding-right: 2em;
-                }
+    table.gridtable th {
+      padding-left: 2em;
+      padding-right: 2em;
+    }
+    table.gridtable thead th {
+      cursor: pointer;
+    }
 
-                table.gridtable th.descending:before {
-                  content: "▲";
-                  float: left;
-                }
-                table.gridtable th.ascending:before {
-                  content: "▼";
-                  float: left;
-                }
+    table.gridtable th.descending:before {
+      content: "▲";
+      float: left;
+    }
+    table.gridtable th.ascending:before {
+      content: "▼";
+      float: left;
+    }
 </style>
 
 <table class="gridtable">
