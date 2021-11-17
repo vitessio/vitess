@@ -1644,29 +1644,29 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 // for the designated replica to catch up with last position.
 // It will point old primary at the newly promoted primary at the correct coordinates.
 // All of this is accomplished via PlannedReparentShard operation. It is an idempotent operation, look at its documentation for more detail
-func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedPrimaryCoordinates *inst.BinlogCoordinates, err error) {
+func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey) (topologyRecovery *TopologyRecovery, err error) {
 	clusterPrimaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
 	}
 	if len(clusterPrimaries) != 1 {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
 	}
 	clusterPrimary := clusterPrimaries[0]
 
 	analysisEntry, err := forceAnalysisEntry(clusterName, inst.PlannedReparentShard, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
 	if topologyRecovery == nil || err != nil {
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard.", analysisEntry.AnalyzedInstanceKey))
-		return topologyRecovery, nil, err
+		return topologyRecovery, err
 	}
 
 	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
 	if err != nil {
-		return topologyRecovery, nil, err
+		return topologyRecovery, err
 	}
 	if designatedKey != nil && !designatedKey.IsValid() {
 		// An empty or invalid key is as good as no key
@@ -1676,7 +1676,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 	if designatedKey != nil {
 		designatedTablet, err := inst.ReadTablet(*designatedKey)
 		if err != nil {
-			return topologyRecovery, nil, err
+			return topologyRecovery, err
 		}
 		designatedTabletAlias = designatedTablet.Alias
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("started PlannedReparentShard, new primary will be %s.", topoproto.TabletAliasString(designatedTabletAlias)))
@@ -1716,7 +1716,7 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		})
 	}
 	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
-	return topologyRecovery, promotedPrimaryCoordinates, err
+	return topologyRecovery, err
 }
 
 func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
