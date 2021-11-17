@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
@@ -1677,6 +1679,9 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 			return topologyRecovery, nil, err
 		}
 		designatedTabletAlias = designatedTablet.Alias
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("started PlannedReparentShard, new primary will be %s.", topoproto.TabletAliasString(designatedTabletAlias)))
+	} else {
+		AuditTopologyRecovery(topologyRecovery, "started PlannedReparentShard with automatic primary selection.")
 	}
 
 	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
