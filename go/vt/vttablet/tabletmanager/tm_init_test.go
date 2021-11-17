@@ -64,13 +64,14 @@ func TestStartBuildTabletFromInput(t *testing.T) {
 			"vt":   port,
 			"grpc": grpcport,
 		},
-		Keyspace:        "test_keyspace",
-		Shard:           "0",
-		KeyRange:        nil,
-		Type:            topodatapb.TabletType_REPLICA,
-		Tags:            map[string]string{},
-		DbNameOverride:  "aa",
-		DbServerVersion: dbServerVersion,
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 map[string]string{},
+		DbNameOverride:       "aa",
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: 45,
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
@@ -147,13 +148,14 @@ func TestBuildTabletFromInputWithBuildTags(t *testing.T) {
 			"vt":   port,
 			"grpc": grpcport,
 		},
-		Keyspace:        "test_keyspace",
-		Shard:           "0",
-		KeyRange:        nil,
-		Type:            topodatapb.TabletType_REPLICA,
-		Tags:            servenv.AppVersion.ToStringMap(),
-		DbNameOverride:  "aa",
-		DbServerVersion: "5.7.0",
+		Keyspace:             "test_keyspace",
+		Shard:                "0",
+		KeyRange:             nil,
+		Type:                 topodatapb.TabletType_REPLICA,
+		Tags:                 servenv.AppVersion.ToStringMap(),
+		DbNameOverride:       "aa",
+		DbServerVersion:      "5.7.0",
+		DefaultConnCollation: 45,
 	}
 
 	gotTablet, err := BuildTabletFromInput(alias, port, grpcport, dbServerVersion, nil)
