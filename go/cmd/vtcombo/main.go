@@ -60,6 +60,9 @@ var (
 
 	mysqlPort = flag.Int("mysql_port", 3306, "mysql port")
 
+	externalTopoServer = flag.Bool("external_topo_server", false, "Should vtcombo use an external topology server instead of starting its own in-memory topology server. "+
+		"If true, vtcombo will use the flags defined in topo/server.go to open topo server")
+
 	ts              *topo.Server
 	resilientServer *srvtopo.ResilientServer
 )
@@ -142,8 +145,14 @@ func main() {
 		flag.Set("log_dir", "$VTDATAROOT/tmp")
 	}
 
-	// Create topo server. We use a 'memorytopo' implementation.
-	ts = memorytopo.NewServer(tpb.Cells...)
+	if *externalTopoServer {
+		// Open topo server based on the command line flags defined at topo/server.go
+		// do not create cell info as it should be done by whoever sets up the external topo server
+		ts = topo.Open()
+	} else {
+		// Create topo server. We use a 'memorytopo' implementation.
+		ts = memorytopo.NewServer(tpb.Cells...)
+	}
 	servenv.Init()
 	tabletenv.Init()
 
