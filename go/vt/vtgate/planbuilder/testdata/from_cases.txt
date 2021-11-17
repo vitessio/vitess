@@ -2662,10 +2662,10 @@ Gen4 plan same as above
 }
 
 # wire-up on within cross-shard derived table
-"select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
+"select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
     "OperatorType": "SimpleProjection",
     "Columns": [
@@ -2689,7 +2689,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select `user`.id, `user`.col1, `user`.col from `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.id, `user`.col1, `user`.col from `user`",
+            "Query": "select `user`.id, `user`.col1, `user`.col from `user`",
             "Table": "`user`"
           },
           {
@@ -2700,7 +2700,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from user_extra where user_extra.col = :user_col",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
             "Table": "user_extra"
           }
         ]
@@ -2710,7 +2710,7 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Original": "select t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
   "Instructions": {
     "OperatorType": "SimpleProjection",
     "Columns": [
@@ -2719,9 +2719,11 @@ Gen4 plan same as above
     "Inputs": [
       {
         "OperatorType": "Join",
-        "Variant": "HashJoin",
-        "ComparisonType": "INT16",
+        "Variant": "Join",
         "JoinColumnIndexes": "-2,-3",
+        "JoinVars": {
+          "user_col": 0
+        },
         "Predicate": "user_extra.col = `user`.col",
         "TableName": "`user`_user_extra",
         "Inputs": [
@@ -2733,7 +2735,7 @@ Gen4 plan same as above
               "Sharded": true
             },
             "FieldQuery": "select `user`.col, `user`.id, `user`.col1 from `user` where 1 != 1",
-            "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col, `user`.id, `user`.col1 from `user`",
+            "Query": "select `user`.col, `user`.id, `user`.col1 from `user`",
             "Table": "`user`"
           },
           {
@@ -2743,8 +2745,8 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col from user_extra",
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select 1 from user_extra where user_extra.col = :user_col",
             "Table": "user_extra"
           }
         ]
@@ -4533,6 +4535,176 @@ Gen4 plan same as above
               "::__sq1"
             ],
             "Vindex": "user_index"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# join on int columns
+"select u.id from user as u join user as uu on u.intcol = uu.intcol"
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-1",
+    "JoinVars": {
+      "u_intcol": 1
+    },
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id, u.intcol from `user` as u where 1 != 1",
+        "Query": "select u.id, u.intcol from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as uu where 1 != 1",
+        "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select u.id from user as u join user as uu on u.intcol = uu.intcol",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "u_intcol": 0
+    },
+    "Predicate": "u.intcol = uu.intcol",
+    "TableName": "`user`_`user`",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.intcol, u.id from `user` as u where 1 != 1",
+        "Query": "select u.intcol, u.id from `user` as u",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from `user` as uu where 1 != 1",
+        "Query": "select 1 from `user` as uu where uu.intcol = :u_intcol",
+        "Table": "`user`"
+      }
+    ]
+  }
+}
+
+# wire-up on within cross-shard derived table (hash-join version)
+"select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "-1,-2",
+        "JoinVars": {
+          "user_col": 2
+        },
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.id, `user`.col1, `user`.col from `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.id, `user`.col1, `user`.col from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from user_extra where user_extra.col = :user_col",
+            "Table": "user_extra"
+          }
+        ]
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ t.id from (select user.id, user.col1 from user join user_extra on user_extra.col = user.col) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Join",
+        "Variant": "HashJoin",
+        "ComparisonType": "INT16",
+        "JoinColumnIndexes": "-2,-3",
+        "Predicate": "user_extra.col = `user`.col",
+        "TableName": "`user`_user_extra",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `user`.col, `user`.id, `user`.col1 from `user` where 1 != 1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col, `user`.id, `user`.col1 from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col from user_extra",
+            "Table": "user_extra"
           }
         ]
       }

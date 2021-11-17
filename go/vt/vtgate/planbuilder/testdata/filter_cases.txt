@@ -691,10 +691,10 @@ Gen4 plan same as above
 }
 
 # Multi-route unique vindex constraint
-"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
+"select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -712,7 +712,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -727,7 +727,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -735,12 +735,14 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "ComparisonType": "INT16",
-    "JoinColumnIndexes": "2",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -752,7 +754,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
+        "Query": "select `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -766,8 +768,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra",
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -928,10 +930,10 @@ Gen4 plan same as above
 }
 
 # Multi-route with non-route constraint, should use first route.
-"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
+"select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -949,7 +951,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
+        "Query": "select `user`.col from `user` where 1 = 1",
         "Table": "`user`"
       },
       {
@@ -960,7 +962,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
+        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -968,12 +970,14 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "ComparisonType": "INT16",
-    "JoinColumnIndexes": "2",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -985,7 +989,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
+        "Query": "select `user`.col from `user` where 1 = 1",
         "Table": "`user`"
       },
       {
@@ -995,8 +999,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
-        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra where 1 = 1",
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select user_extra.id from user_extra where 1 = 1 and user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -3497,3 +3501,163 @@ Gen4 plan same as above
   }
 }
 Gen4 plan same as above
+
+# Multi-route unique vindex constraint (with hash join)
+"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "HashJoin",
+    "ComparisonType": "INT16",
+    "JoinColumnIndexes": "2",
+    "Predicate": "`user`.col = user_extra.col",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
+        "Table": "`user`",
+        "Values": [
+          5
+        ],
+        "Vindex": "user_index"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+
+# Multi-route with non-route constraint, should use first route.
+"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1",
+    "JoinVars": {
+      "user_col": 0
+    },
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
+{
+  "QueryType": "SELECT",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Instructions": {
+    "OperatorType": "Join",
+    "Variant": "HashJoin",
+    "ComparisonType": "INT16",
+    "JoinColumnIndexes": "2",
+    "Predicate": "`user`.col = user_extra.col",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user` where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra where 1 = 1",
+        "Table": "user_extra"
+      }
+    ]
+  }
+}
