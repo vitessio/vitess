@@ -645,6 +645,22 @@ func (itc *internalTabletConn) ReserveBeginExecute(
 	return res, transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// ReserveBeginExecute is part of the QueryService interface.
+func (itc *internalTabletConn) ReserveBeginStreamExecute(
+	ctx context.Context,
+	target *querypb.Target,
+	preQueries []string,
+	postBeginQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	options *querypb.ExecuteOptions,
+	callback func(*sqltypes.Result) error,
+) (int64, int64, *topodatapb.TabletAlias, error) {
+	bindVariables = sqltypes.CopyBindVariables(bindVariables)
+	transactionID, reservedID, alias, err := itc.tablet.qsc.QueryService().ReserveBeginStreamExecute(ctx, target, preQueries, postBeginQueries, sql, bindVariables, options, callback)
+	return transactionID, reservedID, alias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // ReserveExecute is part of the QueryService interface.
 func (itc *internalTabletConn) ReserveExecute(
 	ctx context.Context,

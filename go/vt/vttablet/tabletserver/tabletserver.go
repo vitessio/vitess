@@ -1190,6 +1190,44 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 	return result, connID, connID, tsv.alias, err
 }
 
+// ReserveBeginStreamExecute combines Begin and StreamExecute.
+func (tsv *TabletServer) ReserveBeginStreamExecute(
+	ctx context.Context,
+	target *querypb.Target,
+	preQueries []string,
+	postBeginQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	options *querypb.ExecuteOptions,
+	callback func(*sqltypes.Result) error,
+) (int64, int64, *topodatapb.TabletAlias, error) {
+	var connID int64
+	var err error
+
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"ReserveBegin", "begin", bindVariables,
+		target, options, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = connID
+			logStats.ReservedID = connID
+			return nil
+		},
+	)
+
+	if err != nil {
+		return 0, 0, nil, err
+	}
+
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, options, callback)
+	return connID, connID, tsv.alias, err
+}
+
 //ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	var connID int64
