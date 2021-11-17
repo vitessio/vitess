@@ -39,6 +39,8 @@ const (
 	DirectiveIgnoreMaxMemoryRows = "IGNORE_MAX_MEMORY_ROWS"
 	// DirectiveAllowScatter lets scatter plans pass through even when they are turned off by `no-scatter`.
 	DirectiveAllowScatter = "ALLOW_SCATTER"
+	// DirectiveAllowHashJoin lets the planner use hash join if possible
+	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 )
 
 func isNonSpace(r rune) bool {
@@ -212,8 +214,7 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 
 	var vals map[string]interface{}
 
-	for _, comment := range comments {
-		commentStr := string(comment)
+	for _, commentStr := range comments {
 		if commentStr[0:5] != commentDirectivePreamble {
 			continue
 		}
@@ -237,6 +238,18 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 
 			strVal := directive[sep+1:]
 			directive = directive[:sep]
+
+			// merging strVal with next directives to support comma-separated lists with spaces
+			// i.e: VAR=(a, b, c)
+			if strings.HasPrefix(strVal, "(") {
+				for j := i + 1; j < len(directives)-1; j++ {
+					strVal += directives[j]
+					if strings.HasSuffix(directives[j], ")") {
+						i = j
+						break
+					}
+				}
+			}
 
 			intVal, err := strconv.Atoi(strVal)
 			if err == nil {
@@ -291,6 +304,36 @@ func (d CommentDirectives) GetString(key string, defaultVal string) string {
 		stringVal = unquoted
 	}
 	return stringVal
+}
+
+// HashJoinDirective looks for DirectiveAllowHashJoin in the comments of the given
+// statement and returns a slice of strings containing the table names that can be hash joined
+func HashJoinDirective(stmt Statement) []string {
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union:
+		directives = ExtractCommentDirectives(stmt.GetComments())
+	default:
+		return nil
+	}
+	vals, found := directives[DirectiveAllowHashJoin]
+	if !found {
+		return nil
+	}
+	str, isStr := vals.(string)
+	if !isStr {
+		return nil
+	}
+	str = strings.TrimFunc(str, func(r rune) bool {
+		return r == '(' || r == ')'
+	})
+	tables := strings.Split(str, ",")
+	for i, table := range tables {
+		tables[i] = strings.TrimSpace(table)
+	}
+	return tables
 }
 
 // MultiShardAutocommitDirective returns true if multishard autocommit directive is set to true in query.
