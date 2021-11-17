@@ -413,7 +413,7 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value, colls map[int
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-			if !((isComparisonErr || isCollationErr) && key.WeightStringCol != -1) {
+			if !isComparisonErr && !isCollationErr || key.WeightStringCol == -1 {
 				return false, err
 			}
 			key.KeyCol = key.WeightStringCol
