@@ -3847,6 +3847,9 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		if err != nil {
 			return err
 		}
+		if workflow == "" {
+			return fmt.Errorf("workflow has to be defined for action %s", action)
+		}
 	}
 	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
 	if err != nil {
