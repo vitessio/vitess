@@ -1220,7 +1220,7 @@ INPUT
 select SUBPARTITION_METHOD FROM information_schema.partitions WHERE table_schema="test" AND table_name="t1";
 END
 OUTPUT
-select SUBPARTITION_METHOD from information_schema.partitions where table_schema = 'test' and table_name = 't1'
+select SUBPARTITION_METHOD from information_schema.`partitions` where table_schema = 'test' and table_name = 't1'
 END
 INPUT
 select grp,group_concat(a,null) from t1 group by grp;
