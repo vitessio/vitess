@@ -197,7 +197,7 @@ func (sbc *SandboxConn) ExecuteBatch(ctx context.Context, target *querypb.Target
 }
 
 // StreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (sbc *SandboxConn) StreamExecute(ctx context.Context, target *querypb.Target, query string, bindVars map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	sbc.sExecMu.Lock()
 	sbc.ExecCount.Add(1)
 	bv := make(map[string]*querypb.BindVariable)
@@ -400,7 +400,7 @@ func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.
 	if err != nil {
 		return 0, nil, err
 	}
-	err = sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, options, callback)
+	err = sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, callback)
 	return transactionID, alias, err
 }
 

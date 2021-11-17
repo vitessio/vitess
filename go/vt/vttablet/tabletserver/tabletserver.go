@@ -775,11 +775,23 @@ func smallerTimeout(t1, t2 time.Duration) time.Duration {
 // StreamExecute executes the query and streams the result.
 // The first QueryResult will have Fields set (and Rows nil).
 // The subsequent QueryResult will have Rows set (and Fields nil).
-func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (err error) {
+	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
+		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
+	}
+
+	allowOnShutdown := false
+	var timeout time.Duration
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the transaction timeout.
+		timeout = tsv.txTimeout.Get()
+	}
+
 	return tsv.execRequest(
-		ctx, 0,
+		ctx, timeout,
 		"StreamExecute", sql, bindVariables,
-		target, options, false, /* allowOnShutdown */
+		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			if bindVariables == nil {
 				bindVariables = make(map[string]*querypb.BindVariable)
@@ -790,11 +802,16 @@ func (tsv *TabletServer) StreamExecute(ctx context.Context, target *querypb.Targ
 			if err != nil {
 				return err
 			}
+			// If both the values are non-zero then by design they are same value. So, it is safe to overwrite.
+			connID := reservedID
+			if transactionID != 0 {
+				connID = transactionID
+			}
 			qre := &QueryExecutor{
 				query:          query,
 				marginComments: comments,
 				bindVars:       bindVariables,
-				connID:         transactionID,
+				connID:         connID,
 				options:        options,
 				plan:           plan,
 				ctx:            ctx,
@@ -935,7 +952,7 @@ func (tsv *TabletServer) BeginStreamExecute(
 		return 0, nil, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, options, callback)
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, callback)
 	return transactionID, alias, err
 }
 
@@ -1224,7 +1241,7 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		return 0, 0, nil, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, options, callback)
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, 0, options, callback)
 	return connID, connID, tsv.alias, err
 }
 

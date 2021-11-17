@@ -81,7 +81,7 @@ type QueryService interface {
 	// Query execution
 	Execute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID, reservedID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, error)
 	// Currently always called with transactionID = 0
-	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
+	StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error
 	// Currently always called with transactionID = 0
 	ExecuteBatch(ctx context.Context, target *querypb.Target, queries []*querypb.BoundQuery, asTransaction bool, transactionID int64, options *querypb.ExecuteOptions) ([]sqltypes.Result, error)
 
@@ -148,7 +148,7 @@ func ExecuteWithStreamer(ctx context.Context, conn QueryService, target *querypb
 	}
 	go func() {
 		defer close(rs.done)
-		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, 0, options, func(qr *sqltypes.Result) error {
+		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, 0, 0, options, func(qr *sqltypes.Result) error {
 			select {
 			case <-ctx.Done():
 				return io.EOF
@@ -171,7 +171,7 @@ func ExecuteWithTransactionalStreamer(ctx context.Context, conn QueryService, ta
 	}
 	go func() {
 		defer close(rs.done)
-		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, transactionID, options, func(qr *sqltypes.Result) error {
+		rs.err = conn.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, func(qr *sqltypes.Result) error {
 			select {
 			case <-ctx.Done():
 				return io.EOF
