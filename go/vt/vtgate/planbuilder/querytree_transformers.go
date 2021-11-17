@@ -256,11 +256,8 @@ func getCollationsFor(ctx *planningContext, n *concatenateTree) []collations.ID 
 		if !ok {
 			return nil
 		}
-		typ, ok := ctx.semTable.ExprTypes[aliasedE.Expr]
-		if !ok {
-			return nil
-		}
-		colls = append(colls, typ.Collation)
+		typ := ctx.semTable.CollationFor(aliasedE.Expr)
+		colls = append(colls, typ)
 	}
 	return colls
 }
@@ -505,14 +502,15 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 	}
 
 	if lhsInfo.typ.Collation != rhsInfo.typ.Collation {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "joins with different collations are not yet supported")
-	}
-	coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
-	if err != nil {
-		return nil, err
+		// joins with different collations are not yet supported
+		canHashJoin = false
 	}
 
 	if canHashJoin {
+		coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
+		if err != nil {
+			return nil, err
+		}
 		return &hashJoin{
 			Left:           lhs,
 			Right:          rhs,
@@ -541,7 +539,7 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 // Hash joins are only supporting equality join predicates, which is why the join predicate
 // has to be an EqualOp.
 func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs joinColumnInfo, err error) {
-	if len(n.predicatesToRemoveFromHashJoin) != 1 || n.rhs.cost() <= 5 || n.leftJoin ||
+	if len(n.predicatesToRemoveFromHashJoin) != 1 || n.rhs.cost() <= MinHashJoinCost || n.leftJoin ||
 		!sqlparser.ExtractCommentDirectives(ctx.semTable.Comments).IsSet(sqlparser.DirectiveAllowHashJoin) {
 		return
 	}
@@ -591,7 +589,7 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs join
 
 	columns, err := n.rhs.pushOutputColumns([]*sqlparser.ColName{col}, ctx.semTable)
 	if err != nil {
-		return
+		return false, lhs, rhs, nil
 	}
 	if len(columns) != 1 {
 		return
