@@ -165,7 +165,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Perform a graceful reparent operation.
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tab4.Alias))
 
 	checkPrimaryTablet(t, tab2)
 }
@@ -313,7 +313,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab3.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tab3.Alias))
 
 	// insert data into the new primary, check the connected replica work
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})

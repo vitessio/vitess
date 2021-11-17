@@ -722,8 +722,7 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary tablet record %v: %v", topoproto.TabletAliasString(si.PrimaryAlias), err)
 	}
-	// TODO(deepthi): fix after v12.0
-	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	posStr, err := tmc.PrimaryPosition(ctx, ti.Tablet)
 	if err != nil {
 		return mysql.Position{}, fmt.Errorf("can't get primary replication position: %v", err)
 	}
