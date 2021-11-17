@@ -26,10 +26,10 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"vitess.io/vitess/go/mysql/collations"
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
