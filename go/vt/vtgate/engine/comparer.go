@@ -44,10 +44,10 @@ func (c *comparer) compare(r1, r2 []sqltypes.Value) (int, error) {
 	if err != nil {
 		_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 		_, isCollationErr := err.(evalengine.UnsupportedCollationError)
-		if !((isComparisonErr || isCollationErr) && c.weightString != -1) {
+		if !isComparisonErr && !isCollationErr || c.weightString == -1 {
 			return 0, err
 		}
-		// in case of a comparison error switch to using the weight string column for ordering
+		// in case of a comparison or collation error switch to using the weight string column for ordering
 		c.orderBy = c.weightString
 		c.weightString = -1
 		cmp, err = evalengine.NullsafeCompare(r1[c.orderBy], r2[c.orderBy], c.collationID)
