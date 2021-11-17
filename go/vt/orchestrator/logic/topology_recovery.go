@@ -1698,9 +1698,6 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard.", analysisEntry.AnalyzedInstanceKey))
 		return topologyRecovery, nil, err
 	}
-	if err := executeProcesses(config.Config.PreGracefulTakeoverProcesses, "PreGracefulTakeoverProcesses", topologyRecovery, true); err != nil {
-		return topologyRecovery, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
-	}
 
 	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
 	if err != nil {
@@ -1792,8 +1789,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 		}()
 
 		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
-
-		executeProcesses(config.Config.PostGracefulTakeoverProcesses, "PostGracefulTakeoverProcesses", topologyRecovery, false)
 	}
 }
 
