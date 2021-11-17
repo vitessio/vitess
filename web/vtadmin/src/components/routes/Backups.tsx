@@ -70,13 +70,13 @@ export const Backups = () => {
                 <tr key={`${row.clusterID}-${row.directory}-${row.name}`}>
                     <DataCell>
                         {formatDateTime(row.time)}
-                        <div className="font-size-small text-color-secondary">{formatRelativeTime(row.time)}</div>
+                        <div className="font-size-small text-secondary">{formatRelativeTime(row.time)}</div>
                     </DataCell>
                     <DataCell>
                         <ShardLink clusterID={row.clusterID} keyspace={row.keyspace} shard={row.shard}>
                             {row.directory}
                         </ShardLink>
-                        <div className="font-size-small text-color-secondary">{row.clusterName}</div>
+                        <div className="font-size-small text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>{row.name}</DataCell>
                     <DataCell>
@@ -84,7 +84,7 @@ export const Backups = () => {
                             {row.tablet}
                         </TabletLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">
+                    <DataCell className="whitespace-nowrap">
                         <BackupStatusPip status={row._status} /> {row.status}
                     </DataCell>
                 </tr>

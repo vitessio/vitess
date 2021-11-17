@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -125,23 +125,6 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 	})
 }
 
-func TestScatterConnStreamExecute(t *testing.T) {
-	testScatterConnGeneric(t, "TestScatterConnStreamExecute", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
-		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-		rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecute", topodatapb.TabletType_REPLICA, key.DestinationShards(shards))
-		if err != nil {
-			return nil, err
-		}
-
-		qr := new(sqltypes.Result)
-		err = sc.StreamExecute(ctx, "query", nil, rss, nil, func(r *sqltypes.Result) error {
-			qr.AppendResult(r)
-			return nil
-		})
-		return qr, err
-	})
-}
-
 func TestScatterConnStreamExecuteMulti(t *testing.T) {
 	testScatterConnGeneric(t, "TestScatterConnStreamExecuteMulti", func(sc *ScatterConn, shards []string) (*sqltypes.Result, error) {
 		res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
@@ -151,7 +134,10 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 		}
 		bvs := make([]map[string]*querypb.BindVariable, len(rss))
 		qr := new(sqltypes.Result)
-		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(r *sqltypes.Result) error {
+		var mu sync.Mutex
+		errors := sc.StreamExecuteMulti(ctx, "query", rss, bvs, NewSafeSession(&vtgatepb.Session{InTransaction: true}), true, func(r *sqltypes.Result) error {
+			mu.Lock()
+			defer mu.Unlock()
 			qr.AppendResult(r)
 			return nil
 		})
@@ -415,7 +401,8 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, err := sc.ExecuteMultiShard(ctx, rss, queries, NewSafeSession(nil), false, false)
+	session := NewSafeSession(&vtgatepb.Session{})
+	_, err := sc.ExecuteMultiShard(ctx, rss, queries, session, false, false)
 	require.NoError(t, vterrors.Aggregate(err))
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
@@ -459,7 +446,7 @@ func TestMultiExecs(t *testing.T) {
 			"bv1": sqltypes.Int64BindVariable(1),
 		},
 	}
-	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, nil, func(*sqltypes.Result) error {
+	_ = sc.StreamExecuteMulti(ctx, "query", rss, bvs, session, false, func(*sqltypes.Result) error {
 		return nil
 	})
 	if !reflect.DeepEqual(sbc0.Queries[0].BindVariables, wantVars0) {
@@ -467,26 +454,6 @@ func TestMultiExecs(t *testing.T) {
 	}
 	if !reflect.DeepEqual(sbc1.Queries[0].BindVariables, wantVars1) {
 		t.Errorf("got %+v, want %+v", sbc0.Queries[0].BindVariables, wantVars1)
-	}
-}
-
-func TestScatterConnStreamExecuteSendError(t *testing.T) {
-	createSandbox("TestScatterConnStreamExecuteSendError")
-	hc := discovery.NewFakeLegacyHealthCheck()
-	sc := newTestLegacyScatterConn(hc, new(sandboxTopo), "aa")
-	hc.AddTestTablet("aa", "0", 1, "TestScatterConnStreamExecuteSendError", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
-	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
-	rss, err := res.ResolveDestination(ctx, "TestScatterConnStreamExecuteSendError", topodatapb.TabletType_REPLICA, key.DestinationShard("0"))
-	if err != nil {
-		t.Fatalf("ResolveDestination failed: %v", err)
-	}
-	err = sc.StreamExecute(ctx, "query", nil, rss, nil, func(*sqltypes.Result) error {
-		return fmt.Errorf("send error")
-	})
-	want := "send error"
-	// Ensure that we handle send errors.
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("got %s, must contain %v", err, want)
 	}
 }
 

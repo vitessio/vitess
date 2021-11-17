@@ -1,4 +1,4 @@
-/*
+m/*
 Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -663,7 +663,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// user is created yet.
 	params := &mysql.ConnParams{
 		Uname:      "root",
-		Charset:    "utf8",
+		Charset:    "utf8mb4",
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
@@ -1142,4 +1142,9 @@ func buildLdPaths() ([]string, error) {
 	}
 
 	return ldPaths, nil
+}
+
+// GetVersionString is part of the MysqlDeamon interface.
+func (mysqld *Mysqld) GetVersionString() string {
+	return fmt.Sprintf("%d.%d.%d", mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor, mysqld.capabilities.version.Patch)
 }

@@ -259,6 +259,7 @@ func TestSchemaChange(t *testing.T) {
 		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 		require.NotNil(t, rs)
@@ -285,6 +286,7 @@ func TestSchemaChange(t *testing.T) {
 		testMigrationRowCount(t, uuid)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
 		insertRows(t, 2)
@@ -329,6 +331,7 @@ func TestSchemaChange(t *testing.T) {
 		testRows(t)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
 		// migration will fail again
 	})
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {

@@ -29,18 +29,12 @@ func init() {
 	register(&Collation_utf8mb4_0900_bin{})
 }
 
-type CollationUCA interface {
-	Collation
-	Charset() charset.Charset
-	UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout)
-}
-
 type Collation_utf8mb4_uca_0900 struct {
 	name string
 	id   ID
 
-	weights          uca.WeightTable
-	tailoring        []uca.WeightPatch
+	weights          uca.Weights
+	tailoring        []uca.Patch
 	contract         uca.Contractor
 	reorder          []uca.Reorder
 	upperCaseFirst   bool
@@ -59,10 +53,6 @@ func (c *Collation_utf8mb4_uca_0900) Init() {
 		c.tailoring = nil
 		c.reorder = nil
 	})
-}
-
-func (c *Collation_utf8mb4_uca_0900) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
-	return c.uca.Weights()
 }
 
 func (c *Collation_utf8mb4_uca_0900) Name() string {
@@ -257,8 +247,8 @@ type Collation_uca_legacy struct {
 	id   ID
 
 	charset      charset.Charset
-	weights      uca.WeightTable
-	tailoring    []uca.WeightPatch
+	weights      uca.Weights
+	tailoring    []uca.Patch
 	contract     uca.Contractor
 	maxCodepoint rune
 
@@ -272,10 +262,6 @@ func (c *Collation_uca_legacy) Init() {
 		c.weights = nil
 		c.tailoring = nil
 	})
-}
-
-func (c *Collation_uca_legacy) UnicodeWeightsTable() (uca.WeightTable, uca.TableLayout) {
-	return c.uca.Weights()
 }
 
 func (c *Collation_uca_legacy) ID() ID {

@@ -57,7 +57,12 @@ func buildDeletePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	}
 
 	if len(edel.Table.Owned) > 0 {
-		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
+		aTblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: delete on complex table expression")
+		}
+		tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edel.Table.Name}, As: aTblExpr.As}
+		edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
 		edel.KsidVindex = ksidVindex
 	}
 
