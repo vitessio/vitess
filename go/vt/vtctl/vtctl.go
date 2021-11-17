@@ -2540,7 +2540,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		wr.Logger().Printf("Waiting for workflow to start:\n")
 
 		type streamCount struct {
-			total, running int64
+			total, started int64
 		}
 		errCh := make(chan error)
 		wfErrCh := make(chan []*wrangler.WorkflowError)
@@ -2557,7 +2557,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
 					return
 				case <-ticker.C:
-					totalStreams, runningStreams, workflowErrors, err := wf.GetStreamCount()
+					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
 					if err != nil {
 						errCh <- err
 						close(errCh)
@@ -2568,7 +2568,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					}
 					progressCh <- &streamCount{
 						total:   totalStreams,
-						running: runningStreams,
+						started: startedStreams,
 					}
 				}
 			}
@@ -2577,12 +2577,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		for {
 			select {
 			case progress := <-progressCh:
-				if progress.running == progress.total {
+				if progress.started == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
 					printDetails()
 					return nil
 				}
-				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
+				wr.Logger().Printf("%d%% ... ", 100*progress.started/progress.total)
 			case err := <-errCh:
 				wr.Logger().Error(err)
 				cancelTimedCtx()
