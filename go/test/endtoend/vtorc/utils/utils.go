@@ -736,6 +736,7 @@ func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response 
 		default:
 			status, response = MakeAPICall(t, url)
 			if status == 500 && strings.Contains(response, "no successor promoted") {
+				time.Sleep(1 * time.Second)
 				break
 			}
 			return status, response
