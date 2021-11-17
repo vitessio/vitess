@@ -714,7 +714,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplyRoutingRules",
 				method: commandApplyRoutingRules,
-				params: "{-rules=<rules> || -rules_file=<rules_file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry_run]",
+				params: "{-rules=<rules> || -rules_file=<rules_file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
 				help:   "Applies the VSchema routing rules.",
 			},
 			{
