@@ -19,13 +19,17 @@ package mysqlctl
 import (
 	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/klauspost/pgzip"
@@ -36,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -55,6 +60,8 @@ var (
 	// It can later be extended for other calls to mysqld during backup functions.
 	// Exported for testing.
 	BuiltinBackupMysqldTimeout = flag.Duration("builtinbackup_mysqld_timeout", 10*time.Minute, "how long to wait for mysqld to shutdown at the start of the backup")
+
+	builtinBackupProgress = flag.Duration("builtinbackup_progress", 5*time.Second, "how often to send progress updates when backing up large files")
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -359,6 +366,88 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	return nil
 }
 
+type backupPipe struct {
+	filename string
+	maxSize  int64
+
+	r io.Reader
+	w *bufio.Writer
+
+	crc32  hash.Hash32
+	nn     int64
+	done   chan struct{}
+	closed int32
+}
+
+func newBackupWriter(filename string, maxSize int64, w io.Writer) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		w:        bufio.NewWriterSize(w, writerBufferSize),
+		filename: filename,
+		maxSize:  maxSize,
+		done:     make(chan struct{}),
+	}
+}
+
+func newBackupReader(filename string, r io.Reader) *backupPipe {
+	return &backupPipe{
+		crc32:    crc32.NewIEEE(),
+		r:        r,
+		filename: filename,
+		done:     make(chan struct{}),
+	}
+}
+
+func (bp *backupPipe) Read(p []byte) (int, error) {
+	nn, err := bp.r.Read(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Write(p []byte) (int, error) {
+	nn, err := bp.w.Write(p)
+	_, _ = bp.crc32.Write(p[:nn])
+	atomic.AddInt64(&bp.nn, int64(nn))
+	return nn, err
+}
+
+func (bp *backupPipe) Close() error {
+	if atomic.CompareAndSwapInt32(&bp.closed, 0, 1) {
+		close(bp.done)
+		if bp.w != nil {
+			if err := bp.w.Flush(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (bp *backupPipe) HashString() string {
+	return hex.EncodeToString(bp.crc32.Sum(nil))
+}
+
+func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger) {
+	tick := time.NewTicker(period)
+	defer tick.Stop()
+
+	for {
+		select {
+		case <-bp.done:
+			return
+		case <-tick.C:
+			written := float64(atomic.LoadInt64(&bp.nn))
+			if bp.maxSize == 0 {
+				logger.Infof("Backup %q: %.02fkb", bp.filename, written/1024.0)
+			} else {
+				maxSize := float64(bp.maxSize)
+				logger.Infof("Backup %q: %.02f%% (%.02f/%.02fkb)", bp.filename, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+			}
+		}
+	}
+}
+
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
@@ -389,11 +478,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			}
 		}
 	}(name, fe.Name)
-	dst := bufio.NewWriterSize(wc, writerBufferSize)
 
-	// Create the hasher and the tee on top.
-	hasher := newHasher()
-	writer := io.MultiWriter(dst, hasher)
+	bw := newBackupWriter(fe.Name, fi.Size(), wc)
+	go bw.ReportProgress(*builtinBackupProgress, params.Logger)
+
+	var writer io.Writer = bw
 
 	// Create the external write pipe, if any.
 	var pipe io.WriteCloser
@@ -446,13 +535,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		}
 	}
 
-	// Flush the buffer to finish writing on destination.
-	if err = dst.Flush(); err != nil {
+	// Close the backupPipe to finish writing on destination.
+	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
 
 	// Save the hash.
-	fe.Hash = hasher.HashString()
+	fe.Hash = bw.HashString()
 	return nil
 }
 
@@ -545,15 +634,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}
 	}()
 
-	// Create a buffering output.
-	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
+	bp := newBackupReader(name, source)
+	go bp.ReportProgress(*builtinBackupProgress, params.Logger)
 
-	// Create hash to write the compressed data to.
-	hasher := newHasher()
-
-	// Create a Tee: we split the input into the hasher
-	// and into the gunziper.
-	reader := io.TeeReader(source, hasher)
+	dst := bufio.NewWriterSize(dstFile, writerBufferSize)
+	var reader io.Reader = bp
 
 	// Create the external read pipe, if any.
 	var wait hook.WaitFunc
@@ -602,7 +687,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}
 
 	// Check the hash.
-	hash := hasher.HashString()
+	hash := bp.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
@@ -610,6 +695,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Flush the buffer.
 	if err := dst.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	if err := bp.Close(); err != nil {
+		return vterrors.Wrap(err, "failed to close the source reader")
 	}
 
 	return nil
