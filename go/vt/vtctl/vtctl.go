@@ -217,7 +217,7 @@ var commands = []commandGroup{
 			{
 				name:   "ChangeTabletType",
 				method: commandChangeTabletType,
-				params: "[-dry_run] <tablet alias> <tablet type>",
+				params: "[-dry-run] <tablet alias> <tablet type>",
 				help: "Changes the db type for the specified tablet, if possible. This command is used primarily to arrange replicas, and it will not convert a primary.\n" +
 					"NOTE: This command automatically updates the serving graph.\n",
 			},
@@ -702,7 +702,7 @@ var commands = []commandGroup{
 			{
 				name:   "ApplyVSchema",
 				method: commandApplyVSchema,
-				params: "{-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry_run] <keyspace>",
+				params: "{-vschema=<vschema> || -vschema_file=<vschema file> || -sql=<sql> || -sql_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run] <keyspace>",
 				help:   "Applies the VTGate routing schema to the provided keyspace. Shows the result after application.",
 			},
 			{
