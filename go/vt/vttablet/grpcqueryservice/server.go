@@ -454,6 +454,30 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 	}, nil
 }
 
+// ReserveBeginStreamExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExecuteRequest, stream queryservicepb.Query_ReserveBeginStreamExecuteServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	transactionID, reservedID, alias, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+			Result: sqltypes.ResultToProto3(reply),
+		})
+	})
+	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		ReservedId:    reservedID,
+		TransactionId: transactionID,
+		TabletAlias:   alias,
+	})
+	if err != nil {
+		return vterrors.ToGRPC(err)
+	}
+
+	return vterrors.ToGRPC(errInLastPacket)
+}
+
 //Release implements the QueryServer interface
 func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (response *querypb.ReleaseResponse, err error) {
 	defer q.server.HandlePanic(&err)
