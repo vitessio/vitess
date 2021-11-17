@@ -39,6 +39,7 @@
 }
 
 .sqlInput {
+    border: solid 1px var(--colorScaffoldingHighlight);
     display: block;
     font-family: var(--fontFamilyMonospace);
     line-height: var(--lineHeightBody);

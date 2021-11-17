@@ -40,10 +40,6 @@ type codepointIterator struct {
 	stride  int
 }
 
-func pageOffset(cp rune) (int, int) {
-	return int(cp) >> 8, int(cp) & 0xFF
-}
-
 func (it *codepointIterator) next() (uint16, bool) {
 	for it.ce > 0 && it.weights[0] == 0x0 {
 		if it.stride <= len(it.weights) {
@@ -63,7 +59,7 @@ func (it *codepointIterator) next() (uint16, bool) {
 }
 
 func (it *codepointIterator) init(parent *iterator900, cp rune) {
-	p, offset := pageOffset(cp)
+	p, offset := PageOffset(cp)
 	page := parent.table[p]
 	if page == nil {
 		it.initImplicit(parent, cp)
@@ -89,7 +85,7 @@ func (it *codepointIterator) initImplicit(parent *iterator900, cp rune) {
 	if jamos := UnicodeDecomposeHangulSyllable(cp); jamos != nil {
 		jweight := it.scratch[:0]
 		for _, jamo := range jamos {
-			p, offset := pageOffset(jamo)
+			p, offset := PageOffset(jamo)
 			page := *parent.table[p]
 			jweight = append(jweight,
 				page[1*CodepointsPerPage+offset],

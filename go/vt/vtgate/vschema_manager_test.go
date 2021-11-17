@@ -219,7 +219,7 @@ func TestRebuildVSchema(t *testing.T) {
 }
 
 func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *vindexes.VSchema {
-	kSchema := &vindexes.KeyspaceSchema{
+	keyspaceSchema := &vindexes.KeyspaceSchema{
 		Keyspace: &vindexes.Keyspace{
 			Name:    ks,
 			Sharded: sharded,
@@ -228,7 +228,7 @@ func makeTestVSchema(ks string, sharded bool, tbls map[string]*vindexes.Table) *
 		Vindexes: map[string]vindexes.Vindex{},
 	}
 	vs := makeTestEmptyVSchema()
-	vs.Keyspaces[ks] = kSchema
+	vs.Keyspaces[ks] = keyspaceSchema
 	return vs
 }
 
@@ -240,12 +240,12 @@ func makeTestEmptyVSchema() *vindexes.VSchema {
 }
 
 func makeTestSrvVSchema(ks string, sharded bool, tbls map[string]*vschemapb.Table) *vschemapb.SrvVSchema {
-	kSchema := &vschemapb.Keyspace{
+	keyspaceSchema := &vschemapb.Keyspace{
 		Sharded: sharded,
 		Tables:  tbls,
 	}
 	return &vschemapb.SrvVSchema{
-		Keyspaces: map[string]*vschemapb.Keyspace{ks: kSchema},
+		Keyspaces: map[string]*vschemapb.Keyspace{ks: keyspaceSchema},
 	}
 }
 

@@ -36,7 +36,7 @@ export const NavRail = () => {
     return (
         <div className={style.container}>
             <Link className={style.logoContainer} to="/">
-                <img alt="Vitess logo" className={style.logo} src={logo} height={40}></img>
+                <img alt="Vitess logo" className="h-16 mx-auto" src={logo} height={40}></img>
             </Link>
 
             <div className={style.navLinks}>

@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -109,18 +110,20 @@ func (s *Send) TryExecute(vcursor VCursor, bindVars map[string]*querypb.BindVari
 		}
 	}
 
-	canAutocommit := false
-	if s.IsDML {
-		canAutocommit = (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
-	}
-
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
-	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, canAutocommit)
+	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
 	}
 	return result, nil
+}
+
+func (s *Send) canAutoCommit(vcursor VCursor, rss []*srvtopo.ResolvedShard) bool {
+	if s.IsDML {
+		return (len(rss) == 1 || s.MultishardAutocommit) && vcursor.AutocommitApproval()
+	}
+	return false
 }
 
 func copyBindVars(in map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
@@ -155,7 +158,7 @@ func (s *Send) TryStreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 		}
 		multiBindVars[i] = bv
 	}
-	errors := vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, callback)
+	errors := vcursor.StreamExecuteMulti(s.Query, rss, multiBindVars, s.IsDML /*rollbackOnError*/, s.canAutoCommit(vcursor, rss), callback)
 	return vterrors.Aggregate(errors)
 }
 

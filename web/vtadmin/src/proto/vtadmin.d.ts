@@ -22507,6 +22507,240 @@ export namespace query {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a BeginStreamExecuteRequest. */
+    interface IBeginStreamExecuteRequest {
+
+        /** BeginStreamExecuteRequest effective_caller_id */
+        effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BeginStreamExecuteRequest immediate_caller_id */
+        immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BeginStreamExecuteRequest target */
+        target?: (query.ITarget|null);
+
+        /** BeginStreamExecuteRequest query */
+        query?: (query.IBoundQuery|null);
+
+        /** BeginStreamExecuteRequest options */
+        options?: (query.IExecuteOptions|null);
+
+        /** BeginStreamExecuteRequest reserved_id */
+        reserved_id?: (number|Long|null);
+
+        /** BeginStreamExecuteRequest pre_queries */
+        pre_queries?: (string[]|null);
+    }
+
+    /** Represents a BeginStreamExecuteRequest. */
+    class BeginStreamExecuteRequest implements IBeginStreamExecuteRequest {
+
+        /**
+         * Constructs a new BeginStreamExecuteRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IBeginStreamExecuteRequest);
+
+        /** BeginStreamExecuteRequest effective_caller_id. */
+        public effective_caller_id?: (vtrpc.ICallerID|null);
+
+        /** BeginStreamExecuteRequest immediate_caller_id. */
+        public immediate_caller_id?: (query.IVTGateCallerID|null);
+
+        /** BeginStreamExecuteRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** BeginStreamExecuteRequest query. */
+        public query?: (query.IBoundQuery|null);
+
+        /** BeginStreamExecuteRequest options. */
+        public options?: (query.IExecuteOptions|null);
+
+        /** BeginStreamExecuteRequest reserved_id. */
+        public reserved_id: (number|Long);
+
+        /** BeginStreamExecuteRequest pre_queries. */
+        public pre_queries: string[];
+
+        /**
+         * Creates a new BeginStreamExecuteRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BeginStreamExecuteRequest instance
+         */
+        public static create(properties?: query.IBeginStreamExecuteRequest): query.BeginStreamExecuteRequest;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRequest message. Does not implicitly {@link query.BeginStreamExecuteRequest.verify|verify} messages.
+         * @param message BeginStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IBeginStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BeginStreamExecuteRequest message, length delimited. Does not implicitly {@link query.BeginStreamExecuteRequest.verify|verify} messages.
+         * @param message BeginStreamExecuteRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IBeginStreamExecuteRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BeginStreamExecuteRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BeginStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.BeginStreamExecuteRequest;
+
+        /**
+         * Decodes a BeginStreamExecuteRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BeginStreamExecuteRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.BeginStreamExecuteRequest;
+
+        /**
+         * Verifies a BeginStreamExecuteRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BeginStreamExecuteRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BeginStreamExecuteRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.BeginStreamExecuteRequest;
+
+        /**
+         * Creates a plain object from a BeginStreamExecuteRequest message. Also converts values to other types if specified.
+         * @param message BeginStreamExecuteRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.BeginStreamExecuteRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BeginStreamExecuteRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a BeginStreamExecuteResponse. */
+    interface IBeginStreamExecuteResponse {
+
+        /** BeginStreamExecuteResponse error */
+        error?: (vtrpc.IRPCError|null);
+
+        /** BeginStreamExecuteResponse result */
+        result?: (query.IQueryResult|null);
+
+        /** BeginStreamExecuteResponse transaction_id */
+        transaction_id?: (number|Long|null);
+
+        /** BeginStreamExecuteResponse tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+    }
+
+    /** Represents a BeginStreamExecuteResponse. */
+    class BeginStreamExecuteResponse implements IBeginStreamExecuteResponse {
+
+        /**
+         * Constructs a new BeginStreamExecuteResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IBeginStreamExecuteResponse);
+
+        /** BeginStreamExecuteResponse error. */
+        public error?: (vtrpc.IRPCError|null);
+
+        /** BeginStreamExecuteResponse result. */
+        public result?: (query.IQueryResult|null);
+
+        /** BeginStreamExecuteResponse transaction_id. */
+        public transaction_id: (number|Long);
+
+        /** BeginStreamExecuteResponse tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /**
+         * Creates a new BeginStreamExecuteResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns BeginStreamExecuteResponse instance
+         */
+        public static create(properties?: query.IBeginStreamExecuteResponse): query.BeginStreamExecuteResponse;
+
+        /**
+         * Encodes the specified BeginStreamExecuteResponse message. Does not implicitly {@link query.BeginStreamExecuteResponse.verify|verify} messages.
+         * @param message BeginStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IBeginStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified BeginStreamExecuteResponse message, length delimited. Does not implicitly {@link query.BeginStreamExecuteResponse.verify|verify} messages.
+         * @param message BeginStreamExecuteResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IBeginStreamExecuteResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a BeginStreamExecuteResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns BeginStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.BeginStreamExecuteResponse;
+
+        /**
+         * Decodes a BeginStreamExecuteResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns BeginStreamExecuteResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.BeginStreamExecuteResponse;
+
+        /**
+         * Verifies a BeginStreamExecuteResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a BeginStreamExecuteResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns BeginStreamExecuteResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.BeginStreamExecuteResponse;
+
+        /**
+         * Creates a plain object from a BeginStreamExecuteResponse message. Also converts values to other types if specified.
+         * @param message BeginStreamExecuteResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.BeginStreamExecuteResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this BeginStreamExecuteResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a MessageStreamRequest. */
     interface IMessageStreamRequest {
 

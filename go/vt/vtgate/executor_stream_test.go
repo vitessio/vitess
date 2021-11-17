@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	_ "vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -83,26 +82,6 @@ func TestStreamSQLSharded(t *testing.T) {
 	}
 }
 
-func TestStreamError(t *testing.T) {
-	executor, _, _, _ := createLegacyExecutorEnv()
-	logChan := QueryLogger.Subscribe("TestStreamError")
-	defer QueryLogger.Unsubscribe(logChan)
-
-	queries := []string{
-		"start transaction",
-		"begin",
-		"rollback",
-		"commit",
-	}
-	for _, query := range queries {
-		t.Run(query, func(t *testing.T) {
-			_, err := executorStreamMessages(executor, query)
-			require.Error(t, err)
-			require.Contains(t, err.Error(), "OLAP does not supported statement")
-		})
-	}
-}
-
 func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result, err error) {
 	results := make(chan *sqltypes.Result, 100)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
@@ -113,9 +92,6 @@ func executorStreamMessages(executor *Executor, sql string) (qr *sqltypes.Result
 		NewSafeSession(primarySession),
 		sql,
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

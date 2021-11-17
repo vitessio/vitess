@@ -501,7 +501,6 @@ func (hc *LegacyHealthCheckImpl) updateHealth(ts *LegacyTabletStats, conn querys
 		// Track how often a tablet gets promoted to primary. It is used for
 		// comparing against the variables in go/vtgate/buffer/variables.go.
 		if oldts.Target.TabletType != topodatapb.TabletType_PRIMARY && ts.Target.TabletType == topodatapb.TabletType_PRIMARY {
-			hcMasterPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 			hcPrimaryPromotedCounters.Add([]string{ts.Target.Keyspace, ts.Target.Shard}, 1)
 		}
 	}

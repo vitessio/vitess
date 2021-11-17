@@ -502,6 +502,72 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 	return sqltypes.Proto3ToResults(reply.Results), reply.TransactionId, conn.tablet.Alias, nil
 }
 
+// BeginStreamExecute starts a transaction and runs an Execute.
+func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return 0, nil, tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_BeginStreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.BeginStreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			PreQueries:        preQueries,
+			Query: &querypb.BoundQuery{
+				Sql:           query,
+				BindVariables: bindVars,
+			},
+			Options: options,
+		}
+		stream, err := conn.c.BeginStreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return 0, nil, err
+	}
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if transactionID == 0 && ser.GetTransactionId() != 0 {
+			transactionID = ser.GetTransactionId()
+		}
+		if alias == nil && ser.GetTabletAlias() != nil {
+			alias = ser.GetTabletAlias()
+		}
+
+		if err != nil {
+			return transactionID, alias, tabletconn.ErrorFromGRPC(err)
+		}
+
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return transactionID, alias, nil
+		}
+
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return transactionID, alias, nil
+			}
+			return transactionID, alias, err
+		}
+	}
+}
+
 // MessageStream streams messages.
 func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error {
 	// Please see comments in StreamExecute to see how this works.

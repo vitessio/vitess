@@ -591,57 +591,17 @@ const (
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	// CharacterSetUtf8 is for UTF8. We use this by default.
+	DefaultCollation = "utf8mb4_general_ci"
+
+	// CharacterSetUtf8 is for UTF8.
 	CharacterSetUtf8 = 33
+
+	// CharacterSetUtf8mb4 is for 4-bytes UTF8.
+	CharacterSetUtf8mb4 = 45
 
 	// CharacterSetBinary is for binary. Use by integer fields for instance.
 	CharacterSetBinary = 63
 )
-
-// CharacterSetMap maps the charset name (used in ConnParams) to the
-// integer value.  Interesting ones have their own constant above.
-var CharacterSetMap = map[string]uint8{
-	"big5":     1,
-	"dec8":     3,
-	"cp850":    4,
-	"hp8":      6,
-	"koi8r":    7,
-	"latin1":   8,
-	"latin2":   9,
-	"swe7":     10,
-	"ascii":    11,
-	"ujis":     12,
-	"sjis":     13,
-	"hebrew":   16,
-	"tis620":   18,
-	"euckr":    19,
-	"koi8u":    22,
-	"gb2312":   24,
-	"greek":    25,
-	"cp1250":   26,
-	"gbk":      28,
-	"latin5":   30,
-	"armscii8": 32,
-	"utf8":     CharacterSetUtf8,
-	"ucs2":     35,
-	"cp866":    36,
-	"keybcs2":  37,
-	"macce":    38,
-	"macroman": 39,
-	"cp852":    40,
-	"latin7":   41,
-	"utf8mb4":  45,
-	"cp1251":   51,
-	"utf16":    54,
-	"utf16le":  56,
-	"cp1256":   57,
-	"cp1257":   59,
-	"utf32":    60,
-	"binary":   CharacterSetBinary,
-	"geostd8":  92,
-	"cp932":    95,
-	"eucjpms":  97,
-}
 
 // CharacterSetEncoding maps a charset name to a golang encoder.
 // golang does not support encoders for all MySQL charsets.
@@ -667,15 +627,6 @@ var CharacterSetEncoding = map[string]encoding.Encoding{
 	"cp1256":  charmap.Windows1256,
 	"cp1257":  charmap.Windows1257,
 	"binary":  nil,
-}
-
-// ReverseCharacterSetMap maps a charset integer code to charset name
-var ReverseCharacterSetMap = map[uint8]string{}
-
-func init() {
-	for c, i := range CharacterSetMap {
-		ReverseCharacterSetMap[i] = c
-	}
 }
 
 // IsNum returns true if a MySQL type is a numeric value.
