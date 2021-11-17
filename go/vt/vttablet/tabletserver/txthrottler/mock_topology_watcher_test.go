@@ -10,47 +10,51 @@ import (
 	gomock "github.com/golang/mock/gomock"
 )
 
-// MockTopologyWatcherInterface is a mock of TopologyWatcherInterface interface
+// MockTopologyWatcherInterface is a mock of TopologyWatcherInterface interface.
 type MockTopologyWatcherInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockTopologyWatcherInterfaceMockRecorder
 }
 
-// MockTopologyWatcherInterfaceMockRecorder is the mock recorder for MockTopologyWatcherInterface
+// MockTopologyWatcherInterfaceMockRecorder is the mock recorder for MockTopologyWatcherInterface.
 type MockTopologyWatcherInterfaceMockRecorder struct {
 	mock *MockTopologyWatcherInterface
 }
 
-// NewMockTopologyWatcherInterface creates a new mock instance
+// NewMockTopologyWatcherInterface creates a new mock instance.
 func NewMockTopologyWatcherInterface(ctrl *gomock.Controller) *MockTopologyWatcherInterface {
 	mock := &MockTopologyWatcherInterface{ctrl: ctrl}
 	mock.recorder = &MockTopologyWatcherInterfaceMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockTopologyWatcherInterface) EXPECT() *MockTopologyWatcherInterfaceMockRecorder {
 	return m.recorder
 }
 
-// Stop mocks base method
+// Stop mocks base method.
 func (m *MockTopologyWatcherInterface) Stop() {
+	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Stop")
 }
 
-// Stop indicates an expected call of Stop
+// Stop indicates an expected call of Stop.
 func (mr *MockTopologyWatcherInterfaceMockRecorder) Stop() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockTopologyWatcherInterface)(nil).Stop))
 }
 
-// WaitForInitialTopology mocks base method
+// WaitForInitialTopology mocks base method.
 func (m *MockTopologyWatcherInterface) WaitForInitialTopology() error {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitForInitialTopology")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// WaitForInitialTopology indicates an expected call of WaitForInitialTopology
+// WaitForInitialTopology indicates an expected call of WaitForInitialTopology.
 func (mr *MockTopologyWatcherInterfaceMockRecorder) WaitForInitialTopology() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitForInitialTopology", reflect.TypeOf((*MockTopologyWatcherInterface)(nil).WaitForInitialTopology))
 }
