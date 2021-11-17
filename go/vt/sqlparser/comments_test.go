@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -315,6 +317,12 @@ func TestExtractCommentDirectives(t *testing.T) {
 			"ANOTHER_WITH_VALEQ": "val=",
 			"AND_ONE_WITH_EQ":    "=",
 		},
+	}, {
+		input: "/*vt+ HASH_JOIN=(a, b) ANOTHER */",
+		vals: CommentDirectives{
+			"HASH_JOIN": "(a,b)",
+			"ANOTHER":   true,
+		},
 	}}
 
 	for _, testCase := range testCases {
@@ -466,6 +474,29 @@ func TestIgnoreMaxMaxMemoryRowsDirective(t *testing.T) {
 			stmt, _ := Parse(test.query)
 			got := IgnoreMaxMaxMemoryRowsDirective(stmt)
 			assert.Equalf(t, test.expected, got, fmt.Sprintf("IgnoreMaxPayloadSizeDirective(stmt) returned %v but expected %v", got, test.expected))
+		})
+	}
+}
+
+func TestHashJoinDirective(t *testing.T) {
+	testCases := []struct {
+		query    string
+		expected []string
+	}{
+		{query: "select /*vt+ ALLOW_HASH_JOIN=a */ * from a", expected: []string{"a"}},
+		{query: "select /*vt+ ALLOW_HASH_JOIN=(a) */ * from a", expected: []string{"a"}},
+		{query: "select /*vt+ ALLOW_HASH_JOIN=(a,b) */ a.*, b.* from a, b", expected: []string{"a", "b"}},
+		{query: "select /*vt+ ALLOW_HASH_JOIN=(a, b) */ a.*, b.* from a, b", expected: []string{"a", "b"}},
+		{query: "select /*vt+ ALLOW_HASH_JOIN=(a) */ * from a dual union select * from a", expected: []string{"a"}},
+		{query: "delete /*vt+ ALLOW_HASH_JOIN=(a) */ from a", expected: nil},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.query, func(t *testing.T) {
+			stmt, err := Parse(tc.query)
+			require.NoError(t, err)
+			got := HashJoinDirective(stmt)
+			assert.Equal(t, tc.expected, got)
 		})
 	}
 }
