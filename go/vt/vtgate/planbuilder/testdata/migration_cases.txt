@@ -48,6 +48,23 @@ Gen4 plan same as above
 }
 Gen4 plan same as above
 
+# complete migration
+"alter vitess_migration 'abc' cleanup"
+{
+  "QueryType": "UNKNOWN",
+  "Original": "alter vitess_migration 'abc' cleanup",
+  "Instructions": {
+    "OperatorType": "Send",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "TargetDestination": "AllShards()",
+    "Query": "alter vitess_migration 'abc' cleanup"
+  }
+}
+Gen4 plan same as above
+
 # cancel migration
 "alter vitess_migration 'abc' cancel"
 {

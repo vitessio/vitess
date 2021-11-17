@@ -392,6 +392,8 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case RetryMigrationType:
 		alterType = "retry"
+	case CleanupMigrationType:
+		alterType = "cleanup"
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CancelMigrationType:
