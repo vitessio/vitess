@@ -723,3 +723,22 @@ func MakeAPICall(t *testing.T, url string) (status int, response string) {
 	body := string(bodyBytes)
 	return res.StatusCode, body
 }
+
+// MakeAPICallUntilRegistered is used to make an API call and retry if we see a 500 - no successor promoted output. This happens when some other recovery had previously run
+// and the API recovery was unable to be registered due to active timeout period.
+func MakeAPICallUntilRegistered(t *testing.T, url string) (status int, response string) {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timedout waiting for api to register correctly")
+			return
+		default:
+			status, response = MakeAPICall(t, url)
+			if status == 500 && strings.Contains(response, "no successor promoted") {
+				break
+			}
+			return status, response
+		}
+	}
+}

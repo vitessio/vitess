@@ -52,7 +52,7 @@ func TestGracefulPrimaryTakeover(t *testing.T) {
 	// check that the replication is setup correctly before we failover
 	utils.CheckReplication(t, clusterInfo, curPrimary, []*cluster.Vttablet{replica}, 10*time.Second)
 
-	status, _ := utils.MakeAPICall(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
+	status, _ := utils.MakeAPICallUntilRegistered(t, fmt.Sprintf("http://localhost:3000/api/graceful-primary-takeover/localhost/%d/localhost/%d", curPrimary.MySQLPort, replica.MySQLPort))
 	assert.Equal(t, 200, status)
 
 	// check that the replica gets promoted
