@@ -31,9 +31,8 @@ import (
 	"github.com/hashicorp/consul/api"
 	"google.golang.org/protobuf/encoding/protojson"
 
-	"vitess.io/vitess/go/vt/log"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/tlstest"
 
 	"github.com/stretchr/testify/assert"
@@ -193,38 +192,33 @@ func TestCanVtGateExecute(t *testing.T) {
 	assert.NoError(t, err)
 	defer cluster.TearDown()
 
-	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
-	assert.NoError(t, err)
-	defer client.Close()
-	stream, err := client.ExecuteVtctlCommand(
-		context.Background(),
-		[]string{
-			"VtGateExecute",
-			"-server",
-			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
-			"select 'success';",
-		},
-		30*time.Second,
-	)
-	assert.NoError(t, err)
+	assertVtGateExecute(t, cluster)
+}
 
-	var b strings.Builder
-	b.Grow(1024)
+func TestExternalTopoServerConsul(t *testing.T) {
+	args := os.Args
+	conf := config
+	defer resetFlags(args, conf)
 
-Out:
-	for {
-		e, err := stream.Recv()
-		switch err {
-		case nil:
-			b.WriteString(e.Value)
-		case io.EOF:
-			break Out
-		default:
-			assert.FailNow(t, err.Error())
+	// Start a single consul in the background.
+	cmd, serverAddr := startConsul(t)
+	defer func() {
+		// Alerts command did not run successful
+		if err := cmd.Process.Kill(); err != nil {
+			log.Errorf("cmd process kill has an error: %v", err)
 		}
-	}
+		// Alerts command did not run successful
+		if err := cmd.Wait(); err != nil {
+			log.Errorf("cmd process wait has an error: %v", err)
+		}
+	}()
 
-	assert.Contains(t, b.String(), "success")
+	cluster, err := startCluster("-external_topo_implementation=consul",
+		fmt.Sprintf("-external_topo_global_server_address=%s", serverAddr), "-external_topo_global_root=consul_test/global")
+	assert.NoError(t, err)
+	defer cluster.TearDown()
+
+	assertVtGateExecute(t, cluster)
 }
 
 func TestMtlsAuth(t *testing.T) {
@@ -312,38 +306,6 @@ func TestMtlsAuthUnauthorizedFails(t *testing.T) {
 	assert.Contains(t, err.Error(), "code = Unauthenticated desc = client certificate not authorized")
 }
 
-func TestExternalTopoServerConsul(t *testing.T) {
-	// Start a single consul in the background.
-	cmd, serverAddr := startConsul(t)
-	defer func() {
-		// Alerts command did not run successful
-		if err := cmd.Process.Kill(); err != nil {
-			log.Errorf("cmd process kill has an error: %v", err)
-		}
-		// Alerts command did not run successful
-		if err := cmd.Wait(); err != nil {
-			log.Errorf("cmd process wait has an error: %v", err)
-		}
-	}()
-
-	args := os.Args
-	conf := config
-	defer resetFlags(args, conf)
-
-	cluster, err := startCluster("-external_topo_implementation=consul",
-		fmt.Sprintf("-external_topo_global_server_address=%s", serverAddr), "-external_topo_global_root=consul_test/global")
-	defer cluster.TearDown()
-
-	assert.NoError(t, err)
-	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
-	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
-
-	// Add Hash vindex via vtgate execution on table
-	err = addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
-	assert.NoError(t, err)
-	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
-}
-
 func startPersistentCluster(dir string, flags ...string) (vttest.LocalCluster, error) {
 	flags = append(flags, []string{
 		"-persistent_mode",
@@ -422,6 +384,41 @@ func resetFlags(args []string, conf vttest.Config) {
 func randomPort() int {
 	v := rand.Int31n(20000)
 	return int(v + 10000)
+}
+
+func assertVtGateExecute(t *testing.T, cluster vttest.LocalCluster) {
+	client, err := vtctlclient.New(fmt.Sprintf("localhost:%v", cluster.GrpcPort()))
+	assert.NoError(t, err)
+	defer client.Close()
+	stream, err := client.ExecuteVtctlCommand(
+		context.Background(),
+		[]string{
+			"VtGateExecute",
+			"-server",
+			fmt.Sprintf("localhost:%v", cluster.GrpcPort()),
+			"select 'success';",
+		},
+		30*time.Second,
+	)
+	assert.NoError(t, err)
+
+	var b strings.Builder
+	b.Grow(1024)
+
+Out:
+	for {
+		e, err := stream.Recv()
+		switch err {
+		case nil:
+			b.WriteString(e.Value)
+		case io.EOF:
+			break Out
+		default:
+			assert.FailNow(t, err.Error())
+		}
+	}
+
+	assert.Contains(t, b.String(), "success")
 }
 
 // startConsul starts a consul subprocess, and waits for it to be ready.
