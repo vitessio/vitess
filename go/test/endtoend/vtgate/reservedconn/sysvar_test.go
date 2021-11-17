@@ -206,26 +206,6 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
 
-func TestSetSystemVariableAndThenSuccessfulTxInStreaming(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-
-	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-	checkedExec(t, conn, "delete from test")
-
-	checkedExec(t, conn, "set workload = olap")
-	checkedExec(t, conn, "set sql_safe_updates = 1")
-	checkedExec(t, conn, "begin")
-	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
-	checkedExec(t, conn, "commit")
-	assertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
-	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
-}
-
 func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
@@ -414,4 +394,24 @@ func TestSysvarSocket(t *testing.T) {
 	assert.Equal(t, mysql.ERIncorrectGlobalLocalVar, sqlErr.Number())
 	assert.Equal(t, mysql.SSUnknownSQLState, sqlErr.SQLState())
 	assert.Equal(t, "variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
+}
+
+func TestReservedConnInStreaming(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	checkedExec(t, conn, "delete from test")
+
+	checkedExec(t, conn, "set workload = olap")
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
+	checkedExec(t, conn, "commit")
+	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
+	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
