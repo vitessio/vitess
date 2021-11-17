@@ -17,8 +17,10 @@ limitations under the License.
 package engine
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -115,12 +117,12 @@ func TestHashJoinExecuteDifferentType(t *testing.T) {
 
 	// Normal join
 	jn := &HashJoin{
-		Opcode: InnerJoin,
-		Left:   leftPrim,
-		Right:  rightPrim,
-		Cols:   []int{-1, -2, 1, 2},
-		LHSKey: 0,
-		RHSKey: 0,
+		Opcode:         InnerJoin,
+		Left:           leftPrim,
+		Right:          rightPrim,
+		Cols:           []int{-1, -2, 1, 2},
+		LHSKey:         0,
+		RHSKey:         0,
 		ComparisonType: querypb.Type_FLOAT64,
 	}
 	r, err := jn.TryExecute(&noopVCursor{}, map[string]*querypb.BindVariable{}, true)

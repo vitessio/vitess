@@ -766,6 +766,16 @@ var commands = []commandGroup{
 	{
 		"Workflow", []command{
 			{
+				name:   "VExec",
+				method: commandVExec,
+				params: "<ks.workflow> <query> --dry-run",
+				help:   "Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
+			},
+		},
+	},
+	{
+		"Workflow", []command{
+			{
 				name:   "Workflow",
 				method: commandWorkflow,
 				params: "<ks.workflow> <action> --dry-run",
@@ -2540,7 +2550,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		wr.Logger().Printf("Waiting for workflow to start:\n")
 
 		type streamCount struct {
-			total, running int64
+			total, started int64
 		}
 		errCh := make(chan error)
 		wfErrCh := make(chan []*wrangler.WorkflowError)
@@ -2557,7 +2567,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
 					return
 				case <-ticker.C:
-					totalStreams, runningStreams, workflowErrors, err := wf.GetStreamCount()
+					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
 					if err != nil {
 						errCh <- err
 						close(errCh)
@@ -2568,7 +2578,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					}
 					progressCh <- &streamCount{
 						total:   totalStreams,
-						running: runningStreams,
+						started: startedStreams,
 					}
 				}
 			}
@@ -2577,12 +2587,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		for {
 			select {
 			case progress := <-progressCh:
-				if progress.running == progress.total {
+				if progress.started == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
 					printDetails()
 					return nil
 				}
-				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
+				wr.Logger().Printf("%d%% ... ", 100*progress.started/progress.total)
 			case err := <-errCh:
 				wr.Logger().Error(err)
 				cancelTimedCtx()
@@ -3826,6 +3836,45 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	return nil
 }
 
+func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
+	log.Warningf(deprecationMessage)
+
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of tablets on which it will be applied")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("usage: VExec --dry-run keyspace.workflow \"<query>\"")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
+	if err != nil {
+		wr.Logger().Errorf("keyspace %s not found", keyspace)
+	}
+	query := subFlags.Arg(1)
+
+	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		return nil
+	}
+	if qr == nil {
+		wr.Logger().Printf("no result returned\n")
+	}
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+}
+
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
 	if err := subFlags.Parse(args); err != nil {
@@ -3846,6 +3895,9 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		keyspace, workflow, err = splitKeyspaceWorkflow(subFlags.Arg(0))
 		if err != nil {
 			return err
+		}
+		if workflow == "" {
+			return fmt.Errorf("workflow has to be defined for action %s", action)
 		}
 	}
 	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
