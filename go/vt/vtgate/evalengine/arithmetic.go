@@ -297,25 +297,25 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 	case sqltypes.IsFloat(typ) || typ == sqltypes.Decimal:
 		switch {
 		case v.IsSigned():
-			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: float64(ival), typ: sqltypes.Float64}, nil
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: float64(uval), typ: sqltypes.Float64}, nil
 		case v.IsFloat() || v.Type() == sqltypes.Decimal:
-			fval, err := strconv.ParseFloat(string(v.Raw()), 64)
+			fval, err := strconv.ParseFloat(v.RawStr(), 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
 		case v.IsText() || v.IsBinary():
-			fval := parseStringToFloat(string(v.Raw()))
+			fval := parseStringToFloat(v.RawStr())
 			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
 		default:
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
@@ -324,13 +324,13 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 	case sqltypes.IsSigned(typ):
 		switch {
 		case v.IsSigned():
-			ival, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
@@ -342,13 +342,13 @@ func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
 	case sqltypes.IsUnsigned(typ):
 		switch {
 		case v.IsSigned():
-			uval, err := strconv.ParseInt(string(v.Raw()), 10, 64)
+			uval, err := strconv.ParseInt(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
 			return EvalResult{uval: uint64(uval), typ: sqltypes.Uint64}, nil
 		case v.IsUnsigned():
-			uval, err := strconv.ParseUint(string(v.Raw()), 10, 64)
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 			if err != nil {
 				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
 			}
