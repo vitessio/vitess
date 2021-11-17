@@ -79,6 +79,11 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
+	// Collation is the default collation used by MySQL
+	// If Collation is set and Charset is not set, Collation will be used
+	// to define the value of Charset
+	Collation string
+
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -125,6 +130,13 @@ type Config struct {
 
 	// Allow users to submit direct DDL statements
 	EnableDirectDDL bool
+
+	// Allow users to start a local cluster using a remote topo server
+	ExternalTopoImplementation string
+
+	ExternalTopoGlobalServerAddress string
+
+	ExternalTopoGlobalRoot string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -200,6 +212,7 @@ type LocalCluster struct {
 	Env Environment
 
 	mysql MySQLManager
+	topo  TopoManager
 	vt    *VtProcess
 }
 
@@ -236,6 +249,16 @@ func (db *LocalCluster) Setup() error {
 	}
 
 	log.Infof("LocalCluster environment: %+v", db.Env)
+
+	// Set up topo manager if we are using a remote topo server
+	if db.ExternalTopoImplementation != "" {
+		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
+		log.Infof("Initializing Topo Manager: %+v", db.topo)
+		if err := db.topo.Setup(); err != nil {
+			log.Errorf("Failed to set up Topo Manager: %v", err)
+			return err
+		}
+	}
 
 	db.mysql, err = db.Env.MySQLManager(db.ExtraMyCnf, db.SnapshotFile)
 	if err != nil {

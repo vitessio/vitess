@@ -139,10 +139,6 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	tabletVars := vttablet.VttabletProcess.GetVars()
 
 	assert.Contains(t, tabletVars, "VReplicationStreamCount")
-	// DEPRECATED, can be deleted after v12.0
-	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMasterMax")
-	assert.Contains(t, tabletVars, "VReplicationSecondsBehindMaster")
-
 	assert.Contains(t, tabletVars, "VReplicationLagSecondsMax")
 	assert.Contains(t, tabletVars, "VReplicationLagSeconds")
 	assert.Contains(t, tabletVars, "VReplicationSource")

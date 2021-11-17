@@ -74,7 +74,7 @@ export const Keyspace = () => {
                     <Link to="/keyspaces">Keyspaces</Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{name}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
 
                 <div className={style.headingMeta}>
                     <span>

@@ -24,7 +24,7 @@ import (
 
 type FastIterator900 struct {
 	iterator900
-	fastTable []uint32
+	fastTable *[256]uint32
 }
 
 func (it *FastIterator900) Done() {
@@ -34,7 +34,7 @@ func (it *FastIterator900) Done() {
 }
 
 func (it *FastIterator900) reset(input []byte) {
-	it.fastTable = fastweightTable_uca900_page000L0[:256]
+	it.fastTable = &fastweightTable_uca900_page000L0
 	it.iterator900.reset(input)
 }
 
@@ -96,10 +96,10 @@ func (it *FastIterator900) NextChunk(dstbytes []byte) int {
 			// for this implementation, for ASCII levels 0, 1 and 2. The slow iterator replaces
 			// the table stored on `it.fastTable` every time we skip a level.
 			// Note that the table has 256 entries although only the first 128 are used. We
-			// want a 256 entry table, and we explicitly slice it like that, because it forces
-			// the Go compiler to disable all bound checks when accessing the table IF our index
-			// variable is a byte (since a byte cannot be larger than 255).
-			table := it.fastTable[:256]
+			// want a 256 entry table because it forces the Go compiler to disable all bound
+			// checks when accessing the table IF our index variable is a byte (since a byte
+			// cannot be larger than 255).
+			table := it.fastTable
 
 			// All ASCII codepoints (0 >= cp >= 127) have either 0 or 1 weights to yield.
 			// This is a problem for our fast path, because 0-weights must NOT appear in the
@@ -239,9 +239,9 @@ func (it *FastIterator900) resetForNextLevel() {
 	it.input = it.original
 	switch it.level {
 	case 1:
-		it.fastTable = fastweightTable_uca900_page000L1[:256]
+		it.fastTable = &fastweightTable_uca900_page000L1
 	case 2:
-		it.fastTable = fastweightTable_uca900_page000L2[:256]
+		it.fastTable = &fastweightTable_uca900_page000L2
 	}
 }
 
