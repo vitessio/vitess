@@ -691,10 +691,10 @@ Gen4 plan same as above
 }
 
 # Multi-route unique vindex constraint
-"select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
+"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5"
 {
   "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -712,7 +712,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -727,7 +727,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -735,7 +735,7 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where user.id = 5",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
@@ -752,7 +752,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where `user`.id = 5",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where `user`.id = 5",
         "Table": "`user`",
         "Values": [
           5
@@ -767,7 +767,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.col, user_extra.id from user_extra",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra",
         "Table": "user_extra"
       }
     ]
@@ -928,10 +928,10 @@ Gen4 plan same as above
 }
 
 # Multi-route with non-route constraint, should use first route.
-"select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
+"select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1"
 {
   "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "Join",
@@ -949,7 +949,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where 1 = 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
         "Table": "`user`"
       },
       {
@@ -960,7 +960,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user_extra where user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]
@@ -968,7 +968,7 @@ Gen4 plan same as above
 }
 {
   "QueryType": "SELECT",
-  "Original": "select user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
+  "Original": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.id from user join user_extra on user.col = user_extra.col where 1 = 1",
   "Instructions": {
     "OperatorType": "Join",
     "Variant": "HashJoin",
@@ -985,7 +985,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select `user`.col from `user` where 1 != 1",
-        "Query": "select `user`.col from `user` where 1 = 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ `user`.col from `user` where 1 = 1",
         "Table": "`user`"
       },
       {
@@ -996,7 +996,7 @@ Gen4 plan same as above
           "Sharded": true
         },
         "FieldQuery": "select user_extra.col, user_extra.id from user_extra where 1 != 1",
-        "Query": "select user_extra.col, user_extra.id from user_extra where 1 = 1",
+        "Query": "select /*vt+ ALLOW_HASH_JOIN */ user_extra.col, user_extra.id from user_extra where 1 = 1",
         "Table": "user_extra"
       }
     ]
@@ -3246,9 +3246,11 @@ Gen4 plan same as above
   "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.foobar = 5",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "ComparisonType": "INT16",
+    "Variant": "Join",
     "JoinColumnIndexes": "-2",
+    "JoinVars": {
+      "user_col": 0
+    },
     "Predicate": "`user`.col = user_extra.col",
     "TableName": "`user`_user_extra",
     "Inputs": [
@@ -3270,8 +3272,8 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-        "Query": "select user_extra.col from user_extra where user_extra.foobar = 5",
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_extra.foobar = 5 and user_extra.col = :user_col",
         "Table": "user_extra"
       }
     ]

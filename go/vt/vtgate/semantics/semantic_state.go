@@ -305,11 +305,11 @@ func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	return res
 }
 
-// CopyExprTypeValue lookups src in the ExprTypes map and, if a key is found, assign
+// CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
 // the corresponding Type value of src to dest.
-func (st *SemTable) CopyExprTypeValue(src, dest sqlparser.Expr) {
-	fromType, found := st.ExprTypes[src]
+func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
+	srcType, found := st.ExprTypes[src]
 	if found {
-		st.ExprTypes[dest] = fromType
+		st.ExprTypes[dest] = srcType
 	}
 }
