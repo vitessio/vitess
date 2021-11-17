@@ -239,18 +239,6 @@ func ExtractCommentDirectives(comments Comments) CommentDirectives {
 			strVal := directive[sep+1:]
 			directive = directive[:sep]
 
-			// merging strVal with next directives to support comma-separated lists with spaces
-			// i.e: VAR=(a, b, c)
-			if strings.HasPrefix(strVal, "(") {
-				for j := i + 1; j < len(directives)-1; j++ {
-					strVal += directives[j]
-					if strings.HasSuffix(directives[j], ")") {
-						i = j
-						break
-					}
-				}
-			}
-
 			intVal, err := strconv.Atoi(strVal)
 			if err == nil {
 				vals[directive] = intVal

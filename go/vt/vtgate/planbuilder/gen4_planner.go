@@ -27,6 +27,8 @@ import (
 
 var _ selectPlanner = gen4Planner
 
+const MinHashJoinCost = 5
+
 func gen4Planner(query string) func(sqlparser.Statement, *sqlparser.ReservedVars, ContextVSchema) (engine.Primitive, error) {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 		selStatement, ok := stmt.(sqlparser.SelectStatement)
