@@ -363,13 +363,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				qs    queryservice.QueryService
 			)
 			transactionID := info.transactionID
+			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
-			}
-
-			if info.reservedID != 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			}
 
 			if autocommit {
@@ -397,13 +394,16 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
 					return nil, err
 				}
-			case reserve, reserveBegin:
+			case reserve:
+				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
+			case reserveBegin:
+				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, 0, alias)
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
 				return newInfo, err
 			}
