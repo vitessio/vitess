@@ -23,8 +23,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -176,7 +174,6 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
-		Collation:      int32(collations.Default().LookupByName("utf8mb4_general_ci").ID()),
 	})
 }
 
@@ -310,7 +307,6 @@ func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransac
 		client.transactionID,
 		&querypb.ExecuteOptions{
 			IncludedFields: querypb.ExecuteOptions_ALL,
-			Collation:      int32(collations.Default().LookupByName("utf8mb4_general_ci").ID()),
 		},
 	)
 }

@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -194,7 +195,7 @@ type TabletManager struct {
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
-func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string) (*topodatapb.Tablet, error) {
+func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, dbServerVersion string, db *dbconfigs.DBConfigs) (*topodatapb.Tablet, error) {
 	hostname := *tabletHostname
 	if hostname == "" {
 		var err error
@@ -232,6 +233,17 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		return nil, err
 	}
 
+	var coll collations.Collation
+	env := collations.NewEnvironment(dbServerVersion)
+	if db == nil {
+		coll, err = env.ResolveCollation("", "")
+	} else {
+		coll, err = env.ResolveCollation(db.Charset, db.Collation)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	return &topodatapb.Tablet{
 		Alias:    alias,
 		Hostname: hostname,
@@ -239,13 +251,14 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 			"vt":   port,
 			"grpc": grpcPort,
 		},
-		Keyspace:        *initKeyspace,
-		Shard:           shard,
-		KeyRange:        keyRange,
-		Type:            tabletType,
-		DbNameOverride:  *initDbNameOverride,
-		Tags:            mergeTags(buildTags, initTags),
-		DbServerVersion: dbServerVersion,
+		Keyspace:             *initKeyspace,
+		Shard:                shard,
+		KeyRange:             keyRange,
+		Type:                 tabletType,
+		DbNameOverride:       *initDbNameOverride,
+		Tags:                 mergeTags(buildTags, initTags),
+		DbServerVersion:      dbServerVersion,
+		DefaultConnCollation: uint32(coll.ID()),
 	}, nil
 }
 

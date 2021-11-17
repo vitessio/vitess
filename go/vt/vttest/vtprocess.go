@@ -220,7 +220,6 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
-		"-collation", collation,
 		"-db_charset", charset,
 		"-db_collation", collation,
 		"-db_app_user", user,

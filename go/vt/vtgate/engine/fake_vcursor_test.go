@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/mysql/collations"
 
 	"golang.org/x/sync/errgroup"
 
@@ -52,6 +53,11 @@ var _ SessionActions = (*noopVCursor)(nil)
 // noopVCursor is used to build other vcursors.
 type noopVCursor struct {
 	ctx context.Context
+}
+
+// ConnCollation implements VCursor
+func (t *noopVCursor) ConnCollation() collations.Collation {
+	panic("implement me")
 }
 
 func (t *noopVCursor) ExecutePrimitive(primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
