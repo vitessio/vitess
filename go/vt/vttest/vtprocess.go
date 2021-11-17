@@ -138,15 +138,11 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	}
 
 	vtp.proc.Args = append(vtp.proc.Args, vtp.ExtraArgs...)
-
-	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stdout = os.Stdout
-
 	vtp.proc.Env = append(vtp.proc.Env, os.Environ()...)
 	vtp.proc.Env = append(vtp.proc.Env, vtp.Env...)
 
 	vtp.proc.Stderr = os.Stderr
-	vtp.proc.Stderr = os.Stdout
+	vtp.proc.Stdout = os.Stdout
 
 	log.Infof("%v %v", strings.Join(vtp.proc.Args, " "))
 	err = vtp.proc.Start()
@@ -178,7 +174,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 }
 
 // DefaultCharset is the default charset used by MySQL instances
-const DefaultCharset = "utf8"
+const DefaultCharset = "utf8mb4"
 
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
@@ -284,6 +280,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-mysql_server_port", fmt.Sprintf("%d", vtcomboMysqlPort),
 		"-mysql_server_bind_address", vtcomboMysqlBindAddress,
 	}...)
+
+	if args.ExternalTopoImplementation != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{
+			"-external_topo_server",
+			"-topo_implementation", args.ExternalTopoImplementation,
+			"-topo_global_server_address", args.ExternalTopoGlobalServerAddress,
+			"-topo_global_root", args.ExternalTopoGlobalRoot,
+		}...)
+	}
 
 	return vt
 }

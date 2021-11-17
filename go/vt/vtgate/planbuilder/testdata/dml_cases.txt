@@ -519,7 +519,7 @@ Gen4 plan same as above
     "TargetTabletType": "PRIMARY",
     "KsidVindex": "user_index",
     "MultiShardAutocommit": false,
-    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` where id = 1 for update",
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as route1 where id = 1 for update",
     "Query": "delete from `user` as route1 where id = 1",
     "Table": "user",
     "Values": [
@@ -2582,6 +2582,53 @@ Gen4 plan same as above
       ]
     ],
     "Vindex": "lookup_t1_2"
+  }
+}
+Gen4 plan same as above
+
+#update with alias table
+"update user u set u.name = 'john' where u.col > 20"
+{
+  "QueryType": "UPDATE",
+  "Original": "update user u set u.name = 'john' where u.col \u003e 20",
+  "Instructions": {
+    "OperatorType": "Update",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "ChangedVindexValues": [
+      "name_user_map:3"
+    ],
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly, u.`name` = 'john' from `user` as u where u.col \u003e 20 for update",
+    "Query": "update `user` as u set u.`name` = 'john' where u.col \u003e 20",
+    "Table": "user"
+  }
+}
+Gen4 plan same as above
+
+#delete with alias table
+"delete from user u where u.col > 20"
+{
+  "QueryType": "DELETE",
+  "Original": "delete from user u where u.col \u003e 20",
+  "Instructions": {
+    "OperatorType": "Delete",
+    "Variant": "Scatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "TargetTabletType": "PRIMARY",
+    "KsidVindex": "user_index",
+    "MultiShardAutocommit": false,
+    "OwnedVindexQuery": "select Id, `Name`, Costly from `user` as u where u.col \u003e 20 for update",
+    "Query": "delete from `user` as u where u.col \u003e 20",
+    "Table": "user"
   }
 }
 Gen4 plan same as above

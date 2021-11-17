@@ -345,6 +345,8 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
 				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
+
+				// The collation field of ExecuteOption is set right before an execution.
 			},
 			Autocommit:           true,
 			DDLStrategy:          *defaultDDLStrategy,

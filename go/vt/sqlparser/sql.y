@@ -233,7 +233,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -777,9 +777,9 @@ update_statement:
   }
 
 delete_statement:
-  with_clause_opt DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$6}}, Partitions: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
 | with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -2384,6 +2384,13 @@ alter_statement:
   {
     $$ = &AlterMigration{
       Type: RetryMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING CLEANUP
+  {
+    $$ = &AlterMigration{
+      Type: CleanupMigrationType,
       UUID: string($4),
     }
   }
@@ -5292,6 +5299,7 @@ non_reserved_keyword:
 | CHAR
 | CHARSET
 | CHECKSUM
+| CLEANUP
 | CLONE
 | COALESCE
 | CODE
