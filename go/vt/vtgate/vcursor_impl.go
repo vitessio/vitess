@@ -147,8 +147,10 @@ func newVCursorImpl(
 	// we only support collations for the new TabletGateway implementation
 	collationEnv := collations.NewEnvironment(*sqlparser.MySQLServerVersion)
 	var connCollation collations.ID
-	if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
-		connCollation = gw.DefaultConnCollation()
+	if executor != nil {
+		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+			connCollation = gw.DefaultConnCollation()
+		}
 	}
 	if connCollation == collations.Unknown {
 		coll, err := collationEnv.ResolveCollation("", "")
