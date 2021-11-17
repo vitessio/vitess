@@ -383,7 +383,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 
 			switch info.actionNeeded {
 			case nothing:
-				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], info.transactionID, opts, callback)
+				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], transactionID, reservedID, opts, callback)
 				if err != nil {
 					// TODO once we have stream support for reserved connections, this should use the retryRequest from the ExecuteMulti method
 					return nil, err
@@ -398,7 +398,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			case reserveBegin:
 				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}

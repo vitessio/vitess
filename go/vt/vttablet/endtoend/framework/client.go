@@ -238,21 +238,13 @@ func (client *QueryClient) StreamExecute(query string, bindvars map[string]*quer
 // StreamExecuteWithOptions executes a query & returns the results using 'options'.
 func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
 	result := &sqltypes.Result{}
-	err := client.server.StreamExecute(
-		client.ctx,
-		client.target,
-		query,
-		bindvars,
-		0,
-		options,
-		func(res *sqltypes.Result) error {
-			if result.Fields == nil {
-				result.Fields = res.Fields
-			}
-			result.Rows = append(result.Rows, res.Rows...)
-			return nil
-		},
-	)
+	err := client.server.StreamExecute(client.ctx, client.target, query, bindvars, 0, 0, options, func(res *sqltypes.Result) error {
+		if result.Fields == nil {
+			result.Fields = res.Fields
+		}
+		result.Rows = append(result.Rows, res.Rows...)
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -286,15 +278,7 @@ func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQuerie
 
 // Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
-	return client.server.StreamExecute(
-		client.ctx,
-		client.target,
-		query,
-		bindvars,
-		0,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
-		sendFunc,
-	)
+	return client.server.StreamExecute(client.ctx, client.target, query, bindvars, 0, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, sendFunc)
 }
 
 // ExecuteBatch executes a batch of queries.

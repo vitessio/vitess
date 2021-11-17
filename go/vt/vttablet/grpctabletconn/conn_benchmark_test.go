@@ -73,7 +73,7 @@ func (b *BenchmarkService) Execute(ctx context.Context, target *querypb.Target, 
 	panic("should not be called")
 }
 
-func (b *BenchmarkService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
+func (b *BenchmarkService) StreamExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) error {
 	panic("should not be called")
 }
 
