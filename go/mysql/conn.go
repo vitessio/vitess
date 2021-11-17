@@ -194,11 +194,6 @@ type Conn struct {
 	// query to MySQL after the handshake is done.
 	Collation collations.ID
 
-	// CollationEnvironment defines the collation environment used by this
-	// connection. We set its value using the ServerVersion we receive from
-	// MySQL after the handshake.
-	CollationEnvironment *collations.Environment
-
 	// Packet encoding variables.
 	sequence uint8
 }
@@ -1523,24 +1518,4 @@ func (c *Conn) IsUnixSocket() bool {
 // GetRawConn returns the raw net.Conn for nefarious purposes.
 func (c *Conn) GetRawConn() net.Conn {
 	return c.conn
-}
-
-// MatchCollation returns nil if the given collations.ID matches with the connection's
-// collation, otherwise it returns an error explaining why it does not match.
-func (c *Conn) MatchCollation(collationID collations.ID) error {
-	// The collation environment of a connection parameter should never be nil, if we fail
-	// to create it we already errored out when initializing the connection with MySQL.
-	if c.CollationEnvironment == nil {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "No collation environment for this connection")
-	}
-
-	vttabletCollString := c.CollationEnvironment.LookupByID(c.Collation).Name()
-	coll := c.CollationEnvironment.LookupByID(collationID)
-	if coll == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption's Collation could not be looked up: (Collation ID %d), VTTablet has (Collation: '%v')", collationID, vttabletCollString)
-	}
-	if coll.ID() != c.Collation {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "QueryOption ('%v') and VTTablet ('%v') charsets do not match", coll.Name(), vttabletCollString)
-	}
-	return nil
 }

@@ -95,9 +95,6 @@ var (
 
 	enableSchemaChangeSignal = flag.Bool("schema_change_signal", false, "Enable the schema tracker")
 	schemaChangeUser         = flag.String("schema_change_signal_user", "", "User to be used to send down query to vttablet to retrieve schema changes")
-
-	// the default collation for VTGate is the default collation of utf8mb4
-	collation = flag.String("collation", "", "Collation to use by default between the client, VTGate, VTTablet and MySQL. If the default value is not overridden, the collation will be set to the default collation of utf8mb4 used by the backend MySQL/MariaDB servers. The version of the backend servers are sent to VTGate through schema tracking.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -232,9 +229,6 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		*noScatter,
 	)
 
-	// Get the default collation of VTGate using VTTablet's health check and the given collation flag.
-	setVTGateCollation(gw.hc.Subscribe(), executor.collation.Set)
-
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
 		st.RegisterSignalReceiver(executor.vm.Rebuild)
@@ -301,15 +295,6 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	initAPI(gw.hc)
 
 	return rpcVTGate
-}
-
-func setVTGateCollation(ch chan *discovery.TabletHealth, set func(*discovery.TabletHealth)) {
-	log.Warning("entering set vtgate collation")
-	go func() {
-		th := <-ch
-		set(th)
-		log.Warning("done with set vtgate collation")
-	}()
 }
 
 func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {

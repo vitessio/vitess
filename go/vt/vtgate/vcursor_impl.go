@@ -27,6 +27,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -82,16 +83,19 @@ type VSchemaOperator interface {
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx            context.Context
-	safeSession    *SafeSession
-	keyspace       string
-	tabletType     topodatapb.TabletType
-	destination    key.Destination
-	marginComments sqlparser.MarginComments
-	executor       iExecute
-	resolver       *srvtopo.Resolver
-	topoServer     *topo.Server
-	logStats       *LogStats
+	ctx                  context.Context
+	safeSession          *SafeSession
+	keyspace             string
+	tabletType           topodatapb.TabletType
+	destination          key.Destination
+	marginComments       sqlparser.MarginComments
+	executor             iExecute
+	resolver             *srvtopo.Resolver
+	topoServer           *topo.Server
+	logStats             *LogStats
+	collationEnvironment *collations.Environment
+	collation            collations.ID
+
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -140,21 +144,42 @@ func newVCursorImpl(
 		}
 	}
 
+	// we only support collations for the new TabletGateway implementation
+	collationEnv := collations.NewEnvironment(*sqlparser.MySQLServerVersion)
+	var connCollation collations.ID
+	if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+		connCollation = gw.DefaultConnCollation()
+	}
+	if connCollation == collations.Unknown {
+		coll, err := collationEnv.ResolveCollation("", "")
+		if err != nil {
+			panic("should never happen: don't know how to resolve default collation")
+		}
+		connCollation = coll.ID()
+	}
+
 	return &vcursorImpl{
-		ctx:             ctx,
-		safeSession:     safeSession,
-		keyspace:        keyspace,
-		tabletType:      tabletType,
-		destination:     destination,
-		marginComments:  marginComments,
-		executor:        executor,
-		logStats:        logStats,
-		resolver:        resolver,
-		vschema:         vschema,
-		vm:              vm,
-		topoServer:      ts,
-		warnShardedOnly: warnShardedOnly,
+		ctx:                  ctx,
+		safeSession:          safeSession,
+		keyspace:             keyspace,
+		tabletType:           tabletType,
+		destination:          destination,
+		marginComments:       marginComments,
+		executor:             executor,
+		logStats:             logStats,
+		collationEnvironment: collationEnv,
+		collation:            connCollation,
+		resolver:             resolver,
+		vschema:              vschema,
+		vm:                   vm,
+		topoServer:           ts,
+		warnShardedOnly:      warnShardedOnly,
 	}, nil
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) ConnCollation() collations.Collation {
+	return vc.collationEnvironment.LookupByID(vc.collation)
 }
 
 // Context returns the current Context.
