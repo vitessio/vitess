@@ -1250,10 +1250,18 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 	var connID int64
 	var err error
 
+	allowOnShutdown := false
+	timeout := tsv.QueryTimeout.Get()
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the smaller of the two values (0 means infinity).
+		timeout = smallerTimeout(timeout, tsv.txTimeout.Get())
+	}
+
 	err = tsv.execRequest(
-		ctx, tsv.QueryTimeout.Get(),
+		ctx, timeout,
 		"Reserve", "", bindVariables,
-		target, options, false, /* allowOnShutdown */
+		target, options, allowOnShutdown,
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
 			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
@@ -1272,6 +1280,52 @@ func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Tar
 
 	result, err := tsv.Execute(ctx, target, sql, bindVariables, connID, connID, options)
 	return result, connID, tsv.alias, err
+}
+
+// ReserveStreamExecute combines Begin and StreamExecute.
+func (tsv *TabletServer) ReserveStreamExecute(
+	ctx context.Context,
+	target *querypb.Target,
+	preQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	transactionID int64,
+	options *querypb.ExecuteOptions,
+	callback func(*sqltypes.Result) error,
+) (int64, *topodatapb.TabletAlias, error) {
+	var connID int64
+	var err error
+
+	allowOnShutdown := false
+	var timeout time.Duration
+	if transactionID != 0 {
+		allowOnShutdown = true
+		// Use the transaction timeout.
+		timeout = tsv.txTimeout.Get()
+	}
+
+	err = tsv.execRequest(
+		ctx, timeout,
+		"Reserve", "", bindVariables,
+		target, options, allowOnShutdown,
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
+			connID, err = tsv.te.Reserve(ctx, options, transactionID, preQueries)
+			if err != nil {
+				return err
+			}
+			logStats.TransactionID = connID
+			logStats.ReservedID = connID
+			return nil
+		},
+	)
+
+	if err != nil {
+		return 0, nil, err
+	}
+
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, connID, options, callback)
+	return connID, tsv.alias, err
 }
 
 //Release implements the QueryService interface

@@ -136,6 +136,10 @@ func (b *BenchmarkService) ReserveExecute(ctx context.Context, target *querypb.T
 	panic("should not be called")
 }
 
+func (b *BenchmarkService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+	panic("should not be called")
+}
+
 func (b *BenchmarkService) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	panic("should not be called")
 }

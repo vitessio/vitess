@@ -328,6 +328,16 @@ func (ws *wrappedService) ReserveExecute(ctx context.Context, target *querypb.Ta
 	return res, reservedID, alias, err
 }
 
+func (ws *wrappedService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (reservedID int64, alias *topodatapb.TabletAlias, err error) {
+	inDedicatedConn := transactionID != 0
+	err = ws.wrapper(ctx, target, ws.impl, "ReserveStreamExecute", inDedicatedConn, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		reservedID, alias, innerErr = conn.ReserveStreamExecute(ctx, target, preQueries, sql, bindVariables, transactionID, options, callback)
+		return canRetry(ctx, innerErr), innerErr
+	})
+	return reservedID, alias, err
+}
+
 func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	inDedicatedConn := transactionID != 0 || reservedID != 0
 	return ws.wrapper(ctx, target, ws.impl, "Release", inDedicatedConn, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {

@@ -748,6 +748,11 @@ func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.T
 	panic("implement me")
 }
 
+// ReserveStreamExecute satisfies the Gateway interface
+func (f *FakeQueryService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+	panic("implement me")
+}
+
 //Release implements the QueryService interface
 func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	panic("implement me")

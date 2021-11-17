@@ -935,6 +935,74 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	return sqltypes.Proto3ToResult(reply.Result), reply.ReservedId, conn.tablet.Alias, nil
 }
 
+//ReserveStreamExecute implements the queryservice interface
+func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (reservedID int64, alias *topodatapb.TabletAlias, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return 0, nil, tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_ReserveStreamExecuteClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &querypb.ReserveStreamExecuteRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Options:           options,
+			PreQueries:        preQueries,
+			Query: &querypb.BoundQuery{
+				Sql:           sql,
+				BindVariables: bindVariables,
+			},
+			TransactionId: transactionID,
+		}
+		stream, err := conn.c.ReserveStreamExecute(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return 0, nil, tabletconn.ErrorFromGRPC(err)
+	}
+
+	var fields []*querypb.Field
+	for {
+		ser, err := stream.Recv()
+		if reservedID == 0 && ser.GetReservedId() != 0 {
+			reservedID = ser.GetReservedId()
+		}
+		if alias == nil && ser.GetTabletAlias() != nil {
+			alias = ser.GetTabletAlias()
+		}
+
+		if err != nil {
+			return reservedID, alias, tabletconn.ErrorFromGRPC(err)
+		}
+
+		// The last stream receive will not have a result, so callback will not be called for it.
+		if ser.Result == nil {
+			return reservedID, alias, nil
+		}
+
+		if fields == nil {
+			fields = ser.Result.Fields
+		}
+		if err := callback(sqltypes.CustomProto3ToResult(fields, ser.Result)); err != nil {
+			if err == nil || err == io.EOF {
+				return reservedID, alias, nil
+			}
+			return reservedID, alias, err
+		}
+	}
+}
+
 func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
