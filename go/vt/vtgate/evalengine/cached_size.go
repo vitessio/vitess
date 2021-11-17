@@ -107,7 +107,7 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(64)
 	}
 	// field Val vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
 	size += cached.Val.CachedSize(false)

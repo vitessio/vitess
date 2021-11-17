@@ -143,6 +143,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlUpdateReadyForCleanup = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
+		WHERE
+			migration_uuid=%a
+	`
 	sqlUpdateTablet = `UPDATE _vt.schema_migrations
 			SET tablet=%a
 		WHERE
