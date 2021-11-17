@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
-	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -768,37 +768,14 @@ func anyMinusFloat(v1 EvalResult, v2 float64) EvalResult {
 }
 
 func parseStringToFloat(str string) float64 {
-	// removing all whitespace in the left
-	// we keep '.', '+', '-'
-	str = strings.TrimLeftFunc(str, func(r rune) bool {
-		return (r < '0' || r > '9') && r != '-' && r != '+' && r != '.'
-	})
+	str = strings.TrimSpace(str)
 
-	// removeRightIdx indicates the index where the numeric value ends
-	// if there is a '.', it ends after the first suite of numbers past the first '.'
-	// if there are no '.', it ends after the first suite of numbers
-	removeRightIdx := 0
-	dotIdx := strings.Index(str, ".")
-	if dotIdx != -1 {
-		// iterating on the string starting after the first '.' and finishing after
-		// the first suite of numbers
-		for i := dotIdx + 1; i < len(str) && str[i] >= '0' && str[i] <= '9'; i++ {
-			removeRightIdx = i
-		}
-	} else {
-		removeRightIdx = strings.LastIndexFunc(str, func(r rune) bool {
-			return r >= '0' && r <= '9'
-		})
-	}
-
-	// trim the RHS of the string
-	str = str[:removeRightIdx+1]
-
-	// parse, note that we're okay with ParseFloat returning an error
-	// MySQL treats non-parsable strings as float64(0.00)
-	val, err := strconv.ParseFloat(str, 64)
+	// We only care to parse as many of the initial float characters of the
+	// string as possible. This functionality is implemented in the `strconv` package
+	// of the standard library, but not exposed, so we hook into it.
+	val, _, err := hack.ParseFloatPrefix(str, 64)
 	if err != nil {
-		return 0
+		return 0.0
 	}
 	return val
 }

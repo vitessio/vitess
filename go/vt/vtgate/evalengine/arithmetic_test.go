@@ -1661,6 +1661,7 @@ func TestParseStringToFloat(t *testing.T) {
 		{str: "8794354", val: 8794354},
 		{str: "    10  ", val: 10},
 		{str: "2266951196291479516", val: 2266951196291479516},
+		{str: "abcd123", val: 0},
 	}
 
 	for _, tc := range tcs {
