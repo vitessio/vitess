@@ -457,7 +457,6 @@ var keywords = []keyword{
 	{"straight_join", STRAIGHT_JOIN},
 	{"stream", STREAM},
 	{"system", UNUSED},
-	{"vstream", VSTREAM},
 	{"table", TABLE},
 	{"tables", TABLES},
 	{"tablespace", TABLESPACE},
