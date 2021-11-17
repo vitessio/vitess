@@ -395,7 +395,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					return nil, err
 				}
 			case reserve:
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
+				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
 			case reserveBegin:
 				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
 			default:
