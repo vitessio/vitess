@@ -173,8 +173,13 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, <-vtp.exit)
 }
 
-// DefaultCharset is the default charset used by MySQL instances
-const DefaultCharset = "utf8mb4"
+const (
+	// DefaultCharset is the default charset used by MySQL instances
+	DefaultCharset = "utf8mb4"
+
+	// DefaultCollation is the default collation used between VTTablet and MySQL
+	DefaultCollation = "utf8mb4_general_ci"
+)
 
 // QueryServerArgs are the default arguments passed to all Vitess query servers
 var QueryServerArgs = []string{
@@ -208,10 +213,15 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if charset == "" {
 		charset = DefaultCharset
 	}
+	collation := args.Collation
+	if collation == "" {
+		collation = DefaultCollation
+	}
 
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"-db_charset", charset,
+		"-db_collation", collation,
 		"-db_app_user", user,
 		"-db_app_password", pass,
 		"-db_dba_user", user,
