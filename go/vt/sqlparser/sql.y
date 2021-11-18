@@ -157,6 +157,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
+  unaryExprOperator UnaryExprOperator
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -436,7 +437,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-
+%type <unaryExprOperator> underscore_charsets
 %start any_command
 
 %%
@@ -1357,64 +1358,55 @@ text_literal
   {
 	$$ = NewBitLiteral($1)
   }
-| UNDERSCORE_BINARY HEX %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: UBinaryOp, Expr: NewHexLiteral($2)}
-  }
-| UNDERSCORE_UTF8 HEX %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewHexLiteral($2)}
-  }
-| UNDERSCORE_UTF8MB4 HEX %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: NewHexLiteral($2)}
-  }
-| UNDERSCORE_LATIN1 HEX %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Latin1Op, Expr: NewHexLiteral($2)}
-  }
-| UNDERSCORE_BINARY HEXNUM %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: UBinaryOp, Expr: NewHexNumLiteral($2)}
-  }
-| UNDERSCORE_UTF8 HEXNUM %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewHexNumLiteral($2)}
-  }
-| UNDERSCORE_UTF8MB4 HEXNUM %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: NewHexNumLiteral($2)}
-  }
-| UNDERSCORE_LATIN1 HEXNUM %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Latin1Op, Expr: NewHexNumLiteral($2)}
-  }
-| UNDERSCORE_BINARY BIT_LITERAL %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: UBinaryOp, Expr: NewBitLiteral($2)}
-  }
-| UNDERSCORE_UTF8 BIT_LITERAL %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewBitLiteral($2)}
-  }
-| UNDERSCORE_UTF8MB4 BIT_LITERAL %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: NewBitLiteral($2)}
-  }
-| UNDERSCORE_LATIN1 BIT_LITERAL %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Latin1Op, Expr: NewBitLiteral($2)}
-  }
 | VALUE_ARG
   {
     $$ = NewArgument($1[1:])
     bindVariable(yylex, $1[1:])
   }
+| underscore_charsets  BIT_LITERAL %prec UNARY
+  {
+  	$$ = &UnaryExpr{Operator: $1, Expr: NewBitLiteral($2)}
+  }
+| underscore_charsets HEXNUM %prec UNARY
+  {
+  	$$ = &UnaryExpr{Operator: $1, Expr: NewHexNumLiteral($2)}
+  }
+| underscore_charsets HEX %prec UNARY
+  {
+   	$$ = &UnaryExpr{Operator: $1, Expr: NewHexLiteral($2)}
+  }
+| underscore_charsets column_name %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: $1, Expr: $2}
+  }
+| underscore_charsets VALUE_ARG %prec UNARY
+  {
+    bindVariable(yylex, $2[1:])
+    $$ = &UnaryExpr{Operator: $1, Expr: NewArgument($2[1:])}
+  }
+
+underscore_charsets:
+ UNDERSCORE_BINARY
+  {
+  	$$ = UBinaryOp
+  }
+| UNDERSCORE_UTF8
+  {
+  	$$ = Utf8Op
+  }
+| UNDERSCORE_UTF8MB4
+  {
+  	$$ = Utf8mb4Op
+  }
+| UNDERSCORE_LATIN1
+  {
+  	$$ = Latin1Op
+  }
 
 literal_or_null:
-          literal
-        | null_as_literal
-        ;
+literal
+| null_as_literal
+
 NUM_literal:
 INTEGRAL
   {
@@ -1435,22 +1427,10 @@ STRING
   {
 	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
   }
-| UNDERSCORE_BINARY STRING %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: UBinaryOp, Expr: NewStrLiteral($2)}
-  }
-| UNDERSCORE_UTF8 STRING %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8Op, Expr: NewStrLiteral($2)}
-  }
-| UNDERSCORE_UTF8MB4 STRING %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: NewStrLiteral($2)}
-  }
-| UNDERSCORE_LATIN1 STRING %prec UNARY
-  {
-	$$ = &UnaryExpr{Operator: Latin1Op, Expr: NewStrLiteral($2)}
-  }
+ | underscore_charsets STRING %prec UNARY
+   {
+   	$$ = &UnaryExpr{Operator: $1, Expr: NewStrLiteral($2)}
+   }
 
 keys:
   PRIMARY KEY
