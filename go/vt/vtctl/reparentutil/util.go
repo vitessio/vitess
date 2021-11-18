@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -63,8 +62,10 @@ func ChooseNewPrimary(
 	}
 
 	var (
-		searcher = topotools.NewMaxReplicationPositionSearcher(tmc, logger, waitReplicasTimeout)
-		wg       sync.WaitGroup
+		wg              sync.WaitGroup
+		mu              sync.Mutex
+		validTablets    []*topodatapb.Tablet
+		tabletPositions []mysql.Position
 	)
 
 	for _, tablet := range tabletMap {
@@ -81,17 +82,52 @@ func ChooseNewPrimary(
 
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			searcher.ProcessTablet(ctx, tablet)
+			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
+			mu.Lock()
+			defer mu.Unlock()
+			if err == nil {
+				validTablets = append(validTablets, tablet)
+				tabletPositions = append(tabletPositions, pos)
+			}
 		}(tablet.Tablet)
 	}
 
 	wg.Wait()
 
-	if maxPosTablet := searcher.MaxPositionTablet(); maxPosTablet != nil {
-		return maxPosTablet.Alias, nil
+	if len(validTablets) == 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	// sort the tablets for finding the best intermediate source in ERS
+	err := sortTabletsForERS(validTablets, tabletPositions)
+	if err != nil {
+		return nil, err
+	}
+
+	return validTablets[0].Alias, nil
+}
+
+// findPositionForTablet processes the replication position for a single tablet and
+// returns it. It is safe to call from multiple goroutines.
+func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (mysql.Position, error) {
+	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+
+	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
+	defer cancel()
+
+	status, err := tmc.ReplicationStatus(ctx, tablet)
+	if err != nil {
+		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		return mysql.Position{}, err
+	}
+
+	pos, err := mysql.DecodePosition(status.Position)
+	if err != nil {
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		return mysql.Position{}, err
+	}
+
+	return pos, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The
