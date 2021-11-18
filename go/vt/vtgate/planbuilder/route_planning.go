@@ -416,18 +416,18 @@ func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *route) error {
 		return err
 	}
 	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
-		if aliasedExpr, ok := cursor.Node().(*sqlparser.AliasedExpr); ok {
-			cursor.Replace(removeKeyspaceFromColName(aliasedExpr))
+		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
 		return true
 	}, nil)
 	return nil
 }
 
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr, ast *sqlparser.Select, i int) {
+func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
-		ast.SelectExprs[i] = removeKeyspaceFromColName(expr)
+		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewTableIdent("")
 	}
@@ -448,8 +448,8 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
 		toNode.SelectExprs = node.SelectExprs
-		for i, expr := range toNode.SelectExprs {
-			removeKeyspaceFromSelectExpr(expr, toNode, i)
+		for _, expr := range toNode.SelectExprs {
+			removeKeyspaceFromSelectExpr(expr)
 		}
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
@@ -971,11 +971,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	case engine.SelectUnsharded, engine.SelectReference:
 		return a.eroute.Opcode == b.eroute.Opcode
 	case engine.SelectDBA:
-		return b.eroute.Opcode == engine.SelectDBA &&
-			len(a.eroute.SysTableTableSchema) == 0 &&
-			len(a.eroute.SysTableTableName) == 0 &&
-			len(b.eroute.SysTableTableSchema) == 0 &&
-			len(b.eroute.SysTableTableName) == 0
+		return canSelectDBAMerge(a, b)
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if b.eroute.Opcode == engine.SelectEqualUnique &&
@@ -992,6 +988,7 @@ func canMergeUnionPlans(ctx *planningContext, a, b *route) bool {
 	}
 	return false
 }
+
 func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 	// this method should be close to tryMerge below. it does the same thing, but on logicalPlans instead of queryTrees
 	if a.eroute.Keyspace.Name != b.eroute.Keyspace.Name {
@@ -1001,11 +998,7 @@ func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 	case engine.SelectUnsharded, engine.SelectReference:
 		return a.eroute.Opcode == b.eroute.Opcode
 	case engine.SelectDBA:
-		return b.eroute.Opcode == engine.SelectDBA &&
-			len(a.eroute.SysTableTableSchema) == 0 &&
-			len(a.eroute.SysTableTableName) == 0 &&
-			len(b.eroute.SysTableTableSchema) == 0 &&
-			len(b.eroute.SysTableTableName) == 0
+		return canSelectDBAMerge(a, b)
 	case engine.SelectEqualUnique:
 		// Check if they target the same shard.
 		if b.eroute.Opcode == engine.SelectEqualUnique &&
@@ -1017,6 +1010,37 @@ func canMergeSubqueryPlans(ctx *planningContext, a, b *route) bool {
 		}
 	}
 	return false
+}
+
+func canSelectDBAMerge(a, b *route) bool {
+	if a.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+	if b.eroute.Opcode != engine.SelectDBA {
+		return false
+	}
+
+	// safe to merge when any 1 table name or schema matches, since either the routing will match or either side would be throwing an error
+	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
+	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
+	for _, aExpr := range a.eroute.SysTableTableSchema {
+		for _, bExpr := range b.eroute.SysTableTableSchema {
+			if aExpr.String() == bExpr.String() {
+				return true
+			}
+		}
+	}
+	for _, aExpr := range a.eroute.SysTableTableName {
+		for _, bExpr := range b.eroute.SysTableTableName {
+			if aExpr.String() == bExpr.String() {
+				return true
+			}
+		}
+	}
+
+	// if either/both of the side does not have any routing information, then they can be merged.
+	return (len(a.eroute.SysTableTableSchema) == 0 && len(a.eroute.SysTableTableName) == 0) ||
+		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
 }
 
 func tryMerge(ctx *planningContext, a, b queryTree, joinPredicates []sqlparser.Expr, merger mergeFunc) (queryTree, error) {

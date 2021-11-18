@@ -143,6 +143,7 @@ func TestMain(m *testing.M) {
 				localCluster.TmpDirectory,
 				commonTabletArg,
 				true,
+				localCluster.DefaultCharset,
 			)
 			tablet.VttabletProcess.SupportsBackup = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()

@@ -121,21 +121,51 @@ func fetchCacheEnvironment(version collver) *Environment {
 	return env
 }
 
+// ResolveCollation returns the default collation that will be used for the given charset and collation.
+// Both charset and collation can be empty strings, in which case utf8mb4 will be used as a charset and its
+// default collation will be returned.
+func (env *Environment) ResolveCollation(charset, collation string) (Collation, error) {
+	// if there is no collation or charset, we default to utf8mb4
+	if collation == "" && charset == "" {
+		charset = "utf8mb4"
+	}
+
+	var coll Collation
+	if collation == "" {
+		// If there is no collation we will just use the charset's default collation
+		// otherwise we directly use the given collation.
+		coll = env.DefaultCollationForCharset(charset)
+	} else {
+		// Here we call the collations API to ensure the collation/charset exist
+		// and is supported by Vitess.
+		coll = env.LookupByName(collation)
+	}
+	if coll == nil {
+		// The given collation is most likely unknown or unsupported, we need to fail.
+		return nil, fmt.Errorf("cannot resolve collation: '%s'", collation)
+	}
+	return coll, nil
+}
+
 // NewEnvironment creates a collation Environment for the given MySQL version string.
 // The version string must be in the format that is sent by the server as the version packet
 // when opening a new MySQL connection
-func NewEnvironment(serverVersion string) (*Environment, error) {
-	var version collver
+func NewEnvironment(serverVersion string) *Environment {
+	var version collver = collverMySQL56
 	switch {
+	case strings.HasSuffix(serverVersion, "-ripple"):
+		// the ripple binlog server can mask the actual version of mysqld;
+		// assume we have the highest
+		version = collverMySQL80
 	case strings.Contains(serverVersion, "MariaDB"):
 		switch {
-		case strings.HasPrefix(serverVersion, "10.0."):
+		case strings.Contains(serverVersion, "10.0."):
 			version = collverMariaDB100
-		case strings.HasPrefix(serverVersion, "10.1."):
+		case strings.Contains(serverVersion, "10.1."):
 			version = collverMariaDB101
-		case strings.HasPrefix(serverVersion, "10.2."):
+		case strings.Contains(serverVersion, "10.2."):
 			version = collverMariaDB102
-		case strings.HasPrefix(serverVersion, "10.3."):
+		case strings.Contains(serverVersion, "10.3."):
 			version = collverMariaDB103
 		}
 	case strings.HasPrefix(serverVersion, "5.6."):
@@ -145,10 +175,7 @@ func NewEnvironment(serverVersion string) (*Environment, error) {
 	case strings.HasPrefix(serverVersion, "8.0."):
 		version = collverMySQL80
 	}
-	if version == collverInvalid {
-		return nil, fmt.Errorf("unknown ServerVersion value: %q", serverVersion)
-	}
-	return fetchCacheEnvironment(version), nil
+	return fetchCacheEnvironment(version)
 }
 
 func makeEnv(version collver) *Environment {

@@ -16,7 +16,6 @@
 import { orderBy } from 'lodash-es';
 import * as React from 'react';
 
-import style from './Clusters.module.scss';
 import { useClusters } from '../../hooks/api';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { DataTable } from '../dataTable/DataTable';
@@ -49,7 +48,7 @@ export const Clusters = () => {
             </WorkspaceHeader>
 
             <ContentContainer>
-                <div className={style.container}>
+                <div className="max-w-screen-sm">
                     <DataTable columns={['Name', 'Id']} data={rows} renderRows={renderRows} />
                 </div>
             </ContentContainer>

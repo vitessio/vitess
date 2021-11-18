@@ -147,6 +147,7 @@ func (ctl *Mysqlctl) TabletDir() string {
 func (ctl *Mysqlctl) Params(dbname string) mysql.ConnParams {
 	return mysql.ConnParams{
 		Charset:    DefaultCharset,
+		Collation:  "utf8mb4_general_ci",
 		DbName:     dbname,
 		Uname:      "vt_dba",
 		UnixSocket: ctl.UnixSocket(),

@@ -845,6 +845,9 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 	}
 
 	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+		return v, err
+	}
 	{
 		// Apply CREATE TABLE for materialized table
 		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
@@ -911,6 +914,9 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 		return nil, err
 	}
 
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+		return v, err
+	}
 	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "")
 	v.pos = revertStream.pos
 	return v, nil
@@ -968,9 +974,6 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err := e.postInitVreplicationOriginalMigration(ctx, onlineDDL, v, conn); err != nil {
 			return err
 		}
-	}
-	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
-		return err
 	}
 
 	{

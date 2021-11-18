@@ -21,13 +21,13 @@ export const Debug = () => {
             <div className={style.container}>
                 <h1>Debugging ✨🦋🐛🐝🐞🐜🕷🕸🦂🦗🦟✨</h1>
 
-                <h2>Environment variables</h2>
+                <h2 className="mt-12 mb-8">Environment variables</h2>
                 <pre>{JSON.stringify(process.env, null, 2)}</pre>
 
-                <h2>Style Guide</h2>
+                <h2 className="mt-12 mb-8">Style Guide</h2>
 
                 <section>
-                    <h3>Theme</h3>
+                    <h3 className="mt-12 mb-8">Theme</h3>
                     <div>
                         {Object.values(Theme).map((t) => (
                             <div key={t}>
@@ -47,7 +47,7 @@ export const Debug = () => {
                 </section>
 
                 <section>
-                    <h3>Tabs</h3>
+                    <h3 className="mt-12 mb-8">Tabs</h3>
 
                     <TabContainer className={style.tabContainer} size="small">
                         <Tab text="Small Tab" to="/debug/small/1" />
@@ -69,7 +69,7 @@ export const Debug = () => {
                 </section>
 
                 <section>
-                    <h3>Icons</h3>
+                    <h3 className="mt-12 mb-8">Icons</h3>
                     <div className={style.iconContainer}>
                         {Object.values(Icons).map((i) => (
                             <Tooltip text={i}>
@@ -80,7 +80,7 @@ export const Debug = () => {
                 </section>
 
                 <section>
-                    <h3>Select</h3>
+                    <h3 className="mt-12 mb-8">Select</h3>
                     <div className={style.dropdownContainer}>
                         <div className={style.dropdownRow}>
                             <Select
@@ -156,7 +156,7 @@ export const Debug = () => {
                 </section>
 
                 <section>
-                    <h3>Text Inputs</h3>
+                    <h3 className="mt-12 mb-8">Text Inputs</h3>
                     <div className={style.inputContainer}>
                         <TextInput autoFocus placeholder="Basic text input" />
                         <TextInput iconLeft={Icons.search} placeholder="With leftIcon" />
@@ -194,7 +194,7 @@ export const Debug = () => {
                 </section>
 
                 <section>
-                    <h3>Buttons</h3>
+                    <h3 className="mt-12 mb-8">Buttons</h3>
                     <div className={style.buttonContainer}>
                         {/* Large */}
                         <Button size="large">Button</Button>

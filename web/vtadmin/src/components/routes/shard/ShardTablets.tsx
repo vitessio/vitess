@@ -69,7 +69,7 @@ export const ShardTablets: React.FunctionComponent<Props> = (props) => {
                 <div className={style.emoji}>🏜</div>
                 <div>
                     No tablets in{' '}
-                    <span className="font-family-monospace">
+                    <span className="font-mono">
                         {props.keyspace}/{props.shard}
                     </span>
                     .
