@@ -173,6 +173,45 @@ func (c *Collation) Hash(_ []byte, _ int) collations.HashCode {
 	panic("unsupported: Hash for remote collations")
 }
 
+type remotePattern struct {
+	remote  *Collation
+	pattern string
+	escape  rune
+}
+
+func (rp *remotePattern) Match(in []byte) bool {
+	c := rp.remote
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.sql.Reset()
+	c.sql.WriteString("SELECT ")
+	c.sql.WriteString(c.prefix)
+	c.hex.Write(in)
+	c.sql.WriteString(c.suffix)
+	c.sql.WriteString(" LIKE ")
+	c.sql.WriteString(rp.pattern)
+
+	if rp.escape != 0 && rp.escape != '\\' {
+		fmt.Fprintf(&c.sql, " ESCAPE X'%x'", string(rp.escape))
+	}
+
+	var match bool
+	if result := c.performRemoteQuery(); result != nil {
+		match, c.err = result[0].ToBool()
+	}
+	return match
+}
+
+func (c *Collation) Wildcard(pat []byte, _ rune, _ rune, escape rune) collations.WildcardPattern {
+	return &remotePattern{
+		pattern: fmt.Sprintf("_%s X'%x'", c.charset, pat),
+		remote:  c,
+		escape:  escape,
+	}
+}
+
 func (c *Collation) WeightStringLen(_ int) int {
 	return 0
 }

@@ -22,6 +22,15 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+type Collation interface {
+	Charset() charset.Charset
+	Weights() (Weights, Layout)
+	WeightForSpace() uint16
+	WeightsEqual(left, right rune) bool
+}
+
+var _ Collation = (*Collation900)(nil)
+
 type Collation900 struct {
 	table     Weights
 	implicits func([]uint16, rune)
@@ -29,6 +38,10 @@ type Collation900 struct {
 	param     *parametricT
 	maxLevel  int
 	iterpool  *sync.Pool
+}
+
+func (c *Collation900) Charset() charset.Charset {
+	return charset.Charset_utf8mb4{}
 }
 
 func (c *Collation900) Weights() (Weights, Layout) {
@@ -44,6 +57,13 @@ func (c *Collation900) Iterator(input []byte) WeightIterator {
 func (c *Collation900) WeightForSpace() uint16 {
 	ascii := *c.table[0]
 	return ascii[CodepointsPerPage+' ']
+}
+
+func (c *Collation900) WeightsEqual(left, right rune) bool {
+	if left == right {
+		return true
+	}
+	return equalWeights900(c.table, c.maxLevel, left, right)
 }
 
 func NewCollation(name string, weights Weights, weightPatches []Patch, reorder []Reorder, contract Contractor, upperCaseFirst bool, levels int) *Collation900 {
@@ -77,12 +97,18 @@ func NewCollation(name string, weights Weights, weightPatches []Patch, reorder [
 	return coll
 }
 
+var _ Collation = (*CollationLegacy)(nil)
+
 type CollationLegacy struct {
 	charset      charset.Charset
 	table        Weights
 	maxCodepoint rune
 	contract     Contractor
 	iterpool     *sync.Pool
+}
+
+func (c *CollationLegacy) Charset() charset.Charset {
+	return c.charset
 }
 
 func (c *CollationLegacy) Weights() (Weights, Layout) {
@@ -99,6 +125,13 @@ func (c *CollationLegacy) WeightForSpace() uint16 {
 	ascii := *c.table[0]
 	stride := ascii[0]
 	return ascii[1+' '*stride]
+}
+
+func (c *CollationLegacy) WeightsEqual(left, right rune) bool {
+	if left == right {
+		return true
+	}
+	return equalWeightsLegacy(c.table, left, right)
 }
 
 func NewCollationLegacy(cs charset.Charset, weights Weights, weightPatches []Patch, contract Contractor, maxCodepoint rune) *CollationLegacy {
