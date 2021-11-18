@@ -381,18 +381,38 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				return nil, err
 			}
 
+			retryRequest := func(exec func()) {
+				retry := checkAndResetShardSession(info, err, session, rs.Target)
+				switch retry {
+				case newQS:
+					// Current tablet is not available, try querying new tablet using gateway.
+					qs = rs.Gateway
+					fallthrough
+				case shard:
+					// if we need to reset a reserved connection, here is our chance to try executing again,
+					// against a new connection
+					exec()
+				}
+			}
+
 			switch info.actionNeeded {
 			case nothing:
 				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], transactionID, reservedID, opts, callback)
 				if err != nil {
-					// TODO once we have stream support for reserved connections, this should use the retryRequest from the ExecuteMulti method
-					return nil, err
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserve
+						reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+					})
 				}
 			case begin:
 				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], opts, callback)
 				if err != nil {
-					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
-					return nil, err
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserveBegin
+						transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+					})
 				}
 			case reserve:
 				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
