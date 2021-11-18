@@ -1,5 +1,10 @@
 # VTAdmin
 
+## Prerequisites
+
+- [node](https://nodejs.org) >= 16.13.0 LTS
+- npm >= 8.1.0 (comes with node)
+
 ## Available scripts
 
 Scripts for common and not-so-common tasks. These are always run from the `vitess/web/vtadmin` directory (although some of them have counterparts in `vitess/Makefile`):
@@ -19,6 +24,7 @@ Scripts for common and not-so-common tasks. These are always run from the `vites
 - [create-react-app](https://create-react-app.dev/) (generated with v.4.0.1)
 - [TypeScript](http://typescriptlang.org/)
 - [protobufjs](https://github.com/protobufjs)
+- [tailwindcss](https://tailwindcss.com/)
 
 ## Environment Variables
 

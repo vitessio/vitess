@@ -32,6 +32,7 @@ const (
 	skipTopoFlag          = "skip-topo"
 	singletonFlag         = "singleton"
 	singletonContextFlag  = "singleton-context"
+	allowZeroInDateFlag   = "allow-zero-in-date"
 	vreplicationTestSuite = "vreplication-test-suite"
 )
 
@@ -130,6 +131,11 @@ func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
 }
 
+// IsAllowZeroInDateFlag checks if strategy options include -allow-zero-in-date
+func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
+	return setting.hasFlag(allowZeroInDateFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -145,6 +151,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
+		case isFlag(opt, allowZeroInDateFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)

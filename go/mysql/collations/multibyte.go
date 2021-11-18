@@ -17,24 +17,34 @@ limitations under the License.
 package collations
 
 import (
+	"math"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type Collation_multibyte struct {
 	id      ID
 	name    string
-	sort    []byte
+	sort    *[256]byte
 	charset charset.Charset
 }
 
-func (c *Collation_multibyte) init() {}
+func (c *Collation_multibyte) Init() {}
 
-func (c *Collation_multibyte) Id() ID {
+func (c *Collation_multibyte) ID() ID {
 	return c.id
 }
 
 func (c *Collation_multibyte) Name() string {
 	return c.name
+}
+
+func (c *Collation_multibyte) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_multibyte) IsBinary() bool {
+	return c.sort == nil
 }
 
 func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
@@ -44,7 +54,7 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 
 	cmpLen := minInt(len(left), len(right))
 	cs := c.charset
-	sortOrder := c.sort[:256]
+	sortOrder := c.sort
 	for i := 0; i < cmpLen; i++ {
 		sortL, sortR := left[i], right[i]
 		if sortL > 127 {
@@ -137,10 +147,39 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 	return dst
 }
 
-func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
-	return numCodepoints
+func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) uintptr {
+	cs := c.charset
+	sortOrder := c.sort
+
+	var hash = uintptr(c.id)
+	var left = numCodepoints
+	if left == 0 {
+		left = math.MaxInt32
+	}
+	for len(src) > 0 && left > 0 {
+		w := src[0]
+		if w <= 127 {
+			if sortOrder != nil {
+				w = sortOrder[w]
+			}
+			hash = memhash8(w, hash)
+			src = src[1:]
+		} else {
+			_, width := cs.DecodeRune(src)
+			hash = memhash(src[:width], hash)
+			src = src[width:]
+		}
+		left--
+	}
+	if numCodepoints > 0 {
+		for left > 0 {
+			hash = memhash8(' ', hash)
+			left--
+		}
+	}
+	return hash
 }
 
-func (c *Collation_multibyte) Charset() charset.Charset {
-	return c.charset
+func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
+	return numCodepoints
 }

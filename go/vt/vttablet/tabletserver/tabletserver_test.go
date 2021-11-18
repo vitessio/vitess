@@ -1671,17 +1671,20 @@ func TestRescheduleMessages(t *testing.T) {
 	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	_, err := tsv.PostponeMessages(ctx, &target, "nonmsg", []string{"1", "2"})
+	_, err := tsv.messager.GetGenerator("nonmsg")
 	want := "message table nonmsg not found in schema"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
 
-	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
+	gen, err := tsv.messager.GetGenerator("msg")
+	require.NoError(t, err)
+
+	_, err = tsv.PostponeMessages(ctx, &target, gen, []string{"1", "2"})
 	want = "query: 'update msg set time_next"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
+	count, err := tsv.PostponeMessages(ctx, &target, gen, []string{"1", "2"})
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
 }
@@ -1692,18 +1695,21 @@ func TestPurgeMessages(t *testing.T) {
 	defer tsv.StopService()
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 
-	_, err := tsv.PurgeMessages(ctx, &target, "nonmsg", 0)
+	_, err := tsv.messager.GetGenerator("nonmsg")
 	want := "message table nonmsg not found in schema"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), want)
 
-	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
+	gen, err := tsv.messager.GetGenerator("msg")
+	require.NoError(t, err)
+
+	_, err = tsv.PurgeMessages(ctx, &target, gen, 0)
 	want = "query: 'delete from msg where time_acked"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 
 	db.AddQuery("delete from msg where time_acked < 3 limit 500", &sqltypes.Result{RowsAffected: 1})
-	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
+	count, err := tsv.PurgeMessages(ctx, &target, gen, 3)
 	require.NoError(t, err)
 	require.EqualValues(t, 1, count)
 }
@@ -1816,12 +1822,12 @@ func TestTerseErrorsBindVars(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	want := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
-	if err == nil || err.Error() != want {
-		t.Errorf("error got '%v', want '%s'", err, want)
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {a: \"type:INT64 value:\\\"1\\\"\"}"
+	wantLog := wantErr
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
@@ -1845,7 +1851,7 @@ func TestTerseErrorsNoBindVars(t *testing.T) {
 
 func TestTruncateErrors(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
-	config.TerseErrors = true
+	config.TerseErrors = false
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	tl := newTestLogger()
 	defer tl.Close()
@@ -1861,11 +1867,14 @@ func TestTruncateErrors(t *testing.T) {
 		sqlErr,
 		nil,
 	)
-	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+
+	// Error not truncated
+	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
+	// but log *is* truncated
 	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {vtg1: \"type:VARBINARY value:\\ [TRUNCATED]"
 	if wantLog != tl.getLog(0) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
@@ -1880,16 +1889,48 @@ func TestTruncateErrors(t *testing.T) {
 		nil,
 	)
 
-	wantErr = "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+	// Error not truncated
+	wantErr = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("error got '%v', want '%s'", err, wantErr)
 	}
 
+	// Log not truncated, since our limit is large enough now
 	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARBINARY value:\\\"this is kinda long eh\\\"\"}"
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
 	*sqlparser.TruncateErrLen = 0
+}
+
+func TestTerseErrors(t *testing.T) {
+	config := tabletenv.NewDefaultConfig()
+	config.TerseErrors = true
+	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
+	tl := newTestLogger()
+	defer tl.Close()
+
+	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
+	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
+	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
+	err := tsv.convertAndLogError(
+		ctx,
+		sql,
+		map[string]*querypb.BindVariable{"vtg1": sqltypes.StringBindVariable("this is kinda long eh")},
+		sqlErr,
+		nil,
+	)
+
+	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {}"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("error got '%v', want '%s'", err, wantErr)
+	}
+
+	// Log should be truncated in same way as the error
+	wantLog := wantErr
+	if wantLog != tl.getLog(0) {
+		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
+	}
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -2059,7 +2100,10 @@ func TestReserveBeginExecute(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, transactionID, reservedID)
 	require.NoError(t, err)
 }
@@ -2079,7 +2123,10 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, 0, reservedID)
 	require.NoError(t, err)
 }
@@ -2104,7 +2151,10 @@ func TestReserveExecute_WithTx(t *testing.T) {
 		"select 42 from dual where 1 != 1",
 		"select 42 from dual limit 10001",
 	}
-	assert.Contains(t, db.QueryLog(), strings.Join(expected, ";"), "expected queries to run")
+	splitOutput := strings.Split(db.QueryLog(), ";")
+	for _, exp := range expected {
+		assert.Contains(t, splitOutput, exp, "expected queries to run")
+	}
 	err = tsv.Release(ctx, &target, transactionID, reservedID)
 	require.NoError(t, err)
 }
@@ -2257,7 +2307,9 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteMethod(t *testing.T) {
 	// Testing Execute Method
 	transactionID, _, err := tsv.Begin(ctx, target, nil)
 	require.NoError(t, err)
-	res, err := tsv.Execute(ctx, target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, err := tsv.Execute(ctx, target, executeSQL, nil, transactionID, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2297,7 +2349,9 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 		}
 		return nil
 	}
-	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL}, callback)
+	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	}, callback)
 	require.NoError(t, err)
 }
 
@@ -2333,7 +2387,9 @@ func TestDatabaseNameReplaceByKeyspaceNameExecuteBatchMethod(t *testing.T) {
 			Sql:           executeSQL,
 			BindVariables: nil,
 		},
-	}, true, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	}, true, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, res := range results {
 		for _, field := range res.Fields {
@@ -2365,7 +2421,9 @@ func TestDatabaseNameReplaceByKeyspaceNameBeginExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test BeginExecute Method
-	res, transactionID, _, err := tsv.BeginExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, _, err := tsv.BeginExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2445,7 +2503,9 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveExecuteMethod(t *testing.T) {
 	target := tsv.sm.target
 
 	// Test ReserveExecute
-	res, rID, _, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, rID, _, err := tsv.ReserveExecute(ctx, target, nil, executeSQL, nil, 0, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)
@@ -2477,7 +2537,9 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	target := tsv.sm.target
 
 	// Test for ReserveBeginExecute
-	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, nil, executeSQL, nil, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	res, transactionID, reservedID, _, err := tsv.ReserveBeginExecute(ctx, target, nil, nil, executeSQL, nil, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 	require.NoError(t, err)
 	for _, field := range res.Fields {
 		require.Equal(t, "keyspaceName", field.Database)

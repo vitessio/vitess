@@ -17,18 +17,26 @@ limitations under the License.
 package charset
 
 import (
+	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset/eightbit"
 	"vitess.io/vitess/go/mysql/collations/internal/charset/japanese"
 	"vitess.io/vitess/go/mysql/collations/internal/charset/korean"
 	"vitess.io/vitess/go/mysql/collations/internal/charset/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
 	"vitess.io/vitess/go/mysql/collations/internal/charset/unicode"
 )
 
-type Charset interface {
-	Name() string
-	SupportsSupplementaryChars() bool
-	DecodeRune([]byte) (rune, int)
-	EncodeFromUTF8(in []byte) ([]byte, error)
-}
+const RuneError = utf8.RuneError
+
+type Charset = types.Charset
+
+// 8-bit encodings
+
+type Charset_8bit = eightbit.Charset_8bit
+type Charset_binary = eightbit.Charset_binary
+type Charset_latin1 = eightbit.Charset_latin1
+type UnicodeMapping = eightbit.UnicodeMapping
 
 // Unicode encodings
 
@@ -48,30 +56,40 @@ type Charset_gb2312 = simplifiedchinese.Charset_gb2312
 
 type Charset_ujis = japanese.Charset_ujis
 type Charset_sjis = japanese.Charset_sjis
-type Charset_cp932 = japanese.Charset_sjis // TODO: this is not correct, see https://en.wikipedia.org/wiki/Code_page_932_(Microsoft_Windows)#Differences_from_standard_Shift_JIS
+type Charset_cp932 = japanese.Charset_cp932
+type Charset_eucjpms = japanese.Charset_eucjpms
 
 // Korean encodings
 
 type Charset_euckr = korean.Charset_euckr
 
-const RuneError = unicode.RuneError
-
-func IsUnicode(csname string) bool {
+func IsMultibyteByName(csname string) bool {
 	switch csname {
-	case "utf8", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":
+	case "euckr", "gb2312", "sjis", "cp932", "eucjpms", "ujis":
+		return true
+
+	default:
+		return false
+	}
+}
+
+func IsUnicode(charset Charset) bool {
+	switch charset.(type) {
+	case Charset_utf8, Charset_utf8mb4:
+		return true
+	case Charset_utf16, Charset_utf16le, Charset_ucs2:
+		return true
+	case Charset_utf32:
 		return true
 	default:
 		return false
 	}
 }
 
-func IsMultibyte(csname string) bool {
+func IsUnicodeByName(csname string) bool {
 	switch csname {
-	case "cp932", "euckr", "gb2312", "sjis", "ujis":
+	case "utf8", "utf8mb4", "utf16", "utf16le", "ucs2", "utf32":
 		return true
-	case "eucjpms":
-		// TODO: These multibyte encodings are not supported yet
-		return false
 	default:
 		return false
 	}

@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -216,7 +218,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := wr.GetSchema(ctx, oneTarget.GetPrimary().Alias, nil, nil, false)
+	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
@@ -1057,7 +1059,8 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
 			c = bytes.Compare(sourceRow[compareIndex].ToBytes(), targetRow[compareIndex].ToBytes())
 		} else {
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex])
+			// TODO(king-11) make collation aware
+			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
 		}
 		if err != nil {
 			return 0, err
@@ -1143,6 +1146,10 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 type contextVCursor struct {
 	engine.VCursor
 	ctx context.Context
+}
+
+func (vc *contextVCursor) ConnCollation() collations.Collation {
+	panic("implement me")
 }
 
 func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {

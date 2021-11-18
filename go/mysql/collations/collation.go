@@ -17,14 +17,13 @@ limitations under the License.
 package collations
 
 import (
-	"fmt"
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
-// Generate mysqldata.go from the JSON information dumped from MySQL
-//go:generate go run ./tools/makemysqldata/
+// Generate all the metadata used for collations from the JSON data dumped from MySQL
+//go:generate go run ./tools/makecolldata/
 
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
@@ -35,13 +34,13 @@ const Unknown ID = 0
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
-	// init initializes the internal state for the collation the first time it is used
-	init()
+	// Init initializes the internal state for the collation the first time it is used
+	Init()
 
-	// Id returns the numerical identifier for this collation. This is the same
+	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
-	Id() ID
+	ID() ID
 
 	// Name is the full name of this collation, in the form of "ENCODING_LANG_SENSITIVITY"
 	Name() string
@@ -107,7 +106,26 @@ type Collation interface {
 	// returned value.
 	WeightStringLen(numCodepoints int) int
 
+	// Hash returns a 32 or 64 bit identifier (depending on the platform) that uniquely identifies
+	// the given string based on this collation. It is functionally equivalent to calling WeightString
+	// and then hashing the result.
+	//
+	// Consequently, if the hashes for two strings are different, then the two strings are considered
+	// different according to this collation. If the hashes for two strings are equal, the two strings
+	// may or may not be considered equal according to this collation, because hashes can collide unlike
+	// weight strings.
+	//
+	// The numCodepoints argument has the same behavior as in WeightString: if this collation uses PAD SPACE,
+	// the hash will interpret the source string as if it were stored in a `CHAR(n)` column. If the value of
+	// numCodepoints is 0, this is equivalent to setting `numCodepoints = RuneCount(src)`.
+	// For collations with NO PAD, the numCodepoint argument is ignored.
+	Hash(src []byte, numCodepoints int) uintptr
+
+	// Charset returns the Charset with which this collation is encoded
 	Charset() charset.Charset
+
+	// IsBinary returns whether this collation is a binary collation
+	IsBinary() bool
 }
 
 const PadToMax = math.MaxInt32
@@ -119,64 +137,11 @@ func minInt(i1, i2 int) int {
 	return i2
 }
 
-var collationsByName = make(map[string]Collation)
-var collationsById = make(map[ID]Collation)
+var globalAllCollations = make(map[ID]Collation)
 
 func register(c Collation) {
-	duplicatedCharset := func(old Collation) {
-		panic(fmt.Sprintf("duplicated collation: %s[%d] (existing collation is %s[%d])",
-			c.Name(), c.Id(), old.Name(), old.Id(),
-		))
+	if _, found := globalAllCollations[c.ID()]; found {
+		panic("duplicated collation registered")
 	}
-	if old, found := collationsByName[c.Name()]; found {
-		duplicatedCharset(old)
-	}
-	if old, found := collationsById[c.Id()]; found {
-		duplicatedCharset(old)
-	}
-	collationsByName[c.Name()] = c
-	collationsById[c.Id()] = c
-}
-
-// LookupByName returns the collation with the given name. The collation
-// is initialized if it's the first time being accessed.
-func LookupByName(name string) Collation {
-	csi := collationsByName[name]
-	if csi != nil {
-		csi.init()
-	}
-	return csi
-}
-
-// LookupIDByName returns the collation ID for the given name
-func LookupIDByName(name string) ID {
-	if supported, ok := collationsByName[name]; ok {
-		return supported.Id()
-	}
-	if unsupported, ok := collationsUnsupportedByName[name]; ok {
-		return unsupported
-	}
-	return Unknown
-}
-
-// LookupById returns the collation with the given numerical identifier. The collation
-// is initialized if it's the first time being accessed.
-func LookupById(id ID) Collation {
-	csi := collationsById[id]
-	if csi != nil {
-		csi.init()
-	}
-	return csi
-}
-
-// All returns a slice with all known collations in Vitess. This is an expensive call because
-// it will initialize the internal state of all the collations before returning them.
-// Used for testing/debugging.
-func All() (all []Collation) {
-	all = make([]Collation, 0, len(collationsById))
-	for _, col := range collationsById {
-		col.init()
-		all = append(all, col)
-	}
-	return
+	globalAllCollations[c.ID()] = c
 }

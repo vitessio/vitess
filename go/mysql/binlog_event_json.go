@@ -23,8 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"github.com/spyzhov/ajson"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -474,7 +472,7 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		if err != nil {
 			return nil, err
 		}
-		float, err := evalengine.ToFloat64(val)
+		float, err := val.ToFloat64()
 		if err != nil {
 			return nil, err
 		}

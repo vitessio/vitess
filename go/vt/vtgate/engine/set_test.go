@@ -98,7 +98,7 @@ func TestSetTable(t *testing.T) {
 		setOps: []SetOp{
 			&UserDefinedVariable{
 				Name: "x",
-				Expr: evalengine.NewColumn(0),
+				Expr: evalengine.NewColumn(0, 0),
 			},
 		},
 		qr: []*sqltypes.Result{sqltypes.MakeTestResult(

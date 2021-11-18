@@ -18,6 +18,8 @@ package collations
 
 import (
 	"bytes"
+	"math"
+	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
@@ -29,18 +31,22 @@ type Collation_unicode_general_ci struct {
 	charset charset.Charset
 }
 
-func (c *Collation_unicode_general_ci) init() {}
+func (c *Collation_unicode_general_ci) Init() {}
 
-func (c *Collation_unicode_general_ci) Charset() charset.Charset {
-	return c.charset
-}
-
-func (c *Collation_unicode_general_ci) Id() ID {
+func (c *Collation_unicode_general_ci) ID() ID {
 	return c.id
 }
 
 func (c *Collation_unicode_general_ci) Name() string {
 	return c.name
+}
+
+func (c *Collation_unicode_general_ci) Charset() charset.Charset {
+	return c.charset
+}
+
+func (c *Collation_unicode_general_ci) IsBinary() bool {
+	return false
 }
 
 func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool) int {
@@ -118,6 +124,35 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 	return dst
 }
 
+func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) uintptr {
+	unicaseInfo := c.unicase
+	cs := c.charset
+
+	var hash = uintptr(c.id)
+	var left = numCodepoints
+	if left == 0 {
+		left = math.MaxInt32
+	}
+
+	for left > 0 {
+		r, width := cs.DecodeRune(src)
+		if r == charset.RuneError && width < 3 {
+			break
+		}
+		src = src[width:]
+		hash = memhash16(bits.ReverseBytes16(uint16(unicaseInfo.unicodeSort(r))), hash)
+		left--
+	}
+
+	if numCodepoints > 0 {
+		for left > 0 {
+			hash = memhash16(bits.ReverseBytes16(0x0020), hash)
+			left--
+		}
+	}
+	return hash
+}
+
 func (c *Collation_unicode_general_ci) WeightStringLen(numBytes int) int {
 	return ((numBytes + 3) / 4) * 2
 }
@@ -128,9 +163,9 @@ type Collation_unicode_bin struct {
 	charset charset.Charset
 }
 
-func (c *Collation_unicode_bin) init() {}
+func (c *Collation_unicode_bin) Init() {}
 
-func (c *Collation_unicode_bin) Id() ID {
+func (c *Collation_unicode_bin) ID() ID {
 	return c.id
 }
 
@@ -140,6 +175,10 @@ func (c *Collation_unicode_bin) Name() string {
 
 func (c *Collation_unicode_bin) Charset() charset.Charset {
 	return c.charset
+}
+
+func (c *Collation_unicode_bin) IsBinary() bool {
+	return true
 }
 
 func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {
@@ -237,6 +276,65 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 	}
 
 	return dst
+}
+
+func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) uintptr {
+	if c.charset.SupportsSupplementaryChars() {
+		return c.hashUnicode(src, numCodepoints)
+	}
+	return c.hashBMP(src, numCodepoints)
+}
+
+func (c *Collation_unicode_bin) hashUnicode(src []byte, numCodepoints int) uintptr {
+	cs := c.charset
+
+	var hash = uintptr(c.id)
+	var left = numCodepoints
+	if left == 0 {
+		left = math.MaxInt32
+	}
+	for left > 0 {
+		r, width := cs.DecodeRune(src)
+		if r == charset.RuneError && width < 3 {
+			break
+		}
+		src = src[width:]
+		hash = memhash32(bits.ReverseBytes32(uint32(r)), hash)
+		left--
+	}
+	if numCodepoints > 0 {
+		for left > 0 {
+			hash = memhash32(bits.ReverseBytes32(0x20), hash)
+			left--
+		}
+	}
+	return hash
+}
+
+func (c *Collation_unicode_bin) hashBMP(src []byte, numCodepoints int) uintptr {
+	cs := c.charset
+
+	var hash = uintptr(c.id)
+	var left = numCodepoints
+	if left == 0 {
+		left = math.MaxInt32
+	}
+	for left > 0 {
+		r, width := cs.DecodeRune(src)
+		if r == charset.RuneError && width < 3 {
+			break
+		}
+		src = src[width:]
+		hash = memhash16(bits.ReverseBytes16(uint16(r)), hash)
+		left--
+	}
+	if numCodepoints > 0 {
+		for left > 0 {
+			hash = memhash16(bits.ReverseBytes16(0x20), hash)
+			left--
+		}
+	}
+	return hash
 }
 
 func (c *Collation_unicode_bin) WeightStringLen(numBytes int) int {

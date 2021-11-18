@@ -83,11 +83,6 @@ Gen4 plan same as above
 "unsupported: '*' expression in cross-shard query"
 Gen4 error: cannot use column offsets in group statement when using `*`
 
-# Filtering on scatter aggregates
-"select count(*) a from user having a >10"
-"unsupported: filtering on results of aggregates"
-Gen4 plan same as above
-
 # group by must reference select list
 "select a from user group by b"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
@@ -116,7 +111,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 plan same as above
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
@@ -132,6 +127,11 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+
+# group by and ',' joins with condition
+"select user.col from user join user_extra on user_extra.col = user.col group by user.id"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
@@ -505,11 +505,11 @@ Gen4 plan same as above
 # TODO this should be planned without using OA and MS
 "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3"
 "unsupported: cross-shard query with aggregates"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 "select (select 1 from user u having count(ue.col) > 10) from user_extra ue"
 "symbol ue.col not found in subquery"
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by
 "select 1 from user having count(id) = 10"
@@ -528,7 +528,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Table": "`user`"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # aggregation filtering by having on a route with no group by with non-unique vindex filter
 "select 1 from user having count(id) = 10 and name = 'a'"
@@ -551,7 +551,7 @@ Gen4 error: unsupported: filtering on results of aggregates
     "Vindex": "name_user_map"
   }
 }
-Gen4 error: unsupported: filtering on results of aggregates
+Gen4 error: expr cannot be converted, not supported: *sqlparser.FuncExpr
 
 # subquery of information_schema with itself and star expression in outer select
 "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)"
@@ -617,3 +617,28 @@ Gen4 plan same as above
 "with x as (select * from user) select * from x union select * from x"
 "unsupported: with expression in union statement"
 Gen4 plan same as above
+
+# Aggregate on join
+"select user.a, count(*) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
+
+# Aggregate on other table in join
+"select user.a, count(user_extra.a) from user join user_extra group by user.a"
+"unsupported: cross-shard query with aggregates"
+Gen4 plan same as above
+
+# Equal filter with hexadecimal value
+"select count(*) a from user having a = 0x01"
+"unsupported: filtering on results of aggregates"
+Gen4 error: expr cannot be converted, not supported: hexadecimal value: 0x01
+
+# scatter aggregate with complex select list (can't build order by)
+"select distinct a+1 from user"
+"generating order by clause: cannot reference a complex expression"
+Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
+
+# aggregation on union
+"select sum(col) from (select col from user union all select col from unsharded) t"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: unsupported: aggregation on unions

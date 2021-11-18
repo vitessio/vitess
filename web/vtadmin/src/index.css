@@ -15,6 +15,10 @@
  */
 @import './style/fonts.css';
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
     /* Greyscale */
     --grey75: #f8fafd;
@@ -36,9 +40,8 @@
     --colorError200: #9a0007;
 
     /* Fonts */
-    --fontFamilyPrimary: 'NotoSans', -apple-system, blinkmacsystemfont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
-        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-    --fontFamilyMonospace: 'NotoMono', source-code-pro, menlo, monaco, consolas, 'Courier New', monospace;
+    --fontFamilyPrimary: theme('fontFamily.sans');
+    --fontFamilyMonospace: theme('fontFamily.mono');
 
     /* Body text */
     --fontSizeDefault: 1.4rem;
@@ -73,16 +76,13 @@
     --colorScaffoldingHighlight: var(--grey400);
     --colorScaffoldingForeground: var(--grey600);
     --tableBorderColor: var(--grey400);
-    --textColorPrimary: #17171b;
+    --textColorPrimary: theme('textColor.primary');
     --textColorInverted: #fff;
-    --textColorSecondary: #718096;
+    --textColorSecondary: theme('textColor.secondary');
     --textColorDisabled: #cbd5e0;
 
     /* TODO(doeg, someday): add a mixin to apply opacity to hex vars to re-use var(--backgroundInverted) */
     --tooltipBackground: rgba(0, 0, 0, 0.85);
-
-    /* A common bounding width for views that don't require the full viewport. */
-    --contentWidth: 1400px;
 
     /* Z-index */
     --zIndexDefault: 0;
@@ -165,6 +165,10 @@ code {
     margin: 0 2px;
 }
 
+p {
+    margin: 1.2rem 0;
+}
+
 /* Links */
 a,
 a:visited,
@@ -217,34 +221,6 @@ table tbody td[rowSpan] {
 }
 
 /* One-liner utilities */
-.font-family-monospace {
-    font-family: var(--fontFamilyMonospace);
-}
-
-.font-family-primary {
-    font-family: var(--fontFamilyPrimary);
-}
-
 .font-size-small {
     font-size: var(--fontSizeSmall);
-}
-
-.font-weight-bold {
-    font-weight: 700;
-}
-
-.max-width-content {
-    max-width: var(--contentWidth);
-}
-
-.text-align-right {
-    text-align: right;
-}
-
-.text-color-secondary {
-    color: var(--textColorSecondary);
-}
-
-.white-space-nowrap {
-    white-space: nowrap;
 }

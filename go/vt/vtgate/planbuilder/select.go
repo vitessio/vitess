@@ -320,9 +320,8 @@ func handleDualSelects(sel *sqlparser.Select, vschema ContextVSchema) (engine.Pr
 		if sqlparser.IsLockingFunc(expr.Expr) {
 			// if we are using any locking functions, we bail out here and send the whole query to a single destination
 			return buildLockingPrimitive(sel, vschema)
-
 		}
-		exprs[i], err = sqlparser.Convert(expr.Expr)
+		exprs[i], err = evalengine.Convert(expr.Expr, nil)
 		if err != nil {
 			return nil, nil
 		}
@@ -343,10 +342,12 @@ func buildLockingPrimitive(sel *sqlparser.Select, vschema ContextVSchema) (engin
 	if err != nil {
 		return nil, err
 	}
+	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
 	return &engine.Lock{
 		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
 		Query:             sqlparser.String(sel),
+		FieldQuery:        buf.String(),
 	}, nil
 }
 

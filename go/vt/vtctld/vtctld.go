@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
 var (
@@ -128,7 +129,10 @@ func InitVtctld(ts *topo.Server) error {
 
 	actionRepo.RegisterTabletAction("ReloadSchema", acl.ADMIN,
 		func(ctx context.Context, wr *wrangler.Wrangler, tabletAlias *topodatapb.TabletAlias) (string, error) {
-			return "", wr.ReloadSchema(ctx, tabletAlias)
+			_, err := wr.VtctldServer().ReloadSchema(ctx, &vtctldatapb.ReloadSchemaRequest{
+				TabletAlias: tabletAlias,
+			})
+			return "", err
 		})
 
 	// Anything unrecognized gets redirected to the main app page.

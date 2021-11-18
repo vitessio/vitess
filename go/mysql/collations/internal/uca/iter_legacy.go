@@ -44,8 +44,8 @@ func (it *codepointIteratorLegacy) next() (uint16, bool) {
 	return weight, weight != 0x0
 }
 
-func (it *codepointIteratorLegacy) init(table WeightTable, cp rune) {
-	p, offset := pageOffset(cp)
+func (it *codepointIteratorLegacy) init(table Weights, cp rune) {
+	p, offset := PageOffset(cp)
 	page := table[p]
 	if page == nil {
 		UnicodeImplicitWeightsLegacy(it.scratch[:2], cp)
@@ -93,11 +93,13 @@ func (it *WeightIteratorLegacy) Next() (uint16, bool) {
 		if cp > it.maxCodepoint {
 			return 0xFFFD, true
 		}
-		if weights, remainder, skip := it.contractions.weightForContractionCharset(cp, it.input, it.charset); weights != nil {
-			it.codepoint.initContraction(weights)
-			it.input = remainder
-			it.length += skip
-			continue
+		if it.contract != nil {
+			if weights, remainder, skip := it.contract.Find(it.charset, cp, it.input); weights != nil {
+				it.codepoint.initContraction(weights)
+				it.input = remainder
+				it.length += skip
+				continue
+			}
 		}
 		it.codepoint.init(it.table, cp)
 	}

@@ -33,8 +33,10 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
+	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -46,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -641,6 +644,41 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	return resp, err
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ExecuteHook(ctx context.Context, req *vtctldatapb.ExecuteHookRequest) (*vtctldatapb.ExecuteHookResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ExecuteHook")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	if req.TabletHookRequest == nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "TabletHookRequest cannot be nil")
+	}
+
+	span.Annotate("hook_name", req.TabletHookRequest.Name)
+
+	if strings.Contains(req.TabletHookRequest.Name, "/") {
+		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "hook name cannot contain a '/'; was %v", req.TabletHookRequest.Name)
+	}
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	hook := hk.NewHookWithEnv(req.TabletHookRequest.Name, req.TabletHookRequest.Parameters, req.TabletHookRequest.ExtraEnv)
+	hr, err := s.tmc.ExecuteHook(ctx, ti.Tablet, hook)
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ExecuteHookResponse{HookResult: &tabletmanagerdatapb.ExecuteHookResponse{
+		ExitStatus: int64(hr.ExitStatus),
+		Stdout:     hr.Stdout,
+		Stderr:     hr.Stderr,
+	}}, nil
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) FindAllShardsInKeyspace(ctx context.Context, req *vtctldatapb.FindAllShardsInKeyspaceRequest) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.FindAllShardsInKeyspace")
@@ -844,21 +882,15 @@ func (s *VtctldServer) GetSchema(ctx context.Context, req *vtctldatapb.GetSchema
 	defer span.Finish()
 
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
-
-	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
-	if err != nil {
-		return nil, fmt.Errorf("GetTablet(%v) failed: %w", req.TabletAlias, err)
-	}
-
 	span.Annotate("tables", strings.Join(req.Tables, ","))
 	span.Annotate("exclude_tables", strings.Join(req.ExcludeTables, ","))
 	span.Annotate("include_views", req.IncludeViews)
 	span.Annotate("table_names_only", req.TableNamesOnly)
 	span.Annotate("table_sizes_only", req.TableSizesOnly)
 
-	sd, err := s.tmc.GetSchema(ctx, tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews)
+	sd, err := schematools.GetSchema(ctx, s.ts, s.tmc, req.TabletAlias, req.Tables, req.ExcludeTables, req.IncludeViews)
 	if err != nil {
-		return nil, fmt.Errorf("GetSchema(%v, %v, %v, %v) failed: %w", tablet.Tablet, req.Tables, req.ExcludeTables, req.IncludeViews, err)
+		return nil, err
 	}
 
 	if req.TableNamesOnly {
@@ -1700,6 +1732,105 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	}, nil
 }
 
+// ReloadSchema is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchema(ctx context.Context, req *vtctldatapb.ReloadSchemaRequest) (*vtctldatapb.ReloadSchemaResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchema")
+	defer span.Finish()
+
+	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
+
+	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "GetTablet(%v) failed: %v", req.TabletAlias, err)
+	}
+
+	err = s.tmc.ReloadSchema(ctx, ti.Tablet, "")
+	if err != nil {
+		return nil, err
+	}
+
+	return &vtctldatapb.ReloadSchemaResponse{}, nil
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	logger, getEvents := eventStreamLogger()
+
+	var sema *sync2.Semaphore
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	s.reloadSchemaShard(ctx, req, sema, logger)
+
+	return &vtctldatapb.ReloadSchemaShardResponse{
+		Events: getEvents(),
+	}, nil
+}
+
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	isPartial, ok := schematools.ReloadShard(ctx, s.ts, s.tmc, logger, req.Keyspace, req.Shard, req.WaitPosition, sema, req.IncludePrimary)
+	if !ok {
+		return
+	}
+
+	span.Annotate("is_partial_result", isPartial)
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatapb.ReloadSchemaKeyspaceRequest) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaKeyspace")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("include_primary", req.IncludePrimary)
+	span.Annotate("wait_position", req.WaitPosition)
+
+	shards, err := s.ts.GetShardNames(ctx, req.Keyspace)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "GetShardNames(%v) failed: %v", req.Keyspace, err)
+	}
+
+	var (
+		wg                sync.WaitGroup
+		sema              *sync2.Semaphore
+		logger, getEvents = eventStreamLogger()
+	)
+
+	if req.Concurrency > 0 {
+		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+	}
+
+	for _, shard := range shards {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			s.reloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+				Keyspace:       req.Keyspace,
+				Shard:          shard,
+				IncludePrimary: req.IncludePrimary,
+				WaitPosition:   req.WaitPosition,
+			}, sema, logger)
+		}(shard)
+	}
+
+	wg.Wait()
+
+	return &vtctldatapb.ReloadSchemaKeyspaceResponse{
+		Events: getEvents(),
+	}, nil
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.RemoveKeyspaceCellRequest) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.RemoveKeyspaceCell")
@@ -1792,7 +1923,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 		return nil, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot ReparentTablet current shard primary (%v) onto itself", topoproto.TabletAliasString(req.Tablet))
 	}
 
-	if err := s.tmc.SetMaster(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false); err != nil {
+	if err := s.tmc.SetReplicationSource(ctx, tablet.Tablet, shard.PrimaryAlias, 0, "", false); err != nil {
 		return nil, err
 	}
 
@@ -2084,7 +2215,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 
 				var status *replicationdatapb.Status
 
-				pos, err := s.tmc.MasterPosition(ctx, tablet)
+				pos, err := s.tmc.PrimaryPosition(ctx, tablet)
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
@@ -2094,7 +2225,7 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
-						rec.RecordError(fmt.Errorf("MasterPosition(%s) failed: %w", alias, err))
+						rec.RecordError(fmt.Errorf("PrimaryPosition(%s) failed: %w", alias, err))
 						return
 					}
 				} else {

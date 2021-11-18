@@ -17,10 +17,14 @@ limitations under the License.
 package remote
 
 import (
+	"encoding/hex"
 	"fmt"
+	"io"
 	"sync"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type Charset struct {
@@ -28,31 +32,81 @@ type Charset struct {
 
 	mu   *sync.Mutex
 	conn *mysql.Conn
+	sql  bytes2.Buffer
+	hex  io.Writer
+}
+
+var _ charset.Charset = (*Charset)(nil)
+
+func makeRemoteCharset(conn *mysql.Conn, mu *sync.Mutex, csname string) *Charset {
+	cs := &Charset{
+		name: csname,
+		mu:   mu,
+		conn: conn,
+	}
+	cs.hex = hex.NewEncoder(&cs.sql)
+	return cs
+}
+
+func NewCharset(conn *mysql.Conn, csname string) *Charset {
+	return makeRemoteCharset(conn, &sync.Mutex{}, csname)
 }
 
 func (c *Charset) Name() string {
 	return c.name
 }
 
+func (c *Charset) IsSuperset(_ charset.Charset) bool {
+	return false
+}
+
 func (c *Charset) SupportsSupplementaryChars() bool {
 	return true
 }
 
-func (c *Charset) DecodeRune(bytes []byte) (rune, int) {
-	panic("unsupported: DecodeRune in remote.Charset")
+func (c *Charset) EncodeRune(dst []byte, r rune) int {
+	panic("unsupported: EncodeRune in remote.Charset (use Charset.Convert directly)")
 }
 
-func (c *Charset) EncodeFromUTF8(in []byte) ([]byte, error) {
+func (c *Charset) DecodeRune(bytes []byte) (rune, int) {
+	panic("unsupported: DecodeRune in remote.Charset (use Charset.Convert directly)")
+}
+
+func (c *Charset) performConversion(dst []byte, dstCharset string, src []byte, srcCharset string) ([]byte, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	query := fmt.Sprintf("SELECT CAST(CONVERT(_utf8mb4 X'%x' USING %s) AS binary)", in, c.name)
-	res, err := c.conn.ExecuteFetch(query, 1, false)
+	c.sql.Reset()
+	c.sql.WriteString("SELECT CAST(CONVERT(_")
+	c.sql.WriteString(srcCharset)
+	c.sql.WriteString(" X'")
+	c.hex.Write(src)
+	c.sql.WriteString("' USING ")
+	c.sql.WriteString(dstCharset)
+	c.sql.WriteString(") AS binary)")
+
+	res, err := c.conn.ExecuteFetch(c.sql.StringUnsafe(), 1, false)
 	if err != nil {
 		return nil, err
 	}
 	if len(res.Rows) != 1 {
 		return nil, fmt.Errorf("unexpected result from MySQL: %d rows returned", len(res.Rows))
 	}
-	return res.Rows[0][0].ToBytes(), nil
+	result := res.Rows[0][0].ToBytes()
+	if dst != nil {
+		return append(dst, result...), nil
+	}
+	return result, nil
+}
+
+func (c *Charset) EncodeFromUTF8(dst, src []byte) ([]byte, error) {
+	return c.performConversion(dst, c.name, src, "utf8mb4")
+}
+
+func (c *Charset) DecodeToUTF8(dst, src []byte) ([]byte, error) {
+	return c.performConversion(dst, "utf8mb4", src, c.name)
+}
+
+func (c *Charset) Convert(dst, src []byte, srcCharset charset.Charset) ([]byte, error) {
+	return c.performConversion(dst, c.name, src, srcCharset.Name())
 }

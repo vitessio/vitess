@@ -456,6 +456,12 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 	defer conn.Close()
 
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
+	if err != nil {
+		return false, err
+	}
+
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown)
 	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
 
@@ -716,8 +722,48 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// deferred function will unlock keyspace
 }
 
+// initMigrationSQLMode sets sql_mode according to DDL strategy, and returns a function that
+// restores sql_mode to original state
+func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (deferFunc func(), err error) {
+	deferFunc = func() {}
+	if !onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
+		// No need to change sql_mode.
+		return deferFunc, nil
+	}
+
+	// Grab current sql_mode value
+	rs, err := conn.ExecuteFetch(`select @@session.sql_mode as sql_mode`, 1, true)
+	if err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	sqlMode, err := rs.Named().Row().ToString("sql_mode")
+	if err != nil {
+		return deferFunc, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	// Pre-calculate restore function
+	deferFunc = func() {
+		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
+		conn.ExecuteFetch(restoreSQLModeQuery, 0, false)
+	}
+	// Change sql_mode
+	changeSSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
+	if _, err := conn.ExecuteFetch(changeSSQLModeQuery, 0, false); err != nil {
+		return deferFunc, err
+	}
+	return deferFunc, nil
+}
+
 func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, conn *dbconnpool.DBConnection) (v *VRepl, err error) {
+	restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+	defer restoreSQLModeFunc()
+	if err != nil {
+		return v, err
+	}
+
 	vreplTableName := fmt.Sprintf("_%s_%s_vrepl", onlineDDL.UUID, ReadableTimestamp())
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+		return v, err
+	}
 	{
 		// Apply CREATE TABLE for materialized table
 		parsed := sqlparser.BuildParsedQuery(sqlCreateTableLike, vreplTableName, onlineDDL.Table)
@@ -740,8 +786,14 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 // postInitVreplicationOriginalMigration runs extra changes after a vreplication online DDL has been initialized.
 // This function is called after both source and target tables have been analyzed, so there's more information
 // about the two, and about the transition between the two.
-func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
+func (e *Executor) postInitVreplicationOriginalMigration(ctx context.Context, onlineDDL *schema.OnlineDDL, v *VRepl, conn *dbconnpool.DBConnection) (err error) {
 	if v.sourceAutoIncrement > 0 && !v.parser.IsAutoIncrementDefined() {
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
+		if err != nil {
+			return err
+		}
+
 		// Apply ALTER TABLE AUTO_INCREMENT=?
 		parsed := sqlparser.BuildParsedQuery(sqlAlterTableAutoIncrement, v.targetTable, ":auto_increment")
 		bindVars := map[string]*querypb.BindVariable{
@@ -778,6 +830,9 @@ func (e *Executor) initVreplicationRevertMigration(ctx context.Context, onlineDD
 		return nil, err
 	}
 
+	if err := e.updateArtifacts(ctx, onlineDDL.UUID, vreplTableName); err != nil {
+		return v, err
+	}
 	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, "")
 	v.pos = revertStream.pos
 	return v, nil
@@ -832,12 +887,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
 			return err
 		}
-		if err := e.postInitVreplicationOriginalMigration(ctx, v, conn); err != nil {
+		if err := e.postInitVreplicationOriginalMigration(ctx, onlineDDL, v, conn); err != nil {
 			return err
 		}
-	}
-	if err := e.updateArtifacts(ctx, onlineDDL.UUID, v.targetTable); err != nil {
-		return err
 	}
 
 	{
@@ -1022,6 +1074,9 @@ exit $exit_code
 			fmt.Sprintf(`--alter=%s`, alterOptions),
 			fmt.Sprintf(`--panic-flag-file=%s`, e.ghostPanicFlagFileName(onlineDDL.UUID)),
 			fmt.Sprintf(`--execute=%t`, execute),
+		}
+		if onlineDDL.StrategySetting().IsAllowZeroInDateFlag() {
+			args = append(args, "--allow-zero-in-date")
 		}
 		args = append(args, onlineDDL.StrategySetting().RuntimeOptions()...)
 		_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, fmt.Sprintf("executing gh-ost --execute=%v", execute))
@@ -1695,6 +1750,12 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 		// Create the comparison table
 		ddlStmt.SetTable("", comparisonTableName)
 		modifiedCreateSQL := sqlparser.String(ddlStmt)
+
+		restoreSQLModeFunc, err := e.initMigrationSQLMode(ctx, onlineDDL, conn)
+		defer restoreSQLModeFunc()
+		if err != nil {
+			return "", err
+		}
 
 		if _, err := conn.ExecuteFetch(modifiedCreateSQL, 0, false); err != nil {
 			return "", err
@@ -2860,6 +2921,28 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	return e.execQuery(ctx, query)
 }
 
+// CleanupMigration sets migration is ready for artifact cleanup. Artifacts are not immediately deleted:
+// all we do is set retain_artifacts_seconds to a very small number (it's actually a negative) so that the
+// next iteration of gcArtifacts() picks up the migration's artifacts and schedules them for deletion
+func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *sqltypes.Result, err error) {
+	if !e.isOpen {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Not a valid migration ID in CLEANUP: %s", uuid)
+	}
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+
+	query, err := sqlparser.ParseAndBind(sqlUpdateReadyForCleanup,
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return e.execQuery(ctx, query)
+}
+
 // SubmitMigration inserts a new migration request
 func (e *Executor) SubmitMigration(
 	ctx context.Context,
@@ -2877,6 +2960,8 @@ func (e *Executor) SubmitMigration(
 		return nil, err
 	}
 
+	retainArtifactsSeconds := int64((*retainOnlineDDLTables).Seconds())
+
 	query, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
@@ -2890,6 +2975,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(onlineDDL.RequestContext),
 		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
+		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 	)
 	if err != nil {
 		return nil, err

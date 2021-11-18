@@ -61,7 +61,7 @@ func parseAndBuildDefaultValue(sysvar sysvars.SystemVariable) evalengine.Expr {
 	}
 	sel := stmt.(*sqlparser.Select)
 	aliasedExpr := sel.SelectExprs[0].(*sqlparser.AliasedExpr)
-	def, err := sqlparser.Convert(aliasedExpr.Expr)
+	def, err := evalengine.Convert(aliasedExpr.Expr, nil)
 	if err != nil {
 		panic(fmt.Sprintf("bug in set plan init - default value for %s not able to convert to evalengine.Expr: %s", sysvar.Name, sysvar.Default))
 	}

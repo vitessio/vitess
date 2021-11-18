@@ -17,14 +17,10 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"html/template"
 	"sort"
 	"sync"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -33,11 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // SplitDiffWorker executes a diff between a destination shard and its
@@ -357,9 +356,9 @@ func (sdw *SplitDiffWorker) synchronizeReplication(ctx context.Context) error {
 	if err := sdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, primaryInfo.Tablet, int(sdw.sourceShard.Uid), mysqlPos); err != nil {
 		return vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", sdw.shardInfo.PrimaryAlias, mysqlPos)
 	}
-	primaryPos, err := sdw.wr.TabletManagerClient().MasterPosition(shortCtx, primaryInfo.Tablet)
+	primaryPos, err := sdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, primaryInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "MasterPosition for %v failed", sdw.shardInfo.PrimaryAlias)
+		return vterrors.Wrapf(err, "PrimaryPosition for %v failed", sdw.shardInfo.PrimaryAlias)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed
@@ -404,8 +403,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sdw.destinationSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+		sdw.destinationSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.destinationAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)
@@ -417,8 +416,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sdw.sourceSchemaDefinition, err = sdw.wr.GetSchema(
-			shortCtx, sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
+		sdw.sourceSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, sdw.wr.TopoServer(), sdw.wr.TabletManagerClient(), sdw.sourceAlias, nil /* tables */, sdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			sdw.markAsWillFail(rec, err)

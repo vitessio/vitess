@@ -154,6 +154,15 @@ func (client *gRPCVtctldClient) EmergencyReparentShard(ctx context.Context, in *
 	return client.c.EmergencyReparentShard(ctx, in, opts...)
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ExecuteHook(ctx, in, opts...)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *gRPCVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	if client.c == nil {
@@ -377,6 +386,33 @@ func (client *gRPCVtctldClient) RefreshStateByShard(ctx context.Context, in *vtc
 	}
 
 	return client.c.RefreshStateByShard(ctx, in, opts...)
+}
+
+// ReloadSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReloadSchema(ctx context.Context, in *vtctldatapb.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReloadSchema(ctx, in, opts...)
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReloadSchemaKeyspace(ctx context.Context, in *vtctldatapb.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReloadSchemaKeyspace(ctx, in, opts...)
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *gRPCVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldatapb.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	if client.c == nil {
+		return nil, status.Error(codes.Unavailable, connClosedMsg)
+	}
+
+	return client.c.ReloadSchemaShard(ctx, in, opts...)
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
