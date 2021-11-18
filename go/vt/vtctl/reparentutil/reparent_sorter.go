@@ -26,68 +26,69 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// ERSIntermediateSourceSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
-// candidate for intermediate promotion in emergency reparent shard
-type ERSIntermediateSourceSorter struct {
+// reparentSorter sorts tablets by GTID positions and Promotion rules aimed at finding the best
+// candidate for intermediate promotion in emergency reparent shard, and the new primary in planned reparent shard
+type reparentSorter struct {
 	tablets   []*topodatapb.Tablet
 	positions []mysql.Position
 }
 
-// NewERSIntermediateSourceSorter creates a new ERSIntermediateSourceSorter
-func NewERSIntermediateSourceSorter(tablets []*topodatapb.Tablet, positions []mysql.Position) *ERSIntermediateSourceSorter {
-	return &ERSIntermediateSourceSorter{
+// newReparentSorter creates a new reparentSorter
+func newReparentSorter(tablets []*topodatapb.Tablet, positions []mysql.Position) *reparentSorter {
+	return &reparentSorter{
 		tablets:   tablets,
 		positions: positions,
 	}
 }
 
 // Len implements the Interface for sorting
-func (ersISSorter *ERSIntermediateSourceSorter) Len() int { return len(ersISSorter.tablets) }
+func (rs *reparentSorter) Len() int { return len(rs.tablets) }
 
 // Swap implements the Interface for sorting
-func (ersISSorter *ERSIntermediateSourceSorter) Swap(i, j int) {
-	ersISSorter.tablets[i], ersISSorter.tablets[j] = ersISSorter.tablets[j], ersISSorter.tablets[i]
-	ersISSorter.positions[i], ersISSorter.positions[j] = ersISSorter.positions[j], ersISSorter.positions[i]
+func (rs *reparentSorter) Swap(i, j int) {
+	rs.tablets[i], rs.tablets[j] = rs.tablets[j], rs.tablets[i]
+	rs.positions[i], rs.positions[j] = rs.positions[j], rs.positions[i]
 }
 
 // Less implements the Interface for sorting
-func (ersISSorter *ERSIntermediateSourceSorter) Less(i, j int) bool {
+func (rs *reparentSorter) Less(i, j int) bool {
 	// Returning "true" in this function means [i] is before [j] in the sorting order,
 	// which will lead to [i] be a better candidate for promotion
 
 	// Should not happen
 	// fail-safe code
-	if ersISSorter.tablets[i] == nil {
+	if rs.tablets[i] == nil {
 		return false
 	}
-	if ersISSorter.tablets[j] == nil {
+	if rs.tablets[j] == nil {
 		return true
 	}
 
-	if !ersISSorter.positions[i].AtLeast(ersISSorter.positions[j]) {
+	if !rs.positions[i].AtLeast(rs.positions[j]) {
 		// [i] does not have all GTIDs that [j] does
 		return false
 	}
-	if !ersISSorter.positions[j].AtLeast(ersISSorter.positions[i]) {
+	if !rs.positions[j].AtLeast(rs.positions[i]) {
 		// [j] does not have all GTIDs that [i] does
 		return true
 	}
 
 	// at this point, both have the same GTIDs
 	// so we check their promotion rules
-	jPromotionRule := PromotionRule(ersISSorter.tablets[j])
-	iPromotionRule := PromotionRule(ersISSorter.tablets[i])
+	jPromotionRule := PromotionRule(rs.tablets[j])
+	iPromotionRule := PromotionRule(rs.tablets[i])
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 
-// sortTabletsForERS sorts the tablets, given their positions for emergency reparent shard
-func sortTabletsForERS(tablets []*topodatapb.Tablet, positions []mysql.Position) error {
+// sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard
+// primary sorting is via the tablet positions, and ties are broken by the promotion rules.
+func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []mysql.Position) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
 	if len(tablets) != len(positions) {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unequal number of tablets and positions")
 	}
 
-	sort.Sort(NewERSIntermediateSourceSorter(tablets, positions))
+	sort.Sort(newReparentSorter(tablets, positions))
 	return nil
 }

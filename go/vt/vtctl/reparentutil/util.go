@@ -36,8 +36,8 @@ import (
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
-// amount of time spent catching up with the current primary.
-//
+// amount of time spent catching up with the current primary. Further ties are
+// broken by the durability rules.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -62,8 +62,10 @@ func ChooseNewPrimary(
 	}
 
 	var (
-		wg              sync.WaitGroup
-		mu              sync.Mutex
+		wg sync.WaitGroup
+		// mutex to secure the next two fields from concurrent access
+		mu sync.Mutex
+		// tablets that are possible candidates to be the new primary and their positions
 		validTablets    []*topodatapb.Tablet
 		tabletPositions []mysql.Position
 	)
@@ -82,6 +84,7 @@ func ChooseNewPrimary(
 
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
+			// find and store the positions for the tablet
 			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
 			mu.Lock()
 			defer mu.Unlock()
@@ -94,12 +97,13 @@ func ChooseNewPrimary(
 
 	wg.Wait()
 
+	// return nothing if there are no valid tablets available
 	if len(validTablets) == 0 {
 		return nil, nil
 	}
 
-	// sort the tablets for finding the best intermediate source in ERS
-	err := sortTabletsForERS(validTablets, tabletPositions)
+	// sort the tablets for finding the best primary
+	err := sortTabletsForReparent(validTablets, tabletPositions)
 	if err != nil {
 		return nil, err
 	}
