@@ -324,7 +324,7 @@ func (vrw *VReplicationWorkflow) Complete() (*[]string, error) {
 		renameTable = workflow.DropTable
 	}
 	if dryRunResults, err = vrw.wr.DropSources(vrw.ctx, vrw.ws.TargetKeyspace, vrw.ws.Workflow, renameTable,
-		false, vrw.params.KeepData, vrw.params.DryRun); err != nil {
+		vrw.params.KeepData, false /* force */, vrw.params.DryRun); err != nil {
 		return nil, err
 	}
 	return dryRunResults, nil
