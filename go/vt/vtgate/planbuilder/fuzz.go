@@ -80,7 +80,7 @@ func loadFormalForFuzzing(f *fuzz.ConsumeFuzzer) (*vschemapb.SrvVSchema, error) 
 func FuzzTestBuilder(data []byte) int {
 	initter.Do(onceInit)
 	f := fuzz.NewConsumer(data)
-	query, err := f.GetString()
+	query, err := f.GetSQLString()
 	if err != nil {
 		return 0
 	}
