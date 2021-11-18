@@ -483,8 +483,8 @@ func TestSchemaChange(t *testing.T) {
 			// Message suggests that the migration was identified as duplicate
 			require.Contains(t, message, "duplicate DDL")
 		}
-  })
- }
+	})
+}
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {
