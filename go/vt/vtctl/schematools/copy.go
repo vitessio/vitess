@@ -74,7 +74,7 @@ func CopySchemas(ctx context.Context, tmc tmclient.TabletManagerClient, target *
 		}
 	}
 
-	pos, err := tmc.MasterPosition(ctx, target.Tablet)
+	pos, err := tmc.PrimaryPosition(ctx, target.Tablet)
 	if err != nil {
 		return "", fmt.Errorf("CopySchemas: can't get replication position after schema applied: %v", err)
 	}
