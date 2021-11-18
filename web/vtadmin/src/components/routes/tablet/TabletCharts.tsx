@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import style from './TabletCharts.module.scss';
 import { TabletQPSChart } from '../../charts/TabletQPSChart';
 import { TabletVReplicationQPSChart } from '../../charts/TabletVReplicationQPSChart';
 
@@ -25,18 +24,18 @@ interface Props {
 
 export const TabletCharts = ({ alias, clusterID }: Props) => {
     return (
-        <div className={style.container}>
-            <div>
+        <div>
+            <div className="mt-12 mb-16">
                 <h3>QPS</h3>
-                <div className={style.chartContainer}>
+                <div className="mt-8">
                     <TabletQPSChart alias={alias} clusterID={clusterID} />
                 </div>
             </div>
 
-            <div>
+            <div className="mt-12 mb-16">
                 <h3>VReplication QPS</h3>
                 <p>VReplication operations aggregated across all streams.</p>
-                <div className={style.chartContainer}>
+                <div className="mt-8">
                     <TabletVReplicationQPSChart alias={alias} clusterID={clusterID} />
                 </div>
             </div>

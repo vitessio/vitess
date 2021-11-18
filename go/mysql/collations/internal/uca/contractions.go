@@ -28,14 +28,14 @@ type trie struct {
 	weights  []uint16
 }
 
-func (t *trie) walk(remainder []byte) ([]uint16, []byte) {
+func (t *trie) walkUTF8(remainder []byte) ([]uint16, []byte) {
 	if len(remainder) > 0 {
 		cp, width := utf8.DecodeRune(remainder)
 		if cp == utf8.RuneError && width < 3 {
 			return nil, nil
 		}
 		if ch := t.children[cp]; ch != nil {
-			return ch.walk(remainder[width:])
+			return ch.walkUTF8(remainder[width:])
 		}
 	}
 	return t.weights, remainder
@@ -51,7 +51,7 @@ func (t *trie) walkCharset(cs charset.Charset, remainder []byte, depth int) ([]u
 			return ch.walkCharset(cs, remainder[width:], depth+1)
 		}
 	}
-	return t.weights, remainder, depth
+	return t.weights, remainder, depth + 1
 }
 
 func (t *trie) insert(path []rune, weights []uint16) {
@@ -74,11 +74,11 @@ func (t *trie) insert(path []rune, weights []uint16) {
 	ch.insert(path[1:], weights)
 }
 
-type contractions struct {
+type trieContractor struct {
 	tr trie
 }
 
-func (ctr *contractions) insert(c *Contraction) {
+func (ctr *trieContractor) insert(c *Contraction) {
 	if len(c.Path) < 2 {
 		panic("contraction is too short")
 	}
@@ -91,25 +91,14 @@ func (ctr *contractions) insert(c *Contraction) {
 	ctr.tr.insert(c.Path, c.Weights)
 }
 
-func (ctr *contractions) weightForContraction(cp rune, remainder []byte) ([]uint16, []byte) {
-	if ctr != nil {
-		if tr := ctr.tr.children[cp]; tr != nil {
-			return tr.walk(remainder)
-		}
-	}
-	return nil, nil
-}
-
-func (ctr *contractions) weightForContractionCharset(cp rune, remainder []byte, cs charset.Charset) ([]uint16, []byte, int) {
-	if ctr != nil {
-		if tr := ctr.tr.children[cp]; tr != nil {
-			return tr.walkCharset(cs, remainder, 0)
-		}
+func (ctr *trieContractor) Find(cs charset.Charset, cp rune, remainder []byte) ([]uint16, []byte, int) {
+	if tr := ctr.tr.children[cp]; tr != nil {
+		return tr.walkCharset(cs, remainder, 0)
 	}
 	return nil, nil, 0
 }
 
-func (ctr *contractions) weightForContextualContraction(cp, prev rune) []uint16 {
+func (ctr *trieContractor) FindContextual(cp, prev rune) []uint16 {
 	if tr := ctr.tr.children[cp]; tr != nil {
 		if trc := tr.children[prev]; trc != nil {
 			return trc.weights
@@ -118,11 +107,11 @@ func (ctr *contractions) weightForContextualContraction(cp, prev rune) []uint16 
 	return nil
 }
 
-func newContractions(all []Contraction) *contractions {
+func NewTrieContractor(all []Contraction) Contractor {
 	if len(all) == 0 {
 		return nil
 	}
-	ctr := &contractions{}
+	ctr := &trieContractor{}
 	for _, c := range all {
 		ctr.insert(&c)
 	}
@@ -133,4 +122,9 @@ type Contraction struct {
 	Path       []rune
 	Weights    []uint16
 	Contextual bool
+}
+
+type Contractor interface {
+	Find(cs charset.Charset, cp rune, remainder []byte) ([]uint16, []byte, int)
+	FindContextual(cp1, cp0 rune) []uint16
 }

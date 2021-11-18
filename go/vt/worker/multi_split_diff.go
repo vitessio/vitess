@@ -17,29 +17,28 @@ limitations under the License.
 package worker
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"sort"
 	"sync"
 	"time"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
-
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/wrangler"
-
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/wrangler"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // Scanners encapsulates a source and a destination. We create one of these per parallel runner.
@@ -447,10 +446,10 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardI
 	}
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	primaryPos, err := msdw.wr.TabletManagerClient().MasterPosition(shortCtx, primaryInfo.Tablet)
+	primaryPos, err := msdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, primaryInfo.Tablet)
 	cancel()
 	if err != nil {
-		return "", vterrors.Wrapf(err, "MasterPosition for %v failed", msdw.shardInfo.PrimaryAlias)
+		return "", vterrors.Wrapf(err, "PrimaryPosition for %v failed", msdw.shardInfo.PrimaryAlias)
 	}
 	return primaryPos, nil
 }
@@ -655,10 +654,10 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 func (msdw *MultiSplitDiffWorker) waitForDestinationTabletToReach(ctx context.Context, tablet *topodatapb.Tablet, mysqlPos string) error {
 	for i := 0; i < 20; i++ {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		pos, err := msdw.wr.TabletManagerClient().MasterPosition(shortCtx, tablet)
+		pos, err := msdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, tablet)
 		cancel()
 		if err != nil {
-			return vterrors.Wrapf(err, "get MasterPosition for %v failed", tablet)
+			return vterrors.Wrapf(err, "get PrimaryPosition for %v failed", tablet)
 		}
 
 		if pos == mysqlPos {
@@ -761,8 +760,8 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 		go func(i int, destinationAlias *topodatapb.TabletAlias) {
 			var err error
 			shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-			destinationSchemaDefinition, err := msdw.wr.GetSchema(
-				shortCtx, destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+			destinationSchemaDefinition, err := schematools.GetSchema(
+				shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), destinationAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 			cancel()
 			if err != nil {
 				msdw.markAsWillFail(rec, err)
@@ -776,8 +775,8 @@ func (msdw *MultiSplitDiffWorker) gatherSchemaInfo(ctx context.Context) ([]*tabl
 	go func() {
 		var err error
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		sourceSchemaDefinition, err = msdw.wr.GetSchema(
-			shortCtx, msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
+		sourceSchemaDefinition, err = schematools.GetSchema(
+			shortCtx, msdw.wr.TopoServer(), msdw.wr.TabletManagerClient(), msdw.sourceAlias, nil /* tables */, msdw.excludeTables, false /* includeViews */)
 		cancel()
 		if err != nil {
 			msdw.markAsWillFail(rec, err)

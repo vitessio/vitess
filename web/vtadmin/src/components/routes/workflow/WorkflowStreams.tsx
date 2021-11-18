@@ -18,8 +18,6 @@ import { orderBy, groupBy } from 'lodash-es';
 import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
-import style from './WorkflowStreams.module.scss';
-
 import { useWorkflow } from '../../../hooks/api';
 import { formatAlias } from '../../../util/tablets';
 import { formatDateTime } from '../../../util/time';
@@ -67,10 +65,10 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                 <tr key={row.key}>
                     <DataCell>
                         <StreamStatePip state={row.state} />{' '}
-                        <Link className="font-weight-bold" to={href}>
+                        <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
-                        <div className="font-size-small text-color-secondary">
+                        <div className="font-size-small text-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
                     </DataCell>
@@ -84,7 +82,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                                 {source}
                             </ShardLink>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
@@ -93,7 +91,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                                 {target}
                             </ShardLink>
                         ) : (
-                            <span className="text-color-secondary">N/A</span>
+                            <span className="text-secondary">N/A</span>
                         )}
                     </DataCell>
                     <DataCell>
@@ -107,15 +105,15 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
     };
 
     return (
-        <div>
+        <div className="mt-12 mb-16">
             {process.env.REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS && (
                 <>
-                    <h3>Stream VReplication Lag</h3>
+                    <h3 className="my-8">Stream VReplication Lag</h3>
                     <WorkflowStreamsLagChart clusterID={clusterID} keyspace={keyspace} workflowName={name} />
                 </>
             )}
 
-            <h3>Streams</h3>
+            <h3 className="mt-24 mb-8">Streams</h3>
             {/* TODO(doeg): add a protobuf enum for this (https://github.com/vitessio/vitess/projects/12#card-60190340) */}
             {['Error', 'Copying', 'Running', 'Stopped'].map((streamState) => {
                 if (!Array.isArray(streamsByState[streamState])) {
@@ -123,7 +121,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                 }
 
                 return (
-                    <div className={style.streamTable} key={streamState}>
+                    <div className="my-12" key={streamState}>
                         <DataTable
                             columns={COLUMNS}
                             data={streamsByState[streamState]}

@@ -61,6 +61,7 @@ const (
 	alterSchemaMigrationsTableAddedUniqueKeys    = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
+	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableContextIndex       = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
@@ -76,9 +77,10 @@ const (
 		requested_timestamp,
 		migration_context,
 		migration_status,
-		tablet
+		tablet,
+		retain_artifacts_seconds
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -139,6 +141,11 @@ const (
 	`
 	sqlClearArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=''
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateReadyForCleanup = `UPDATE _vt.schema_migrations
+			SET retain_artifacts_seconds=-1
 		WHERE
 			migration_uuid=%a
 	`
@@ -288,7 +295,10 @@ const (
 		WHERE
 			migration_status IN ('complete', 'failed')
 			AND cleanup_timestamp IS NULL
-			AND completed_timestamp <= NOW() - INTERVAL %a SECOND
+			AND completed_timestamp <= IF(retain_artifacts_seconds=0,
+				NOW() - INTERVAL %a SECOND,
+				NOW() - INTERVAL retain_artifacts_seconds SECOND
+			)
 	`
 	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
 		SET
@@ -535,5 +545,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableAddedUniqueKeys,
 	alterSchemaMigrationsTableRemovedUniqueKeys,
 	alterSchemaMigrationsTableLogFile,
+	alterSchemaMigrationsTableRetainArtifacts,
 	alterSchemaMigrationsTableContextIndex,
 }

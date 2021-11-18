@@ -2581,6 +2581,51 @@ Gen4 plan same as above
   }
 }
 
+# correlated subquery in exists clause with an order by
+"select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col"
+"unsupported: cross-shard correlated subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id \u003c user.id) order by col",
+  "Instructions": {
+    "OperatorType": "SemiJoin",
+    "JoinVars": {
+      "user_id": 0
+    },
+    "ProjectedIndexes": "-2",
+    "TableName": "`user`_user_extra",
+    "Inputs": [
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.id, col, weight_string(col) from `user` where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select `user`.id, col, weight_string(col) from `user` order by col asc",
+        "Table": "`user`"
+      },
+      {
+        "OperatorType": "Route",
+        "Variant": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select 1 from user_extra where 1 != 1",
+        "Query": "select 1 from user_extra where user_id = 3 and user_id \u003c :user_id",
+        "Table": "user_extra",
+        "Values": [
+          3
+        ],
+        "Vindex": "user_index"
+      }
+    ]
+  }
+}
+
 # correlated subquery having dependencies on two tables
 "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)"
 "unsupported: cross-shard correlated subquery"
@@ -2685,3 +2730,46 @@ Gen4 plan same as above
 "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)"
 "unsupported: cross-shard correlated subquery"
 Gen4 error: exists sub-queries are only supported with AND clause
+
+# union as a derived table
+"select found from (select id as found from user union all (select id from unsharded)) as t"
+{
+  "QueryType": "SELECT",
+  "Original": "select found from (select id as found from user union all (select id from unsharded)) as t",
+  "Instructions": {
+    "OperatorType": "SimpleProjection",
+    "Columns": [
+      0
+    ],
+    "Inputs": [
+      {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectScatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id as found from `user` where 1 != 1",
+            "Query": "select id as found from `user`",
+            "Table": "`user`"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "SelectUnsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select id from unsharded where 1 != 1",
+            "Query": "select id from unsharded",
+            "Table": "unsharded"
+          }
+        ]
+      }
+    ]
+  }
+}
+Gen4 plan same as above

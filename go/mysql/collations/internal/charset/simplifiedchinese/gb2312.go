@@ -19,7 +19,7 @@ package simplifiedchinese
 import (
 	"unicode/utf8"
 
-	"golang.org/x/text/encoding/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
 )
 
 type Charset_gb2312 struct{}
@@ -28,23 +28,101 @@ func (Charset_gb2312) Name() string {
 	return "gb2312"
 }
 
+func (Charset_gb2312) IsSuperset(other types.Charset) bool {
+	switch other.(type) {
+	case Charset_gb2312:
+		return true
+	default:
+		return false
+	}
+}
+
 func (Charset_gb2312) SupportsSupplementaryChars() bool {
 	return false
 }
 
-func (Charset_gb2312) DecodeRune(in []byte) (rune, int) {
-	if len(in) < 1 {
-		return utf8.RuneError, 0
-	}
-	if in[0] >= 0xa1 && in[0] <= 0xf7 {
-		if len(in) >= 2 && in[1] >= 0xa1 && in[1] <= 0xfe {
-			return 0, 2
+func (Charset_gb2312) EncodeRune(dst []byte, r rune) int {
+	switch {
+	case r < utf8.RuneSelf:
+		dst[0] = byte(r)
+		return 1
+	case gb2312Encode0min <= r && r <= gb2312Encode0max:
+		if r = rune(gb2312Encode0[r-gb2312Encode0min]); r != 0 {
+			goto writeGB
 		}
-		return utf8.RuneError, 1
+	case gb2312Encode1min <= r && r <= gb2312Encode1max:
+		if r = rune(gb2312Encode1[r-gb2312Encode1min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode2min <= r && r <= gb2312Encode2max:
+		if r = rune(gb2312Encode2[r-gb2312Encode2min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode3min <= r && r <= gb2312Encode3max:
+		if r = rune(gb2312Encode3[r-gb2312Encode3min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode4min <= r && r <= gb2312Encode4max:
+		if r = rune(gb2312Encode4[r-gb2312Encode4min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode5min <= r && r <= gb2312Encode5max:
+		if r = rune(gb2312Encode5[r-gb2312Encode5min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode6min <= r && r <= gb2312Encode6max:
+		if r = rune(gb2312Encode6[r-gb2312Encode6min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode7min <= r && r <= gb2312Encode7max:
+		if r = rune(gb2312Encode7[r-gb2312Encode7min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode8min <= r && r <= gb2312Encode8max:
+		if r = rune(gb2312Encode8[r-gb2312Encode8min]); r != 0 {
+			goto writeGB
+		}
+	case gb2312Encode9min <= r && r <= gb2312Encode9max:
+		if r = rune(gb2312Encode9[r-gb2312Encode9min]); r != 0 {
+			goto writeGB
+		}
 	}
-	return rune(in[0]), 1
+	return -1
+
+writeGB:
+	r |= 0x8080
+	dst[0] = byte(r >> 8)
+	dst[1] = byte(r)
+	return 2
 }
 
-func (Charset_gb2312) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return simplifiedchinese.HZGB2312.NewEncoder().Bytes(in)
+func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
+	if len(src) < 1 {
+		return utf8.RuneError, 0
+	}
+
+	c0 := src[0]
+	if c0 < utf8.RuneSelf {
+		return rune(c0), 1
+	}
+
+	if len(src) < 2 {
+		return utf8.RuneError, 1
+	}
+
+	r := (uint16(c0)<<8 | uint16(src[1])) & 0x7f7f
+	switch {
+	case gb2312Decode0min <= r && r <= gb2312Decode0max:
+		r = gb2312Decode0[r-gb2312Decode0min]
+	case gb2312Decode1min <= r && r <= gb2312Decode1max:
+		r = gb2312Decode1[r-gb2312Decode1min]
+	case gb2312Decode2min <= r && r <= gb2312Decode2max:
+		r = gb2312Decode2[r-gb2312Decode2min]
+	default:
+		r = 0
+	}
+	if r == 0 {
+		return utf8.RuneError, 2
+	}
+	return rune(r), 2
 }

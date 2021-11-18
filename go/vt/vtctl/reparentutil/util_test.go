@@ -640,7 +640,7 @@ func TestWaitForCatchUp(t *testing.T) {
 		{
 			name: "success",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -670,7 +670,7 @@ func TestWaitForCatchUp(t *testing.T) {
 		}, {
 			name: "error in primary position",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -701,7 +701,7 @@ func TestWaitForCatchUp(t *testing.T) {
 		}, {
 			name: "error in waiting for position",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{

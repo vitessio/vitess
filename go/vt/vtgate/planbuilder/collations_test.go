@@ -58,6 +58,9 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemaWrapper) {
 }
 
 func TestOrderedAggregateCollations(t *testing.T) {
+	collid := func(collname string) collations.ID {
+		return collations.Default().LookupByName(collname).ID()
+	}
 	testCases := []collationTestCase{
 		{
 			collations: []collationInTable{{ks: "user", table: "user", collationName: "utf8mb4_bin", offsetInTable: 2}},
@@ -65,7 +68,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collations.LookupByName(colls[0].collationName).Id(), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
 			},
 		},
 		{
@@ -74,7 +77,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collations.LookupByName(colls[0].collationName).Id(), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
 			},
 		},
 		{
@@ -86,8 +89,8 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collations.LookupByName(colls[0].collationName).Id(), oa.GroupByKeys[0].CollationID)
-				require.Equal(t, collations.LookupByName(colls[1].collationName).Id(), oa.GroupByKeys[1].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[1].collationName), oa.GroupByKeys[1].CollationID)
 			},
 		},
 		{
@@ -98,7 +101,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 			check: func(t *testing.T, colls []collationInTable, primitive engine.Primitive) {
 				oa, isOA := primitive.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collations.LookupByName(colls[0].collationName).Id(), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
 			},
 		},
 		{
@@ -111,7 +114,7 @@ func TestOrderedAggregateCollations(t *testing.T) {
 				require.True(t, isMemSort, "should be a MemorySort")
 				oa, isOA := memSort.Input.(*engine.OrderedAggregate)
 				require.True(t, isOA, "should be an OrderedAggregate")
-				require.Equal(t, collations.LookupByName(colls[0].collationName).Id(), oa.GroupByKeys[0].CollationID)
+				require.Equal(t, collid(colls[0].collationName), oa.GroupByKeys[0].CollationID)
 			},
 		},
 	}

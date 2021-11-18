@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,8 @@ var (
 	NewUint64  = sqltypes.NewUint64
 	NewFloat64 = sqltypes.NewFloat64
 	TestValue  = sqltypes.TestValue
+
+	maxUint64 uint64 = math.MaxUint64
 )
 
 func TestArithmetics(t *testing.T) {
@@ -82,11 +85,11 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow with min negative value
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			err: "BIGINT value is out of range in -9223372036854775808 - 1",
+			err: dataOutOfRangeError(math.MinInt64, 1, "BIGINT", "-").Error(),
 		}, {
 			v1:  NewUint64(4),
 			v2:  NewInt64(5),
-			err: "BIGINT UNSIGNED value is out of range in 4 - 5",
+			err: dataOutOfRangeError(4, 5, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - int
 			v1:  NewUint64(7),
@@ -100,7 +103,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for int64 overflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewUint64(0),
-			err: "BIGINT UNSIGNED value is out of range in -9223372036854775808 - 0",
+			err: dataOutOfRangeError(math.MinInt64, 0, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  TestValue(querypb.Type_VARCHAR, "c"),
 			v2:  NewInt64(1),
@@ -137,7 +140,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-1),
 			v2:  NewUint64(2),
-			err: "BIGINT UNSIGNED value is out of range in -1 - 2",
+			err: dataOutOfRangeError(-1, 2, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			v1:  NewInt64(2),
 			v2:  NewUint64(1),
@@ -166,7 +169,7 @@ func TestArithmetics(t *testing.T) {
 			// testing uint - uint if v2 > v1
 			v1:  NewUint64(2),
 			v2:  NewUint64(4),
-			err: "BIGINT UNSIGNED value is out of range in 2 - 4",
+			err: dataOutOfRangeError(2, 4, "BIGINT UNSIGNED", "-").Error(),
 		}, {
 			// testing uint - (- int)
 			v1:  NewUint64(1),
@@ -204,7 +207,7 @@ func TestArithmetics(t *testing.T) {
 		}, {
 			v1:  NewInt64(-2),
 			v2:  NewUint64(1),
-			err: "BIGINT UNSIGNED value is out of range in 1 + -2",
+			err: dataOutOfRangeError(1, -2, "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(-2),
@@ -216,14 +219,14 @@ func TestArithmetics(t *testing.T) {
 			out: NewUint64(3),
 		}, {
 			// testing for overflow uint64
-			v1:  NewUint64(math.MaxUint64),
+			v1:  NewUint64(maxUint64),
 			v2:  NewUint64(2),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
 		}, {
 			// int64 underflow
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(-2),
-			err: "BIGINT value is out of range in -9223372036854775808 + -2",
+			err: dataOutOfRangeError(math.MinInt64, -2, "BIGINT", "+").Error(),
 		}, {
 			// checking int64 max value can be returned
 			v1:  NewInt64(math.MaxInt64),
@@ -256,9 +259,9 @@ func TestArithmetics(t *testing.T) {
 			err: "strconv.ParseInt: parsing \"1.2\": invalid syntax",
 		}, {
 			// testing for uint64 overflow with max uint64 + int value
-			v1:  NewUint64(math.MaxUint64),
+			v1:  NewUint64(maxUint64),
 			v2:  NewInt64(2),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2",
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "+").Error(),
 		}},
 	}, {
 		operator: "/",
@@ -342,7 +345,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: "BIGINT value is out of range in 1.7976931348623157e+308 / 0.5",
+			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "BIGINT", "/").Error(),
 		}},
 	}, {
 		operator: "*",
@@ -406,12 +409,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of int64
 			v1:  NewInt64(math.MaxInt64),
 			v2:  NewInt64(2),
-			err: "BIGINT value is out of range in 9223372036854775807 * 2",
+			err: dataOutOfRangeError(math.MaxInt64, 2, "BIGINT", "*").Error(),
 		}, {
 			// testing for underflow of uint64*max.uint64
 			v1:  NewInt64(2),
-			v2:  NewUint64(math.MaxUint64),
-			err: "BIGINT UNSIGNED value is out of range in 18446744073709551615 * 2",
+			v2:  NewUint64(maxUint64),
+			err: dataOutOfRangeError(maxUint64, 2, "BIGINT UNSIGNED", "*").Error(),
 		}, {
 			v1:  NewUint64(math.MaxUint64),
 			v2:  NewUint64(1),
@@ -420,7 +423,7 @@ func TestArithmetics(t *testing.T) {
 			//Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
-			err: "BIGINT UNSIGNED value is out of range in 9223372036854775807 * 3",
+			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
 		}},
 	}}
 
@@ -442,7 +445,7 @@ func TestArithmetics(t *testing.T) {
 	}
 }
 
-func TestNullsafeAdd(t *testing.T) {
+func TestNullSafeAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    sqltypes.Value
@@ -481,7 +484,11 @@ func TestNullsafeAdd(t *testing.T) {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		out: NewInt64(-9223372036854775808),
+		out: NewInt64(1),
+	}, {
+		v1:  NewInt64(-100),
+		v2:  NewUint64(10),
+		err: dataOutOfRangeError(10, -100, "BIGINT UNSIGNED", "+"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
@@ -489,10 +496,16 @@ func TestNullsafeAdd(t *testing.T) {
 		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
-		got := NullsafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+		got, err := NullSafeAdd(tcase.v1, tcase.v2, querypb.Type_INT64)
+
+		if tcase.err == nil {
+			require.NoError(t, err)
+		} else {
+			require.EqualError(t, err, tcase.err.Error())
+		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("NullsafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("NullSafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 }
@@ -584,7 +597,7 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2)
+		got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -594,6 +607,95 @@ func TestNullsafeCompare(t *testing.T) {
 
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+		}
+	}
+}
+
+func getCollationID(collation string) collations.ID {
+	id, _ := collations.Default().LookupID(collation)
+	return id
+}
+
+func TestNullsafeCompareCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       int
+		err       error
+	}{
+		{
+			// case insensitive
+			v1:        "abCd",
+			v2:        "aBcd",
+			out:       0,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// accent sensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       1,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// hangul decomposition
+			v1:        "\uAC00",
+			v2:        "\u326E",
+			out:       0,
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       -1,
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       -1,
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       -1,
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 0,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		},
+		{
+			v1:        "abcd",
+			v2:        "abcd",
+			collation: 1111,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 1111 isn't possible"),
+		},
+		{
+			v1: "abcd",
+			v2: "abcd",
+			// unsupported collation gb18030_bin
+			collation: 249,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 249 isn't possible"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := NullsafeCompare(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1112,9 +1214,9 @@ func TestPrioritize(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.v1.Value().String()+" - "+tcase.v2.Value().String(), func(t *testing.T) {
-			got1, got2 := makeNumericAndprioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndprioritize")
-			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndprioritize")
+			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
+			utils.MustMatch(t, tcase.out1, got1, "makeNumericAndPrioritize")
+			utils.MustMatch(t, tcase.out2, got2, "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1268,7 +1370,7 @@ func TestMin(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Min(tcase.v1, tcase.v2)
+		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Min error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1278,6 +1380,64 @@ func TestMin(t *testing.T) {
 
 		if !reflect.DeepEqual(v, tcase.min) {
 			t.Errorf("Min(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.min)
+		}
+	}
+}
+
+func TestMinCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Min(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got.ToString() == tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1317,7 +1477,7 @@ func TestMax(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
-		v, err := Max(tcase.v1, tcase.v2)
+		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Max error: %v, want %v", vterrors.Print(err), vterrors.Print(tcase.err))
 		}
@@ -1327,6 +1487,64 @@ func TestMax(t *testing.T) {
 
 		if !reflect.DeepEqual(v, tcase.max) {
 			t.Errorf("Max(%v, %v): %v, want %v", tcase.v1, tcase.v2, v, tcase.max)
+		}
+	}
+}
+
+func TestMaxCollate(t *testing.T) {
+	tcases := []struct {
+		v1, v2    string
+		collation collations.ID
+		out       string
+		err       error
+	}{
+		{
+			// accent insensitive
+			v1:        "ǍḄÇ",
+			v2:        "ÁḆĈ",
+			out:       "ǍḄÇ",
+			collation: getCollationID("utf8mb4_0900_as_ci"),
+		},
+		{
+			// kana sensitive
+			v1:        "\xE3\x81\xAB\xE3\x81\xBB\xE3\x82\x93\xE3\x81\x94",
+			v2:        "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			out:       "\xE3\x83\x8B\xE3\x83\x9B\xE3\x83\xB3\xE3\x82\xB4",
+			collation: getCollationID("utf8mb4_ja_0900_as_cs_ks"),
+		},
+		{
+			// non breaking space
+			v1:        "abc ",
+			v2:        "abc\u00a0",
+			out:       "abc\u00a0",
+			collation: getCollationID("utf8mb4_0900_as_cs"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "c",
+			v2:        "cs",
+			out:       "cs",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+		{
+			// "cs" counts as a separate letter, where c < cs < d
+			v1:        "cukor",
+			v2:        "csak",
+			out:       "csak",
+			collation: getCollationID("utf8mb4_hu_0900_ai_ci"),
+		},
+	}
+	for _, tcase := range tcases {
+		got, err := Max(TestValue(querypb.Type_VARCHAR, tcase.v1), TestValue(querypb.Type_VARCHAR, tcase.v2), tcase.collation)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got.ToString() != tcase.out {
+			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
 }
@@ -1375,7 +1593,7 @@ func BenchmarkAddActual(b *testing.B) {
 	v1 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("1"))
 	v2 := sqltypes.MakeTrusted(querypb.Type_INT64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		v1 = NullsafeAdd(v1, v2, querypb.Type_INT64)
+		v1, _ = NullSafeAdd(v1, v2, querypb.Type_INT64)
 	}
 }
 

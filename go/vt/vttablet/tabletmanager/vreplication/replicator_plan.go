@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -281,7 +282,8 @@ func (tp *TablePlan) isOutsidePKRange(bindvars map[string]*querypb.BindVariable,
 		}
 
 		rowVal, _ := sqltypes.BindVariableToValue(bindvar)
-		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0])
+		// TODO(king-11) make collation aware
+		result, err := evalengine.NullsafeCompare(rowVal, tp.Lastpk.Rows[0][0], collations.Unknown)
 		// If rowVal is > last pk, transaction will be a noop, so don't apply this statement
 		if err == nil && result > 0 {
 			tp.Stats.NoopQueryCount.Add(stmtType, 1)

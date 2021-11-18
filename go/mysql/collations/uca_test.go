@@ -18,22 +18,53 @@ package collations
 
 import (
 	"bytes"
+	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
+
+var testcollationMap map[string]Collation
+var testcollationSlice []Collation
+var testcollationOnce sync.Once
+
+func testinit() {
+	testcollationOnce.Do(func() {
+		testcollationSlice = make([]Collation, 0, len(globalAllCollations))
+		testcollationMap = make(map[string]Collation)
+
+		for _, collation := range globalAllCollations {
+			collation.Init()
+			testcollationMap[collation.Name()] = collation
+			testcollationSlice = append(testcollationSlice, collation)
+		}
+
+		sort.Slice(testcollationSlice, func(i, j int) bool {
+			return testcollationSlice[i].ID() < testcollationSlice[j].ID()
+		})
+	})
+}
 
 func testcollation(t testing.TB, name string) Collation {
 	t.Helper()
-	coll := LookupByName(name)
+	testinit()
+	coll := testcollationMap[name]
 	if coll == nil {
 		t.Fatalf("missing collation: %s", name)
 	}
 	return coll
 }
 
+func testall() []Collation {
+	testinit()
+	return testcollationSlice
+}
+
 func TestWeightsForSpace(t *testing.T) {
-	for _, coll := range All() {
+	for _, coll := range testall() {
 		var actual, expected uint16
 		switch coll := coll.(type) {
 		case *Collation_uca_legacy:
@@ -209,15 +240,17 @@ const ChineseString2 = "春江潮水连海平，海上明月共潮生。" +
 	"白云一片去悠悠，青枫浦上不胜愁。" +
 	"谁家今夜扁舟子？何处相思明月楼？"
 
-var AllTestStrings = []string{
-	ExampleString,
-	ExampleStringLong,
-	JapaneseString,
-	WhitespaceString,
-	HungarianString,
-	JapaneseString2,
-	ChineseString,
-	ChineseString2,
+var AllTestStrings = []struct {
+	Name, Content string
+}{
+	{"Example", ExampleString},
+	{"ExampleLong", ExampleStringLong},
+	{"Japanese", JapaneseString},
+	{"Whitespace", WhitespaceString},
+	{"Hungarian", HungarianString},
+	{"Japanese2", JapaneseString2},
+	{"Chinese", ChineseString},
+	{"Chinese2", ChineseString2},
 }
 
 var TestCases = []struct {
@@ -797,6 +830,98 @@ func TestFastIterators(t *testing.T) {
 			result := coll.WeightString(nil, allASCIICharacters, 0)
 			if !bytes.Equal(tc.expected, result) {
 				t.Errorf("weight_string(%q) = %#v (expected %#v)", allASCIICharacters, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestUniqueHashes(t *testing.T) {
+	for _, teststr := range AllTestStrings {
+		t.Run(teststr.Name, func(t *testing.T) {
+			var hashes = make(map[uintptr]string)
+			for _, collation := range testall() {
+				trans, _ := charset.ConvertFromUTF8(nil, collation.Charset(), []byte(teststr.Content))
+				h := collation.Hash(trans, 0)
+				if dupname, dup := hashes[h]; dup {
+					t.Fatalf("%s hashes to %d in %s and %s", teststr.Name, h, collation.Name(), dupname)
+				}
+				hashes[h] = collation.Name()
+			}
+		})
+	}
+}
+
+type ConsistentCollation struct {
+	Collation
+	t testing.TB
+}
+
+func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
+	cmp := c.Collation.Collate(left, right, isPrefix)
+	if isPrefix {
+		return cmp
+	}
+
+	equal := cmp == 0
+	w1 := c.WeightString(nil, left, 0)
+	w2 := c.WeightString(nil, right, 0)
+	if bytes.Equal(w1, w2) != equal {
+		c.t.Errorf("ConsistentCollation: expected WeightString %q / %v == %q / %v to be %v", left, w1, right, w2, equal)
+	}
+
+	h1 := c.Hash(left, 0)
+	h2 := c.Hash(right, 0)
+	if (h1 == h2) != equal {
+		c.t.Errorf("ConsistentCollation: expected Hash %q / %v == %q / %v to be %v", left, h1, right, h2, equal)
+	}
+
+	return cmp
+}
+
+func TestEqualities(t *testing.T) {
+	var cases = []struct {
+		collation   string
+		left, right string
+		equal       bool
+	}{
+		{"utf8mb4_0900_as_ci", "Abc", "aBC", true},
+		{"utf8mb4_0900_as_ci", "ǍḄÇ", "ÁḆĈ", false},
+		{"utf8mb4_0900_as_ci", "\uA73A", "\uA738", false},
+		{"utf8mb4_0900_as_ci", "\uAC00", "\u326E", true},
+		{"utf8mb4_0900_as_cs", "の東京ノ", "ノ東京の", false},
+		{"utf8mb4_ja_0900_as_cs", "の東京ノ", "ノ東京の", true},
+		{"utf8mb4_ja_0900_as_cs_ks", "の東京ノ", "ノ東京の", false},
+	}
+
+	for _, tc := range cases {
+		collation := testcollation(t, tc.collation)
+		collation = &ConsistentCollation{Collation: collation, t: t}
+
+		cmp := collation.Collate([]byte(tc.left), []byte(tc.right), false)
+		if (cmp == 0) != tc.equal {
+			t.Errorf("expected %q == %q to be %v", tc.left, tc.right, tc.equal)
+		}
+	}
+}
+
+func TestCaseChangeEqualities(t *testing.T) {
+	for _, teststr := range AllTestStrings {
+		str1 := []byte(teststr.Content)
+		str2 := []byte(strings.ToUpper(teststr.Content))
+		str3 := []byte(strings.ToLower(teststr.Content))
+
+		t.Run(teststr.Name, func(t *testing.T) {
+			for _, collation := range testall() {
+				collation = &ConsistentCollation{Collation: collation, t: t}
+
+				cs := collation.Charset()
+				trans1, _ := charset.ConvertFromUTF8(nil, cs, str1)
+				trans2, _ := charset.ConvertFromUTF8(nil, cs, str2)
+				trans3, _ := charset.ConvertFromUTF8(nil, cs, str3)
+
+				_ = collation.Collate(trans1, trans2, false)
+				_ = collation.Collate(trans1, trans3, false)
+				_ = collation.Collate(trans2, trans3, false)
 			}
 		})
 	}

@@ -18,6 +18,8 @@ package uca
 
 import (
 	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
 type iterator900 struct {
@@ -36,10 +38,6 @@ type codepointIterator struct {
 	scratch [16]uint16
 	ce      int
 	stride  int
-}
-
-func pageOffset(cp rune) (int, int) {
-	return int(cp) >> 8, int(cp) & 0xFF
 }
 
 func (it *codepointIterator) next() (uint16, bool) {
@@ -61,7 +59,7 @@ func (it *codepointIterator) next() (uint16, bool) {
 }
 
 func (it *codepointIterator) init(parent *iterator900, cp rune) {
-	p, offset := pageOffset(cp)
+	p, offset := PageOffset(cp)
 	page := parent.table[p]
 	if page == nil {
 		it.initImplicit(parent, cp)
@@ -87,7 +85,7 @@ func (it *codepointIterator) initImplicit(parent *iterator900, cp rune) {
 	if jamos := UnicodeDecomposeHangulSyllable(cp); jamos != nil {
 		jweight := it.scratch[:0]
 		for _, jamo := range jamos {
-			p, offset := pageOffset(jamo)
+			p, offset := PageOffset(jamo)
 			page := *parent.table[p]
 			jweight = append(jweight,
 				page[1*CodepointsPerPage+offset],
@@ -162,10 +160,12 @@ func (it *slowIterator900) Next() (uint16, bool) {
 		}
 
 		it.input = it.input[width:]
-		if weights, remainder := it.contractions.weightForContraction(cp, it.input); weights != nil {
-			it.codepoint.initContraction(weights, it.level)
-			it.input = remainder
-			continue
+		if it.contract != nil {
+			if weights, remainder, _ := it.contract.Find(charset.Charset_utf8mb4{}, cp, it.input); weights != nil {
+				it.codepoint.initContraction(weights, it.level)
+				it.input = remainder
+				continue
+			}
 		}
 		it.codepoint.init(&it.iterator900, cp)
 	}

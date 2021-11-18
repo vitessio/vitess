@@ -175,6 +175,28 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Filter) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Predicate vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Predicate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ASTPredicate vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.ASTPredicate.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Gen4CompareV3) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -321,7 +343,7 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -331,6 +353,8 @@ func (cached *Lock) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
+	// field FieldQuery string
+	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	return size
 }
 func (cached *MStream) CachedSize(alloc bool) int64 {
@@ -363,7 +387,10 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	size += cached.UpperLimit.CachedSize(false)
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Input.(cachedObject); ok {
@@ -390,7 +417,10 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	return size
 }
@@ -415,6 +445,16 @@ func (cached *OnlineDDL) CachedSize(alloc bool) int64 {
 	// field TargetDestination vitess.io/vitess/go/vt/key.Destination
 	if cc, ok := cached.TargetDestination.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *OrderByParams) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
 	}
 	return size
 }
@@ -617,7 +657,10 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(33))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(36))
+		for _, elem := range cached.OrderBy {
+			size += elem.CachedSize(false)
+		}
 	}
 	// field SysTableTableSchema []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	{
@@ -702,7 +745,7 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field Left vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Left.(cachedObject); ok {
@@ -711,6 +754,10 @@ func (cached *SemiJoin) CachedSize(alloc bool) int64 {
 	// field Right vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Right.(cachedObject); ok {
 		size += cc.CachedSize(true)
+	}
+	// field Cols []int
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(8))
 	}
 	// field Vars map[string]int
 	if cached.Vars != nil {

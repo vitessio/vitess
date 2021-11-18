@@ -16,10 +16,12 @@ limitations under the License.
 
 package unicode
 
-import "golang.org/x/text/encoding/unicode"
+import (
+	"unicode/utf16"
+	"unicode/utf8"
 
-var defaultUTF16be = unicode.UTF16(unicode.BigEndian, unicode.IgnoreBOM)
-var defaultUTF16le = unicode.UTF16(unicode.LittleEndian, unicode.IgnoreBOM)
+	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+)
 
 // 0xd800-0xdc00 encodes the high 10 bits of a pair.
 // 0xdc00-0xe000 encodes the low 10 bits of a pair.
@@ -34,12 +36,38 @@ const (
 type Charset_utf16be struct{}
 
 func (Charset_utf16be) Name() string {
-	return "utf16be"
+	return "utf16"
+}
+
+func (Charset_utf16be) IsSuperset(other types.Charset) bool {
+	switch other.(type) {
+	case Charset_utf16be, Charset_ucs2:
+		return true
+	default:
+		return false
+	}
+}
+
+func (Charset_utf16be) EncodeRune(dst []byte, r rune) int {
+	_ = dst[3]
+
+	if r <= 0xffff {
+		dst[0] = uint8(r >> 8)
+		dst[1] = uint8(r)
+		return 2
+	} else {
+		r1, r2 := utf16.EncodeRune(r)
+		dst[0] = uint8(r1 >> 8)
+		dst[1] = uint8(r1)
+		dst[2] = uint8(r2 >> 8)
+		dst[3] = uint8(r2)
+		return 4
+	}
 }
 
 func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 
 	r1 := uint16(b[1]) | uint16(b[0])<<8
@@ -48,7 +76,7 @@ func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 
 	r2 := uint16(b[3]) | uint16(b[2])<<8
@@ -56,15 +84,11 @@ func (Charset_utf16be) DecodeRune(b []byte) (rune, int) {
 		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
 	}
 
-	return RuneError, 1
+	return utf8.RuneError, 1
 }
 
 func (Charset_utf16be) SupportsSupplementaryChars() bool {
 	return true
-}
-
-func (Charset_utf16be) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return defaultUTF16be.NewEncoder().Bytes(in)
 }
 
 type Charset_utf16le struct{}
@@ -73,9 +97,35 @@ func (Charset_utf16le) Name() string {
 	return "utf16le"
 }
 
+func (Charset_utf16le) IsSuperset(other types.Charset) bool {
+	switch other.(type) {
+	case Charset_utf16le:
+		return true
+	default:
+		return false
+	}
+}
+
+func (Charset_utf16le) EncodeRune(dst []byte, r rune) int {
+	_ = dst[3]
+
+	if r <= 0xffff {
+		dst[0] = uint8(r)
+		dst[1] = uint8(r >> 8)
+		return 2
+	} else {
+		r1, r2 := utf16.EncodeRune(r)
+		dst[0] = uint8(r1)
+		dst[1] = uint8(r1 >> 8)
+		dst[2] = uint8(r2)
+		dst[3] = uint8(r2 >> 8)
+		return 4
+	}
+}
+
 func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	if len(b) < 2 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 
 	r1 := uint16(b[0]) | uint16(b[1])<<8
@@ -84,7 +134,7 @@ func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 	}
 
 	if len(b) < 4 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 
 	r2 := uint16(b[2]) | uint16(b[3])<<8
@@ -92,15 +142,11 @@ func (Charset_utf16le) DecodeRune(b []byte) (rune, int) {
 		return (rune(r1)-surr1)<<10 | (rune(r2) - surr2) + surrSelf, 4
 	}
 
-	return RuneError, 1
+	return utf8.RuneError, 1
 }
 
 func (Charset_utf16le) SupportsSupplementaryChars() bool {
 	return true
-}
-
-func (Charset_utf16le) EncodeFromUTF8(in []byte) ([]byte, error) {
-	return defaultUTF16le.NewEncoder().Bytes(in)
 }
 
 type Charset_ucs2 struct{}
@@ -109,20 +155,33 @@ func (Charset_ucs2) Name() string {
 	return "ucs2"
 }
 
+func (Charset_ucs2) IsSuperset(other types.Charset) bool {
+	switch other.(type) {
+	case Charset_ucs2:
+		return true
+	default:
+		return false
+	}
+}
+
+func (Charset_ucs2) EncodeRune(dst []byte, r rune) int {
+	_ = dst[1]
+
+	if r <= 0xffff {
+		dst[0] = uint8(r >> 8)
+		dst[1] = uint8(r)
+		return 2
+	}
+	return -1
+}
+
 func (Charset_ucs2) DecodeRune(p []byte) (rune, int) {
 	if len(p) < 2 {
-		return RuneError, 0
+		return utf8.RuneError, 0
 	}
 	return rune(p[0])<<8 | rune(p[1]), 2
 }
 
 func (Charset_ucs2) SupportsSupplementaryChars() bool {
 	return false
-}
-
-func (Charset_ucs2) EncodeFromUTF8(in []byte) ([]byte, error) {
-	if err := ensureBMPRange(in); err != nil {
-		return nil, err
-	}
-	return defaultUTF16be.NewEncoder().Bytes(in)
 }

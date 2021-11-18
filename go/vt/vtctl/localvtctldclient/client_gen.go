@@ -96,6 +96,11 @@ func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in 
 	return client.s.EmergencyReparentShard(ctx, in)
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
+	return client.s.ExecuteHook(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
@@ -219,6 +224,21 @@ func (client *localVtctldClient) RefreshState(ctx context.Context, in *vtctldata
 // RefreshStateByShard is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RefreshStateByShard(ctx context.Context, in *vtctldatapb.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldatapb.RefreshStateByShardResponse, error) {
 	return client.s.RefreshStateByShard(ctx, in)
+}
+
+// ReloadSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchema(ctx context.Context, in *vtctldatapb.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaResponse, error) {
+	return client.s.ReloadSchema(ctx, in)
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchemaKeyspace(ctx context.Context, in *vtctldatapb.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	return client.s.ReloadSchemaKeyspace(ctx, in)
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldatapb.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	return client.s.ReloadSchemaShard(ctx, in)
 }
 
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.

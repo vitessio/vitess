@@ -121,6 +121,24 @@ var (
 			PRIMARY KEY (id)
 		) ENGINE=InnoDB
 	`
+	createStatementZeroDate = `
+		CREATE TABLE zerodate_test (
+			id bigint(20) not null,
+			hint_col varchar(64) not null default 'create_with_zero',
+			zero_datetime datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
+	createStatementZeroDate2 = `
+		CREATE TABLE zerodate_test (
+			id bigint(20) not null,
+			i int not null default 0,
+			hint_col varchar(64) not null default 'create_with_zero2',
+			zero_datetime datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			zero_datetime2 datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
 	dropStatement = `
 		DROP TABLE stress_test
 	`
@@ -409,8 +427,32 @@ func TestSchemaChange(t *testing.T) {
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createStatementZeroDate, "online --allow-zero-in-date", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createStatementZeroDate2, "online -declarative --allow-zero-in-date", "vtgate", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
 
-	// ### Teh following tests are not strictly 'declarative' but are best served under this endtoend test
+	// ### The following tests are not strictly 'declarative' but are best served under this endtoend test
 
 	// Test duplicate context/SQL
 	t.Run("Trivial statement with request context is successful", func(t *testing.T) {
@@ -441,8 +483,8 @@ func TestSchemaChange(t *testing.T) {
 			// Message suggests that the migration was identified as duplicate
 			require.Contains(t, message, "duplicate DDL")
 		}
-	})
-}
+  })
+ }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string) (uuid string) {

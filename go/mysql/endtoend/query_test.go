@@ -92,8 +92,8 @@ func TestQueries(t *testing.T) {
 				OrgTable:     "a",
 				Database:     "vttest",
 				OrgName:      "name",
-				ColumnLength: 384,
-				Charset:      mysql.CharacterSetUtf8,
+				ColumnLength: 512,
+				Charset:      mysql.CharacterSetUtf8mb4,
 			},
 		},
 		Rows: [][]sqltypes.Value{
@@ -201,8 +201,8 @@ func readRowsUsingStream(t *testing.T, conn *mysql.Conn, expectedCount int) {
 			OrgTable:     "a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: 384,
-			Charset:      mysql.CharacterSetUtf8,
+			ColumnLength: 512,
+			Charset:      mysql.CharacterSetUtf8mb4,
 		},
 	}
 	fields, err := conn.Fields()

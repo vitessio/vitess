@@ -52,6 +52,8 @@ type Collation struct {
 	err  error
 }
 
+var _ collations.Collation = (*Collation)(nil)
+
 func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string) *Collation {
 	charset := collname
 	if idx := strings.IndexByte(collname, '_'); idx >= 0 {
@@ -71,8 +73,8 @@ func makeRemoteCollation(conn *mysql.Conn, collid collations.ID, collname string
 	return coll
 }
 
-func RemoteByName(conn *mysql.Conn, collname string) *Collation {
-	return makeRemoteCollation(conn, collations.LookupIDByName(collname), collname)
+func NewCollation(conn *mysql.Conn, collname string) *Collation {
+	return makeRemoteCollation(conn, collations.Unknown, collname)
 }
 
 func (c *Collation) LastError() error {
@@ -81,10 +83,14 @@ func (c *Collation) LastError() error {
 	return c.err
 }
 
-func (c *Collation) init() {}
+func (c *Collation) Init() {}
 
-func (c *Collation) Id() collations.ID {
+func (c *Collation) ID() collations.ID {
 	return c.id
+}
+
+func (c *Collation) IsBinary() bool {
+	return false
 }
 
 func (c *Collation) Name() string {
@@ -92,11 +98,7 @@ func (c *Collation) Name() string {
 }
 
 func (c *Collation) Charset() charset.Charset {
-	return &Charset{
-		name: c.charset,
-		mu:   &c.mu,
-		conn: c.conn,
-	}
+	return makeRemoteCharset(c.conn, &c.mu, c.charset)
 }
 
 func (c *Collation) Collate(left, right []byte, isPrefix bool) int {
@@ -118,13 +120,10 @@ func (c *Collation) Collate(left, right []byte, isPrefix bool) int {
 	c.sql.WriteString(c.suffix)
 	c.sql.WriteString(")")
 
-	result := c.performRemoteQuery()
-	if result == nil {
-		return 0
-	}
-
 	var cmp int64
-	cmp, c.err = result[0].ToInt64()
+	if result := c.performRemoteQuery(); result != nil {
+		cmp, c.err = result[0].ToInt64()
+	}
 	return int(cmp)
 }
 
@@ -160,14 +159,18 @@ func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	}
 	c.sql.WriteString(")")
 
-	result := c.performRemoteQuery()
-	if result == nil {
-		return nil
+	if result := c.performRemoteQuery(); result != nil {
+		if dst == nil {
+			dst = result[0].ToBytes()
+		} else {
+			dst = append(dst, result[0].ToBytes()...)
+		}
 	}
-	if dst == nil {
-		return result[0].ToBytes()
-	}
-	return append(dst, result[0].ToBytes()...)
+	return dst
+}
+
+func (c *Collation) Hash(_ []byte, _ int) uintptr {
+	panic("unsupported: Hash for remote collations")
 }
 
 func (c *Collation) WeightStringLen(_ int) int {

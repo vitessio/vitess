@@ -17,10 +17,27 @@ limitations under the License.
 package planbuilder
 
 import (
+	"strings"
+
+	"vitess.io/vitess/go/mysql/collations"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
+
+type notImplementedSchemaInfoConverter struct{}
+
+func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
+}
+
+func (f *notImplementedSchemaInfoConverter) CollationIDLookup(sqlparser.Expr) collations.ID {
+	return 0
+}
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
@@ -104,9 +121,9 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		if cmp.Operator == sqlparser.EqualOp {
 			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
 			if col != nil && shouldRewrite(other) {
-				evalExpr, err := sqlparser.Convert(other)
+				evalExpr, err := evalengine.Convert(other, &notImplementedSchemaInfoConverter{})
 				if err != nil {
-					if err == sqlparser.ErrExprNotSupported {
+					if strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
 						// This just means we can't rewrite this particular expression,
 						// not that we have to exit altogether
 						return false, "", nil, nil

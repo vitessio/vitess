@@ -71,6 +71,8 @@ type VttabletProcess struct {
 	DbPort                      int
 	VreplicationTabletType      string
 	DbFlavor                    string
+	Charset                     string
+
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -103,6 +105,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vtctld_addr", vttablet.VtctldAddress,
 		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
+		"-db_charset", vttablet.Charset,
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -198,8 +201,14 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 }
 
 // WaitForStatus waits till desired status of tablet is reached
-func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
-	return vttablet.GetTabletStatus() == status
+func (vttablet *VttabletProcess) WaitForStatus(status string, howLong time.Duration) bool {
+	ticker := time.NewTicker(howLong)
+	for range ticker.C {
+		if vttablet.GetTabletStatus() == status {
+			return true
+		}
+	}
+	return false
 }
 
 // GetTabletStatus returns the tablet state as seen in /debug/vars TabletStateName
@@ -523,7 +532,7 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
+func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, enableSemiSync bool, charset string) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -550,6 +559,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		VreplicationTabletType:      "replica",
 		TabletUID:                   tabletUID,
+		Charset:                     charset,
 	}
 
 	if tabletType == "rdonly" {

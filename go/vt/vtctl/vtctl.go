@@ -103,7 +103,6 @@ import (
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -118,6 +117,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -321,14 +321,6 @@ var commands = []commandGroup{
 				method: commandSetShardIsPrimaryServing,
 				params: "<keyspace/shard> <is_serving>",
 				help:   "Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.",
-			},
-			{
-				name:         "SetShardIsMasterServing",
-				method:       commandSetShardIsPrimaryServing,
-				params:       "<keyspace/shard> <is_master_serving>",
-				help:         "DEPRECATED. Use SetShardIsPrimaryServing instead.",
-				deprecated:   true,
-				deprecatedBy: "SetShardIsPrimaryServing",
 			},
 			{
 				name:   "SetShardTabletControl",
@@ -774,6 +766,16 @@ var commands = []commandGroup{
 	{
 		"Workflow", []command{
 			{
+				name:   "VExec",
+				method: commandVExec,
+				params: "<ks.workflow> <query> --dry-run",
+				help:   "Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
+			},
+		},
+	},
+	{
+		"Workflow", []command{
+			{
 				name:   "Workflow",
 				method: commandWorkflow,
 				params: "<ks.workflow> <action> --dry-run",
@@ -1069,7 +1071,6 @@ func commandUpdateTabletAddrs(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use allow_primary instead.")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows for the primary tablet of a shard to be deleted. Use with caution.")
 
 	if err := subFlags.Parse(args); err != nil {
@@ -1082,11 +1083,6 @@ func commandDeleteTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	tabletAliases, err := tabletParamsToTabletAliases(subFlags.Args())
 	if err != nil {
 		return err
-	}
-	// deprecated flags
-	// delete in a future release
-	if *deprecatedAllowMaster {
-		allowPrimary = deprecatedAllowMaster
 	}
 	for _, tabletAlias := range tabletAliases {
 		if err := wr.DeleteTablet(ctx, tabletAlias, *allowPrimary); err != nil {
@@ -1462,10 +1458,22 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	if err != nil {
 		return err
 	}
-	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
-	hr, err := wr.ExecuteHook(ctx, tabletAlias, hook)
+
+	resp, err := wr.VtctldServer().ExecuteHook(ctx, &vtctldatapb.ExecuteHookRequest{
+		TabletAlias: tabletAlias,
+		TabletHookRequest: &tabletmanagerdatapb.ExecuteHookRequest{
+			Name:       subFlags.Arg(1),
+			Parameters: subFlags.Args()[2:],
+		},
+	})
 	if err != nil {
 		return err
+	}
+
+	hr := hk.HookResult{
+		ExitStatus: int(resp.HookResult.ExitStatus),
+		Stdout:     resp.HookResult.Stdout,
+		Stderr:     resp.HookResult.Stderr,
 	}
 	return printJSON(wr.Logger(), hr)
 }
@@ -2542,7 +2550,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		wr.Logger().Printf("Waiting for workflow to start:\n")
 
 		type streamCount struct {
-			total, running int64
+			total, started int64
 		}
 		errCh := make(chan error)
 		wfErrCh := make(chan []*wrangler.WorkflowError)
@@ -2559,7 +2567,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
 					return
 				case <-ticker.C:
-					totalStreams, runningStreams, workflowErrors, err := wf.GetStreamCount()
+					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
 					if err != nil {
 						errCh <- err
 						close(errCh)
@@ -2570,7 +2578,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 					}
 					progressCh <- &streamCount{
 						total:   totalStreams,
-						running: runningStreams,
+						started: startedStreams,
 					}
 				}
 			}
@@ -2579,12 +2587,12 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *fla
 		for {
 			select {
 			case progress := <-progressCh:
-				if progress.running == progress.total {
+				if progress.started == progress.total {
 					wr.Logger().Printf("\nWorkflow started successfully with %d stream(s)\n", progress.total)
 					printDetails()
 					return nil
 				}
-				wr.Logger().Printf("%d%% ... ", 100*progress.running/progress.total)
+				wr.Logger().Printf("%d%% ... ", 100*progress.started/progress.total)
 			case err := <-errCh:
 				wr.Logger().Error(err)
 				cancelTimedCtx()
@@ -3117,16 +3125,15 @@ func commandReloadSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if err != nil {
 		return err
 	}
-	return wr.ReloadSchema(ctx, tabletAlias)
+	_, err = wr.VtctldServer().ReloadSchema(ctx, &vtctldatapb.ReloadSchemaRequest{
+		TabletAlias: tabletAlias,
+	})
+	return err
 }
 
 func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet")
-
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "DEPRECATED. Use -include_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3138,21 +3145,24 @@ func commandReloadSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	if *deprecatedIncludeMaster {
-		includePrimary = deprecatedIncludeMaster
+	resp, err := wr.VtctldServer().ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       keyspace,
+		Shard:          shard,
+		WaitPosition:   "",
+		IncludePrimary: *includePrimary,
+		Concurrency:    uint32(*concurrency),
+	})
+	if resp != nil {
+		for _, e := range resp.Events {
+			logutil.LogEvent(wr.Logger(), e)
+		}
 	}
-	sema := sync2.NewSemaphore(*concurrency, 0)
-	wr.ReloadSchemaShard(ctx, keyspace, shard, "" /* waitPosition */, sema, *includePrimary)
-	return nil
+	return err
 }
 
 func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 10, "How many tablets to reload in parallel")
 	includePrimary := subFlags.Bool("include_primary", true, "Include the primary tablet(s)")
-
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedIncludeMaster := subFlags.Bool("include_master", true, "DEPRECATED. Use -include_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -3160,11 +3170,18 @@ func commandReloadSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, sub
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <keyspace> argument is required for the ReloadSchemaKeyspace command")
 	}
-	if *deprecatedIncludeMaster {
-		includePrimary = deprecatedIncludeMaster
+	resp, err := wr.VtctldServer().ReloadSchemaKeyspace(ctx, &vtctldatapb.ReloadSchemaKeyspaceRequest{
+		Keyspace:       subFlags.Arg(0),
+		WaitPosition:   "",
+		IncludePrimary: *includePrimary,
+		Concurrency:    uint32(*concurrency),
+	})
+	if resp != nil {
+		for _, e := range resp.Events {
+			logutil.LogEvent(wr.Logger(), e)
+		}
 	}
-	sema := sync2.NewSemaphore(*concurrency, 0)
-	return wr.ReloadSchemaKeyspace(ctx, subFlags.Arg(0), sema, *includePrimary)
+	return err
 }
 
 func commandValidateSchemaShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -3195,10 +3212,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 	skipNoPrimary := subFlags.Bool("skip-no-primary", true, "Skip shards that don't have primary when performing validation")
 	includeVSchema := subFlags.Bool("include-vschema", false, "Validate schemas against the vschema")
 
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedSkipNoMaster := subFlags.Bool("skip-no-master", false, "DEPRECATED. Use -skip-no-primary instead")
-
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3206,9 +3219,6 @@ func commandValidateSchemaKeyspace(ctx context.Context, wr *wrangler.Wrangler, s
 		return fmt.Errorf("the <keyspace name> argument is required for the ValidateSchemaKeyspace command")
 	}
 
-	if *deprecatedSkipNoMaster {
-		skipNoPrimary = deprecatedSkipNoMaster
-	}
 	keyspace := subFlags.Arg(0)
 	var excludeTableArray []string
 	if *excludeTables != "" {
@@ -3826,6 +3836,45 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Flag
 	return nil
 }
 
+func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
+	log.Warningf(deprecationMessage)
+
+	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of tablets on which it will be applied")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("usage: VExec --dry-run keyspace.workflow \"<query>\"")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
+	if err != nil {
+		wr.Logger().Errorf("keyspace %s not found", keyspace)
+	}
+	query := subFlags.Arg(1)
+
+	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
+	if err != nil {
+		return err
+	}
+	if *dryRun {
+		return nil
+	}
+	if qr == nil {
+		wr.Logger().Printf("no result returned\n")
+	}
+	if *json {
+		return printJSON(wr.Logger(), qr)
+	}
+	printQueryResult(loggerWriter{wr.Logger()}, qr)
+	return nil
+}
+
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
 	if err := subFlags.Parse(args); err != nil {
@@ -3846,6 +3895,9 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 		keyspace, workflow, err = splitKeyspaceWorkflow(subFlags.Arg(0))
 		if err != nil {
 			return err
+		}
+		if workflow == "" {
+			return fmt.Errorf("workflow has to be defined for action %s", action)
 		}
 	}
 	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)

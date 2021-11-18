@@ -16,7 +16,9 @@ limitations under the License.
 
 package mysql
 
-import "vitess.io/vitess/go/vt/vttls"
+import (
+	"vitess.io/vitess/go/vt/vttls"
+)
 
 // ConnParams contains all the parameters to use to connect to mysql.
 type ConnParams struct {
@@ -27,6 +29,7 @@ type ConnParams struct {
 	DbName     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
+	Collation  string `json:"collation"`
 	Flags      uint64 `json:"flags"`
 	Flavor     string `json:"flavor,omitempty"`
 
