@@ -70,13 +70,13 @@ export const Backups = () => {
                 <tr key={`${row.clusterID}-${row.directory}-${row.name}`}>
                     <DataCell>
                         {formatDateTime(row.time)}
-                        <div className="font-size-small text-secondary">{formatRelativeTime(row.time)}</div>
+                        <div className="text-sm text-secondary">{formatRelativeTime(row.time)}</div>
                     </DataCell>
                     <DataCell>
                         <ShardLink clusterID={row.clusterID} keyspace={row.keyspace} shard={row.shard}>
                             {row.directory}
                         </ShardLink>
-                        <div className="font-size-small text-secondary">{row.clusterName}</div>
+                        <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>{row.name}</DataCell>
                     <DataCell>

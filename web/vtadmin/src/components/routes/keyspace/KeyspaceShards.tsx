@@ -131,7 +131,7 @@ export const KeyspaceShards = ({ keyspace }: Props) => {
                                     <TabletLink alias={row.primaryAlias} clusterID={keyspace?.cluster?.id}>
                                         <TabletServingPip state={row._primaryTablet.state} /> {row.primaryAlias}
                                     </TabletLink>
-                                    <div className="font-size-small text-secondary">{row.primaryHostname}</div>
+                                    <div className="text-sm text-secondary">{row.primaryHostname}</div>
                                 </div>
                             ) : (
                                 <span className="text-secondary">No primary tablet</span>

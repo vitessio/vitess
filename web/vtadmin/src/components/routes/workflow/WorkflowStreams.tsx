@@ -68,7 +68,7 @@ export const WorkflowStreams = ({ clusterID, keyspace, name }: Props) => {
                         <Link className="font-bold" to={href}>
                             {row.key}
                         </Link>
-                        <div className="font-size-small text-secondary">
+                        <div className="text-sm text-secondary">
                             Updated {formatDateTime(row.time_updated?.seconds)}
                         </div>
                     </DataCell>
