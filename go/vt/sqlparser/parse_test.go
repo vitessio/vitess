@@ -1382,9 +1382,33 @@ var (
 		// Tests unicode character §
 		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
 	}, {
-		input: "alter vschema create vindex hash_vdx using hash",
+		input:  "create table t (id int) partition by hash (id) partitions 3",
+		output: "create table t (\n\tid int\n) partition by hash (id) partitions 3",
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+		input:  "create table t (hired date) partition by linear hash (year(hired)) partitions 4",
+		output: "create table t (\n\thired date\n) partition by linear hash (year(hired)) partitions 4",
+	}, {
+		input:  "create table t (id int) partition by key (id) partitions 2",
+		output: "create table t (\n\tid int\n) partition by key (id) partitions 2",
+	}, {
+		input:  "create table t (id int) partition by key algorithm = 1 (id)",
+		output: "create table t (\n\tid int\n) partition by key algorithm = 1 (id)",
+	}, {
+		input:  "create table t (id int not null) partition by linear key (id) partitions 5",
+		output: "create table t (\n\tid int not null\n) partition by linear key (id) partitions 5",
+	}, {
+		input:  "create table t (id int) partition by list (id)",
+		output: "create table t (\n\tid int\n) partition by list (id)", // TODO PARTITION BY LIST(id) (PARTITION p0 VALUES IN (1, 4, 7))
+	}, {
+		input:  "create table t (renewal date) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+		output: "create table t (\n\trenewal date\n) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+	}, {
+		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+	}, {
+		input: "alter vschema create vindex hash_vdx using `hash`",
+	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
 	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
@@ -1410,25 +1434,25 @@ var (
 	}, {
 		input: "alter vschema drop table ks.a",
 	}, {
-		input: "alter vschema on a add vindex hash (id)",
+		input: "alter vschema on a add vindex `hash` (id)",
 	}, {
-		input: "alter vschema on ks.a add vindex hash (id)",
+		input: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex hash (id)",
+		output: "alter vschema on a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex hash (id)",
+		output: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input: "alter vschema on a add vindex `add` (`add`)",
 	}, {
-		input: "alter vschema on a add vindex hash (id) using hash",
+		input: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
@@ -1436,15 +1460,15 @@ var (
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
-		input: "alter vschema on a drop vindex hash",
+		input: "alter vschema on a drop vindex `hash`",
 	}, {
-		input: "alter vschema on ks.a drop vindex hash",
+		input: "alter vschema on ks.a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
@@ -1792,6 +1816,8 @@ var (
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 	}, {
@@ -2631,6 +2657,9 @@ func TestSelectInto(t *testing.T) {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by 'c' terminated by '\n' enclosed by '\t'`,
+	}, {
+		input:  `alter vschema create vindex my_vdx using hash`,
+		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
 	for _, tcase := range validSQL {

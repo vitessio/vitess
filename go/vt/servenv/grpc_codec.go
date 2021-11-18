@@ -24,7 +24,7 @@ import (
 	"github.com/golang/protobuf/proto" //nolint
 
 	"google.golang.org/grpc/encoding"
-	_ "google.golang.org/grpc/encoding/proto"
+	_ "google.golang.org/grpc/encoding/proto" // nolint:revive
 )
 
 // Name is the name registered for the proto compressor.

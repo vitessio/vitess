@@ -32,18 +32,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/sync2"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -86,24 +81,6 @@ func init() {
 	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
-// ExecutorCollation contains information about the default collation to use by the executor.
-type ExecutorCollation struct {
-	mu   sync.Mutex
-	once sync.Once
-
-	// CollationEnvironment is the collation environment that was used to create
-	// DefaultCollation, it can be used later to lookup collations by name or ID.
-	CollationEnvironment *collations.Environment
-
-	// DefaultCollation is the default collation that will be used for this Executor.
-	// DefaultCollation is expected to match with the one the VTTablets use.
-	// String literals will be treated as if they were using DefaultCollation.
-	DefaultCollation collations.Collation
-
-	// CollationString represents the input collation as a string.
-	CollationString string
-}
-
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
@@ -124,8 +101,6 @@ type Executor struct {
 
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
-
-	collation *ExecutorCollation
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
@@ -151,7 +126,6 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
-		collation:       &ExecutorCollation{},
 	}
 
 	vschemaacl.Init()
@@ -374,57 +348,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
-// Set sets the ExecutorCollation fields using the given tablet health.
-// This method is meant to be executed only once.
-// If the tablet health does not contain any relevant information for us to
-// figure the default collation and collation environment, we warn the user
-// and use the collation that was specified through VTGate's arguments, or
-// we use the default collation of utf8mb4 if the flag was not specified.
-func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
-	ec.once.Do(func() {
-		t := th.Tablet
-		env := collations.NewEnvironment(t.DbServerVersion)
-
-		// if VTGate's -collation flag was not specified, we use the default collation of utf8mb4
-		// given our collation environment.
-		var foundColl collations.Collation
-		if *collation == "" {
-			foundColl = env.DefaultCollationForCharset("utf8mb4")
-		} else {
-			foundColl = env.LookupByName(*collation)
-		}
-
-		ec.mu.Lock()
-		defer ec.mu.Unlock()
-
-		if foundColl == nil {
-			ec.CollationString = *collation
-		} else {
-			ec.CollationString = foundColl.Name()
-		}
-		ec.CollationEnvironment = env
-		ec.DefaultCollation = foundColl
-	})
-}
-
-// setSessionExecuteOptionCollation sets the collation of the given session to the executor's default collation
-func (e *Executor) setSessionExecuteOptionCollation(session *SafeSession) {
-	// locking the session
-	session.mu.Lock()
-	defer session.mu.Unlock()
-
-	// locking the executor's collation
-	e.collation.mu.Lock()
-	defer e.collation.mu.Unlock()
-
-	if session.Options == nil || e.collation.DefaultCollation == nil {
-		return
-	}
-	session.Options.Collation = int32(e.collation.DefaultCollation.ID())
-}
-
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	e.setSessionExecuteOptionCollation(safeSession)
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
@@ -576,12 +500,6 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
-		case sysvars.Collation.Name:
-			name := ""
-			if e.collation != nil && e.collation.DefaultCollation != nil {
-				name = e.collation.DefaultCollation.Name()
-			}
-			bindVars[key] = sqltypes.StringBindVariable(name)
 		}
 	}
 

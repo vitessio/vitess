@@ -1477,15 +1477,48 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
+// PartitionOption describes partitioning control (for create table statements)
+type PartitionOption struct {
+	Linear       string
+	isHASH       bool
+	isKEY        bool
+	KeyAlgorithm string
+	KeyColList   Columns
+	RangeOrList  string
+	ExprOrCol    *ExprOrColumns
+	Expr         Expr
+	Partitions   string
+	SubPartition *SubPartition
+	Definitions  []*PartitionDefinition
+}
+
+// ExprOrColumns describes expression and columnlist in the partition
+type ExprOrColumns struct {
+	Expr       Expr
+	ColumnList Columns
+}
+
+// SubPartition describes subpartitions control
+type SubPartition struct {
+	Linear        string
+	isHASH        bool
+	isKEY         bool
+	KeyAlgorithm  string
+	KeyColList    Columns
+	Expr          Expr
+	SubPartitions string
+}
+
 // TableOptions specifies a list of table options
 type TableOptions []*TableOption
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	Options     TableOptions
+	Columns         []*ColumnDefinition
+	Indexes         []*IndexDefinition
+	Constraints     []*ConstraintDefinition
+	Options         TableOptions
+	PartitionOption *PartitionOption
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement

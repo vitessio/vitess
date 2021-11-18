@@ -209,11 +209,11 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	tmclient.TabletManagerClient
 
-	demoteMasterResults map[string]*struct {
+	demotePrimaryResults map[string]*struct {
 		PrimaryStatus *replicationdatapb.PrimaryStatus
 		Err           error
 	}
-	demoteMasterDelays map[string]time.Duration
+	demotePrimaryDelays map[string]time.Duration
 
 	stopReplicationAndGetStatusResults map[string]*struct {
 		StopStatus *replicationdatapb.StopReplicationStatus
@@ -222,14 +222,14 @@ type stopReplicationAndBuildStatusMapsTestTMClient struct {
 	stopReplicationAndGetStatusDelays map[string]time.Duration
 }
 
-func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemoteMaster(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	if tablet.Alias == nil {
 		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
 
-	if delay, ok := fake.demoteMasterDelays[key]; ok {
+	if delay, ok := fake.demotePrimaryDelays[key]; ok {
 		select {
 		case <-time.After(delay):
 		case <-ctx.Done():
@@ -237,7 +237,7 @@ func (fake *stopReplicationAndBuildStatusMapsTestTMClient) DemoteMaster(ctx cont
 		}
 	}
 
-	if result, ok := fake.demoteMasterResults[key]; ok {
+	if result, ok := fake.demotePrimaryResults[key]; ok {
 		return result.PrimaryStatus, result.Err
 	}
 
@@ -386,7 +386,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		{
 			name: "have PRIMARY tablet and can demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
+				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
 					Err           error
 				}{
@@ -446,7 +446,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		{
 			name: "one tablet is PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
+				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
 					Err           error
 				}{
@@ -500,7 +500,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 		{
 			name: "multiple tablets are PRIMARY and cannot demote",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
-				demoteMasterResults: map[string]*struct {
+				demotePrimaryResults: map[string]*struct {
 					PrimaryStatus *replicationdatapb.PrimaryStatus
 					Err           error
 				}{
@@ -607,7 +607,7 @@ func TestStopReplicationAndBuildStatusMaps(t *testing.T) {
 					Err        error
 				}{
 					"zone1-0000000100": {
-						Err: assert.AnError, // not being mysql.ErrNotReplica will not cause us to call DemoteMaster
+						Err: assert.AnError, // not being mysql.ErrNotReplica will not cause us to call DemotePrimary
 					},
 					"zone1-0000000101": {
 						StopStatus: &replicationdatapb.StopReplicationStatus{

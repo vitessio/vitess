@@ -1111,10 +1111,10 @@ func (fra *fakeRPCTM) SetReplicationSource(ctx context.Context, parent *topodata
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
-	compare(fra.t, "SetMaster parent", parent, testPrimaryAlias)
-	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
-	compare(fra.t, "SetMaster waitPosition", waitPosition, testWaitPosition)
-	compare(fra.t, "SetMaster forceStartReplica", forceStartReplica, testForceStartReplica)
+	compare(fra.t, "SetReplicationSource parent", parent, testPrimaryAlias)
+	compare(fra.t, "SetReplicationSource timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	compare(fra.t, "SetReplicationSource waitPosition", waitPosition, testWaitPosition)
+	compare(fra.t, "SetReplicationSource forceStartReplica", forceStartReplica, testForceStartReplica)
 	testSetMasterCalled = true
 	return nil
 }

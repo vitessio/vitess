@@ -971,6 +971,27 @@ func (cached *ExplainTab) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Wild)))
 	return size
 }
+func (cached *ExprOrColumns) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field ColumnList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.ColumnList)) * int64(40))
+		for _, elem := range cached.ColumnList {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
 func (cached *ExtractFuncExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1559,6 +1580,46 @@ func (cached *PartitionDefinition) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *PartitionOption) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(160)
+	}
+	// field Linear string
+	size += hack.RuntimeAllocSize(int64(len(cached.Linear)))
+	// field KeyAlgorithm string
+	size += hack.RuntimeAllocSize(int64(len(cached.KeyAlgorithm)))
+	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.KeyColList)) * int64(40))
+		for _, elem := range cached.KeyColList {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field RangeOrList string
+	size += hack.RuntimeAllocSize(int64(len(cached.RangeOrList)))
+	// field ExprOrCol *vitess.io/vitess/go/vt/sqlparser.ExprOrColumns
+	size += cached.ExprOrCol.CachedSize(true)
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Partitions string
+	size += hack.RuntimeAllocSize(int64(len(cached.Partitions)))
+	// field SubPartition *vitess.io/vitess/go/vt/sqlparser.SubPartition
+	size += cached.SubPartition.CachedSize(true)
+	// field Definitions []*vitess.io/vitess/go/vt/sqlparser.PartitionDefinition
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Definitions)) * int64(8))
+		for _, elem := range cached.Definitions {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2039,6 +2100,33 @@ func (cached *Stream) CachedSize(alloc bool) int64 {
 	size += cached.Table.CachedSize(false)
 	return size
 }
+func (cached *SubPartition) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(96)
+	}
+	// field Linear string
+	size += hack.RuntimeAllocSize(int64(len(cached.Linear)))
+	// field KeyAlgorithm string
+	size += hack.RuntimeAllocSize(int64(len(cached.KeyAlgorithm)))
+	// field KeyColList vitess.io/vitess/go/vt/sqlparser.Columns
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.KeyColList)) * int64(40))
+		for _, elem := range cached.KeyColList {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field Expr vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SubPartitions string
+	size += hack.RuntimeAllocSize(int64(len(cached.SubPartitions)))
+	return size
+}
 func (cached *Subquery) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2148,7 +2236,7 @@ func (cached *TableSpec) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field Columns []*vitess.io/vitess/go/vt/sqlparser.ColumnDefinition
 	{
@@ -2178,6 +2266,8 @@ func (cached *TableSpec) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field PartitionOption *vitess.io/vitess/go/vt/sqlparser.PartitionOption
+	size += cached.PartitionOption.CachedSize(true)
 	return size
 }
 func (cached *TablespaceOperation) CachedSize(alloc bool) int64 {
