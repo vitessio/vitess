@@ -202,7 +202,7 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
-	var si SchemaInfo = nil
+	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if *enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser)
@@ -216,7 +216,18 @@ func Init(ctx context.Context, serv srvtopo.Server, cell string, tabletTypesToWa
 		LFU:            *queryPlanCacheLFU,
 	}
 
-	executor := NewExecutor(ctx, serv, cell, resolver, *normalizeQueries, *warnShardedOnly, *streamBufferSize, cacheCfg, si, *noScatter)
+	executor := NewExecutor(
+		ctx,
+		serv,
+		cell,
+		resolver,
+		*normalizeQueries,
+		*warnShardedOnly,
+		*streamBufferSize,
+		cacheCfg,
+		si,
+		*noScatter,
+	)
 
 	// connect the schema tracker with the vschema manager
 	if *enableSchemaChangeSignal {
@@ -433,10 +444,6 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session,
 			NewSafeSession(session),
 			sql,
 			bindVariables,
-			&querypb.Target{
-				Keyspace:   destKeyspace,
-				TabletType: destTabletType,
-			},
 			func(reply *sqltypes.Result) error {
 				vtg.rowsReturned.Add(statsKey, int64(len(reply.Rows)))
 				vtg.rowsAffected.Add(statsKey, int64(reply.RowsAffected))

@@ -665,6 +665,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 
 	start := time.Now()
 	conn, err := qre.tsv.qe.conns.Get(ctx)
+
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)

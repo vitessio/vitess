@@ -63,6 +63,7 @@ func (ki *KeyspaceInfo) GetServedFrom(tabletType topodatapb.TabletType) *topodat
 func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletType, cells []string, keyspace string, remove bool) error {
 	// primary is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_PRIMARY {
+		// TODO(deepthi): these master references will go away when we delete legacy resharding
 		if !remove {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}

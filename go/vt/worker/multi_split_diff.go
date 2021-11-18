@@ -446,10 +446,10 @@ func (msdw *MultiSplitDiffWorker) stopVreplicationAt(ctx context.Context, shardI
 	}
 
 	shortCtx, cancel = context.WithTimeout(ctx, *remoteActionsTimeout)
-	primaryPos, err := msdw.wr.TabletManagerClient().MasterPosition(shortCtx, primaryInfo.Tablet)
+	primaryPos, err := msdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, primaryInfo.Tablet)
 	cancel()
 	if err != nil {
-		return "", vterrors.Wrapf(err, "MasterPosition for %v failed", msdw.shardInfo.PrimaryAlias)
+		return "", vterrors.Wrapf(err, "PrimaryPosition for %v failed", msdw.shardInfo.PrimaryAlias)
 	}
 	return primaryPos, nil
 }
@@ -654,10 +654,10 @@ func (msdw *MultiSplitDiffWorker) synchronizeSrcAndDestTxState(ctx context.Conte
 func (msdw *MultiSplitDiffWorker) waitForDestinationTabletToReach(ctx context.Context, tablet *topodatapb.Tablet, mysqlPos string) error {
 	for i := 0; i < 20; i++ {
 		shortCtx, cancel := context.WithTimeout(ctx, *remoteActionsTimeout)
-		pos, err := msdw.wr.TabletManagerClient().MasterPosition(shortCtx, tablet)
+		pos, err := msdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, tablet)
 		cancel()
 		if err != nil {
-			return vterrors.Wrapf(err, "get MasterPosition for %v failed", tablet)
+			return vterrors.Wrapf(err, "get PrimaryPosition for %v failed", tablet)
 		}
 
 		if pos == mysqlPos {

@@ -34,10 +34,9 @@ package topotools
 // This file contains utility functions for tablets
 
 import (
+	"context"
 	"errors"
 	"fmt"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -101,6 +100,43 @@ func CheckOwnership(oldTablet, newTablet *topodatapb.Tablet) error {
 			oldTablet.Hostname, oldTablet.PortMap["vt"], newTablet.Hostname, newTablet.PortMap["vt"])
 	}
 	return nil
+}
+
+// DoCellsHaveRdonlyTablets returns true if any of the cells has at least one
+// tablet with type RDONLY. If the slice of cells to search over is empty, it
+// checks all cells in the topo.
+func DoCellsHaveRdonlyTablets(ctx context.Context, ts *topo.Server, cells []string) (bool, error) {
+	areAnyRdonly := func(tablets []*topo.TabletInfo) bool {
+		for _, tablet := range tablets {
+			if tablet.Type == topodatapb.TabletType_RDONLY {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	if len(cells) == 0 {
+		tablets, err := GetAllTabletsAcrossCells(ctx, ts)
+		if err != nil {
+			return false, err
+		}
+
+		return areAnyRdonly(tablets), nil
+	}
+
+	for _, cell := range cells {
+		tablets, err := GetAllTablets(ctx, ts, cell)
+		if err != nil {
+			return false, err
+		}
+
+		if areAnyRdonly(tablets) {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // IsPrimaryTablet is a helper function to determine whether the current tablet

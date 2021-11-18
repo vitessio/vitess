@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
@@ -174,7 +175,7 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 				return i, false, nil
 			}
 		}
-		expr = removeKeyspaceFromColName(expr)
+		expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 		sel, isSel := node.Select.(*sqlparser.Select)
 		if !isSel {
 			return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%s' in 'order clause'", sqlparser.String(expr))
@@ -316,6 +317,18 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		}
 		node.cols = append(node.cols, column)
 		return len(node.cols) - 1, true, nil
+	case *concatenateGen4:
+		if hasAggregation {
+			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
+		}
+		offset, added, err := pushProjection(expr, node.sources[0], semTable, inner, reuseCol, hasAggregation)
+		if err != nil {
+			return 0, false, err
+		}
+		if added {
+			return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
+		}
+		return offset, false, nil
 	default:
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
 	}
@@ -334,15 +347,6 @@ func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *sema
 		}
 	}
 	return nil
-}
-
-func removeKeyspaceFromColName(expr *sqlparser.AliasedExpr) *sqlparser.AliasedExpr {
-	if _, ok := expr.Expr.(*sqlparser.ColName); ok {
-		expr = sqlparser.CloneRefOfAliasedExpr(expr)
-		col := expr.Expr.(*sqlparser.ColName)
-		col.Qualifier.Qualifier = sqlparser.NewTableIdent("")
-	}
-	return expr
 }
 
 func checkIfAlreadyExists(expr *sqlparser.AliasedExpr, node sqlparser.SelectStatement, semTable *semantics.SemTable) int {
@@ -397,6 +401,9 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	uniqVindex := hasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.GroupByExprs)
 	_, joinPlan := plan.(*joinGen4)
 	if !uniqVindex || joinPlan {
+		if hp.qp.ProjectionError != nil {
+			return nil, hp.qp.ProjectionError
+		}
 		eaggr := &engine.OrderedAggregate{}
 		oa = &orderedAggregate{
 			resultsBuilder: resultsBuilder{
@@ -713,11 +720,11 @@ func planOrderByForRoute(orderExprs []abstract.OrderBy, plan *route, semTable *s
 		if err != nil {
 			return nil, false, err
 		}
-
 		plan.eroute.OrderBy = append(plan.eroute.OrderBy, engine.OrderByParams{
 			Col:             offset,
 			WeightStringCol: weightStringOffset,
 			Desc:            order.Inner.Direction == sqlparser.DescOrder,
+			CollationID:     semTable.CollationFor(order.Inner.Expr),
 		})
 	}
 	return plan, origColCount != plan.Select.GetColumnCount(), nil
@@ -832,32 +839,38 @@ func createMemorySortPlanOnAggregation(plan *orderedAggregate, orderExprs []abst
 	}
 
 	for _, order := range orderExprs {
-		offset, woffset, found := findExprInOrderedAggr(plan, order)
+		offset, woffset, idx, found := findExprInOrderedAggr(plan, order)
 		if !found {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
+		}
+
+		collationID := collations.Unknown
+		if woffset != -1 {
+			collationID = plan.eaggr.GroupByKeys[idx].CollationID
 		}
 		ms.eMemorySort.OrderBy = append(ms.eMemorySort.OrderBy, engine.OrderByParams{
 			Col:               offset,
 			WeightStringCol:   woffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
+			CollationID:       collationID,
 		})
 	}
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (int, int, bool) {
-	for _, key := range plan.eaggr.GroupByKeys {
+func findExprInOrderedAggr(plan *orderedAggregate, order abstract.OrderBy) (keyCol int, weightStringCol int, index int, found bool) {
+	for idx, key := range plan.eaggr.GroupByKeys {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) {
-			return key.KeyCol, key.WeightStringCol, true
+			return key.KeyCol, key.WeightStringCol, idx, true
 		}
 	}
-	for _, aggregate := range plan.eaggr.Aggregates {
+	for idx, aggregate := range plan.eaggr.Aggregates {
 		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Expr) {
-			return aggregate.Col, -1, true
+			return aggregate.Col, -1, idx, true
 		}
 	}
-	return 0, 0, false
+	return 0, 0, 0, false
 }
 
 func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logicalPlan, orderExprs []abstract.OrderBy, useWeightStr bool) (logicalPlan, error) {
@@ -886,6 +899,7 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 			WeightStringCol:   weightStringOffset,
 			Desc:              order.Inner.Direction == sqlparser.DescOrder,
 			StarColFixedIndex: offset,
+			CollationID:       ctx.semTable.CollationFor(order.Inner.Expr),
 		})
 	}
 	return ms, nil

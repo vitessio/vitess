@@ -292,6 +292,9 @@ docker_lite_all: docker_lite $(DOCKER_LITE_TARGETS)
 docker_local:
 	${call build_docker_image,docker/local/Dockerfile,vitess/local}
 
+docker_run_local:
+	./docker/local/run.sh
+
 docker_mini:
 	${call build_docker_image,docker/mini/Dockerfile,vitess/mini}
 
