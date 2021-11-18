@@ -19,7 +19,10 @@ package collations
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
@@ -82,6 +85,83 @@ func TestCollationsForLanguage(t *testing.T) {
 	}
 }
 
+// XTestSupportTables should not run by default; it is used to generate a Markdown
+// table with Collation support information for the current build of Vitess.
+func XTestSupportTables(t *testing.T) {
+	var versions = []collver{
+		collverMySQL80,
+		collverMySQL57,
+		collverMySQL56,
+		collverMariaDB103,
+		collverMariaDB102,
+		collverMariaDB101,
+		collverMariaDB100,
+	}
+
+	var envs []*Environment
+	for _, v := range versions {
+		envs = append(envs, makeEnv(v))
+	}
+
+	var all []ID
+	for id := range globalVersionInfo {
+		all = append(all, id)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i] < all[j]
+	})
+
+	var out = os.Stdout
+
+	fmt.Fprintf(out, "| Collation | Charset")
+	for _, env := range envs {
+		fmt.Fprintf(out, " | %s", env.version.String())
+	}
+	fmt.Fprintf(out, " |\n|%s\n", strings.Repeat("---|", len(envs)+2))
+
+	for _, id := range all {
+		coll := globalAllCollations[id]
+		if coll == nil {
+			vdata := globalVersionInfo[id]
+
+			var collname string
+			for _, name := range vdata.alias {
+				collname = name
+				break
+			}
+			parts := strings.Split(collname, "_")
+
+			fmt.Fprintf(out, "| %s | %s", collname, parts[0])
+			for _, env := range envs {
+				var supported bool
+				for v := range vdata.alias {
+					if v&env.version != 0 {
+						supported = true
+						break
+					}
+				}
+				if supported {
+					fmt.Fprintf(out, " | ⚠️")
+				} else {
+					fmt.Fprintf(out, " | ❌")
+				}
+			}
+		} else {
+			fmt.Fprintf(out, "| %s | %s", coll.Name(), coll.Charset().Name())
+			for _, env := range envs {
+				_, supported := env.byID[coll.ID()]
+				if supported {
+					fmt.Fprintf(out, " | ✅")
+				} else {
+					fmt.Fprintf(out, " | ❌")
+				}
+			}
+		}
+
+		fmt.Fprintf(out, " |\n")
+	}
+}
+
 func TestAllCollationsByCharset(t *testing.T) {
 	var defaults1 = map[string][2]string{
 		"utf8mb4": {"utf8mb4_general_ci", "utf8mb4_bin"},
@@ -98,6 +178,7 @@ func TestAllCollationsByCharset(t *testing.T) {
 		{collverMariaDB101, defaults1},
 		{collverMariaDB102, defaults1},
 		{collverMariaDB103, defaults1},
+		{collverMySQL56, defaults1},
 		{collverMySQL57, defaults1},
 		{collverMySQL80, defaults2},
 	} {
