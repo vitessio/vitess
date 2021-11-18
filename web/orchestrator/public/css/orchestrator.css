@@ -787,7 +787,7 @@ body {
     margin-bottom: 8px;
 }
 
-.instance .instance-master-section {
+.instance .instance-primary-section {
   position: absolute;
   bottom: 0px;
   left: 0px;
@@ -796,7 +796,7 @@ body {
   width: 48%;
 }
 
-.instance.accept_drop_check .instance-master-section {
+.instance.accept_drop_check .instance-primary-section {
   height: 100%;
 }
 
