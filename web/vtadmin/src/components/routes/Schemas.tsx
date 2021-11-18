@@ -91,13 +91,13 @@ export const Schemas = () => {
                     <DataCell>
                         <KeyspaceLink clusterID={row.clusterID} name={row.keyspace}>
                             <div>{row.keyspace}</div>
-                            <div className="font-size-small text-secondary">{row.cluster}</div>
+                            <div className="text-sm text-secondary">{row.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell className="font-bold">{href ? <Link to={href}>{row.table}</Link> : row.table}</DataCell>
                     <DataCell className="text-right">
                         <div>{formatBytes(row._raw.tableSize?.data_length)}</div>
-                        <div className="font-size-small text-secondary">
+                        <div className="text-sm text-secondary">
                             {formatBytes(row._raw.tableSize?.data_length, 'B')}
                         </div>
                     </DataCell>

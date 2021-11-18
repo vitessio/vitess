@@ -219,8 +219,3 @@ table tbody td {
 table tbody td[rowSpan] {
     border-right: solid 1px var(--tableBorderColor);
 }
-
-/* One-liner utilities */
-.font-size-small {
-    font-size: var(--fontSizeSmall);
-}
