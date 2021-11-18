@@ -24,7 +24,7 @@ if [ -z "$gofiles" ]; then
   exit 0
 fi
 
-gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ')
+gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ' -)
 
 echo "Linting $gopackages"
 golangci-lint run -E revive $gopackages

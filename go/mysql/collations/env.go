@@ -17,6 +17,7 @@ limitations under the License.
 package collations
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 )
@@ -118,6 +119,32 @@ func fetchCacheEnvironment(version collver) *Environment {
 		globalEnvironments[version] = env
 	}
 	return env
+}
+
+// ResolveCollation returns the default collation that will be used for the given charset and collation.
+// Both charset and collation can be empty strings, in which case utf8mb4 will be used as a charset and its
+// default collation will be returned.
+func (env *Environment) ResolveCollation(charset, collation string) (Collation, error) {
+	// if there is no collation or charset, we default to utf8mb4
+	if collation == "" && charset == "" {
+		charset = "utf8mb4"
+	}
+
+	var coll Collation
+	if collation == "" {
+		// If there is no collation we will just use the charset's default collation
+		// otherwise we directly use the given collation.
+		coll = env.DefaultCollationForCharset(charset)
+	} else {
+		// Here we call the collations API to ensure the collation/charset exist
+		// and is supported by Vitess.
+		coll = env.LookupByName(collation)
+	}
+	if coll == nil {
+		// The given collation is most likely unknown or unsupported, we need to fail.
+		return nil, fmt.Errorf("cannot resolve collation: '%s'", collation)
+	}
+	return coll, nil
 }
 
 // NewEnvironment creates a collation Environment for the given MySQL version string.

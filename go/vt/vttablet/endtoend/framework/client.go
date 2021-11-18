@@ -172,7 +172,9 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 }
 
 // BeginExecute performs a BeginExecute.
@@ -303,7 +305,9 @@ func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransac
 		queries,
 		asTransaction,
 		client.transactionID,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+		&querypb.ExecuteOptions{
+			IncludedFields: querypb.ExecuteOptions_ALL,
+		},
 	)
 }
 
