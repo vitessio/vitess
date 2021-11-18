@@ -1684,6 +1684,13 @@ func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey
 		AuditTopologyRecovery(topologyRecovery, "started PlannedReparentShard with automatic primary selection.")
 	}
 
+	// check for the constraint failure for cross cell promotion
+	if designatedTabletAlias != nil && designatedTabletAlias.Cell != primaryTablet.Alias.Cell && config.Config.PreventCrossDataCenterPrimaryFailover {
+		errorMessage := fmt.Sprintf("GracefulPrimaryTakeover: constraint failure - %s and %s are in different cells", topoproto.TabletAliasString(designatedTabletAlias), topoproto.TabletAliasString(primaryTablet.Alias))
+		AuditTopologyRecovery(topologyRecovery, errorMessage)
+		return topologyRecovery, fmt.Errorf(errorMessage)
+	}
+
 	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
 		level := event.GetLevel()
 		value := event.GetValue()
