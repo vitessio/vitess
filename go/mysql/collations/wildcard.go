@@ -212,7 +212,6 @@ retry:
 				return false
 			}
 			s = s[width:]
-			break
 		case patternMatchMany:
 			star = true
 			str = s
