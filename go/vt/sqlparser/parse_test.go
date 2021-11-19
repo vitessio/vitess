@@ -2611,10 +2611,10 @@ func TestKeywords(t *testing.T) {
 			output: "insert into t(a, b) values ('a', 'b')",
 		}, {
 			input: "insert into t() values ()",
-			output: "insert into t values ()",
+			output: "insert into t() values ()",
 		}, {
 			input: "insert into t() values (), (), ()",
-			output: "insert into t values (), (), ()",
+			output: "insert into t() values (), (), ()",
 		}, {
 			input: "select * from t where a > utc_timestmp()",
 		}, {

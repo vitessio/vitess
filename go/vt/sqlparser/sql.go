@@ -10269,7 +10269,7 @@ yydefault:
 		yyDollar = yyS[yypt-4 : yypt+1]
 //line sql.y:4400
 		{
-			yyVAL.ins = &Insert{Rows: yyDollar[4].values}
+			yyVAL.ins = &Insert{Columns: []ColIdent{}, Rows: yyDollar[4].values}
 		}
 	case 876:
 		yyDollar = yyS[yypt-1 : yypt+1]

@@ -3057,7 +3057,8 @@ func (node Columns) Format(buf *TrackedBuffer) {
 	if node == nil {
 		return
 	}
-	prefix := "("
+	buf.WriteString("(")
+	prefix := ""
 	for _, n := range node {
 		buf.Myprintf("%s%v", prefix, n)
 		prefix = ", "
