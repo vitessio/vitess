@@ -525,7 +525,7 @@ func (sbc *SandboxConn) QueryServiceByAlias(_ *topodatapb.TabletAlias, _ *queryp
 func (sbc *SandboxConn) HandlePanic(err *error) {
 }
 
-//ReserveBeginExecute implements the QueryService interface
+// ReserveBeginExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
 	result, transactionID, alias, err := sbc.BeginExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options)
@@ -548,7 +548,7 @@ func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *q
 	return transactionID, reservedID, alias, err
 }
 
-//ReserveExecute implements the QueryService interface
+// ReserveExecute implements the QueryService interface
 func (sbc *SandboxConn) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, transactionID, options)
 	result, err := sbc.Execute(ctx, target, sql, bindVariables, transactionID, reservedID, options)
@@ -582,7 +582,7 @@ func (sbc *SandboxConn) reserve(ctx context.Context, target *querypb.Target, pre
 	return sbc.ReserveID.Add(1)
 }
 
-//Release implements the QueryService interface
+// Release implements the QueryService interface
 func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	sbc.ReleaseCount.Add(1)
 	return sbc.getError()

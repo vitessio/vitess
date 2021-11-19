@@ -1177,7 +1177,7 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 	return tsv.vstreamer.StreamResults(ctx, query, send)
 }
 
-//ReserveBeginExecute implements the QueryService interface
+// ReserveBeginExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 
 	var connID int64
@@ -1241,11 +1241,11 @@ func (tsv *TabletServer) ReserveBeginStreamExecute(
 		return 0, 0, nil, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, 0, options, callback)
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, connID, connID, options, callback)
 	return connID, connID, tsv.alias, err
 }
 
-//ReserveExecute implements the QueryService interface
+// ReserveExecute implements the QueryService interface
 func (tsv *TabletServer) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	var connID int64
 	var err error
@@ -1328,7 +1328,7 @@ func (tsv *TabletServer) ReserveStreamExecute(
 	return connID, tsv.alias, err
 }
 
-//Release implements the QueryService interface
+// Release implements the QueryService interface
 func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error {
 	if reservedID == 0 && transactionID == 0 {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NoSuchSession, "connection ID and transaction ID do not exist")
@@ -1342,7 +1342,7 @@ func (tsv *TabletServer) Release(ctx context.Context, target *querypb.Target, tr
 			logStats.TransactionID = transactionID
 			logStats.ReservedID = reservedID
 			if reservedID != 0 {
-				//Release to close the underlying connection.
+				// Release to close the underlying connection.
 				return tsv.te.Release(reservedID)
 			}
 			// Rollback to cleanup the transaction before returning to the pool.
