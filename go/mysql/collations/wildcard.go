@@ -14,6 +14,30 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// The wildcard matching code in Vitess uses two different implementations for wildcard algorithms,
+// as seen on https://en.wikipedia.org/wiki/Matching_wildcards
+//
+// The main implementation is based on the logic in INN (https://inn.eyrie.org/trac/browser/trunk/lib/uwildmat.c),
+// and is originally MIT licensed. This is a recursive matching algorithm with important optimizations, as explained
+// on the Wikipedia page: it is a traditional recursion algorithm with 3 return values for match, no match, and
+// impossible match, which greatly stops the depth of the recursion tree. It also only tries to target the ending
+// codepoint at the end of a 'star' match, which again cuts the recursion depth.
+//
+// In practice, this results in a very efficient algorithm which performs great in real world cases, however,
+// as just explained, it DOES recurse, which may be an issue when the input pattern is complex enough to cause
+// deep recursion.
+//
+// To prevent Vitess instances from crashing because of stack overflows, we've added a stack guard to the algorithm,
+// controlled by the wildcardRecursionDepth constant. If the recursion limit is reached, the match will fail --
+// potentially leading to wrong results for the algorithm.
+//
+// If accuracy is of upmost importance, the wildcardRecursionDepth constant can be set to 0, in which case Vitess
+// will use an alternative iterative algorithm, based on a public domain algorithm by Alessandro Cantatore
+// (seen in http://xoomer.virgilio.it/acantato/dev/wildcard/wildmatch.html). This algorithm is much simpler and does
+// not recurse, however it is significantly slower than our recursive implementation (~25% slower in our benchmarks).
+//
+// Because of this, we intend to enable the recursive algorithm by default.
+
 package collations
 
 import (
@@ -166,7 +190,7 @@ func newUnicodeWildcardMatcher(
 	}
 }
 
-func (wc *unicodeWildcard) matchFast(str []byte, pat []rune) bool {
+func (wc *unicodeWildcard) matchIter(str []byte, pat []rune) bool {
 	var s []byte
 	var p []rune
 	var star = false
@@ -227,9 +251,9 @@ starCheck:
 
 func (wc *unicodeWildcard) Match(in []byte) bool {
 	if wildcardRecursionDepth == 0 {
-		return wc.matchFast(in, wc.pattern)
+		return wc.matchIter(in, wc.pattern)
 	}
-	return wc.matchInner(in, wc.pattern, 0) == matchOK
+	return wc.matchRecursive(in, wc.pattern, 0) == matchOK
 }
 
 func (wc *unicodeWildcard) matchMany(in []byte, pat []rune, depth int) match {
@@ -278,14 +302,14 @@ retry:
 	}
 	in = in[width:]
 
-	m := wc.matchInner(in, pat, depth+1)
+	m := wc.matchRecursive(in, pat, depth+1)
 	if m == matchFail {
 		goto retry
 	}
 	return m
 }
 
-func (wc *unicodeWildcard) matchInner(in []byte, pat []rune, depth int) match {
+func (wc *unicodeWildcard) matchRecursive(in []byte, pat []rune, depth int) match {
 	if depth >= wildcardRecursionDepth {
 		return matchFail
 	}
@@ -408,9 +432,9 @@ func newEightbitWildcardMatcher(
 
 func (wc *eightbitWildcard) Match(in []byte) bool {
 	if wildcardRecursionDepth == 0 {
-		return wc.matchFast(in, wc.pattern)
+		return wc.matchIter(in, wc.pattern)
 	}
-	return wc.matchInner(in, wc.pattern, 0) == matchOK
+	return wc.matchRecursive(in, wc.pattern, 0) == matchOK
 }
 
 func (wc *eightbitWildcard) matchMany(in []byte, pat []int16, depth int) match {
@@ -451,14 +475,14 @@ retry:
 	}
 	in = in[1:]
 
-	m := wc.matchInner(in, pat, depth+1)
+	m := wc.matchRecursive(in, pat, depth+1)
 	if m == matchFail {
 		goto retry
 	}
 	return m
 }
 
-func (wc *eightbitWildcard) matchInner(in []byte, pat []int16, depth int) match {
+func (wc *eightbitWildcard) matchRecursive(in []byte, pat []int16, depth int) match {
 	if depth >= wildcardRecursionDepth {
 		return matchFail
 	}
@@ -488,7 +512,7 @@ func (wc *eightbitWildcard) matchInner(in []byte, pat []int16, depth int) match 
 	return matchFail
 }
 
-func (wc *eightbitWildcard) matchFast(str []byte, pat []int16) bool {
+func (wc *eightbitWildcard) matchIter(str []byte, pat []int16) bool {
 	var s []byte
 	var p []int16
 	var star = false
