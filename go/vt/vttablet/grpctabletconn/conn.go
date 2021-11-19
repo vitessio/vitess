@@ -802,7 +802,7 @@ func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }
 
-//ReserveBeginExecute implements the queryservice interface
+// ReserveBeginExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -833,7 +833,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	return sqltypes.Proto3ToResult(reply.Result), reply.TransactionId, reply.ReservedId, conn.tablet.Alias, nil
 }
 
-//ReserveBeginStreamExecute implements the queryservice interface
+// ReserveBeginStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, reservedID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -904,7 +904,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 	}
 }
 
-//ReserveBeginExecute implements the queryservice interface
+// ReserveBeginExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
@@ -935,7 +935,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb
 	return sqltypes.Proto3ToResult(reply.Result), reply.ReservedId, conn.tablet.Alias, nil
 }
 
-//ReserveStreamExecute implements the queryservice interface
+// ReserveStreamExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (reservedID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
