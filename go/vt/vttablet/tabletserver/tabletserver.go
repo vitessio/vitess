@@ -944,15 +944,16 @@ func (tsv *TabletServer) BeginStreamExecute(
 	preQueries []string,
 	sql string,
 	bindVariables map[string]*querypb.BindVariable,
+	reservedID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := tsv.begin(ctx, target, preQueries /* revervedID */, 0, options)
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries, reservedID, options)
 	if err != nil {
 		return 0, nil, err
 	}
 
-	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, callback)
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
 	return transactionID, alias, err
 }
 

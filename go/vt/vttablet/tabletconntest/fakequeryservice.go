@@ -605,7 +605,7 @@ func (f *FakeQueryService) BeginExecuteBatch(ctx context.Context, target *queryp
 }
 
 // BeginStreamExecute combines Begin and StreamExecute.
-func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
 	panic("FakeQueryService does not implement BeginStreamExecute")
 }
 

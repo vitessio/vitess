@@ -504,7 +504,7 @@ func (conn *gRPCQueryClient) BeginExecuteBatch(ctx context.Context, target *quer
 }
 
 // BeginStreamExecute starts a transaction and runs an Execute.
-func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
+func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, query string, bindVars map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (transactionID int64, alias *topodatapb.TabletAlias, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -527,7 +527,8 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 				Sql:           query,
 				BindVariables: bindVars,
 			},
-			Options: options,
+			ReservedId: reservedID,
+			Options:    options,
 		}
 		stream, err := conn.c.BeginStreamExecute(ctx, req)
 		if err != nil {
