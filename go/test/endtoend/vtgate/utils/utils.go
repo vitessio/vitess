@@ -43,6 +43,7 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 	t.Helper()
 	_, err := ExecAllowError(t, conn, query)
 	require.Error(t, err)
+	fmt.Println(err.Error())
 	require.Contains(t, err.Error(), expected)
 }
 
