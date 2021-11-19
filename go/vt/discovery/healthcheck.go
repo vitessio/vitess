@@ -351,13 +351,10 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	}
 	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
 	res := thc.SimpleCopy()
-	if ths, ok := hc.healthData[key]; !ok {
+	if _, ok := hc.healthData[key]; !ok {
 		hc.healthData[key] = make(map[tabletAliasString]*TabletHealth)
-		hc.healthData[key][tabletAliasString(tabletAlias)] = res
-	} else {
-		// just overwrite it if it exists already
-		ths[tabletAliasString(tabletAlias)] = res
 	}
+	hc.healthData[key][tabletAliasString(tabletAlias)] = res
 
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
@@ -381,6 +378,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
+	key := hc.keyFromTablet(tablet)
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
@@ -392,18 +390,14 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// which will call finalizeConn, which will close the connection.
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
-
-	// the tablet has been deleted from the authoritative healthByAlias map so let's ensure it's deleted
-	// from the healthData map as well, which means we need to delete any existing combinations of
-	// keyspace.shard.tabletType we may have had for the tablet
-	for _, key := range hc.keysFromTablet(tablet) {
-		if ths, ok := hc.healthData[key]; ok {
-			delete(ths, tabletAlias)
-		}
+	// delete from map by keyspace.shard.tabletType
+	ths, ok := hc.healthData[key]
+	if !ok {
+		log.Warningf("We have no health data for target: %v", key)
+		return
 	}
-
-	// We only need to recompute the healthy record for the current state of the tablet
-	key := hc.keyFromTablet(tablet)
+	delete(ths, tabletAlias)
+	// delete from healthy list
 	healthy, ok := hc.healthy[key]
 	if ok && len(healthy) > 0 {
 		hc.recomputeHealthy(key)
@@ -419,8 +413,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	// let's be sure that this tablet hasn't been deleted from the authortative map
 	// so that we're not racing to update it and in effect re-adding a copy of the
 	// tablet record that was deleted
-	_, ok := hc.healthByAlias[tabletAlias]
-	if !ok {
+	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
 		log.Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
 		return
 	}
@@ -439,7 +432,10 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
 		}
 	}
-	// add it to the map by target
+	// add it to the map by target and create the map record if needed
+	if _, ok := hc.healthData[targetKey]; !ok {
+		hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
+	}
 	hc.healthData[targetKey][tabletAlias] = th
 
 	isPrimary := th.Target.TabletType == topodata.TabletType_PRIMARY
@@ -733,15 +729,6 @@ func (hc *HealthCheckImpl) keyFromTarget(target *query.Target) keyspaceShardTabl
 
 func (hc *HealthCheckImpl) keyFromTablet(tablet *topodata.Tablet) keyspaceShardTabletType {
 	return keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tablet.Type)))
-}
-
-// keysFromTablet returns a slice of potential type based keys for a tablet
-func (hc *HealthCheckImpl) keysFromTablet(tablet *topodata.Tablet) []keyspaceShardTabletType {
-	tabletTypeKeys := make([]keyspaceShardTabletType, len(topoproto.AllTabletTypes))
-	for i, tabletType := range topoproto.AllTabletTypes {
-		tabletTypeKeys[i] = keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
-	}
-	return tabletTypeKeys
 }
 
 // getAliasByCell should only be called while holding hc.mu
