@@ -1425,3 +1425,24 @@ Gen4 plan same as above
     "Table": "information_schema.random"
   }
 }
+
+# systable union query in derived table with constraint on outside (star projection)
+"select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'"
+"symbol constraint_name not found in table or subquery"
+{
+  "QueryType": "SELECT",
+  "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+  "Instructions": {
+    "OperatorType": "Route",
+    "Variant": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "FieldQuery": "select * from (select * from information_schema.key_column_usage as kcu where 1 != 1 union select * from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
+    "Query": "select * from (select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and constraint_name = 'primary' union select * from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and constraint_name = 'primary') as kcu",
+    "SysTableTableName": "[kcu_table_name1:VARBINARY(\"music\"), kcu_table_name:VARBINARY(\"user_extra\")]",
+    "SysTableTableSchema": "[VARBINARY(\"user\"), VARBINARY(\"user\")]",
+    "Table": "information_schema.key_column_usage"
+  }
+}
