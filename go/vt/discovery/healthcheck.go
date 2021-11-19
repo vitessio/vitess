@@ -410,7 +410,7 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	defer hc.mu.Unlock()
 
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
-	// let's be sure that this tablet hasn't been deleted from the authortative map
+	// let's be sure that this tablet hasn't been deleted from the authoritative map
 	// so that we're not racing to update it and in effect re-adding a copy of the
 	// tablet record that was deleted
 	if _, ok := hc.healthByAlias[tabletAlias]; !ok {

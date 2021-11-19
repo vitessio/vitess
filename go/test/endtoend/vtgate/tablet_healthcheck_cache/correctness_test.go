@@ -33,12 +33,13 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtParams        mysql.ConnParams
-	keyspaceName    = "healthcheck_test_ks"
-	cell            = "healthcheck_test_cell"
-	shards          = []string{"-80", "80-"}
-	schemaSQL       = `
+	clusterInstance       *cluster.LocalProcessCluster
+	vtParams              mysql.ConnParams
+	tabletRefreshInterval = 5 * time.Second
+	keyspaceName          = "healthcheck_test_ks"
+	cell                  = "healthcheck_test_cell"
+	shards                = []string{"-80", "80-"}
+	schemaSQL             = `
 create table customer(
 	customer_id bigint not null auto_increment,
 	email varbinary(128),
@@ -110,7 +111,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = []string{}
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, []string{"-tablet_refresh_interval", tabletRefreshInterval.String()}...)
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
@@ -161,7 +162,7 @@ func TestHealthCheckCacheWithTabletChurn(t *testing.T) {
 		// We need to sleep for at least vtgate's -tablet_refresh_interval to be sure we
 		// have resynchronized the healthcheck cache with the topo server via the topology
 		// watcher and pruned the deleted tablet from the healthcheck cache.
-		time.Sleep(1 * time.Minute)
+		time.Sleep(tabletRefreshInterval)
 
 		qr, _ = vtgateConn.ExecuteFetch(query, 100, true)
 		assert.Equal(t, expectedTabletHCcacheEntries, len(qr.Rows), "wrong number of tablet records in healthcheck cache, expected %d but had %d. Results: %v", expectedTabletHCcacheEntries, len(qr.Rows), qr.Rows)
