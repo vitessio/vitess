@@ -2607,6 +2607,15 @@ func TestKeywords(t *testing.T) {
 			input:  "insert into t(a, b) values (current_date, current_date())",
 			output: "insert into t(a, b) values (current_date(), current_date())",
 		}, {
+			input: "insert into t(a, b) values ('a', 'b')",
+			output: "insert into t(a, b) values ('a', 'b')",
+		}, {
+			input: "insert into t() values ()",
+			output: "insert into t() values ()",
+		}, {
+			input: "insert into t() values (), (), ()",
+			output: "insert into t() values (), (), ()",
+		}, {
 			input: "select * from t where a > utc_timestmp()",
 		}, {
 			input: "select * from t where a > utc_timestamp(4)",
