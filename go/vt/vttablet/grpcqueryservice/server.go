@@ -307,7 +307,7 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})

@@ -415,3 +415,62 @@ func TestReservedConnInStreaming(t *testing.T) {
 	assertMatches(t, conn, "select id, val1 from test", "[[INT64(80) NULL]]")
 	assertMatches(t, conn, "select @@sql_safe_updates", "[[INT64(1)]]")
 }
+
+func TestUnifiedOlapAndOltp(t *testing.T) {
+	vtParams := mysql.ConnParams{
+		Host: "localhost",
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	checkedExec(t, conn, "delete from test")
+	checkOltpAndOlapInterchangingTx(t, conn)
+
+	// modify some system settings to active reserved connection use.
+	checkedExec(t, conn, "set sql_safe_updates = 1")
+
+	checkedExec(t, conn, "delete from test")
+	checkOltpAndOlapInterchangingTx(t, conn)
+}
+
+func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
+	// start transaction in execute
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
+
+	// move to streaming
+	checkedExec(t, conn, "set workload = olap")
+
+	// checking data in streaming
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
+
+	// rollback the tx
+	checkedExec(t, conn, "rollback")
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[]")
+
+	// move back to oltp
+	checkedExec(t, conn, "set workload = oltp")
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[]")
+
+	// move to streaming and start transaction
+	checkedExec(t, conn, "set workload = olap")
+	checkedExec(t, conn, "begin")
+	checkedExec(t, conn, "insert into test (id, val1) values (80, null)")
+
+	// checking data in streaming
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
+
+	// move back to oltp and commit the tx
+	checkedExec(t, conn, "set workload = oltp")
+	checkedExec(t, conn, "commit")
+
+	// check in oltp
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
+
+	// check in olap
+	checkedExec(t, conn, "set workload = oltp")
+	assertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
+}
