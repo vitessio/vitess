@@ -129,6 +129,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfExplainStmt(in)
 	case *ExplainTab:
 		return CloneRefOfExplainTab(in)
+	case *ExprOrColumns:
+		return CloneRefOfExprOrColumns(in)
 	case Exprs:
 		return CloneExprs(in)
 	case *ExtractFuncExpr:
@@ -209,6 +211,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfParenTableExpr(in)
 	case *PartitionDefinition:
 		return CloneRefOfPartitionDefinition(in)
+	case *PartitionOption:
+		return CloneRefOfPartitionOption(in)
 	case *PartitionSpec:
 		return CloneRefOfPartitionSpec(in)
 	case Partitions:
@@ -267,6 +271,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfStarExpr(in)
 	case *Stream:
 		return CloneRefOfStream(in)
+	case *SubPartition:
+		return CloneRefOfSubPartition(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:
@@ -862,6 +868,17 @@ func CloneRefOfExplainTab(n *ExplainTab) *ExplainTab {
 	return &out
 }
 
+// CloneRefOfExprOrColumns creates a deep clone of the input.
+func CloneRefOfExprOrColumns(n *ExprOrColumns) *ExprOrColumns {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Expr = CloneExpr(n.Expr)
+	out.ColumnList = CloneColumns(n.ColumnList)
+	return &out
+}
+
 // CloneExprs creates a deep clone of the input.
 func CloneExprs(n Exprs) Exprs {
 	if n == nil {
@@ -1268,6 +1285,20 @@ func CloneRefOfPartitionDefinition(n *PartitionDefinition) *PartitionDefinition 
 	return &out
 }
 
+// CloneRefOfPartitionOption creates a deep clone of the input.
+func CloneRefOfPartitionOption(n *PartitionOption) *PartitionOption {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.ExprOrCol = CloneRefOfExprOrColumns(n.ExprOrCol)
+	out.Expr = CloneExpr(n.Expr)
+	out.SubPartition = CloneRefOfSubPartition(n.SubPartition)
+	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	return &out
+}
+
 // CloneRefOfPartitionSpec creates a deep clone of the input.
 func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	if n == nil {
@@ -1575,6 +1606,17 @@ func CloneRefOfStream(n *Stream) *Stream {
 	return &out
 }
 
+// CloneRefOfSubPartition creates a deep clone of the input.
+func CloneRefOfSubPartition(n *SubPartition) *SubPartition {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.KeyColList = CloneColumns(n.KeyColList)
+	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
 // CloneRefOfSubquery creates a deep clone of the input.
 func CloneRefOfSubquery(n *Subquery) *Subquery {
 	if n == nil {
@@ -1654,6 +1696,7 @@ func CloneRefOfTableSpec(n *TableSpec) *TableSpec {
 	out.Indexes = CloneSliceOfRefOfIndexDefinition(n.Indexes)
 	out.Constraints = CloneSliceOfRefOfConstraintDefinition(n.Constraints)
 	out.Options = CloneTableOptions(n.Options)
+	out.PartitionOption = CloneRefOfPartitionOption(n.PartitionOption)
 	return &out
 }
 

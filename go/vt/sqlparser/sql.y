@@ -91,6 +91,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
   convertType   *ConvertType
@@ -164,6 +165,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   boolean bool
   boolVal BoolVal
   ignore Ignore
+  partitionOption *PartitionOption
+  exprOrColumns *ExprOrColumns
+  subPartition  *SubPartition
 }
 
 %token LEX_ERROR
@@ -294,6 +298,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
+// Partitions tokens
+%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
+
+%type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
@@ -322,6 +330,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
+%type <partitionOption> partitions_options_opt
+%type <exprOrColumns> expr_or_col
+%type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
@@ -423,7 +434,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
-%type <partDefs> partition_definitions
+%type <partDefs> partition_definitions partition_definition_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
@@ -958,7 +969,7 @@ vindex_type_opt:
   }
 
 vindex_type:
-  id_or_var
+  sql_id
   {
     $$ = $1
   }
@@ -1045,10 +1056,11 @@ database_or_schema:
 | SCHEMA
 
 table_spec:
-  '(' table_column_list ')' table_option_list_opt
+  '(' table_column_list ')' table_option_list_opt partitions_options_opt
   {
     $$ = $2
     $$.Options = $4
+    $$.PartitionOption = $5
   }
 
 create_options_opt:
@@ -1079,7 +1091,7 @@ create_options:
   }
 
 default_optional:
-  /* empty */ %prec LOWER_THAN_CHARSET 
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = false
   }
@@ -2413,6 +2425,136 @@ alter_statement:
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
     }
+  }
+
+partitions_options_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY linear_opt HASH '(' expression ')' partitions_opt
+    subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isHASH: true,
+        Expr: $6,
+        Partitions: $8,
+        SubPartition: $9,
+        Definitions: $10,
+      }
+    }
+| PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
+    partitions_opt subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isKEY: true,
+        KeyAlgorithm: $5,
+        KeyColList: $7,
+        Partitions: $9,
+        SubPartition: $10,
+        Definitions: $11,
+      }
+    }
+| PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
+    partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        RangeOrList: $3,
+        ExprOrCol: $4,
+        Partitions: $5,
+        SubPartition: $6,
+        Definitions: $7,
+      }
+    }
+
+subpartition_opt:
+  {
+    $$ = nil
+  }
+| SUBPARTITION BY linear_opt HASH '(' expression ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isHASH: true,
+      Expr: $6,
+      SubPartitions: $8,
+    }
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isKEY: true,
+      KeyAlgorithm: $5,
+      KeyColList: $7,
+      SubPartitions: $9,
+    }
+  }
+
+partition_definition_opt:
+  {
+    $$ = nil
+  }
+| '(' partition_definitions ')'
+  {
+    $$ = $2
+  }
+
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1)
+  }
+
+algorithm_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
+  }
+
+expr_or_col:
+  '(' expression ')'
+  {
+    $$ = &ExprOrColumns{Expr: $2}
+  }
+| COLUMNS '(' column_list ')'
+  {
+    $$ = &ExprOrColumns{ColumnList: $3}
+  }
+
+partitions_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
+subpartitions_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($2)
   }
 
 partition_operation:
@@ -5199,6 +5341,7 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LINEAR
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
@@ -5226,6 +5369,7 @@ reserved_keyword:
 | PARTITION
 | PERCENT_RANK
 | PRIMARY
+| RANGE
 | RANK
 | READ
 | RECURSIVE
@@ -5366,6 +5510,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
+| HASH
 | HEADER
 | HISTOGRAM
 | HISTORY
@@ -5391,6 +5536,7 @@ non_reserved_keyword:
 | LEVEL
 | LINES
 | LINESTRING
+| LIST
 | LOAD
 | LOCAL
 | LOCKED
@@ -5440,6 +5586,7 @@ non_reserved_keyword:
 | PACK_KEYS
 | PARSER
 | PARTITIONING
+| PARTITIONS
 | PASSWORD
 | PATH
 | PERSIST
@@ -5501,6 +5648,8 @@ non_reserved_keyword:
 | STATUS
 | STORAGE
 | STREAM
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TEMPORARY

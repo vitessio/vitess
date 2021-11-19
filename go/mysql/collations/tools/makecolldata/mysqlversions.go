@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
 )
@@ -111,8 +112,13 @@ func makeversions(output string) {
 	g.P("func (v collver) String() string {")
 	g.P("switch v {")
 	g.P("case collverInvalid: return \"Invalid\"")
-	for _, version := range versions {
-		g.P("case collver", version, ": return ", codegen.Quote(version))
+	for _, cv := range versions {
+		vi := strings.IndexFunc(cv, unicode.IsNumber)
+		database := cv[:vi]
+		version, _ := strconv.Atoi(cv[vi:])
+		toString := fmt.Sprintf("%s %.1f", database, float64(version)/10.0)
+
+		g.P("case collver", cv, ": return ", codegen.Quote(toString))
 	}
 	g.P("default: panic(\"invalid version identifier\")")
 	g.P("}")
