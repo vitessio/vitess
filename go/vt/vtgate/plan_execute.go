@@ -212,9 +212,15 @@ func (e *Executor) executePlan(
 	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
-	if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
-		_ = e.txConn.Rollback(ctx, safeSession)
-		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+	if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec != "" {
+		_, _, sErr := e.execute(ctx, safeSession, vcursor.rollbackOnPartialExec, bindVars, logStats)
+		if sErr == nil {
+			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "failed to execute due to partial DML execution: %v", err)
+		} else {
+			// not able to rollback changes of the failed query, so have to abort the complete transaction.
+			_ = e.txConn.Rollback(ctx, safeSession)
+			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to not able to reverse changes of partial DML execution: %v:%v", sErr, err)
+		}
 	}
 	return qr, err
 }
