@@ -295,9 +295,15 @@ func (e *Executor) StreamExecute(
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 		// Check if there was partial DML execution. If so, rollback the transaction.
-		if err != nil && safeSession.InTransaction() && vc.rollbackOnPartialExec {
-			_ = e.txConn.Rollback(ctx, safeSession)
-			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+		if err != nil && safeSession.InTransaction() && vc.rollbackOnPartialExec != "" {
+			_, _, sErr := e.execute(ctx, safeSession, vc.rollbackOnPartialExec, bindVars, logStats)
+			if sErr == nil {
+				err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "failed to execute due to partial DML execution: %v", err)
+			} else {
+				// not able to rollback changes of the failed query, so have to abort the complete transaction.
+				_ = e.txConn.Rollback(ctx, safeSession)
+				err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to not able to reverse changes of partial DML execution: %v:%v", sErr, err)
+			}
 		}
 		return err
 	}
@@ -1663,7 +1669,7 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError string, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, session, autocommit, callback)
 }
 

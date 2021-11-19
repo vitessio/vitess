@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
+
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
@@ -63,7 +65,7 @@ var _ vindexes.VCursor = (*vcursorImpl)(nil)
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError string, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -99,7 +101,7 @@ type vcursorImpl struct {
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
-	rollbackOnPartialExec bool
+	rollbackOnPartialExec string
 	ignoreMaxMemoryRows   bool
 	vschema               *vindexes.VSchema
 	vm                    VSchemaOperator
@@ -434,20 +436,42 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
 
+	uID, err := vc.markSavepoint(rollbackOnError, session, bindVars)
+	if err != nil {
+		return nil, err
+	}
 	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil && rollbackOnError {
-		vc.rollbackOnPartialExec = true
+	if err == nil && rollbackOnError && vc.rollbackOnPartialExec == "" {
+		vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
 	}
 	return qr, err
+}
+
+func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, session *SafeSession, bindVars map[string]*querypb.BindVariable) (string, error) {
+	if !rollbackOnError {
+		return "", nil
+	}
+	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
+	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
+	_, err := vc.executor.Execute(vc.ctx, "markSavepoint", session, spQuery, bindVars)
+	if err != nil {
+		return "", err
+	}
+	return uID, nil
 }
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(queries)))
+	uID, err := vc.markSavepoint(rollbackOnError, vc.safeSession, map[string]*querypb.BindVariable{})
+	if err != nil {
+		return nil, []error{err}
+	}
+
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
-	if errs == nil && rollbackOnError {
-		vc.rollbackOnPartialExec = true
+	if len(errs) == 0 && rollbackOnError && vc.rollbackOnPartialExec == "" {
+		vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
 	}
 	return qr, errs
 }
@@ -515,13 +539,7 @@ func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query str
 	}}
 	qr, errs := vc.ExecuteMultiShard(rss, queries, rollbackOnError, autocommit)
 
-	if len(errs) == 0 {
-		if rollbackOnError {
-			vc.rollbackOnPartialExec = true
-		}
-		return qr, nil
-	}
-	return nil, errs[0]
+	return qr, vterrors.Aggregate(errs)
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
