@@ -716,7 +716,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
-	query = "show vitess_shards like 'TestSharded%/%'"
+	query = "show vitess_shards like 'TestShard%/%'"
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 
