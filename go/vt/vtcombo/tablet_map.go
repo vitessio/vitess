@@ -607,11 +607,12 @@ func (itc *internalTabletConn) BeginStreamExecute(
 	preQueries []string,
 	query string,
 	bindVars map[string]*querypb.BindVariable,
+	reservedID int64,
 	options *querypb.ExecuteOptions,
 	callback func(*sqltypes.Result) error,
 ) (int64, *topodatapb.TabletAlias, error) {
 	bindVars = sqltypes.CopyBindVariables(bindVars)
-	transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, options, callback)
+	transactionID, tabletAlias, err := itc.tablet.qsc.QueryService().BeginStreamExecute(ctx, target, preQueries, query, bindVars, reservedID, options, callback)
 	return transactionID, tabletAlias, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

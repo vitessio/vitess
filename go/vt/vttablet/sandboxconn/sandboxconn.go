@@ -392,15 +392,15 @@ func (sbc *SandboxConn) BeginExecuteBatch(ctx context.Context, target *querypb.T
 }
 
 // BeginStreamExecute is part of the QueryService interface.
-func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
-	transactionID, alias, err := sbc.begin(ctx, target, preQueries, 0, options)
+func (sbc *SandboxConn) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := sbc.begin(ctx, target, preQueries, reservedID, options)
 	if transactionID != 0 {
-		sbc.setTxReservedID(transactionID, 0)
+		sbc.setTxReservedID(transactionID, reservedID)
 	}
 	if err != nil {
 		return 0, nil, err
 	}
-	err = sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, 0, options, callback)
+	err = sbc.StreamExecute(ctx, target, sql, bindVariables, transactionID, reservedID, options, callback)
 	return transactionID, alias, err
 }
 
@@ -541,7 +541,7 @@ func (sbc *SandboxConn) ReserveBeginExecute(ctx context.Context, target *querypb
 // ReserveBeginStreamExecute is part of the QueryService interface.
 func (sbc *SandboxConn) ReserveBeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (int64, int64, *topodatapb.TabletAlias, error) {
 	reservedID := sbc.reserve(ctx, target, preQueries, bindVariables, 0, options)
-	transactionID, alias, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, options, callback)
+	transactionID, alias, err := sbc.BeginStreamExecute(ctx, target, postBeginQueries, sql, bindVariables, reservedID, options, callback)
 	if transactionID != 0 {
 		sbc.setTxReservedID(transactionID, reservedID)
 	}
