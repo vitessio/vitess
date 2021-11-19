@@ -406,7 +406,7 @@ func (stc *ScatterConn) StreamExecuteMulti(
 					})
 				}
 			case begin:
-				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], opts, callback)
+				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
 				if err != nil {
 					retryRequest(func() {
 						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
