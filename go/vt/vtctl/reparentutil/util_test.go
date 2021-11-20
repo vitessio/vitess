@@ -129,7 +129,7 @@ func TestChooseNewPrimary(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "found a replica",
+			name: "found a replica - more advanced relay log position",
 			tmc: &chooseNewPrimaryTestTMClient{
 				// zone1-101 is behind zone1-102
 				// since the relay log position for zone1-102 is more advanced
