@@ -10,6 +10,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+var dtNameCounter = 1
+
 func TestName(t *testing.T) {
 	fooCol := &sqlparser.ColName{
 		Name:      sqlparser.NewColIdent("col"),
@@ -97,11 +99,27 @@ func TestName(t *testing.T) {
 				condition: joinCond,
 			},
 			expected: "select * from (select count(*), dt1.col from foo group by dt1.col) as dt1, bar having dt1.col = bar.col",
+		}, {
+			op: &join{
+				lhs: &vectorAggr{
+					src:     &table{name: "foo"},
+					groupBy: []*AliasedExpr{{Expr: fooCol}},
+					aggrF:   []*AliasedExpr{{Expr: countStar}},
+				},
+				rhs: &vectorAggr{
+					src:     &table{name: "bar"},
+					groupBy: []*AliasedExpr{{Expr: barCol}},
+					aggrF:   []*AliasedExpr{{Expr: countStar}},
+				},
+				condition: joinCond,
+			},
+			expected: "select * from (select count(*), dt2.col from foo group by dt2.col) as dt2, (select count(*), dt1.col from bar group by dt1.col) as dt1 having dt2.col = dt1.col",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.expected, func(t *testing.T) {
+			dtNameCounter = 1
 			assert.Equal(t, test.expected, sqlparser.String(toSQL(test.op)))
 		})
 	}
@@ -259,6 +277,8 @@ func (qb *queryBuilder) hasTable(tableName string) bool {
 }
 
 func (qb *queryBuilder) convertToDerivedTable() string {
+	dtName := fmt.Sprintf("dt%d", dtNameCounter)
+	dtNameCounter++
 	sel := &sqlparser.Select{
 		From: []sqlparser.TableExpr{
 			&sqlparser.AliasedTableExpr{
@@ -266,15 +286,13 @@ func (qb *queryBuilder) convertToDerivedTable() string {
 					Select: qb.sel,
 				},
 				// TODO: use number generators for dt1
-				As: sqlparser.NewTableIdent("dt1"),
+				As: sqlparser.NewTableIdent(dtName),
 				// TODO: also alias the column names to avoid collision with other tables
 			},
 		},
-		SelectExprs: sqlparser.SelectExprs{&sqlparser.StarExpr{}},
 	}
 	qb.sel = sel
-
-	return "dt1"
+	return dtName
 }
 
 type queryBuilder struct {
