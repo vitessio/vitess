@@ -831,10 +831,16 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			filter := show.ShowTablesOpt.Filter
 
 			if filter.Like != "" {
-				likeRexep := sqlparser.LikeToRegexp(filter.Like)
+				shardLikeRexep := sqlparser.LikeToRegexp(filter.Like)
 
+				if strings.Contains(filter.Like, "/") {
+					keyspaceLikeRexep := sqlparser.LikeToRegexp(strings.Split(filter.Like, "/")[0])
+					keyspaceFilters = append(keyspaceFilters, func(ks string) bool {
+						return keyspaceLikeRexep.MatchString(ks)
+					})
+				}
 				shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
-					return likeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
+					return shardLikeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
 				})
 
 				return keyspaceFilters, shardFilters
