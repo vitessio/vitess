@@ -47,7 +47,7 @@ type (
 
 	// QueryTable is a single FROM table, including all predicates particular to this table
 	QueryTable struct {
-		TableID     semantics.TableSet
+		ID          semantics.TableSet
 		Alias       *sqlparser.AliasedTableExpr
 		Table       sqlparser.TableName
 		Predicates  []sqlparser.Expr
@@ -72,7 +72,7 @@ func (qg *QueryGraph) PushPredicate(expr sqlparser.Expr, semTable *semantics.Sem
 func (qg *QueryGraph) TableID() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
-		ts = ts.Merge(table.TableID)
+		ts = ts.Merge(table.ID)
 	}
 	return ts
 }
@@ -148,7 +148,7 @@ func (qg *QueryGraph) collectPredicate(predicate sqlparser.Expr, semTable *seman
 
 func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
-		if table == t.TableID {
+		if table == t.ID {
 			t.Predicates = append(t.Predicates, predicate)
 			return true
 		}

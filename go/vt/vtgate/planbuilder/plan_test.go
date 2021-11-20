@@ -239,7 +239,8 @@ func TestSysVarSetDisabled(t *testing.T) {
 
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
-		v: loadSchema(t, "schema_test.json"),
+		v:        loadSchema(t, "schema_test.json"),
+		gen4Hack: true,
 	}
 
 	testFile(t, "onecase.txt", "", vschema)
@@ -474,6 +475,7 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       PlannerVersion
+	gen4Hack      bool
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {
@@ -492,6 +494,10 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 
 func (vw *vschemaWrapper) Planner() PlannerVersion {
 	return vw.version
+}
+
+func (vw *vschemaWrapper) Gen4Hack() bool {
+	return vw.gen4Hack
 }
 
 // SetPlannerVersion implements the ContextVSchema interface

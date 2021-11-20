@@ -53,6 +53,7 @@ type ContextVSchema interface {
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
+	Gen4Hack() bool
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so

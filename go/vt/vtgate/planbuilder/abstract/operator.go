@@ -65,7 +65,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
@@ -149,6 +149,34 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(node, semTable)
+	case *sqlparser.Union:
+		op, err = createOperatorFromUnion(node, semTable)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T: operator not yet supported", selStmt)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return op.Compact(semTable)
+}
+
+// CreateFullOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
+func CreateFullOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op Operator, err error) {
+	switch node := selStmt.(type) {
+	case *sqlparser.Select:
+		op, err = createOperatorFromSelect(node, semTable)
+		if err != nil {
+			return nil, err
+		}
+		var expressions []*sqlparser.AliasedExpr
+		for _, expr := range node.SelectExprs {
+			expressions = append(expressions, expr.(*sqlparser.AliasedExpr))
+		}
+		return &Projection{
+			Source:      op,
+			Expressions: expressions,
+		}, nil
 	case *sqlparser.Union:
 		op, err = createOperatorFromUnion(node, semTable)
 	default:

@@ -388,6 +388,10 @@ func (vc *vcursorImpl) Planner() planbuilder.PlannerVersion {
 	return planbuilder.V3
 }
 
+func (vc *vcursorImpl) Gen4Hack() bool {
+	return *OpHack
+}
+
 // GetSemTable implements the ContextVSchema interface
 func (vc *vcursorImpl) GetSemTable() *semantics.SemTable {
 	return vc.semTable

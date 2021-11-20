@@ -142,28 +142,48 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
-	if err != nil {
-		return nil, err
-	}
-	err = opTree.CheckValid()
-	if err != nil {
-		return nil, err
-	}
 
-	tree, err := optimizeQuery(ctx, opTree)
-	if err != nil {
-		return nil, err
-	}
+	var plan logicalPlan
 
-	plan, err := transformToLogicalPlan(ctx, tree)
-	if err != nil {
-		return nil, err
-	}
+	if vschema.Gen4Hack() {
+		// Gen4++ FOR LIFE!
+		opTree, err := abstract.CreateFullOperatorFromAST(selStmt, semTable)
+		if err != nil {
+			return nil, err
+		}
 
-	plan, err = planHorizon(ctx, plan, selStmt)
-	if err != nil {
-		return nil, err
+		tree, err := optimizeTree(ctx, opTree)
+		if err != nil {
+			return nil, err
+		}
+		plan, err = transformOpToPlan(ctx, tree)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+		if err != nil {
+			return nil, err
+		}
+		err = opTree.CheckValid()
+		if err != nil {
+			return nil, err
+		}
+
+		tree, err := optimizeQuery(ctx, opTree)
+		if err != nil {
+			return nil, err
+		}
+
+		plan, err = transformToLogicalPlan(ctx, tree)
+		if err != nil {
+			return nil, err
+		}
+
+		plan, err = planHorizon(ctx, plan, selStmt)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
@@ -183,6 +203,10 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 
 	return plan, nil
+}
+
+func transformOpToPlan(ctx *planningContext, tree abstract.Operator) (logicalPlan, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "do me next!")
 }
 
 func newPlanningContext(reservedVars *sqlparser.ReservedVars, semTable *semantics.SemTable, vschema ContextVSchema) *planningContext {
