@@ -40,6 +40,7 @@ const (
 	MediumIntColumnType
 	JSONColumnType
 	FloatColumnType
+	DoubleColumnType
 	BinaryColumnType
 	StringColumnType
 	IntegerColumnType
@@ -57,6 +58,11 @@ type Column struct {
 
 	IsNullable    bool
 	IsDefaultNull bool
+
+	CharacterMaximumLength int64
+	NumericPrecision       int64
+	NumericScale           int64
+	DateTimePrecision      int64
 
 	// add Octet length for binary type, fix bytes with suffix "00" get clipped in mysql binlog.
 	// https://github.com/github/gh-ost/issues/909
@@ -77,6 +83,16 @@ func (c *Column) HasDefault() bool {
 		return false
 	}
 	return true
+}
+
+// IsNumeric returns true if the column is of a numeric type
+func (c *Column) IsNumeric() bool {
+	return c.NumericPrecision > 0
+}
+
+// IsFloatingPoint returns true if the column is of a floating point numeric type
+func (c *Column) IsFloatingPoint() bool {
+	return c.Type == FloatColumnType || c.Type == DoubleColumnType
 }
 
 // NewColumns creates a new column array from non empty names

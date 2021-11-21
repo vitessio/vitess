@@ -230,6 +230,11 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "YES")
 			column.IsDefaultNull = row.AsBool("is_default_null", false)
 
+			column.CharacterMaximumLength = row.AsInt64("CHARACTER_MAXIMUM_LENGTH", 0)
+			column.NumericPrecision = row.AsInt64("NUMERIC_PRECISION", 0)
+			column.NumericScale = row.AsInt64("NUMERIC_SCALE", 0)
+			column.DateTimePrecision = row.AsInt64("DATETIME_PRECISION", 0)
+
 			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
 				column.IsUnsigned = true
@@ -248,6 +253,9 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 			}
 			if strings.Contains(columnType, "float") {
 				column.SetTypeIfUnknown(vrepl.FloatColumnType)
+			}
+			if strings.Contains(columnType, "double") {
+				column.SetTypeIfUnknown(vrepl.DoubleColumnType)
 			}
 			if strings.HasPrefix(columnType, "enum") {
 				column.SetTypeIfUnknown(vrepl.EnumColumnType)
@@ -370,6 +378,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 
 	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
+	v.expandedColumnNames = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
 	if err != nil {

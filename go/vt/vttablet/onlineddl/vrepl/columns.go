@@ -77,6 +77,59 @@ func GetSharedColumns(
 	return NewColumnList(sharedColumnNames), NewColumnList(mappedSharedColumnNames), NewColumnList(droppedSourceNonGeneratedColumnsNames), sharedColumnsMap
 }
 
+// isExpandedColumn sees if target column has any value set/range that is impossible in source column. See GetExpandedColumns comment for examples
+func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string) {
+	if targetColumn.IsNullable && !sourceColumn.IsNullable {
+		return true, "target is NULL-able, source is not"
+	}
+	if targetColumn.CharacterMaximumLength > sourceColumn.CharacterMaximumLength {
+		return true, "higher CHARACTER_MAXIMUM_LENGTH"
+	}
+	if targetColumn.NumericPrecision > sourceColumn.NumericPrecision {
+		return true, "higher NUMERIC_PRECISION"
+	}
+	if targetColumn.NumericScale > sourceColumn.NumericScale {
+		return true, "higher NUMERIC_SCALE"
+	}
+	if targetColumn.DateTimePrecision > sourceColumn.DateTimePrecision {
+		return true, "higher DATETIME_PRECISION"
+	}
+	if sourceColumn.IsNumeric() && targetColumn.IsNumeric() {
+		if sourceColumn.IsUnsigned && !targetColumn.IsUnsigned {
+			return true, "source is unsigned, target is signed"
+		}
+		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {
+			return true, "target is floating point, source is not"
+		}
+	}
+	return false, ""
+}
+
+// GetExpandedColumnNames is given source and target shared columns, and returns the list of columns whose data type is expanded.
+// An expanded data type is one where the target can have a value which the source does not. Examples:
+// - any NOT NULL to NULLable (a NULL in the target cannot appear on source)
+// - INT -> BIGINT (obvious)
+// - BIGINT UNSIGNED -> INT SIGNED (negative values)
+// - TIMESTAMP -> TIMESTAMP(3)
+// etc.
+func GetExpandedColumnNames(
+	sourceSharedColumns *ColumnList,
+	targetSharedColumns *ColumnList,
+) (
+	expandedColumnNames []string,
+) {
+	for i := range sourceSharedColumns.Columns() {
+		// source and target columns assumed to be mapped 1:1, same length
+		sourceColumn := sourceSharedColumns.Columns()[i]
+		targetColumn := targetSharedColumns.Columns()[i]
+
+		if isExpanded, _ := isExpandedColumn(&sourceColumn, &targetColumn); isExpanded {
+			expandedColumnNames = append(expandedColumnNames, sourceColumn.Name)
+		}
+	}
+	return expandedColumnNames
+}
+
 // GetNoDefaultColumnNames returns names of columns which have no default value, out of given list of columns
 func GetNoDefaultColumnNames(columns *ColumnList) (names []string) {
 	names = []string{}
