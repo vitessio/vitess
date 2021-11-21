@@ -219,37 +219,38 @@ func TestSchemaChange(t *testing.T) {
 	require.Equal(t, 1, len(shards))
 
 	var uuids []string
+	ddlStrategy := "online"
 	// CREATE
 	t.Run("CREATE TABLE IF NOT EXISTS where table does not exist", func(t *testing.T) {
 		// The table does not exist
-		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// The table existed, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// Table was dropped (renamed) so it will now be restored
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert revert revert CREATE TABLE IF NOT EXISTS where did not exist", func(t *testing.T) {
 		// Table was restored, so it will now be dropped (renamed)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
-		uuid := testOnlineDDLStatement(t, createStatement, "online", "vtgate", "just-created")
+		uuid := testOnlineDDLStatement(t, createStatement, ddlStrategy, "vtgate", "just-created")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -258,14 +259,14 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("revert CREATE TABLE", func(t *testing.T) {
 		// This will drop the table (well, actually, rename it away)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
 		// Restore the table. Data should still be in the table!
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -273,13 +274,13 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("fail revert older change", func(t *testing.T) {
 		// We shouldn't be able to revert one-before-last succcessful migration.
-		uuid := testRevertMigration(t, uuids[len(uuids)-2])
+		uuid := testRevertMigration(t, uuids[len(uuids)-2], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 	})
 	t.Run("CREATE TABLE IF NOT EXISTS where table exists", func(t *testing.T) {
 		// The table exists. A noop.
-		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, "online", "vtgate", "")
+		uuid := testOnlineDDLStatement(t, createIfNotExistsStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -287,14 +288,14 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
 		// Since the table already existed, thus not created by the reverts migration,
 		// we expect to _not_ drop it in this revert. A noop.
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
 		// Table was not dropped, thus isn't re-created, and it just still exists. A noop.
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -324,6 +325,7 @@ func TestSchemaChange(t *testing.T) {
 			// If it fails, it has nothing to do with revert.
 			// We run this test because we expect its functionality to work in the next step.
 			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
@@ -342,13 +344,14 @@ func TestSchemaChange(t *testing.T) {
 		// This reverts the last ALTER TABLE.
 		// And we run traffic on the table during the revert
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		cancel() // will cause runMultipleConnections() to terminate
@@ -360,13 +363,14 @@ func TestSchemaChange(t *testing.T) {
 		// This reverts the last revert (reapplying the last ALTER TABLE).
 		// And we run traffic on the table during the revert
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		cancel() // will cause runMultipleConnections() to terminate
@@ -378,18 +382,43 @@ func TestSchemaChange(t *testing.T) {
 		// For good measure, let's verify that revert-revert-revert works...
 		// So this again pulls us back to first ALTER
 		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			runMultipleConnections(ctx, t)
 		}()
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		cancel() // will cause runMultipleConnections() to terminate
 		wg.Wait()
 		checkMigratedTable(t, tableName, alterHints[0])
+		testSelectTableMetrics(t)
+	})
+	t.Run("postponed revert", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runMultipleConnections(ctx, t)
+		}()
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy+" -postpone-completion")
+		uuids = append(uuids, uuid)
+		// Should be still running!
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+		// Issue a complete and wait for successful completion
+		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
+		// This part may take a while, because we depend on vreplicatoin polling
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		cancel() // will cause runMultipleConnections() to terminate
+		wg.Wait()
+		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
 
@@ -402,7 +431,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("revert DROP TABLE", func(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, true)
@@ -410,7 +439,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("revert revert DROP TABLE", func(t *testing.T) {
 		// This will reapply DROP TABLE
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
@@ -426,21 +455,21 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table will not be recreated because it didn't exist during the DROP TABLE IF EXISTS
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table still does not exist
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table still does not exist
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		checkTable(t, tableName, false)
@@ -456,7 +485,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("fail revert failed online DROP TABLE", func(t *testing.T) {
 		// Cannot revert a failed migration
-		uuid := testRevertMigration(t, uuids[len(uuids)-1])
+		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
 		checkTable(t, tableName, false)
@@ -494,9 +523,9 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 }
 
 // testRevertMigration reverts a given migration
-func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
+func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy string) (uuid string) {
 	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
-	r := onlineddl.VtgateExecQuery(t, &vtParams, revertQuery, "")
+	r := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, revertQuery, "")
 
 	row := r.Named().Row()
 	require.NotNil(t, row)
@@ -506,7 +535,7 @@ func testRevertMigration(t *testing.T, revertUUID string) (uuid string) {
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	time.Sleep(time.Second * 20)
+	_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 	return uuid
 }
 
