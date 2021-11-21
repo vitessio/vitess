@@ -392,6 +392,8 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case RetryMigrationType:
 		alterType = "retry"
+	case CleanupMigrationType:
+		alterType = "cleanup"
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CancelMigrationType:
@@ -603,6 +605,112 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteByte(' ')
+			node.KeyColList.formatFast(buf)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(node.RangeOrList)
+		buf.WriteByte(' ')
+		node.ExprOrCol.formatFast(buf)
+	}
+	if node.Partitions != "" {
+		buf.WriteString(" partitions ")
+		buf.WriteString(node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.WriteByte(' ')
+		node.SubPartition.formatFast(buf)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			pd.formatFast(buf)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// formatFast formats the node.
+func (node *SubPartition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteString(" (")
+			node.KeyColList.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.WriteString(" subpartitions ")
+		buf.WriteString(node.SubPartitions)
+	}
+}
+
+// formatFast formats the node.
+func (node *ExprOrColumns) formatFast(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.WriteByte('(')
+		node.Expr.formatFast(buf)
+		buf.WriteByte(')')
+	}
+	if node.ColumnList != nil {
+		buf.WriteString("columns ")
+		node.ColumnList.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
 func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
 	for i, col := range ts.Columns {
@@ -641,6 +749,10 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 			opt.Tables.formatFast(buf)
 			buf.WriteByte(')')
 		}
+	}
+	if ts.PartitionOption != nil {
+		buf.WriteByte(' ')
+		ts.PartitionOption.formatFast(buf)
 	}
 }
 

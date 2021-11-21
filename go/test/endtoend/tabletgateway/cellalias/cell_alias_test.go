@@ -130,7 +130,8 @@ func TestMain(m *testing.M) {
 		var mysqlProcs []*exec.Cmd
 		for _, tablet := range []*cluster.Vttablet{shard1Primary, shard1Replica, shard1Rdonly, shard2Primary, shard2Replica, shard2Rdonly} {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				tablet.Cell,
@@ -143,7 +144,7 @@ func TestMain(m *testing.M) {
 				localCluster.TmpDirectory,
 				commonTabletArg,
 				true,
-			)
+				localCluster.DefaultCharset)
 			tablet.VttabletProcess.SupportsBackup = true
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {

@@ -68,8 +68,8 @@ func TestBatchRead(t *testing.T) {
 			OrgTable:     "vitess_a",
 			Database:     "vttest",
 			OrgName:      "name",
-			ColumnLength: 384,
-			Charset:      33,
+			ColumnLength: 512,
+			Charset:      45,
 		}, {
 			Name:         "foo",
 			Type:         sqltypes.VarBinary,

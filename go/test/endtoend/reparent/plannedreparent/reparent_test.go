@@ -154,6 +154,33 @@ func TestReparentGraceful(t *testing.T) {
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab3, tab4})
 }
 
+// TestPRSWithDrainedLaggingTablet tests that PRS succeeds even if we have a lagging drained tablet
+func TestPRSWithDrainedLaggingTablet(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	setupReparentCluster(t)
+	defer teardownCluster()
+
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tab2.Alias, "drained")
+	require.NoError(t, err)
+
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab2, tab3, tab4})
+
+	// make tab2 lag from the other tablets by setting the delay to a large number
+	runSQL(context.Background(), t, `stop slave;CHANGE MASTER TO MASTER_DELAY = 1999;start slave;`, tab2)
+
+	// insert another row in tab2
+	confirmReplication(t, tab1, []*cluster.Vttablet{tab3, tab4})
+
+	// assert that there is indeed only 1 row in tab2
+	res := runSQL(context.Background(), t, `select msg from vt_insert_test;`, tab2)
+	assert.Equal(t, 1, len(res.Rows))
+
+	// Perform a graceful reparent operation
+	prs(t, tab3)
+	validateTopology(t, false)
+	checkPrimaryTablet(t, tab3)
+}
+
 func TestReparentReplicaOffline(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	setupReparentCluster(t)
@@ -165,7 +192,7 @@ func TestReparentReplicaOffline(t *testing.T) {
 	// Perform a graceful reparent operation.
 	out, err := prsWithTimeout(t, tab2, false, "", "31s")
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab4.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tab4.Alias))
 
 	checkPrimaryTablet(t, tab2)
 }
@@ -313,7 +340,7 @@ func TestReparentWithDownReplica(t *testing.T) {
 	// Perform a graceful reparent operation. It will fail as one tablet is down.
 	out, err := prs(t, tab2)
 	require.Error(t, err)
-	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetMaster", tab3.Alias))
+	assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tab3.Alias))
 
 	// insert data into the new primary, check the connected replica work
 	confirmReplication(t, tab2, []*cluster.Vttablet{tab1, tab4})

@@ -111,7 +111,7 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
 # scatter aggregate complex order by
 "select id from user group by id order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
-Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column 'id + 1' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+Gen4 plan same as above
 
 # Scatter order by is complex with aggregates in select
 "select col, count(*) from user group by col order by col+1"
@@ -127,6 +127,11 @@ Gen4 error: unsupported: in scatter query: complex aggregate expression
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.id' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
+
+# group by and ',' joins with condition
+"select user.col from user join user_extra on user_extra.col = user.col group by user.id"
+"unsupported: cross-shard query with aggregates"
+Gen4 error: Expression of SELECT list is not in GROUP BY clause and contains nonaggregated column '`user`.col' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by
 
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
@@ -637,3 +642,8 @@ Gen4 error: unsupported: in scatter query: complex order by expression: a + 1
 "select sum(col) from (select col from user union all select col from unsharded) t"
 "unsupported: cross-shard query with aggregates"
 Gen4 error: unsupported: aggregation on unions
+
+# systable union query in derived table with constraint on outside (without star projection)
+"select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'"
+"unsupported: filtering on results of cross-shard subquery"
+Gen4 error: can't push predicates on concatenate

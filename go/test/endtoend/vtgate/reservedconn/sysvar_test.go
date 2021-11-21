@@ -65,12 +65,12 @@ func TestSetSysVarSingle(t *testing.T) {
 		expected: `[[VARCHAR("InnoDB")]]`,
 	}, {
 		name:     "character_set_client", // check and ignored
-		expr:     "utf8",
-		expected: `[[VARCHAR("utf8")]]`,
+		expr:     "utf8mb4",
+		expected: `[[VARCHAR("utf8mb4")]]`,
 	}, {
 		name:     "character_set_client", // ignored so will keep the actual value
 		expr:     "@charvar",
-		expected: `[[VARCHAR("utf8")]]`,
+		expected: `[[VARCHAR("utf8mb4")]]`,
 	}, {
 		name:     "sql_mode", // use reserved conn
 		expr:     "''",

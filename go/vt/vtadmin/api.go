@@ -178,6 +178,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
+	experimentalRouter.HandleFunc("/whoami", httpAPI.Adapt(experimental.WhoAmI))
 
 	if !opts.HTTPOpts.DisableDebug {
 		// Due to the way net/http/pprof insists on registering its handlers, we
