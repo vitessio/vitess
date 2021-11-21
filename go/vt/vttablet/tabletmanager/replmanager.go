@@ -130,6 +130,19 @@ func (rm *replManager) checkActionLocked() {
 	rm.failed = false
 }
 
+// reset the replication manager state and deleting the marker-file.
+// it does not start or stop the ticks. Use setReplicationStopped instead to change that.
+func (rm *replManager) reset() {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+
+	rm.replStopped = nil
+	if rm.markerFile == "" {
+		return
+	}
+	os.Remove(rm.markerFile)
+}
+
 // setReplicationStopped performs a best effort attempt of
 // remembering a decision to stop replication.
 func (rm *replManager) setReplicationStopped(stopped bool) {
