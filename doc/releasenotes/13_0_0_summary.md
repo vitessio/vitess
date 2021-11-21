@@ -26,7 +26,7 @@ A new query is supported:
 alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup
 ```
 
-This query tells Vitess that a migration's artifacts are good to be cleaned up asap. This allows Vitess to free disk resources sooner. As reminder, once a migration's artifacts are cleaned up, the migration is no
+This query tells Vitess that a migration's artifacts are good to be cleaned up asap. This allows Vitess to free disk resources sooner. As a reminder, once a migration's artifacts are cleaned up, the migration is no
 longer revertible.
 
 ### alter vitess_migration ... complete
@@ -41,7 +41,7 @@ This command indicates that a migration executed with `-postpone-completion` is 
 
 - For running `ALTER`s (`online` and `gh-ost`) which are ready to cut-over: cut-over imminently (though not immediately - cut-over depends on polling interval, replication lag, etc)
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
-- For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the schedulers discretion. there is no guarantee that they will be scheduled to run immediately.
+- For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
 
 ## Incompatible Changes
 
