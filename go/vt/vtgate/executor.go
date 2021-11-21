@@ -32,14 +32,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -114,17 +113,7 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(
-	ctx context.Context,
-	serv srvtopo.Server,
-	cell string,
-	resolver *Resolver,
-	normalize, warnOnShardedOnly bool,
-	streamSize int,
-	cacheCfg *cache.Config,
-	schemaTracker SchemaInfo,
-	noScatter bool,
-) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver *Resolver, normalize, warnOnShardedOnly bool, streamSize int, cacheCfg *cache.Config, schemaTracker SchemaInfo, noScatter bool) *Executor {
 	e := &Executor{
 		serv:            serv,
 		cell:            cell,
@@ -842,10 +831,16 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			filter := show.ShowTablesOpt.Filter
 
 			if filter.Like != "" {
-				likeRexep := sqlparser.LikeToRegexp(filter.Like)
+				shardLikeRexep := sqlparser.LikeToRegexp(filter.Like)
 
+				if strings.Contains(filter.Like, "/") {
+					keyspaceLikeRexep := sqlparser.LikeToRegexp(strings.Split(filter.Like, "/")[0])
+					keyspaceFilters = append(keyspaceFilters, func(ks string) bool {
+						return keyspaceLikeRexep.MatchString(ks)
+					})
+				}
 				shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
-					return likeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
+					return shardLikeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
 				})
 
 				return keyspaceFilters, shardFilters

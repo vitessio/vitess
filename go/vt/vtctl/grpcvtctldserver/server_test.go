@@ -2637,7 +2637,7 @@ func TestEmergencyReparentShard(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -2656,13 +2656,13 @@ func TestEmergencyReparentShard(t *testing.T) {
 				}{
 					"zone1-0000000200": {},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
 					"zone1-0000000200": {},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},
@@ -4931,7 +4931,7 @@ func TestPlannedReparentShard(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -4942,7 +4942,7 @@ func TestPlannedReparentShard(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -4963,9 +4963,9 @@ func TestPlannedReparentShard(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
-					"zone1-0000000200": nil, // waiting for master-position during promotion
-					// reparent SetMaster calls
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000200": nil, // waiting for primary-position during promotion
+					// reparent SetReplicationSource calls
 					"zone1-0000000100": nil,
 					"zone1-0000000101": nil,
 				},
@@ -6341,7 +6341,7 @@ func TestReparentTablet(t *testing.T) {
 		{
 			name: "success",
 			tmc: &testutil.TabletManagerClient{
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
 			},
@@ -6740,9 +6740,9 @@ func TestReparentTablet(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "tmc.SetMaster failure",
+			name: "tmc.SetReplicationSource failure",
 			tmc: &testutil.TabletManagerClient{
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
 			},
@@ -6797,7 +6797,7 @@ func TestReparentTablet(t *testing.T) {
 		{
 			name: "topo is down",
 			tmc: &testutil.TabletManagerClient{
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
 			},
@@ -7814,7 +7814,7 @@ func TestShardReplicationPositions(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -7893,10 +7893,10 @@ func TestShardReplicationPositions(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionDelays: map[string]time.Duration{
+				PrimaryPositionDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 100,
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -7975,7 +7975,7 @@ func TestShardReplicationPositions(t *testing.T) {
 				},
 			},
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{

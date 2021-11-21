@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2021 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package vttest
 
-// Imports and register the gRPC vtctl client.
+// This plugin imports etcd2topo to register the etcd2 implementation of TopoServer.
 
 import (
-	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
+	_ "vitess.io/vitess/go/vt/topo/etcd2topo" // nolint:revive
 )
