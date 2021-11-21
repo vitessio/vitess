@@ -111,9 +111,9 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: longer text",
-		fromSchema:          `id int primary key, i1 int default null, v varchar(40) not null`,
-		toSchema:            `id int primary key, i1 int not null, v varchar(100) not null`,
-		expandedColumnNames: `v`,
+		fromSchema:          `id int primary key, i1 int default null, v1 varchar(40) not null, v2 varchar(5), v3 varchar(3)`,
+		toSchema:            `id int primary key, i1 int not null, v1 varchar(100) not null, v2 char(3), v3 char(5)`,
+		expandedColumnNames: `v1,v3`,
 	},
 	{
 		name:                "expanded: int numeric precision and scale",
@@ -150,6 +150,12 @@ var testCases = []testCase{
 		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, ti1 time, dt2 datetime(3), dt3 datetime(6), ts2 timestamp(3)`,
 		toSchema:            `id int primary key, dt1 datetime(3), ts1 timestamp(6), ti1 time(3), dt2 datetime(6), dt3 datetime(3), ts2 timestamp`,
 		expandedColumnNames: `dt1,ts1,ti1,dt2`,
+	},
+	{
+		name:                "expanded: strange data type changes",
+		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b')`,
+		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2)`,
+		expandedColumnNames: `dt1,ts1,i1,d1,e1`,
 	},
 }
 
