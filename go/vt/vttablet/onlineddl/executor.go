@@ -1638,65 +1638,63 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	{
-		// Review REVERT migrations
-		// These migrations are submitted with some details missing. This is because the statement
-		//   REVERT VITESS_MIGRATION '<uuid>'
-		// doesn't have much detail, we need to extract the info from the reverted migration. Missing details:
-		// - What table is affected?
-		// - What ddl action (CREATE, DROP, ALTER) is being reverted, or what is the counter-operation to be executed?
+	// Review REVERT migrations
+	// These migrations are submitted with some details missing. This is because the statement
+	//   REVERT VITESS_MIGRATION '<uuid>'
+	// doesn't have much detail, we need to extract the info from the reverted migration. Missing details:
+	// - What table is affected?
+	// - What ddl action (CREATE, DROP, ALTER) is being reverted, or what is the counter-operation to be executed?
 
-		r, err := e.execQuery(ctx, sqlSelectQueuedRevertMigrations)
+	r, err := e.execQuery(ctx, sqlSelectQueuedRevertMigrations)
+	if err != nil {
+		return err
+	}
+
+	for _, row := range r.Named().Rows {
+		uuid := row["migration_uuid"].ToString()
+		onlineDDL, _, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return err
 		}
-
-		for _, row := range r.Named().Rows {
-			uuid := row["migration_uuid"].ToString()
-			onlineDDL, _, err := e.readMigration(ctx, uuid)
-			if err != nil {
-				return err
-			}
-			reviewEmptyTableRevertMigrations := func() error {
-				if onlineDDL.Table != "" {
-					return nil
-				}
-				// Table name is empty. Let's populate it.
-
-				// Try to update table name and ddl_action
-				// Failure to do so fails the migration
-				revertUUID, err := onlineDDL.GetRevertUUID()
-				if err != nil {
-					return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
-				}
-				revertedMigration, row, err := e.readMigration(ctx, revertUUID)
-				if err != nil {
-					return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot read migration %s reverted by migration %s: %s", revertUUID, onlineDDL.UUID, err))
-				}
-				revertedActionStr := row["ddl_action"].ToString()
-				mimickedActionStr := ""
-
-				switch revertedActionStr {
-				case sqlparser.CreateStr:
-					mimickedActionStr = sqlparser.DropStr
-				case sqlparser.DropStr:
-					mimickedActionStr = sqlparser.CreateStr
-				case sqlparser.AlterStr:
-					mimickedActionStr = sqlparser.AlterStr
-				default:
-					return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertedMigration.UUID, revertedActionStr))
-				}
-				if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
-					return err
-				}
-				if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
-					return err
-				}
+		reviewEmptyTableRevertMigrations := func() error {
+			if onlineDDL.Table != "" {
 				return nil
 			}
-			if err := reviewEmptyTableRevertMigrations(); err != nil {
+			// Table name is empty. Let's populate it.
+
+			// Try to update table name and ddl_action
+			// Failure to do so fails the migration
+			revertUUID, err := onlineDDL.GetRevertUUID()
+			if err != nil {
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
+			}
+			revertedMigration, row, err := e.readMigration(ctx, revertUUID)
+			if err != nil {
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot read migration %s reverted by migration %s: %s", revertUUID, onlineDDL.UUID, err))
+			}
+			revertedActionStr := row["ddl_action"].ToString()
+			mimickedActionStr := ""
+
+			switch revertedActionStr {
+			case sqlparser.CreateStr:
+				mimickedActionStr = sqlparser.DropStr
+			case sqlparser.DropStr:
+				mimickedActionStr = sqlparser.CreateStr
+			case sqlparser.AlterStr:
+				mimickedActionStr = sqlparser.AlterStr
+			default:
+				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertedMigration.UUID, revertedActionStr))
+			}
+			if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
 				return err
 			}
+			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
+				return err
+			}
+			return nil
+		}
+		if err := reviewEmptyTableRevertMigrations(); err != nil {
+			return err
 		}
 	}
 	return nil
