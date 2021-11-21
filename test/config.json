@@ -810,7 +810,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_tablet_healthcheck_cache",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_transaction": {

@@ -40,7 +40,7 @@ This command indicates that a migration executed with `-postpone-completion` is 
 
 - For running `ALTER`s (`online` and `gh-ost`) which are ready to cut-over: cut-over imminently (though not immediately - cut-over depends on polling interval, replication lag, etc)
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
-- For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the schedulers discretion. there is no guarantee that they will be scheduled to run immediately.
+- For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
 
 ## Incompatible Changes
 
