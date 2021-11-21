@@ -135,9 +135,15 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: signed, unsigned",
-		fromSchema:          `id int primary key, i1 int signed, i2 int unsigned, i3 bigint unsigned`,
-		toSchema:            `id int primary key, i1 int unsigned, i2 int signed, i3 int signed`,
+		fromSchema:          `id int primary key, i1 bigint signed, i2 int unsigned, i3 bigint unsigned`,
+		toSchema:            `id int primary key, i1 int signed, i2 int signed, i3 int signed`,
 		expandedColumnNames: `i2,i3`,
+	},
+	{
+		name:                "expanded: signed, unsigned: range",
+		fromSchema:          `id int primary key, i1 int signed, i2 bigint signed, i3 int signed`,
+		toSchema:            `id int primary key, i1 int unsigned, i2 int unsigned, i3 bigint unsigned`,
+		expandedColumnNames: `i1,i3`,
 	},
 	{
 		name:                "expanded: datetime precision",

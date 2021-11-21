@@ -98,6 +98,10 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 		if sourceColumn.IsUnsigned && !targetColumn.IsUnsigned {
 			return true, "source is unsigned, target is signed"
 		}
+		if sourceColumn.NumericPrecision <= targetColumn.NumericPrecision && !sourceColumn.IsUnsigned && targetColumn.IsUnsigned {
+			// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED = BIGINT UNSIGNED
+			return true, "target unsgined value exeeds source unsigned value"
+		}
 		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {
 			return true, "target is floating point, source is not"
 		}
