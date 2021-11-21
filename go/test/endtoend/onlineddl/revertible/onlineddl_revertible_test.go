@@ -103,6 +103,48 @@ var testCases = []testCase{
 		toSchema:                    `id int primary key, i2 int not null default 0`,
 		droppedNoDefaultColumnNames: `i1`,
 	},
+	{
+		name:                "expanded: nullable",
+		fromSchema:          `id int primary key, i1 int not null, i2 int default null`,
+		toSchema:            `id int primary key, i1 int default null, i2 int not null`,
+		expandedColumnNames: `i1`,
+	},
+	{
+		name:                "expanded: longer text",
+		fromSchema:          `id int primary key, i1 int default null, v varchar(40) not null`,
+		toSchema:            `id int primary key, i1 int not null, v varchar(100) not null`,
+		expandedColumnNames: `v`,
+	},
+	{
+		name:                "expanded: int numeric precision and scale",
+		fromSchema:          `id int primary key, i1 int, i2 tinyint, i3 mediumint, i4 bigint`,
+		toSchema:            `id int primary key, i1 int, i2 mediumint, i3 int, i4 tinyint`,
+		expandedColumnNames: `i2,i3`,
+	},
+	{
+		name:                "expanded: floating point",
+		fromSchema:          `id int primary key, i1 int, n2 bigint, n3 bigint, n4 float, n5 double`,
+		toSchema:            `id int primary key, i1 int, n2 float, n3 double, n4 double, n5 float`,
+		expandedColumnNames: `n2,n3,n4`,
+	},
+	{
+		name:                "expanded: decimal numeric precision and scale",
+		fromSchema:          `id int primary key, i1 int, d1 decimal(10,2), d2 decimal (10,2), d3 decimal (10,2)`,
+		toSchema:            `id int primary key, i1 int, d1 decimal(11,2), d2 decimal (9,1), d3 decimal (10,3)`,
+		expandedColumnNames: `d1,d3`,
+	},
+	{
+		name:                "expanded: signed, unsigned",
+		fromSchema:          `id int primary key, i1 int signed, i2 int unsigned, i3 bigint unsigned`,
+		toSchema:            `id int primary key, i1 int unsigned, i2 int signed, i3 int signed`,
+		expandedColumnNames: `i2,i3`,
+	},
+	{
+		name:                "expanded: datetime precision",
+		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, ti1 time, dt2 datetime(3), dt3 datetime(6), ts2 timestamp(3)`,
+		toSchema:            `id int primary key, dt1 datetime(3), ts1 timestamp(6), ti1 time(3), dt2 datetime(6), dt3 datetime(3), ts2 timestamp`,
+		expandedColumnNames: `dt1,ts1,ti1,dt2`,
+	},
 }
 
 func TestMain(m *testing.M) {
@@ -206,9 +248,9 @@ func TestSchemaChange(t *testing.T) {
 					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
 					expandedColumnNames := row.AsString("expanded_column_names", "")
 
-					assert.Equal(t, removedUniqueKeyNames, testcase.removedUniqueKeyNames)
-					assert.Equal(t, droppedNoDefaultColumnNames, testcase.droppedNoDefaultColumnNames)
-					assert.Equal(t, expandedColumnNames, testcase.expandedColumnNames)
+					assert.Equal(t, testcase.removedUniqueKeyNames, removedUniqueKeyNames)
+					assert.Equal(t, testcase.droppedNoDefaultColumnNames, droppedNoDefaultColumnNames)
+					assert.Equal(t, testcase.expandedColumnNames, expandedColumnNames)
 				}
 			})
 		})
