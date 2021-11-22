@@ -132,9 +132,9 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 			return true, "expand character set to utf8"
 		}
 	}
-	if sourceColumn.EnumValues != "" {
+	if sourceColumn.Type == EnumColumnType {
 		// this is an enum
-		if targetColumn.EnumValues == "" {
+		if targetColumn.Type != EnumColumnType {
 			return true, "conversion from enum to non-enum adds potential values"
 		}
 		// target is an enum. See if all values on target exist in source
