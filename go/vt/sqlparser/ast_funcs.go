@@ -1071,18 +1071,6 @@ func (op ComparisonExprOperator) ToString() string {
 }
 
 // ToString returns the operator as a string
-func (op RangeCondOperator) ToString() string {
-	switch op {
-	case BetweenOp:
-		return BetweenStr
-	case NotBetweenOp:
-		return NotBetweenStr
-	default:
-		return "Unknown RangeCondOperator"
-	}
-}
-
-// ToString returns the operator as a string
 func (op IsExprOperator) ToString() string {
 	switch op {
 	case IsNullOp:
