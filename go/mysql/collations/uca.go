@@ -161,7 +161,7 @@ performPadding:
 	return dst
 }
 
-func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) uintptr {
+func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
 	var hash = uintptr(c.id)
 
 	it := c.uca.Iterator(src)
@@ -234,7 +234,7 @@ func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints
 	return dst
 }
 
-func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) uintptr {
+func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) HashCode {
 	return memhash(src, 0xb900b900)
 }
 
@@ -340,7 +340,7 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	return dst
 }
 
-func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) HashCode {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 

@@ -82,7 +82,7 @@ func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_bin) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_8bit_bin) Hash(src []byte, numCodepoints int) HashCode {
 	hash := 0x8b8b0000 | uintptr(c.id)
 	if numCodepoints == 0 {
 		return memhash(src, hash)
@@ -164,7 +164,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) HashCode {
 	sortOrder := c.sort
 
 	var tocopy = len(src)
@@ -251,7 +251,7 @@ func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []by
 	return dst
 }
 
-func (c *Collation_binary) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_binary) Hash(src []byte, numCodepoints int) HashCode {
 	if numCodepoints > 0 {
 		src = src[:numCodepoints]
 	}
