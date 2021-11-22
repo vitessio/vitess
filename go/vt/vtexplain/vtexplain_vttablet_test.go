@@ -25,6 +25,61 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+func TestRun(t *testing.T) {
+	testVSchema := `
+{
+	"test_keyspace": {
+		"sharded": false,
+		"tables": {
+			"t1": {
+				"columns": [
+					{ "name": "id", "type": "INT64" }
+				],
+				"column_list_authoritative": true
+			},
+			"t2": {
+				"columns": [
+					{ "name": "id", "type": "INT32" }
+				],
+				"column_list_authoritative": true
+			}
+		}
+	}
+}
+`
+
+	testSchema := `
+create table t1 (
+	id bigint unsigned not null
+);
+
+create table t2 (
+	id int unsigned not null
+);
+`
+
+	opts := &Options{
+		ExecutionMode:   "multi",
+		ReplicationMode: "ROW",
+		NumShards:       2,
+	}
+
+	defer Stop()
+
+	err := Init(testVSchema, testSchema, "", opts)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	sql := "SELECT * FROM t1 INNER JOIN t2 ON t1.id = t2.id"
+
+	_, err = Run(sql)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 (
