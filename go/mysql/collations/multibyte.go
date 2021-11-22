@@ -183,3 +183,23 @@ func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) HashCode {
 func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 	return numCodepoints
 }
+
+func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	var equals func(rune, rune) bool
+	var sortOrder = c.sort
+
+	if sortOrder != nil {
+		equals = func(a, b rune) bool {
+			if a < 128 && b < 128 {
+				return sortOrder[a] == sortOrder[b]
+			}
+			return a == b
+		}
+	} else {
+		equals = func(a, b rune) bool {
+			return a == b
+		}
+	}
+
+	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+}
