@@ -40,9 +40,9 @@ func (e *EvalResult) ToBooleanStrict() (bool, error) {
 
 	switch e.typ {
 	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-		return intToBool(int(e.ival))
+		return intToBool(int(e.numval))
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-		return intToBool(int(e.uval))
+		return intToBool(int(e.numval))
 	case sqltypes.VarBinary:
 		lower := strings.ToLower(string(e.bytes))
 		switch lower {

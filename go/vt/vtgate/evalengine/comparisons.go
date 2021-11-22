@@ -53,8 +53,8 @@ type (
 )
 
 var (
-	resultTrue  = EvalResult{typ: sqltypes.Int32, ival: 1}
-	resultFalse = EvalResult{typ: sqltypes.Int32, ival: 0}
+	resultTrue  = EvalResult{typ: sqltypes.Int32, numval: 1}
+	resultFalse = EvalResult{typ: sqltypes.Int32, numval: 0}
 	resultNull  = EvalResult{typ: sqltypes.Null}
 )
 
@@ -387,7 +387,7 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 			returnValue = resultNull
 			continue
 		}
-		if sqltypes.IsIntegral(res.typ) && res.ival == 1 {
+		if sqltypes.IsIntegral(res.typ) && res.numval == 1 {
 			return resultTrue, nil
 		}
 	}
@@ -407,7 +407,7 @@ func (i *InOp) String() string {
 // Evaluate implements the ComparisonOp interface
 func (n *NotInOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	res, err := (&InOp{}).Evaluate(left, right)
-	res.ival = 1 - res.ival
+	res.numval = 1 - res.numval
 	return res, err
 }
 

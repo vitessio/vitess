@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -33,11 +34,10 @@ import (
 type (
 	EvalResult struct {
 		typ          querypb.Type
-		ival         int64
-		uval         uint64
-		fval         float64
-		bytes        []byte
 		collation    collations.ID
+		_            uint16
+		numval       uint64
+		bytes        []byte
 		tupleResults []EvalResult
 	}
 
@@ -58,8 +58,7 @@ type (
 	// Expressions
 	Null    struct{}
 	Literal struct {
-		Val       EvalResult
-		Collation collations.ID
+		Val EvalResult
 	}
 	BindVariable struct {
 		Key       string
@@ -96,12 +95,12 @@ func NewLiteralIntFromBytes(val []byte) (Expr, error) {
 
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Int64, ival: i}}
+	return &Literal{Val: EvalResult{typ: sqltypes.Int64, numval: uint64(i)}}
 }
 
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: val}}
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(val)}}
 }
 
 // NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
@@ -110,12 +109,12 @@ func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, fval: fval}}, nil
+	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}}, nil
 }
 
 // NewLiteralString returns a literal expression
 func NewLiteralString(val []byte, collation collations.ID) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val}, Collation: collation}
+	return &Literal{Val: EvalResult{typ: sqltypes.VarBinary, bytes: val, collation: collation}}
 }
 
 // NewBindVar returns a bind variable
@@ -151,9 +150,11 @@ func (n Null) String() string {
 
 // Evaluate implements the Expr interface
 func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
-	eval := l.Val
-	eval.collation = l.Collation
-	return eval, nil
+	return l.Val, nil
+}
+
+func (l *Literal) Collation() collations.ID {
+	return l.Val.collation
 }
 
 // Evaluate implements the Expr interface
@@ -262,25 +263,25 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 		if err != nil {
 			ival = 0
 		}
-		return EvalResult{typ: sqltypes.Int64, ival: ival}, nil
+		return EvalResult{typ: sqltypes.Int64, numval: uint64(ival)}, nil
 	case sqltypes.Int32:
 		ival, err := strconv.ParseInt(string(val.Value), 10, 32)
 		if err != nil {
 			ival = 0
 		}
-		return EvalResult{typ: sqltypes.Int32, ival: ival}, nil
+		return EvalResult{typ: sqltypes.Int32, numval: uint64(ival)}, nil
 	case sqltypes.Uint64:
 		uval, err := strconv.ParseUint(string(val.Value), 10, 64)
 		if err != nil {
 			uval = 0
 		}
-		return EvalResult{typ: sqltypes.Uint64, uval: uval}, nil
+		return EvalResult{typ: sqltypes.Uint64, numval: uval}, nil
 	case sqltypes.Float64:
 		fval, err := strconv.ParseFloat(string(val.Value), 64)
 		if err != nil {
 			fval = 0
 		}
-		return EvalResult{typ: sqltypes.Float64, fval: fval}, nil
+		return EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}, nil
 	case sqltypes.VarChar, sqltypes.Text, sqltypes.VarBinary:
 		return EvalResult{typ: sqltypes.VarBinary, bytes: val.Value}, nil
 	case sqltypes.Time, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Date:
@@ -293,5 +294,5 @@ func evaluateByType(val *querypb.BindVariable) (EvalResult, error) {
 
 // debugString prints the entire EvalResult in a debug format
 func (e *EvalResult) debugString() string {
-	return fmt.Sprintf("(%s) %d %d %f %s", querypb.Type_name[int32(e.typ)], e.ival, e.uval, e.fval, string(e.bytes))
+	return fmt.Sprintf("(%s) 0x%08x %s", querypb.Type_name[int32(e.typ)], e.numval, e.bytes)
 }

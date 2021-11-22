@@ -64,9 +64,9 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, 1, got.ival)
+			require.EqualValues(t, 1, got.numval)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, 0, got.ival)
+			require.EqualValues(t, 0, got.numval)
 		} else {
 			require.EqualValues(t, sqltypes.Null, got.typ)
 		}
