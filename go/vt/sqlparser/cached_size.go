@@ -2147,14 +2147,10 @@ func (cached *SubstrExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Name.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field StrVal vitess.io/vitess/go/vt/sqlparser.Expr
-	if cc, ok := cached.StrVal.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	// field From vitess.io/vitess/go/vt/sqlparser.Expr

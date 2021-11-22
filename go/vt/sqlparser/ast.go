@@ -1968,10 +1968,9 @@ type (
 	// SubstrExpr('static string value', value_expression, value_expression)
 	// In this case StrVal will be set instead of Name.
 	SubstrExpr struct {
-		Name   Expr
-		StrVal Expr
-		From   Expr
-		To     Expr
+		Name Expr
+		From Expr
+		To   Expr
 	}
 
 	// ConvertExpr represents a call to CONVERT(expr, type)

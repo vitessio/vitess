@@ -2503,7 +2503,6 @@ func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
 		return false
 	}
 	return EqualsExpr(a.Name, b.Name) &&
-		EqualsExpr(a.StrVal, b.StrVal) &&
 		EqualsExpr(a.From, b.From) &&
 		EqualsExpr(a.To, b.To)
 }

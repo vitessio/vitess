@@ -2054,9 +2054,6 @@ func VisitRefOfSubstrExpr(in *SubstrExpr, f Visit) error {
 	if err := VisitExpr(in.Name, f); err != nil {
 		return err
 	}
-	if err := VisitExpr(in.StrVal, f); err != nil {
-		return err
-	}
 	if err := VisitExpr(in.From, f); err != nil {
 		return err
 	}
