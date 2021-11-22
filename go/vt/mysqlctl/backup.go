@@ -58,6 +58,8 @@ const (
 const (
 	// replicationStartDeadline is the deadline for starting replication
 	replicationStartDeadline = 30
+
+	Error1193 = "Unknown system variable"
 )
 
 var (
@@ -341,7 +343,12 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// This is safe, since we're restarting MySQL after the restore anyway
 	params.Logger.Infof("Restore: disabling super_read_only")
 	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
-		params.Logger.Warningf("Restore: setting super_read_only failed, continuing anyway: %v", err)
+		if strings.Contains(err.Error(), Error1193) {
+			params.Logger.Warningf("Restore: server does not know about super_read_only; maybe MariaDB? Continuing anyway.")
+		} else {
+			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
+			return nil, err
+		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")
