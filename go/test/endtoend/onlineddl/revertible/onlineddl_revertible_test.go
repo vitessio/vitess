@@ -157,6 +157,12 @@ var testCases = []testCase{
 		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2)`,
 		expandedColumnNames: `dt1,ts1,i1,d1,e1`,
 	},
+	{
+		name:                "expanded: temporal types",
+		fromSchema:          `id int primary key, t1 time, t2 timestamp, t3 date, t4 datetime, t5 time, t6 date`,
+		toSchema:            `id int primary key, t1 datetime, t2 datetime, t3 timestamp, t4 timestamp, t5 timestamp, t6 datetime`,
+		expandedColumnNames: `t1,t2,t3,t5,t6`,
+	},
 }
 
 func TestMain(m *testing.M) {

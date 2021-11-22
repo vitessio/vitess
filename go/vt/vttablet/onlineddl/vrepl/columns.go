@@ -6,8 +6,21 @@
 package vrepl
 
 import (
+	"fmt"
 	"strings"
 )
+
+// expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
+// For example, in "date:datetime", datetime expands date because it has more precision. In "timestamp:date" date expands timestamp
+// because it can contain years not covered by timestamp.
+var expandedDataTypes = map[string]bool{
+	"time:datetime":      true,
+	"date:datetime":      true,
+	"timestamp:datetime": true,
+	"time:timestamp":     true,
+	"date:timestamp":     true,
+	"timestamp:date":     true,
+}
 
 // GetSharedColumns returns the intersection of two lists of columns in same order as the first list
 func GetSharedColumns(
@@ -105,6 +118,9 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {
 			return true, "target is floating point, source is not"
 		}
+	}
+	if expandedDataTypes[fmt.Sprintf("%s:%s", sourceColumn.DataType, targetColumn.DataType)] {
+		return true, "target is expanded data type of source"
 	}
 	return false, ""
 }
