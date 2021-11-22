@@ -122,6 +122,14 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 	if expandedDataTypes[fmt.Sprintf("%s:%s", sourceColumn.DataType, targetColumn.DataType)] {
 		return true, "target is expanded data type of source"
 	}
+	if sourceColumn.Charset != targetColumn.Charset {
+		if targetColumn.Charset == "utf8mb4" {
+			return true, "expand character set to utf8mb4"
+		}
+		if targetColumn.Charset == "utf8" && sourceColumn.Charset != "utf8mb4" {
+			return true, "expand character set to utf8"
+		}
+	}
 	return false, ""
 }
 
