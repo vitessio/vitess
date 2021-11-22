@@ -900,6 +900,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		strings.Join(removedUniqueKeyNames, ","),
 		strings.Join(v.droppedNoDefaultColumnNames, ","),
 		strings.Join(v.expandedColumnNames, ","),
+		v.revertibleNotes,
 	); err != nil {
 		return err
 	}
@@ -2859,13 +2860,15 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 
 func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string,
-	droppedNoDefaultColumnNames string, expandedColumnNames string) error {
+	droppedNoDefaultColumnNames string, expandedColumnNames string,
+	revertibleNotes string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
 		sqltypes.StringBindVariable(removedUniqueKeyNames),
 		sqltypes.StringBindVariable(droppedNoDefaultColumnNames),
 		sqltypes.StringBindVariable(expandedColumnNames),
+		sqltypes.StringBindVariable(revertibleNotes),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
