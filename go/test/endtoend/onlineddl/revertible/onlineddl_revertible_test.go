@@ -163,6 +163,12 @@ var testCases = []testCase{
 		toSchema:            `id int primary key, t1 datetime, t2 datetime, t3 timestamp, t4 timestamp, t5 timestamp, t6 datetime`,
 		expandedColumnNames: `t1,t2,t3,t5,t6`,
 	},
+	{
+		name:                "expanded: character sets",
+		fromSchema:          `id int primary key, c1 char(3) charset utf8, c2 char(3) charset utf8mb4, c3 char(3) charset ascii, c4 char(3) charset utf8mb4, c5 char(3) charset utf8, c6 char(3) charset latin1`,
+		toSchema:            `id int primary key, c1 char(3) charset utf8mb4, c2 char(3) charset utf8, c3 char(3) charset utf8, c4 char(3) charset ascii, c5 char(3) charset utf8, c6 char(3) charset utf8mb4`,
+		expandedColumnNames: `c1,c3,c6`,
+	},
 }
 
 func TestMain(m *testing.M) {
