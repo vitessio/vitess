@@ -59,6 +59,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAutoIncSpec(in)
 	case *Begin:
 		return CloneRefOfBegin(in)
+	case *BetweenExpr:
+		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
 	case BoolVal:
@@ -217,8 +219,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPartitionSpec(in)
 	case Partitions:
 		return ClonePartitions(in)
-	case *RangeCond:
-		return CloneRefOfRangeCond(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -502,6 +502,18 @@ func CloneRefOfBegin(n *Begin) *Begin {
 	return &out
 }
 
+// CloneRefOfBetweenExpr creates a deep clone of the input.
+func CloneRefOfBetweenExpr(n *BetweenExpr) *BetweenExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Left = CloneExpr(n.Left)
+	out.From = CloneExpr(n.From)
+	out.To = CloneExpr(n.To)
+	return &out
+}
+
 // CloneRefOfBinaryExpr creates a deep clone of the input.
 func CloneRefOfBinaryExpr(n *BinaryExpr) *BinaryExpr {
 	if n == nil {
@@ -746,7 +758,7 @@ func CloneRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) *CurTimeFuncExpr {
 	}
 	out := *n
 	out.Name = CloneColIdent(n.Name)
-	out.Fsp = CloneExpr(n.Fsp)
+	out.Fsp = CloneRefOfLiteral(n.Fsp)
 	return &out
 }
 
@@ -1324,18 +1336,6 @@ func ClonePartitions(n Partitions) Partitions {
 	return res
 }
 
-// CloneRefOfRangeCond creates a deep clone of the input.
-func CloneRefOfRangeCond(n *RangeCond) *RangeCond {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Left = CloneExpr(n.Left)
-	out.From = CloneExpr(n.From)
-	out.To = CloneExpr(n.To)
-	return &out
-}
-
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
 func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
 	if n == nil {
@@ -1633,8 +1633,7 @@ func CloneRefOfSubstrExpr(n *SubstrExpr) *SubstrExpr {
 		return nil
 	}
 	out := *n
-	out.Name = CloneRefOfColName(n.Name)
-	out.StrVal = CloneRefOfLiteral(n.StrVal)
+	out.Name = CloneExpr(n.Name)
 	out.From = CloneExpr(n.From)
 	out.To = CloneExpr(n.To)
 	return &out
@@ -2101,6 +2100,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfAndExpr(in)
 	case Argument:
 		return in
+	case *BetweenExpr:
+		return CloneRefOfBetweenExpr(in)
 	case *BinaryExpr:
 		return CloneRefOfBinaryExpr(in)
 	case BoolVal:
@@ -2147,8 +2148,6 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNullVal(in)
 	case *OrExpr:
 		return CloneRefOfOrExpr(in)
-	case *RangeCond:
-		return CloneRefOfRangeCond(in)
 	case *Subquery:
 		return CloneRefOfSubquery(in)
 	case *SubstrExpr:

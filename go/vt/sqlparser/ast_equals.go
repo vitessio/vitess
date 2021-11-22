@@ -134,6 +134,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfBegin(a, b)
+	case *BetweenExpr:
+		b, ok := inB.(*BetweenExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBetweenExpr(a, b)
 	case *BinaryExpr:
 		b, ok := inB.(*BinaryExpr)
 		if !ok {
@@ -608,12 +614,6 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsPartitions(a, b)
-	case *RangeCond:
-		b, ok := inB.(*RangeCond)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRangeCond(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -1151,6 +1151,20 @@ func EqualsRefOfBegin(a, b *Begin) bool {
 	return true
 }
 
+// EqualsRefOfBetweenExpr does deep equals between the two objects.
+func EqualsRefOfBetweenExpr(a, b *BetweenExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.IsBetween == b.IsBetween &&
+		EqualsExpr(a.Left, b.Left) &&
+		EqualsExpr(a.From, b.From) &&
+		EqualsExpr(a.To, b.To)
+}
+
 // EqualsRefOfBinaryExpr does deep equals between the two objects.
 func EqualsRefOfBinaryExpr(a, b *BinaryExpr) bool {
 	if a == b {
@@ -1270,7 +1284,6 @@ func EqualsRefOfColumnType(a, b *ColumnType) bool {
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
 		a.Charset == b.Charset &&
-		a.Collate == b.Collate &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
@@ -1451,7 +1464,7 @@ func EqualsRefOfCurTimeFuncExpr(a, b *CurTimeFuncExpr) bool {
 		return false
 	}
 	return EqualsColIdent(a.Name, b.Name) &&
-		EqualsExpr(a.Fsp, b.Fsp)
+		EqualsRefOfLiteral(a.Fsp, b.Fsp)
 }
 
 // EqualsRefOfDefault does deep equals between the two objects.
@@ -2134,20 +2147,6 @@ func EqualsPartitions(a, b Partitions) bool {
 	return true
 }
 
-// EqualsRefOfRangeCond does deep equals between the two objects.
-func EqualsRefOfRangeCond(a, b *RangeCond) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Operator == b.Operator &&
-		EqualsExpr(a.Left, b.Left) &&
-		EqualsExpr(a.From, b.From) &&
-		EqualsExpr(a.To, b.To)
-}
-
 // EqualsRefOfReferenceDefinition does deep equals between the two objects.
 func EqualsRefOfReferenceDefinition(a, b *ReferenceDefinition) bool {
 	if a == b {
@@ -2503,8 +2502,7 @@ func EqualsRefOfSubstrExpr(a, b *SubstrExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsRefOfColName(a.Name, b.Name) &&
-		EqualsRefOfLiteral(a.StrVal, b.StrVal) &&
+	return EqualsExpr(a.Name, b.Name) &&
 		EqualsExpr(a.From, b.From) &&
 		EqualsExpr(a.To, b.To)
 }
@@ -3195,6 +3193,12 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return a == b
+	case *BetweenExpr:
+		b, ok := inB.(*BetweenExpr)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfBetweenExpr(a, b)
 	case *BinaryExpr:
 		b, ok := inB.(*BinaryExpr)
 		if !ok {
@@ -3333,12 +3337,6 @@ func EqualsExpr(inA, inB Expr) bool {
 			return false
 		}
 		return EqualsRefOfOrExpr(a, b)
-	case *RangeCond:
-		b, ok := inB.(*RangeCond)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfRangeCond(a, b)
 	case *Subquery:
 		b, ok := inB.(*Subquery)
 		if !ok {
@@ -3918,7 +3916,6 @@ func EqualsColumnType(a, b ColumnType) bool {
 		a.Unsigned == b.Unsigned &&
 		a.Zerofill == b.Zerofill &&
 		a.Charset == b.Charset &&
-		a.Collate == b.Collate &&
 		EqualsRefOfColumnTypeOptions(a.Options, b.Options) &&
 		EqualsRefOfLiteral(a.Length, b.Length) &&
 		EqualsRefOfLiteral(a.Scale, b.Scale) &&
@@ -3934,6 +3931,7 @@ func EqualsRefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 		return false
 	}
 	return a.Autoincrement == b.Autoincrement &&
+		a.Collate == b.Collate &&
 		EqualsRefOfBool(a.Null, b.Null) &&
 		EqualsExpr(a.Default, b.Default) &&
 		EqualsExpr(a.OnUpdate, b.OnUpdate) &&
