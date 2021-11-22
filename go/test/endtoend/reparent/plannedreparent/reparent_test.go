@@ -19,8 +19,11 @@ package plannedreparent
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"testing"
 	"time"
+
+	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -438,4 +441,76 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	out, err := prs(t, tab2)
 	require.Error(t, err)
 	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
+}
+
+// TestPRSForInitialization tests whether calling PRS in the beginning sets up the cluster properly or not
+func TestPRSForInitialization(t *testing.T) {
+	var tablets []*cluster.Vttablet
+	clusterInstance = cluster.NewCluster(cell1, hostname)
+	keyspace := &cluster.Keyspace{Name: keyspaceName}
+	// Start topo server
+	err := clusterInstance.StartTopo()
+	require.NoError(t, err)
+	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell1)
+	require.NoError(t, err)
+	for i := 0; i < 4; i++ {
+		tablet := clusterInstance.NewVttabletInstance("replica", 100+i, cell1)
+		tablets = append(tablets, tablet)
+	}
+
+	shard := &cluster.Shard{Name: shardName}
+	shard.Vttablets = tablets
+	clusterInstance.VtTabletExtraArgs = []string{
+		"-lock_tables_timeout", "5s",
+		"-enable_semi_sync",
+		"-init_populate_metadata",
+		"-track_schema_versions=true",
+	}
+
+	// Initialize Cluster
+	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
+	require.NoError(t, err)
+
+	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			require.NoError(t, err)
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+		}
+	}
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			t.Fatalf("Error starting mysql: %s", err.Error())
+		}
+	}
+
+	// create tablet manager client
+	tmClient = tmc.NewClient()
+	for _, tablet := range tablets {
+		// Start the tablet
+		err = tablet.VttabletProcess.Setup()
+		require.NoError(t, err)
+	}
+	for _, tablet := range tablets {
+		err := tablet.VttabletProcess.WaitForTabletStatuses([]string{"SERVING", "NOT_SERVING"})
+		require.NoError(t, err)
+	}
+
+	// Force the replica to reparent assuming that all the datasets are identical.
+	res, err := prs(t, tablets[0])
+	require.NoError(t, err, res)
+
+	validateTopology(t, true)
+	// create Tables
+	runSQL(context.Background(), t, sqlSchema, tablets[0])
+	checkPrimaryTablet(t, tablets[0])
+	validateTopology(t, false)
+	time.Sleep(100 * time.Millisecond) // wait for replication to catchup
+	strArray := getShardReplicationPositions(t, keyspaceName, shardName, true)
+	assert.Equal(t, len(tablets), len(strArray))
+	assert.Contains(t, strArray[0], "primary") // primary first
 }
