@@ -1962,11 +1962,11 @@ type (
 		Name *ColName
 	}
 
-	// SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
-	// also supported syntax SubstrExpr(column from value_expression for value_expression).
-	// Additionally to column names, SubstrExpr is also supported for string values, e.g.:
-	// SubstrExpr('static string value', value_expression, value_expression)
-	// In this case StrVal will be set instead of Name.
+	// SubstrExpr represents a calls to
+	// - SubstrExpr(expression, expression, expression)
+	// - SubstrExpr(expression, expression)
+	// - SubstrExpr(expression FROM expression)
+	// - SubstrExpr(expression FROM expression FOR expression)
 	SubstrExpr struct {
 		Name Expr
 		From Expr
