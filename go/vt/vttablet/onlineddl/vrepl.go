@@ -262,6 +262,10 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				column.SetTypeIfUnknown(vrepl.EnumColumnType)
 				column.EnumValues = schema.ParseEnumValues(columnType)
 			}
+			if strings.HasPrefix(columnType, "set(") {
+				column.SetTypeIfUnknown(vrepl.SetColumnType)
+				column.EnumValues = schema.ParseEnumValues(columnType)
+			}
 			if strings.HasPrefix(columnType, "binary") {
 				column.SetTypeIfUnknown(vrepl.BinaryColumnType)
 				column.BinaryOctetLength = columnOctetLength
@@ -379,7 +383,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 
 	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
-	v.expandedColumnNames = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
+	v.expandedColumnNames, _ = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
 	if err != nil {

@@ -54,7 +54,7 @@ var (
 	createTableRegexp     = regexp.MustCompile(`(?s)(?i)(CREATE\s+TABLE\s+)` + "`" + `([^` + "`" + `]+)` + "`" + `(\s*[(].*$)`)
 	revertStatementRegexp = regexp.MustCompile(`(?i)^revert\s+([\S]*)$`)
 
-	enumValuesRegexp = regexp.MustCompile("(?i)^enum[(](.*)[)]$")
+	enumValuesRegexp = regexp.MustCompile("(?i)^(enum|set)[(](.*)[)]$")
 )
 
 // ReplaceTableNameInCreateTableStatement returns a modified CREATE TABLE statement, such that the table name is replaced with given name.
@@ -109,7 +109,7 @@ func legacyParseRevertUUID(sql string) (uuid string, err error) {
 // ParseEnumValues parses the comma delimited part of an enum column definition
 func ParseEnumValues(enumColumnType string) string {
 	if submatch := enumValuesRegexp.FindStringSubmatch(enumColumnType); len(submatch) > 0 {
-		return submatch[1]
+		return submatch[2]
 	}
 	return enumColumnType
 }

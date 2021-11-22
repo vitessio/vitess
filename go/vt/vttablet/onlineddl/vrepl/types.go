@@ -37,6 +37,7 @@ const (
 	TimestampColumnType
 	DateTimeColumnType
 	EnumColumnType
+	SetColumnType
 	MediumIntColumnType
 	JSONColumnType
 	FloatColumnType
