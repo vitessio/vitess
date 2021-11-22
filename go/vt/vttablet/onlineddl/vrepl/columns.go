@@ -8,6 +8,8 @@ package vrepl
 import (
 	"fmt"
 	"strings"
+
+	"vitess.io/vitess/go/vt/schema"
 )
 
 // expandedDataTypes maps some known and difficult-to-compute by INFORMATION_SCHEMA data types which expand other data types.
@@ -128,6 +130,20 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 		}
 		if targetColumn.Charset == "utf8" && sourceColumn.Charset != "utf8mb4" {
 			return true, "expand character set to utf8"
+		}
+	}
+	if sourceColumn.EnumValues != "" {
+		// this is an enum
+		if targetColumn.EnumValues == "" {
+			return true, "conversion from enum to non-enum adds potential values"
+		}
+		// target is an enum. See if all values on target exist in source
+		sourceEnumTokensMap := schema.ParseEnumTokensMap(sourceColumn.EnumValues)
+		targetEnumTokensMap := schema.ParseEnumTokensMap(targetColumn.EnumValues)
+		for k, v := range targetEnumTokensMap {
+			if sourceEnumTokensMap[k] != v {
+				return true, "target enum expands source enum"
+			}
 		}
 	}
 	return false, ""
