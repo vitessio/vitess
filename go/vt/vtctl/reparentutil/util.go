@@ -125,7 +125,7 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 		return mysql.Position{}, err
 	}
 
-	// Use the relay log position if available, otherwise use the executed GTID set executed.
+	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
 	positionString := status.Position
 	if status.RelayLogPosition != "" {
 		positionString = status.RelayLogPosition
