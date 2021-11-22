@@ -55,6 +55,7 @@ type Column struct {
 	Type                 ColumnType
 	EnumValues           string
 	EnumToTextConversion bool
+	DataType             string // from COLUMN_TYPE column
 
 	IsNullable    bool
 	IsDefaultNull bool
@@ -93,6 +94,11 @@ func (c *Column) IsNumeric() bool {
 // IsFloatingPoint returns true if the column is of a floating point numeric type
 func (c *Column) IsFloatingPoint() bool {
 	return c.Type == FloatColumnType || c.Type == DoubleColumnType
+}
+
+// IsFloatingPoint returns true if the column is of a temporal type
+func (c *Column) IsTemporal() bool {
+	return c.DateTimePrecision >= 0
 }
 
 // NewColumns creates a new column array from non empty names

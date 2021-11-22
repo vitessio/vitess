@@ -227,13 +227,14 @@ func (v *VRepl) applyColumnTypes(ctx context.Context, conn *dbconnpool.DBConnect
 				continue
 			}
 
+			column.DataType = row.AsString("DATA_TYPE", "") // a more canonical form of column_type
 			column.IsNullable = (row.AsString("IS_NULLABLE", "") == "YES")
 			column.IsDefaultNull = row.AsBool("is_default_null", false)
 
 			column.CharacterMaximumLength = row.AsInt64("CHARACTER_MAXIMUM_LENGTH", 0)
 			column.NumericPrecision = row.AsInt64("NUMERIC_PRECISION", 0)
 			column.NumericScale = row.AsInt64("NUMERIC_SCALE", 0)
-			column.DateTimePrecision = row.AsInt64("DATETIME_PRECISION", 0)
+			column.DateTimePrecision = row.AsInt64("DATETIME_PRECISION", -1)
 
 			column.Type = vrepl.UnknownColumnType
 			if strings.Contains(columnType, "unsigned") {
