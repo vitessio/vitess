@@ -48,6 +48,15 @@ var (
 		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
 		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
 	}, {
+		input:  "select 1 from t1 where exists (select 1) = TRUE",
+		output: "select 1 from t1 where exists (select 1 from dual) = true",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = FALSE",
+		output: "select 1 from t1 where exists (select 1 from dual) = false",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = 1",
+		output: "select 1 from t1 where exists (select 1 from dual) = 1",
+	}, {
 		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
 	}, {
