@@ -206,6 +206,12 @@ enum Type {
   // This type is for internal use only.
   // Properties: 31, None.
   EXPRESSION = 31;
+  // HEXNUM specifies a HEXNUM type (unquoted varbinary).
+  // Properties: 32, IsText.
+  HEXNUM = 4128;
+  // HEXVAL specifies a HEXVAL type (unquoted varbinary).
+  // Properties: 33, IsText.
+  HEXVAL = 4129;
 }
 
 // Value represents a typed value.
@@ -660,6 +666,30 @@ message BeginExecuteBatchResponse {
   topodata.TabletAlias tablet_alias = 4;
 }
 
+// BeginStreamExecuteRequest is the payload to BeginStreamExecute
+message BeginStreamExecuteRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  VTGateCallerID immediate_caller_id = 2;
+  Target target = 3;
+  BoundQuery query = 4;
+  ExecuteOptions options = 5;
+  repeated string pre_queries = 6;
+}
+
+// BeginStreamExecuteResponse is the returned value from BeginStreamExecute
+message BeginStreamExecuteResponse {
+  // error contains an application level error if necessary. Note the
+  // transaction_id may be set, even when an error is returned, if the begin
+  // worked but the stream execute failed.
+  vtrpc.RPCError error = 1;
+
+  QueryResult result = 2;
+
+  // transaction_id might be non-zero even if an error is present.
+  int64 transaction_id = 3;
+  topodata.TabletAlias tablet_alias = 4;
+}
+
 // MessageStreamRequest is the request payload for MessageStream.
 message MessageStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
@@ -721,6 +751,7 @@ message ReserveBeginExecuteRequest {
   BoundQuery query = 4;
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
+  repeated string post_begin_queries = 7;
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute

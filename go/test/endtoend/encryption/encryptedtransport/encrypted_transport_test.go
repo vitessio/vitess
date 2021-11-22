@@ -307,7 +307,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 			}
 			mysqlProcesses = append(mysqlProcesses, proc)
 			// start vttablet process
-			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(
+				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -319,7 +320,8 @@ func clusterSetUp(t *testing.T) (int, error) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync)
+				clusterInstance.EnableSemiSync,
+				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
@@ -374,7 +376,7 @@ func tabletConnExtraArgs(name string) []string {
 }
 
 func getVitessClient(addr string) (vtgateservicepb.VitessClient, error) {
-	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, grpcName)
+	opt, err := grpcclient.SecureDialOption(grpcCert, grpcKey, grpcCa, "", grpcName)
 	if err != nil {
 		return nil, err
 	}

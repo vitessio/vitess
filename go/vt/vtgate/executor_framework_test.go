@@ -449,8 +449,7 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	// Use legacy gateway until we can rewrite these tests to use new tabletgateway
 	*GatewayImplementation = GatewayImplementationDiscovery
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
-	vtgateHealthCheck = hc
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
@@ -550,12 +549,9 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	err = executor.StreamExecute(
 		context.Background(),
 		"TestExecuteStream",
-		NewSafeSession(primarySession),
+		NewSafeSession(nil),
 		sql,
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 .icon {
-  fill: var(--textColorSecondary);
-  height: 1.8rem;
-  vertical-align: bottom;
-  width: auto;
+    display: inline-block;
+    fill: var(--textColorSecondary);
+    height: 1.8rem;
+    vertical-align: bottom;
+    width: auto;
 }

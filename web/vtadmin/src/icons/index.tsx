@@ -40,6 +40,7 @@ export { ReactComponent as KeyK } from './keyK.svg';
 export { ReactComponent as KeyR } from './keyR.svg';
 export { ReactComponent as KeyS } from './keyS.svg';
 export { ReactComponent as KeyT } from './keyT.svg';
+export { ReactComponent as KeyV } from './keyV.svg';
 export { ReactComponent as Keyboard } from './keyboard.svg';
 export { ReactComponent as Link } from './link.svg';
 export { ReactComponent as PageFirst } from './pageFirst.svg';

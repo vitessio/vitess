@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -87,7 +86,6 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 	executor, _, _, sbclookup := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
-	target := &querypb.Target{}
 	fn := func(r *sqltypes.Result) error {
 		return nil
 	}
@@ -112,7 +110,7 @@ func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
 		}
 
 		sbclookup.SetResults([]*sqltypes.Result{result})
-		err = executor.StreamExecute(ctx, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil, target, fn)
+		err = executor.StreamExecute(ctx, "TestExecutorMaxMemoryRowsExceeded", session, test.query, nil, fn)
 		require.NoError(t, err, "maxMemoryRows limit does not apply to StreamExecute")
 	}
 }
@@ -263,6 +261,66 @@ func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	}
 }
 
+func TestExecutorTransactionsAutoCommitStreaming(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	oltpOptions := &querypb.ExecuteOptions{Workload: querypb.ExecuteOptions_OLTP}
+	session := NewSafeSession(&vtgatepb.Session{
+		TargetString: "@primary",
+		Autocommit:   true,
+		Options:      oltpOptions,
+	})
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	var results []*sqltypes.Result
+
+	// begin.
+	err := executor.StreamExecute(ctx, "TestExecute", session, "begin", nil, func(result *sqltypes.Result) error {
+		results = append(results, result)
+		return nil
+	})
+
+	require.EqualValues(t, 1, len(results), "should get empty result from begin")
+	assert.Empty(t, results[0].Rows, "should get empty result from begin")
+
+	require.NoError(t, err)
+	wantSession := &vtgatepb.Session{
+		InTransaction: true,
+		TargetString:  "@primary",
+		Autocommit:    true,
+		Options:       oltpOptions,
+	}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.Zero(t, sbclookup.CommitCount.Get())
+	_ = testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+
+	// commit.
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "commit", nil)
+	require.NoError(t, err)
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 1, sbclookup.CommitCount.Get())
+
+	logStats := testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from main1", 1)
+	assert.EqualValues(t, 0, logStats.CommitTime)
+	logStats = testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 1)
+	assert.NotEqual(t, 0, logStats.CommitTime)
+
+	// rollback.
+	_, err = executor.Execute(ctx, "TestExecute", session, "begin", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "select id from main1", nil)
+	require.NoError(t, err)
+	_, err = executor.Execute(ctx, "TestExecute", session, "rollback", nil)
+	require.NoError(t, err)
+	wantSession = &vtgatepb.Session{TargetString: "@primary", Autocommit: true, Options: oltpOptions}
+	utils.MustMatch(t, wantSession, session.Session, "session")
+	assert.EqualValues(t, 1, sbclookup.RollbackCount.Get())
+}
+
 func TestExecutorDeleteMetadata(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
@@ -335,7 +393,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	utils.MustMatch(t, wantSession, session.Session, "session does not match for autocommit=1")
 
 	logStats = testQueryLog(t, logChan, "TestExecute", "UPDATE", "update main1 set id=1", 1)
-	assert.NotEqual(t, time.Duration(0), logStats.CommitTime, "logstats: expected non-zero CommitTime")
+	assert.NotZero(t, logStats.CommitTime, "logstats: expected non-zero CommitTime")
 	assert.NotEqual(t, uint64(0), logStats.RowsAffected, "logstats: expected non-zero RowsAffected")
 
 	// autocommit = 1, "begin"
@@ -701,6 +759,36 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
+	query = "show vitess_shards like 'TestSharded/%'"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestSharded/e0-"),
+		},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
+	query = "show vitess_shards like 'TestShard%/%'"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestSharded/e0-"),
+		},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
 	// The FakeLegacyTablets in FakeLegacyHealthCheck don't have support for these columns/values
 	// So let's just be sure the statement works and we get the expected results (none)
 	query = "show vitess_replication_status"
@@ -946,6 +1034,32 @@ func TestExecutorShow(t *testing.T) {
 	assert.EqualError(t, err, want, query)
 }
 
+func TestExecutorShowTargeted(t *testing.T) {
+	executor, _, sbc2, _ := createLegacyExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor/40-60"})
+
+	queries := []string{
+		"show databases",
+		"show variables like 'read_only'",
+		"show collation",
+		"show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
+		"show tables",
+		fmt.Sprintf("show tables from %v", KsTestUnsharded),
+		"show create table user_seq",
+		"show full columns from table1",
+		"show plugins",
+		"show warnings",
+	}
+
+	for _, sql := range queries {
+		_, err := executor.Execute(ctx, "TestExecutorShowTargeted", session, sql, nil)
+		require.NoError(t, err)
+		assert.NotZero(t, len(sbc2.Queries), "Tablet should have received 'show' query")
+		lastQuery := sbc2.Queries[len(sbc2.Queries)-1].Sql
+		assert.Equal(t, sql, lastQuery, "Got: %v, want %v", lastQuery, sql)
+	}
+}
+
 func TestExecutorUse(t *testing.T) {
 	executor, _, _, _ := createLegacyExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "@primary"})
@@ -1056,7 +1170,6 @@ func TestExecutorOther(t *testing.T) {
 	}
 
 	stmts := []string{
-		"show tables",
 		"analyze table t1",
 		"describe select * from t1",
 		"explain select * from t1",
@@ -1311,7 +1424,7 @@ func TestExecutorCreateVindexDDL(t *testing.T) {
 
 	// Create a new vschema keyspace implicitly by creating a vindex with a different
 	// target in the session
-	//ksNew := "test_new_keyspace"
+	// ksNew := "test_new_keyspace"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	stmt = "alter vschema create vindex test_vindex2 using hash"
 	_, err = executor.Execute(ctx, "TestExecute", session, stmt, nil)
@@ -1533,7 +1646,9 @@ func assertCacheContains(t *testing.T, e *Executor, want []string) {
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *LogStats) {
 	logStats := NewLogStats(ctx, "Test", "", nil)
-	plan, err := e.getPlan(vcursor, sql, comments, bindVars, skipQueryPlanCache, logStats)
+	plan, err := e.getPlan(vcursor, sql, comments, bindVars, &SafeSession{
+		Session: &vtgatepb.Session{Options: &querypb.ExecuteOptions{SkipQueryPlanCache: skipQueryPlanCache}},
+	}, logStats)
 	require.NoError(t, err)
 
 	// Wait for cache to settle
@@ -1696,7 +1811,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	}
 	assertCacheContains(t, r, want)
 
-	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, false, nil)
+	_, err := r.getPlan(emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	wantErr := "syntax error at position 7 near 'syntax'"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("getPlan(syntax): %v, want %s", err, wantErr)
@@ -1891,13 +2006,12 @@ func TestOlapSelectDatabase(t *testing.T) {
 	session := &vtgatepb.Session{Autocommit: true}
 
 	sql := `select database()`
-	target := &querypb.Target{}
 	cbInvoked := false
 	cb := func(r *sqltypes.Result) error {
 		cbInvoked = true
 		return nil
 	}
-	err := executor.StreamExecute(context.Background(), "TestExecute", NewSafeSession(session), sql, nil, target, cb)
+	err := executor.StreamExecute(context.Background(), "TestExecute", NewSafeSession(session), sql, nil, cb)
 	assert.NoError(t, err)
 	assert.True(t, cbInvoked)
 }
@@ -2167,6 +2281,70 @@ func TestExecutorSavepointInTx(t *testing.T) {
 	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint b", 1)
 	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
 	testQueryLog(t, logChan, "TestExecute", "ROLLBACK", "rollback", 2)
+}
+
+func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("TestExecutorSavepoint")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	session := NewSafeSession(&vtgatepb.Session{Autocommit: true, TargetString: "TestExecutor", EnableSystemSettings: true})
+	sbc1.SetResults([]*sqltypes.Result{
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("orig|new", "varchar|varchar"), "a|"),
+	})
+	_, err := exec(executor, session, "set sql_mode = ''")
+	require.NoError(t, err)
+
+	_, err = exec(executor, session, "begin")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 1")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "savepoint b")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "release savepoint a")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "select id from user where id = 3")
+	require.NoError(t, err)
+	_, err = exec(executor, session, "commit")
+	require.NoError(t, err)
+	emptyBV := map[string]*querypb.BindVariable{}
+	sbc1WantQueries := []*querypb.BoundQuery{{
+		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
+	}, {
+		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "select id from `user` where id = 1", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint b", BindVariables: emptyBV,
+	}, {
+		Sql: "release savepoint a", BindVariables: emptyBV,
+	}}
+
+	sbc2WantQueries := []*querypb.BoundQuery{{
+		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "savepoint b", BindVariables: emptyBV,
+	}, {
+		Sql: "release savepoint a", BindVariables: emptyBV,
+	}, {
+		Sql: "select id from `user` where id = 3", BindVariables: emptyBV,
+	}}
+	utils.MustMatch(t, sbc1WantQueries, sbc1.Queries, "")
+	utils.MustMatch(t, sbc2WantQueries, sbc2.Queries, "")
+	testQueryLog(t, logChan, "TestExecute", "SET", "set session sql_mode = ''", 1)
+	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint a", 0)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 1", 1)
+	testQueryLog(t, logChan, "TestExecute", "SAVEPOINT", "savepoint b", 1)
+	testQueryLog(t, logChan, "TestExecute", "RELEASE", "release savepoint a", 1)
+	testQueryLog(t, logChan, "TestExecute", "SELECT", "select id from user where id = 3", 1)
+	testQueryLog(t, logChan, "TestExecute", "COMMIT", "commit", 2)
 }
 
 func TestExecutorSavepointWithoutTx(t *testing.T) {

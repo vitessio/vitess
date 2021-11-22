@@ -47,6 +47,7 @@ type (
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
+		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
 		SetComments(comments Comments)
@@ -123,6 +124,18 @@ type (
 		DefaultVal  Expr
 	}
 
+	// With contains the lists of common table expression and specifies if it is recursive or not
+	With struct {
+		ctes      []*CommonTableExpr
+		Recursive bool
+	}
+
+	// CommonTableExpr is the structure for supporting common table expressions
+	CommonTableExpr struct {
+		TableID  TableIdent
+		Columns  Columns
+		Subquery *Subquery
+	}
 	// ChangeColumn is used to change the column definition, can also rename the column in alter table command
 	ChangeColumn struct {
 		OldColumn        *ColName
@@ -211,6 +224,7 @@ type (
 		Comments    Comments
 		SelectExprs SelectExprs
 		Where       *Where
+		With        *With
 		GroupBy     GroupBy
 		Having      *Where
 		OrderBy     OrderBy
@@ -242,6 +256,7 @@ type (
 		Right    SelectStatement
 		Distinct bool
 		OrderBy  OrderBy
+		With     *With
 		Limit    *Limit
 		Lock     Lock
 		Into     *SelectInto
@@ -291,6 +306,7 @@ type (
 	// Update represents an UPDATE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Update struct {
+		With       *With
 		Comments   Comments
 		Ignore     Ignore
 		TableExprs TableExprs
@@ -303,6 +319,7 @@ type (
 	// Delete represents a DELETE statement.
 	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
 	Delete struct {
+		With       *With
 		Ignore     Ignore
 		Comments   Comments
 		Targets    TableNames
@@ -576,6 +593,8 @@ type (
 		Table TableName
 		Wild  string
 	}
+	// IntervalTypes is an enum to get types of intervals
+	IntervalTypes int8
 
 	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
 	// It should be used only as an indicator. It does not contain
@@ -1458,15 +1477,48 @@ type PartitionDefinition struct {
 	Maxvalue bool
 }
 
+// PartitionOption describes partitioning control (for create table statements)
+type PartitionOption struct {
+	Linear       string
+	isHASH       bool
+	isKEY        bool
+	KeyAlgorithm string
+	KeyColList   Columns
+	RangeOrList  string
+	ExprOrCol    *ExprOrColumns
+	Expr         Expr
+	Partitions   string
+	SubPartition *SubPartition
+	Definitions  []*PartitionDefinition
+}
+
+// ExprOrColumns describes expression and columnlist in the partition
+type ExprOrColumns struct {
+	Expr       Expr
+	ColumnList Columns
+}
+
+// SubPartition describes subpartitions control
+type SubPartition struct {
+	Linear        string
+	isHASH        bool
+	isKEY         bool
+	KeyAlgorithm  string
+	KeyColList    Columns
+	Expr          Expr
+	SubPartitions string
+}
+
 // TableOptions specifies a list of table options
 type TableOptions []*TableOption
 
 // TableSpec describes the structure of a table from a CREATE TABLE statement
 type TableSpec struct {
-	Columns     []*ColumnDefinition
-	Indexes     []*IndexDefinition
-	Constraints []*ConstraintDefinition
-	Options     TableOptions
+	Columns         []*ColumnDefinition
+	Indexes         []*IndexDefinition
+	Constraints     []*ConstraintDefinition
+	Options         TableOptions
+	PartitionOption *PartitionOption
 }
 
 // ColumnDefinition describes a column in a CREATE TABLE statement
@@ -1876,6 +1928,12 @@ type (
 		Unit  string
 	}
 
+	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
+	ExtractFuncExpr struct {
+		IntervalTypes IntervalTypes
+		Expr          Expr
+	}
+
 	// CollateExpr represents dynamic collate operator.
 	CollateExpr struct {
 		Expr    Expr
@@ -1963,6 +2021,21 @@ type (
 		Name ColIdent
 		Fsp  Expr // fractional seconds precision, integer from 0 to 6
 	}
+
+	// ExtractedSubquery is a subquery that has been extracted from the original AST
+	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
+	// CAUTION: you should only change argName and hasValuesArg through the setter methods
+	ExtractedSubquery struct {
+		Original     Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery     *Subquery
+		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+
+		hasValuesArg string
+		argName      string
+		alternative  Expr // this is what will be used to Format this struct
+	}
 )
 
 // iExpr ensures that only expressions nodes can be assigned to a Expr
@@ -1988,6 +2061,7 @@ func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
+func (*ExtractFuncExpr) iExpr()   {}
 func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
@@ -1997,6 +2071,7 @@ func (*ConvertUsingExpr) iExpr()  {}
 func (*MatchExpr) iExpr()         {}
 func (*GroupConcatExpr) iExpr()   {}
 func (*Default) iExpr()           {}
+func (*ExtractedSubquery) iExpr() {}
 
 // Exprs represents a list of value expressions.
 // It's not a valid expression because it's not parenthesized.

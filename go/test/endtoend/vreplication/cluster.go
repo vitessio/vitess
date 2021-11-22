@@ -26,10 +26,12 @@ var (
 	vtdataroot            string
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
+	extraVTGateArgs       = []string{"-tablet_refresh_interval", "10ms"}
 )
 
 // ClusterConfig defines the parameters like ports, tmpDir, tablet types which uniquely define a vitess cluster
 type ClusterConfig struct {
+	charset              string
 	hostname             string
 	topoPort             int
 	vtctldPort           int
@@ -127,6 +129,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		charset:             "utf8mb4",
 	}
 }
 
@@ -254,7 +257,8 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false)
+		false,
+		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
@@ -383,7 +387,7 @@ func (vc *VitessCluster) StartVtgate(t testing.TB, cell *Cell, cellsToWatch stri
 		vc.ClusterConfig.tabletTypes,
 		vc.ClusterConfig.topoPort,
 		vc.ClusterConfig.tmpDir,
-		[]string{"-tablet_refresh_interval", "10ms"},
+		extraVTGateArgs,
 		vc.ClusterConfig.vtgatePlannerVersion)
 	require.NotNil(t, vtgate)
 	if err := vtgate.Setup(); err != nil {

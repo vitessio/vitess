@@ -17,7 +17,10 @@ limitations under the License.
 package semantics
 
 import (
+	"fmt"
 	"testing"
+
+	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,11 +34,12 @@ var T0 TableSet
 
 var (
 	// Just here to make outputs more readable
-	T1 = SingleTableSet(0)
-	T2 = SingleTableSet(1)
-	T3 = SingleTableSet(2)
-	T4 = SingleTableSet(3)
-	T5 = SingleTableSet(4)
+	None = EmptyTableSet()
+	T1   = SingleTableSet(0)
+	T2   = SingleTableSet(1)
+	T3   = SingleTableSet(2)
+	T4   = SingleTableSet(3)
+	T5   = SingleTableSet(4)
 )
 
 func extract(in *sqlparser.Select, idx int) sqlparser.Expr {
@@ -485,10 +489,10 @@ func TestScopeForSubqueries(t *testing.T) {
 			deps: T2,
 		}, {
 			sql:  `select t.col1, (select (select y.col2 from y) from z) from x as t`,
-			deps: T3,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select (select (select (select w.col2 from w) from x) from y) from z) from x as t`,
-			deps: T5,
+			deps: None,
 		}, {
 			sql:  `select t.col1, (select id from t) from x as t`,
 			deps: T2,
@@ -506,6 +510,94 @@ func TestScopeForSubqueries(t *testing.T) {
 			require.NoError(t, semTable.ProjectionErr)
 			// if scoping works as expected, we should be able to see the inner table being used by the inner expression
 			assert.Equal(t, tc.deps, s1)
+		})
+	}
+}
+
+func TestSubqueriesMappingWhereClause(t *testing.T) {
+	tcs := []struct {
+		sql           string
+		opCode        engine.PulloutOpcode
+		otherSideName string
+	}{
+		{
+			sql:           "select id from t1 where id in (select uid from t2)",
+			opCode:        engine.PulloutIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t1 where id not in (select uid from t2)",
+			opCode:        engine.PulloutNotIn,
+			otherSideName: "id",
+		},
+		{
+			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+		{
+			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutExists,
+			otherSideName: "",
+		},
+		{
+			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
+			opCode:        engine.PulloutValue,
+			otherSideName: "col1",
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			var subq *sqlparser.Subquery
+			switch whereExpr := sel.Where.Expr.(type) {
+			case *sqlparser.ComparisonExpr:
+				subq = whereExpr.Right.(*sqlparser.Subquery)
+			case *sqlparser.ExistsExpr:
+				subq = whereExpr.Subquery
+			}
+
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr))
+			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
+			if tc.otherSideName == "" {
+				assert.Nil(t, extractedSubq.OtherSide)
+			} else {
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
+			}
+		})
+	}
+}
+
+func TestSubqueriesMappingSelectExprs(t *testing.T) {
+	tcs := []struct {
+		sql        string
+		selExprIdx int
+	}{
+		{
+			sql:        "select (select id from t1)",
+			selExprIdx: 0,
+		},
+		{
+			sql:        "select id, (select id from t1) from t1",
+			selExprIdx: 1,
+		},
+	}
+
+	for i, tc := range tcs {
+		t.Run(fmt.Sprintf("%d_%s", i+1, tc.sql), func(t *testing.T) {
+			stmt, semTable := parseAndAnalyze(t, tc.sql, "d")
+			sel, _ := stmt.(*sqlparser.Select)
+
+			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
+			extractedSubq := semTable.SubqueryRef[subq]
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq))
+			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
 		})
 	}
 }
@@ -923,6 +1015,65 @@ func TestScopingWDerivedTables(t *testing.T) {
 				assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(extract(sel, 0)), "RecursiveDeps")
 				assert.Equal(t, query.expectation, st.DirectDeps(extract(sel, 0)), "DirectDeps")
 			}
+		})
+	}
+}
+
+func TestDerivedTablesOrderClause(t *testing.T) {
+	queries := []struct {
+		query                string
+		recursiveExpectation TableSet
+		expectation          TableSet
+	}{{
+		query:                "select 1 from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id from (select id from user) as t order by t.id",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select id as foo from (select id from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar from user) as t order by foo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id as bar, oo from user) as t order by oo",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}, {
+		query:                "select bar as foo from (select id, oo from user) as t(bar,oo) order by bar",
+		recursiveExpectation: T1,
+		expectation:          T2,
+	}}
+	si := &FakeSI{Tables: map[string]*vindexes.Table{"t": {Name: sqlparser.NewTableIdent("t")}}}
+	for _, query := range queries {
+		t.Run(query.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(query.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", si)
+			require.NoError(t, err)
+
+			sel := parse.(*sqlparser.Select)
+			assert.Equal(t, query.recursiveExpectation, st.RecursiveDeps(sel.OrderBy[0].Expr), "RecursiveDeps")
+			assert.Equal(t, query.expectation, st.DirectDeps(sel.OrderBy[0].Expr), "DirectDeps")
+
 		})
 	}
 }

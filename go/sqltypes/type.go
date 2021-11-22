@@ -86,6 +86,11 @@ func IsNumber(t querypb.Type) bool {
 	return IsIntegral(t) || IsFloat(t) || t == Decimal
 }
 
+// IsDate returns true if the type represents a date and/or time.
+func IsDate(t querypb.Type) bool {
+	return t == Datetime || t == Date || t == Timestamp || t == Time
+}
+
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
 // Although these constants are interchangeable,
@@ -140,6 +145,8 @@ const (
 	Geometry   = querypb.Type_GEOMETRY
 	TypeJSON   = querypb.Type_JSON
 	Expression = querypb.Type_EXPRESSION
+	HexNum     = querypb.Type_HEXNUM
+	HexVal     = querypb.Type_HEXVAL
 )
 
 // bit-shift the mysql flags by two byte so we

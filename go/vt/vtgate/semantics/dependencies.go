@@ -17,7 +17,6 @@ limitations under the License.
 package semantics
 
 import (
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -33,7 +32,7 @@ type (
 	dependency struct {
 		direct    TableSet
 		recursive TableSet
-		typ       *querypb.Type
+		typ       *Type
 	}
 	nothing struct{}
 	certain struct {
@@ -47,7 +46,7 @@ type (
 
 var ambigousErr = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous")
 
-func createCertain(direct TableSet, recursive TableSet, qt *querypb.Type) *certain {
+func createCertain(direct TableSet, recursive TableSet, qt *Type) *certain {
 	return &certain{
 		dependency: dependency{
 			direct:    direct,

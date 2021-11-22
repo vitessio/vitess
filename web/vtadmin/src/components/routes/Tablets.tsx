@@ -33,6 +33,7 @@ import { DataFilter } from '../dataTable/DataFilter';
 import { KeyspaceLink } from '../links/KeyspaceLink';
 import { TabletLink } from '../links/TabletLink';
 import { ExternalTabletLink } from '../links/ExternalTabletLink';
+import { ShardLink } from '../links/ShardLink';
 
 export const Tablets = () => {
     useDocumentTitle('Tablets');
@@ -52,30 +53,30 @@ export const Tablets = () => {
                     <DataCell>
                         <KeyspaceLink clusterID={t._raw.cluster?.id} name={t.keyspace}>
                             <div>{t.keyspace}</div>
-                            <div className="font-size-small text-color-secondary">{t.cluster}</div>
+                            <div className="font-size-small text-secondary">{t.cluster}</div>
                         </KeyspaceLink>
                     </DataCell>
                     <DataCell>
-                        <KeyspaceLink
-                            className="white-space-nowrap"
+                        <ShardLink
+                            className="whitespace-nowrap"
                             clusterID={t._raw.cluster?.id}
-                            name={t.keyspace}
+                            keyspace={t.keyspace}
                             shard={t.shard}
                         >
                             <ShardServingPip isLoading={ksQuery.isLoading} isServing={t.isShardServing} /> {t.shard}
                             {ksQuery.isSuccess && (
-                                <div className="font-size-small text-color-secondary white-space-nowrap">
+                                <div className="font-size-small text-secondary whitespace-nowrap">
                                     {!t.isShardServing && 'NOT SERVING'}
                                 </div>
                             )}
-                        </KeyspaceLink>
+                        </ShardLink>
                     </DataCell>
                     <DataCell>
-                        <TabletLink alias={t.alias} className="font-weight-bold" clusterID={t._raw.cluster?.id}>
+                        <TabletLink alias={t.alias} className="font-bold" clusterID={t._raw.cluster?.id}>
                             {t.alias}
                         </TabletLink>
                     </DataCell>
-                    <DataCell className="white-space-nowrap">{t.type}</DataCell>
+                    <DataCell className="whitespace-nowrap">{t.type}</DataCell>
 
                     <DataCell>
                         <TabletServingPip state={t._raw.state} /> {t.state}

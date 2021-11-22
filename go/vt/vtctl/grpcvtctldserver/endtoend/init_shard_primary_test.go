@@ -66,7 +66,7 @@ func TestInitShardPrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	tablet2.FakeMysqlDaemon.SetReplicationSourceInput = fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort)
+	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
@@ -75,7 +75,7 @@ func TestInitShardPrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	tablet3.FakeMysqlDaemon.SetReplicationSourceInput = fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort)
+	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	for _, tablet := range []*testlib.FakeTablet{tablet1, tablet2, tablet3} {
 		tablet.StartActionLoop(t, wr)
@@ -122,7 +122,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	tablet2.FakeMysqlDaemon.SetReplicationSourceInput = fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort)
+	tablet2.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet2.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	tablet3.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
@@ -130,7 +130,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
-	tablet3.FakeMysqlDaemon.SetReplicationSourceInput = fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort)
+	tablet3.FakeMysqlDaemon.SetReplicationSourceInputs = append(tablet3.FakeMysqlDaemon.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", tablet1.Tablet.Hostname, tablet1.Tablet.MysqlPort))
 
 	for _, tablet := range []*testlib.FakeTablet{tablet1, tablet2, tablet3} {
 		tablet.StartActionLoop(t, wr)

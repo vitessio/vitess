@@ -17,60 +17,61 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"time"
 
-	"context"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/wrangler"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func init() {
 	addCommand("Shards", command{
-		"ListBackups",
-		commandListBackups,
-		"<keyspace/shard>",
-		"Lists all the backups for a shard."})
+		name:   "ListBackups",
+		method: commandListBackups,
+		params: "<keyspace/shard>",
+		help:   "Lists all the backups for a shard.",
+	})
 	addCommand("Shards", command{
-		"BackupShard",
-		commandBackupShard,
-		"[-allow_primary=false] <keyspace/shard>",
-		"Chooses a tablet and creates a backup for a shard."})
+		name:   "BackupShard",
+		method: commandBackupShard,
+		params: "[-allow_primary=false] <keyspace/shard>",
+		help:   "Chooses a tablet and creates a backup for a shard.",
+	})
 	addCommand("Shards", command{
-		"RemoveBackup",
-		commandRemoveBackup,
-		"<keyspace/shard> <backup name>",
-		"Removes a backup for the BackupStorage."})
+		name:   "RemoveBackup",
+		method: commandRemoveBackup,
+		params: "<keyspace/shard> <backup name>",
+		help:   "Removes a backup for the BackupStorage.",
+	})
 
 	addCommand("Tablets", command{
-		"Backup",
-		commandBackup,
-		"[-concurrency=4] [-allow_primary=false] <tablet alias>",
-		"Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes."})
+		name:   "Backup",
+		method: commandBackup,
+		params: "[-concurrency=4] [-allow_primary=false] <tablet alias>",
+		help:   "Stops mysqld and uses the BackupStorage service to store a new backup. This function also remembers if the tablet was replicating so that it can restore the same state after the backup completes.",
+	})
 	addCommand("Tablets", command{
-		"RestoreFromBackup",
-		commandRestoreFromBackup,
-		"[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
-		"Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time."})
+		name:   "RestoreFromBackup",
+		method: commandRestoreFromBackup,
+		params: "[-backup_timestamp=yyyy-MM-dd.HHmmss] <tablet alias>",
+		help:   "Stops mysqld and restores the data from the latest backup or if a timestamp is specified then the most recent backup at or before that time.",
+	})
 }
 
 func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Allows backups to be taken on primary. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
-
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -87,9 +88,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 	if err != nil {
 		return err
 	}
-	if *deprecatedAllowMaster {
-		*allowPrimary = *deprecatedAllowMaster
-	}
 
 	return execBackup(ctx, wr, tabletInfo.Tablet, *concurrency, *allowPrimary)
 }
@@ -97,10 +95,6 @@ func commandBackup(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fl
 func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	concurrency := subFlags.Int("concurrency", 4, "Specifies the number of compression/checksum jobs to run simultaneously")
 	allowPrimary := subFlags.Bool("allow_primary", false, "Whether to use primary tablet for backup. Warning!! If you are using the builtin backup engine, this will shutdown your primary mysql for as long as it takes to create a backup.")
-
-	// handle deprecated flags
-	// should be deleted in a future release
-	deprecatedAllowMaster := subFlags.Bool("allow_master", false, "DEPRECATED. Use -allow_primary instead")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -115,7 +109,7 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 	}
 
 	tablets, stats, err := wr.ShardReplicationStatuses(ctx, keyspace, shard)
-	if tablets == nil {
+	if err != nil {
 		return err
 	}
 
@@ -160,10 +154,6 @@ func commandBackupShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 
 	if tabletForBackup == nil {
 		return errors.New("no tablet available for backup")
-	}
-
-	if *deprecatedAllowMaster {
-		*allowPrimary = *deprecatedAllowMaster
 	}
 
 	return execBackup(ctx, wr, tabletForBackup, *concurrency, *allowPrimary)

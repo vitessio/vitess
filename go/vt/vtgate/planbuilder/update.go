@@ -29,6 +29,9 @@ import (
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema ContextVSchema) (engine.Primitive, error) {
 	upd := stmt.(*sqlparser.Update)
+	if upd.With != nil {
+		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+	}
 	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
@@ -113,7 +116,12 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		return nil, "", nil
 	}
 	// generate rest of the owned vindex query.
-	buf.Myprintf(" from %v%v%v%v for update", table.Name, update.Where, update.OrderBy, update.Limit)
+	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update on complex table expression")
+	}
+	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
+	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
 	return changedVindexes, buf.String(), nil
 }
 

@@ -180,6 +180,8 @@ type VtctldClient interface {
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error)
+	// ExecuteHook runs the hook on the tablet.
+	ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(ctx context.Context, in *vtctldata.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
@@ -253,9 +255,20 @@ type VtctldClient interface {
 	RefreshState(ctx context.Context, in *vtctldata.RefreshStateRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateResponse, error)
 	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
 	RefreshStateByShard(ctx context.Context, in *vtctldata.RefreshStateByShardRequest, opts ...grpc.CallOption) (*vtctldata.RefreshStateByShardResponse, error)
+	// ReloadSchema instructs the remote tablet to reload its schema.
+	ReloadSchema(ctx context.Context, in *vtctldata.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaResponse, error)
+	// ReloadSchemaKeyspace reloads the schema on all tablets in a keyspace.
+	ReloadSchemaKeyspace(ctx context.Context, in *vtctldata.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaKeyspaceResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard.
+	//
+	// In general, we don't always expect all replicas to be ready to reload, and
+	// the periodic schema reload makes them self-healing anyway. So, we do this
+	// on a best-effort basis, and log warnings for any tablets that fail to
+	// reload within the context deadline.
+	ReloadSchemaShard(ctx context.Context, in *vtctldata.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
-	// shards in the specified keyspace, as well as from the SrvKeyspace for that
-	// keyspace in that cell.
+	// shards in the specified keyspace (by calling RemoveShardCell on every
+	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error)
 	// RemoveShardCell removes the specified cell from the specified shard's Cells
 	// list.
@@ -266,6 +279,13 @@ type VtctldClient interface {
 	ReparentTablet(ctx context.Context, in *vtctldata.ReparentTabletRequest, opts ...grpc.CallOption) (*vtctldata.ReparentTabletResponse, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+	// only for emergency fixes. This does not rebuild the serving graph.
+	//
+	// The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+	SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error)
+	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+	SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -449,6 +469,15 @@ func (c *vtctldClient) DeleteTablets(ctx context.Context, in *vtctldata.DeleteTa
 func (c *vtctldClient) EmergencyReparentShard(ctx context.Context, in *vtctldata.EmergencyReparentShardRequest, opts ...grpc.CallOption) (*vtctldata.EmergencyReparentShardResponse, error) {
 	out := new(vtctldata.EmergencyReparentShardResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/EmergencyReparentShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ExecuteHook(ctx context.Context, in *vtctldata.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldata.ExecuteHookResponse, error) {
+	out := new(vtctldata.ExecuteHookResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ExecuteHook", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -680,6 +709,33 @@ func (c *vtctldClient) RefreshStateByShard(ctx context.Context, in *vtctldata.Re
 	return out, nil
 }
 
+func (c *vtctldClient) ReloadSchema(ctx context.Context, in *vtctldata.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaResponse, error) {
+	out := new(vtctldata.ReloadSchemaResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReloadSchema", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ReloadSchemaKeyspace(ctx context.Context, in *vtctldata.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaKeyspaceResponse, error) {
+	out := new(vtctldata.ReloadSchemaKeyspaceResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReloadSchemaKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldata.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldata.ReloadSchemaShardResponse, error) {
+	out := new(vtctldata.ReloadSchemaShardResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/ReloadSchemaShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldata.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	out := new(vtctldata.RemoveKeyspaceCellResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RemoveKeyspaceCell", in, out, opts...)
@@ -710,6 +766,24 @@ func (c *vtctldClient) ReparentTablet(ctx context.Context, in *vtctldata.Reparen
 func (c *vtctldClient) RunHealthCheck(ctx context.Context, in *vtctldata.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldata.RunHealthCheckResponse, error) {
 	out := new(vtctldata.RunHealthCheckResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/RunHealthCheck", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldata.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceServedFromResponse, error) {
+	out := new(vtctldata.SetKeyspaceServedFromResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceServedFrom", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldata.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
+	out := new(vtctldata.SetKeyspaceShardingInfoResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/SetKeyspaceShardingInfo", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -885,6 +959,8 @@ type VtctldServer interface {
 	// EmergencyReparentShard reparents the shard to the new primary. It assumes
 	// the old primary is dead or otherwise not responding.
 	EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error)
+	// ExecuteHook runs the hook on the tablet.
+	ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error)
 	// FindAllShardsInKeyspace returns a map of shard names to shard references
 	// for a given keyspace.
 	FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error)
@@ -958,9 +1034,20 @@ type VtctldServer interface {
 	RefreshState(context.Context, *vtctldata.RefreshStateRequest) (*vtctldata.RefreshStateResponse, error)
 	// RefreshStateByShard calls RefreshState on all the tablets in the given shard.
 	RefreshStateByShard(context.Context, *vtctldata.RefreshStateByShardRequest) (*vtctldata.RefreshStateByShardResponse, error)
+	// ReloadSchema instructs the remote tablet to reload its schema.
+	ReloadSchema(context.Context, *vtctldata.ReloadSchemaRequest) (*vtctldata.ReloadSchemaResponse, error)
+	// ReloadSchemaKeyspace reloads the schema on all tablets in a keyspace.
+	ReloadSchemaKeyspace(context.Context, *vtctldata.ReloadSchemaKeyspaceRequest) (*vtctldata.ReloadSchemaKeyspaceResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard.
+	//
+	// In general, we don't always expect all replicas to be ready to reload, and
+	// the periodic schema reload makes them self-healing anyway. So, we do this
+	// on a best-effort basis, and log warnings for any tablets that fail to
+	// reload within the context deadline.
+	ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error)
 	// RemoveKeyspaceCell removes the specified cell from the Cells list for all
-	// shards in the specified keyspace, as well as from the SrvKeyspace for that
-	// keyspace in that cell.
+	// shards in the specified keyspace (by calling RemoveShardCell on every
+	// shard). It also removes the SrvKeyspace for that keyspace in that cell.
 	RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error)
 	// RemoveShardCell removes the specified cell from the specified shard's Cells
 	// list.
@@ -971,6 +1058,13 @@ type VtctldServer interface {
 	ReparentTablet(context.Context, *vtctldata.ReparentTabletRequest) (*vtctldata.ReparentTabletResponse, error)
 	// RunHealthCheck runs a healthcheck on the remote tablet.
 	RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error)
+	// SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+	// only for emergency fixes. This does not rebuild the serving graph.
+	//
+	// The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+	SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error)
+	// SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+	SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error)
 	// SetShardIsPrimaryServing adds or removes a shard from serving.
 	//
 	// This is meant as an emergency function. It does not rebuild any serving
@@ -1073,6 +1167,9 @@ func (UnimplementedVtctldServer) DeleteTablets(context.Context, *vtctldata.Delet
 func (UnimplementedVtctldServer) EmergencyReparentShard(context.Context, *vtctldata.EmergencyReparentShardRequest) (*vtctldata.EmergencyReparentShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EmergencyReparentShard not implemented")
 }
+func (UnimplementedVtctldServer) ExecuteHook(context.Context, *vtctldata.ExecuteHookRequest) (*vtctldata.ExecuteHookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecuteHook not implemented")
+}
 func (UnimplementedVtctldServer) FindAllShardsInKeyspace(context.Context, *vtctldata.FindAllShardsInKeyspaceRequest) (*vtctldata.FindAllShardsInKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method FindAllShardsInKeyspace not implemented")
 }
@@ -1148,6 +1245,15 @@ func (UnimplementedVtctldServer) RefreshState(context.Context, *vtctldata.Refres
 func (UnimplementedVtctldServer) RefreshStateByShard(context.Context, *vtctldata.RefreshStateByShardRequest) (*vtctldata.RefreshStateByShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshStateByShard not implemented")
 }
+func (UnimplementedVtctldServer) ReloadSchema(context.Context, *vtctldata.ReloadSchemaRequest) (*vtctldata.ReloadSchemaResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchema not implemented")
+}
+func (UnimplementedVtctldServer) ReloadSchemaKeyspace(context.Context, *vtctldata.ReloadSchemaKeyspaceRequest) (*vtctldata.ReloadSchemaKeyspaceResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaKeyspace not implemented")
+}
+func (UnimplementedVtctldServer) ReloadSchemaShard(context.Context, *vtctldata.ReloadSchemaShardRequest) (*vtctldata.ReloadSchemaShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
+}
 func (UnimplementedVtctldServer) RemoveKeyspaceCell(context.Context, *vtctldata.RemoveKeyspaceCellRequest) (*vtctldata.RemoveKeyspaceCellResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
@@ -1159,6 +1265,12 @@ func (UnimplementedVtctldServer) ReparentTablet(context.Context, *vtctldata.Repa
 }
 func (UnimplementedVtctldServer) RunHealthCheck(context.Context, *vtctldata.RunHealthCheckRequest) (*vtctldata.RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceServedFrom(context.Context, *vtctldata.SetKeyspaceServedFromRequest) (*vtctldata.SetKeyspaceServedFromResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceServedFrom not implemented")
+}
+func (UnimplementedVtctldServer) SetKeyspaceShardingInfo(context.Context, *vtctldata.SetKeyspaceShardingInfoRequest) (*vtctldata.SetKeyspaceShardingInfoResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetKeyspaceShardingInfo not implemented")
 }
 func (UnimplementedVtctldServer) SetShardIsPrimaryServing(context.Context, *vtctldata.SetShardIsPrimaryServingRequest) (*vtctldata.SetShardIsPrimaryServingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetShardIsPrimaryServing not implemented")
@@ -1460,6 +1572,24 @@ func _Vtctld_EmergencyReparentShard_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).EmergencyReparentShard(ctx, req.(*vtctldata.EmergencyReparentShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ExecuteHook_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ExecuteHookRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ExecuteHook(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ExecuteHook",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ExecuteHook(ctx, req.(*vtctldata.ExecuteHookRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1914,6 +2044,60 @@ func _Vtctld_RefreshStateByShard_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_ReloadSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ReloadSchemaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ReloadSchema(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ReloadSchema",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ReloadSchema(ctx, req.(*vtctldata.ReloadSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ReloadSchemaKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ReloadSchemaKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ReloadSchemaKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ReloadSchemaKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ReloadSchemaKeyspace(ctx, req.(*vtctldata.ReloadSchemaKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.ReloadSchemaShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).ReloadSchemaShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/ReloadSchemaShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).ReloadSchemaShard(ctx, req.(*vtctldata.ReloadSchemaShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.RemoveKeyspaceCellRequest)
 	if err := dec(in); err != nil {
@@ -1982,6 +2166,42 @@ func _Vtctld_RunHealthCheck_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).RunHealthCheck(ctx, req.(*vtctldata.RunHealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SetKeyspaceServedFrom_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceServedFromRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceServedFrom(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceServedFrom",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceServedFrom(ctx, req.(*vtctldata.SetKeyspaceServedFromRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_SetKeyspaceShardingInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.SetKeyspaceShardingInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/SetKeyspaceShardingInfo",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).SetKeyspaceShardingInfo(ctx, req.(*vtctldata.SetKeyspaceShardingInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2284,6 +2504,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_EmergencyReparentShard_Handler,
 		},
 		{
+			MethodName: "ExecuteHook",
+			Handler:    _Vtctld_ExecuteHook_Handler,
+		},
+		{
 			MethodName: "FindAllShardsInKeyspace",
 			Handler:    _Vtctld_FindAllShardsInKeyspace_Handler,
 		},
@@ -2384,6 +2608,18 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Vtctld_RefreshStateByShard_Handler,
 		},
 		{
+			MethodName: "ReloadSchema",
+			Handler:    _Vtctld_ReloadSchema_Handler,
+		},
+		{
+			MethodName: "ReloadSchemaKeyspace",
+			Handler:    _Vtctld_ReloadSchemaKeyspace_Handler,
+		},
+		{
+			MethodName: "ReloadSchemaShard",
+			Handler:    _Vtctld_ReloadSchemaShard_Handler,
+		},
+		{
 			MethodName: "RemoveKeyspaceCell",
 			Handler:    _Vtctld_RemoveKeyspaceCell_Handler,
 		},
@@ -2398,6 +2634,14 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RunHealthCheck",
 			Handler:    _Vtctld_RunHealthCheck_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceServedFrom",
+			Handler:    _Vtctld_SetKeyspaceServedFrom_Handler,
+		},
+		{
+			MethodName: "SetKeyspaceShardingInfo",
+			Handler:    _Vtctld_SetKeyspaceShardingInfo_Handler,
 		},
 		{
 			MethodName: "SetShardIsPrimaryServing",

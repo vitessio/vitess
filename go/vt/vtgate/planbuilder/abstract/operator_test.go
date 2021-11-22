@@ -25,6 +25,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/vtgate/engine"
+
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"github.com/stretchr/testify/assert"
@@ -48,7 +50,7 @@ func (lcr *lineCountingReader) nextLine() (string, error) {
 func readTestCase(lcr *lineCountingReader) (testCase, error) {
 	query := ""
 	var err error
-	for query == "" || query == "\n" {
+	for query == "" || query == "\n" || strings.HasPrefix(query, "#") {
 		query, err = lcr.nextLine()
 		if err != nil {
 			return testCase{}, err
@@ -61,9 +63,9 @@ func readTestCase(lcr *lineCountingReader) (testCase, error) {
 		jsonPart, err := lcr.nextLine()
 		if err != nil {
 			if err == io.EOF {
-				return testCase{}, fmt.Errorf("test data is bad. expectation not finished")
+				return tc, fmt.Errorf("test data is bad. expectation not finished")
 			}
-			return testCase{}, err
+			return tc, err
 		}
 		if jsonPart == "}\n" {
 			tc.expected += "}"
@@ -93,6 +95,7 @@ func TestOperator(t *testing.T) {
 			break
 		}
 		t.Run(fmt.Sprintf("%d:%s", tc.line, tc.query), func(t *testing.T) {
+			require.NoError(t, err)
 			tree, err := sqlparser.Parse(tc.query)
 			require.NoError(t, err)
 			stmt := tree.(sqlparser.SelectStatement)
@@ -130,9 +133,9 @@ func testString(op Operator) string {
 	case *SubQuery:
 		var inners []string
 		for _, sqOp := range op.Inner {
-			subquery := fmt.Sprintf("{\n\tType: %s", sqOp.Type.String())
-			if sqOp.ArgName != "" {
-				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ArgName)
+			subquery := fmt.Sprintf("{\n\tType: %s", engine.PulloutOpcode(sqOp.ExtractedSubquery.OpCode).String())
+			if sqOp.ExtractedSubquery.GetArgName() != "" {
+				subquery += fmt.Sprintf("\n\tArgName: %s", sqOp.ExtractedSubquery.GetArgName())
 			}
 			subquery += fmt.Sprintf("\n\tQuery: %s\n}", indent(testString(sqOp.Inner)))
 			subquery = indent(subquery)

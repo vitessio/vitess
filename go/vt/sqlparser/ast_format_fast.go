@@ -25,6 +25,9 @@ import (
 
 // formatFast formats the node.
 func (node *Select) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("select ")
 	node.Comments.formatFast(buf)
 
@@ -185,7 +188,34 @@ func (node *Insert) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *With) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("with ")
+
+	if node.Recursive {
+		buf.WriteString("recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		node.ctes[i].formatFast(buf)
+		buf.WriteString(", ")
+	}
+	node.ctes[ctesLength-1].formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *CommonTableExpr) formatFast(buf *TrackedBuffer) {
+	node.TableID.formatFast(buf)
+	node.Columns.formatFast(buf)
+	buf.WriteString(" as ")
+	node.Subquery.formatFast(buf)
+	buf.WriteByte(' ')
+}
+
+// formatFast formats the node.
 func (node *Update) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("update ")
 	node.Comments.formatFast(buf)
 	buf.WriteString(node.Ignore.ToString())
@@ -204,6 +234,9 @@ func (node *Update) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Delete) formatFast(buf *TrackedBuffer) {
+	if node.With != nil {
+		node.With.formatFast(buf)
+	}
 	buf.WriteString("delete ")
 	node.Comments.formatFast(buf)
 	if node.Ignore {
@@ -359,6 +392,8 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 	switch node.Type {
 	case RetryMigrationType:
 		alterType = "retry"
+	case CleanupMigrationType:
+		alterType = "cleanup"
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CancelMigrationType:
@@ -570,6 +605,112 @@ func (node *PartitionDefinition) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteByte(' ')
+			node.KeyColList.formatFast(buf)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(node.RangeOrList)
+		buf.WriteByte(' ')
+		node.ExprOrCol.formatFast(buf)
+	}
+	if node.Partitions != "" {
+		buf.WriteString(" partitions ")
+		buf.WriteString(node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.WriteByte(' ')
+		node.SubPartition.formatFast(buf)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			pd.formatFast(buf)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// formatFast formats the node.
+func (node *SubPartition) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.WriteString(" (")
+			node.Expr.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.WriteByte(' ')
+			buf.WriteString(node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.WriteString(" algorithm = ")
+			buf.WriteString(node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.WriteString(" (")
+			node.KeyColList.formatFast(buf)
+			buf.WriteByte(')')
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.WriteString(" subpartitions ")
+		buf.WriteString(node.SubPartitions)
+	}
+}
+
+// formatFast formats the node.
+func (node *ExprOrColumns) formatFast(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.WriteByte('(')
+		node.Expr.formatFast(buf)
+		buf.WriteByte(')')
+	}
+	if node.ColumnList != nil {
+		buf.WriteString("columns ")
+		node.ColumnList.formatFast(buf)
+	}
+}
+
+// formatFast formats the node.
 func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("(\n")
 	for i, col := range ts.Columns {
@@ -608,6 +749,10 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 			opt.Tables.formatFast(buf)
 			buf.WriteByte(')')
 		}
+	}
+	if ts.PartitionOption != nil {
+		buf.WriteByte(' ')
+		ts.PartitionOption.formatFast(buf)
 	}
 }
 
@@ -677,16 +822,13 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 	if ct.Options.Default != nil {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.WriteByte(' ')
-			ct.Options.Default.formatFast(buf)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.WriteString(" (")
 			ct.Options.Default.formatFast(buf)
 			buf.WriteByte(')')
+		} else {
+			buf.WriteByte(' ')
+			ct.Options.Default.formatFast(buf)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -1450,6 +1592,15 @@ func (node *TimestampFuncExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr1, true)
 	buf.WriteString(", ")
 	buf.printExpr(node, node.Expr2, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *ExtractFuncExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("extract(")
+	buf.WriteString(node.IntervalTypes.ToString())
+	buf.WriteString(" from ")
+	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte(')')
 }
 
@@ -2249,4 +2400,12 @@ func (node *RenameTable) formatFast(buf *TrackedBuffer) {
 		pair.ToTable.formatFast(buf)
 		prefix = ", "
 	}
+}
+
+// formatFast formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) formatFast(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
 }

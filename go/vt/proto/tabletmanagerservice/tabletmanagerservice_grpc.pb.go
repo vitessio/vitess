@@ -47,11 +47,11 @@ type TabletManagerClient interface {
 	ExecuteFetchAsApp(ctx context.Context, in *tabletmanagerdata.ExecuteFetchAsAppRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(ctx context.Context, in *tabletmanagerdata.ReplicationStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicationStatusResponse, error)
-	// MasterStatus returns the current primary status.
+	// Deprecated, use PrimaryStatus instead
 	MasterStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(ctx context.Context, in *tabletmanagerdata.PrimaryStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// MasterPosition returns the current primary position
+	// Deprecated, use PrimaryPosition instead
 	MasterPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(ctx context.Context, in *tabletmanagerdata.PrimaryPositionRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrimaryPositionResponse, error)
@@ -93,7 +93,7 @@ type TabletManagerClient interface {
 	UndoDemotePrimary(ctx context.Context, in *tabletmanagerdata.UndoDemotePrimaryRequest, opts ...grpc.CallOption) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
-	// SetMaster tells the replica to reparent
+	// Deprecated, use SetReplicationSource instead
 	SetMaster(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(ctx context.Context, in *tabletmanagerdata.SetReplicationSourceRequest, opts ...grpc.CallOption) (*tabletmanagerdata.SetReplicationSourceResponse, error)
@@ -656,11 +656,11 @@ type TabletManagerServer interface {
 	ExecuteFetchAsApp(context.Context, *tabletmanagerdata.ExecuteFetchAsAppRequest) (*tabletmanagerdata.ExecuteFetchAsAppResponse, error)
 	// ReplicationStatus returns the current replication status.
 	ReplicationStatus(context.Context, *tabletmanagerdata.ReplicationStatusRequest) (*tabletmanagerdata.ReplicationStatusResponse, error)
-	// MasterStatus returns the current primary status.
+	// Deprecated, use PrimaryStatus instead
 	MasterStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
 	// PrimaryStatus returns the current primary status.
 	PrimaryStatus(context.Context, *tabletmanagerdata.PrimaryStatusRequest) (*tabletmanagerdata.PrimaryStatusResponse, error)
-	// MasterPosition returns the current primary position
+	// Deprecated, use PrimaryPosition instead
 	MasterPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
 	// PrimaryPosition returns the current primary position
 	PrimaryPosition(context.Context, *tabletmanagerdata.PrimaryPositionRequest) (*tabletmanagerdata.PrimaryPositionResponse, error)
@@ -702,7 +702,7 @@ type TabletManagerServer interface {
 	UndoDemotePrimary(context.Context, *tabletmanagerdata.UndoDemotePrimaryRequest) (*tabletmanagerdata.UndoDemotePrimaryResponse, error)
 	// ReplicaWasPromoted tells the remote tablet it is now the primary
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
-	// SetMaster tells the replica to reparent
+	// Deprecated, use SetReplicationSource instead
 	SetMaster(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)
 	// SetReplicationSource tells the replica to reparent
 	SetReplicationSource(context.Context, *tabletmanagerdata.SetReplicationSourceRequest) (*tabletmanagerdata.SetReplicationSourceResponse, error)

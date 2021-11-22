@@ -17,17 +17,15 @@ limitations under the License.
 package vtctl
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	"google.golang.org/protobuf/encoding/prototext"
-
-	"context"
-
 	"github.com/olekukonko/tablewriter"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/throttler"
@@ -49,33 +47,38 @@ func init() {
 	addCommandGroup(throttlerGroupName)
 
 	addCommand(throttlerGroupName, command{
-		"ThrottlerMaxRates",
-		commandThrottlerMaxRates,
-		"-server <vtworker or vttablet>",
-		"Returns the current max rate of all active resharding throttlers on the server."})
+		name:   "ThrottlerMaxRates",
+		method: commandThrottlerMaxRates,
+		params: "-server <vtworker or vttablet>",
+		help:   "Returns the current max rate of all active resharding throttlers on the server.",
+	})
 	addCommand(throttlerGroupName, command{
-		"ThrottlerSetMaxRate",
-		commandThrottlerSetMaxRate,
-		"-server <vtworker or vttablet> <rate>",
-		"Sets the max rate for all active resharding throttlers on the server."})
+		name:   "ThrottlerSetMaxRate",
+		method: commandThrottlerSetMaxRate,
+		params: "-server <vtworker or vttablet> <rate>",
+		help:   "Sets the max rate for all active resharding throttlers on the server.",
+	})
 
 	addCommand(throttlerGroupName, command{
-		"GetThrottlerConfiguration",
-		commandGetThrottlerConfiguration,
-		"-server <vtworker or vttablet> [<throttler name>]",
-		"Returns the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be returned."})
+		name:   "GetThrottlerConfiguration",
+		method: commandGetThrottlerConfiguration,
+		params: "-server <vtworker or vttablet> [<throttler name>]",
+		help:   "Returns the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be returned.",
+	})
 	addCommand(throttlerGroupName, command{
-		"UpdateThrottlerConfiguration",
-		commandUpdateThrottlerConfiguration,
+		name:   "UpdateThrottlerConfiguration",
+		method: commandUpdateThrottlerConfiguration,
 		// Note: <configuration protobuf text> is put in quotes to tell the user
 		// that the value must be quoted such that it's one argument only.
-		`-server <vtworker or vttablet> [-copy_zero_values] "<configuration protobuf text>" [<throttler name>]`,
-		"Updates the configuration of the MaxReplicationLag module. The configuration must be specified as protobuf text. If a field is omitted or has a zero value, it will be ignored unless -copy_zero_values is specified. If no throttler name is specified, all throttlers will be updated."})
+		params: `-server <vtworker or vttablet> [-copy_zero_values] "<configuration protobuf text>" [<throttler name>]`,
+		help:   "Updates the configuration of the MaxReplicationLag module. The configuration must be specified as protobuf text. If a field is omitted or has a zero value, it will be ignored unless -copy_zero_values is specified. If no throttler name is specified, all throttlers will be updated.",
+	})
 	addCommand(throttlerGroupName, command{
-		"ResetThrottlerConfiguration",
-		commandResetThrottlerConfiguration,
-		"-server <vtworker or vttablet> [<throttler name>]",
-		"Resets the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be reset."})
+		name:   "ResetThrottlerConfiguration",
+		method: commandResetThrottlerConfiguration,
+		params: "-server <vtworker or vttablet> [<throttler name>]",
+		help:   "Resets the current configuration of the MaxReplicationLag module. If no throttler name is specified, the configuration of all throttlers will be reset.",
+	})
 }
 
 func commandThrottlerMaxRates(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

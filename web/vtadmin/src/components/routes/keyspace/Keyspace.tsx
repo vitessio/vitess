@@ -16,11 +16,15 @@
 import { Switch, useLocation, useParams, useRouteMatch } from 'react-router';
 import { Link, Redirect, Route } from 'react-router-dom';
 
-import { useKeyspaces } from '../../../hooks/api';
+import { useKeyspace } from '../../../hooks/api';
 import { useDocumentTitle } from '../../../hooks/useDocumentTitle';
+import { Code } from '../../Code';
+import { ContentContainer } from '../../layout/ContentContainer';
 import { NavCrumbs } from '../../layout/NavCrumbs';
 import { WorkspaceHeader } from '../../layout/WorkspaceHeader';
 import { WorkspaceTitle } from '../../layout/WorkspaceTitle';
+import { Tab } from '../../tabs/Tab';
+import { TabContainer } from '../../tabs/TabContainer';
 import style from './Keyspace.module.scss';
 import { KeyspaceShards } from './KeyspaceShards';
 
@@ -31,15 +35,12 @@ interface RouteParams {
 
 export const Keyspace = () => {
     const { clusterID, name } = useParams<RouteParams>();
-    const { path } = useRouteMatch();
+    const { path, url } = useRouteMatch();
     const { search } = useLocation();
 
     useDocumentTitle(`${name} (${clusterID})`);
 
-    // TODO(doeg): add a vtadmin-api endpoint to fetch a single keyspace
-    // See https://github.com/vitessio/vitess/projects/12#card-59980087
-    const { data: keyspaces = [], ...kq } = useKeyspaces();
-    const keyspace = keyspaces.find((k) => k.cluster?.id === clusterID && k.keyspace?.name === name);
+    const { data: keyspace, ...kq } = useKeyspace({ clusterID, name });
 
     if (kq.error) {
         return (
@@ -73,7 +74,7 @@ export const Keyspace = () => {
                     <Link to="/keyspaces">Keyspaces</Link>
                 </NavCrumbs>
 
-                <WorkspaceTitle className="font-family-monospace">{name}</WorkspaceTitle>
+                <WorkspaceTitle className="font-mono">{name}</WorkspaceTitle>
 
                 <div className={style.headingMeta}>
                     <span>
@@ -82,16 +83,27 @@ export const Keyspace = () => {
                 </div>
             </WorkspaceHeader>
 
-            {/* TODO skeleton placeholder */}
-            {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
+            <ContentContainer>
+                <TabContainer>
+                    <Tab text="Shards" to={`${url}/shards`} />
+                    <Tab text="JSON" to={`${url}/json`} />
+                </TabContainer>
 
-            <Switch>
-                <Route path={`${path}/shards`}>
-                    <KeyspaceShards keyspace={keyspace} />
-                </Route>
+                <Switch>
+                    <Route path={`${path}/shards`}>
+                        <KeyspaceShards keyspace={keyspace} />
+                    </Route>
 
-                <Redirect exact from={path} to={{ pathname: `${path}/shards`, search }} />
-            </Switch>
+                    <Route path={`${path}/json`}>
+                        <Code code={JSON.stringify(keyspace, null, 2)} />
+                    </Route>
+
+                    <Redirect exact from={path} to={{ pathname: `${path}/shards`, search }} />
+                </Switch>
+
+                {/* TODO skeleton placeholder */}
+                {!!kq.isLoading && <div className={style.placeholder}>Loading</div>}
+            </ContentContainer>
         </div>
     );
 };

@@ -122,6 +122,13 @@ func (session *SafeSession) Reset() {
 	session.PostSessions = nil
 }
 
+// SavePoints returns the save points of the session. It's safe to use concurrently
+func (session *SafeSession) SavePoints() []string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.GetSavepoints()
+}
+
 // SetAutocommittable sets the state to autocommitable if true.
 // Otherwise, it's notAutocommitable.
 func (session *SafeSession) SetAutocommittable(flag bool) {
@@ -544,4 +551,28 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 		session.Session.Options = &querypb.ExecuteOptions{}
 	}
 	return session.Session.Options
+}
+
+var _ iQueryOption = (*SafeSession)(nil)
+
+func (session *SafeSession) cachePlan() bool {
+	if session == nil || session.Options == nil {
+		return true
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return !(session.Options.SkipQueryPlanCache || session.Options.HasCreatedTempTables)
+}
+
+func (session *SafeSession) getSelectLimit() int {
+	if session == nil || session.Options == nil {
+		return -1
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return int(session.Options.SqlSelectLimit)
 }

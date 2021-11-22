@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
@@ -277,6 +278,38 @@ func (c *Cluster) CreateKeyspace(ctx context.Context, req *vtctldatapb.CreateKey
 	}, nil
 }
 
+// CreateShard creates a shard in the given cluster, proxying a
+// CreateShardRequest to a vtctld in that cluster.
+func (c *Cluster) CreateShard(ctx context.Context, req *vtctldatapb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.CreateShard")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.ShardName)
+	span.Annotate("force", req.Force)
+	span.Annotate("include_parent", req.IncludeParent)
+
+	if req.Keyspace == "" {
+		return nil, fmt.Errorf("%w: keyspace name is required", errors.ErrInvalidRequest)
+	}
+
+	if req.ShardName == "" {
+		return nil, fmt.Errorf("%w: shard name is required", errors.ErrInvalidRequest)
+	}
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("CreateShard(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.CreateShard(ctx, req)
+}
+
 // DeleteKeyspace deletes a keyspace in the given cluster, proxying a
 // DeleteKeyspaceRequest to a vtctld in that cluster.
 func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
@@ -300,6 +333,37 @@ func (c *Cluster) DeleteKeyspace(ctx context.Context, req *vtctldatapb.DeleteKey
 	}
 
 	return c.Vtctld.DeleteKeyspace(ctx, req)
+}
+
+// DeleteShards deletes one or more shards in the given cluster, proxying a
+// single DeleteShardsRequest to a vtctld in that cluster.
+func (c *Cluster) DeleteShards(ctx context.Context, req *vtctldatapb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "Cluster.DeleteShards")
+	defer span.Finish()
+
+	AnnotateSpan(c, span)
+
+	if req == nil {
+		return nil, fmt.Errorf("%w: request cannot be nil", errors.ErrInvalidRequest)
+	}
+
+	shards := make([]string, len(req.Shards))
+	for i, shard := range req.Shards {
+		shards[i] = fmt.Sprintf("%s/%s", shard.Keyspace, shard.Name)
+	}
+
+	sort.Strings(shards)
+
+	span.Annotate("num_shards", len(shards))
+	span.Annotate("shards", strings.Join(shards, ", "))
+	span.Annotate("recursive", req.Recursive)
+	span.Annotate("even_if_serving", req.EvenIfServing)
+
+	if err := c.topoRWPool.Acquire(ctx); err != nil {
+		return nil, fmt.Errorf("DeleteShards(%+v) failed to acquire topoRWPool: %w", req, err)
+	}
+
+	return c.Vtctld.DeleteShards(ctx, req)
 }
 
 // FindAllShardsInKeyspaceOptions modify the behavior of a cluster's

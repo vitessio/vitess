@@ -50,7 +50,12 @@ func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
-	return nil
+	// when creating a connection, we send a query to MySQL to set the connection's collation,
+	// this query usually returns us something. however, we use testHandler which is a fake
+	// implementation of MySQL that returns no results and no error for set queries, Vitess
+	// interprets this as an error, we do not want to fail if we see such error.
+	// for this reason, we send back an empty result to the caller.
+	return callback(&sqltypes.Result{Fields: []*querypb.Field{}, Rows: [][]sqltypes.Value{}})
 }
 
 func (th *testHandler) ComPrepare(c *mysql.Conn, q string, b map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
@@ -264,6 +269,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 	defer os.RemoveAll(root)
 	tlstest.CreateCA(root)
+	tlstest.CreateCRL(root, tlstest.CA)
 	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 
 	serverCACert := ""
@@ -272,7 +278,7 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 	}
 
 	listener := &mysql.Listener{}
-	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
+	if err := initTLSConfig(listener, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), path.Join(root, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12); err != nil {
 		t.Fatalf("init tls config failure due to: +%v", err)
 	}
 

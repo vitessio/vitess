@@ -44,6 +44,132 @@ var (
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
+		input:  "SELECT EXTRACT(YEAR FROM '2019-07-02')",
+		output: "select extract(year from '2019-07-02') from dual",
+	}, {
+		input:  "SELECT EXTRACT(YEAR_MONTH FROM '2019-07-02 01:02:03')",
+		output: "select extract(year_month from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "select extract(year from \"21-10-22 12:00:00\")",
+		output: "select extract(year from '21-10-22 12:00:00') from dual",
+	}, {
+		input:  "SELECT EXTRACT(DAY_MINUTE FROM '2019-07-02 01:02:03')",
+		output: "select extract(day_minute from '2019-07-02 01:02:03') from dual",
+	}, {
+		input:  "SELECT EXTRACT(MICROSECOND FROM '2003-01-02 10:30:00.000123')",
+		output: "select extract(microsecond from '2003-01-02 10:30:00.000123') from dual",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b blob DEFAULT 'abc')",
+		output: "create table t2 (\n\tb blob default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b BLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb BLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGBLOB DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGBLOB default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b TINYTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb TINYTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b MEDIUMTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb MEDIUMTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT 'abc')",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
+		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT ('{name:abc}'))",
+		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT 7.0)",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location POINT DEFAULT (7.0))",
+		output: "create table x (\n\tlocation POINT default (7.0)\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+	}, {
+		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
+		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
+	}, {
+		input:  "WITH topsales2003 AS (SELECT salesRepEmployeeNumber employeeNumber, SUM(quantityOrdered * priceEach) sales FROM orders INNER JOIN orderdetails USING (orderNumber) INNER JOIN customers USING (customerNumber) WHERE YEAR(shippedDate) = 2003 AND status = 'Shipped' GROUP BY salesRepEmployeeNumber ORDER BY sales DESC LIMIT 5)SELECT employeeNumber, firstName, lastName, sales FROM employees JOIN topsales2003 USING (employeeNumber)",
+		output: "with topsales2003 as (select salesRepEmployeeNumber as employeeNumber, SUM(quantityOrdered * priceEach) as sales from orders join orderdetails using (orderNumber) join customers using (customerNumber) where YEAR(shippedDate) = 2003 and `status` = 'Shipped' group by salesRepEmployeeNumber order by sales desc limit 5) select employeeNumber, firstName, lastName, sales from employees join topsales2003 using (employeeNumber)",
+	}, {
 		input: "select 1 from t",
 	}, {
 		input:  "select * from (select 1) as x(user)",
@@ -51,6 +177,10 @@ var (
 	}, {
 		input:  "select user from (select id from users ) as x(user)",
 		output: "select `user` from (select id from users) as x(`user`)",
+	}, {
+		input: "select n, d from something",
+	}, {
+		input: "insert into sys_message_assign(message_id, assign_user_id, read_state, id, is_delete, create_time, update_time, remark) values (N'3477028275831808', N'4104487936', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null), (N'3477028275831808', N'3454139190608923', N'1', N'0', N'0', '2021-09-22 14:24:17.922', '2021-09-22 14:24:17.922', null)",
 	}, {
 		input:  "select name, numbers from (select * from users) as x(name, numbers)",
 		output: "select `name`, numbers from (select * from users) as x(`name`, numbers)",
@@ -1266,9 +1396,33 @@ var (
 		// Tests unicode character §
 		input: "create table invalid_enum_value_name (\n\there_be_enum enum('$§!') default null\n)",
 	}, {
-		input: "alter vschema create vindex hash_vdx using hash",
+		input:  "create table t (id int) partition by hash (id) partitions 3",
+		output: "create table t (\n\tid int\n) partition by hash (id) partitions 3",
 	}, {
-		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+		input:  "create table t (hired date) partition by linear hash (year(hired)) partitions 4",
+		output: "create table t (\n\thired date\n) partition by linear hash (year(hired)) partitions 4",
+	}, {
+		input:  "create table t (id int) partition by key (id) partitions 2",
+		output: "create table t (\n\tid int\n) partition by key (id) partitions 2",
+	}, {
+		input:  "create table t (id int) partition by key algorithm = 1 (id)",
+		output: "create table t (\n\tid int\n) partition by key algorithm = 1 (id)",
+	}, {
+		input:  "create table t (id int not null) partition by linear key (id) partitions 5",
+		output: "create table t (\n\tid int not null\n) partition by linear key (id) partitions 5",
+	}, {
+		input:  "create table t (id int) partition by list (id)",
+		output: "create table t (\n\tid int\n) partition by list (id)", // TODO PARTITION BY LIST(id) (PARTITION p0 VALUES IN (1, 4, 7))
+	}, {
+		input:  "create table t (renewal date) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+		output: "create table t (\n\trenewal date\n) partition by range columns (renewal) (partition p0 values less than ('2021-08-27'))",
+	}, {
+		input:  "create table t (pur date) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+		output: "create table t (\n\tpur date\n) partition by range (year(pur)) subpartition by hash (to_days(pur)) subpartitions 2 (partition p0 values less than (2015), partition p2 values less than (2018))",
+	}, {
+		input: "alter vschema create vindex hash_vdx using `hash`",
+	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using `hash`",
 	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
@@ -1294,25 +1448,25 @@ var (
 	}, {
 		input: "alter vschema drop table ks.a",
 	}, {
-		input: "alter vschema on a add vindex hash (id)",
+		input: "alter vschema on a add vindex `hash` (id)",
 	}, {
-		input: "alter vschema on ks.a add vindex hash (id)",
+		input: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
-		output: "alter vschema on a add vindex hash (id)",
+		output: "alter vschema on a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
-		output: "alter vschema on ks.a add vindex hash (id)",
+		output: "alter vschema on ks.a add vindex `hash` (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input: "alter vschema on a add vindex `add` (`add`)",
 	}, {
-		input: "alter vschema on a add vindex hash (id) using hash",
+		input: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
-		output: "alter vschema on a add vindex hash (id) using hash",
+		output: "alter vschema on a add vindex `hash` (id) using `hash`",
 	}, {
 		input:  "alter vschema on user add vindex name_lookup_vdx (name) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
 		output: "alter vschema on `user` add vindex name_lookup_vdx (`name`) using lookup_hash with owner=user, table=name_user_idx, from=name, to=user_id",
@@ -1320,15 +1474,15 @@ var (
 		input:  "alter vschema on user2 add vindex name_lastname_lookup_vdx (name,lastname) using lookup with owner=`user`, table=`name_lastname_keyspace_id_map`, from=`name,lastname`, to=`keyspace_id`",
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (`name`, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
-		input: "alter vschema on a drop vindex hash",
+		input: "alter vschema on a drop vindex `hash`",
 	}, {
-		input: "alter vschema on ks.a drop vindex hash",
+		input: "alter vschema on ks.a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex hash",
-		output: "alter vschema on a drop vindex hash",
+		output: "alter vschema on a drop vindex `hash`",
 	}, {
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
@@ -1676,6 +1830,8 @@ var (
 		input: "revert /*vt+ uuid=123 */ vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' retry",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
 	}, {
@@ -2515,6 +2671,9 @@ func TestSelectInto(t *testing.T) {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by '\\' terminated by '\n'`,
 	}, {
 		input: `select * from t1 into outfile '/tmp/foo.csv' fields escaped by 'c' terminated by '\n' enclosed by '\t'`,
+	}, {
+		input:  `alter vschema create vindex my_vdx using hash`,
+		output: "alter vschema create vindex my_vdx using `hash`",
 	}}
 
 	for _, tcase := range validSQL {

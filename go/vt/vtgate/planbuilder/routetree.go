@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -161,6 +164,20 @@ outer:
 	return idxs, nil
 }
 
+func (rp *routeTree) pushPredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	return rp.addPredicate(ctx, expr)
+}
+
+func (rp *routeTree) removePredicate(ctx *planningContext, expr sqlparser.Expr) error {
+	for i, predicate := range rp.predicates {
+		if sqlparser.EqualsExpr(predicate, expr) {
+			rp.predicates = append(rp.predicates[0:i], rp.predicates[i+1:]...)
+			return rp.resetRoutingSelections(ctx)
+		}
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s not found in predicates", sqlparser.String(expr))
+}
+
 // addPredicate adds these predicates added to it. if the predicates can help,
 // they will improve the routeOpCode
 func (rp *routeTree) addPredicate(ctx *planningContext, predicates ...sqlparser.Expr) error {
@@ -191,43 +208,29 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 	newVindexFound := false
 	for _, filter := range predicates {
 		switch node := filter.(type) {
-		case *sqlparser.ComparisonExpr:
-			if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
-				// we are looking at ANDed predicates in the WHERE clause.
-				// since we know that nothing returns true when compared to NULL,
-				// so we can safely bail out here
-				rp.routeOpCode = engine.SelectNone
-				return false, nil
+		case *sqlparser.ExtractedSubquery:
+			originalCmp, ok := node.Original.(*sqlparser.ComparisonExpr)
+			if !ok {
+				break
 			}
 
-			switch node.Operator {
-			case sqlparser.EqualOp:
-				found, err := rp.planEqualOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.InOp:
-				if rp.isImpossibleIN(node) {
-					return false, nil
-				}
-				found, err := rp.planInOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
-			case sqlparser.NotInOp:
-				// NOT IN is always a scatter, except when we can be sure it would return nothing
-				if rp.isImpossibleNotIN(node) {
-					return false, nil
-				}
-			case sqlparser.LikeOp:
-				found, err := rp.planLikeOp(ctx, node)
-				if err != nil {
-					return false, err
-				}
-				newVindexFound = newVindexFound || found
+			// using the node.subquery which is the rewritten version of our subquery
+			cmp := &sqlparser.ComparisonExpr{
+				Left:     node.OtherSide,
+				Right:    &sqlparser.Subquery{Select: node.Subquery.Select},
+				Operator: originalCmp.Operator,
 			}
+			found, exitEarly, err := rp.planComparison(ctx, cmp)
+			if err != nil || exitEarly {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
+		case *sqlparser.ComparisonExpr:
+			found, exitEarly, err := rp.planComparison(ctx, node)
+			if err != nil || exitEarly {
+				return false, err
+			}
+			newVindexFound = newVindexFound || found
 		case *sqlparser.IsExpr:
 			found, err := rp.planIsExpr(ctx, node)
 			if err != nil {
@@ -237,6 +240,46 @@ func (rp *routeTree) searchForNewVindexes(ctx *planningContext, predicates []sql
 		}
 	}
 	return newVindexFound, nil
+}
+
+func (rp *routeTree) planComparison(ctx *planningContext, node *sqlparser.ComparisonExpr) (bool, bool, error) {
+	if sqlparser.IsNull(node.Left) || sqlparser.IsNull(node.Right) {
+		// we are looking at ANDed predicates in the WHERE clause.
+		// since we know that nothing returns true when compared to NULL,
+		// so we can safely bail out here
+		rp.routeOpCode = engine.SelectNone
+		return false, true, nil
+	}
+
+	switch node.Operator {
+	case sqlparser.EqualOp:
+		found, err := rp.planEqualOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	case sqlparser.InOp:
+		if rp.isImpossibleIN(node) {
+			return false, true, nil
+		}
+		found, err := rp.planInOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	case sqlparser.NotInOp:
+		// NOT IN is always a scatter, except when we can be sure it would return nothing
+		if rp.isImpossibleNotIN(node) {
+			return false, true, nil
+		}
+	case sqlparser.LikeOp:
+		found, err := rp.planLikeOp(ctx, node)
+		if err != nil {
+			return false, false, err
+		}
+		return found, false, nil
+	}
+	return false, false, nil
 }
 
 func (rp *routeTree) isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
@@ -414,11 +457,23 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
 func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
-	if ctx.isSubQueryToReplace(argumentName(n)) {
+	if ctx.isSubQueryToReplace(n) {
 		return nil, nil
 	}
 
 	for _, expr := range ctx.semTable.GetExprAndEqualities(n) {
+		if subq, isSubq := expr.(*sqlparser.Subquery); isSubq {
+			extractedSubquery := ctx.semTable.FindSubqueryReference(subq)
+			if extractedSubquery == nil {
+				continue
+			}
+			switch engine.PulloutOpcode(extractedSubquery.OpCode) {
+			case engine.PulloutIn, engine.PulloutNotIn:
+				expr = sqlparser.NewListArg(extractedSubquery.GetArgName())
+			case engine.PulloutValue, engine.PulloutExists:
+				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
+			}
+		}
 		pv, err := makePlanValue(expr)
 		if err != nil {
 			return nil, err
@@ -442,15 +497,6 @@ func (rp *routeTree) hasVindex(column *sqlparser.ColName) bool {
 	return false
 }
 
-func allNotNil(s []sqlparser.Expr) bool {
-	for _, expr := range s {
-		if expr == nil {
-			return false
-		}
-	}
-	return true
-}
-
 func (rp *routeTree) haveMatchingVindex(
 	ctx *planningContext,
 	node sqlparser.Expr,
@@ -466,51 +512,26 @@ func (rp *routeTree) haveMatchingVindex(
 		if !ctx.semTable.DirectDeps(column).IsSolvedBy(v.tableID) {
 			continue
 		}
-		cols := len(v.colVindex.Columns)
-		for idx, col := range v.colVindex.Columns {
-			if column.Name.Equal(col) {
-				if cols == 1 {
-					// single column vindex - just add the option
-					routeOpcode := opcode(v.colVindex)
-					vindex := vfunc(v.colVindex)
-					v.options = append(v.options, &vindexOption{
-						values:      []sqltypes.PlanValue{value},
-						valueExprs:  []sqlparser.Expr{valueExpr},
-						predicates:  []sqlparser.Expr{node},
-						opcode:      routeOpcode,
-						foundVindex: vindex,
-						cost:        costFor(vindex, routeOpcode),
-						ready:       true,
-					})
-					newVindexFound = true
-				} else {
-					// let's first see if we can improve any of the existing options
-					for _, option := range v.options {
-						if option.predicates[idx] == nil {
-							option.values[idx] = value
-							option.predicates[idx] = node
-							option.valueExprs[idx] = valueExpr
-						}
-						if allNotNil(option.predicates) {
-							option.opcode = opcode(v.colVindex)
-							option.foundVindex = vfunc(v.colVindex)
-							option.cost = costFor(option.foundVindex, option.opcode)
-							option.ready = true
-							newVindexFound = true
-						}
-					}
+		// Ignore MultiColumn vindexes for finding matching Vindex.
+		if _, isSingleCol := v.colVindex.Vindex.(vindexes.SingleColumn); !isSingleCol {
+			continue
+		}
 
-					newOption := &vindexOption{
-						values:     make([]sqltypes.PlanValue, cols),
-						valueExprs: make([]sqlparser.Expr, cols),
-						predicates: make([]sqlparser.Expr, cols),
-					}
-					newOption.values[idx] = value
-					newOption.predicates[idx] = node
-					newOption.valueExprs[idx] = valueExpr
-					v.options = append(v.options, newOption)
-				}
-			}
+		col := v.colVindex.Columns[0]
+		if column.Name.Equal(col) {
+			// single column vindex - just add the option
+			routeOpcode := opcode(v.colVindex)
+			vindex := vfunc(v.colVindex)
+			v.options = append(v.options, &vindexOption{
+				values:      []sqltypes.PlanValue{value},
+				valueExprs:  []sqlparser.Expr{valueExpr},
+				predicates:  []sqlparser.Expr{node},
+				opcode:      routeOpcode,
+				foundVindex: vindex,
+				cost:        costFor(vindex, routeOpcode),
+				ready:       true,
+			})
+			newVindexFound = true
 		}
 	}
 	return newVindexFound
@@ -627,17 +648,6 @@ func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 		return nil, err
 	}
 	return &value, nil
-}
-
-func argumentName(node sqlparser.SQLNode) string {
-	var argName string
-	switch node := node.(type) {
-	case sqlparser.ListArg:
-		argName = string(node)
-	case sqlparser.Argument:
-		argName = string(node)
-	}
-	return argName
 }
 
 // costFor returns a cost struct to make route choices easier to compare

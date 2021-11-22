@@ -163,6 +163,8 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
 	router.HandleFunc("/shard_replication_positions", httpAPI.Adapt(vtadminhttp.GetShardReplicationPositions)).Name("API.GetShardReplicationPositions")
+	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
+	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
 	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
@@ -176,6 +178,7 @@ func NewAPI(clusters []*cluster.Cluster, opts Options) *API {
 
 	experimentalRouter := router.PathPrefix("/experimental").Subrouter()
 	experimentalRouter.HandleFunc("/tablet/{tablet}/debug/vars", httpAPI.Adapt(experimental.TabletDebugVarsPassthrough)).Name("API.TabletDebugVarsPassthrough")
+	experimentalRouter.HandleFunc("/whoami", httpAPI.Adapt(experimental.WhoAmI))
 
 	if !opts.HTTPOpts.DisableDebug {
 		// Due to the way net/http/pprof insists on registering its handlers, we
@@ -241,9 +244,9 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 		return nil, fmt.Errorf("%w: cannot create keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
@@ -260,6 +263,29 @@ func (api *API) CreateKeyspace(ctx context.Context, req *vtadminpb.CreateKeyspac
 	}, nil
 }
 
+// CreateShard is part of the vtadminpb.VTAdminServer interface.
+func (api *API) CreateShard(ctx context.Context, req *vtadminpb.CreateShardRequest) (*vtctldatapb.CreateShardResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.CreateShard")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ShardResource, rbac.CreateAction) {
+		return nil, fmt.Errorf("%w: cannot create shard in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.CreateShard(ctx, req.Options)
+}
+
 // DeleteKeyspace is part of the vtadminpb.VTAdminServer interface.
 func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspaceRequest) (*vtctldatapb.DeleteKeyspaceResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.DeleteKeyspace")
@@ -271,9 +297,9 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 		return nil, fmt.Errorf("%w: cannot delete keyspace in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := c.Vtctld.Dial(ctx); err != nil {
@@ -281,6 +307,29 @@ func (api *API) DeleteKeyspace(ctx context.Context, req *vtadminpb.DeleteKeyspac
 	}
 
 	return c.DeleteKeyspace(ctx, req.Options)
+}
+
+// DeleteShards is part of the vtadminpb.VTAdminServer interface.
+func (api *API) DeleteShards(ctx context.Context, req *vtadminpb.DeleteShardsRequest) (*vtctldatapb.DeleteShardsResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.DeleteShards")
+	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+
+	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ShardResource, rbac.DeleteAction) {
+		return nil, fmt.Errorf("%w: cannot delete shards in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := c.Vtctld.Dial(ctx); err != nil {
+		return nil, err
+	}
+
+	return c.DeleteShards(ctx, req.Options)
 }
 
 // FindSchema is part of the vtadminpb.VTAdminServer interface.
@@ -561,9 +610,9 @@ func (api *API) GetSchema(ctx context.Context, req *vtadminpb.GetSchemaRequest) 
 	span.Annotate("table", req.Table)
 	vtadminproto.AnnotateSpanWithGetSchemaTableSizeOptions(req.TableSizeOptions, span)
 
-	c, ok := api.clusterMap[req.ClusterId]
-	if !ok {
-		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, req.ClusterId)
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
 	}
 
 	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.GetAction) {
@@ -1371,6 +1420,15 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil
+}
+
+func (api *API) getClusterForRequest(id string) (*cluster.Cluster, error) {
+	c, ok := api.clusterMap[id]
+	if !ok {
+		return nil, fmt.Errorf("%w: no cluster with id %s", errors.ErrUnsupportedCluster, id)
+	}
+
+	return c, nil
 }
 
 func (api *API) getClustersForRequest(ids []string) ([]*cluster.Cluster, []string) {

@@ -125,7 +125,7 @@ func interceptors() []grpc.DialOption {
 // SecureDialOption returns the gRPC dial option to use for the
 // given client connection. It is either using TLS, or Insecure if
 // nothing is set.
-func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
+func SecureDialOption(cert, key, ca, crl, name string) (grpc.DialOption, error) {
 	// No security options set, just return.
 	if (cert == "" || key == "") && ca == "" {
 		return grpc.WithInsecure(), nil
@@ -133,7 +133,7 @@ func SecureDialOption(cert, key, ca, name string) (grpc.DialOption, error) {
 
 	// Load the config. At this point we know
 	// we want a strict config with verify identity.
-	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, name, tls.VersionTLS12)
+	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, crl, name, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}

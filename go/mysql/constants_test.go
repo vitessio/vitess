@@ -51,3 +51,34 @@ func TestIsConnErr(t *testing.T) {
 		}
 	}
 }
+
+func TestIsConnLostDuringQuery(t *testing.T) {
+	testcases := []struct {
+		in   error
+		want bool
+	}{{
+		in:   errors.New("t"),
+		want: false,
+	}, {
+		in:   NewSQLError(5, "", ""),
+		want: false,
+	}, {
+		in:   NewSQLError(CRServerGone, "", ""),
+		want: false,
+	}, {
+		in:   NewSQLError(CRServerLost, "", ""),
+		want: true,
+	}, {
+		in:   NewSQLError(ERQueryInterrupted, "", ""),
+		want: false,
+	}, {
+		in:   NewSQLError(CRCantReadCharset, "", ""),
+		want: false,
+	}}
+	for _, tcase := range testcases {
+		got := IsConnLostDuringQuery(tcase.in)
+		if got != tcase.want {
+			t.Errorf("IsConnLostDuringQuery(%#v): %v, want %v", tcase.in, got, tcase.want)
+		}
+	}
+}

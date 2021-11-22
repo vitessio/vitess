@@ -38,6 +38,8 @@ type fakePrimitive struct {
 	sendErr error
 
 	log []string
+
+	allResultsInOneCall bool
 }
 
 func (f *fakePrimitive) Inputs() []Primitive {
@@ -83,33 +85,39 @@ func (f *fakePrimitive) TryStreamExecute(vcursor VCursor, bindVars map[string]*q
 		return f.sendErr
 	}
 
-	r := f.results[f.curResult]
-	f.curResult++
-	if r == nil {
-		return f.sendErr
-	}
-	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
-		return err
-	}
-	result := &sqltypes.Result{}
-	for i := 0; i < len(r.Rows); i++ {
-		result.Rows = append(result.Rows, r.Rows[i])
-		// Send only two rows at a time.
-		if i%2 == 1 {
+	readMoreResults := true
+	for readMoreResults && f.curResult < len(f.results) {
+		readMoreResults = f.allResultsInOneCall
+		r := f.results[f.curResult]
+		f.curResult++
+		if r == nil {
+			return f.sendErr
+		}
+		if wantfields {
+			if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
+				return err
+			}
+		}
+		result := &sqltypes.Result{}
+		for i := 0; i < len(r.Rows); i++ {
+			result.Rows = append(result.Rows, r.Rows[i])
+			// Send only two rows at a time.
+			if i%2 == 1 {
+				if err := callback(result); err != nil {
+					return err
+				}
+				result = &sqltypes.Result{}
+			}
+		}
+		if len(result.Rows) != 0 {
 			if err := callback(result); err != nil {
 				return err
 			}
-			result = &sqltypes.Result{}
 		}
 	}
-	if len(result.Rows) != 0 {
-		if err := callback(result); err != nil {
-			return err
-		}
-	}
+
 	return nil
 }
-
 func (f *fakePrimitive) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("GetFields %v", printBindVars(bindVars)))
 	return f.TryExecute(vcursor, bindVars, true /* wantfields */)

@@ -62,7 +62,7 @@ func booleanValues(astExpr sqlparser.Expr) evalengine.Expr {
 func identifierAsStringValue(astExpr sqlparser.Expr) evalengine.Expr {
 	colName, isColName := astExpr.(*sqlparser.ColName)
 	if isColName {
-		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()))
+		return evalengine.NewLiteralString([]byte(colName.Name.Lowered()), 0)
 	}
 	return nil
 }
@@ -80,9 +80,9 @@ func (ec *expressionConverter) convert(astExpr sqlparser.Expr, boolean, identifi
 			return evalExpr, nil
 		}
 	}
-	evalExpr, err := sqlparser.Convert(astExpr)
+	evalExpr, err := evalengine.Convert(astExpr, nil)
 	if err != nil {
-		if err != sqlparser.ErrExprNotSupported {
+		if !strings.Contains(err.Error(), evalengine.ErrConvertExprNotSupported) {
 			return nil, err
 		}
 		evalExpr = &evalengine.Column{Offset: len(ec.tabletExpressions)}

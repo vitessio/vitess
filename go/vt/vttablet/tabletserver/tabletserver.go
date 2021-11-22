@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -30,8 +31,6 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -54,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -370,7 +370,7 @@ func (tsv *TabletServer) StopService() {
 // connect to the database and serving traffic), or an error explaining
 // the unhealthiness otherwise.
 func (tsv *TabletServer) IsHealthy() error {
-	if IsServingType(tsv.sm.Target().TabletType) {
+	if topoproto.IsServingType(tsv.sm.Target().TabletType) {
 		_, err := tsv.Execute(
 			tabletenv.LocalContext(),
 			nil,
@@ -383,17 +383,6 @@ func (tsv *TabletServer) IsHealthy() error {
 		return err
 	}
 	return nil
-}
-
-// IsServingType returns true if the tablet type is one that should be serving to be healthy, or false if the tablet type
-// should not be serving in it's healthy state.
-func IsServingType(tabletType topodatapb.TabletType) bool {
-	switch tabletType {
-	case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_BATCH, topodatapb.TabletType_EXPERIMENTAL:
-		return true
-	default:
-		return false
-	}
 }
 
 // ReloadSchema reloads the schema.
@@ -931,6 +920,25 @@ func (tsv *TabletServer) BeginExecute(ctx context.Context, target *querypb.Targe
 	return result, transactionID, alias, err
 }
 
+// BeginStreamExecute combines Begin and StreamExecute.
+func (tsv *TabletServer) BeginStreamExecute(
+	ctx context.Context,
+	target *querypb.Target,
+	preQueries []string,
+	sql string,
+	bindVariables map[string]*querypb.BindVariable,
+	options *querypb.ExecuteOptions,
+	callback func(*sqltypes.Result) error,
+) (int64, *topodatapb.TabletAlias, error) {
+	transactionID, alias, err := tsv.begin(ctx, target, preQueries /* revervedID */, 0, options)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	err = tsv.StreamExecute(ctx, target, sql, bindVariables, transactionID, options, callback)
+	return transactionID, alias, err
+}
+
 func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions, sql string, bindVariables map[string]*querypb.BindVariable) (txserializer.DoneFunc, error) {
 	// Serialize the creation of new transactions *if* the first
 	// UPDATE or DELETE query has the same WHERE clause as a query which is
@@ -1052,8 +1060,13 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 	for _, val := range ids {
 		sids = append(sids, sqltypes.ProtoToValue(val).ToString())
 	}
+	querygen, err := tsv.messager.GetGenerator(name)
+	if err != nil {
+		return 0, err
+	}
 	count, err = tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GenerateAckQuery(name, sids)
+		query, bv := querygen.GenerateAckQuery(sids)
+		return query, bv, nil
 	})
 	if err != nil {
 		return 0, err
@@ -1064,17 +1077,19 @@ func (tsv *TabletServer) MessageAck(ctx context.Context, target *querypb.Target,
 
 // PostponeMessages postpones the list of messages for a given message table.
 // It returns the number of messages successfully postponed.
-func (tsv *TabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error) {
+func (tsv *TabletServer) PostponeMessages(ctx context.Context, target *querypb.Target, querygen messager.QueryGenerator, ids []string) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GeneratePostponeQuery(name, ids)
+		query, bv := querygen.GeneratePostponeQuery(ids)
+		return query, bv, nil
 	})
 }
 
 // PurgeMessages purges messages older than specified time in Unix Nanoseconds.
 // It purges at most 500 messages. It returns the number of messages successfully purged.
-func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error) {
+func (tsv *TabletServer) PurgeMessages(ctx context.Context, target *querypb.Target, querygen messager.QueryGenerator, timeCutoff int64) (count int64, err error) {
 	return tsv.execDML(ctx, target, func() (string, map[string]*querypb.BindVariable, error) {
-		return tsv.messager.GeneratePurgeQuery(name, timeCutoff)
+		query, bv := querygen.GeneratePurgeQuery(timeCutoff)
+		return query, bv, nil
 	})
 }
 
@@ -1146,7 +1161,7 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 }
 
 //ReserveBeginExecute implements the QueryService interface
-func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
+func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *querypb.Target, preQueries []string, postBeginQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, int64, *topodatapb.TabletAlias, error) {
 
 	var connID int64
 	var err error
@@ -1157,7 +1172,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, target *queryp
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tsv.stats.QueryTimings.Record("RESERVE", time.Now())
-			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries)
+			connID, err = tsv.te.ReserveBegin(ctx, options, preQueries, postBeginQueries)
 			if err != nil {
 				return err
 			}
@@ -1253,6 +1268,7 @@ func (tsv *TabletServer) execRequest(
 	logStats.OriginalSQL = sql
 	logStats.BindVariables = bindVariables
 	defer tsv.handlePanicAndSendLogStats(sql, bindVariables, logStats)
+
 	if err = tsv.sm.StartRequest(ctx, target, allowOnShutdown); err != nil {
 		return err
 	}
@@ -1276,11 +1292,20 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 	logStats *tabletenv.LogStats,
 ) {
 	if x := recover(); x != nil {
-		errorMessage := fmt.Sprintf(
-			"Uncaught panic for %v:\n%v\n%s",
-			queryAsString(sql, bindVariables),
-			x,
-			tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		var errorMessage string
+		if tsv.TerseErrors && len(bindVariables) != 0 {
+			errorMessage = fmt.Sprintf(
+				"Uncaught panic for %v:\n%v\n%s",
+				queryAsString(sql, nil),
+				x,
+				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		} else {
+			errorMessage = fmt.Sprintf(
+				"Uncaught panic for %v:\n%v\n%s",
+				queryAsString(sql, bindVariables),
+				x,
+				tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
+		}
 		log.Errorf(errorMessage)
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", errorMessage)
 		tsv.stats.InternalErrors.Add("Panic", 1)
@@ -1343,7 +1368,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		if tsv.TerseErrors && len(bindVariables) != 0 && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, nil))
 			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, truncateSQLAndBindVars(sql, bindVariables))
+				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, truncateSQLAndBindVars(sql, nil))
 			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables))

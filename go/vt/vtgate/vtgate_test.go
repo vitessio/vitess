@@ -194,9 +194,7 @@ func TestVTGateStreamExecute(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
+	require.NoError(t, err)
 	want := []*sqltypes.Result{{
 		Fields: sandboxconn.StreamRowResult.Fields,
 	}, {

@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -472,10 +473,15 @@ func (se *Engine) GetTableForPos(tableName sqlparser.TableIdent, gtid string) (*
 	}
 	se.mu.Lock()
 	defer se.mu.Unlock()
-	st, ok := se.tables[tableName.String()]
+	tableNameStr := tableName.String()
+	st, ok := se.tables[tableNameStr]
 	if !ok {
-		log.Infof("table %v not found in vttablet schema: current tables", tableName.String(), se.tables)
-		return nil, fmt.Errorf("table %v not found in vttablet schema", tableName.String())
+		if schema.IsInternalOperationTableName(tableNameStr) {
+			log.Infof("internal table %v found in vttablet schema: skipping for GTID search", tableNameStr)
+		} else {
+			log.Infof("table %v not found in vttablet schema, current tables: %v", tableNameStr, se.tables)
+			return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
+		}
 	}
 	return newMinimalTable(st), nil
 }

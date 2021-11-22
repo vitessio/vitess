@@ -496,6 +496,15 @@ func TestNewPlanValue(t *testing.T) {
 		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
 	}, {
 		in: &UnaryExpr{
+			Operator: NStringOp,
+			Expr: &Literal{
+				Type: StrVal,
+				Val:  "strval",
+			},
+		},
+		out: sqltypes.PlanValue{Value: sqltypes.NewVarBinary("strval")},
+	}, {
+		in: &UnaryExpr{
 			Operator: UBinaryOp,
 			Expr: &Literal{
 				Type: StrVal,

@@ -25,15 +25,6 @@ import (
 
 type (
 	// Operator forms the tree of operators, representing the declarative query provided.
-	// An operator can be:
-	//	*  Derived - which represents an expression that generates a table.
-	//  *  QueryGraph - which represents a group of tables and predicates that can be evaluated in any order
-	//     while still preserving the results
-	//	*  LeftJoin - A left join. These can't be evaluated in any order, so we keep them separate
-	//	*  Join - A join represents inner join.
-	//  *  SubQuery - Represents a query that encapsulates one or more sub-queries (SubQueryInner).
-	//  *  Vindex - Represents a query that selects from vindex tables.
-	//  *  Concatenate - Represents concatenation of the outputs of all the input sources
 	Operator interface {
 		// TableID returns a TableSet of the tables contained within
 		TableID() semantics.TableSet
@@ -82,7 +73,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if err != nil {
 				return nil, err
 			}
-			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select}, nil
+			return &Derived{Alias: tableExpr.As.String(), Inner: inner, Sel: tbl.Select, ColumnAliases: tableExpr.Columns}, nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unable to use: %T", tbl)
 		}
@@ -99,7 +90,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			op := createJoin(lhs, rhs)
 			if tableExpr.Condition.On != nil {
-				err = op.PushPredicate(tableExpr.Condition.On, semTable)
+				err = op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On), semTable)
 				if err != nil {
 					return nil, err
 				}
@@ -117,9 +108,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			if tableExpr.Join == sqlparser.RightJoinType {
 				lhs, rhs = rhs, lhs
 			}
-			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: tableExpr.Condition.On}, nil
-		case sqlparser.StraightJoinType:
-			return nil, semantics.Gen4NotSupportedF(tableExpr.Join.ToString())
+			return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
 		default:
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: %s", tableExpr.Join.ToString())
 		}
@@ -201,22 +190,13 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
 		for _, sq := range semTable.SubqueryMap[sel] {
-			subquerySelectStatement, isSel := sq.SubQuery.Select.(*sqlparser.Select)
-			if !isSel {
-				return nil, semantics.Gen4NotSupportedF("UNION in subquery")
-			}
-			opInner, err := createOperatorFromSelect(subquerySelectStatement, semTable)
+			opInner, err := CreateOperatorFromAST(sq.Subquery.Select, semTable)
 			if err != nil {
 				return nil, err
 			}
 			resultantOp.Inner = append(resultantOp.Inner, &SubQueryInner{
-				SelectStatement:  subquerySelectStatement,
-				Inner:            opInner,
-				Type:             sq.OpCode,
-				ArgName:          sq.ArgName,
-				HasValues:        sq.HasValues,
-				ExprsNeedReplace: sq.ExprsNeedReplace,
-				ReplaceBy:        sq.ReplaceBy,
+				ExtractedSubquery: sq,
+				Inner:             opInner,
 			})
 		}
 	}
@@ -227,7 +207,7 @@ func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTabl
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			err := op.PushPredicate(expr, semTable)
+			err := op.PushPredicate(sqlparser.RemoveKeyspaceFromColName(expr), semTable)
 			if err != nil {
 				return nil, err
 			}

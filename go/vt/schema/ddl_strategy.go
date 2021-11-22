@@ -28,11 +28,13 @@ var (
 )
 
 const (
-	declarativeFlag       = "declarative"
-	skipTopoFlag          = "skip-topo"
-	singletonFlag         = "singleton"
-	singletonContextFlag  = "singleton-context"
-	vreplicationTestSuite = "vreplication-test-suite"
+	declarativeFlag        = "declarative"
+	skipTopoFlag           = "skip-topo"
+	singletonFlag          = "singleton"
+	singletonContextFlag   = "singleton-context"
+	allowZeroInDateFlag    = "allow-zero-in-date"
+	postponeCompletionFlag = "postpone-completion"
+	vreplicationTestSuite  = "vreplication-test-suite"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -130,6 +132,16 @@ func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
 }
 
+// IsAllowZeroInDateFlag checks if strategy options include -allow-zero-in-date
+func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
+	return setting.hasFlag(allowZeroInDateFlag)
+}
+
+// IsPostponeCompletion checks if strategy options include -postpone-completion
+func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
+	return setting.hasFlag(postponeCompletionFlag)
+}
+
 // IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
@@ -145,6 +157,8 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, skipTopoFlag):
 		case isFlag(opt, singletonFlag):
 		case isFlag(opt, singletonContextFlag):
+		case isFlag(opt, allowZeroInDateFlag):
+		case isFlag(opt, postponeCompletionFlag):
 		case isFlag(opt, vreplicationTestSuite):
 		default:
 			validOpts = append(validOpts, opt)

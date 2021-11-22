@@ -86,8 +86,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   subquery      *Subquery
   derivedTable  *DerivedTable
   when          *When
+  with          *With
+  cte           *CommonTableExpr
+  ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
   convertType   *ConvertType
@@ -152,6 +156,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
 
@@ -160,6 +165,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   boolean bool
   boolVal BoolVal
   ignore Ignore
+  partitionOption *PartitionOption
+  exprOrColumns *ExprOrColumns
+  subPartition  *SubPartition
 }
 
 %token LEX_ERROR
@@ -176,7 +184,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL COMPRESSION
+%token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
 %token <str> DISCARD IMPORT ENABLE DISABLE TABLESPACE
 %token <str> VIRTUAL STORED
@@ -228,7 +237,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE
+%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
@@ -257,6 +266,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE
 %token <str> CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
 %token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> REPLACE
 %token <str> CONVERT CAST
 %token <str> SUBSTR SUBSTRING
@@ -288,11 +298,18 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
+// Partitions tokens
+%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
+
+%type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
+%type <with> with_clause_opt with_clause
+%type <cte> common_table_expr
+%type <ctes> with_list
 %type <renameTablePairs> rename_list
 %type <createTable> create_table_prefix
 %type <alterTable> alter_table_prefix
@@ -313,6 +330,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
+%type <partitionOption> partitions_options_opt
+%type <exprOrColumns> expr_or_col
+%type <subPartition> subpartition_opt
+%type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
@@ -413,7 +434,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
-%type <partDefs> partition_definitions
+%type <partDefs> partition_definitions partition_definition_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
@@ -517,6 +538,42 @@ load_statement:
   {
     $$ = &Load{}
   }
+
+with_clause:
+  WITH with_list
+  {
+	$$ = &With{ctes: $2, Recursive: false}
+  }
+| WITH RECURSIVE with_list
+  {
+	$$ = &With{ctes: $3, Recursive: true}
+  }
+
+with_clause_opt:
+  {
+    $$ = nil
+  }
+ | with_clause
+ {
+ 	$$ = $1
+ }
+
+with_list:
+  with_list ',' common_table_expr
+  {
+	$$ = append($1, $3)
+  }
+| common_table_expr
+  {
+	$$ = []*CommonTableExpr{$1}
+  }
+
+common_table_expr:
+  table_id column_list_opt AS subquery
+  {
+	$$ = &CommonTableExpr{TableID: $1, Columns: $2, Subquery: $4}
+  }
+
 query_expression_parens:
   openb query_expression_parens closeb
   {
@@ -551,9 +608,9 @@ query_expression_parens:
 query_expression:
  query_expression_body order_by_opt limit_opt
   {
-		$1.SetOrderBy($2)
-		$1.SetLimit($3)
-		$$ = $1
+	$1.SetOrderBy($2)
+	$1.SetLimit($3)
+	$$ = $1
   }
 | query_expression_parens limit_clause
   {
@@ -565,6 +622,30 @@ query_expression:
 	$1.SetOrderBy($2)
 	$1.SetLimit($3)
 	$$ = $1
+  }
+| with_clause query_expression_body order_by_opt limit_opt
+  {
+  		$2.SetWith($1)
+		$2.SetOrderBy($3)
+		$2.SetLimit($4)
+		$$ = $2
+  }
+| with_clause query_expression_parens limit_clause
+  {
+  		$2.SetWith($1)
+		$2.SetLimit($3)
+		$$ = $2
+  }
+| with_clause query_expression_parens order_by_clause limit_opt
+  {
+  		$2.SetWith($1)
+		$2.SetOrderBy($3)
+		$2.SetLimit($4)
+		$$ = $2
+  }
+| with_clause query_expression_parens
+  {
+	$2.SetWith($1)
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
@@ -701,27 +782,27 @@ insert_or_replace:
   }
 
 update_statement:
-  UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
+  with_clause_opt UPDATE comment_opt ignore_opt table_references SET update_list where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Update{Comments: Comments($2), Ignore: $3, TableExprs: $4, Exprs: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
+    $$ = &Update{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: $5, Exprs: $7, Where: NewWhere(WhereClause, $8), OrderBy: $9, Limit: $10}
   }
 
 delete_statement:
-  DELETE comment_opt ignore_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
+  with_clause_opt DELETE comment_opt ignore_opt FROM table_name as_opt_id opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, TableExprs:  TableExprs{&AliasedTableExpr{Expr:$5}}, Partitions: $6, Where: NewWhere(WhereClause, $7), OrderBy: $8, Limit: $9}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, TableExprs: TableExprs{&AliasedTableExpr{Expr:$6, As: $7}}, Partitions: $8, Where: NewWhere(WhereClause, $9), OrderBy: $10, Limit: $11}
   }
-| DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt FROM table_name_list USING table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $6, TableExprs: $8, Where: NewWhere(WhereClause, $9)}
   }
-| DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt table_name_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
-| DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
+| with_clause_opt DELETE comment_opt ignore_opt delete_table_list from_or_using table_references where_expression_opt
   {
-    $$ = &Delete{Comments: Comments($2), Ignore: $3, Targets: $4, TableExprs: $6, Where: NewWhere(WhereClause, $7)}
+    $$ = &Delete{With: $1, Comments: Comments($3), Ignore: $4, Targets: $5, TableExprs: $7, Where: NewWhere(WhereClause, $8)}
   }
 
 from_or_using:
@@ -888,7 +969,7 @@ vindex_type_opt:
   }
 
 vindex_type:
-  id_or_var
+  sql_id
   {
     $$ = $1
   }
@@ -975,10 +1056,11 @@ database_or_schema:
 | SCHEMA
 
 table_spec:
-  '(' table_column_list ')' table_option_list_opt
+  '(' table_column_list ')' table_option_list_opt partitions_options_opt
   {
     $$ = $2
     $$.Options = $4
+    $$.PartitionOption = $5
   }
 
 create_options_opt:
@@ -1009,7 +1091,7 @@ create_options:
   }
 
 default_optional:
-  /* empty */ %prec LOWER_THAN_CHARSET 
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = false
   }
@@ -2317,6 +2399,13 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING CLEANUP
+  {
+    $$ = &AlterMigration{
+      Type: CleanupMigrationType,
+      UUID: string($4),
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
   {
     $$ = &AlterMigration{
@@ -2336,6 +2425,136 @@ alter_statement:
     $$ = &AlterMigration{
       Type: CancelAllMigrationType,
     }
+  }
+
+partitions_options_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY linear_opt HASH '(' expression ')' partitions_opt
+    subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isHASH: true,
+        Expr: $6,
+        Partitions: $8,
+        SubPartition: $9,
+        Definitions: $10,
+      }
+    }
+| PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
+    partitions_opt subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isKEY: true,
+        KeyAlgorithm: $5,
+        KeyColList: $7,
+        Partitions: $9,
+        SubPartition: $10,
+        Definitions: $11,
+      }
+    }
+| PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
+    partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        RangeOrList: $3,
+        ExprOrCol: $4,
+        Partitions: $5,
+        SubPartition: $6,
+        Definitions: $7,
+      }
+    }
+
+subpartition_opt:
+  {
+    $$ = nil
+  }
+| SUBPARTITION BY linear_opt HASH '(' expression ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isHASH: true,
+      Expr: $6,
+      SubPartitions: $8,
+    }
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isKEY: true,
+      KeyAlgorithm: $5,
+      KeyColList: $7,
+      SubPartitions: $9,
+    }
+  }
+
+partition_definition_opt:
+  {
+    $$ = nil
+  }
+| '(' partition_definitions ')'
+  {
+    $$ = $2
+  }
+
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1)
+  }
+
+algorithm_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
+  }
+
+expr_or_col:
+  '(' expression ')'
+  {
+    $$ = &ExprOrColumns{Expr: $2}
+  }
+| COLUMNS '(' column_list ')'
+  {
+    $$ = &ExprOrColumns{ColumnList: $3}
+  }
+
+partitions_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
+subpartitions_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($2)
   }
 
 partition_operation:
@@ -3866,6 +4085,10 @@ value_expression:
   {
     $$ = &UnaryExpr{Operator: Latin1Op, Expr: $2}
   }
+| NCHAR_STRING
+  {
+	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+  }
 | '+'  value_expression %prec UNARY
   {
     $$ = $2
@@ -4057,6 +4280,96 @@ function_call_nonkeyword:
 | TIMESTAMPDIFF openb sql_id ',' value_expression ',' value_expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+  }
+| EXTRACT openb interval FROM expression closeb
+  {
+	$$ = &ExtractFuncExpr{IntervalTypes: $3, Expr: $5}
+  }
+
+interval:
+ interval_time_stamp
+ {}
+| DAY_HOUR
+  {
+	$$=IntervalDayHour
+  }
+| DAY_MICROSECOND
+  {
+	$$=IntervalDayMicrosecond
+  }
+| DAY_MINUTE
+  {
+	$$=IntervalDayMinute
+  }
+| DAY_SECOND
+  {
+	$$=IntervalDaySecond
+  }
+| HOUR_MICROSECOND
+  {
+	$$=IntervalHourMicrosecond
+  }
+| HOUR_MINUTE
+  {
+	$$=IntervalHourMinute
+  }
+| HOUR_SECOND
+  {
+	$$=IntervalHourSecond
+  }
+| MINUTE_MICROSECOND
+  {
+	$$=IntervalMinuteMicrosecond
+  }
+| MINUTE_SECOND
+  {
+	$$=IntervalMinuteSecond
+  }
+| SECOND_MICROSECOND
+  {
+	$$=IntervalSecondMicrosecond
+  }
+| YEAR_MONTH
+  {
+	$$=IntervalYearMonth
+  }
+
+interval_time_stamp:
+ DAY
+  {
+ 	$$=IntervalDay
+  }
+| WEEK
+  {
+  	$$=IntervalWeek
+  }
+| HOUR
+  {
+ 	$$=IntervalHour
+  }
+| MINUTE
+  {
+ 	$$=IntervalMinute
+  }
+| MONTH
+  {
+	$$=IntervalMonth
+  }
+| QUARTER
+  {
+	$$=IntervalQuarter
+  }
+| SECOND
+  {
+	$$=IntervalSecond
+  }
+| MICROSECOND
+  {
+	$$=IntervalMicrosecond
+  }
+| YEAR
+  {
+	$$=IntervalYear
   }
 
 func_paren_opt:
@@ -4996,6 +5309,7 @@ reserved_keyword:
 | ESCAPE
 | EXISTS
 | EXPLAIN
+| EXTRACT
 | FALSE
 | FIRST_VALUE
 | FOR
@@ -5027,6 +5341,7 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LINEAR
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
@@ -5054,6 +5369,7 @@ reserved_keyword:
 | PARTITION
 | PERCENT_RANK
 | PRIMARY
+| RANGE
 | RANK
 | READ
 | RECURSIVE
@@ -5127,6 +5443,7 @@ non_reserved_keyword:
 | CHAR
 | CHARSET
 | CHECKSUM
+| CLEANUP
 | CLONE
 | COALESCE
 | CODE
@@ -5193,6 +5510,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
+| HASH
 | HEADER
 | HISTOGRAM
 | HISTORY
@@ -5218,6 +5536,7 @@ non_reserved_keyword:
 | LEVEL
 | LINES
 | LINESTRING
+| LIST
 | LOAD
 | LOCAL
 | LOCKED
@@ -5267,6 +5586,7 @@ non_reserved_keyword:
 | PACK_KEYS
 | PARSER
 | PARTITIONING
+| PARTITIONS
 | PASSWORD
 | PATH
 | PERSIST
@@ -5328,6 +5648,8 @@ non_reserved_keyword:
 | STATUS
 | STORAGE
 | STREAM
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TEMPORARY
@@ -5379,6 +5701,24 @@ non_reserved_keyword:
 | WORK
 | YEAR
 | ZEROFILL
+| DAY
+| DAY_HOUR
+| DAY_MICROSECOND
+| DAY_MINUTE
+| DAY_SECOND
+| HOUR
+| HOUR_MICROSECOND
+| HOUR_MINUTE
+| HOUR_SECOND
+| MICROSECOND
+| MINUTE
+| MINUTE_MICROSECOND
+| MINUTE_SECOND
+| MONTH
+| QUARTER
+| SECOND
+| SECOND_MICROSECOND
+| YEAR_MONTH
 
 openb:
   '('

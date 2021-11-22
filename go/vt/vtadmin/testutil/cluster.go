@@ -27,6 +27,8 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -34,9 +36,13 @@ import (
 	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtadmin/vtsql/fakevtsql"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	grpcvtctldtestutil "vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 // Dbcfg is a test utility for controlling the behavior of the cluster's DB
@@ -135,4 +141,39 @@ func BuildClusters(t testing.TB, cfgs ...TestClusterConfig) []*cluster.Cluster {
 	}
 
 	return clusters
+}
+
+// IntegrationTestCluster is a vtadmin cluster suitable for use in integration
+// tests. It contains the cluster struct, the topo server backing the cluster,
+// and the memorytopo.Factory to force topo errors for certain test cases.
+type IntegrationTestCluster struct {
+	Cluster     *cluster.Cluster
+	Topo        *topo.Server
+	TopoFactory *memorytopo.Factory
+}
+
+// BuildIntegrationTestCluster is a helper for building a test cluster with a
+// real grpcvtctldserver-backing implementation.
+//
+// (TODO|@ajm188): Unify this with the BuildCluster API. Also this does not
+// support any cluster methods that involve vtgate/vitessdriver queries.
+func BuildIntegrationTestCluster(t testing.TB, c *vtadminpb.Cluster, cells ...string) *IntegrationTestCluster {
+	t.Helper()
+
+	ts, factory := memorytopo.NewServerAndFactory(cells...)
+	vtctld := grpcvtctldtestutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return grpcvtctldserver.NewVtctldServer(ts)
+	})
+
+	localclient := localvtctldclient.New(vtctld)
+
+	testcluster := BuildCluster(t, TestClusterConfig{
+		Cluster:      c,
+		VtctldClient: localclient,
+	})
+	return &IntegrationTestCluster{
+		Cluster:     testcluster,
+		Topo:        ts,
+		TopoFactory: factory,
+	}
 }

@@ -79,6 +79,8 @@ service Vtctld {
   // EmergencyReparentShard reparents the shard to the new primary. It assumes
   // the old primary is dead or otherwise not responding.
   rpc EmergencyReparentShard(vtctldata.EmergencyReparentShardRequest) returns (vtctldata.EmergencyReparentShardResponse) {};
+  // ExecuteHook runs the hook on the tablet.
+  rpc ExecuteHook(vtctldata.ExecuteHookRequest) returns (vtctldata.ExecuteHookResponse);
   // FindAllShardsInKeyspace returns a map of shard names to shard references
   // for a given keyspace.
   rpc FindAllShardsInKeyspace(vtctldata.FindAllShardsInKeyspaceRequest) returns (vtctldata.FindAllShardsInKeyspaceResponse) {};
@@ -152,9 +154,20 @@ service Vtctld {
   rpc RefreshState(vtctldata.RefreshStateRequest) returns (vtctldata.RefreshStateResponse) {};
   // RefreshStateByShard calls RefreshState on all the tablets in the given shard.
   rpc RefreshStateByShard(vtctldata.RefreshStateByShardRequest) returns (vtctldata.RefreshStateByShardResponse) {};
+  // ReloadSchema instructs the remote tablet to reload its schema.
+  rpc ReloadSchema(vtctldata.ReloadSchemaRequest) returns (vtctldata.ReloadSchemaResponse) {};
+  // ReloadSchemaKeyspace reloads the schema on all tablets in a keyspace.
+  rpc ReloadSchemaKeyspace(vtctldata.ReloadSchemaKeyspaceRequest) returns (vtctldata.ReloadSchemaKeyspaceResponse) {};
+  // ReloadSchemaShard reloads the schema on all tablets in a shard.
+  //
+  // In general, we don't always expect all replicas to be ready to reload, and
+  // the periodic schema reload makes them self-healing anyway. So, we do this
+  // on a best-effort basis, and log warnings for any tablets that fail to
+  // reload within the context deadline.
+  rpc ReloadSchemaShard(vtctldata.ReloadSchemaShardRequest) returns (vtctldata.ReloadSchemaShardResponse) {};
   // RemoveKeyspaceCell removes the specified cell from the Cells list for all
-  // shards in the specified keyspace, as well as from the SrvKeyspace for that
-  // keyspace in that cell.
+  // shards in the specified keyspace (by calling RemoveShardCell on every
+  // shard). It also removes the SrvKeyspace for that keyspace in that cell.
   rpc RemoveKeyspaceCell(vtctldata.RemoveKeyspaceCellRequest) returns (vtctldata.RemoveKeyspaceCellResponse) {};
   // RemoveShardCell removes the specified cell from the specified shard's Cells
   // list.
@@ -165,6 +178,13 @@ service Vtctld {
   rpc ReparentTablet(vtctldata.ReparentTabletRequest) returns (vtctldata.ReparentTabletResponse) {};
   // RunHealthCheck runs a healthcheck on the remote tablet.
   rpc RunHealthCheck(vtctldata.RunHealthCheckRequest) returns (vtctldata.RunHealthCheckResponse) {};
+  // SetKeyspaceServedFrom changes the ServedFromMap manually, and is intended
+  // only for emergency fixes. This does not rebuild the serving graph.
+  //
+  // The ServedFromMap is automatically updated as a part of MigrateServedFrom.
+  rpc SetKeyspaceServedFrom(vtctldata.SetKeyspaceServedFromRequest) returns (vtctldata.SetKeyspaceServedFromResponse) {};
+  // SetKeyspaceShardingInfo updates the sharding information for a keyspace.
+  rpc SetKeyspaceShardingInfo(vtctldata.SetKeyspaceShardingInfoRequest) returns (vtctldata.SetKeyspaceShardingInfoResponse) {};
   // SetShardIsPrimaryServing adds or removes a shard from serving.
   //
   // This is meant as an emergency function. It does not rebuild any serving

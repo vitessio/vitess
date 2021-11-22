@@ -360,7 +360,12 @@ func StopReplicas(replicas [](*Instance), stopReplicationMethod StopReplicationM
 
 // StopReplicasNicely will attemt to stop all given replicas nicely, up to timeout
 func StopReplicasNicely(replicas [](*Instance), timeout time.Duration) [](*Instance) {
-	return StopReplicas(replicas, StopReplicationNice, timeout)
+	stoppedReplicas := StopReplicas(replicas, StopReplicationNice, timeout)
+	// We remove nil instances because StopReplicas might introduce nils in the array that it returns in case of
+	// failures while reading the tablet from the backend. This could happen when the tablet is forgotten while we are
+	// trying to stop the replication on the tablets.
+	stoppedReplicas = RemoveNilInstances(stoppedReplicas)
+	return stoppedReplicas
 }
 
 // StopReplication stops replication on a given instance
