@@ -84,9 +84,10 @@ type VRepl struct {
 	addedUniqueKeys   []*vrepl.UniqueKey
 	removedUniqueKeys []*vrepl.UniqueKey
 
-	filterQuery   string
-	enumToTextMap map[string]string
-	bls           *binlogdatapb.BinlogSource
+	revertibleNotes string
+	filterQuery     string
+	enumToTextMap   map[string]string
+	bls             *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
 
@@ -383,9 +384,22 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 	}
 
 	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
-	v.expandedColumnNames, _ = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
+	var expandedDescriptions map[string]string
+	v.expandedColumnNames, expandedDescriptions = vrepl.GetExpandedColumnNames(v.sourceSharedColumns, v.targetSharedColumns)
 
 	v.sourceAutoIncrement, err = v.readAutoIncrement(ctx, conn, v.sourceTable)
+
+	notes := []string{}
+	for _, uk := range v.removedUniqueKeys {
+		notes = append(notes, fmt.Sprintf("unique constraint removed: %s", uk.Name))
+	}
+	for _, name := range v.droppedNoDefaultColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s dropped, and had no default value", name))
+	}
+	for _, name := range v.expandedColumnNames {
+		notes = append(notes, fmt.Sprintf("column %s: %s", name, expandedDescriptions[name]))
+	}
+	v.revertibleNotes = strings.Join(notes, "\n")
 	if err != nil {
 		return err
 	}

@@ -66,6 +66,7 @@ const (
 	alterSchemaMigrationsTableRemovedUniqueNames       = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
 	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
 	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
+	alterSchemaMigrationsTableRevertibleNotes          = "ALTER TABLE _vt.schema_migrations add column revertible_notes text NOT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -184,7 +185,8 @@ const (
 	`
 	sqlUpdateSchemaAnalysis = `UPDATE _vt.schema_migrations
 			SET added_unique_keys=%a, removed_unique_keys=%a, removed_unique_key_names=%a,
-			dropped_no_default_column_names=%a, expanded_column_names=%a
+			dropped_no_default_column_names=%a, expanded_column_names=%a,
+			revertible_notes=%a
 		WHERE
 			migration_uuid=%a
 	`
@@ -566,4 +568,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRemovedUniqueNames,
 	alterSchemaMigrationsTableRemovedNoDefaultColNames,
 	alterSchemaMigrationsTableExpandedColNames,
+	alterSchemaMigrationsTableRevertibleNotes,
 }

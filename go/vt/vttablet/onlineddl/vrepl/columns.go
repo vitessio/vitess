@@ -98,16 +98,16 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 		return true, "target is NULL-able, source is not"
 	}
 	if targetColumn.CharacterMaximumLength > sourceColumn.CharacterMaximumLength {
-		return true, "higher CHARACTER_MAXIMUM_LENGTH"
+		return true, "increased CHARACTER_MAXIMUM_LENGTH"
 	}
 	if targetColumn.NumericPrecision > sourceColumn.NumericPrecision {
-		return true, "higher NUMERIC_PRECISION"
+		return true, "increased NUMERIC_PRECISION"
 	}
 	if targetColumn.NumericScale > sourceColumn.NumericScale {
-		return true, "higher NUMERIC_SCALE"
+		return true, "increased NUMERIC_SCALE"
 	}
 	if targetColumn.DateTimePrecision > sourceColumn.DateTimePrecision {
-		return true, "higher DATETIME_PRECISION"
+		return true, "increased DATETIME_PRECISION"
 	}
 	if sourceColumn.IsNumeric() && targetColumn.IsNumeric() {
 		if sourceColumn.IsUnsigned && !targetColumn.IsUnsigned {
@@ -115,7 +115,7 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 		}
 		if sourceColumn.NumericPrecision <= targetColumn.NumericPrecision && !sourceColumn.IsUnsigned && targetColumn.IsUnsigned {
 			// e.g. INT SIGNED => INT UNSIGNED, INT SIGNED = BIGINT UNSIGNED
-			return true, "target unsgined value exeeds source unsigned value"
+			return true, "target unsgined value exceeds source unsigned value"
 		}
 		if targetColumn.IsFloatingPoint() && !sourceColumn.IsFloatingPoint() {
 			return true, "target is floating point, source is not"
