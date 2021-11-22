@@ -905,7 +905,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 	}
 }
 
-// ReserveBeginExecute implements the queryservice interface
+// ReserveExecute implements the queryservice interface
 func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, *topodatapb.TabletAlias, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
