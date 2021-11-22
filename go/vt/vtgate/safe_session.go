@@ -576,3 +576,24 @@ func (session *SafeSession) getSelectLimit() int {
 
 	return int(session.Options.SqlSelectLimit)
 }
+
+func (session *SafeSession) isTxOpen() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.ShardSessions) > 0 || len(session.PreSessions) > 0 || len(session.PostSessions) > 0
+}
+
+func (session *SafeSession) GetSessions() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	switch session.commitOrder {
+	case vtgatepb.CommitOrder_PRE:
+		return session.PreSessions
+	case vtgatepb.CommitOrder_POST:
+		return session.PostSessions
+	default:
+		return session.ShardSessions
+	}
+}
