@@ -342,9 +342,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 ) []error {
-	// mu protects fieldSent, callback and replyErr
-	var mu sync.Mutex
-
 	if session.InLockSession() && session.TriggerLockHeartBeat() {
 		go stc.runLockQuery(ctx, session)
 	}
@@ -426,8 +423,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			if err != nil {
 				return newInfo, err
 			}
-			mu.Lock()
-			defer mu.Unlock()
 
 			return newInfo, nil
 		},
