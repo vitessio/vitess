@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"sync"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -33,8 +32,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-var initter sync.Once
 
 func onceInit() {
 	testing.Init()
