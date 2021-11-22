@@ -327,11 +327,14 @@ func TestInsertStmtInOLAP(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	defer func() {
+		_, _ = conn.ExecuteFetch("delete from t1", 100, false)
+	}()
 
 	utils.Exec(t, conn, `set workload='olap'`)
 	_, err = conn.ExecuteFetch(`insert into t1(id1, id2) values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)`, 1000, true)
-	require.Error(t, err)
-	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[]`)
+	require.NoError(t, err)
+	utils.AssertMatches(t, conn, `select id1 from t1 order by id1`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]`)
 }
 
 func TestCreateIndex(t *testing.T) {
@@ -543,4 +546,230 @@ func TestSelectEqualUniqueOuterJoinRightPredicate(t *testing.T) {
 	utils.Exec(t, conn, "insert into t1(id1, id2) values (0,10),(1,9),(2,8),(3,7),(4,6),(5,5)")
 	utils.Exec(t, conn, "insert into t2(id3, id4) values (0,20),(1,19),(2,18),(3,17),(4,16),(5,15)")
 	utils.AssertMatches(t, conn, `SELECT id3 FROM t1 LEFT JOIN t2 ON t1.id1 = t2.id3 WHERE t2.id3 = 10`, `[]`)
+}
+
+func TestSQLSelectLimit(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null), (4, 'a'), (5, 'a'), (6, 'b')")
+	defer utils.Exec(t, conn, "delete from t7_xxhash")
+
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		utils.Exec(t, conn, "set sql_select_limit = 2")
+		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
+		utils.AssertMatches(t, conn, "(select uid, msg from t7_xxhash order by uid)", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`)
+		utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid limit 4", `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL] [VARCHAR("4") VARCHAR("a")]]`)
+		/*
+			planner does not support query with order by in union query. without order by the results are not deterministic for testing purpose
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid", ``)
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash union all select uid, msg from t7_xxhash order by uid limit 3", ``)
+		*/
+
+		//	without order by the results are not deterministic for testing purpose. Checking row count only.
+		qr := utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash")
+		assert.Equal(t, 2, len(qr.Rows))
+
+		qr = utils.Exec(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
+		assert.Equal(t, 3, len(qr.Rows))
+	}
+}
+
+func TestSQLSelectLimitWithPlanCache(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a'), (2, 'b'), (3, null)")
+	defer utils.Exec(t, conn, "delete from t7_xxhash")
+
+	tcases := []struct {
+		limit int
+		out   string
+	}{{
+		limit: -1,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}, {
+		limit: 1,
+		out:   `[[VARCHAR("1") VARCHAR("a")]]`,
+	}, {
+		limit: 2,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")]]`,
+	}, {
+		limit: 3,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}, {
+		limit: 4,
+		out:   `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("2") VARCHAR("b")] [VARCHAR("3") NULL]]`,
+	}}
+	for _, workload := range []string{"olap", "oltp"} {
+		utils.Exec(t, conn, fmt.Sprintf("set workload = %s", workload))
+		for _, tcase := range tcases {
+			utils.Exec(t, conn, fmt.Sprintf("set sql_select_limit = %d", tcase.limit))
+			utils.AssertMatches(t, conn, "select uid, msg from t7_xxhash order by uid", tcase.out)
+		}
+	}
+}
+
+func TestSavepointInReservedConn(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set session sql_mode = ''")
+	utils.Exec(t, conn, "BEGIN")
+	utils.Exec(t, conn, "SAVEPOINT sp_1")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(1, 'a')")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_1")
+	utils.Exec(t, conn, "ROLLBACK")
+
+	utils.Exec(t, conn, "set session sql_mode = ''")
+	utils.Exec(t, conn, "BEGIN")
+	utils.Exec(t, conn, "SAVEPOINT sp_1")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_1")
+	utils.Exec(t, conn, "SAVEPOINT sp_2")
+	utils.Exec(t, conn, "insert into t7_xxhash(uid, msg) values(2, 'a')")
+	utils.Exec(t, conn, "RELEASE SAVEPOINT sp_2")
+	utils.Exec(t, conn, "COMMIT")
+	defer utils.Exec(t, conn, `delete from t7_xxhash`)
+	utils.AssertMatches(t, conn, "select uid from t7_xxhash", `[[VARCHAR("2")]]`)
+}
+
+func TestUnionWithManyInfSchemaQueries(t *testing.T) {
+	// trying to reproduce the problems in https://github.com/vitessio/vitess/issues/9139
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, `SELECT /* GEN4_COMPARE_ONLY_GEN4 */ 
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company_invite_code'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_role'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_urgent'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item_event'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site_item'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'site'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user_company'
+                 UNION 
+                SELECT
+                    TABLE_SCHEMA,
+                    TABLE_NAME
+                FROM
+                    INFORMATION_SCHEMA.TABLES
+                WHERE
+                    TABLE_SCHEMA = 'ionescu'
+                    AND
+                    TABLE_NAME = 'user'`)
+}
+
+func TestTransactionsInStreamingMode(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+	utils.Exec(t, conn, "delete from t1")
+	defer utils.Exec(t, conn, "delete from t1")
+
+	utils.Exec(t, conn, "set workload = olap")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (1,2)")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
+	utils.Exec(t, conn, "commit")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
+
+	utils.Exec(t, conn, "set workload = olap")
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (2,3)")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[[INT64(2) INT64(3)]]`)
+	utils.Exec(t, conn, "rollback")
+	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[]`)
 }

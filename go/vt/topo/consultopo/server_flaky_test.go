@@ -68,6 +68,9 @@ func startConsul(t *testing.T, authToken string) (*exec.Cmd, string, string) {
 		},
 	}
 
+	// TODO(deepthi): this is the legacy ACL format. We run v1.4.0 by default in which this has been deprecated.
+	// We should start using the new format
+	// https://learn.hashicorp.com/tutorials/consul/access-control-replication-multiple-datacenters?in=consul/security-operations
 	if authToken != "" {
 		config["datacenter"] = "vitess"
 		config["acl_datacenter"] = "vitess"

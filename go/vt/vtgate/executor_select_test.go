@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/cache"
@@ -259,7 +261,8 @@ func TestStreamUnsharded(t *testing.T) {
 	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
+		diff := cmp.Diff(wantResult, result)
+		t.Errorf("result: %+v, want %+v\ndiff: %s", result, wantResult, diff)
 	}
 	testQueryLog(t, logChan, "TestExecuteStream", "SELECT", sql, 1)
 }
@@ -283,22 +286,18 @@ func TestStreamBuffering(t *testing.T) {
 		}},
 	}})
 
-	results := make(chan *sqltypes.Result, 10)
+	var results []*sqltypes.Result
 	err := executor.StreamExecute(
 		context.Background(),
 		"TestStreamBuffering",
 		NewSafeSession(primarySession),
 		"select id from music_user_map where id = 1",
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
-			results <- qr
+			results = append(results, qr)
 			return nil
 		},
 	)
-	close(results)
 	require.NoError(t, err)
 	wantResults := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
@@ -316,11 +315,7 @@ func TestStreamBuffering(t *testing.T) {
 			sqltypes.NewVarChar("12345678901234567890"),
 		}},
 	}}
-	var gotResults []*sqltypes.Result
-	for r := range results {
-		gotResults = append(gotResults, r)
-	}
-	utils.MustMatch(t, wantResults, gotResults)
+	utils.MustMatch(t, wantResults, results)
 }
 
 func TestStreamLimitOffset(t *testing.T) {
@@ -365,9 +360,6 @@ func TestStreamLimitOffset(t *testing.T) {
 		NewSafeSession(primarySession),
 		"select id, textcol from user order by id limit 2 offset 2",
 		nil,
-		&querypb.Target{
-			TabletType: topodatapb.TabletType_PRIMARY,
-		},
 		func(qr *sqltypes.Result) error {
 			results <- qr
 			return nil
@@ -1279,7 +1271,7 @@ func TestSelectScatterPartialOLAP(t *testing.T) {
 func TestSelectScatterPartialOLAP2(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -1363,9 +1355,7 @@ func TestStreamSelectScatter(t *testing.T) {
 			sandboxconn.StreamRowResult.Rows[0],
 		},
 	}
-	if !result.Equal(wantResult) {
-		t.Errorf("result: %+v, want %+v", result, wantResult)
-	}
+	utils.MustMatch(t, wantResult, result)
 }
 
 // TestSelectScatterOrderBy will run an ORDER BY query that will scatter out to 8 shards and return the 8 rows (one per shard) sorted.
@@ -2604,7 +2594,7 @@ func TestSelectFromInformationSchema(t *testing.T) {
 func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 	// Special setup: Don't use createLegacyExecutorEnv.
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2638,7 +2628,7 @@ func TestStreamOrderByLimitWithMultipleResults(t *testing.T) {
 func TestSelectScatterFails(t *testing.T) {
 	sess := &vtgatepb.Session{}
 	cell := "aa"
-	hc := discovery.NewFakeHealthCheck()
+	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox("TestExecutor")
 	s.VSchema = executorVSchema
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
@@ -2674,4 +2664,37 @@ func TestSelectScatterFails(t *testing.T) {
 
 	_, err = executorExecSession(executor, "select /*vt+ ALLOW_SCATTER */ id from user", nil, sess)
 	require.NoError(t, err)
+}
+
+func TestGen4SelectStraightJoin(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	*plannerVersion = "gen4"
+	defer func() {
+		// change it back to v3
+		*plannerVersion = "v3"
+	}()
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	query := "select u.id from user u straight_join user2 u2 on u.id = u2.id"
+	_, err := executor.Execute(context.Background(),
+		"TestGen4SelectStraightJoin",
+		session,
+		query, map[string]*querypb.BindVariable{},
+	)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "select u.id from `user` as u, user2 as u2 where u.id = u2.id",
+			BindVariables: map[string]*querypb.BindVariable{},
+		},
+	}
+	wantWarnings := []*querypb.QueryWarning{
+		{
+			Code:    1235,
+			Message: "straight join is converted to normal join",
+		},
+	}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+	utils.MustMatch(t, wantWarnings, session.Warnings)
 }

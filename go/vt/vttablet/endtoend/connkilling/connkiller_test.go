@@ -32,7 +32,7 @@ func TestTxKillerKillsTransactionsInReservedConnections(t *testing.T) {
 	client := framework.NewClient()
 	defer client.Release()
 
-	_, err := client.ReserveBeginExecute("select 42", nil, nil)
+	_, err := client.ReserveBeginExecute("select 42", nil, nil, nil)
 	require.NoError(t, err)
 
 	assertIsKilledWithin6Seconds(t, client)

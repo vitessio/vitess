@@ -20,7 +20,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -39,30 +38,8 @@ type SubQueryInner struct {
 	// of type Concatenate since we have a Union.
 	Inner Operator
 
-	// Type represents the type of the subquery (value, in, not in, exists)
-	Type engine.PulloutOpcode
-
-	// SelectStatement is the inner's select
-	SelectStatement *sqlparser.Select
-
-	// ArgName is the substitution argument string for the subquery.
-	// Subquery argument name looks like: `__sq1`, with `1` being an
-	// unique identifier. This is used when we wish to replace the
-	// subquery by an argument for PullOut subqueries.
-	ArgName string
-
-	// HasValues is a string of form `__sq_has_values1` with `1` being
-	// a unique identifier that matches the one used in ArgName.
-	// We use `__sq_has_values` for in and not in subqueries.
-	HasValues string
-
-	// ExprsNeedReplace is a slice of all the expressions that were
-	// introduced by the rewrite of the subquery and that potentially
-	// need to be re-replace if we can merge the subquery into a route.
-	// An expression that contains at least all of ExprsNeedReplace will
-	// be replaced by the expression in ReplaceBy.
-	ExprsNeedReplace []sqlparser.Expr
-	ReplaceBy        sqlparser.Expr
+	// ExtractedSubquery contains all information we need about this subquery
+	ExtractedSubquery *sqlparser.ExtractedSubquery
 }
 
 // TableID implements the Operator interface

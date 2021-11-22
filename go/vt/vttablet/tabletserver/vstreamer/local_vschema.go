@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -70,7 +72,11 @@ func (lvs *localVSchema) findTable(tablename string) (*vindexes.Table, error) {
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
-		return nil, fmt.Errorf("table %s not found", tablename)
+		if schema.IsInternalOperationTableName(tablename) {
+			log.Infof("found internal table %s, ignoring in local vschema search", tablename)
+		} else {
+			return nil, fmt.Errorf("table %s not found", tablename)
+		}
 	}
 	return table, nil
 }

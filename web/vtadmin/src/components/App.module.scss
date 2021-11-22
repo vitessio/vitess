@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 .container {
-  display: grid;
-  grid-template-areas: 'nav content';
-  grid-template-rows: auto;
-  grid-template-columns: 240px auto;
-  height: 100vh;
-  overflow: hidden;
-  position: relative;
-  width: 100vw;
+    display: grid;
+    grid-template-areas: 'nav content';
+    grid-template-rows: auto;
+    grid-template-columns: 240px auto;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    width: 100vw;
 }
 
 .navContainer {
-  grid-area: nav;
-  height: 100vh;
+    grid-area: nav;
+    height: 100vh;
 }
 
 .mainContainer {
-  grid-area: content;
-  overflow: auto;
+    grid-area: content;
+    overflow: auto;
 }

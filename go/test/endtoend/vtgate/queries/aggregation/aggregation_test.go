@@ -18,6 +18,7 @@ package aggregation
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/vtgate/utils"
@@ -84,4 +85,204 @@ func TestDistinct(t *testing.T) {
 	utils.Exec(t, conn, "delete from t3")
 	utils.Exec(t, conn, "delete from t7_xxhash")
 	utils.Exec(t, conn, "delete from aggr_test")
+}
+
+func TestEqualFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = 'oltp'")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 = 1", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 = a", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = a", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 3+2", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1+4 = 3+2", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 1", `[]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"1\"", `[]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = \"5\"", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a = 5.00", `[[INT64(5)]]`)
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a, val1 from aggr_test group by val1 having a = 1.00", `[[INT64(1) VARCHAR("a")] [INT64(1) VARCHAR("b")] [INT64(1) VARCHAR("c")] [INT64(1) VARCHAR("d")] [INT64(1) VARCHAR("e")]]`)
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) = 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
+}
+
+func TestNotEqualFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 5", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 5 != a", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != a", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 3+2", `[]`)             // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 1", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != \"1\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != \"5\"", `[]`)           // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a != 5.00", `[]`)            // having clause
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) != 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
+}
+
+func TestLessFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < 10", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 < a", `[[INT64(5)]]`)      // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < a", `[]`)                // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < 3+2", `[]`)              // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < 1", `[]`)                // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < \"10\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < \"5\"", `[]`)            // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a < 6.00", `[[INT64(5)]]`)   // having clause
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) < 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
+}
+
+func TestLessEqualFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= 10", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 <= a", `[[INT64(5)]]`)      // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= a", `[[INT64(5)]]`)      // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= 3+2", `[[INT64(5)]]`)    // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= 1", `[]`)                // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= \"10\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= \"5\"", `[[INT64(5)]]`)  // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a <= 5.00", `[[INT64(5)]]`)   // having clause
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) <= 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
+}
+
+func TestGreaterFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > 1", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 > a", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > a", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > 3+1", `[[INT64(5)]]`)   // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > 10", `[]`)              // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > \"1\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > \"5\"", `[]`)           // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a > 4.00", `[[INT64(5)]]`)  // having clause
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) > 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
+}
+
+func TestGreaterEqualFilterOnScatter(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',2), (3,'c',3), (4,'d',4), (5,'e',5)")
+
+	defer func() {
+		utils.Exec(t, conn, "set workload = oltp")
+		utils.Exec(t, conn, "delete from aggr_test")
+	}()
+
+	workloads := []string{"oltp", "olap"}
+	for _, workload := range workloads {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, fmt.Sprintf("set workload = '%s'", workload))
+
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= 1", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having 1 >= a", `[]`)               // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= a", `[[INT64(5)]]`)     // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= 3+2", `[[INT64(5)]]`)   // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= 10", `[]`)              // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= \"1\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= \"5\"", `[[INT64(5)]]`) // having clause
+			utils.AssertMatches(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ count(*) as a from aggr_test having a >= 5.00", `[[INT64(5)]]`)  // having clause
+
+			utils.AssertContainsError(t, conn, "select /* GEN4_COMPARE_ONLY_GEN4 */ 1 from aggr_test having count(*) >= 5", `expr cannot be converted, not supported: *sqlparser.FuncExpr`) // will fail since `count(*)` is a FuncExpr
+		})
+	}
 }

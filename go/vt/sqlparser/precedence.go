@@ -90,6 +90,8 @@ func precedenceFor(in Expr) Precendence {
 		}
 	case *IntervalExpr:
 		return P1
+	case *ExtractedSubquery:
+		return precedenceFor(node.alternative)
 	}
 
 	return Syntactic

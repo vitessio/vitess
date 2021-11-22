@@ -24,8 +24,10 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -71,6 +73,22 @@ var (
 		Use:  "RemoveKeyspaceCell <keyspace> <cell>",
 		Args: cobra.ExactArgs(2),
 		RunE: commandRemoveKeyspaceCell,
+	}
+	// SetKeyspaceServedFrom makes a SetKeyspaceServedFrom gRPC call to a vtcltd.
+	SetKeyspaceServedFrom = &cobra.Command{
+		Use:                   "SetKeyspaceServedFrom [--source <keyspace>] [--remove] [--cells=<cells>] <keyspace> <tablet_type>",
+		Short:                 "Updates the ServedFromMap for a keyspace manually. This command is intended for emergency fixes; the map is automatically set by MigrateServedTypes. This command does not rebuild the serving graph.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.ExactArgs(2),
+		RunE:                  commandSetKeyspaceServedFrom,
+	}
+	// SetKeyspaceShardingInfo makes a SetKeyspaceShardingInfo gRPC call to a vtcltd.
+	SetKeyspaceShardingInfo = &cobra.Command{
+		Use:                   "SetKeyspaceShardingInfo [--force] <keyspace> [<column name> [<column type>]]",
+		Short:                 "Updates the sharding information for a keyspace.",
+		DisableFlagsInUseLine: true,
+		Args:                  cobra.RangeArgs(1, 3),
+		RunE:                  commandSetKeyspaceShardingInfo,
 	}
 )
 
@@ -266,6 +284,97 @@ func commandRemoveKeyspaceCell(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var setKeyspaceServedFromOptions = struct {
+	Cells          []string
+	SourceKeyspace string
+	Remove         bool
+}{}
+
+func commandSetKeyspaceServedFrom(cmd *cobra.Command, args []string) error {
+	keyspace := cmd.Flags().Arg(0)
+	tabletType, err := topoproto.ParseTabletType(cmd.Flags().Arg(1))
+	if err != nil {
+		return err
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceServedFrom(commandCtx, &vtctldatapb.SetKeyspaceServedFromRequest{
+		Keyspace:       keyspace,
+		TabletType:     tabletType,
+		Cells:          setKeyspaceServedFromOptions.Cells,
+		SourceKeyspace: setKeyspaceServedFromOptions.SourceKeyspace,
+		Remove:         setKeyspaceServedFromOptions.Remove,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
+var setKeyspaceShardingInfoOptions = struct {
+	Force bool
+}{}
+
+func commandSetKeyspaceShardingInfo(cmd *cobra.Command, args []string) error {
+	var (
+		keyspace   = cmd.Flags().Arg(0)
+		columnName string
+		columnType = topodatapb.KeyspaceIdType_UNSET
+	)
+
+	switch len(cmd.Flags().Args()) {
+	case 1:
+		// Nothing else to do; we set keyspace already above.
+	case 2:
+		columnName = cmd.Flags().Arg(1)
+	case 3:
+		var err error
+		columnType, err = key.ParseKeyspaceIDType(cmd.Flags().Arg(2))
+		if err != nil {
+			return err
+		}
+	default:
+		// This should be impossible due to cobra.RangeArgs, but we handle it
+		// explicitly anyway.
+		return fmt.Errorf("SetKeyspaceShardingInfo expects between 1 and 3 positional args; have %d", len(cmd.Flags().Args()))
+	}
+
+	isColumnNameSet := columnName != ""
+	isColumnTypeSet := columnType != topodatapb.KeyspaceIdType_UNSET
+
+	if (isColumnNameSet && !isColumnTypeSet) || (!isColumnNameSet && isColumnTypeSet) {
+		return fmt.Errorf("both <column_name:%v> and <column_type:%v> must be set, or both must be unset", columnName, key.KeyspaceIDTypeString(columnType))
+	}
+
+	cli.FinishedParsing(cmd)
+
+	resp, err := client.SetKeyspaceShardingInfo(commandCtx, &vtctldatapb.SetKeyspaceShardingInfoRequest{
+		Keyspace:   keyspace,
+		ColumnName: columnName,
+		ColumnType: columnType,
+		Force:      setKeyspaceShardingInfoOptions.Force,
+	})
+	if err != nil {
+		return err
+	}
+
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
+	return nil
+}
+
 func init() {
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.Force, "force", "f", false, "Proceeds even if the keyspace already exists. Does not overwrite the existing keyspace record")
 	CreateKeyspace.Flags().BoolVarP(&createKeyspaceOptions.AllowEmptyVSchema, "allow-empty-vschema", "e", false, "Allows a new keyspace to have no vschema")
@@ -287,4 +396,12 @@ func init() {
 	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Force, "force", "f", false, "Proceed even if the cell's topology server cannot be reached. The assumption is that you turned down the entire cell, and just need to update the global topo data.")
 	RemoveKeyspaceCell.Flags().BoolVarP(&removeKeyspaceCellOptions.Recursive, "recursive", "r", false, "Also delete all tablets in that cell beloning to the specified keyspace.")
 	Root.AddCommand(RemoveKeyspaceCell)
+
+	SetKeyspaceServedFrom.Flags().StringSliceVarP(&setKeyspaceServedFromOptions.Cells, "cells", "c", nil, "Cells to affect (comma-separated).")
+	SetKeyspaceServedFrom.Flags().BoolVarP(&setKeyspaceServedFromOptions.Remove, "remove", "r", false, "If set, remove the ServedFrom record.")
+	SetKeyspaceServedFrom.Flags().StringVar(&setKeyspaceServedFromOptions.SourceKeyspace, "source", "", "Specifies the source keyspace name.")
+	Root.AddCommand(SetKeyspaceServedFrom)
+
+	SetKeyspaceShardingInfo.Flags().BoolVarP(&setKeyspaceShardingInfoOptions.Force, "force", "f", false, "Updates fields even if they are already set. Use caution before passing force to this command.")
+	Root.AddCommand(SetKeyspaceShardingInfo)
 }

@@ -56,6 +56,23 @@ type versionInfo struct {
 	version            string
 }
 
+// ToStringMap returns the version info as a map[string]string, allowing version
+// info to be used in things like arbitrary string-tag maps (e.g. tablet tags
+// in the topo).
+func (v *versionInfo) ToStringMap() map[string]string {
+	return map[string]string{
+		"build_host":       v.buildHost,
+		"build_user":       v.buildUser,
+		"build_time":       v.buildTimePretty,
+		"build_git_rev":    v.buildGitRev,
+		"build_git_branch": v.buildGitBranch,
+		"go_version":       v.goVersion,
+		"goos":             v.goOS,
+		"goarch":           v.goArch,
+		"version":          v.version,
+	}
+}
+
 func (v *versionInfo) Print() {
 	fmt.Println(v)
 }

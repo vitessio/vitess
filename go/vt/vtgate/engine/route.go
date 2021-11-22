@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -134,6 +135,8 @@ type OrderByParams struct {
 	StarColFixedIndex int
 	// v3 specific boolean. Used to also add weight strings originating from GroupBys to the Group by clause
 	FromGroupBy bool
+	// Collation ID for comparison using collation
+	CollationID collations.ID
 }
 
 // String returns a string. Used for plan descriptions
@@ -149,6 +152,10 @@ func (obp OrderByParams) String() string {
 		val += " DESC"
 	} else {
 		val += " ASC"
+	}
+	if obp.CollationID != collations.Unknown {
+		collation := collations.Default().LookupByID(obp.CollationID)
+		val += " COLLATE " + collation.Name()
 	}
 	return val
 }
@@ -368,7 +375,7 @@ func (route *Route) TryStreamExecute(vcursor VCursor, bindVars map[string]*query
 	}
 
 	if len(route.OrderBy) == 0 {
-		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, func(qr *sqltypes.Result) error {
+		errs := vcursor.StreamExecuteMulti(route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 		if len(errs) > 0 {
@@ -819,6 +826,9 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if route.ScatterErrorsAsWarnings {
 		other["ScatterErrorsAsWarnings"] = true
+	}
+	if route.QueryTimeout > 0 {
+		other["QueryTimeout"] = route.QueryTimeout
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",

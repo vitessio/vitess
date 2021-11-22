@@ -172,7 +172,7 @@ var (
 	prometheusMetricsAddress = flag.String(
 		"prometheus_metrics_address", ":8080", "Address on which to serve prometheus metrics")
 	debug                   = flag.Bool("debug", false, "Enable debug logging")
-	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @master and @replica)")
+	useVtgate               = flag.Bool("vtgate", false, "Using vtgate (for @primary and @replica)")
 	initialize              = flag.Bool("initialize", false, "Initialize database (for testing)")
 	datasetSize             = flag.Int("dataset_size", 10, "Number of total records in database")
 	endpointsConfigFilename = flag.String("endpoints_config", "", "Endpoint and load configuration.")

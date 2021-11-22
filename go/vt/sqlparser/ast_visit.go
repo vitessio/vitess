@@ -86,6 +86,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitComments(in, f)
 	case *Commit:
 		return VisitRefOfCommit(in, f)
+	case *CommonTableExpr:
+		return VisitRefOfCommonTableExpr(in, f)
 	case *ComparisonExpr:
 		return VisitRefOfComparisonExpr(in, f)
 	case *ConstraintDefinition:
@@ -126,8 +128,14 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfExplainStmt(in, f)
 	case *ExplainTab:
 		return VisitRefOfExplainTab(in, f)
+	case *ExprOrColumns:
+		return VisitRefOfExprOrColumns(in, f)
 	case Exprs:
 		return VisitExprs(in, f)
+	case *ExtractFuncExpr:
+		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractedSubquery:
+		return VisitRefOfExtractedSubquery(in, f)
 	case *Flush:
 		return VisitRefOfFlush(in, f)
 	case *Force:
@@ -202,6 +210,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfParenTableExpr(in, f)
 	case *PartitionDefinition:
 		return VisitRefOfPartitionDefinition(in, f)
+	case *PartitionOption:
+		return VisitRefOfPartitionOption(in, f)
 	case *PartitionSpec:
 		return VisitRefOfPartitionSpec(in, f)
 	case Partitions:
@@ -260,6 +270,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfStarExpr(in, f)
 	case *Stream:
 		return VisitRefOfStream(in, f)
+	case *SubPartition:
+		return VisitRefOfSubPartition(in, f)
 	case *Subquery:
 		return VisitRefOfSubquery(in, f)
 	case *SubstrExpr:
@@ -314,6 +326,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfWhen(in, f)
 	case *Where:
 		return VisitRefOfWhere(in, f)
+	case *With:
+		return VisitRefOfWith(in, f)
 	case *XorExpr:
 		return VisitRefOfXorExpr(in, f)
 	default:
@@ -716,6 +730,24 @@ func VisitRefOfCommit(in *Commit, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfCommonTableExpr(in *CommonTableExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitTableIdent(in.TableID, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.Columns, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfComparisonExpr(in *ComparisonExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -876,6 +908,9 @@ func VisitRefOfDelete(in *Delete, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitComments(in.Comments, f); err != nil {
 		return err
 	}
@@ -1013,6 +1048,21 @@ func VisitRefOfExplainTab(in *ExplainTab, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfExprOrColumns(in *ExprOrColumns, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitColumns(in.ColumnList, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitExprs(in Exprs, f Visit) error {
 	if in == nil {
 		return nil
@@ -1024,6 +1074,39 @@ func VisitExprs(in Exprs, f Visit) error {
 		if err := VisitExpr(el, f); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+func VisitRefOfExtractFuncExpr(in *ExtractFuncExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfExtractedSubquery(in *ExtractedSubquery, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Original, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubquery(in.Subquery, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.OtherSide, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.alternative, f); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1488,6 +1571,32 @@ func VisitRefOfPartitionDefinition(in *PartitionDefinition, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPartitionOption(in *PartitionOption, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColumns(in.KeyColList, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfExprOrColumns(in.ExprOrCol, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfSubPartition(in.SubPartition, f); err != nil {
+		return err
+	}
+	for _, el := range in.Definitions {
+		if err := VisitRefOfPartitionDefinition(el, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
 func VisitRefOfPartitionSpec(in *PartitionSpec, f Visit) error {
 	if in == nil {
 		return nil
@@ -1685,6 +1794,9 @@ func VisitRefOfSelect(in *Select, f Visit) error {
 		return err
 	}
 	if err := VisitRefOfWhere(in.Where, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitGroupBy(in.GroupBy, f); err != nil {
@@ -1905,6 +2017,21 @@ func VisitRefOfStream(in *Stream, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfSubPartition(in *SubPartition, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitColumns(in.KeyColList, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfSubquery(in *Subquery, f Visit) error {
 	if in == nil {
 		return nil
@@ -2013,6 +2140,9 @@ func VisitRefOfTableSpec(in *TableSpec, f Visit) error {
 	if err := VisitTableOptions(in.Options, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfPartitionOption(in.PartitionOption, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfTablespaceOperation(in *TablespaceOperation, f Visit) error {
@@ -2079,6 +2209,9 @@ func VisitRefOfUnion(in *Union, f Visit) error {
 	if err := VisitOrderBy(in.OrderBy, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
+		return err
+	}
 	if err := VisitRefOfLimit(in.Limit, f); err != nil {
 		return err
 	}
@@ -2101,6 +2234,9 @@ func VisitRefOfUpdate(in *Update, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitRefOfWith(in.With, f); err != nil {
 		return err
 	}
 	if err := VisitComments(in.Comments, f); err != nil {
@@ -2290,6 +2426,20 @@ func VisitRefOfWhere(in *Where, f Visit) error {
 	}
 	if err := VisitExpr(in.Expr, f); err != nil {
 		return err
+	}
+	return nil
+}
+func VisitRefOfWith(in *With, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	for _, el := range in.ctes {
+		if err := VisitRefOfCommonTableExpr(el, f); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2487,6 +2637,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfDefault(in, f)
 	case *ExistsExpr:
 		return VisitRefOfExistsExpr(in, f)
+	case *ExtractFuncExpr:
+		return VisitRefOfExtractFuncExpr(in, f)
+	case *ExtractedSubquery:
+		return VisitRefOfExtractedSubquery(in, f)
 	case *FuncExpr:
 		return VisitRefOfFuncExpr(in, f)
 	case *GroupConcatExpr:

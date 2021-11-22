@@ -1,0 +1,22 @@
+--source suite/collations/include/unicode.inc
+--test:uca0900 utf8mb4_ja_0900_as_cs
+select hex(convert(uc using utf32)),
+       hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_ja_0900_as_cs)),
+       name from unicode
+where category in ('Lu','Ll','Lt','Lm','Lo','So')
+order by uc  collate utf8mb4_ja_0900_as_cs, cp;
+
+--test:uca0900 utf8mb4_ja_0900_as_cs_ks
+select hex(convert(uc using utf32)),
+       hex(weight_string(convert(uc using utf8mb4) collate utf8mb4_ja_0900_as_cs_ks)),
+       name from unicode
+where category in ('Lu','Ll','Lt','Lm','Lo','So')
+order by uc  collate utf8mb4_ja_0900_as_cs_ks, cp;
+
+## Some specific Japanese features
+## Kana-sensitivity
+select 'の東京ノ' = 'ノ東京の' collate utf8mb4_0900_as_cs;
+select 'の東京ノ' = 'ノ東京の' collate utf8mb4_ja_0900_as_cs;
+select 'の東京ノ' = 'ノ東京の' collate utf8mb4_ja_0900_as_cs_ks;
+
+drop table if exists unicode;

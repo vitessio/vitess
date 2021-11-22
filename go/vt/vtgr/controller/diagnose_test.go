@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -74,6 +73,10 @@ func TestShardIsHealthy(t *testing.T) {
 	testutil.AddTablet(ctx, t, ts, tablet1.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet2.Tablet, nil)
 	testutil.AddTablet(ctx, t, ts, tablet3.Tablet, nil)
+	ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = tablet1.Alias
+		return nil
+	})
 	dbAgent.
 		EXPECT().
 		FetchGroupView(gomock.Any(), gomock.Any()).
@@ -99,37 +102,43 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 		ttype    topodatapb.TabletType
 	}
 	var tablettests = []struct {
-		name       string
-		expected   DiagnoseType
-		errMessage string
-		inputs     []data
+		name         string
+		expected     DiagnoseType
+		errMessage   string
+		primaryAlias string
+		inputs       []data
 	}{
-		{name: "healthy shard", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{
+		{name: "healthy shard", expected: DiagnoseTypeHealthy, errMessage: "", primaryAlias: "test_cell-0000017000", inputs: []data{
 			{true, topodatapb.TabletType_PRIMARY},
 			{true, topodatapb.TabletType_REPLICA},
 			{true, topodatapb.TabletType_REPLICA},
 		}},
-		{name: "non primary tablet is not pingable", expected: DiagnoseTypeHealthy, errMessage: "", inputs: []data{ // vtgr should do nothing
+		{name: "non primary tablet is not pingable", expected: DiagnoseTypeHealthy, errMessage: "", primaryAlias: "test_cell-0000017000", inputs: []data{ // vtgr should do nothing
 			{true, topodatapb.TabletType_PRIMARY},
 			{false, topodatapb.TabletType_REPLICA},
 			{false, topodatapb.TabletType_REPLICA},
 		}},
-		{name: "primary tablet is not pingable", expected: DiagnoseTypeUnreachablePrimary, errMessage: "", inputs: []data{ // vtgr should trigger a failover
+		{name: "primary tablet is not pingable", expected: DiagnoseTypeUnreachablePrimary, errMessage: "", primaryAlias: "test_cell-0000017000", inputs: []data{ // vtgr should trigger a failover
 			{false, topodatapb.TabletType_PRIMARY},
 			{true, topodatapb.TabletType_REPLICA},
 			{true, topodatapb.TabletType_REPLICA},
 		}},
-		{name: "no primary tablet", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", inputs: []data{ // vtgr should create one based on mysql
+		{name: "no primary tablet", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", primaryAlias: "", inputs: []data{ // vtgr should create one based on mysql
 			{true, topodatapb.TabletType_REPLICA},
 			{true, topodatapb.TabletType_REPLICA},
 			{true, topodatapb.TabletType_REPLICA},
 		}},
-		{name: "mysql and vttablet has different primary", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", inputs: []data{ // vtgr should fix vttablet
+		{name: "wrong primary in tablet types", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", primaryAlias: "test_cell-0000017001", inputs: []data{ // shard info returns differently comparing with tablet type
+			{true, topodatapb.TabletType_PRIMARY},
+			{true, topodatapb.TabletType_REPLICA},
+			{true, topodatapb.TabletType_REPLICA},
+		}},
+		{name: "mysql and vttablet has different primary", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", primaryAlias: "test_cell-0000017001", inputs: []data{ // vtgr should fix vttablet
 			{true, topodatapb.TabletType_REPLICA},
 			{true, topodatapb.TabletType_PRIMARY},
 			{true, topodatapb.TabletType_REPLICA},
 		}},
-		{name: "unreachable wrong vttablet primary", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", inputs: []data{ // vtgr should fix vttablet
+		{name: "unreachable wrong vttablet primary", expected: DiagnoseTypeWrongPrimaryTablet, errMessage: "", primaryAlias: "test_cell-0000017001", inputs: []data{ // vtgr should fix vttablet
 			{true, topodatapb.TabletType_REPLICA},
 			{false, topodatapb.TabletType_PRIMARY},
 			{true, topodatapb.TabletType_REPLICA},
@@ -149,13 +158,30 @@ func TestTabletIssueDiagnoses(t *testing.T) {
 			tmc := NewMockGRTmcClient(ctrl)
 			dbAgent := db.NewMockAgent(ctrl)
 			tablets := make(map[string]*topo.TabletInfo)
+			if tt.primaryAlias == "" {
+				ts.
+					EXPECT().
+					GetShard(gomock.Any(), gomock.Eq("ks"), gomock.Eq("0")).
+					Return(&topo.ShardInfo{Shard: &topodatapb.Shard{}}, nil)
+			}
 			for i, input := range tt.inputs {
 				id := uint32(testPort0 + i)
 				tablet := buildTabletInfo(id, testHost, testPort0+i, input.ttype, time.Now())
-				tablets[fmt.Sprintf("cell-%d", id)] = tablet
+				tablets[tablet.AliasString()] = tablet
 				var response = struct {
 					pingable bool
 				}{input.pingable}
+				if tt.primaryAlias == tablet.AliasString() {
+					si := &topo.ShardInfo{
+						Shard: &topodatapb.Shard{
+							PrimaryAlias: tablet.Alias,
+						},
+					}
+					ts.
+						EXPECT().
+						GetShard(gomock.Any(), gomock.Eq("ks"), gomock.Eq("0")).
+						Return(si, nil)
+				}
 				dbAgent.
 					EXPECT().
 					FetchGroupView(gomock.Any(), gomock.Any()).
@@ -530,15 +556,29 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 				tt.config = cfg
 			}
 			conf := tt.config
+			hasPrimary := false
 			for i, input := range tt.inputs {
-				id := uint32(testPort0 + i)
+				id := uint32(i)
+				//id := uint32(testPort0 + i)
 				tablet := buildTabletInfo(id, testHost, testPort0+i, input.ttype, time.Now())
-				tablets[input.alias] = tablet
+				tablets[tablet.AliasString()] = tablet
 				inputMap[input.alias] = testGroupInput{
 					input.groupName,
 					input.readOnly,
 					input.groupInput,
 					nil,
+				}
+				if tablet.Type == topodatapb.TabletType_PRIMARY {
+					si := &topo.ShardInfo{
+						Shard: &topodatapb.Shard{
+							PrimaryAlias: tablet.Alias,
+						},
+					}
+					ts.
+						EXPECT().
+						GetShard(gomock.Any(), gomock.Eq("ks"), gomock.Eq("0")).
+						Return(si, nil)
+					hasPrimary = true
 				}
 				dbAgent.
 					EXPECT().
@@ -552,6 +592,12 @@ func TestMysqlIssueDiagnoses(t *testing.T) {
 						return view, nil
 					}).
 					AnyTimes()
+			}
+			if !hasPrimary {
+				ts.
+					EXPECT().
+					GetShard(gomock.Any(), gomock.Eq("ks"), gomock.Eq("0")).
+					Return(&topo.ShardInfo{Shard: &topodatapb.Shard{}}, nil)
 			}
 			for _, tid := range tt.removeTablets {
 				delete(tablets, tid)
@@ -707,6 +753,12 @@ func TestDiagnoseWithInactive(t *testing.T) {
 					nil,
 				}
 				pingable[input.alias] = input.pingable
+				if tablet.Type == topodatapb.TabletType_PRIMARY {
+					ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
+						si.PrimaryAlias = tablet.Alias
+						return nil
+					})
+				}
 				dbAgent.
 					EXPECT().
 					FetchGroupView(gomock.Any(), gomock.Any()).

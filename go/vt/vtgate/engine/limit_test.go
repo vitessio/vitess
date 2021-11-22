@@ -371,7 +371,7 @@ func TestLimitStreamExecute(t *testing.T) {
 
 	// Test with limit smaller than input.
 	var results []*sqltypes.Result
-	err := l.TryStreamExecute(&noopVCursor{}, bindVars, false, func(qr *sqltypes.Result) error {
+	err := l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -389,7 +389,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = sqltypes.PlanValue{Key: "l"}
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, false, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, map[string]*querypb.BindVariable{"l": sqltypes.Int64BindVariable(2)}, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -402,7 +402,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = int64PlanValue(3)
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, bindVars, false, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -422,7 +422,7 @@ func TestLimitStreamExecute(t *testing.T) {
 	fp.rewind()
 	l.Count = int64PlanValue(4)
 	results = nil
-	err = l.TryStreamExecute(&noopVCursor{}, bindVars, false, func(qr *sqltypes.Result) error {
+	err = l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -459,7 +459,7 @@ func TestOffsetStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := l.TryStreamExecute(&noopVCursor{}, bindVars, false, func(qr *sqltypes.Result) error {
+	err := l.TryStreamExecute(&noopVCursor{}, bindVars, true, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})

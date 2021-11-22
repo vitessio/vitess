@@ -172,7 +172,9 @@ func (client *QueryClient) SetServingType(tabletType topodatapb.TabletType) erro
 
 // Execute executes a query.
 func (client *QueryClient) Execute(query string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	return client.ExecuteWithOptions(query, bindvars, &querypb.ExecuteOptions{
+		IncludedFields: querypb.ExecuteOptions_ALL,
+	})
 }
 
 // BeginExecute performs a BeginExecute.
@@ -257,6 +259,31 @@ func (client *QueryClient) StreamExecuteWithOptions(query string, bindvars map[s
 	return result, nil
 }
 
+// StreamBeginExecuteWithOptions starts a tx and executes a query using 'options', returning the results .
+func (client *QueryClient) StreamBeginExecuteWithOptions(query string, preQueries []string, bindvars map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, error) {
+	result := &sqltypes.Result{}
+	txID, _, err := client.server.BeginStreamExecute(
+		client.ctx,
+		client.target,
+		preQueries,
+		query,
+		bindvars,
+		options,
+		func(res *sqltypes.Result) error {
+			if result.Fields == nil {
+				result.Fields = res.Fields
+			}
+			result.Rows = append(result.Rows, res.Rows...)
+			return nil
+		},
+	)
+	client.transactionID = txID
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 // Stream streams the results of a query.
 func (client *QueryClient) Stream(query string, bindvars map[string]*querypb.BindVariable, sendFunc func(*sqltypes.Result) error) error {
 	return client.server.StreamExecute(
@@ -278,7 +305,9 @@ func (client *QueryClient) ExecuteBatch(queries []*querypb.BoundQuery, asTransac
 		queries,
 		asTransaction,
 		client.transactionID,
-		&querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL},
+		&querypb.ExecuteOptions{
+			IncludedFields: querypb.ExecuteOptions_ALL,
+		},
 	)
 }
 
@@ -313,14 +342,14 @@ func (client *QueryClient) ReserveExecute(query string, preQueries []string, bin
 }
 
 // ReserveBeginExecute performs a ReserveBeginExecute.
-func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (client *QueryClient) ReserveBeginExecute(query string, preQueries []string, postBeginQueries []string, bindvars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	if client.reservedID != 0 {
 		return nil, errors.New("already reserved a connection")
 	}
 	if client.transactionID != 0 {
 		return nil, errors.New("already in transaction")
 	}
-	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
+	qr, transactionID, reservedID, _, err := client.server.ReserveBeginExecute(client.ctx, client.target, preQueries, postBeginQueries, query, bindvars, &querypb.ExecuteOptions{IncludedFields: querypb.ExecuteOptions_ALL})
 	client.transactionID = transactionID
 	client.reservedID = reservedID
 	if err != nil {

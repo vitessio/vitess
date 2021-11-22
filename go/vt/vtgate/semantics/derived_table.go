@@ -23,7 +23,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type derivedTable struct {
+// DerivedTable contains the information about the projection, tables involved in derived table.
+type DerivedTable struct {
 	tableName   string
 	ASTNode     *sqlparser.AliasedTableExpr
 	columnNames []string
@@ -31,15 +32,17 @@ type derivedTable struct {
 	tables      TableSet
 }
 
-var _ TableInfo = (*derivedTable)(nil)
+var _ TableInfo = (*DerivedTable)(nil)
 
-func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *derivedTable {
-	vTbl := &derivedTable{}
-	for _, selectExpr := range expressions {
+func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
+	vTbl := &DerivedTable{}
+	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
 			vTbl.cols = append(vTbl.cols, expr.Expr)
-			if expr.As.IsEmpty() {
+			if len(cols) > 0 {
+				vTbl.columnNames = append(vTbl.columnNames, cols[i].String())
+			} else if expr.As.IsEmpty() {
 				switch expr := expr.Expr.(type) {
 				case *sqlparser.ColName:
 					// for projections, we strip out the qualifier and keep only the column name
@@ -59,18 +62,15 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, tables 
 	return vTbl
 }
 
-// Dependencies implements the TableInfo interface
-func (dt *derivedTable) dependencies(colName string, org originable) (dependencies, error) {
+// dependencies implements the TableInfo interface
+func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
+	directDeps := org.tableSetFor(dt.ASTNode)
 	for i, name := range dt.columnNames {
 		if name != colName {
 			continue
 		}
-		recursiveDeps, qt := org.depsForExpr(dt.cols[i])
+		_, recursiveDeps, qt := org.depsForExpr(dt.cols[i])
 
-		directDeps := recursiveDeps
-		if dt.ASTNode != nil {
-			directDeps = org.tableSetFor(dt.ASTNode)
-		}
 		return createCertain(directDeps, recursiveDeps, qt), nil
 	}
 
@@ -78,39 +78,37 @@ func (dt *derivedTable) dependencies(colName string, org originable) (dependenci
 		return &nothing{}, nil
 	}
 
-	recursive := dt.tables
-	direct := org.tableSetFor(dt.ASTNode)
-
-	return createUncertain(direct, recursive), nil
+	return createUncertain(directDeps, dt.tables), nil
 }
 
 // IsInfSchema implements the TableInfo interface
-func (dt *derivedTable) IsInfSchema() bool {
+func (dt *DerivedTable) IsInfSchema() bool {
 	return false
 }
 
-func (dt *derivedTable) matches(name sqlparser.TableName) bool {
+func (dt *DerivedTable) matches(name sqlparser.TableName) bool {
 	return dt.tableName == name.Name.String() && name.Qualifier.IsEmpty()
 }
 
-func (dt *derivedTable) authoritative() bool {
+func (dt *DerivedTable) authoritative() bool {
 	return true
 }
 
-func (dt *derivedTable) Name() (sqlparser.TableName, error) {
+// Name implements the TableInfo interface
+func (dt *DerivedTable) Name() (sqlparser.TableName, error) {
 	return dt.ASTNode.TableName()
 }
 
-func (dt *derivedTable) getExpr() *sqlparser.AliasedTableExpr {
+func (dt *DerivedTable) getExpr() *sqlparser.AliasedTableExpr {
 	return dt.ASTNode
 }
 
 // GetVindexTable implements the TableInfo interface
-func (dt *derivedTable) GetVindexTable() *vindexes.Table {
+func (dt *DerivedTable) GetVindexTable() *vindexes.Table {
 	return nil
 }
 
-func (dt *derivedTable) getColumns() []ColumnInfo {
+func (dt *DerivedTable) getColumns() []ColumnInfo {
 	cols := make([]ColumnInfo, 0, len(dt.columnNames))
 	for _, col := range dt.columnNames {
 		cols = append(cols, ColumnInfo{
@@ -120,17 +118,17 @@ func (dt *derivedTable) getColumns() []ColumnInfo {
 	return cols
 }
 
-func (dt *derivedTable) hasStar() bool {
+func (dt *DerivedTable) hasStar() bool {
 	return dt.tables.NumberOfTables() > 0
 }
 
 // GetTables implements the TableInfo interface
-func (dt *derivedTable) getTableSet(_ originable) TableSet {
+func (dt *DerivedTable) getTableSet(_ originable) TableSet {
 	return dt.tables
 }
 
 // GetExprFor implements the TableInfo interface
-func (dt *derivedTable) getExprFor(s string) (sqlparser.Expr, error) {
+func (dt *DerivedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	for i, colName := range dt.columnNames {
 		if colName == s {
 			return dt.cols[i], nil
@@ -139,7 +137,7 @@ func (dt *derivedTable) getExprFor(s string) (sqlparser.Expr, error) {
 	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
 }
 
-func (dt *derivedTable) checkForDuplicates() error {
+func (dt *DerivedTable) checkForDuplicates() error {
 	for i, name := range dt.columnNames {
 		for j, name2 := range dt.columnNames {
 			if i == j {

@@ -506,11 +506,12 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 		}
 
-		if len(selStmt.From) != 1 {
-			return fmt.Errorf("unsupported select with multiple from clauses")
+		// Gen4 supports more complex queries so we now need to
+		// handle multiple FROM clauses
+		tables := make([]sqlparser.TableIdent, len(selStmt.From))
+		for _, from := range selStmt.From {
+			tables = append(tables, getTables(from)...)
 		}
-
-		tables := getTables(selStmt.From[0])
 		colTypeMap := map[string]querypb.Type{}
 		for _, table := range tables {
 			tableName := sqlparser.String(table)

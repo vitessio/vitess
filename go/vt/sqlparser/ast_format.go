@@ -24,6 +24,9 @@ import (
 
 // Format formats the node.
 func (node *Select) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "select %v", node.Comments)
 
 	if node.Distinct {
@@ -117,7 +120,29 @@ func (node *Insert) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *With) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "with ")
+
+	if node.Recursive {
+		buf.astPrintf(node, "recursive ")
+	}
+	ctesLength := len(node.ctes)
+	for i := 0; i < ctesLength-1; i++ {
+		buf.astPrintf(node, "%v, ", node.ctes[i])
+	}
+	buf.astPrintf(node, "%v", node.ctes[ctesLength-1])
+}
+
+// Format formats the node.
+func (node *CommonTableExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%v%v as %v ", node.TableID, node.Columns, node.Subquery)
+}
+
+// Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "update %v%s%v set %v%v%v%v",
 		node.Comments, node.Ignore.ToString(), node.TableExprs,
 		node.Exprs, node.Where, node.OrderBy, node.Limit)
@@ -125,6 +150,9 @@ func (node *Update) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Delete) Format(buf *TrackedBuffer) {
+	if node.With != nil {
+		buf.astPrintf(node, "%v", node.With)
+	}
 	buf.astPrintf(node, "delete %v", node.Comments)
 	if node.Ignore {
 		buf.WriteString("ignore ")
@@ -236,6 +264,8 @@ func (node *AlterMigration) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case RetryMigrationType:
 		alterType = "retry"
+	case CleanupMigrationType:
+		alterType = "cleanup"
 	case CompleteMigrationType:
 		alterType = "complete"
 	case CancelMigrationType:
@@ -406,6 +436,91 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PartitionOption) Format(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " %v", node.KeyColList)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.astPrintf(node, " %s", node.RangeOrList)
+		buf.astPrintf(node, " %v", node.ExprOrCol)
+	}
+	if node.Partitions != "" {
+		buf.astPrintf(node, " partitions %s", node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.astPrintf(node, " %v", node.SubPartition)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.astPrintf(node, "%v", pd)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// Format formats the node.
+func (node *SubPartition) Format(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " (%v)", node.KeyColList)
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.astPrintf(node, " subpartitions %s", node.SubPartitions)
+	}
+}
+
+// Format formats the node.
+func (node *ExprOrColumns) Format(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.astPrintf(node, "(%v)", node.Expr)
+	}
+	if node.ColumnList != nil {
+		buf.astPrintf(node, "columns %v", node.ColumnList)
+	}
+}
+
+// Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ts, "(\n")
 	for i, col := range ts.Columns {
@@ -435,6 +550,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		} else {
 			buf.astPrintf(ts, " (%v)", opt.Tables)
 		}
+	}
+	if ts.PartitionOption != nil {
+		buf.astPrintf(ts, " %v", ts.PartitionOption)
 	}
 }
 
@@ -479,13 +597,10 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	}
 	if ct.Options.Default != nil {
 		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-		_, isLiteral := ct.Options.Default.(*Literal)
-		_, isBool := ct.Options.Default.(BoolVal)
-		_, isNullVal := ct.Options.Default.(*NullVal)
-		if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
-			buf.astPrintf(ct, " %v", ct.Options.Default)
-		} else {
+		if defaultRequiresParens(ct) {
 			buf.astPrintf(ct, " (%v)", ct.Options.Default)
+		} else {
+			buf.astPrintf(ct, " %v", ct.Options.Default)
 		}
 	}
 	if ct.Options.OnUpdate != nil {
@@ -1083,6 +1198,11 @@ func (node *IntervalExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *TimestampFuncExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%s(%s, %v, %v)", node.Name, node.Unit, node.Expr1, node.Expr2)
+}
+
+// Format formats the node.
+func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "extract(%s from %v)", node.IntervalTypes.ToString(), node.Expr)
 }
 
 // Format formats the node.
@@ -1719,4 +1839,12 @@ func (node *RenameTable) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, "%s%v to %v", prefix, pair.FromTable, pair.ToTable)
 		prefix = ", "
 	}
+}
+
+// Format formats the node.
+// If an extracted subquery is still in the AST when we print it,
+// it will be formatted as if the subquery has been extracted, and instead
+// show up like argument comparisons
+func (node *ExtractedSubquery) Format(buf *TrackedBuffer) {
+	node.alternative.Format(buf)
 }

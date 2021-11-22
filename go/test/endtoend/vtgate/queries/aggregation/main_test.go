@@ -51,6 +51,13 @@ create table aggr_test(
 	primary key(id)
 ) Engine=InnoDB;
 
+create table aggr_test_dates(
+	id bigint,
+	val1 datetime default current_timestamp,
+	val2 datetime default current_timestamp,
+	primary key(id)
+) Engine=InnoDB;
+
 create table t7_xxhash(
 	uid varchar(50),
 	phone bigint,
@@ -127,6 +134,24 @@ create table t7_xxhash_idx(
         {
           "name": "val1",
           "type": "VARCHAR"
+        }
+      ]
+    },
+	"aggr_test_dates": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ],
+      "columns": [
+        {
+          "name": "val1",
+          "type": "DATETIME"
+        },
+        {
+          "name": "val2",
+          "type": "DATETIME"
         }
       ]
     },

@@ -17,13 +17,8 @@ limitations under the License.
 package semantics
 
 import (
-	"fmt"
-	"runtime/debug"
-	"strings"
-
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -32,17 +27,17 @@ import (
 // analyzer controls the flow of the analysis.
 // It starts the tree walking and controls which part of the analysis sees which parts of the tree
 type analyzer struct {
-	scoper *scoper
-	tables *tableCollector
-	binder *binder
-	typer  *typer
+	scoper   *scoper
+	tables   *tableCollector
+	binder   *binder
+	typer    *typer
+	rewriter *earlyRewriter
 
 	err          error
 	inProjection int
 
 	projErr error
-
-	hasRewritten bool
+	warning string
 }
 
 // newAnalyzer create the semantic analyzer
@@ -57,6 +52,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 	s.org = a
 	a.tables.org = a
 	a.binder = newBinder(s, a, a.tables, a.typer)
+	a.rewriter = &earlyRewriter{scoper: s}
 
 	return a
 }
@@ -74,19 +70,6 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	// Creation of the semantic table
 	semTable := analyzer.newSemTable(statement)
 
-	// Rewriting operation
-	if err = earlyRewrite(statement, semTable, analyzer.scoper); err != nil {
-		return nil, err
-	}
-	analyzer.hasRewritten = true
-
-	// Analysis post rewriting
-	err = analyzer.analyze(statement)
-	if err != nil {
-		return nil, err
-	}
-
-	semTable.ProjectionErr = analyzer.projErr
 	return semTable, nil
 }
 
@@ -98,6 +81,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
 		ProjectionErr:    a.projErr,
+		Warning:          a.warning,
 		Comments:         statement.GetComments(),
 		SubqueryMap:      a.binder.subqueryMap,
 		SubqueryRef:      a.binder.subqueryRef,
@@ -126,28 +110,20 @@ func (a *analyzer) analyzeDown(cursor *sqlparser.Cursor) bool {
 		return true
 	}
 
-	if !a.hasRewritten {
-		if err := a.scoper.down(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-		if err := a.checkForInvalidConstructs(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-	} else { // after expand star
-		if err := checkUnionColumns(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
-
-		a.scoper.downPost(cursor)
-
-		if err := a.binder.down(cursor); err != nil {
-			a.setError(err)
-			return true
-		}
+	if err := a.scoper.down(cursor); err != nil {
+		a.setError(err)
+		return true
 	}
+	if err := a.checkForInvalidConstructs(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	if err := a.rewriter.down(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+	// log any warn in rewriting.
+	a.warning = a.rewriter.warning
 
 	a.enterProjection(cursor)
 	// this is the visitor going down the tree. Returning false here would just not visit the children
@@ -161,24 +137,22 @@ func (a *analyzer) analyzeUp(cursor *sqlparser.Cursor) bool {
 		return false
 	}
 
-	if !a.hasRewritten {
-		if err := a.scoper.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.tables.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-	} else { // after expand star
-		if err := a.scoper.upPost(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
-		if err := a.typer.up(cursor); err != nil {
-			a.setError(err)
-			return false
-		}
+	if err := a.binder.up(cursor); err != nil {
+		a.setError(err)
+		return true
+	}
+
+	if err := a.scoper.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.tables.up(cursor); err != nil {
+		a.setError(err)
+		return false
+	}
+	if err := a.typer.up(cursor); err != nil {
+		a.setError(err)
+		return false
 	}
 
 	a.leaveProjection(cursor)
@@ -195,11 +169,7 @@ func containsStar(s sqlparser.SelectExprs) bool {
 	return false
 }
 
-func checkUnionColumns(cursor *sqlparser.Cursor) error {
-	union, isUnion := cursor.Node().(*sqlparser.Union)
-	if !isUnion {
-		return nil
-	}
+func checkUnionColumns(union *sqlparser.Union) error {
 	firstProj := sqlparser.GetFirstSelect(union).SelectExprs
 	if containsStar(firstProj) {
 		// if we still have *, we can't figure out if the query is invalid or not
@@ -245,16 +215,18 @@ func isParentSelect(cursor *sqlparser.Cursor) bool {
 
 type originable interface {
 	tableSetFor(t *sqlparser.AliasedTableExpr) TableSet
-	depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type)
+	depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type)
 }
 
-func (a *analyzer) depsForExpr(expr sqlparser.Expr) (TableSet, *querypb.Type) {
-	ts := a.binder.recursive.Dependencies(expr)
+func (a *analyzer) depsForExpr(expr sqlparser.Expr) (direct, recursive TableSet, typ *Type) {
+	recursive = a.binder.recursive.dependencies(expr)
+	direct = a.binder.direct.dependencies(expr)
 	qt, isFound := a.typer.exprTypes[expr]
 	if !isFound {
-		return ts, nil
+		return
 	}
-	return ts, &qt
+	typ = &qt
+	return
 }
 
 func (a *analyzer) analyze(statement sqlparser.Statement) error {
@@ -336,6 +308,10 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		if err != nil {
 			return err
 		}
+		err = checkUnionColumns(node)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -347,17 +323,6 @@ func (a *analyzer) shouldContinue() bool {
 
 func (a *analyzer) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 	return a.tables.tableSetFor(t)
-}
-
-// Gen4NotSupportedF returns a common error for shortcomings in the gen4 planner
-func Gen4NotSupportedF(format string, args ...interface{}) error {
-	message := fmt.Sprintf("gen4 does not yet support: "+format, args...)
-
-	// add the line that this happens in so it is easy to find it
-	stack := string(debug.Stack())
-	lines := strings.Split(stack, "\n")
-	message += "\n" + lines[6]
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, message)
 }
 
 // ProjError is used to mark an error as something that should only be returned

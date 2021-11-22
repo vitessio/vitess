@@ -96,6 +96,11 @@ func (client *localVtctldClient) EmergencyReparentShard(ctx context.Context, in 
 	return client.s.EmergencyReparentShard(ctx, in)
 }
 
+// ExecuteHook is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ExecuteHook(ctx context.Context, in *vtctldatapb.ExecuteHookRequest, opts ...grpc.CallOption) (*vtctldatapb.ExecuteHookResponse, error) {
+	return client.s.ExecuteHook(ctx, in)
+}
+
 // FindAllShardsInKeyspace is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) FindAllShardsInKeyspace(ctx context.Context, in *vtctldatapb.FindAllShardsInKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.FindAllShardsInKeyspaceResponse, error) {
 	return client.s.FindAllShardsInKeyspace(ctx, in)
@@ -221,6 +226,21 @@ func (client *localVtctldClient) RefreshStateByShard(ctx context.Context, in *vt
 	return client.s.RefreshStateByShard(ctx, in)
 }
 
+// ReloadSchema is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchema(ctx context.Context, in *vtctldatapb.ReloadSchemaRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaResponse, error) {
+	return client.s.ReloadSchema(ctx, in)
+}
+
+// ReloadSchemaKeyspace is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchemaKeyspace(ctx context.Context, in *vtctldatapb.ReloadSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaKeyspaceResponse, error) {
+	return client.s.ReloadSchemaKeyspace(ctx, in)
+}
+
+// ReloadSchemaShard is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) ReloadSchemaShard(ctx context.Context, in *vtctldatapb.ReloadSchemaShardRequest, opts ...grpc.CallOption) (*vtctldatapb.ReloadSchemaShardResponse, error) {
+	return client.s.ReloadSchemaShard(ctx, in)
+}
+
 // RemoveKeyspaceCell is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RemoveKeyspaceCell(ctx context.Context, in *vtctldatapb.RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*vtctldatapb.RemoveKeyspaceCellResponse, error) {
 	return client.s.RemoveKeyspaceCell(ctx, in)
@@ -239,6 +259,16 @@ func (client *localVtctldClient) ReparentTablet(ctx context.Context, in *vtctlda
 // RunHealthCheck is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) RunHealthCheck(ctx context.Context, in *vtctldatapb.RunHealthCheckRequest, opts ...grpc.CallOption) (*vtctldatapb.RunHealthCheckResponse, error) {
 	return client.s.RunHealthCheck(ctx, in)
+}
+
+// SetKeyspaceServedFrom is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceServedFrom(ctx context.Context, in *vtctldatapb.SetKeyspaceServedFromRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceServedFromResponse, error) {
+	return client.s.SetKeyspaceServedFrom(ctx, in)
+}
+
+// SetKeyspaceShardingInfo is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) SetKeyspaceShardingInfo(ctx context.Context, in *vtctldatapb.SetKeyspaceShardingInfoRequest, opts ...grpc.CallOption) (*vtctldatapb.SetKeyspaceShardingInfoResponse, error) {
+	return client.s.SetKeyspaceShardingInfo(ctx, in)
 }
 
 // SetShardIsPrimaryServing is part of the vtctlservicepb.VtctldClient interface.

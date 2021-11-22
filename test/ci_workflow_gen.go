@@ -30,17 +30,19 @@ const (
 	workflowConfigDir = "../.github/workflows"
 
 	unitTestTemplate  = "templates/unit_test.tpl"
-	unitTestDatabases = "percona56, mysql80, mariadb102"
+	unitTestDatabases = "mysql57, mariadb103, mysql80, mariadb102"
 
 	clusterTestTemplate = "templates/cluster_endtoend_test.tpl"
 
 	unitTestSelfHostedTemplate    = "templates/unit_test_self_hosted.tpl"
-	unitTestSelfHostedDatabases   = "mysql57, mariadb103"
+	unitTestSelfHostedDatabases   = ""
 	dockerFileTemplate            = "templates/dockerfile.tpl"
 	clusterTestSelfHostedTemplate = "templates/cluster_endtoend_test_self_hosted.tpl"
 )
 
 var (
+	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
+	// Hence, they are not listed in the list below.
 	clusterList = []string{
 		"11",
 		"12",
@@ -60,6 +62,7 @@ var (
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
+		"vstream_with_keyspaces_to_watch",
 		"onlineddl_ghost",
 		"onlineddl_vrepl",
 		"onlineddl_vrepl_stress",
@@ -76,6 +79,7 @@ var (
 		"vtorc",
 		"vtgate_buffer",
 		"vtgate_concurrentdml",
+		"vtgate_godriver",
 		"vtgate_gen4",
 		"vtgate_readafterwrite",
 		"vtgate_reservedconn",
@@ -93,14 +97,13 @@ var (
 		"resharding",
 		"resharding_bytes",
 		"mysql80",
-	}
-
-	clusterSelfHostedList = []string{
 		"vreplication_basic",
 		"vreplication_multicell",
 		"vreplication_cellalias",
 		"vreplication_v2",
 	}
+
+	clusterSelfHostedList = []string{}
 	// TODO: currently some percona tools including xtrabackup are installed on all clusters, we can possibly optimize
 	// this by only installing them in the required clusters
 	clustersRequiringXtraBackup = append(clusterList, clusterSelfHostedList...)
@@ -177,7 +180,9 @@ func canonnizeList(list []string) []string {
 func parseList(csvList string) []string {
 	var list []string
 	for _, item := range strings.Split(csvList, ",") {
-		list = append(list, strings.TrimSpace(item))
+		if item != "" {
+			list = append(list, strings.TrimSpace(item))
+		}
 	}
 	return list
 }

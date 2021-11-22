@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -179,7 +181,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		return nil, err
 	}
 	if err := ts.validate(ctx); err != nil {
-		ts.wr.Logger().Errorf("validate: %v", err)
+		ts.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}
 	tables = strings.TrimSpace(tables)
@@ -199,13 +201,13 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		targetKeyspace: targetKeyspace,
 		tables:         includeTables,
 	}
-	for shard, source := range ts.sources {
+	for shard, source := range ts.Sources() {
 		df.sources[shard] = &shardStreamer{
 			primary: source.GetPrimary(),
 		}
 	}
 	var oneTarget *workflow.MigrationTarget
-	for shard, target := range ts.targets {
+	for shard, target := range ts.Targets() {
 		df.targets[shard] = &shardStreamer{
 			primary: target.GetPrimary(),
 		}
@@ -216,7 +218,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		oneFilter = bls.Filter
 		break
 	}
-	schm, err := wr.GetSchema(ctx, oneTarget.GetPrimary().Alias, nil, nil, false)
+	schm, err := schematools.GetSchema(ctx, wr.ts, wr.tmc, oneTarget.GetPrimary().Alias, nil, nil, false)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "GetSchema")
 	}
@@ -252,7 +254,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 			return nil, err
 		}
 		// Perform the diff of source and target streams.
-		dr, err := td.diff(ctx, df.ts.wr, &rowsToCompare, debug, onlyPks)
+		dr, err := td.diff(ctx, &rowsToCompare, debug, onlyPks)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
@@ -264,7 +266,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 		if err != nil {
 			wr.Logger().Printf("Error converting report to json: %v", err.Error())
 		}
-		jsonOutput += fmt.Sprintf("%s", json)
+		jsonOutput += string(json)
 		wr.logger.Printf("%s", jsonOutput)
 	} else {
 		for table, dr := range diffReports {
@@ -324,7 +326,7 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 		return vterrors.Wrap(err, "stopTargets")
 	}
 	// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
-	if err := df.startQueryStreams(ctx, df.ts.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
+	if err := df.startQueryStreams(ctx, df.ts.SourceKeyspaceName(), df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
 		return vterrors.Wrap(err, "startQueryStreams(sources)")
 	}
 	// Fast forward the targets to the newly recorded source positions.
@@ -332,7 +334,7 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 		return vterrors.Wrap(err, "syncTargets")
 	}
 	// Sources and targets are in sync. Start query streams on the targets.
-	if err := df.startQueryStreams(ctx, df.ts.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
+	if err := df.startQueryStreams(ctx, df.ts.TargetKeyspaceName(), df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
 		return vterrors.Wrap(err, "startQueryStreams(targets)")
 	}
 	// Now that queries are running, target vreplication streams can be restarted.
@@ -576,11 +578,11 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *shardStreamer) error {
-			sourceTopo := df.ts.wr.ts
-			if ts.externalTopo != nil {
-				sourceTopo = ts.externalTopo
+			sourceTopo := df.ts.TopoServer()
+			if ts.ExternalTopo() != nil {
+				sourceTopo = ts.ExternalTopo()
 			}
-			tp, err := discovery.NewTabletPicker(sourceTopo, []string{df.sourceCell}, df.ts.sourceKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(sourceTopo, []string{df.sourceCell}, df.ts.SourceKeyspaceName(), shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
@@ -598,7 +600,7 @@ func (df *vdiff) selectTablets(ctx context.Context, ts *trafficSwitcher) error {
 	go func() {
 		defer wg.Done()
 		err2 = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-			tp, err := discovery.NewTabletPicker(df.ts.wr.ts, []string{df.targetCell}, df.ts.targetKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(df.ts.TopoServer(), []string{df.targetCell}, df.ts.TargetKeyspaceName(), shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
@@ -624,13 +626,13 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	var mu sync.Mutex
 
 	err := df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
-		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
+		_, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
-		p3qr, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
+		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
+		p3qr, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
 		if err != nil {
 			return err
 		}
@@ -680,7 +682,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.primary.Alias.String())
 		}
 		log.Infof("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), mysql.EncodePosition(participant.position))
-		if err := df.ts.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
+		if err := df.ts.TabletManagerClient().WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
 			log.Errorf("WaitForPosition error: %s", err)
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
@@ -756,14 +758,14 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
-	err := df.ts.forAllUids(func(target *workflow.MigrationTarget, uid uint32) error {
+	err := df.ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
 		bls := target.Sources[uid]
 		pos := df.sources[bls.Shard].snapshotPosition
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", pos, uid)
-		if _, err := df.ts.wr.tmc.VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
+		if _, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, query); err != nil {
 			return err
 		}
-		if err := df.ts.wr.tmc.VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, int(uid), pos); err != nil {
+		if err := df.ts.TabletManagerClient().VReplicationWaitForPos(waitCtx, target.GetPrimary().Tablet, int(uid), pos); err != nil {
 			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.GetPrimary().Tablet.Alias))
 		}
 		return nil
@@ -773,7 +775,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 	}
 
 	err = df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		pos, err := df.ts.wr.tmc.MasterPosition(ctx, target.primary.Tablet)
+		pos, err := df.ts.TabletManagerClient().PrimaryPosition(ctx, target.primary.Tablet)
 		if err != nil {
 			return err
 		}
@@ -790,9 +792,9 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 // restartTargets restarts the stopped target vreplication streams.
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.workflow))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
 		log.Infof("restarting target replication with %s", query)
-		_, err := df.ts.wr.tmc.VReplicationExec(ctx, target.primary.Tablet, query)
+		_, err := df.ts.TabletManagerClient().VReplicationExec(ctx, target.primary.Tablet, query)
 		return err
 	})
 }
@@ -912,7 +914,7 @@ func humanInt(n int64) string {
 //-----------------------------------------------------------------
 // tableDiffer
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool) (*DiffReport, error) {
 	sourceExecutor := newPrimitiveExecutor(ctx, td.sourcePrimitive)
 	targetExecutor := newPrimitiveExecutor(ctx, td.targetPrimitive)
 	dr := &DiffReport{}
@@ -1057,7 +1059,8 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
 			c = bytes.Compare(sourceRow[compareIndex].ToBytes(), targetRow[compareIndex].ToBytes())
 		} else {
-			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex])
+			// TODO(king-11) make collation aware
+			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex], collations.Unknown)
 		}
 		if err != nil {
 			return 0, err
@@ -1143,6 +1146,10 @@ func (td *tableDiffer) genDebugQueryDiff(sel *sqlparser.Select, row []sqltypes.V
 type contextVCursor struct {
 	engine.VCursor
 	ctx context.Context
+}
+
+func (vc *contextVCursor) ConnCollation() collations.Collation {
+	panic("implement me")
 }
 
 func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {

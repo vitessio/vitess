@@ -27,6 +27,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -62,7 +63,7 @@ var _ vindexes.VCursor = (*vcursorImpl)(nil)
 type iExecute interface {
 	Execute(ctx context.Context, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 	ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error)
-	StreamExecuteMulti(ctx context.Context, s string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, options *querypb.ExecuteOptions, callback func(reply *sqltypes.Result) error) []error
+	StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 	ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession) (*sqltypes.Result, error)
 	Commit(ctx context.Context, safeSession *SafeSession) error
 	ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
@@ -82,16 +83,19 @@ type VSchemaOperator interface {
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx            context.Context
-	safeSession    *SafeSession
-	keyspace       string
-	tabletType     topodatapb.TabletType
-	destination    key.Destination
-	marginComments sqlparser.MarginComments
-	executor       iExecute
-	resolver       *srvtopo.Resolver
-	topoServer     *topo.Server
-	logStats       *LogStats
+	ctx                  context.Context
+	safeSession          *SafeSession
+	keyspace             string
+	tabletType           topodatapb.TabletType
+	destination          key.Destination
+	marginComments       sqlparser.MarginComments
+	executor             iExecute
+	resolver             *srvtopo.Resolver
+	topoServer           *topo.Server
+	logStats             *LogStats
+	collationEnvironment *collations.Environment
+	collation            collations.ID
+
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -140,21 +144,44 @@ func newVCursorImpl(
 		}
 	}
 
+	// we only support collations for the new TabletGateway implementation
+	collationEnv := collations.NewEnvironment(*sqlparser.MySQLServerVersion)
+	var connCollation collations.ID
+	if executor != nil {
+		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+			connCollation = gw.DefaultConnCollation()
+		}
+	}
+	if connCollation == collations.Unknown {
+		coll, err := collationEnv.ResolveCollation("", "")
+		if err != nil {
+			panic("should never happen: don't know how to resolve default collation")
+		}
+		connCollation = coll.ID()
+	}
+
 	return &vcursorImpl{
-		ctx:             ctx,
-		safeSession:     safeSession,
-		keyspace:        keyspace,
-		tabletType:      tabletType,
-		destination:     destination,
-		marginComments:  marginComments,
-		executor:        executor,
-		logStats:        logStats,
-		resolver:        resolver,
-		vschema:         vschema,
-		vm:              vm,
-		topoServer:      ts,
-		warnShardedOnly: warnShardedOnly,
+		ctx:                  ctx,
+		safeSession:          safeSession,
+		keyspace:             keyspace,
+		tabletType:           tabletType,
+		destination:          destination,
+		marginComments:       marginComments,
+		executor:             executor,
+		logStats:             logStats,
+		collationEnvironment: collationEnv,
+		collation:            connCollation,
+		resolver:             resolver,
+		vschema:              vschema,
+		vm:                   vm,
+		topoServer:           ts,
+		warnShardedOnly:      warnShardedOnly,
 	}, nil
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) ConnCollation() collations.Collation {
+	return vc.collationEnvironment.LookupByID(vc.collation)
 }
 
 // Context returns the current Context.
@@ -371,6 +398,7 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
+// MaxBufferingRetries is to represent max retries on buffering.
 const MaxBufferingRetries = 3
 
 func (vc *vcursorImpl) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -468,10 +496,10 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 	return qr, vterrors.Aggregate(errs)
 }
 
-// StreamExeculteMulti is the streaming version of ExecuteMultiShard.
-func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) []error {
+// StreamExecuteMulti is the streaming version of ExecuteMultiShard.
+func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
-	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession.Options, callback)
+	return vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, vc.rollbackOnPartialExec, autocommit, callback)
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
@@ -746,7 +774,18 @@ func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...interface{}) {
 	}
 }
 
-// ForeignKey implements the VCursor interface
+// PlannerWarning implements the VCursor interface
+func (vc *vcursorImpl) PlannerWarning(message string) {
+	if message == "" {
+		return
+	}
+	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
+		Code:    mysql.ERNotSupportedYet,
+		Message: message,
+	})
+}
+
+// ForeignKeyMode implements the VCursor interface
 func (vc *vcursorImpl) ForeignKeyMode() string {
 	if foreignKeyMode == nil {
 		return ""

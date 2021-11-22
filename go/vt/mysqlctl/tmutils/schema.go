@@ -26,6 +26,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -247,7 +249,7 @@ func SchemaDefinitionToSQLStrings(sd *tabletmanagerdatapb.SchemaDefinition) []st
 }
 
 // DiffSchema generates a report on what's different between two SchemaDefinitions
-// including views.
+// including views, but Vitess internal tables are ignored.
 func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rightName string, right *tabletmanagerdatapb.SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left == nil && right == nil {
 		return
@@ -265,25 +267,41 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			if schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", left.TableDefinitions[leftIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			}
 			leftIndex++
 			continue
 		}
 
 		// extra table on the right side
 		if left.TableDefinitions[leftIndex].Name > right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			if schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", right.TableDefinitions[rightIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			}
 			rightIndex++
 			continue
 		}
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
+			if schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", left.TableDefinitions[leftIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("schemas differ on table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Schema, rightName, right.TableDefinitions[rightIndex].Schema))
+			}
 		}
 
 		if left.TableDefinitions[leftIndex].Type != right.TableDefinitions[rightIndex].Type {
-			er.RecordError(fmt.Errorf("schemas differ on table type for table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Type, rightName, right.TableDefinitions[rightIndex].Type))
+			if schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", right.TableDefinitions[rightIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("schemas differ on table type for table %v:\n%s: %v\n differs from:\n%s: %v", left.TableDefinitions[leftIndex].Name, leftName, left.TableDefinitions[leftIndex].Type, rightName, right.TableDefinitions[rightIndex].Type))
+			}
 		}
 
 		leftIndex++
@@ -292,7 +310,11 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 
 	for leftIndex < len(left.TableDefinitions) {
 		if left.TableDefinitions[leftIndex].Type == TableBaseTable {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			if schema.IsInternalOperationTableName(left.TableDefinitions[leftIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", left.TableDefinitions[leftIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
+			}
 		}
 		if left.TableDefinitions[leftIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", leftName, left.TableDefinitions[leftIndex].Name))
@@ -301,7 +323,11 @@ func DiffSchema(leftName string, left *tabletmanagerdatapb.SchemaDefinition, rig
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TableBaseTable {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			if schema.IsInternalOperationTableName(right.TableDefinitions[rightIndex].Name) {
+				log.Infof("found internal table %v, skipping in schema diff", right.TableDefinitions[rightIndex].Name)
+			} else {
+				er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
+			}
 		}
 		if right.TableDefinitions[rightIndex].Type == TableView {
 			er.RecordError(fmt.Errorf("%v has an extra view named %v", rightName, right.TableDefinitions[rightIndex].Name))

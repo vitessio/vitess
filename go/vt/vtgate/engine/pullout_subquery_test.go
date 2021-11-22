@@ -316,10 +316,10 @@ func TestPulloutSubqueryStream(t *testing.T) {
 		Underlying:     ufp,
 	}
 
-	result, err := wrapStreamExecute(ps, &noopVCursor{}, bindVars, false)
+	result, err := wrapStreamExecute(ps, &noopVCursor{}, bindVars, true)
 	require.NoError(t, err)
 	sfp.ExpectLog(t, []string{`Execute aa: type:INT64 value:"1" false`})
-	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1" false`})
+	ufp.ExpectLog(t, []string{`StreamExecute aa: type:INT64 value:"1" sq: type:INT64 value:"1" true`})
 	expectResult(t, "ps.StreamExecute", result, underlyingResult)
 }
 

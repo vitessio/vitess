@@ -128,7 +128,7 @@ var onceByKeys = sync.Map{}
 
 // ClientConfig returns the TLS config to use for a client to
 // connect to a server with the provided parameters.
-func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16) (*tls.Config, error) {
+func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion uint16) (*tls.Config, error) {
 	config := newTLSConfig(minTLSVersion)
 
 	// Load the client-side cert & key if any.
@@ -190,12 +190,20 @@ func ClientConfig(mode SslMode, cert, key, ca, name string, minTLSVersion uint16
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid mode: %s", mode)
 	}
 
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
+	}
+
 	return config, nil
 }
 
 // ServerConfig returns the TLS config to use for a server to
 // accept client connections.
-func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
+func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*tls.Config, error) {
 	config := newTLSConfig(minTLSVersion)
 
 	var certificates *[]tls.Certificate
@@ -223,6 +231,14 @@ func ServerConfig(cert, key, ca, serverCA string, minTLSVersion uint16) (*tls.Co
 
 		config.ClientCAs = certificatePool
 		config.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	if crl != "" {
+		crlFunc, err := verifyPeerCertificateAgainstCRL(crl)
+		if err != nil {
+			return nil, err
+		}
+		config.VerifyPeerCertificate = crlFunc
 	}
 
 	return config, nil

@@ -117,7 +117,7 @@ The release cutover section is divided in 4 steps:
 
 * Build a Release Notes document using the Makefile: 
     ```shell
-    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" release-notes
+    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes
     ```
 
 * Check to make sure all labels and categories set for each PR.
@@ -165,7 +165,7 @@ The release cutover section is divided in 4 steps:
 
 * Build a Release Notes document using the Makefile:
     ```shell
-    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" release-notes
+    make VERSION="v12.0.0" FROM="<ref/SHA of the latest tag for v11>" TO="<ref/SHA of main>" SUMMARY="./doc/releasenotes/12_0_0_summary.md" release-notes
     ```
 
 * Check to make sure all labels and categories set for each PR.

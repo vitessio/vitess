@@ -30,22 +30,14 @@ type (
 	// scoper is responsible for figuring out the scoping for the query,
 	// and keeps the current scope when walking the tree
 	scoper struct {
-		rScope       map[*sqlparser.Select]*scope
-		wScope       map[*sqlparser.Select]*scope
-		sqlNodeScope map[scopeKey]*scope
-		scopes       []*scope
-		org          originable
+		rScope map[*sqlparser.Select]*scope
+		wScope map[*sqlparser.Select]*scope
+		scopes []*scope
+		org    originable
 
 		// These scopes are only used for rewriting ORDER BY 1 and GROUP BY 1
 		specialExprScopes map[*sqlparser.Literal]*scope
 	}
-
-	scopeKey struct {
-		typ  keyType
-		node sqlparser.SQLNode
-	}
-
-	keyType int8
 
 	scope struct {
 		parent     *scope
@@ -55,18 +47,10 @@ type (
 	}
 )
 
-const (
-	_ keyType = iota
-	orderBy
-	groupBy
-	having
-)
-
 func newScoper() *scoper {
 	return &scoper{
 		rScope:            map[*sqlparser.Select]*scope{},
 		wScope:            map[*sqlparser.Select]*scope{},
-		sqlNodeScope:      map[scopeKey]*scope{},
 		specialExprScopes: map[*sqlparser.Literal]*scope{},
 	}
 }
@@ -83,7 +67,6 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 
 		s.rScope[node] = currScope
 		s.wScope[node] = newScope(nil)
-		s.sqlNodeScope[scopeKey{node: node}] = currScope
 	case sqlparser.TableExpr:
 		if isParentSelect(cursor) {
 			// when checking the expressions used in JOIN conditions, special rules apply where the ON expression
@@ -93,7 +76,6 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			nScope := newScope(nil)
 			nScope.selectStmt = cursor.Parent().(*sqlparser.Select)
 			s.push(nScope)
-			s.sqlNodeScope[scopeKey{node: node}] = nScope
 		}
 	case sqlparser.SelectExprs:
 		sel, parentIsSelect := cursor.Parent().(*sqlparser.Select)
@@ -101,15 +83,15 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			break
 		}
 
-		// adding a VTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
-		// the VTableInfo we are creating here should not be confused with derived tables' VTableInfo
+		// adding a vTableInfo for each SELECT, so it can be used by GROUP BY, HAVING, ORDER BY
+		// the vTableInfo we are creating here should not be confused with derived tables' vTableInfo
 		wScope, exists := s.wScope[sel]
 		if !exists {
 			break
 		}
-		wScope.tables = append(wScope.tables, createVTableInfoForExpressions(node, s.currentScope().tables, s.org))
+		wScope.tables = []TableInfo{createVTableInfoForExpressions(node, s.currentScope().tables, s.org)}
 	case sqlparser.OrderBy:
-		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: orderBy})
+		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
 			return err
 		}
@@ -120,7 +102,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 			}
 		}
 	case sqlparser.GroupBy:
-		err := s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: groupBy})
+		err := s.createSpecialScopePostProjection(cursor.Parent())
 		if err != nil {
 			return err
 		}
@@ -134,7 +116,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		if node.Type != sqlparser.HavingClause {
 			break
 		}
-		return s.changeScopeForNode(cursor, scopeKey{node: cursor.Parent(), typ: having})
+		return s.createSpecialScopePostProjection(cursor.Parent())
 	}
 	return nil
 }
@@ -177,72 +159,21 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 	return nil
 }
 
-func (s *scoper) downPost(cursor *sqlparser.Cursor) {
-	var scope *scope
-	var found bool
-
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
-		}
-		scope, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			scope, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
-
-	if found {
-		s.push(scope)
-	}
-}
-
-func validAsMapKey(s sqlparser.SQLNode) bool {
+func ValidAsMapKey(s sqlparser.SQLNode) bool {
 	return reflect.TypeOf(s).Comparable()
 }
 
-func (s *scoper) upPost(cursor *sqlparser.Cursor) error {
-	var found bool
-
-	switch node := cursor.Node().(type) {
-	case sqlparser.OrderBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: orderBy}]
-	case sqlparser.GroupBy:
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: groupBy}]
-	case *sqlparser.Where:
-		if node.Type != sqlparser.HavingClause {
-			break
-		}
-		_, found = s.sqlNodeScope[scopeKey{node: cursor.Parent(), typ: having}]
-	default:
-		if validAsMapKey(node) {
-			_, found = s.sqlNodeScope[scopeKey{node: node}]
-		}
-	}
-
-	if found {
-		s.popScope()
-	}
-	return nil
-}
-
-func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error {
-	switch parent := cursor.Parent().(type) {
+// createSpecialScopePostProjection is used for the special projection in ORDER BY, GROUP BY and HAVING
+func (s *scoper) createSpecialScopePostProjection(parent sqlparser.SQLNode) error {
+	switch parent := parent.(type) {
 	case *sqlparser.Select:
 		// In ORDER BY, GROUP BY and HAVING, we can see both the scope in the FROM part of the query, and the SELECT columns created
 		// so before walking the rest of the tree, we change the scope to match this behaviour
 		incomingScope := s.currentScope()
 		nScope := newScope(incomingScope)
-		s.push(nScope)
-		s.sqlNodeScope[k] = nScope
-		wScope := s.wScope[parent]
-		nScope.tables = append(nScope.tables, wScope.tables...)
+		nScope.tables = s.wScope[parent].tables
 		nScope.selectStmt = incomingScope.selectStmt
+		s.push(nScope)
 
 		if s.rScope[parent] != incomingScope {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: scope counts did not match")
@@ -271,7 +202,6 @@ func (s *scoper) changeScopeForNode(cursor *sqlparser.Cursor, k scopeKey) error 
 		}
 
 		s.push(nScope)
-		s.sqlNodeScope[k] = nScope
 	}
 	return nil
 }

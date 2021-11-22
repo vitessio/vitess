@@ -895,6 +895,37 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 		}
 		pos += l
 
+		// If this is a binary type in the binlog event but actually a CHAR column *with a
+		// binary collation*, then we need to factor in the max bytes per character of 3 for
+		// utf8[mb3] and 4 for utf8mb4 and trim the added null-byte padding as needed to accomodate
+		// for that
+		if value.IsBinary() && sqltypes.IsBinary(plan.Table.Fields[colNum].Type) {
+			maxBytesPerChar := uint32(1)
+
+			// TODO: ensure that "Field.Charset" is set to those constants and not to any
+			//		collation ID belonging to either the utf8 or utf8mb4 charset.
+			if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8) {
+				maxBytesPerChar = 3
+			} else if plan.Table.Fields[colNum].Charset == uint32(mysql.CharacterSetUtf8mb4) {
+				maxBytesPerChar = 4
+			}
+
+			if maxBytesPerChar > 1 {
+				maxCharLen := plan.Table.Fields[colNum].ColumnLength / maxBytesPerChar
+				if uint32(value.Len()) > maxCharLen {
+					originalVal := value.ToBytes()
+
+					// Let's be sure that we're not going to be trimming non-null bytes
+					firstNullBytePos := bytes.IndexByte(originalVal, byte(0))
+					if uint32(firstNullBytePos) <= maxCharLen {
+						rightSizedVal := make([]byte, maxCharLen)
+						copy(rightSizedVal, originalVal)
+						value = sqltypes.MakeTrusted(querypb.Type_BINARY, rightSizedVal)
+					}
+				}
+			}
+		}
+
 		values[colNum] = value
 		valueIndex++
 	}

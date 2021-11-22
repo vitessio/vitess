@@ -69,7 +69,7 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 		Name:      keyspaceName,
 		SchemaSQL: sqlSchema,
 	}
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 	require.NoError(t, err)
 
 	// Start vtgate with the schema_change_signal flag
@@ -78,13 +78,16 @@ func TestBlockedLoadKeyspace(t *testing.T) {
 	require.NoError(t, err)
 
 	// wait for addKeyspaceToTracker to timeout
-	time.Sleep(10 * time.Second)
+	time.Sleep(30 * time.Second)
 
 	// check warning logs
 	logDir := clusterInstance.VtgateProcess.LogDir
 	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
 	require.NoError(t, err)
 	require.Contains(t, string(all), "Unable to get initial schema reload")
+
+	// This error should not be logged as the initial load itself failed.
+	require.NotContains(t, string(all), "Unable to add keyspace to tracker")
 }
 
 func TestLoadKeyspaceWithNoTablet(t *testing.T) {
@@ -104,7 +107,7 @@ func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 		SchemaSQL: sqlSchema,
 	}
 	clusterInstance.VtTabletExtraArgs = []string{"-queryserver-config-schema-change-signal"}
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false)
+	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
 	require.NoError(t, err)
 
 	// teardown vttablets

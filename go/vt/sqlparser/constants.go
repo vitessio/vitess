@@ -159,6 +159,7 @@ const (
 	Utf8mb4Str = "_utf8mb4 "
 	Utf8Str    = "_utf8 "
 	Latin1Str  = "_latin1 "
+	NStringStr = "N"
 
 	// ConvertType.Operator
 	CharacterSetStr = " character set"
@@ -252,6 +253,28 @@ const (
 	SharedTypeStr    = "shared"
 	DefaultTypeStr   = "default"
 	ExclusiveTypeStr = "exclusive"
+
+	// IntervalTypes strings
+	DayStr               = "day"
+	WeekStr              = "week"
+	MonthStr             = "month"
+	YearStr              = "year"
+	DayHourStr           = "day_hour"
+	DayMicrosecondStr    = "day_microsecond"
+	DayMinuteStr         = "day_minute"
+	DaySecondStr         = "day_second"
+	HourStr              = "hour"
+	HourMicrosecondStr   = "hour_microsecond"
+	HourMinuteStr        = "hour_minute"
+	HourSecondStr        = "hour_second"
+	MicrosecondStr       = "microsecond"
+	MinuteStr            = "minute"
+	MinuteMicrosecondStr = "minute_microsecond"
+	MinuteSecondStr      = "minute_second"
+	QuarterStr           = "quarter"
+	SecondStr            = "second"
+	SecondMicrosecondStr = "second_microsecond"
+	YearMonthStr         = "year_month"
 )
 
 // Constants for Enum type - AccessMode
@@ -387,6 +410,7 @@ const (
 	Utf8mb4Op
 	Utf8Op
 	Latin1Op
+	NStringOp
 )
 
 // Constant for Enum Type - MatchExprOption
@@ -524,10 +548,35 @@ const (
 	CompleteMigrationType
 	CancelMigrationType
 	CancelAllMigrationType
+	CleanupMigrationType
 )
 
 // ColumnStorage constants
 const (
 	VirtualStorage ColumnStorage = iota
 	StoredStorage
+)
+
+// IntervalTypes constants
+const (
+	IntervalYear IntervalTypes = iota
+	IntervalQuarter
+	IntervalMonth
+	IntervalWeek
+	IntervalDay
+	IntervalHour
+	IntervalMinute
+	IntervalSecond
+	IntervalMicrosecond
+	IntervalYearMonth
+	IntervalDayHour
+	IntervalDayMinute
+	IntervalDaySecond
+	IntervalHourMinute
+	IntervalHourSecond
+	IntervalMinuteSecond
+	IntervalDayMicrosecond
+	IntervalHourMicrosecond
+	IntervalMinuteMicrosecond
+	IntervalSecondMicrosecond
 )

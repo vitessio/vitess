@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql/collations"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"google.golang.org/protobuf/proto"
@@ -66,6 +68,7 @@ type GroupByParams struct {
 	WeightStringCol int
 	Expr            sqlparser.Expr
 	FromGroupBy     bool
+	CollationID     collations.ID
 }
 
 // String returns a string. Used for plan descriptions
@@ -183,6 +186,17 @@ func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
 }
 
+// getCollations specifies the collation ID value for columns.
+func (oa *OrderedAggregate) getCollations() map[int]collations.ID {
+	colls := make(map[int]collations.ID)
+	for _, key := range oa.GroupByKeys {
+		if key.CollationID != collations.Unknown {
+			colls[key.KeyCol] = key.CollationID
+		}
+	}
+	return colls
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 	oa.TruncateColumnCount = count
@@ -206,6 +220,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 	}
+	colls := oa.getCollations()
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
 	var curDistincts []sqltypes.Value
@@ -214,14 +229,13 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 			current, curDistincts = oa.convertRow(row)
 			continue
 		}
-
-		equal, err := oa.keysEqual(current, row)
+		equal, err := oa.keysEqual(current, row, colls)
 		if err != nil {
 			return nil, err
 		}
 
 		if equal {
-			current, curDistincts, err = oa.merge(result.Fields, current, row, curDistincts)
+			current, curDistincts, err = oa.merge(result.Fields, current, row, curDistincts, colls)
 			if err != nil {
 				return nil, err
 			}
@@ -268,6 +282,7 @@ func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[strin
 				return err
 			}
 		}
+		colls := oa.getCollations()
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
@@ -275,13 +290,13 @@ func (oa *OrderedAggregate) TryStreamExecute(vcursor VCursor, bindVars map[strin
 				continue
 			}
 
-			equal, err := oa.keysEqual(current, row)
+			equal, err := oa.keysEqual(current, row, colls)
 			if err != nil {
 				return err
 			}
 
 			if equal {
-				current, curDistincts, err = oa.merge(fields, current, row, curDistincts)
+				current, curDistincts, err = oa.merge(fields, current, row, curDistincts, colls)
 				if err != nil {
 					return err
 				}
@@ -392,16 +407,16 @@ func (oa *OrderedAggregate) NeedsTransaction() bool {
 	return oa.Input.NeedsTransaction()
 }
 
-func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
+func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value, colls map[int]collations.ID) (bool, error) {
 	for _, key := range oa.GroupByKeys {
-		cmp, err := evalengine.NullsafeCompare(row1[key.KeyCol], row2[key.KeyCol])
+		cmp, err := evalengine.NullsafeCompare(row1[key.KeyCol], row2[key.KeyCol], colls[key.KeyCol])
 		if err != nil {
 			_, isComparisonErr := err.(evalengine.UnsupportedComparisonError)
 			if !(isComparisonErr && key.WeightStringCol != -1) {
 				return false, err
 			}
 			key.KeyCol = key.WeightStringCol
-			cmp, err = evalengine.NullsafeCompare(row1[key.WeightStringCol], row2[key.WeightStringCol])
+			cmp, err = evalengine.NullsafeCompare(row1[key.WeightStringCol], row2[key.WeightStringCol], colls[key.KeyCol])
 			if err != nil {
 				return false, err
 			}
@@ -413,14 +428,14 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error)
 	return true, nil
 }
 
-func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value, curDistincts []sqltypes.Value) ([]sqltypes.Value, []sqltypes.Value, error) {
+func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value, curDistincts []sqltypes.Value, colls map[int]collations.ID) ([]sqltypes.Value, []sqltypes.Value, error) {
 	result := sqltypes.CopyRow(row1)
 	for index, aggr := range oa.Aggregates {
 		if aggr.isDistinct() {
 			if row2[aggr.KeyCol].IsNull() {
 				continue
 			}
-			cmp, err := evalengine.NullsafeCompare(curDistincts[index], row2[aggr.KeyCol])
+			cmp, err := evalengine.NullsafeCompare(curDistincts[index], row2[aggr.KeyCol], colls[aggr.KeyCol])
 			if err != nil {
 				return nil, nil, err
 			}
@@ -434,15 +449,15 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		case AggregateCount, AggregateSum:
 			value := row1[aggr.Col]
 			v2 := row2[aggr.Col]
-			result[aggr.Col] = evalengine.NullsafeAdd(value, v2, fields[aggr.Col].Type)
+			result[aggr.Col], err = evalengine.NullSafeAdd(value, v2, fields[aggr.Col].Type)
 		case AggregateMin:
-			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Min(row1[aggr.Col], row2[aggr.Col], colls[aggr.Col])
 		case AggregateMax:
-			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col])
+			result[aggr.Col], err = evalengine.Max(row1[aggr.Col], row2[aggr.Col], colls[aggr.Col])
 		case AggregateCountDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], countOne, OpcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
-			result[aggr.Col] = evalengine.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
+			result[aggr.Col], err = evalengine.NullSafeAdd(row1[aggr.Col], row2[aggr.Col], OpcodeType[aggr.Opcode])
 		case AggregateGtid:
 			vgtid := &binlogdatapb.VGtid{}
 			err = proto.Unmarshal(row1[aggr.Col].ToBytes(), vgtid)

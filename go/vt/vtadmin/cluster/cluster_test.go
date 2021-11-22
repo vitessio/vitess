@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
@@ -177,6 +178,109 @@ func TestCreateKeyspace(t *testing.T) {
 	}
 }
 
+func TestCreateShard(t *testing.T) {
+	t.Parallel()
+
+	type test struct {
+		name      string
+		tc        *testutil.IntegrationTestCluster
+		req       *vtctldatapb.CreateShardRequest
+		shouldErr bool
+		assertion func(t *testing.T, tt *test)
+	}
+	ctx := context.Background()
+	tests := []*test{
+		{
+			name: "ok",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:      "ks1",
+				ShardName:     "-",
+				IncludeParent: true,
+			},
+			assertion: func(t *testing.T, tt *test) {
+				shard, err := tt.tc.Topo.GetShard(ctx, "ks1", "-")
+				require.NoError(t, err, "topo.GetShard(ks1/-) failed")
+
+				utils.MustMatch(t, &topodatapb.Shard{
+					KeyRange:         &topodatapb.KeyRange{},
+					IsPrimaryServing: true,
+				}, shard.Shard)
+			},
+		},
+		{
+			name: "nil request",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req:       nil,
+			shouldErr: true,
+		},
+		{
+			name: "no keyspace in request",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "",
+				ShardName: "-",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "no shard name in request",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "ks1",
+				ShardName: "",
+			},
+			shouldErr: true,
+		},
+		{
+			name: "vtctld.CreateShard fails",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req: &vtctldatapb.CreateShardRequest{
+				Keyspace:  "ks1", // because IncludeParent=false and ks1 does not exist, we fail
+				ShardName: "-",
+			},
+			shouldErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.tc.Cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial in-process vtctld")
+
+			_, err = tt.tc.Cluster.CreateShard(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(t, tt)
+				}()
+			}
+		})
+	}
+}
+
 func TestDeleteKeyspace(t *testing.T) {
 	t.Parallel()
 
@@ -261,6 +365,149 @@ func TestDeleteKeyspace(t *testing.T) {
 
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestDeleteShards(t *testing.T) {
+	t.Parallel()
+
+	type test struct {
+		name      string
+		tc        *testutil.IntegrationTestCluster
+		setup     func(t *testing.T, tt *test)
+		req       *vtctldatapb.DeleteShardsRequest
+		shouldErr bool
+		assertion func(t *testing.T, tt *test)
+	}
+	ctx := context.Background()
+	tests := []*test{
+		{
+			name: "ok",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			setup: func(t *testing.T, tt *test) {
+				ctx := context.Background()
+				shards := []string{"-80", "80-"}
+				for _, shard := range shards {
+					_, err := tt.tc.Cluster.CreateShard(ctx, &vtctldatapb.CreateShardRequest{
+						Keyspace:      "ks1",
+						ShardName:     shard,
+						IncludeParent: true,
+						Force:         true,
+					})
+					require.NoError(t, err)
+				}
+			},
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "ks1",
+						Name:     "80-",
+					},
+				},
+			},
+			assertion: func(t *testing.T, tt *test) {
+				shard, err := tt.tc.Topo.GetShard(ctx, "ks1", "-80")
+				require.NoError(t, err, "topo.GetShard(ks1/-80) failed")
+
+				utils.MustMatch(t, &topodatapb.Shard{
+					KeyRange: &topodatapb.KeyRange{
+						End: []byte{0x80},
+					},
+					IsPrimaryServing: true,
+				}, shard.Shard)
+
+				shard2, err2 := tt.tc.Topo.GetShard(ctx, "ks1", "80-")
+				assert.True(t, topo.IsErrType(err2, topo.NoNode), "expected ks1/80- to be deleted, found %+v", shard2)
+			},
+		},
+		{
+			name: "nil request",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			req:       nil,
+			shouldErr: true,
+		},
+		{
+			name: "vtctld.DeleteShards fails",
+			tc: testutil.BuildIntegrationTestCluster(t, &vtadminpb.Cluster{
+				Id:   "local",
+				Name: "local",
+			}, "zone1"),
+			setup: func(t *testing.T, tt *test) {
+				_, err := tt.tc.Cluster.Vtctld.CreateShard(ctx, &vtctldatapb.CreateShardRequest{
+					Keyspace:      "ks1",
+					ShardName:     "-",
+					IncludeParent: true,
+				})
+				require.NoError(t, err, "CreateShard(ks1/-) failed")
+
+				srvks := &topodatapb.SrvKeyspace{
+					Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{
+						{
+							ServedType: topodatapb.TabletType_PRIMARY,
+							ShardReferences: []*topodatapb.ShardReference{
+								{
+									Name: "-",
+								},
+							},
+						},
+					},
+				}
+				err = tt.tc.Topo.UpdateSrvKeyspace(ctx, "zone1", "ks1", srvks)
+				require.NoError(t, err, "UpdateSrvKeyspace(zone1, ks1, %+v) failed", srvks)
+			},
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "ks1",
+						Name:     "-",
+					},
+				},
+			},
+			shouldErr: true,
+			assertion: func(t *testing.T, tt *test) {
+				shard, err := tt.tc.Topo.GetShard(ctx, "ks1", "-")
+				require.NoError(t, err, "GetShard(ks1/-) failed")
+				utils.MustMatch(t, &topodatapb.Shard{
+					IsPrimaryServing: true,
+					KeyRange:         &topodatapb.KeyRange{},
+				}, shard.Shard)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.tc.Cluster.Vtctld.Dial(ctx)
+			require.NoError(t, err, "could not dial in-process vtctld")
+
+			if tt.setup != nil {
+				func() {
+					t.Helper()
+					tt.setup(t, tt)
+				}()
+			}
+
+			_, err = tt.tc.Cluster.DeleteShards(ctx, tt.req)
+			if tt.shouldErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+
+			if tt.assertion != nil {
+				func() {
+					t.Helper()
+					tt.assertion(t, tt)
+				}()
+			}
 		})
 	}
 }

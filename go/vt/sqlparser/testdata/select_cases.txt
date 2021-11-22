@@ -811,8 +811,8 @@ END
 INPUT
 select extract(HOUR_MINUTE FROM "10:11:12");
 END
-ERROR
-syntax error at position 32 near 'FROM'
+OUTPUT
+select extract(hour_minute from '10:11:12') from dual
 END
 INPUT
 select hex(soundex('a'));
@@ -1220,7 +1220,7 @@ INPUT
 select SUBPARTITION_METHOD FROM information_schema.partitions WHERE table_schema="test" AND table_name="t1";
 END
 OUTPUT
-select SUBPARTITION_METHOD from information_schema.partitions where table_schema = 'test' and table_name = 't1'
+select SUBPARTITION_METHOD from information_schema.`partitions` where table_schema = 'test' and table_name = 't1'
 END
 INPUT
 select grp,group_concat(a,null) from t1 group by grp;
@@ -1339,8 +1339,8 @@ END
 INPUT
 select extract(DAY_MICROSECOND FROM "1999-01-02 10:11:12.000123");
 END
-ERROR
-syntax error at position 36 near 'FROM'
+OUTPUT
+select extract(day_microsecond from '1999-01-02 10:11:12.000123') from dual
 END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2 0xa3, 2);
@@ -4519,8 +4519,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union all select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union all select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 select substring_index('the king of the the hill',' ',-5);
@@ -4681,8 +4681,8 @@ END
 INPUT
 select extract(HOUR FROM "1999-01-02 10:11:12");
 END
-ERROR
-syntax error at position 25 near 'FROM'
+OUTPUT
+select extract(hour from '1999-01-02 10:11:12') from dual
 END
 INPUT
 select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(b.betreff) against ('+abc' in boolean mode) group by a.text, b.id, b.betreff union select a.text, b.id, b.betreff from t2 a inner join t3 b on a.id = b.forum inner join t1 c on b.id = c.thread where match(c.beitrag) against ('+abc' in boolean mode) group by a.text, b.id, b.betreff order by match(b.betreff) against ('+abc' in boolean mode) desc;
@@ -5215,8 +5215,8 @@ END
 INPUT
 select extract(MONTH FROM "2001-02-00");
 END
-ERROR
-syntax error at position 26 near 'FROM'
+OUTPUT
+select extract(month from '2001-02-00') from dual
 END
 INPUT
 select t1.col1 from t1 where t1.col2 in (select t2.col2 from t2 group by t2.col1, t2.col2 having t1.col1 <= 10);
@@ -5239,8 +5239,8 @@ END
 INPUT
 select (with dt as (select t1.a as a, t2.a as b from t2) select dt2.a from dt dt1, dt dt2 where dt1.b=t1.a and dt2.b=dt1.b) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with dt as (select t1.a as a, t2.a as b from t2) select dt2.a from dt as dt1, dt as dt2 where dt1.b = t1.a and dt2.b = dt1.b) as subq from t1
 END
 INPUT
 select count(*), case interval(qty,2,3,4,5,6,7,8) when -1 then NULL when 0 then "zero" when 1 then "one" when 2 then "two" end as category from t1 group by category;
@@ -5713,8 +5713,8 @@ END
 INPUT
 select extract(MONTH FROM "0000-00-00"),extract(MONTH FROM d),extract(MONTH FROM dt),extract(MONTH FROM t),extract(MONTH FROM c) from t1;
 END
-ERROR
-syntax error at position 26 near 'FROM'
+OUTPUT
+select extract(month from '0000-00-00'), extract(month from d), extract(month from dt), extract(month from t), extract(month from c) from t1
 END
 INPUT
 select from t3 where a < 10;
@@ -6061,8 +6061,8 @@ END
 INPUT
 select ctime from t1 where extract(MONTH FROM ctime) = 1 AND extract(YEAR FROM ctime) = 2001;
 END
-ERROR
-syntax error at position 46 near 'FROM'
+OUTPUT
+select ctime from t1 where extract(month from ctime) = 1 and extract(year from ctime) = 2001
 END
 INPUT
 select cast(_koi8r'��' AS nchar) as c1, cast(_koi8r'� ' AS nchar) as c2, cast(_koi8r'���' AS nchar(2)) as c3, cast(_koi8r'� ' AS nchar(2)) as c4, cast(_koi8r'�' AS nchar(2)) as c5;
@@ -6187,8 +6187,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union select a+1 from dt where a<10) select dt1.a from dt dt1 where dt1.a=t1.a ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select dt1.a from dt as dt1 where dt1.a = t1.a) as subq from t1
 END
 INPUT
 select from t5 natural join ((t1 natural join t2), (t3 natural join t4));
@@ -7580,7 +7580,7 @@ INPUT
 select concat(a, if(b>10, N'x', N'y')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, N as x, N as y)) from t1
+select concat(a, if(b > 10, N'x', N'y')) from t1
 END
 INPUT
 select sql_buffer_result max(f1) is null from t1;
@@ -7939,8 +7939,8 @@ END
 INPUT
 select extract(MINUTE_SECOND FROM "10:11:12");
 END
-ERROR
-syntax error at position 34 near 'FROM'
+OUTPUT
+select extract(minute_second from '10:11:12') from dual
 END
 INPUT
 select concat(a,if(b>10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
@@ -8810,7 +8810,7 @@ INPUT
 select (with cte as (select t1.a) select from cte) from t1;
 END
 ERROR
-syntax error at position 13 near 'with'
+syntax error at position 46 near 'from'
 END
 INPUT
 select from v1d;
@@ -9517,8 +9517,8 @@ END
 INPUT
 select (with recursive dt as (select t1.a as a union select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
 END
-ERROR
-syntax error at position 13 near 'with'
+OUTPUT
+select (with recursive dt as (select t1.a as a from dual union select a + 1 from dt where a < 10) select concat(count(*), ' - ', avg(dt.a)) from dt) as subq from t1
 END
 INPUT
 select from t1 natural left join (t4 natural join t5) where t5.z is not NULL;
@@ -10411,8 +10411,8 @@ END
 INPUT
 select extract(DAY_SECOND FROM "225 10:11:12");
 END
-ERROR
-syntax error at position 31 near 'FROM'
+OUTPUT
+select extract(day_second from '225 10:11:12') from dual
 END
 INPUT
 select from t1 where c2 = 3;
@@ -10447,8 +10447,8 @@ END
 INPUT
 select extract(SECOND_MICROSECOND FROM "1999-01-02 10:11:12.000123");
 END
-ERROR
-syntax error at position 39 near 'FROM'
+OUTPUT
+select extract(second_microsecond from '1999-01-02 10:11:12.000123') from dual
 END
 INPUT
 select instr('hello','HE'), instr('hello',binary 'HE'), instr(binary 'hello','HE');
@@ -10801,8 +10801,8 @@ END
 INPUT
 select extract(DAY_MINUTE FROM "02 10:11:12");
 END
-ERROR
-syntax error at position 31 near 'FROM'
+OUTPUT
+select extract(day_minute from '02 10:11:12') from dual
 END
 INPUT
 select ln(exp(10)),exp(ln(sqrt(10))*2),ln(-1),ln(0),ln(NULL);
@@ -11179,8 +11179,8 @@ END
 INPUT
 select extract(MINUTE FROM "10:11:12");
 END
-ERROR
-syntax error at position 27 near 'FROM'
+OUTPUT
+select extract(minute from '10:11:12') from dual
 END
 INPUT
 select (_utf8 X'616263FF');
@@ -12259,8 +12259,8 @@ END
 INPUT
 select extract(DAY FROM "1999-01-02");
 END
-ERROR
-syntax error at position 24 near 'FROM'
+OUTPUT
+select extract(day from '1999-01-02') from dual
 END
 INPUT
 select from t1, t2;
@@ -13063,8 +13063,8 @@ END
 INPUT
 select extract(MINUTE_MICROSECOND FROM "1999-01-02 10:11:12.000123");
 END
-ERROR
-syntax error at position 39 near 'FROM'
+OUTPUT
+select extract(minute_microsecond from '1999-01-02 10:11:12.000123') from dual
 END
 INPUT
 select charset(max(a)), coercibility(max(a)), charset(min(a)), coercibility(min(a)) from t1;
@@ -13093,8 +13093,8 @@ END
 INPUT
 select extract(YEAR FROM "1999-01-02 10:11:12");
 END
-ERROR
-syntax error at position 25 near 'FROM'
+OUTPUT
+select extract(year from '1999-01-02 10:11:12') from dual
 END
 INPUT
 select c,table_name from v1 inner join information_schema.TABLES v2 on (v1.c=v2.table_name) where v1.c rlike "t[1-5]{1}$" order by c;
@@ -15422,7 +15422,7 @@ INPUT
 select concat(a, if(b>10, N'æ', N'ß')) from t1;
 END
 OUTPUT
-select concat(a, if(b > 10, N as `æ`, N as `ß`)) from t1
+select concat(a, if(b > 10, N'æ', N'ß')) from t1
 END
 INPUT
 select date_format(19980021000000,'%H|%I|%k|%l|%i|%p|%r|%S|%T| %M|%W|%D|%Y|%y|%a|%b|%j|%m|%d|%h|%s|%w');
@@ -15559,8 +15559,8 @@ END
 INPUT
 select extract(HOUR_SECOND FROM "10:11:12");
 END
-ERROR
-syntax error at position 32 near 'FROM'
+OUTPUT
+select extract(hour_second from '10:11:12') from dual
 END
 INPUT
 select a as like_lllll from t1 where a like 'lllll%';
@@ -16945,8 +16945,8 @@ END
 INPUT
 select extract(MICROSECOND FROM "1999-01-02 10:11:12.000123");
 END
-ERROR
-syntax error at position 32 near 'FROM'
+OUTPUT
+select extract(microsecond from '1999-01-02 10:11:12.000123') from dual
 END
 INPUT
 select table_name, column_name, data_type from information_schema.columns where table_schema not in ('performance_schema', 'sys') and data_type = 'datetime' and table_name COLLATE utf8_general_ci not like 'innodb_%' order by table_name, column_name;
@@ -18097,8 +18097,8 @@ END
 INPUT
 select extract(HOUR_MICROSECOND FROM "1999-01-02 10:11:12.000123");
 END
-ERROR
-syntax error at position 37 near 'FROM'
+OUTPUT
+select extract(hour_microsecond from '1999-01-02 10:11:12.000123') from dual
 END
 INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('polygon((1 1.2, 1 0, 2 0, 1 1.2))'));
@@ -19106,7 +19106,7 @@ INPUT
 select a from t1 where a in (with cte as (select t1.a) select /*+ no_semijoin() node_modules/ a from cte);
 END
 ERROR
-syntax error at position 34 near 'with'
+syntax error at position 107 near '/*+ no_semijoin() node_modules/ a from cte);'
 END
 INPUT
 select from v1a;
@@ -19933,8 +19933,8 @@ END
 INPUT
 select extract(DAY_HOUR FROM "1999-01-02 10:11:12");
 END
-ERROR
-syntax error at position 29 near 'FROM'
+OUTPUT
+select extract(day_hour from '1999-01-02 10:11:12') from dual
 END
 INPUT
 select from t1 where MATCH a,b AGAINST ('+(+(support collections)) +foobar*' IN BOOLEAN MODE);
@@ -20719,8 +20719,8 @@ END
 INPUT
 select extract(YEAR_MONTH FROM "1999-01-02");
 END
-ERROR
-syntax error at position 31 near 'FROM'
+OUTPUT
+select extract(year_month from '1999-01-02') from dual
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_estonian_ci;
@@ -22015,8 +22015,8 @@ END
 INPUT
 select extract(SECOND FROM "1999-01-02 10:11:12");
 END
-ERROR
-syntax error at position 27 near 'FROM'
+OUTPUT
+select extract(second from '1999-01-02 10:11:12') from dual
 END
 INPUT
 select id-5,facility from t1 order by "id-5";

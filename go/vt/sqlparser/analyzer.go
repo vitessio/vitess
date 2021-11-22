@@ -132,16 +132,26 @@ func CanNormalize(stmt Statement) bool {
 
 // CachePlan takes Statement and returns true if the query plan should be cached
 func CachePlan(stmt Statement) bool {
-	switch stmt.(type) {
-	case *Select, *Union,
-		*Insert, *Update, *Delete, *Stream:
+	var directives CommentDirectives
+	switch stmt := stmt.(type) {
+	case *Select:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Insert:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Update:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Delete:
+		directives = ExtractCommentDirectives(stmt.Comments)
+	case *Union, *Stream:
 		return true
+	default:
+		return false
 	}
-	return false
+	return !directives.IsSet(DirectiveSkipQueryPlanCache)
 }
 
 //MustRewriteAST takes Statement and returns true if RewriteAST must run on it for correct execution irrespective of user flags.
-func MustRewriteAST(stmt Statement) bool {
+func MustRewriteAST(stmt Statement, hasSelectLimit bool) bool {
 	switch node := stmt.(type) {
 	case *Set:
 		return true
@@ -151,6 +161,8 @@ func MustRewriteAST(stmt Statement) bool {
 			return true
 		}
 		return false
+	case SelectStatement:
+		return hasSelectLimit
 	}
 	return false
 }
@@ -326,23 +338,8 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
-// SplitOrExpression breaks up the Expr into OR-separated conditions
-// and appends them to filters. Outer parenthesis are removed. Precedence
-// should be taken into account if expressions are recombined.
-func SplitOrExpression(filters []Expr, node Expr) []Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *OrExpr:
-		filters = SplitOrExpression(filters, node.Left)
-		return SplitOrExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
-// joinExpressions join together a list of Expr using the baseType as operator (either AndExpr or OrExpr).
-func joinExpressions(baseType Expr, exprs ...Expr) Expr {
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
 	switch len(exprs) {
 	case 0:
 		return nil
@@ -350,43 +347,26 @@ func joinExpressions(baseType Expr, exprs ...Expr) Expr {
 		return exprs[0]
 	default:
 		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
 		for i, expr := range exprs {
 			if expr == nil {
 				continue
 			}
 			if result == nil {
 				result = expr
-			} else {
-				found := false
-				for j := 0; j < i; j++ {
-					if EqualsExpr(expr, exprs[j]) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					switch baseType.(type) {
-					case *AndExpr:
-						result = &AndExpr{Left: result, Right: expr}
-					case *OrExpr:
-						result = &OrExpr{Left: result, Right: expr}
-					}
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j]) {
+					continue outer
 				}
 			}
+			result = &AndExpr{Left: result, Right: expr}
 		}
 		return result
 	}
-
-}
-
-// AndExpressions ands together two or more expressions, minimising the expr when possible
-func AndExpressions(exprs ...Expr) Expr {
-	return joinExpressions(&AndExpr{}, exprs...)
-}
-
-// OrExpressions ors together two or more expressions, minimising the expr when possible
-func OrExpressions(exprs ...Expr) Expr {
-	return joinExpressions(&OrExpr{}, exprs...)
 }
 
 // TableFromStatement returns the qualified table name for the query.
@@ -517,7 +497,7 @@ func NewPlanValue(node Expr) (sqltypes.PlanValue, error) {
 		return sqltypes.PlanValue{}, nil
 	case *UnaryExpr:
 		switch node.Operator {
-		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op: // for some charset introducers, we can just ignore them
+		case UBinaryOp, Utf8mb4Op, Utf8Op, Latin1Op, NStringOp: // for some charset introducers, we can just ignore them
 			return NewPlanValue(node.Expr)
 		}
 	}
