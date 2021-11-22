@@ -501,11 +501,6 @@ func transformJoinPlan(ctx *planningContext, n *joinTree) (logicalPlan, error) {
 		opCode = engine.LeftJoin
 	}
 
-	if lhsInfo.typ.Collation != rhsInfo.typ.Collation {
-		// joins with different collations are not yet supported
-		canHashJoin = false
-	}
-
 	if canHashJoin {
 		coercedType, err := evalengine.CoerceTo(lhsInfo.typ.Type, rhsInfo.typ.Type)
 		if err != nil {
@@ -580,6 +575,13 @@ func canHashJoin(ctx *planningContext, n *joinTree) (canHash bool, lhs, rhs join
 	if !found {
 		return
 	}
+
+	if colType.Collation != argType.Collation {
+		// joins with different collations are not yet supported
+		canHash = false
+		return
+	}
+
 	if colOnLeft {
 		lhs.typ = colType
 		rhs.typ = argType
