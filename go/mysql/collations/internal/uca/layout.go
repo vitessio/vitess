@@ -51,6 +51,66 @@ func (Layout_uca900) MaxCodepoint() rune {
 	return MaxCodepoint - 1
 }
 
+func equalWeights900(table Weights, levels int, A, B rune) bool {
+	pA, offsetA := PageOffset(A)
+	pageA := table[pA]
+
+	pB, offsetB := PageOffset(B)
+	pageB := table[pB]
+
+	if pageA == nil || pageB == nil {
+		return false
+	}
+
+	ppA := (*pageA)[256+offsetA:]
+	ppB := (*pageB)[256+offsetB:]
+
+	if ppA[0] != 0x0 && ppB[0] != 0x0 && ppA[0] != ppB[0] {
+		return false
+	}
+
+	cA := int((*pageA)[offsetA])
+	cB := int((*pageB)[offsetB])
+
+	for l := 0; l < levels; l++ {
+		wA, wB := l*256, l*256
+		wA1, wB1 := wA+(cA*256*3), wB+(cB*256*3)
+
+		for wA < wA1 && wB < wB1 {
+			for wA < wA1 && ppA[wA] == 0x0 {
+				wA += 256 * 3
+			}
+			if wA == wA1 {
+				break
+			}
+			for wB < wB1 && ppB[wB] == 0x0 {
+				wB += 256 * 3
+			}
+			if wB == wB1 {
+				break
+			}
+			if ppA[wA] != ppB[wB] {
+				return false
+			}
+			wA += 256 * 3
+			wB += 256 * 3
+		}
+		for wA < wA1 {
+			if ppA[wA] != 0x0 {
+				return false
+			}
+			wA += 256 * 3
+		}
+		for wB < wB1 {
+			if ppB[wB] != 0x0 {
+				return false
+			}
+			wB += 256 * 3
+		}
+	}
+	return true
+}
+
 func (Layout_uca900) DebugWeights(table Weights, codepoint rune) (result []uint16) {
 	p, offset := PageOffset(codepoint)
 	page := table[p]
@@ -118,6 +178,43 @@ type Layout_uca_legacy struct {
 
 func (l Layout_uca_legacy) MaxCodepoint() rune {
 	return l.Max
+}
+
+func equalWeightsLegacy(table Weights, A, B rune) bool {
+	pA, offsetA := PageOffset(A)
+	pageA := table[pA]
+
+	pB, offsetB := PageOffset(B)
+	pageB := table[pB]
+
+	if pageA == nil || pageB == nil {
+		return false
+	}
+
+	sA := int((*pageA)[0])
+	sB := int((*pageB)[0])
+	iA := 1 + sA*offsetA
+	iB := 1 + sB*offsetB
+
+	var shrt, long []uint16
+	if sA < sB {
+		shrt = (*pageA)[iA : iA+sA]
+		long = (*pageB)[iB : iB+sB]
+	} else {
+		shrt = (*pageB)[iB : iB+sB]
+		long = (*pageA)[iA : iA+sA]
+	}
+
+	for i, wA := range shrt {
+		wB := long[i]
+		if wA != wB {
+			return false
+		}
+	}
+	if len(long) > len(shrt) && long[len(shrt)] != 0x0 {
+		return false
+	}
+	return true
 }
 
 func (l Layout_uca_legacy) DebugWeights(table Weights, codepoint rune) (result []uint16) {
