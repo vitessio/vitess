@@ -102,6 +102,7 @@ func (rp *routeTree) selectedVindex() vindexes.Vindex {
 	}
 	return rp.selected.foundVindex
 }
+
 func (rp *routeTree) vindexExpressions() []sqlparser.Expr {
 	if rp.selected == nil {
 		return nil
@@ -320,7 +321,7 @@ func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.Compariso
 		}
 		vdValue = node.Left
 	}
-	val, err := rp.makePlanValue(ctx, vdValue)
+	val, err := makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -330,7 +331,7 @@ func (rp *routeTree) planEqualOp(ctx *planningContext, node *sqlparser.Compariso
 
 func (rp *routeTree) planSimpleInOp(ctx *planningContext, node *sqlparser.ComparisonExpr, left *sqlparser.ColName) (bool, error) {
 	vdValue := node.Right
-	value, err := rp.makePlanValue(ctx, vdValue)
+	value, err := makePlanValue(ctx, vdValue)
 	if err != nil || value == nil {
 		return false, err
 	}
@@ -385,7 +386,7 @@ func (rp *routeTree) planCompositeInOpRecursive(ctx *planningContext, node *sqlp
 					return false, nil
 				}
 			}
-			newPlanValues, err := rp.makePlanValue(ctx, rightVals)
+			newPlanValues, err := makePlanValue(ctx, rightVals)
 			if newPlanValues == nil || err != nil {
 				return false, err
 			}
@@ -415,7 +416,7 @@ func (rp *routeTree) planLikeOp(ctx *planningContext, node *sqlparser.Comparison
 	}
 
 	vdValue := node.Right
-	val, err := rp.makePlanValue(ctx, vdValue)
+	val, err := makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -443,7 +444,7 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 		return false, nil
 	}
 	vdValue := &sqlparser.NullVal{}
-	val, err := rp.makePlanValue(ctx, vdValue)
+	val, err := makePlanValue(ctx, vdValue)
 	if err != nil || val == nil {
 		return false, err
 	}
@@ -456,7 +457,7 @@ func (rp *routeTree) planIsExpr(ctx *planningContext, node *sqlparser.IsExpr) (b
 // method will stops and return nil values.
 // Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
 // The first PlanValue that is successfully produced will be returned.
-func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+func makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	if ctx.isSubQueryToReplace(n) {
 		return nil, nil
 	}
@@ -474,7 +475,7 @@ func (rp *routeTree) makePlanValue(ctx *planningContext, n sqlparser.Expr) (*sql
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, err := makePlanValue(expr)
+		pv, err := createPlanValue(expr)
 		if err != nil {
 			return nil, err
 		}
@@ -634,10 +635,10 @@ func equalOrEqualUnique(vindex *vindexes.ColumnVindex) engine.RouteOpcode {
 	return engine.SelectEqual
 }
 
-// makePlanValue transforms a sqlparser.Expr into a sqltypes.PlanValue.
+// createPlanValue transforms a sqlparser.Expr into a sqltypes.PlanValue.
 // If the expression is too complex e.g: not an argument/literal/tuple/null/unary, then
 // the method will not fail, instead it will exit with nil values.
-func makePlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
+func createPlanValue(n sqlparser.Expr) (*sqltypes.PlanValue, error) {
 	value, err := sqlparser.NewPlanValue(n)
 	if err != nil {
 		// if we are unable to create a PlanValue, we can't use a vindex, but we don't have to fail

@@ -904,7 +904,7 @@ func findColumnVindex(ctx *planningContext, a *routeTree, exp sqlparser.Expr) vi
 			if !isRoute {
 				return true, nil
 			}
-			if leftDep.IsSolvedBy(rb.qtable.TableID) {
+			if leftDep.IsSolvedBy(rb.qtable.TableID()) {
 				for _, vindex := range rb.vtable.ColumnVindexes {
 					sC, isSingle := vindex.Vindex.(vindexes.SingleColumn)
 					if isSingle && vindex.Columns[0].Equal(col.Name) {

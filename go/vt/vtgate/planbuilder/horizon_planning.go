@@ -161,7 +161,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *semantics.SemTable, inner, reuseCol, hasAggregation bool) (offset int, added bool, err error) {
 	switch node := plan.(type) {
 	case *route:
-		value, err := makePlanValue(expr.Expr)
+		value, err := createPlanValue(expr.Expr)
 		if err != nil {
 			return 0, false, err
 		}
