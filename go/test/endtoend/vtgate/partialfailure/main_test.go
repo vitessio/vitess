@@ -140,11 +140,12 @@ func TestMain(m *testing.M) {
 func TestPartialQueryFailure(t *testing.T) {
 	tcases := []struct {
 		mode string
+		qs   []string
 	}{
-		{"set workload = oltp"},
-		{"set workload = oltp; set sql_mode = ''"},
-		{"set workload = olap"},
-		{"set workload = olap; set sql_mode = ''"},
+		{"oltp", []string{"set workload = oltp"}},
+		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
+		{"olap", []string{"set workload = olap"}},
+		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
 	}
 
 	for _, tc := range tcases {
@@ -154,7 +155,9 @@ func TestPartialQueryFailure(t *testing.T) {
 			defer conn.Close()
 
 			// setup the mode
-			utils.Exec(t, conn, tc.mode)
+			for _, q := range tc.qs {
+				utils.Exec(t, conn, q)
+			}
 
 			// cleanup previous run data from table.
 			utils.Exec(t, conn, `delete from test`)
