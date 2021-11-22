@@ -153,9 +153,9 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: strange data type changes",
-		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b'), e2 enum('a', 'b')`,
-		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2), e2 varchar(1)`,
-		expandedColumnNames: `dt1,ts1,i1,d1,e1,e2`,
+		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b')`,
+		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2)`,
+		expandedColumnNames: `dt1,ts1,i1,d1,e1`,
 	},
 	{
 		name:                "expanded: temporal types",
@@ -171,9 +171,9 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: enum",
-		fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b')`,
-		toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b')`,
-		expandedColumnNames: `e3,e4,e5,e6`,
+		fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
+		toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'), e7 varchar(1), e8 tinyint`,
+		expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
 	},
 }
 
