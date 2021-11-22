@@ -588,7 +588,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	if len(safeSession.ShardSessions) == 0 {
+	if !safeSession.isTxOpen() {
 		if safeSession.InTransaction() {
 			// Storing, as this needs to be executed just after starting transaction on the shard.
 			safeSession.StoreSavepoint(sql)
@@ -596,23 +596,37 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		}
 		return nonTxResponse(sql)
 	}
-	var rss []*srvtopo.ResolvedShard
-	for _, shardSession := range safeSession.ShardSessions {
-		rss = append(rss, &srvtopo.ResolvedShard{
-			Target:  shardSession.Target,
-			Gateway: e.resolver.resolver.GetGateway(),
-		})
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{Sql: sql}
-	}
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
-	err := vterrors.Aggregate(errs)
+	orig := safeSession.commitOrder
+	qr, err := e.executeSPInAllSessions(ctx, safeSession, sql, ignoreMaxMemoryRows)
+	safeSession.SetCommitOrder(orig)
 	if err != nil {
 		return nil, err
 	}
 	safeSession.StoreSavepoint(sql)
+	return qr, nil
+}
+
+func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *SafeSession, sql string, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+	var qr *sqltypes.Result
+	var errs []error
+	for _, co := range []vtgatepb.CommitOrder{vtgatepb.CommitOrder_PRE, vtgatepb.CommitOrder_NORMAL, vtgatepb.CommitOrder_POST} {
+		safeSession.SetCommitOrder(co)
+
+		var rss []*srvtopo.ResolvedShard
+		var queries []*querypb.BoundQuery
+		for _, shardSession := range safeSession.GetSessions() {
+			rss = append(rss, &srvtopo.ResolvedShard{
+				Target:  shardSession.Target,
+				Gateway: e.resolver.resolver.GetGateway(),
+			})
+			queries = append(queries, &querypb.BoundQuery{Sql: sql})
+		}
+		qr, errs = e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
+		err := vterrors.Aggregate(errs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return qr, nil
 }
 
