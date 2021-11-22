@@ -92,7 +92,7 @@ var testCases = []testCase{
 		removedUniqueKeyNames: `i1_uidx`,
 	},
 	{
-		name:                  "reducing unique key does not unique constraint",
+		name:                  "reducing unique key does not remove unique constraint",
 		fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1, id)`,
 		toSchema:              `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
 		removedUniqueKeyNames: ``,
@@ -153,9 +153,9 @@ var testCases = []testCase{
 	},
 	{
 		name:                "expanded: strange data type changes",
-		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b')`,
-		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2)`,
-		expandedColumnNames: `dt1,ts1,i1,d1,e1`,
+		fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b'), e2 enum('a', 'b')`,
+		toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2), e2 varchar(1)`,
+		expandedColumnNames: `dt1,ts1,i1,d1,e1,e2`,
 	},
 	{
 		name:                "expanded: temporal types",
@@ -168,6 +168,12 @@ var testCases = []testCase{
 		fromSchema:          `id int primary key, c1 char(3) charset utf8, c2 char(3) charset utf8mb4, c3 char(3) charset ascii, c4 char(3) charset utf8mb4, c5 char(3) charset utf8, c6 char(3) charset latin1`,
 		toSchema:            `id int primary key, c1 char(3) charset utf8mb4, c2 char(3) charset utf8, c3 char(3) charset utf8, c4 char(3) charset ascii, c5 char(3) charset utf8, c6 char(3) charset utf8mb4`,
 		expandedColumnNames: `c1,c3,c6`,
+	},
+	{
+		name:                "expanded: enum",
+		fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b')`,
+		toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b')`,
+		expandedColumnNames: `e3,e4,e5,e6`,
 	},
 }
 
