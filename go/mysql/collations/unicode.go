@@ -124,7 +124,7 @@ func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_general_ci) Hash(src []byte, numCodepoints int) HashCode {
 	unicaseInfo := c.unicase
 	cs := c.charset
 
@@ -278,7 +278,7 @@ func (c *Collation_unicode_bin) weightStringUnicode(dst, src []byte, numCodepoin
 	return dst
 }
 
-func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_unicode_bin) Hash(src []byte, numCodepoints int) HashCode {
 	if c.charset.SupportsSupplementaryChars() {
 		return c.hashUnicode(src, numCodepoints)
 	}

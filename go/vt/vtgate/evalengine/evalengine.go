@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -243,21 +244,16 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 	return sqltypes.NULL
 }
 
-func hashCode(v EvalResult) int64 {
-	// we cast all numerical values to float64 and return the hashcode for that
-	var val float64
-	switch v.typ {
-	case sqltypes.Int64:
-		val = float64(v.ival)
-	case sqltypes.Uint64:
-		val = float64(v.uval)
-	case sqltypes.Float64:
-		val = v.fval
+func numericalHashCode(v EvalResult) HashCode {
+	switch {
+	case sqltypes.IsSigned(v.typ):
+		return HashCode(v.ival)
+	case sqltypes.IsUnsigned(v.typ):
+		return HashCode(v.uval)
+	case sqltypes.IsFloat(v.typ) || v.typ == sqltypes.Decimal:
+		return HashCode(math.Float64bits(v.fval))
 	}
-
-	// this will not work for ±0, NaN and ±Inf,
-	// so one must still check using `compareNumeric` which will not be fooled
-	return int64(val)
+	panic("BUG: this is not a numerical value")
 }
 
 func compareNumeric(v1, v2 EvalResult) (int, error) {

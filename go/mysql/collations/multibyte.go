@@ -147,7 +147,7 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 	return dst
 }
 
-func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) HashCode {
 	cs := c.charset
 	sortOrder := c.sort
 

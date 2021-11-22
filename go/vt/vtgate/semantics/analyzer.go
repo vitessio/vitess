@@ -77,7 +77,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 	return &SemTable{
 		Recursive:        a.binder.recursive,
 		Direct:           a.binder.direct,
-		exprTypes:        a.typer.exprTypes,
+		ExprTypes:        a.typer.exprTypes,
 		Tables:           a.tables.Tables,
 		selectScope:      a.scoper.rScope,
 		ProjectionErr:    a.projErr,

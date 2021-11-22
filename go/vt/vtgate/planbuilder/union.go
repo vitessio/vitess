@@ -76,7 +76,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, reservedVars *s
 		}
 
 		if union.Distinct {
-			pb.plan = newDistinct(pb.plan)
+			pb.plan = newDistinct(pb.plan, nil)
 		}
 	}
 	pb.st.Outer = outer
