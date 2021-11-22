@@ -568,7 +568,7 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 		Input:       fp,
 	}
 
-	want := "types are not comparable: VARCHAR vs VARCHAR"
+	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
 	if _, err := oa.TryExecute(&noopVCursor{}, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}

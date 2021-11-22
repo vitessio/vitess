@@ -670,20 +670,20 @@ func TestNullsafeCompareCollate(t *testing.T) {
 			v1:        "abcd",
 			v2:        "abcd",
 			collation: 0,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 		},
 		{
 			v1:        "abcd",
 			v2:        "abcd",
 			collation: 1111,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 1111 isn't possible"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)"),
 		},
 		{
 			v1: "abcd",
 			v2: "abcd",
 			// unsupported collation gb18030_bin
 			collation: 249,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 249 isn't possible"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 249)"),
 		},
 	}
 	for _, tcase := range tcases {
@@ -1371,7 +1371,7 @@ func TestMin(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
@@ -1478,7 +1478,7 @@ func TestMax(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
