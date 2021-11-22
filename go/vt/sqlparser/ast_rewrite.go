@@ -4149,11 +4149,6 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 	}) {
 		return false
 	}
-	if !a.rewriteExpr(node, node.StrVal, func(newNode, parent SQLNode) {
-		parent.(*SubstrExpr).StrVal = newNode.(Expr)
-	}) {
-		return false
-	}
 	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
 		parent.(*SubstrExpr).From = newNode.(Expr)
 	}) {
