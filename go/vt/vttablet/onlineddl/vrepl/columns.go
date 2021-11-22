@@ -132,17 +132,20 @@ func isExpandedColumn(sourceColumn *Column, targetColumn *Column) (bool, string)
 			return true, "expand character set to utf8"
 		}
 	}
-	if sourceColumn.Type == EnumColumnType {
-		// this is an enum
-		if targetColumn.Type != EnumColumnType {
-			return true, "conversion from enum to non-enum adds potential values"
-		}
-		// target is an enum. See if all values on target exist in source
-		sourceEnumTokensMap := schema.ParseEnumTokensMap(sourceColumn.EnumValues)
-		targetEnumTokensMap := schema.ParseEnumTokensMap(targetColumn.EnumValues)
-		for k, v := range targetEnumTokensMap {
-			if sourceEnumTokensMap[k] != v {
-				return true, "target enum expands source enum"
+	for _, colType := range []ColumnType{EnumColumnType, SetColumnType} {
+		// enums and sets have very similar properties, and are practically identical in our analysis
+		if sourceColumn.Type == colType {
+			// this is an enum or a set
+			if targetColumn.Type != colType {
+				return true, "conversion from enum/set to non-enum/set adds potential values"
+			}
+			// target is an enum or a set. See if all values on target exist in source
+			sourceEnumTokensMap := schema.ParseEnumTokensMap(sourceColumn.EnumValues)
+			targetEnumTokensMap := schema.ParseEnumTokensMap(targetColumn.EnumValues)
+			for k, v := range targetEnumTokensMap {
+				if sourceEnumTokensMap[k] != v {
+					return true, "target enum/set expands source enum/set"
+				}
 			}
 		}
 	}
@@ -161,17 +164,20 @@ func GetExpandedColumnNames(
 	targetSharedColumns *ColumnList,
 ) (
 	expandedColumnNames []string,
+	expandedDescriptions map[string]string,
 ) {
+	expandedDescriptions = map[string]string{}
 	for i := range sourceSharedColumns.Columns() {
 		// source and target columns assumed to be mapped 1:1, same length
 		sourceColumn := sourceSharedColumns.Columns()[i]
 		targetColumn := targetSharedColumns.Columns()[i]
 
-		if isExpanded, _ := isExpandedColumn(&sourceColumn, &targetColumn); isExpanded {
+		if isExpanded, description := isExpandedColumn(&sourceColumn, &targetColumn); isExpanded {
 			expandedColumnNames = append(expandedColumnNames, sourceColumn.Name)
+			expandedDescriptions[sourceColumn.Name] = description
 		}
 	}
-	return expandedColumnNames
+	return expandedColumnNames, expandedDescriptions
 }
 
 // GetNoDefaultColumnNames returns names of columns which have no default value, out of given list of columns
