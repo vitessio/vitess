@@ -120,9 +120,11 @@
   "Original": "select author5s.* from author5s join book6s on book6s.author5_id = author5s.id join book6s_order2s on book6s_order2s.book6_id = book6s.id join order2s on order2s.id = book6s_order2s.order2_id join customer2s on customer2s.id = order2s.customer2_id join supplier5s on supplier5s.id = book6s.supplier5_id",
   "Instructions": {
     "OperatorType": "Join",
-    "Variant": "HashJoin",
-    "ComparisonType": "INT64",
-    "JoinColumnIndexes": "2,3,4,5",
+    "Variant": "Join",
+    "JoinColumnIndexes": "1,2,3,4",
+    "JoinVars": {
+      "order2s_id": 0
+    },
     "Predicate": "order2s.id = book6s_order2s.order2_id",
     "TableName": "customer2s, order2s_author5s, book6s_book6s_order2s_supplier5s",
     "Inputs": [
@@ -140,21 +142,21 @@
       {
         "OperatorType": "Join",
         "Variant": "Join",
-        "JoinColumnIndexes": "-1,-2,-3,-4,-5",
+        "JoinColumnIndexes": "-1,-2,-3,-4",
         "JoinVars": {
           "book6s_supplier5_id": 0
         },
-        "Predicate": "supplier5s.id = book6s.supplier5_id",
+        "Predicate": "supplier5s.id = book6s.supplier5_id and book6s_order2s.order2_id = :order2s_id",
         "TableName": "author5s, book6s_book6s_order2s_supplier5s",
         "Inputs": [
           {
             "OperatorType": "Join",
             "Variant": "Join",
-            "JoinColumnIndexes": "1,-3,-4,-5,-6",
+            "JoinColumnIndexes": "-3,-4,-5,-6",
             "JoinVars": {
               "book6s_id": 0
             },
-            "Predicate": "book6s_order2s.book6_id = book6s.id",
+            "Predicate": "book6s_order2s.book6_id = book6s.id and book6s_order2s.order2_id = :order2s_id",
             "TableName": "author5s, book6s_book6s_order2s",
             "Inputs": [
               {
@@ -175,8 +177,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select book6s_order2s.order2_id from book6s_order2s where 1 != 1",
-                "Query": "select book6s_order2s.order2_id from book6s_order2s where book6s_order2s.book6_id = :book6s_id",
+                "FieldQuery": "select 1 from book6s_order2s where 1 != 1",
+                "Query": "select 1 from book6s_order2s where book6s_order2s.book6_id = :book6s_id and book6s_order2s.order2_id = :order2s_id",
                 "Table": "book6s_order2s",
                 "Values": [
                   ":book6s_id"
@@ -347,11 +349,9 @@
       },
       {
         "OperatorType": "Join",
-        "Variant": "Join",
+        "Variant": "HashJoin",
+        "ComparisonType": "INT64",
         "JoinColumnIndexes": "-1,-2,-3,-4,-5",
-        "JoinVars": {
-          "book6s_supplier5_id": 0
-        },
         "Predicate": "supplier5s.id = book6s.supplier5_id",
         "TableName": "author5s, book6s_book6s_order2s_supplier5s",
         "Inputs": [
@@ -395,18 +395,14 @@
           },
           {
             "OperatorType": "Route",
-            "Variant": "SelectEqualUnique",
+            "Variant": "SelectScatter",
             "Keyspace": {
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from supplier5s where 1 != 1",
-            "Query": "select /*vt+ ALLOW_HASH_JOIN */ 1 from supplier5s where supplier5s.id = :book6s_supplier5_id",
-            "Table": "supplier5s",
-            "Values": [
-              ":book6s_supplier5_id"
-            ],
-            "Vindex": "binary_md5"
+            "FieldQuery": "select supplier5s.id from supplier5s where 1 != 1",
+            "Query": "select /*vt+ ALLOW_HASH_JOIN */ supplier5s.id from supplier5s",
+            "Table": "supplier5s"
           }
         ]
       }
