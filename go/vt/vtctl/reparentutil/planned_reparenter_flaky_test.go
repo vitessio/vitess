@@ -1482,6 +1482,145 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 	}
 }
 
+func TestPlannedReparenter_performInitialPromotion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		ts         *topo.Server
+		tmc        tmclient.TabletManagerClient
+		ctxTimeout time.Duration
+
+		ev           *events.Reparent
+		keyspace     string
+		shard        string
+		primaryElect *topodatapb.Tablet
+
+		expectedPos string
+		shouldErr   bool
+	}{
+		{
+			name: "successful promotion",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Result: "successful reparent journal position",
+						Error:  nil,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			expectedPos: "successful reparent journal position",
+			shouldErr:   false,
+		},
+		{
+			name: "primary-elect fails to promote",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: assert.AnError,
+					},
+				},
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr: true,
+		},
+		{
+			name: "promotion succeeds but parent context times out",
+			ts:   memorytopo.NewServer("zone1"),
+			tmc: &testutil.TabletManagerClient{
+				InitPrimaryPostDelays: map[string]time.Duration{
+					"zone1-0000000200": time.Millisecond * 100, // 10x the parent context timeout
+				},
+				InitPrimaryResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000200": {
+						Error: nil,
+					},
+				},
+			},
+			ctxTimeout: time.Millisecond * 10,
+			ev:         &events.Reparent{},
+			keyspace:   "testkeyspace",
+			shard:      "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  200,
+				},
+			},
+			shouldErr: true,
+		},
+	}
+
+	ctx := context.Background()
+	logger := logutil.NewMemoryLogger()
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := ctx
+
+			testutil.AddShards(ctx, t, tt.ts, &vtctldatapb.Shard{
+				Keyspace: tt.keyspace,
+				Name:     tt.shard,
+			})
+
+			pr := NewPlannedReparenter(tt.ts, tt.tmc, logger)
+
+			if tt.ctxTimeout > 0 {
+				_ctx, cancel := context.WithTimeout(ctx, tt.ctxTimeout)
+				defer cancel()
+
+				ctx = _ctx
+			}
+
+			pos, err := pr.performInitialPromotion(
+				ctx,
+				tt.primaryElect,
+				PlannedReparentOptions{},
+			)
+
+			if tt.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedPos, pos)
+		})
+	}
+}
+
 func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 	t.Parallel()
 
