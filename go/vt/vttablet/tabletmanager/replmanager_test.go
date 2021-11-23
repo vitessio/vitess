@@ -101,4 +101,11 @@ func TestReplManagerReset(t *testing.T) {
 	// reset should not affect the ticks, but the replication stopped should be false
 	assert.False(t, tm.replManager.ticks.Running())
 	assert.False(t, tm.replManager.replicationStopped())
+
+	tm.replManager.setReplicationStopped(true)
+	assert.True(t, tm.replManager.replicationStopped())
+	// DisableActiveReparents == true should result in no-op
+	*mysqlctl.DisableActiveReparents = true
+	tm.replManager.reset()
+	assert.True(t, tm.replManager.replicationStopped())
 }
