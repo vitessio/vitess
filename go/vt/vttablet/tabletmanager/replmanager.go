@@ -133,6 +133,10 @@ func (rm *replManager) checkActionLocked() {
 // reset the replication manager state and deleting the marker-file.
 // it does not start or stop the ticks. Use setReplicationStopped instead to change that.
 func (rm *replManager) reset() {
+	if *mysqlctl.DisableActiveReparents {
+		return
+	}
+
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
