@@ -218,7 +218,15 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 
 	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
-		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+		v1Bytes, err1 := v1.ToBytes()
+		if err1 != nil {
+			return 0, err1
+		}
+		v2Bytes, err2 := v2.ToBytes()
+		if err2 != nil {
+			return 0, err2
+		}
+		return bytes.Compare(v1Bytes, v2Bytes), nil
 	}
 
 	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
@@ -249,7 +257,15 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 				ID: collationID,
 			}
 		}
-		switch result := collation.Collate(v1.ToBytes(), v2.ToBytes(), false); {
+		v1Bytes, err1 := v1.ToBytes()
+		if err1 != nil {
+			return 0, err1
+		}
+		v2Bytes, err2 := v2.ToBytes()
+		if err2 != nil {
+			return 0, err2
+		}
+		switch result := collation.Collate(v1Bytes, v2Bytes, false); {
 		case result < 0:
 			return -1, nil
 		case result > 0:

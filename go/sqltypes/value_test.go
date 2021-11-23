@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -403,7 +405,9 @@ func TestToBytesAndString(t *testing.T) {
 		TestValue(Int64, "1"),
 		TestValue(Int64, "12"),
 	} {
-		if b := v.ToBytes(); !bytes.Equal(b, v.Raw()) {
+		vBytes, err := v.ToBytes()
+		require.NoError(t, err)
+		if b := vBytes; !bytes.Equal(b, v.Raw()) {
 			t.Errorf("%v.ToBytes: %s, want %s", v, b, v.Raw())
 		}
 		if s := v.ToString(); s != string(v.Raw()) {
@@ -412,7 +416,9 @@ func TestToBytesAndString(t *testing.T) {
 	}
 
 	tv := TestValue(Expression, "aa")
-	if b := tv.ToBytes(); b != nil {
+	tvBytes, err := tv.ToBytes()
+	require.EqualError(t, err, "expression cannot be converted to bytes")
+	if b := tvBytes; b != nil {
 		t.Errorf("%v.ToBytes: %s, want nil", tv, b)
 	}
 	if s := tv.ToString(); s != "" {

@@ -65,8 +65,11 @@ func (vind *XXHash) NeedsVCursor() bool {
 func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i := range ids {
-		id := ids[i].ToBytes()
-		out[i] = key.DestinationKeyspaceID(vXXHash(id))
+		idBytes, err := ids[i].ToBytes()
+		if err != nil {
+			return out, err
+		}
+		out[i] = key.DestinationKeyspaceID(vXXHash(idBytes))
 	}
 	return out, nil
 }
@@ -75,8 +78,11 @@ func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination
 func (vind *XXHash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		id := ids[i].ToBytes()
-		out[i] = bytes.Equal(vXXHash(id), ksids[i])
+		idBytes, err := ids[i].ToBytes()
+		if err != nil {
+			return out, err
+		}
+		out[i] = bytes.Equal(vXXHash(idBytes), ksids[i])
 	}
 	return out, nil
 }

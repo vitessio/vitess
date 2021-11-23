@@ -30,9 +30,9 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -241,20 +241,17 @@ func (v Value) RawStr() string {
 
 // ToBytes returns the value as MySQL would return it as []byte.
 // In contrast, Raw returns the internal representation of the Value, which may not
-// match MySQL's representation for newer types.
-// If the value is not convertible like in the case of Expression, it returns nil.
-func (v Value) ToBytes() []byte {
+// match MySQL's representation for hex encoded binary data or newer types.
+// If the value is not convertible like in the case of Expression, it returns an error.
+func (v Value) ToBytes() ([]byte, error) {
 	if v.typ == Expression {
-		return nil
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes")
 	}
 	if v.typ == HexVal {
 		dv, err := v.decodeHexVal()
-		if err != nil {
-			log.Errorf("Unexpected error seen when returning MySQL representation of SQL Hex value: %v", err)
-		}
-		return dv
+		return dv, err
 	}
-	return v.val
+	return v.val, nil
 }
 
 // Len returns the length.
