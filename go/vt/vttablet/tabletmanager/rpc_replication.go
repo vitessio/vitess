@@ -814,7 +814,8 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context) (string, error) {
 
 	// Clear replication sentinel flag for this primary,
 	// or we might block replication the next time we demote it
-	tm.replManager.setReplicationStopped(false)
+	// here, we do not want to start the health ticks, so we should use reset.
+	tm.replManager.reset()
 
 	// Tell Orchestrator we're no longer in maintenance mode.
 	// Do this in the background, as it's best-effort.
