@@ -894,3 +894,21 @@ func TestCompareStrings(t *testing.T) {
 		})
 	}
 }
+
+// TestInOp tests the In operator comparisons
+func TestInOp(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "integer In tuple",
+			v1:   NewLiteralInt(52), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
+			out: &T,
+			op:  &InOp{},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}

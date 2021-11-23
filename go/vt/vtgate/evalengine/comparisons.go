@@ -375,12 +375,40 @@ func (g *GreaterEqualOp) String() string {
 
 // Evaluate implements the ComparisonOp interface
 func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if right.typ != querypb.Type_TUPLE {
+		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+	}
+	returnValue := resultFalse
+	for _, result := range right.results {
+		if result.typ == querypb.Type_NULL_TYPE {
+			returnValue = resultNull
+			continue
+		}
+		isEqual, err := (&EqualOp{}).IsTrue(left, result)
+		if err != nil {
+			return EvalResult{}, err
+		}
+		if isEqual {
+			return resultTrue, nil
+		}
+	}
+	return returnValue, nil
 }
 
 // IsTrue implements the ComparisonOp interface
 func (i *InOp) IsTrue(left, right EvalResult) (bool, error) {
-	return false, nil
+	res, err := i.Evaluate(left, right)
+	return convertEvalResultToBoolean(res), err
+}
+
+func convertEvalResultToBoolean(result EvalResult) bool {
+	if result.typ == querypb.Type_NULL_TYPE {
+		return false
+	}
+	if sqltypes.IsIntegral(result.typ) && result.ival == 0 {
+		return false
+	}
+	return true
 }
 
 // Type implements the ComparisonOp interface

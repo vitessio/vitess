@@ -19,6 +19,7 @@ package evalengine
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -37,6 +38,7 @@ type (
 		fval      float64
 		bytes     []byte
 		collation collations.ID
+		results   []EvalResult
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -67,7 +69,33 @@ type (
 		Offset    int
 		Collation collations.ID
 	}
+	Tuple []Expr
 )
+
+func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	var res EvalResult
+	res.typ = querypb.Type_TUPLE
+	for _, expr := range t {
+		evalRes, err := expr.Evaluate(env)
+		if err != nil {
+			return EvalResult{}, err
+		}
+		res.results = append(res.results, evalRes)
+	}
+	return res, nil
+}
+
+func (t Tuple) Type(env ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_TUPLE, nil
+}
+
+func (t Tuple) String() string {
+	var stringSlice []string
+	for _, expr := range t {
+		stringSlice = append(stringSlice, expr.String())
+	}
+	return "(" + strings.Join(stringSlice, ",") + ")"
+}
 
 var _ Expr = (*Null)(nil)
 var _ Expr = (*Literal)(nil)
@@ -75,6 +103,7 @@ var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
 var _ Expr = (*BinaryExpr)(nil)
 var _ Expr = (*ComparisonExpr)(nil)
+var _ Expr = (Tuple)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
