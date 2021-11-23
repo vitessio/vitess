@@ -72,6 +72,7 @@ type (
 	Tuple []Expr
 )
 
+// Evaluate implements the Expr interface
 func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	var res EvalResult
 	res.typ = querypb.Type_TUPLE
@@ -85,10 +86,12 @@ func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	return res, nil
 }
 
+// Type implements the Expr interface
 func (t Tuple) Type(env ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_TUPLE, nil
 }
 
+// String implements the Expr interface
 func (t Tuple) String() string {
 	var stringSlice []string
 	for _, expr := range t {
