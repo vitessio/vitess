@@ -32,13 +32,13 @@ import (
 
 type (
 	EvalResult struct {
-		typ       querypb.Type
-		ival      int64
-		uval      uint64
-		fval      float64
-		bytes     []byte
-		collation collations.ID
-		results   []EvalResult
+		typ          querypb.Type
+		ival         int64
+		uval         uint64
+		fval         float64
+		bytes        []byte
+		collation    collations.ID
+		tupleResults []EvalResult
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -80,7 +80,7 @@ func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
 		if err != nil {
 			return EvalResult{}, err
 		}
-		res.results = append(res.results, evalRes)
+		res.tupleResults = append(res.tupleResults, evalRes)
 	}
 	return res, nil
 }
