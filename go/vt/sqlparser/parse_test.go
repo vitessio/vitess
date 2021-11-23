@@ -41,6 +41,25 @@ var (
 		output     string
 		partialDDL bool
 	}{{
+		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
+		output:     "create table x",
+		partialDDL: true,
+	}, {
+		input:  "create table x (e enum('red','yellow') null collate 'utf8_bin')",
+		output: "create table x (\n\te enum('red', 'yellow') collate 'utf8_bin' null\n)",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = TRUE",
+		output: "select 1 from t1 where exists (select 1 from dual) = true",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = FALSE",
+		output: "select 1 from t1 where exists (select 1 from dual) = false",
+	}, {
+		input:  "select 1 from t1 where exists (select 1) = 1",
+		output: "select 1 from t1 where exists (select 1 from dual) = 1",
+	}, {
+		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+	}, {
 		input:  "select 1",
 		output: "select 1 from dual",
 	}, {
@@ -122,46 +141,22 @@ var (
 		input:  "create table x(location POINT DEFAULT (7.0))",
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
 	}, {
-		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location GEOMETRY DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location LINESTRING DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location POLYGON DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location MULTIPOINT DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location MULTILINESTRING DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
 	}, {
-		input:  "create table x(location MULTIPOLYGON DEFAULT POINT(7.0, 3.0))",
-		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
-	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
-	}, {
-		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
@@ -2810,6 +2805,7 @@ func TestLoadData(t *testing.T) {
 		"load data from s3 file 'x.txt'",
 		"load data infile 'x.txt' into table 'c'",
 		"load data from s3 'x.txt' into table x"}
+
 	for _, tcase := range validSQL {
 		_, err := Parse(tcase)
 		require.NoError(t, err)
@@ -3128,52 +3124,6 @@ func TestCreateTable(t *testing.T) {
 	time5 timestamp(3) default current_timestamp(3) on update current_timestamp(3)
 )`,
 		}, {
-			// test utc_timestamp with and without ()
-			input: `create table t (
-	time1 timestamp default utc_timestamp,
-	time2 timestamp default utc_timestamp(),
-	time3 timestamp default utc_timestamp on update utc_timestamp,
-	time4 timestamp default utc_timestamp() on update utc_timestamp(),
-	time5 timestamp(4) default utc_timestamp(4) on update utc_timestamp(4)
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_timestamp()),
-	time2 timestamp default (utc_timestamp()),
-	time3 timestamp default (utc_timestamp()) on update utc_timestamp(),
-	time4 timestamp default (utc_timestamp()) on update utc_timestamp(),
-	time5 timestamp(4) default (utc_timestamp(4)) on update utc_timestamp(4)
-)`,
-		}, {
-			// test utc_time with and without ()
-			input: `create table t (
-	time1 timestamp default utc_time,
-	time2 timestamp default utc_time(),
-	time3 timestamp default utc_time on update utc_time,
-	time4 timestamp default utc_time() on update utc_time(),
-	time5 timestamp(5) default utc_time(5) on update utc_time(5)
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_time()),
-	time2 timestamp default (utc_time()),
-	time3 timestamp default (utc_time()) on update utc_time(),
-	time4 timestamp default (utc_time()) on update utc_time(),
-	time5 timestamp(5) default (utc_time(5)) on update utc_time(5)
-)`,
-		}, {
-			// test utc_date with and without ()
-			input: `create table t (
-	time1 timestamp default utc_date,
-	time2 timestamp default utc_date(),
-	time3 timestamp default utc_date on update utc_date,
-	time4 timestamp default utc_date() on update utc_date()
-)`,
-			output: `create table t (
-	time1 timestamp default (utc_date()),
-	time2 timestamp default (utc_date()),
-	time3 timestamp default (utc_date()) on update utc_date(),
-	time4 timestamp default (utc_date()) on update utc_date()
-)`,
-		}, {
 			// test localtime with and without ()
 			input: `create table t (
 	time1 timestamp default localtime,
@@ -3204,36 +3154,6 @@ func TestCreateTable(t *testing.T) {
 	time3 timestamp default localtimestamp() on update localtimestamp(),
 	time4 timestamp default localtimestamp() on update localtimestamp(),
 	time5 timestamp(1) default localtimestamp(1) on update localtimestamp(1)
-)`,
-		}, {
-			// test current_date with and without ()
-			input: `create table t (
-	time1 timestamp default current_date,
-	time2 timestamp default current_date(),
-	time3 timestamp default current_date on update current_date,
-	time4 timestamp default current_date() on update current_date()
-)`,
-			output: `create table t (
-	time1 timestamp default (current_date()),
-	time2 timestamp default (current_date()),
-	time3 timestamp default (current_date()) on update current_date(),
-	time4 timestamp default (current_date()) on update current_date()
-)`,
-		}, {
-			// test current_time with and without ()
-			input: `create table t (
-	time1 timestamp default current_time,
-	time2 timestamp default current_time(),
-	time3 timestamp default current_time on update current_time,
-	time4 timestamp default current_time() on update current_time(),
-	time5 timestamp(2) default current_time(2) on update current_time(2)
-)`,
-			output: `create table t (
-	time1 timestamp default (current_time()),
-	time2 timestamp default (current_time()),
-	time3 timestamp default (current_time()) on update current_time(),
-	time4 timestamp default (current_time()) on update current_time(),
-	time5 timestamp(2) default (current_time(2)) on update current_time(2)
 )`,
 		}, {
 			input: `create table t1 (

@@ -1200,13 +1200,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, false)
+			topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary.", topologyRecovery.SuccessorKey)
 		}
 	case registerCliCommand("graceful-primary-takeover-auto", "Recovery", `Gracefully promote a new primary. orchestrator will attempt to pick the promoted replica automatically`):
 		{
@@ -1216,13 +1215,12 @@ func Cli(command string, strict bool, instance string, destination string, owner
 			if destinationKey != nil {
 				validateInstanceIsFound(destinationKey)
 			}
-			topologyRecovery, promotedPrimaryCoordinates, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey, true)
+			topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, destinationKey)
 			if err != nil {
 				log.Fatale(err)
 			}
 			fmt.Println(topologyRecovery.SuccessorKey.DisplayString())
-			fmt.Println(*promotedPrimaryCoordinates)
-			log.Debugf("Promoted %+v as new primary. Binlog coordinates at time of promotion: %+v", topologyRecovery.SuccessorKey, *promotedPrimaryCoordinates)
+			log.Debugf("Promoted %+v as new primary.", topologyRecovery.SuccessorKey)
 		}
 	case registerCliCommand("replication-analysis", "Recovery", `Request an analysis of potential crash incidents in all known topologies`):
 		{

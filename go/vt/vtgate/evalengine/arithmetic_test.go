@@ -511,6 +511,7 @@ func TestNullSafeAdd(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
+	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -534,7 +535,7 @@ func TestNullsafeCompare(t *testing.T) {
 		// LHS Text
 		v1:  TestValue(querypb.Type_VARCHAR, "abcd"),
 		v2:  TestValue(querypb.Type_VARCHAR, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		out: 0,
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -597,9 +598,9 @@ func TestNullsafeCompare(t *testing.T) {
 		out: -1,
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeCompare(tcase.v1, tcase.v2, collations.Unknown)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("NullsafeCompare(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		got, err := NullsafeCompare(tcase.v1, tcase.v2, collation)
+		if tcase.err != nil {
+			require.EqualError(t, err, tcase.err.Error())
 		}
 		if tcase.err != nil {
 			continue
@@ -669,20 +670,20 @@ func TestNullsafeCompareCollate(t *testing.T) {
 			v1:        "abcd",
 			v2:        "abcd",
 			collation: 0,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 		},
 		{
 			v1:        "abcd",
 			v2:        "abcd",
 			collation: 1111,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 1111 isn't possible"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)"),
 		},
 		{
 			v1: "abcd",
 			v2: "abcd",
 			// unsupported collation gb18030_bin
 			collation: 249,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "comparison using collation 249 isn't possible"),
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 249)"),
 		},
 	}
 	for _, tcase := range tcases {
@@ -1326,9 +1327,12 @@ func TestCompareNumeric(t *testing.T) {
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					aHash := hashCode(aVal)
-					bHash := hashCode(bVal)
-					assert.Equal(t, aHash, bHash, "hash code does not match")
+					if aVal.typ == bVal.typ {
+						// hash codes can only be compared if they are coerced to the same type first
+						aHash := numericalHashCode(aVal)
+						bHash := numericalHashCode(bVal)
+						assert.Equal(t, aHash, bHash, "hash code does not match")
+					}
 				}
 			})
 		}
@@ -1367,7 +1371,7 @@ func TestMin(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2, collations.Unknown)
@@ -1474,7 +1478,7 @@ func TestMax(t *testing.T) {
 	}, {
 		v1:  TestValue(querypb.Type_VARCHAR, "aa"),
 		v2:  TestValue(querypb.Type_VARCHAR, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2, collations.Unknown)
@@ -1547,25 +1551,6 @@ func TestMaxCollate(t *testing.T) {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
 		}
 	}
-}
-
-func TestHashCodes(t *testing.T) {
-	n1 := sqltypes.NULL
-	n2 := sqltypes.Value{}
-
-	h1, err := NullsafeHashcode(n1)
-	require.NoError(t, err)
-	h2, err := NullsafeHashcode(n2)
-	require.NoError(t, err)
-	assert.Equal(t, h1, h2)
-
-	char := TestValue(querypb.Type_VARCHAR, "aa")
-	_, err = NullsafeHashcode(char)
-	require.Error(t, err)
-
-	num := TestValue(querypb.Type_INT64, "123")
-	_, err = NullsafeHashcode(num)
-	require.NoError(t, err)
 }
 
 func printValue(v sqltypes.Value) string {
@@ -1651,5 +1636,38 @@ func BenchmarkAddGo(b *testing.B) {
 	v2 := int64(2)
 	for i := 0; i < b.N; i++ {
 		v1 += v2
+	}
+}
+
+func TestParseStringToFloat(t *testing.T) {
+	tcs := []struct {
+		str string
+		val float64
+	}{
+		{str: ""},
+		{str: " "},
+		{str: "1", val: 1},
+		{str: "1.10", val: 1.10},
+		{str: "    6.87", val: 6.87},
+		{str: "93.66  ", val: 93.66},
+		{str: "\t 42.10 \n ", val: 42.10},
+		{str: "1.10aa", val: 1.10},
+		{str: ".", val: 0.00},
+		{str: ".99", val: 0.99},
+		{str: "..99", val: 0},
+		{str: "1.", val: 1},
+		{str: "0.1.99", val: 0.1},
+		{str: "0.", val: 0},
+		{str: "8794354", val: 8794354},
+		{str: "    10  ", val: 10},
+		{str: "2266951196291479516", val: 2266951196291479516},
+		{str: "abcd123", val: 0},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.str, func(t *testing.T) {
+			got := parseStringToFloat(tc.str)
+			require.EqualValues(t, tc.val, got)
+		})
 	}
 }

@@ -20,7 +20,13 @@ import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
+var sortOrderIdentity [256]byte
+
 func init() {
+	for i := range sortOrderIdentity {
+		sortOrderIdentity[i] = byte(i)
+	}
+
 	register(&Collation_binary{})
 }
 
@@ -82,7 +88,7 @@ func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_bin) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_8bit_bin) Hash(src []byte, numCodepoints int) HashCode {
 	hash := 0x8b8b0000 | uintptr(c.id)
 	if numCodepoints == 0 {
 		return memhash(src, hash)
@@ -103,6 +109,10 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 	return numBytes
 }
 
+func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
 type Collation_8bit_simple_ci struct {
 	id   ID
 	name string
@@ -110,7 +120,11 @@ type Collation_8bit_simple_ci struct {
 	charset charset.Charset
 }
 
-func (c *Collation_8bit_simple_ci) Init() {}
+func (c *Collation_8bit_simple_ci) Init() {
+	if c.sort == nil {
+		panic("8bit_simple_ci collation without sort table")
+	}
+}
 
 func (c *Collation_8bit_simple_ci) Name() string {
 	return c.name
@@ -164,7 +178,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) HashCode {
 	sortOrder := c.sort
 
 	var tocopy = len(src)
@@ -190,6 +204,10 @@ func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) uintptr {
 
 func (c *Collation_8bit_simple_ci) WeightStringLen(numBytes int) int {
 	return numBytes
+}
+
+func (c *Collation_8bit_simple_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newEightbitWildcardMatcher(c.sort, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padToMax bool) []byte {
@@ -251,7 +269,7 @@ func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []by
 	return dst
 }
 
-func (c *Collation_binary) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_binary) Hash(src []byte, numCodepoints int) HashCode {
 	if numCodepoints > 0 {
 		src = src[:numCodepoints]
 	}
@@ -260,4 +278,8 @@ func (c *Collation_binary) Hash(src []byte, numCodepoints int) uintptr {
 
 func (c *Collation_binary) WeightStringLen(numBytes int) int {
 	return numBytes
+}
+
+func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
 }

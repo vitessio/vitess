@@ -522,13 +522,13 @@ var commands = []commandGroup{
 			{
 				name:   "SwitchReads",
 				method: commandSwitchReads,
-				params: "[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry-run] <keyspace.workflow>",
+				params: "[-cells=c1,c2,...] [-reverse] -tablet_type={replica|rdonly} [-dry_run] <keyspace.workflow>",
 				help:   "Switch read traffic for the specified workflow.",
 			},
 			{
 				name:   "SwitchWrites",
 				method: commandSwitchWrites,
-				params: "[-timeout=30s] [-reverse] [-reverse_replication=true] [-dry-run] <keyspace.workflow>",
+				params: "[-timeout=30s] [-reverse] [-reverse_replication=true] [-dry_run] <keyspace.workflow>",
 				help:   "Switch write traffic for the specified workflow.",
 			},
 			{
