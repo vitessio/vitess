@@ -19,16 +19,21 @@ package sqltypes
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
 
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -209,6 +214,13 @@ func (v Value) Raw() []byte {
 func (v Value) ToBytes() []byte {
 	if v.typ == Expression {
 		return nil
+	}
+	if v.typ == HexVal {
+		dv, err := v.decodeHexVal()
+		if err != nil {
+			log.Errorf("Unexpected error seen when returning MySQL representation of SQL Hex value: %v", err)
+		}
+		return dv
 	}
 	return v.val
 }
@@ -393,6 +405,22 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 	}
 	*v, err = InterfaceToValue(val)
 	return err
+}
+
+// decodeHexVal decodes the SQL hex value of the form x'A1' into a byte
+// array matching what MySQL would return when querying the column where
+// an INSERT was performed with x'A1' having been specified as a value
+func (v *Value) decodeHexVal() ([]byte, error) {
+	match, err := regexp.Match("^x'.*'$", v.val)
+	if !match || err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
+	}
+	hexBytes := v.val[2 : len(v.val)-1]
+	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
+	if err != nil {
+		return nil, err
+	}
+	return decodedHexBytes, nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {
