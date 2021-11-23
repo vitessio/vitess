@@ -70,6 +70,7 @@ func TestShowColumns(t *testing.T) {
 	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
 	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
 	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
 }
 
 func TestShowTables(t *testing.T) {
