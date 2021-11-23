@@ -68,7 +68,6 @@ func (tc testCase) run(t *testing.T) {
 		} else if tc.out != nil && !*tc.out {
 			require.EqualValues(t, 0, got.ival)
 		} else {
-			require.EqualValues(t, 0, got.ival)
 			require.EqualValues(t, sqltypes.Null, got.typ)
 		}
 	} else {
@@ -903,6 +902,64 @@ func TestInOp(t *testing.T) {
 			v1:   NewLiteralInt(52), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
 			op:  &InOp{},
+		}, {
+			name: "integer not In tuple",
+			v1:   NewLiteralInt(51), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
+			out: &F,
+			op:  &InOp{},
+		}, {
+			name: "integer not In tuple but with Null inside",
+			v1:   NewLiteralInt(52), v2: Tuple{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}},
+			out: nil,
+			op:  &InOp{},
+		}, {
+			name: "integer In tuple with null inside",
+			v1:   NewLiteralInt(52), v2: Tuple{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
+			out: &T,
+			op:  &InOp{},
+		}, {
+			name: "Null In tuple",
+			v1:   Null{}, v2: Tuple{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
+			out: nil,
+			op:  &InOp{},
+		},
+	}
+
+	for i, tcase := range tests {
+		t.Run(fmt.Sprintf("%d %s", i, tcase.name), func(t *testing.T) {
+			tcase.run(t)
+		})
+	}
+}
+
+// TestNotInOp tests the NotIn operator comparisons
+func TestNotInOp(t *testing.T) {
+	tests := []testCase{
+		{
+			name: "integer In tuple",
+			v1:   NewLiteralInt(52), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
+			out: &F,
+			op:  &NotInOp{},
+		}, {
+			name: "integer not In tuple",
+			v1:   NewLiteralInt(51), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
+			out: &T,
+			op:  &NotInOp{},
+		}, {
+			name: "integer not In tuple but with Null inside",
+			v1:   NewLiteralInt(52), v2: Tuple{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}},
+			out: nil,
+			op:  &NotInOp{},
+		}, {
+			name: "integer In tuple with null inside",
+			v1:   NewLiteralInt(52), v2: Tuple{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
+			out: &F,
+			op:  &NotInOp{},
+		}, {
+			name: "Null In tuple",
+			v1:   Null{}, v2: Tuple{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
+			out: nil,
+			op:  &NotInOp{},
 		},
 	}
 

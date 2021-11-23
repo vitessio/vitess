@@ -423,12 +423,15 @@ func (i *InOp) String() string {
 
 // Evaluate implements the ComparisonOp interface
 func (n *NotInOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	res, err := (&InOp{}).Evaluate(left, right)
+	res.ival = 1 - res.ival
+	return res, err
 }
 
 // IsTrue implements the ComparisonOp interface
 func (n *NotInOp) IsTrue(left, right EvalResult) (bool, error) {
-	return false, nil
+	res, err := (&InOp{}).IsTrue(left, right)
+	return !res, err
 }
 
 // Type implements the ComparisonOp interface
