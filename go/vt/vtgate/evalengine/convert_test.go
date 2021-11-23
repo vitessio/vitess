@@ -103,6 +103,12 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: "(1,2) in ((3,2), (2,3), null)",
 		expected:   NULL,
+	}, {
+		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
+		expected:   NULL,
 	}}
 
 	for _, test := range tests {
