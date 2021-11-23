@@ -72,34 +72,6 @@ type (
 	Tuple []Expr
 )
 
-// Evaluate implements the Expr interface
-func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
-	var res EvalResult
-	res.typ = querypb.Type_TUPLE
-	for _, expr := range t {
-		evalRes, err := expr.Evaluate(env)
-		if err != nil {
-			return EvalResult{}, err
-		}
-		res.tupleResults = append(res.tupleResults, evalRes)
-	}
-	return res, nil
-}
-
-// Type implements the Expr interface
-func (t Tuple) Type(env ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_TUPLE, nil
-}
-
-// String implements the Expr interface
-func (t Tuple) String() string {
-	var stringSlice []string
-	for _, expr := range t {
-		stringSlice = append(stringSlice, expr.String())
-	}
-	return "(" + strings.Join(stringSlice, ",") + ")"
-}
-
 var _ Expr = (*Null)(nil)
 var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
@@ -185,6 +157,20 @@ func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
 }
 
 // Evaluate implements the Expr interface
+func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	var res EvalResult
+	res.typ = querypb.Type_TUPLE
+	for _, expr := range t {
+		evalRes, err := expr.Evaluate(env)
+		if err != nil {
+			return EvalResult{}, err
+		}
+		res.tupleResults = append(res.tupleResults, evalRes)
+	}
+	return res, nil
+}
+
+// Evaluate implements the Expr interface
 func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	val, ok := env.BindVars[b.Key]
 	if !ok {
@@ -222,6 +208,11 @@ func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
 }
 
 // Type implements the Expr interface
+func (t Tuple) Type(env ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_TUPLE, nil
+}
+
+// Type implements the Expr interface
 func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
 	return sqltypes.Float64, nil
 }
@@ -234,6 +225,15 @@ func (b *BindVariable) String() string {
 // String implements the Expr interface
 func (l *Literal) String() string {
 	return l.Val.Value().String()
+}
+
+// String implements the Expr interface
+func (t Tuple) String() string {
+	var stringSlice []string
+	for _, expr := range t {
+		stringSlice = append(stringSlice, expr.String())
+	}
+	return "(" + strings.Join(stringSlice, ",") + ")"
 }
 
 // String implements the Expr interface

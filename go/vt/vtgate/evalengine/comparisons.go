@@ -183,24 +183,6 @@ func foldSingleLenTuples(val EvalResult) EvalResult {
 	return val
 }
 
-func compareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
-	if len(lVal.tupleResults) != len(rVal.tupleResults) {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(lVal.tupleResults))
-	}
-	hasSeenNull := false
-	for idx, lResult := range lVal.tupleResults {
-		rResult := rVal.tupleResults[idx]
-		res, isNull, err := nullSafeExecuteComparison(lResult, rResult)
-		if isNull {
-			hasSeenNull = true
-		}
-		if res != 0 || err != nil {
-			return res, false, err
-		}
-	}
-	return 0, hasSeenNull, nil
-}
-
 // Evaluate implements the Expr interface
 func (c *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	if c.Op == nil {
