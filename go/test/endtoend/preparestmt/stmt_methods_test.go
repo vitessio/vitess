@@ -379,3 +379,24 @@ func TestSelectDBA(t *testing.T) {
 	}
 	require.Equal(t, 2, rowCount)
 }
+
+func TestShowColumns(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	dbo := Connect(t)
+	defer dbo.Close()
+
+	prepare, err := dbo.Prepare("show columns from vt_prepare_stmt_test where Field = 'id'")
+	require.NoError(t, err)
+
+	rows, err := prepare.Query()
+	require.NoError(t, err)
+	defer rows.Close()
+
+	require.True(t, rows.Next(), "no rows found")
+	cols, err := rows.Columns()
+	if err != nil {
+		return
+	}
+	require.Len(t, cols, 6)
+	require.False(t, rows.Next())
+}

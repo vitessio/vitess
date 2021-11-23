@@ -1566,15 +1566,21 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	switch stmtType {
 	case sqlparser.StmtSelect:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
+	case sqlparser.StmtShow:
+		qr, err := e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
+		if err == nil {
+			return qr, nil
+		}
+		if err == planbuilder.ErrPlanNotSupported {
+			res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+			if err == nil {
+				return res.Fields, nil
+			}
+		}
+		return nil, err
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush:
 		return nil, nil
-	case sqlparser.StmtShow:
-		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		if err != nil {
-			return nil, err
-		}
-		return res.Fields, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }
