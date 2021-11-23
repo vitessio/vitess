@@ -152,7 +152,18 @@ func Convert(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Left:  left,
 			Right: right,
 		}, nil
-
+	case sqlparser.ValTuple:
+		var res Tuple
+		for _, expr := range node {
+			convertedExpr, err := Convert(expr, lookup)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, convertedExpr)
+		}
+		return res, nil
+	case *sqlparser.NullVal:
+		return Null{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %T", ErrConvertExprNotSupported, e)
 }

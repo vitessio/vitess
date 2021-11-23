@@ -70,6 +70,15 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: ":float_bind_variable",
 		expected:   sqltypes.NewFloat64(2.2),
+	}, {
+		expression: "42 in (41, 42)",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "42 in (41, 43)",
+		expected:   sqltypes.NewInt32(0),
+	}, {
+		expression: "42 in (null, 41, 43)",
+		expected:   NULL,
 	}}
 
 	for _, test := range tests {
