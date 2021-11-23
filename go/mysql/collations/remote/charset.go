@@ -92,7 +92,10 @@ func (c *Charset) performConversion(dst []byte, dstCharset string, src []byte, s
 	if len(res.Rows) != 1 {
 		return nil, fmt.Errorf("unexpected result from MySQL: %d rows returned", len(res.Rows))
 	}
-	result := res.Rows[0][0].ToBytes()
+	result, err := res.Rows[0][0].ToBytes()
+	if err != nil {
+		return nil, err
+	}
 	if dst != nil {
 		return append(dst, result...), nil
 	}
