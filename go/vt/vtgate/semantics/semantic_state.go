@@ -82,7 +82,7 @@ type (
 		// It does not recurse inside derived tables and the like to find the original dependencies
 		Direct ExprDependencies
 
-		exprTypes   map[sqlparser.Expr]Type
+		ExprTypes   map[sqlparser.Expr]Type
 		selectScope map[*sqlparser.Select]*scope
 		Comments    sqlparser.Comments
 		SubqueryMap map[*sqlparser.Select][]*sqlparser.ExtractedSubquery
@@ -201,7 +201,7 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 
 // TypeFor returns the type of expressions in the query
 func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.exprTypes[e]
+	typ, found := st.ExprTypes[e]
 	if found {
 		return &typ.Type
 	}
@@ -210,7 +210,7 @@ func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
 
 // CollationFor returns the collation name of expressions in the query
 func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
-	typ, found := st.exprTypes[e]
+	typ, found := st.ExprTypes[e]
 	if found {
 		return typ.Collation
 	}
@@ -303,4 +303,13 @@ func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 		}
 	}
 	return res
+}
+
+// CopyExprInfo lookups src in the ExprTypes map and, if a key is found, assign
+// the corresponding Type value of src to dest.
+func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
+	srcType, found := st.ExprTypes[src]
+	if found {
+		st.ExprTypes[dest] = srcType
+	}
 }

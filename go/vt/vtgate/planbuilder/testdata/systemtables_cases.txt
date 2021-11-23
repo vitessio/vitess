@@ -942,6 +942,7 @@ Gen4 plan same as above
     "JoinVars": {
       "x_id": 0
     },
+    "Predicate": "x.id = `user`.id",
     "TableName": "information_schema.key_column_usage_`user`",
     "Inputs": [
       {

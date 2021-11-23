@@ -351,13 +351,10 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodata.Tablet) {
 	}
 	hc.healthByAlias[tabletAliasString(tabletAlias)] = thc
 	res := thc.SimpleCopy()
-	if ths, ok := hc.healthData[key]; !ok {
+	if _, ok := hc.healthData[key]; !ok {
 		hc.healthData[key] = make(map[tabletAliasString]*TabletHealth)
-		hc.healthData[key][tabletAliasString(tabletAlias)] = res
-	} else {
-		// just overwrite it if it exists already
-		ths[tabletAliasString(tabletAlias)] = res
 	}
+	hc.healthData[key][tabletAliasString(tabletAlias)] = res
 
 	hc.broadcast(res)
 	hc.connsWG.Add(1)
@@ -386,7 +383,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
-		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tabletAlias)
+		log.Infof("We have no health data for tablet: %v, it might have been deleted already", tablet)
 		return
 	}
 	// Calling this will end the context associated with th.checkConn,
@@ -413,6 +410,14 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 	defer hc.mu.Unlock()
 
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(th.Tablet.Alias))
+	// let's be sure that this tablet hasn't been deleted from the authoritative map
+	// so that we're not racing to update it and in effect re-adding a copy of the
+	// tablet record that was deleted
+	if _, ok := hc.healthByAlias[tabletAlias]; !ok {
+		log.Infof("Tablet %v has been deleted, skipping health update", th.Tablet)
+		return
+	}
+
 	targetKey := hc.keyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
 	if targetChanged {
@@ -427,7 +432,10 @@ func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Targ
 			hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
 		}
 	}
-	// add it to the map by target
+	// add it to the map by target and create the map record if needed
+	if _, ok := hc.healthData[targetKey]; !ok {
+		hc.healthData[targetKey] = make(map[tabletAliasString]*TabletHealth)
+	}
 	hc.healthData[targetKey][tabletAlias] = th
 
 	isPrimary := th.Target.TabletType == topodata.TabletType_PRIMARY

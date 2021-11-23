@@ -94,3 +94,12 @@ func IsUnicodeByName(csname string) bool {
 		return false
 	}
 }
+
+func IsBackslashSafe(charset Charset) bool {
+	switch charset.(type) {
+	case Charset_sjis, Charset_cp932, Charset_gb18030 /*, Charset_gbk, Charset_big5 */ :
+		return false
+	default:
+		return true
+	}
+}

@@ -227,6 +227,13 @@ func (v Value) Raw() []byte {
 	return v.val
 }
 
+// RawStr returns the internal representation of the value as a string instead
+// of a byte slice. This is equivalent to calling `string(v.Raw())` but does
+// not allocate.
+func (v Value) RawStr() string {
+	return hack.String(v.val)
+}
+
 // ToBytes returns the value as MySQL would return it as []byte.
 // In contrast, Raw returns the internal representation of the Value, which may not
 // match MySQL's representation for newer types.

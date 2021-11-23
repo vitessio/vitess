@@ -650,7 +650,7 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 	}
 
 	_, err := ms.TryExecute(&noopVCursor{}, nil, false)
-	want := "types are not comparable: VARCHAR vs VARCHAR"
+	want := "cannot compare strings, collation is unknown or unsupported (collation ID: 0)"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)
 	}

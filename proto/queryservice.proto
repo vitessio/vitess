@@ -88,8 +88,19 @@ service Query {
   // MessageAck acks messages for a table.
   rpc MessageAck(query.MessageAckRequest) returns (query.MessageAckResponse) {};
 
+  // ReserveExecute executes a query on a reserved connection
   rpc ReserveExecute(query.ReserveExecuteRequest) returns (query.ReserveExecuteResponse) {};
+
+  // ReserveBeginExecute starts a transaction and executes a query in the transaction on a reserved connection
   rpc ReserveBeginExecute(query.ReserveBeginExecuteRequest) returns (query.ReserveBeginExecuteResponse) {};
+
+  // ReserveStreamExecute executes a streaming query on a reserved connection
+  rpc ReserveStreamExecute(query.ReserveStreamExecuteRequest) returns (stream query.ReserveStreamExecuteResponse) {};
+
+  // ReserveBeginStreamExecute starts a transaction and executes a streaming query in the transaction on a reserved connection
+  rpc ReserveBeginStreamExecute(query.ReserveBeginStreamExecuteRequest) returns (stream query.ReserveBeginStreamExecuteResponse) {};
+
+  // Release releases the connection
   rpc Release(query.ReleaseRequest) returns (query.ReleaseResponse) {};
 
   // StreamHealth runs a streaming RPC to the tablet, that returns the

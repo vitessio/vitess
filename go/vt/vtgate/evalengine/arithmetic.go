@@ -20,11 +20,12 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
-
-	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -53,7 +54,7 @@ type UnsupportedCollationError struct {
 
 // Error function implements the error interface
 func (err UnsupportedCollationError) Error() string {
-	return fmt.Sprintf("comparison using collation %d isn't possible", err.ID)
+	return fmt.Sprintf("cannot compare strings, collation is unknown or unsupported (collation ID: %d)", err.ID)
 }
 
 func dataOutOfRangeError(v1, v2 interface{}, typ, sign string) error {
@@ -215,21 +216,33 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	if v2.IsNull() {
 		return 1, nil
 	}
-	if sqltypes.IsNumber(v1.Type()) || sqltypes.IsNumber(v2.Type()) {
-		lv1, err := newEvalResult(v1)
-		if err != nil {
-			return 0, err
-		}
-		lv2, err := newEvalResult(v2)
-		if err != nil {
-			return 0, err
-		}
-		return compareNumeric(lv1, lv2)
-	}
-	if isByteComparable(v1) && isByteComparable(v2) {
+
+	if isByteComparable(v1.Type()) && isByteComparable(v2.Type()) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
-	if v1.IsText() && v2.IsText() && collationID != collations.Unknown {
+
+	typ, err := CoerceTo(v1.Type(), v2.Type()) // TODO systay we should add a method where this decision is done at plantime
+	if err != nil {
+		return 0, err
+	}
+	v1cast, err := castTo(v1, typ)
+	if err != nil {
+		return 0, err
+	}
+	v2cast, err := castTo(v2, typ)
+	if err != nil {
+		return 0, err
+	}
+
+	if sqltypes.IsNumber(typ) {
+		return compareNumeric(v1cast, v2cast)
+	}
+	if sqltypes.IsText(typ) || sqltypes.IsBinary(typ) {
+		if collationID == collations.Unknown {
+			return 0, UnsupportedCollationError{
+				ID: collationID,
+			}
+		}
 		collation := collations.Default().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
@@ -251,31 +264,159 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 	}
 }
 
+// HashCode is a type alias to the code easier to read
+type HashCode = uintptr
+
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
-// TODO: should be extended to support all possible types
-func NullsafeHashcode(v sqltypes.Value) (int64, error) {
-	if v.IsNull() {
-		return math.MaxInt64, nil
+func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
+	castValue, err := castTo(v, coerceType)
+	if err != nil {
+		return 0, err
 	}
-
-	if sqltypes.IsNumber(v.Type()) {
-		result, err := newEvalResult(v)
+	switch {
+	case sqltypes.IsNull(castValue.typ):
+		return HashCode(math.MaxInt64), nil
+	case sqltypes.IsNumber(castValue.typ):
+		return numericalHashCode(castValue), nil
+	case sqltypes.IsText(castValue.typ):
+		coll := collations.Default().LookupByID(collation)
+		if coll == nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+		}
+		return coll.Hash(castValue.bytes, 0), nil
+	case sqltypes.IsDate(castValue.typ):
+		time, err := parseDate(castValue)
 		if err != nil {
 			return 0, err
 		}
-		return hashCode(result), nil
+		return uintptr(time.UnixNano()), nil
 	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", castValue.typ)
+}
 
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", v.Type())
+func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
+	switch {
+	case typ == sqltypes.Null:
+		return EvalResult{}, nil
+	case sqltypes.IsFloat(typ) || typ == sqltypes.Decimal:
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{fval: float64(ival), typ: sqltypes.Float64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{fval: float64(uval), typ: sqltypes.Float64}, nil
+		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+			fval, err := strconv.ParseFloat(v.RawStr(), 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		case v.IsText() || v.IsBinary():
+			fval := parseStringToFloat(v.RawStr())
+			return EvalResult{fval: fval, typ: sqltypes.Float64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
+		}
+
+	case sqltypes.IsSigned(typ):
+		switch {
+		case v.IsSigned():
+			ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{ival: ival, typ: sqltypes.Int64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{ival: int64(uval), typ: sqltypes.Int64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
+		}
+
+	case sqltypes.IsUnsigned(typ):
+		switch {
+		case v.IsSigned():
+			uval, err := strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{uval: uint64(uval), typ: sqltypes.Uint64}, nil
+		case v.IsUnsigned():
+			uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%v", err)
+			}
+			return EvalResult{uval: uval, typ: sqltypes.Uint64}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+		}
+
+	case sqltypes.IsText(typ) || sqltypes.IsBinary(typ):
+		switch {
+		case v.IsText() || v.IsBinary():
+			return EvalResult{bytes: v.Raw(), typ: v.Type()}, nil
+		default:
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a text: %v", v)
+		}
+	}
+	return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value: %v", v)
+}
+
+// CoerceTo takes two input types, and decides how they should be coerced before compared
+func CoerceTo(v1, v2 querypb.Type) (querypb.Type, error) {
+	if v1 == v2 {
+		return v1, nil
+	}
+	if sqltypes.IsNull(v1) || sqltypes.IsNull(v2) {
+		return sqltypes.Null, nil
+	}
+	if (sqltypes.IsText(v1) || sqltypes.IsBinary(v1)) && (sqltypes.IsText(v2) || sqltypes.IsBinary(v2)) {
+		return sqltypes.VarChar, nil
+	}
+	if sqltypes.IsNumber(v1) || sqltypes.IsNumber(v2) {
+		switch {
+		case sqltypes.IsText(v1) || sqltypes.IsBinary(v1) || sqltypes.IsText(v2) || sqltypes.IsBinary(v2):
+			return sqltypes.Float64, nil
+		case sqltypes.IsFloat(v2) || v2 == sqltypes.Decimal || sqltypes.IsFloat(v1) || v1 == sqltypes.Decimal:
+			return sqltypes.Float64, nil
+		case sqltypes.IsSigned(v1):
+			switch {
+			case sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			case sqltypes.IsSigned(v2):
+				return sqltypes.Int64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		case sqltypes.IsUnsigned(v1):
+			switch {
+			case sqltypes.IsSigned(v2) || sqltypes.IsUnsigned(v2):
+				return sqltypes.Uint64, nil
+			default:
+				return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
+			}
+		}
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v vs %v", v1, v2)
 }
 
 // isByteComparable returns true if the type is binary or date/time.
-func isByteComparable(v sqltypes.Value) bool {
-	if v.IsBinary() {
+func isByteComparable(typ querypb.Type) bool {
+	if sqltypes.IsBinary(typ) {
 		return true
 	}
-	switch v.Type() {
+	switch typ {
 	case sqltypes.Timestamp, sqltypes.Date, sqltypes.Time, sqltypes.Datetime, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON, sqltypes.Bit:
 		return true
 	}
@@ -629,4 +770,17 @@ func anyMinusFloat(v1 EvalResult, v2 float64) EvalResult {
 		v1.fval = float64(v1.uval)
 	}
 	return EvalResult{typ: sqltypes.Float64, fval: v1.fval - v2}
+}
+
+func parseStringToFloat(str string) float64 {
+	str = strings.TrimSpace(str)
+
+	// We only care to parse as many of the initial float characters of the
+	// string as possible. This functionality is implemented in the `strconv` package
+	// of the standard library, but not exposed, so we hook into it.
+	val, _, err := hack.ParseFloatPrefix(str, 64)
+	if err != nil {
+		return 0.0
+	}
+	return val
 }

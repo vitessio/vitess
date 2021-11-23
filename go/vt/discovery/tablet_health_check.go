@@ -289,12 +289,13 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 
 		if err != nil {
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)
-			// We have reason to suspect the tablet healthcheck record is corrupted or invalid so let's remove the tablet's record
-			// from the healthcheck cache and it will get re-added again if the tablet is reachable
-			if strings.Contains(err.Error(), "health stats mismatch") ||
-				strings.HasSuffix(err.Error(), context.Canceled.Error()) ||
-				strings.Contains(err.Error(), `"error reading from server: EOF", received prior goaway`) {
-				log.Warningf("tablet %s had a suspect healthcheck error: %s -- clearing cache record", thc.Tablet.Alias, err.Error())
+			// This means that another tablet has taken over the host:port that we were connected to.
+			// So let's remove the tablet's data from the healthcheck, and if it is still a part of the
+			// cluster, the new tablet record will be fetched from the topology server and re-added to
+			// the healthcheck cache again via the topology watcher.
+			// WARNING: Under no other circumstances should we be deleting the tablet here.
+			if strings.Contains(err.Error(), "health stats mismatch") {
+				log.Warningf("deleting tablet %v from healthcheck due to health stats mismatch", thc.Tablet)
 				hc.deleteTablet(thc.Tablet)
 				return
 			}
@@ -331,7 +332,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 }
 
 func (thc *tabletHealthCheck) closeConnection(ctx context.Context, err error) {
-	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet.Alias, err)
+	log.Warningf("tablet %v healthcheck stream error: %v", thc.Tablet, err)
 	thc.setServingState(false, err.Error())
 	thc.LastError = err
 	_ = thc.Conn.Close(ctx)

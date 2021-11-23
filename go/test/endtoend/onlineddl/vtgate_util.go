@@ -118,6 +118,21 @@ func CheckCleanupMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cl
 	assert.Equal(t, len(shards), int(r.RowsAffected))
 }
 
+// CheckCompleteMigration attempts to complete a migration, and expects success by counting affected rows
+func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCompletePossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a complete",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectCompletePossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
 // CheckCancelAllMigrations cancels all pending migrations and expect number of affected rows
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	cancelQuery := "alter vitess_migration cancel all"
