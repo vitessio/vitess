@@ -80,7 +80,7 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	err = q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+	err = q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -307,7 +307,7 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+	transactionID, alias, err := q.server.BeginStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
@@ -400,7 +400,7 @@ func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stre
 	return vterrors.ToGRPC(err)
 }
 
-//ReserveExecute implements the QueryServer interface
+// ReserveExecute implements the QueryServer interface
 func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExecuteRequest) (response *querypb.ReserveExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
@@ -426,7 +426,30 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 	}, nil
 }
 
-//ReserveBeginExecute implements the QueryServer interface
+// ReserveStreamExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteRequest, stream queryservicepb.Query_ReserveStreamExecuteServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	reservedID, alias, err := q.server.ReserveStreamExecute(ctx, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+		return stream.Send(&querypb.ReserveStreamExecuteResponse{
+			Result: sqltypes.ResultToProto3(reply),
+		})
+	})
+	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
+		ReservedId:  reservedID,
+		TabletAlias: alias,
+	})
+	if err != nil {
+		return vterrors.ToGRPC(err)
+	}
+
+	return vterrors.ToGRPC(errInLastPacket)
+}
+
+// ReserveBeginExecute implements the QueryServer interface
 func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.ReserveBeginExecuteRequest) (response *querypb.ReserveBeginExecuteResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
@@ -454,7 +477,31 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 	}, nil
 }
 
-//Release implements the QueryServer interface
+// ReserveBeginStreamExecute is part of the queryservice.QueryServer interface
+func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExecuteRequest, stream queryservicepb.Query_ReserveBeginStreamExecuteServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	transactionID, reservedID, alias, err := q.server.ReserveBeginStreamExecute(ctx, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
+		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+			Result: sqltypes.ResultToProto3(reply),
+		})
+	})
+	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		ReservedId:    reservedID,
+		TransactionId: transactionID,
+		TabletAlias:   alias,
+	})
+	if err != nil {
+		return vterrors.ToGRPC(err)
+	}
+
+	return vterrors.ToGRPC(errInLastPacket)
+}
+
+// Release implements the QueryServer interface
 func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (response *querypb.ReleaseResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),

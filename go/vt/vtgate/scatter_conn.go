@@ -342,9 +342,6 @@ func (stc *ScatterConn) StreamExecuteMulti(
 	autocommit bool,
 	callback func(reply *sqltypes.Result) error,
 ) []error {
-	// mu protects fieldSent, callback and replyErr
-	var mu sync.Mutex
-
 	if session.InLockSession() && session.TriggerLockHeartBeat() {
 		go stc.runLockQuery(ctx, session)
 	}
@@ -363,13 +360,10 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				qs    queryservice.QueryService
 			)
 			transactionID := info.transactionID
+			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
 				opts = session.Session.Options
-			}
-
-			if info.reservedID != 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
 			}
 
 			if autocommit {
@@ -384,31 +378,51 @@ func (stc *ScatterConn) StreamExecuteMulti(
 				return nil, err
 			}
 
+			retryRequest := func(exec func()) {
+				retry := checkAndResetShardSession(info, err, session, rs.Target)
+				switch retry {
+				case newQS:
+					// Current tablet is not available, try querying new tablet using gateway.
+					qs = rs.Gateway
+					fallthrough
+				case shard:
+					// if we need to reset a reserved connection, here is our chance to try executing again,
+					// against a new connection
+					exec()
+				}
+			}
+
 			switch info.actionNeeded {
 			case nothing:
-				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], info.transactionID, opts, callback)
+				err = qs.StreamExecute(ctx, rs.Target, query, bindVars[i], transactionID, reservedID, opts, callback)
 				if err != nil {
-					// TODO once we have stream support for reserved connections, this should use the retryRequest from the ExecuteMulti method
-					return nil, err
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserve
+						reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], 0 /*transactionId*/, opts, callback)
+					})
 				}
 			case begin:
-				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], opts, callback)
+				transactionID, alias, err = qs.BeginStreamExecute(ctx, rs.Target, session.SavePoints(), query, bindVars[i], reservedID, opts, callback)
 				if err != nil {
-					// TODO once we have stream support for reservedc connections, this should use the retryRequest function
-					return nil, err
+					retryRequest(func() {
+						// we seem to have lost our connection. it was a reserved connection, let's try to recreate it
+						info.actionNeeded = reserveBegin
+						transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
+					})
 				}
-			case reserve, reserveBegin:
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "reserved connection not supported in streaming mode")
+			case reserve:
+				reservedID, alias, err = qs.ReserveStreamExecute(ctx, rs.Target, session.SetPreQueries(), query, bindVars[i], transactionID, opts, callback)
+			case reserveBegin:
+				transactionID, reservedID, alias, err = qs.ReserveBeginStreamExecute(ctx, rs.Target, session.SetPreQueries(), session.SavePoints(), query, bindVars[i], opts, callback)
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
 			// We need to new shard info irrespective of the error.
-			newInfo := info.updateTransactionAndReservedID(transactionID, 0, alias)
+			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
 				return newInfo, err
 			}
-			mu.Lock()
-			defer mu.Unlock()
 
 			return newInfo, nil
 		},

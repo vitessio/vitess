@@ -766,7 +766,6 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
 
-	utils.Exec(t, conn, "set workload = olap")
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into t1(id1, id2) values (2,3)")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[[INT64(2) INT64(3)]]`)
