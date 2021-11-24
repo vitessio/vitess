@@ -1936,8 +1936,8 @@ type (
 
 	// CollateExpr represents dynamic collate operator.
 	CollateExpr struct {
-		Expr    Expr
-		Charset string
+		Expr      Expr
+		Collation string
 	}
 
 	// FuncExpr represents a function call.
