@@ -69,14 +69,15 @@ type (
 		Offset    int
 		collation collations.TypedCollation
 	}
-	Tuple       []Expr
+	TupleExpr   []Expr
 	CollateExpr struct {
 		Expr           Expr
 		TypedCollation collations.TypedCollation
 	}
 )
 
-func (t Tuple) Collation() collations.TypedCollation {
+func (t TupleExpr) Collation() collations.TypedCollation {
+	// a Tuple does not have a collation, but an individual collation for every element of the tuple
 	return collations.TypedCollation{}
 }
 
@@ -86,7 +87,7 @@ var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
 var _ Expr = (*BinaryExpr)(nil)
 var _ Expr = (*ComparisonExpr)(nil)
-var _ Expr = (Tuple)(nil)
+var _ Expr = (TupleExpr)(nil)
 var _ Expr = (*CollateExpr)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
@@ -188,7 +189,7 @@ func (l *Literal) Collation() collations.TypedCollation {
 	return l.Val.collation
 }
 
-func (t Tuple) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+func (t TupleExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	var tup []EvalResult
 	for _, expr := range t {
 		evalRes, err := expr.Evaluate(env)
@@ -249,7 +250,7 @@ func (l *Literal) Type(*ExpressionEnv) (querypb.Type, error) {
 }
 
 // Type implements the Expr interface
-func (t Tuple) Type(*ExpressionEnv) (querypb.Type, error) {
+func (t TupleExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_TUPLE, nil
 }
 
@@ -268,7 +269,7 @@ func (l *Literal) String() string {
 }
 
 // String implements the Expr interface
-func (t Tuple) String() string {
+func (t TupleExpr) String() string {
 	var stringSlice []string
 	for _, expr := range t {
 		stringSlice = append(stringSlice, expr.String())

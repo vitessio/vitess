@@ -436,17 +436,8 @@ func compareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
 	}
 	hasSeenNull := false
 	for idx, lResult := range *lVal.tuple {
-		var err error
-		var rResult = (*rVal.tuple)[idx]
-
-		if lResult.collation.Collation != rResult.collation.Collation {
-			lResult, rResult, err = mergeCollations(lResult, rResult)
-			if err != nil {
-				return 0, false, err
-			}
-		}
-
-		res, isNull, err := nullSafeExecuteComparison(lResult, rResult)
+		rResult := (*rVal.tuple)[idx]
+		res, isNull, err := nullSafeCoerceAndCompare(lResult, rResult)
 		if isNull {
 			hasSeenNull = true
 		}

@@ -51,6 +51,7 @@ type (
 
 	InOp struct {
 		Negate bool
+		Hashed map[uintptr]int
 	}
 	LikeOp struct {
 		Negate bool
@@ -135,9 +136,19 @@ func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
 	return sqltypes.IsDate(l.typ) && sqltypes.IsNumber(r.typ) || sqltypes.IsNumber(l.typ) && sqltypes.IsDate(r.typ)
 }
 
+func nullSafeCoerceAndCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
+	if lVal.collation.Collation != rVal.collation.Collation {
+		lVal, rVal, err = mergeCollations(lVal, rVal)
+		if err != nil {
+			return 0, false, err
+		}
+	}
+	return nullSafeCompare(lVal, rVal)
+}
+
 // For more details on comparison expression evaluation and type conversion:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-func nullSafeExecuteComparison(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
+func nullSafeCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
 	lVal = foldSingleLenTuples(lVal)
 	rVal = foldSingleLenTuples(rVal)
 	if hasNullEvalResult(lVal, rVal) {
@@ -228,7 +239,8 @@ func (c *ComparisonExpr) String() string {
 
 // Evaluate implements the ComparisonOp interface
 func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
+	// No need to coerce here because the caller ComparisonExpr.Evaluate has coerced for us
+	numeric, isNull, err := nullSafeCompare(left, right)
 	if err != nil {
 		return EvalResult{}, err
 	}
@@ -271,35 +283,39 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	if right.typ != querypb.Type_TUPLE {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	}
+
 	var foundNull, found bool
-	for _, rtuple := range *right.tuple {
-		var err error
-		var numeric int
-		var isNull bool
 
-		if left.collation.Collation != rtuple.collation.Collation {
-			var ltuple EvalResult
-			ltuple, rtuple, err = mergeCollations(left, rtuple)
-			if err != nil {
-				return EvalResult{}, err
-			}
-
-			numeric, isNull, err = nullSafeExecuteComparison(ltuple, rtuple)
-		} else {
-			numeric, isNull, err = nullSafeExecuteComparison(left, rtuple)
-		}
+	if i.Hashed != nil {
+		hash, err := left.nullSafeHashcode()
 		if err != nil {
 			return EvalResult{}, err
 		}
-		if isNull {
-			foundNull = true
-			continue
+		if idx, ok := i.Hashed[hash]; ok {
+			var numeric int
+			numeric, foundNull, err = nullSafeCoerceAndCompare(left, (*right.tuple)[idx])
+			if err != nil {
+				return EvalResult{}, err
+			}
+			found = numeric == 0
 		}
-		if numeric == 0 {
-			found = true
-			break
+	} else {
+		for _, rtuple := range *right.tuple {
+			numeric, isNull, err := nullSafeCoerceAndCompare(left, rtuple)
+			if err != nil {
+				return EvalResult{}, err
+			}
+			if isNull {
+				foundNull = true
+				continue
+			}
+			if numeric == 0 {
+				found = true
+				break
+			}
 		}
 	}
+
 	if found {
 		return boolResult(found, i.Negate), nil
 	}

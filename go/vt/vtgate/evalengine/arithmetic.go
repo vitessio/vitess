@@ -267,6 +267,28 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 // HashCode is a type alias to the code easier to read
 type HashCode = uintptr
 
+func (er EvalResult) nullSafeHashcode() (HashCode, error) {
+	switch {
+	case sqltypes.IsNull(er.typ):
+		return HashCode(math.MaxUint64), nil
+	case sqltypes.IsNumber(er.typ):
+		return numericalHashCode(er), nil
+	case sqltypes.IsText(er.typ):
+		coll := collations.Local().LookupByID(er.collation.Collation)
+		if coll == nil {
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
+		}
+		return coll.Hash(er.bytes, 0), nil
+	case sqltypes.IsDate(er.typ):
+		time, err := parseDate(er)
+		if err != nil {
+			return 0, err
+		}
+		return uintptr(time.UnixNano()), nil
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", er.typ)
+}
+
 // NullsafeHashcode returns an int64 hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType querypb.Type) (HashCode, error) {
@@ -274,25 +296,8 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType quer
 	if err != nil {
 		return 0, err
 	}
-	switch {
-	case sqltypes.IsNull(castValue.typ):
-		return HashCode(math.MaxInt64), nil
-	case sqltypes.IsNumber(castValue.typ):
-		return numericalHashCode(castValue), nil
-	case sqltypes.IsText(castValue.typ):
-		coll := collations.Local().LookupByID(collation)
-		if coll == nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
-		}
-		return coll.Hash(castValue.bytes, 0), nil
-	case sqltypes.IsDate(castValue.typ):
-		time, err := parseDate(castValue)
-		if err != nil {
-			return 0, err
-		}
-		return uintptr(time.UnixNano()), nil
-	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "types does not support hashcode yet: %v", castValue.typ)
+	castValue.collation.Collation = collation
+	return castValue.nullSafeHashcode()
 }
 
 func castTo(v sqltypes.Value, typ querypb.Type) (EvalResult, error) {
