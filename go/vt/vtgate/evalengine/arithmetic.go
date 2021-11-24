@@ -243,7 +243,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 				ID: collationID,
 			}
 		}
-		collation := collations.Default().LookupByID(collationID)
+		collation := collations.Local().LookupByID(collationID)
 		if collation == nil {
 			return 0, UnsupportedCollationError{
 				ID: collationID,
@@ -280,7 +280,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType quer
 	case sqltypes.IsNumber(castValue.typ):
 		return numericalHashCode(castValue), nil
 	case sqltypes.IsText(castValue.typ):
-		coll := collations.Default().LookupByID(collation)
+		coll := collations.Local().LookupByID(collation)
 		if coll == nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")
 		}

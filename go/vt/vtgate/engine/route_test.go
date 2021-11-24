@@ -993,7 +993,7 @@ func TestRouteSortCollation(t *testing.T) {
 		"dummy_select_field",
 	)
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 
 	sel.OrderBy = []OrderByParams{{
 		Col:         0,

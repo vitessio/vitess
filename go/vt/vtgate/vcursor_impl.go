@@ -145,7 +145,7 @@ func newVCursorImpl(
 	}
 
 	// we only support collations for the new TabletGateway implementation
-	collationEnv := collations.NewEnvironment(*sqlparser.MySQLServerVersion)
+	collationEnv := collations.Local()
 	var connCollation collations.ID
 	if executor != nil {
 		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {

@@ -511,7 +511,7 @@ func TestNullSafeAdd(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -613,7 +613,7 @@ func TestNullsafeCompare(t *testing.T) {
 }
 
 func getCollationID(collation string) collations.ID {
-	id, _ := collations.Default().LookupID(collation)
+	id, _ := collations.Local().LookupID(collation)
 	return id
 }
 
