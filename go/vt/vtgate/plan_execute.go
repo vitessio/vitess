@@ -217,20 +217,29 @@ func (e *Executor) executePlan(
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
 	if err != nil && safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
-		if safeSession.rollbackOnPartialExec != txRollback {
-			_, _, sErr := e.execute(ctx, safeSession, safeSession.rollbackOnPartialExec, bindVars, logStats)
-			if sErr == nil {
-				return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure: %v", err)
-			}
-			// not able to rollback changes of the failed query, so have to abort the complete transaction.
-			err = vterrors.Aggregate([]error{sErr, err})
-		}
-
-		// abort the transaction.
-		_ = e.txConn.Rollback(ctx, safeSession)
-		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back to reverse changes of partial DML execution: %v", err)
+		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
+		err = vterrors.Wrap(err, rErr.Error())
 	}
 	return qr, err
+}
+
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats) error {
+	var err error
+	if safeSession.rollbackOnPartialExec != txRollback {
+		_, _, err := e.execute(ctx, safeSession, safeSession.rollbackOnPartialExec, bindVars, logStats)
+		if err == nil {
+			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
+		}
+		// not able to rollback changes of the failed query, so have to abort the complete transaction.
+	}
+
+	// abort the transaction.
+	_ = e.txConn.Rollback(ctx, safeSession)
+	var errMsg = "transaction rolled back to reverse changes of partial DML execution"
+	if err != nil {
+		return vterrors.Wrap(err, errMsg)
+	}
+	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg)
 }
 
 func (e *Executor) setLogStats(logStats *LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {
