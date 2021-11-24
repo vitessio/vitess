@@ -251,6 +251,10 @@ func (v Value) ToBytes() ([]byte, error) {
 		dv, err := v.decodeHexVal()
 		return dv, err
 	}
+	if v.typ == HexNum {
+		dv, err := v.decodeHexNum()
+		return dv, err
+	}
 	return v.val, nil
 }
 
@@ -487,6 +491,22 @@ func (v *Value) decodeHexVal() ([]byte, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex value: %v", v.val)
 	}
 	hexBytes := v.val[2 : len(v.val)-1]
+	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
+	if err != nil {
+		return nil, err
+	}
+	return decodedHexBytes, nil
+}
+
+// decodeHexNum decodes the SQL hex value of the form 0xA1 into a byte
+// array matching what MySQL would return when querying the column where
+// an INSERT was performed with 0xA1 having been specified as a value
+func (v *Value) decodeHexNum() ([]byte, error) {
+	match, err := regexp.Match("^0x.*$", v.val)
+	if !match || err != nil {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid hex number: %v", v.val)
+	}
+	hexBytes := v.val[2:]
 	decodedHexBytes, err := hex.DecodeString(string(hexBytes))
 	if err != nil {
 		return nil, err

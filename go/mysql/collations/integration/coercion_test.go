@@ -106,6 +106,7 @@ func (tc *testComparison) Expression() string {
 }
 
 func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
+	localCollation := defaultenv.LookupByID(local.Collation)
 	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
 		t.Errorf("failed to transcode left: %v", err)

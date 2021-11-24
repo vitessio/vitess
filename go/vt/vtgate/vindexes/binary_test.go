@@ -73,14 +73,15 @@ func TestBinaryMap(t *testing.T) {
 func TestBinaryVerify(t *testing.T) {
 	hexValStr := "8a1e"
 	hexValStrSQL := fmt.Sprintf("x'%s'", hexValStr)
+	hexNumStrSQL := fmt.Sprintf("0x%s", hexValStr)
 	hexBytes, _ := hex.DecodeString(hexValStr)
-	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2"), sqltypes.NewHexVal([]byte(hexValStrSQL))}
-	ksids := [][]byte{[]byte("1"), []byte("1"), hexBytes}
+	ids := []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NewVarBinary("2"), sqltypes.NewHexVal([]byte(hexValStrSQL)), sqltypes.NewHexNum([]byte(hexNumStrSQL))}
+	ksids := [][]byte{[]byte("1"), []byte("1"), hexBytes, hexBytes}
 	got, err := binOnlyVindex.Verify(nil, ids, ksids)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []bool{true, false, true}
+	want := []bool{true, false, true, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("binary.Verify: %v, want %v", got, want)
 	}
