@@ -36,7 +36,7 @@ errors=
 
 # If any checks are found to be useless, they can be disabled here.
 # See the output of "go doc cmd/vet" for a list of flags.
-vetflags=""
+vetflags="-unsafeptr=false"
 
 # Run on one package at a time
 for gopackage in $gopackages
