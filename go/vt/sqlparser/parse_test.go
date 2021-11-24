@@ -3255,6 +3255,27 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
+func TestOne(t *testing.T) {
+	testOne := struct {
+		input, output string
+	}{
+		input:  "",
+		output: "",
+	}
+	if testOne.input == "" {
+		return
+	}
+	sql := strings.TrimSpace(testOne.input)
+	tree, err := Parse(sql)
+	require.NoError(t, err)
+	got := String(tree)
+	expected := testOne.output
+	if expected == "" {
+		expected = sql
+	}
+	require.Equal(t, expected, got)
+}
+
 func TestCreateTableLike(t *testing.T) {
 	normal := "create table a like b"
 	testCases := []struct {

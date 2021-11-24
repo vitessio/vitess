@@ -70,6 +70,45 @@ func TestEvaluate(t *testing.T) {
 	}, {
 		expression: ":float_bind_variable",
 		expected:   sqltypes.NewFloat64(2.2),
+	}, {
+		expression: "42 in (41, 42)",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "42 in (41, 43)",
+		expected:   sqltypes.NewInt32(0),
+	}, {
+		expression: "42 in (null, 41, 43)",
+		expected:   NULL,
+	}, {
+		expression: "(1,2) in ((1,2), (2,3))",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "(1,2) = (1,2)",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "1 = 'sad'",
+		expected:   sqltypes.NewInt32(0),
+	}, {
+		expression: "(1,2) = (1,3)",
+		expected:   sqltypes.NewInt32(0),
+	}, {
+		expression: "(1,2) = (1,null)",
+		expected:   NULL,
+	}, {
+		expression: "(1,2) in ((4,2), (2,3))",
+		expected:   sqltypes.NewInt32(0),
+	}, {
+		expression: "(1,2) in ((1,null), (2,3))",
+		expected:   NULL,
+	}, {
+		expression: "(1,2) in ((3,2), (2,3), null)",
+		expected:   NULL,
+	}, {
+		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
+		expected:   sqltypes.NewInt32(1),
+	}, {
+		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
+		expected:   NULL,
 	}}
 
 	for _, test := range tests {
