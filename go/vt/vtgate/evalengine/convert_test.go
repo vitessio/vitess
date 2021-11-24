@@ -46,6 +46,10 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 	return collations.ID(d)
 }
 
+func TestCornerCases(t *testing.T) {
+
+}
+
 func TestConvertSimplification(t *testing.T) {
 	type ast struct {
 		literal, err string
@@ -86,6 +90,11 @@ func TestConvertSimplification(t *testing.T) {
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
+		},
+		{
+			`-1 IN ("FOO", 0, -1, (1, 0, -1, 0))`,
+			ok(""),
+			ok(""),
 		},
 	}
 

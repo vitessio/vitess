@@ -152,29 +152,33 @@ func newEvalResult(v sqltypes.Value) (EvalResult, error) {
 	raw := v.Raw()
 	switch {
 	case v.IsBinary() || v.IsText():
+		// TODO: collation
 		return EvalResult{bytes: raw, typ: sqltypes.VarBinary}, nil
 	case v.IsSigned():
 		ival, err := strconv.ParseInt(string(raw), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{numval: uint64(ival), typ: sqltypes.Int64}, nil
+		return newEvalInt64(ival), nil
 	case v.IsUnsigned():
 		uval, err := strconv.ParseUint(string(raw), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		return EvalResult{numval: uval, typ: sqltypes.Uint64}, nil
+		return newEvalUint64(uval), nil
 	case v.IsFloat() || v.Type() == sqltypes.Decimal:
 		fval, err := strconv.ParseFloat(string(raw), 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		typ := sqltypes.Float64
 		if v.Type() == sqltypes.Decimal {
-			typ = sqltypes.Decimal
+			return EvalResult{
+				typ:       sqltypes.Decimal,
+				numval:    math.Float64bits(fval),
+				collation: collationNumeric,
+			}, nil
 		}
-		return EvalResult{numval: math.Float64bits(fval), typ: typ}, nil
+		return newEvalFloat(fval), nil
 	default:
 		return EvalResult{typ: v.Type(), bytes: raw}, nil
 	}
@@ -469,5 +473,8 @@ func compareStrings(l, r EvalResult) int {
 		panic("compareStrings: did not coerce")
 	}
 	collation := collations.Local().LookupByID(l.collation.Collation)
+	if collation == nil {
+		panic("unknown collation after coercion")
+	}
 	return collation.Collate(l.bytes, r.bytes, false)
 }

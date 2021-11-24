@@ -60,11 +60,15 @@ func (tc testCase) run(t *testing.T) {
 		BindVars: tc.bv,
 		Row:      tc.row,
 	}
-	cmp := ComparisonExpr{
+	cmp := &ComparisonExpr{
 		Op:    tc.op,
 		Left:  tc.v1,
 		Right: tc.v2,
 	}
+	if err := cmp.mergeCollations(); err != nil {
+		t.Fatalf("error while merging collations: %v", err)
+	}
+
 	got, err := cmp.Evaluate(env)
 	if tc.err == "" {
 		require.NoError(t, err)

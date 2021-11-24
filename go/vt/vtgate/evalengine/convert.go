@@ -113,13 +113,6 @@ func simplifyExpr(e Expr) (Expr, error) {
 		}
 		lit1, _ := node.Left.(*Literal)
 		lit2, _ := node.Right.(*Literal)
-		if lit1 != nil && lit2 != nil {
-			res, err := node.Evaluate(nil)
-			if err != nil {
-				return nil, err
-			}
-			return &Literal{Val: res}, nil
-		}
 
 		if lit1 != nil && node.CoerceLeft != nil {
 			lit1.Val.bytes, _ = node.CoerceLeft(nil, lit1.Val.bytes)
@@ -130,6 +123,14 @@ func simplifyExpr(e Expr) (Expr, error) {
 			lit2.Val.bytes, _ = node.CoerceRight(nil, lit2.Val.bytes)
 			lit2.Val.collation = node.TypedCollation
 			node.CoerceRight = nil
+		}
+
+		if lit1 != nil && lit2 != nil {
+			res, err := node.Evaluate(nil)
+			if err != nil {
+				return nil, err
+			}
+			return &Literal{Val: res}, nil
 		}
 
 		switch op := node.Op.(type) {
@@ -266,21 +267,9 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Left:  left,
 			Right: right,
 		}
-
-		leftColl := left.Collation()
-		rightColl := right.Collation()
-		if leftColl.Valid() && rightColl.Valid() {
-			env := collations.Local()
-			comp.TypedCollation, comp.CoerceLeft, comp.CoerceRight, err =
-				env.MergeCollations(leftColl, rightColl, collations.CoercionOptions{
-					ConvertToSuperset:   true,
-					ConvertWithCoercion: true,
-				})
-			if err != nil {
-				return nil, err
-			}
+		if err := comp.mergeCollations(); err != nil {
+			return nil, err
 		}
-
 		return comp, nil
 	case sqlparser.Argument:
 		collation := getCollation(e, lookup)
