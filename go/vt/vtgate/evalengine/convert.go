@@ -163,10 +163,6 @@ func simplifyExpr(e Expr) (Expr, error) {
 						optimize = false
 						continue
 					}
-					if _, null := expr.(Null); null {
-						optimize = false
-						continue
-					}
 					literalTuple = false
 					break
 				}
@@ -344,7 +340,7 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 		}
 		return exprs, nil
 	case *sqlparser.NullVal:
-		return Null{}, nil
+		return NewLiteralNull(), nil
 	case *sqlparser.CollateExpr:
 		expr, err := convertExpr(node.Expr, lookup)
 		if err != nil {

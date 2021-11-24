@@ -56,8 +56,6 @@ type (
 		String() string
 	}
 
-	// Expressions
-	Null    struct{}
 	Literal struct {
 		Val EvalResult
 	}
@@ -81,7 +79,6 @@ func (t TupleExpr) Collation() collations.TypedCollation {
 	return collations.TypedCollation{}
 }
 
-var _ Expr = (*Null)(nil)
 var _ Expr = (*Literal)(nil)
 var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
@@ -93,6 +90,16 @@ var _ Expr = (*CollateExpr)(nil)
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
 	return e.toSQLValue(e.typ)
+}
+
+var collationNull = collations.TypedCollation{
+	Collation:    collations.CollationBinaryID,
+	Coercibility: collations.CoerceIgnorable,
+	Repertoire:   collations.RepertoireASCII,
+}
+
+func NewLiteralNull() Expr {
+	return &Literal{Val: EvalResult{typ: querypb.Type_NULL_TYPE, collation: collationNull}}
 }
 
 // NewLiteralIntFromBytes returns a literal expression
@@ -154,29 +161,6 @@ func NewColumn(offset int, collation collations.TypedCollation) Expr {
 	return &Column{
 		Offset:    offset,
 		collation: collation,
-	}
-}
-
-// Evaluate implements the Expr interface
-func (n Null) Evaluate(*ExpressionEnv) (EvalResult, error) {
-	return EvalResult{}, nil
-}
-
-// Type implements the Expr interface
-func (n Null) Type(*ExpressionEnv) (querypb.Type, error) {
-	return querypb.Type_NULL_TYPE, nil
-}
-
-// String implements the Expr interface
-func (n Null) String() string {
-	return "null"
-}
-
-func (n Null) Collation() collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    collations.CollationBinaryID,
-		Coercibility: collations.CoerceIgnorable,
-		Repertoire:   collations.RepertoireASCII,
 	}
 }
 
