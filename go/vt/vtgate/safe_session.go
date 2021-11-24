@@ -38,6 +38,7 @@ import (
 type SafeSession struct {
 	mu              sync.Mutex
 	mustRollback    bool
+	savepointState  savepointState
 	autocommitState autocommitState
 	commitOrder     vtgatepb.CommitOrder
 
@@ -69,6 +70,22 @@ const (
 	notAutocommittable = autocommitState(iota)
 	autocommittable
 	autocommitted
+)
+
+// savepointState keeps track of whether savepoints need to be inserted
+// before running the query. This will help us prevent rolling back the
+// entire transaction in case of partial failures, and be closer to MySQL
+// compatibility, by only reverting the changes from the failed statement
+// If execute is recursively called using the same session,
+// like from a vindex, we should not override the savePointState.
+// It is set the first time and is then permanent for the remainder of the query
+// execution. It should not be affected later by transactions starting or not.
+type savepointState int
+
+const (
+	savepointStateNotSet = savepointState(iota)
+	savepointNeeded
+	savepointNotNeeded
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -164,6 +181,33 @@ func (session *SafeSession) AutocommitApproval() bool {
 		return true
 	}
 	return false
+}
+
+// SetSavepointState sets the state to insertSavepoints if true and noInsertSavepoints if false
+// only when the savepointState is not already set.
+// Calling the function multiple times will have no effect, only
+// the first call would be used.
+func (session *SafeSession) SetSavepointState(flag bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointState != savepointStateNotSet {
+		return
+	}
+
+	if flag {
+		session.savepointState = savepointNeeded
+	} else {
+		session.savepointState = savepointNotNeeded
+	}
+}
+
+// InsertSavepoints returns true if we should insert savepoints.
+func (session *SafeSession) InsertSavepoints() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointNeeded
 }
 
 // SetCommitOrder sets the commit order.
