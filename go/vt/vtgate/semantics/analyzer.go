@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -68,12 +69,12 @@ func Analyze(statement sqlparser.SelectStatement, currentDb string, si SchemaInf
 	}
 
 	// Creation of the semantic table
-	semTable := analyzer.newSemTable(statement)
+	semTable := analyzer.newSemTable(statement, si.ConnCollation())
 
 	return semTable, nil
 }
 
-func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
+func (a analyzer) newSemTable(statement sqlparser.SelectStatement, coll collations.ID) *SemTable {
 	return &SemTable{
 		Recursive:        a.binder.recursive,
 		Direct:           a.binder.direct,
@@ -86,6 +87,7 @@ func (a analyzer) newSemTable(statement sqlparser.SelectStatement) *SemTable {
 		SubqueryMap:      a.binder.subqueryMap,
 		SubqueryRef:      a.binder.subqueryRef,
 		ColumnEqualities: map[columnName][]sqlparser.Expr{},
+		DefaultCollation: coll,
 	}
 }
 

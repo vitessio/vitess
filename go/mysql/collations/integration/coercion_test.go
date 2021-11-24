@@ -41,7 +41,7 @@ type RemoteCoercionResult struct {
 
 type RemoteCoercionTest interface {
 	Expression() string
-	Test(t *testing.T, remote *RemoteCoercionResult, localCollation *collations.TypedCollation, localCoercion collations.Coercion)
+	Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion)
 }
 
 type testConcat struct {
@@ -55,17 +55,24 @@ func (tc *testConcat) Expression() string {
 	)
 }
 
-func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local *collations.TypedCollation, coercion collations.Coercion) {
-	if local.Collation.Name() != remote.Collation.Name() {
-		t.Errorf("bad collation resolved: local is %s, remote is %s", local.Collation.Name(), remote.Collation.Name())
+func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coercion1, coercion2 collations.Coercion) {
+	localCollation := defaultenv.LookupByID(local.Collation)
+	if localCollation.Name() != remote.Collation.Name() {
+		t.Errorf("bad collation resolved: local is %s, remote is %s", localCollation.Name(), remote.Collation.Name())
 	}
 	if local.Coercibility != remote.Coercibility {
 		t.Errorf("bad coercibility resolved: local is %d, remote is %d", local.Coercibility, remote.Coercibility)
 	}
 
-	leftText, rightText, err := coercion(nil, tc.left.Text, tc.right.Text)
+	leftText, err := coercion1(nil, tc.left.Text)
 	if err != nil {
-		t.Errorf("failed to transcode left/right: %v", err)
+		t.Errorf("failed to transcode left: %v", err)
+		return
+	}
+
+	rightText, err := coercion2(nil, tc.right.Text)
+	if err != nil {
+		t.Errorf("failed to transcode right: %v", err)
 		return
 	}
 
@@ -77,7 +84,7 @@ func (tc *testConcat) Test(t *testing.T, remote *RemoteCoercionResult, local *co
 		t.Errorf("failed to concatenate text;\n\tCONCAT(%v COLLATE %s, %v COLLATE %s) = \n\tCONCAT(%v, %v) COLLATE %s = \n\t\t%v\n\n\texpected: %v",
 			tc.left.Text, tc.left.Collation.Name(),
 			tc.right.Text, tc.right.Collation.Name(),
-			leftText, rightText, local.Collation.Name(),
+			leftText, rightText, localCollation.Name(),
 			concat.Bytes(), remote.Expr.ToBytes(),
 		)
 	}
@@ -94,18 +101,25 @@ func (tc *testComparison) Expression() string {
 	)
 }
 
-func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, localCollation *collations.TypedCollation, localCoercion collations.Coercion) {
-	leftText, rightText, err := localCoercion(nil, tc.left.Text, tc.right.Text)
+func (tc *testComparison) Test(t *testing.T, remote *RemoteCoercionResult, local collations.TypedCollation, coerce1, coerce2 collations.Coercion) {
+	leftText, err := coerce1(nil, tc.left.Text)
 	if err != nil {
-		t.Errorf("failed to transcode left/right: %v", err)
+		t.Errorf("failed to transcode left: %v", err)
+		return
+	}
+
+	rightText, err := coerce2(nil, tc.right.Text)
+	if err != nil {
+		t.Errorf("failed to transcode right: %v", err)
 		return
 	}
 
 	remoteEquals := remote.Expr.ToBytes()[0] == '1'
-	localEquals := localCollation.Collation.Collate(leftText, rightText, false) == 0
+	localCollation := defaultenv.LookupByID(local.Collation)
+	localEquals := localCollation.Collate(leftText, rightText, false) == 0
 	if remoteEquals != localEquals {
 		t.Errorf("failed to collate %#v = %#v with collation %s (expected %v, got %v)",
-			leftText, rightText, localCollation.Collation.Name(), remoteEquals, localEquals)
+			leftText, rightText, localCollation.Name(), remoteEquals, localEquals)
 	}
 }
 
@@ -146,17 +160,17 @@ func TestComparisonSemantics(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, collA := range testInputs {
 				for _, collB := range testInputs {
-					left := &collations.TypedCollation{
-						Collation:    collA.Collation,
+					left := collations.TypedCollation{
+						Collation:    collA.Collation.ID(),
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					right := &collations.TypedCollation{
-						Collation:    collB.Collation,
+					right := collations.TypedCollation{
+						Collation:    collB.Collation.ID(),
 						Coercibility: 0,
 						Repertoire:   collations.RepertoireASCII,
 					}
-					resultLocal, coercionLocal, errLocal := defaultenv.MergeCollations(left, right,
+					resultLocal, coercionLocal1, coercionLocal2, errLocal := defaultenv.MergeCollations(left, right,
 						collations.CoercionOptions{
 							ConvertToSuperset:   true,
 							ConvertWithCoercion: true,
@@ -192,7 +206,7 @@ func TestComparisonSemantics(t *testing.T) {
 						Expr:         resultRemote.Rows[0][0],
 						Collation:    remoteCollation,
 						Coercibility: collations.Coercibility(remoteCI),
-					}, resultLocal, coercionLocal)
+					}, resultLocal, coercionLocal1, coercionLocal2)
 				}
 			}
 		})
