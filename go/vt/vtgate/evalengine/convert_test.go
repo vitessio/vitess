@@ -80,11 +80,11 @@ func TestConvertSimplification(t *testing.T) {
 			ok("INT32(1)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), null))`),
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL))`),
 			ok(`INT32(1)`),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), null))`),
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL))`),
 			ok(`NULL`),
 		},
 	}
