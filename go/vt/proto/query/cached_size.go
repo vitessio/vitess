@@ -28,9 +28,13 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 		size += int64(96)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Value []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
+	}
 	// field Values []*vitess.io/vitess/go/vt/proto/query.Value
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(8))
@@ -49,7 +53,9 @@ func (cached *Field) CachedSize(alloc bool) int64 {
 		size += int64(160)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Name string
 	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
 	// field Table string
@@ -73,7 +79,9 @@ func (cached *QueryWarning) CachedSize(alloc bool) int64 {
 		size += int64(64)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Message string
 	size += hack.RuntimeAllocSize(int64(len(cached.Message)))
 	return size
@@ -87,7 +95,9 @@ func (cached *Target) CachedSize(alloc bool) int64 {
 		size += int64(96)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Keyspace string
 	size += hack.RuntimeAllocSize(int64(len(cached.Keyspace)))
 	// field Shard string
@@ -105,8 +115,12 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 		size += int64(80)
 	}
 	// field unknownFields []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.unknownFields)))
+	}
 	// field Value []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Value)))
+	}
 	return size
 }
