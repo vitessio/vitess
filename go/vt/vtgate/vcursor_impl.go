@@ -438,7 +438,7 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
 
-	uID, err := vc.markSavepoint(rollbackOnError, false, bindVars)
+	uID, err := vc.markSavepoint(rollbackOnError, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -453,8 +453,8 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	return qr, err
 }
 
-func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, autocommit bool, bindVars map[string]*querypb.BindVariable) (string, error) {
-	if !rollbackOnError || vc.rollbackOnPartialExec != "" || autocommit {
+func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, bindVars map[string]*querypb.BindVariable) (string, error) {
+	if !rollbackOnError || vc.rollbackOnPartialExec != "" || !vc.safeSession.InsertSavepoints() {
 		return "", nil
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
@@ -469,7 +469,7 @@ func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, autocommit bool, bind
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(queries)))
-	uID, err := vc.markSavepoint(rollbackOnError, autocommit, map[string]*querypb.BindVariable{})
+	uID, err := vc.markSavepoint(rollbackOnError, map[string]*querypb.BindVariable{})
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -533,7 +533,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
-	uID, err := vc.markSavepoint(rollbackOnError, autocommit, map[string]*querypb.BindVariable{})
+	uID, err := vc.markSavepoint(rollbackOnError, map[string]*querypb.BindVariable{})
 	if err != nil {
 		return []error{err}
 	}

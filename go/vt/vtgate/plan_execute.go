@@ -179,6 +179,10 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	// at the beginning, but never after.
 	safeSession.SetAutocommittable(mustCommit)
 
+	// If we to instantly commit the query, then there is no need to add savepoints.
+	// Any partial failure of the query will be taken care by rollback.
+	safeSession.SetSavepointState(!mustCommit)
+
 	// Execute!
 	err := execPlan()
 	if err != nil {

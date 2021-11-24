@@ -385,10 +385,10 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "update `user` set a = 2 where id = 1",
-		BindVariables: map[string]*querypb.BindVariable{},
-	}})
+	require.Equal(t, 2, len(sbc1.Queries))
+	require.Contains(t, sbc1.Queries[0].Sql, "savepoint")
+	require.Equal(t, sbc1.Queries[1].Sql, "update `user` set a = 2 where id = 1")
+
 	testCommitCount(t, "sbc1", sbc1, 0)
 }
 
