@@ -407,13 +407,45 @@ func compareDateAndString(l, r EvalResult) (int, error) {
 	return compareGoTimes(lTime, rTime)
 }
 
+func mergeCollations(left, right EvalResult) (EvalResult, EvalResult, error) {
+	if !sqltypes.IsText(left.typ) || !sqltypes.IsText(right.typ) {
+		return left, right, nil
+	}
+	env := collations.Local()
+	tc, coerceLeft, coerceRight, err := env.MergeCollations(left.collation, right.collation, collations.CoercionOptions{
+		ConvertToSuperset:   true,
+		ConvertWithCoercion: true,
+	})
+	if err != nil {
+		return EvalResult{}, EvalResult{}, err
+	}
+	if coerceLeft != nil {
+		left.bytes, _ = coerceLeft(nil, left.bytes)
+	}
+	if coerceRight != nil {
+		right.bytes, _ = coerceRight(nil, right.bytes)
+	}
+	left.collation = tc
+	right.collation = tc
+	return left, right, nil
+}
+
 func compareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
-	if len(lVal.tupleResults) != len(rVal.tupleResults) {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(lVal.tupleResults))
+	if len(*lVal.tuple) != len(*rVal.tuple) {
+		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
 	}
 	hasSeenNull := false
-	for idx, lResult := range lVal.tupleResults {
-		rResult := rVal.tupleResults[idx]
+	for idx, lResult := range *lVal.tuple {
+		var err error
+		var rResult = (*rVal.tuple)[idx]
+
+		if lResult.collation.Collation != rResult.collation.Collation {
+			lResult, rResult, err = mergeCollations(lResult, rResult)
+			if err != nil {
+				return 0, false, err
+			}
+		}
+
 		res, isNull, err := nullSafeExecuteComparison(lResult, rResult)
 		if isNull {
 			hasSeenNull = true
@@ -437,19 +469,10 @@ func compareGoTimes(lTime, rTime time.Time) (int, error) {
 
 // More on string collations coercibility on MySQL documentation:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/charset-collation-coercibility.html
-func compareStrings(l, r EvalResult) (int, error) {
-	// If one of the strings has an unknown collation we fail, though such error should
-	// already be handled before the execution by the planner.
-	if l.collation == collations.Unknown || r.collation == collations.Unknown {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with an unknown collation")
+func compareStrings(l, r EvalResult) int {
+	if l.collation.Collation != r.collation.Collation {
+		panic("compareStrings: did not coerce")
 	}
-
-	// We cannot compare different collations for now, so we fail
-	// TODO: support multiple collations comparison
-	if r.collation != l.collation {
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare strings with different collations")
-	}
-
-	collation := collations.Default().LookupByID(l.collation)
-	return collation.Collate(l.bytes, r.bytes, false), nil
+	collation := collations.Local().LookupByID(l.collation.Collation)
+	return collation.Collate(l.bytes, r.bytes, false)
 }
