@@ -134,7 +134,7 @@ func (p *Projection) Inputs() []Primitive {
 func (p *Projection) description() PrimitiveDescription {
 	var exprs []string
 	for _, e := range p.Exprs {
-		exprs = append(exprs, e.String())
+		exprs = append(exprs, evalengine.FormatExpr(e))
 	}
 	return PrimitiveDescription{
 		OperatorType: "Projection",

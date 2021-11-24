@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -230,11 +228,6 @@ func (c *ComparisonExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 // Type implements the Expr interface
 func (c *ComparisonExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_INT32, nil
-}
-
-// String implements the Expr interface
-func (c *ComparisonExpr) String() string {
-	return fmt.Sprintf("(%s %s %s)", c.Left.String(), c.Op.String(), c.Right.String())
 }
 
 // Evaluate implements the ComparisonOp interface
