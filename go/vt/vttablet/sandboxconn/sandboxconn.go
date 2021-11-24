@@ -604,6 +604,12 @@ func (sbc *SandboxConn) ChangeTabletType(typ topodatapb.TabletType) {
 }
 
 func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result {
+	switch stmt.(type) {
+	case *sqlparser.Savepoint,
+		*sqlparser.SRollback,
+		*sqlparser.Release:
+		return &sqltypes.Result{}
+	}
 	if len(sbc.results) != 0 {
 		r := sbc.results[0]
 		sbc.results = sbc.results[1:]
@@ -625,10 +631,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		*sqlparser.AlterVschema,
 		*sqlparser.Use,
 		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction,
-		*sqlparser.Savepoint,
-		*sqlparser.SRollback,
-		*sqlparser.Release:
+		*sqlparser.SetTransaction:
 		return &sqltypes.Result{}
 	}
 
