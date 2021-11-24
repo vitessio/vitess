@@ -17,8 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -33,6 +35,82 @@ import (
 These tests should in theory live in the sqltypes package but they live here so we can
 exercise both expression conversion and evaluation in the same test file
 */
+
+type dummyCollation collations.ID
+
+func (d dummyCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
+	panic("not supported")
+}
+
+func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
+	return collations.ID(d)
+}
+
+func TestConvertSimplification(t *testing.T) {
+	type ast struct {
+		literal, err string
+	}
+	ok := func(in string) ast {
+		return ast{literal: in}
+	}
+	err := func(in string) ast {
+		return ast{err: in}
+	}
+
+	var testCases = []struct {
+		expression string
+		converted  ast
+		simplified ast
+	}{
+		{"42", ok("INT64(42)"), ok("INT64(42)")},
+		{"1 + (1 + 1) * 8", ok("(INT64(1) + ((INT64(1) + INT64(1)) * INT64(8)))"), ok("INT64(17)")},
+		{"1.0 + (1 + 1) * 8.0", ok("(FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8)))"), ok("FLOAT64(17)")},
+		{"'pokemon' LIKE 'poke%'", ok("(VARBINARY(\"pokemon\") like VARBINARY(\"poke%\"))"), ok("INT32(1)")},
+		{
+			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
+			ok(`(VARBINARY("foo") COLLATE utf8mb4_general_ci in TUPLE(VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz")))`),
+			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			stmt, err := sqlparser.Parse("select " + tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			converted, err := ConvertEx(astExpr, dummyCollation(45), false)
+			if err != nil {
+				if tc.converted.err == "" {
+					t.Fatalf("failed to Convert (simplify=false): %v", err)
+				}
+				if !strings.Contains(err.Error(), tc.converted.err) {
+					t.Fatalf("wrong Convert error (simplify=false): %q (expected %q)", err, tc.converted.err)
+				}
+				return
+			}
+			if converted.String() != tc.converted.literal {
+				t.Errorf("mismatch (simplify=false): got %q, expected %q", converted.String(), tc.converted.literal)
+			}
+
+			simplified, err := ConvertEx(astExpr, dummyCollation(45), true)
+			if err != nil {
+				if tc.simplified.err == "" {
+					t.Fatalf("failed to Convert (simplify=true): %v", err)
+				}
+				if !strings.Contains(err.Error(), tc.simplified.err) {
+					t.Fatalf("wrong Convert error (simplify=true): %q (expected %q)", err, tc.simplified.err)
+				}
+				return
+			}
+			if simplified.String() != tc.simplified.literal {
+				t.Errorf("mismatch (simplify=true): got %q, expected %q", simplified.String(), tc.simplified.literal)
+			}
+		})
+	}
+}
 
 func TestEvaluate(t *testing.T) {
 	type testCase struct {
@@ -117,10 +195,10 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Convert(astExpr, nil)
+			sqltypesExpr, err := Convert(astExpr, dummyCollation(45))
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := ExpressionEnv{
+			env := &ExpressionEnv{
 				BindVars: map[string]*querypb.BindVariable{
 					"exp":                  sqltypes.Int64BindVariable(66),
 					"string_bind_variable": sqltypes.StringBindVariable("bar"),

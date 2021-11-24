@@ -17,6 +17,9 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -46,8 +49,12 @@ var _ BinaryOp = (*Subtraction)(nil)
 var _ BinaryOp = (*Multiplication)(nil)
 var _ BinaryOp = (*Division)(nil)
 
+func (b *BinaryExpr) Collation() collations.TypedCollation {
+	return collationNumeric
+}
+
 // Evaluate implements the Expr interface
-func (b *BinaryExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (b *BinaryExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	lVal, err := b.Left.Evaluate(env)
 	if err != nil {
 		return EvalResult{}, err
@@ -60,7 +67,7 @@ func (b *BinaryExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
 }
 
 // Type implements the Expr interface
-func (b *BinaryExpr) Type(env ExpressionEnv) (querypb.Type, error) {
+func (b *BinaryExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
 	ltype, err := b.Left.Type(env)
 	if err != nil {
 		return 0, err
@@ -75,7 +82,7 @@ func (b *BinaryExpr) Type(env ExpressionEnv) (querypb.Type, error) {
 
 // String implements the Expr interface
 func (b *BinaryExpr) String() string {
-	return b.Left.String() + " " + b.Op.String() + " " + b.Right.String()
+	return fmt.Sprintf("(%s %s %s)", b.Left.String(), b.Op.String(), b.Right.String())
 }
 
 // Evaluate implements the BinaryOp interface
