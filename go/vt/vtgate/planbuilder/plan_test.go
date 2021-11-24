@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"github.com/google/go-cmp/cmp"
@@ -476,6 +477,10 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       PlannerVersion
+}
+
+func (vw *vschemaWrapper) ConnCollation() collations.ID {
+	return collations.CollationBinaryID
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {

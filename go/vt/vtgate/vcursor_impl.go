@@ -83,18 +83,17 @@ type VSchemaOperator interface {
 // vcursorImpl implements the VCursor functionality used by dependent
 // packages to call back into VTGate.
 type vcursorImpl struct {
-	ctx                  context.Context
-	safeSession          *SafeSession
-	keyspace             string
-	tabletType           topodatapb.TabletType
-	destination          key.Destination
-	marginComments       sqlparser.MarginComments
-	executor             iExecute
-	resolver             *srvtopo.Resolver
-	topoServer           *topo.Server
-	logStats             *LogStats
-	collationEnvironment *collations.Environment
-	collation            collations.ID
+	ctx            context.Context
+	safeSession    *SafeSession
+	keyspace       string
+	tabletType     topodatapb.TabletType
+	destination    key.Destination
+	marginComments sqlparser.MarginComments
+	executor       iExecute
+	resolver       *srvtopo.Resolver
+	topoServer     *topo.Server
+	logStats       *LogStats
+	collation      collations.ID
 
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
@@ -161,27 +160,26 @@ func newVCursorImpl(
 	}
 
 	return &vcursorImpl{
-		ctx:                  ctx,
-		safeSession:          safeSession,
-		keyspace:             keyspace,
-		tabletType:           tabletType,
-		destination:          destination,
-		marginComments:       marginComments,
-		executor:             executor,
-		logStats:             logStats,
-		collationEnvironment: collationEnv,
-		collation:            connCollation,
-		resolver:             resolver,
-		vschema:              vschema,
-		vm:                   vm,
-		topoServer:           ts,
-		warnShardedOnly:      warnShardedOnly,
+		ctx:             ctx,
+		safeSession:     safeSession,
+		keyspace:        keyspace,
+		tabletType:      tabletType,
+		destination:     destination,
+		marginComments:  marginComments,
+		executor:        executor,
+		logStats:        logStats,
+		collation:       connCollation,
+		resolver:        resolver,
+		vschema:         vschema,
+		vm:              vm,
+		topoServer:      ts,
+		warnShardedOnly: warnShardedOnly,
 	}, nil
 }
 
 // ConnCollation returns the collation of this session
-func (vc *vcursorImpl) ConnCollation() collations.Collation {
-	return vc.collationEnvironment.LookupByID(vc.collation)
+func (vc *vcursorImpl) ConnCollation() collations.ID {
+	return vc.collation
 }
 
 // Context returns the current Context.
