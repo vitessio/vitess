@@ -804,7 +804,7 @@ func (route *Route) description() PrimitiveDescription {
 			if idx != 0 {
 				sysTabSchema += ", "
 			}
-			sysTabSchema += tableSchema.String()
+			sysTabSchema += evalengine.FormatExpr(tableSchema)
 		}
 		sysTabSchema += "]"
 		other["SysTableTableSchema"] = sysTabSchema
@@ -812,7 +812,7 @@ func (route *Route) description() PrimitiveDescription {
 	if len(route.SysTableTableName) != 0 {
 		var sysTableName []string
 		for k, v := range route.SysTableTableName {
-			sysTableName = append(sysTableName, k+":"+v.String())
+			sysTableName = append(sysTableName, k+":"+evalengine.FormatExpr(v))
 		}
 		sort.Strings(sysTableName)
 		other["SysTableTableName"] = "[" + strings.Join(sysTableName, ", ") + "]"

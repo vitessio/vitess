@@ -53,7 +53,7 @@ type (
 		Evaluate(env *ExpressionEnv) (EvalResult, error)
 		Type(env *ExpressionEnv) (querypb.Type, error)
 		Collation() collations.TypedCollation
-		String() string
+		format(buf *strings.Builder, wrap bool)
 	}
 
 	Literal struct {
@@ -77,6 +77,68 @@ type (
 func (t TupleExpr) Collation() collations.TypedCollation {
 	// a Tuple does not have a collation, but an individual collation for every element of the tuple
 	return collations.TypedCollation{}
+}
+
+func FormatExpr(expr Expr) string {
+	var bld strings.Builder
+	expr.format(&bld, false)
+	return bld.String()
+}
+
+func (l *Literal) format(w *strings.Builder, _ bool) {
+	w.WriteString(l.Val.Value().String())
+}
+func (bv *BindVariable) format(w *strings.Builder, _ bool) {
+	w.WriteByte(':')
+	w.WriteString(bv.Key)
+}
+func (c *Column) format(w *strings.Builder, _ bool) {
+	fmt.Fprintf(w, "[COLUMN %d]", c.Offset)
+}
+func (b *BinaryExpr) format(w *strings.Builder, wrap bool) {
+	if wrap {
+		w.WriteByte('(')
+	}
+
+	b.Left.format(w, true)
+	w.WriteString(" ")
+	w.WriteString(b.Op.String())
+	w.WriteString(" ")
+	b.Right.format(w, true)
+
+	if wrap {
+		w.WriteByte(')')
+	}
+}
+func (c *ComparisonExpr) format(w *strings.Builder, wrap bool) {
+	if wrap {
+		w.WriteByte('(')
+	}
+
+	c.Left.format(w, true)
+	w.WriteString(" ")
+	w.WriteString(c.Op.String())
+	w.WriteString(" ")
+	c.Right.format(w, true)
+
+	if wrap {
+		w.WriteByte(')')
+	}
+}
+func (t TupleExpr) format(w *strings.Builder, wrap bool) {
+	w.WriteByte('(')
+	for i, expr := range t {
+		if i > 0 {
+			w.WriteString(", ")
+		}
+		expr.format(w, wrap)
+	}
+	w.WriteByte(')')
+}
+func (c *CollateExpr) format(w *strings.Builder, wrap bool) {
+	c.Expr.format(w, wrap)
+	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
+	fmt.Fprintf(w, " COLLATE %s", coll.Name())
 }
 
 var _ Expr = (*Literal)(nil)
@@ -242,30 +304,6 @@ func (c *Column) Type(*ExpressionEnv) (querypb.Type, error) {
 	return sqltypes.Float64, nil
 }
 
-// String implements the Expr interface
-func (b *BindVariable) String() string {
-	return ":" + b.Key
-}
-
-// String implements the Expr interface
-func (l *Literal) String() string {
-	return l.Val.Value().String()
-}
-
-// String implements the Expr interface
-func (t TupleExpr) String() string {
-	var stringSlice []string
-	for _, expr := range t {
-		stringSlice = append(stringSlice, expr.String())
-	}
-	return "TUPLE(" + strings.Join(stringSlice, ", ") + ")"
-}
-
-// String implements the Expr interface
-func (c *Column) String() string {
-	return fmt.Sprintf("column %d from the input", c.Offset)
-}
-
 func mergeNumericalTypes(ltype, rtype querypb.Type) querypb.Type {
 	switch ltype {
 	case sqltypes.Int64:
@@ -339,9 +377,4 @@ func (c *CollateExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
 
 func (c *CollateExpr) Collation() collations.TypedCollation {
 	return c.TypedCollation
-}
-
-func (c *CollateExpr) String() string {
-	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
-	return fmt.Sprintf("%s COLLATE %s", c.Expr.String(), coll.Name())
 }

@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -78,11 +76,6 @@ func (b *BinaryExpr) Type(env *ExpressionEnv) (querypb.Type, error) {
 	}
 	typ := mergeNumericalTypes(ltype, rtype)
 	return b.Op.Type(typ), nil
-}
-
-// String implements the Expr interface
-func (b *BinaryExpr) String() string {
-	return fmt.Sprintf("(%s %s %s)", b.Left.String(), b.Op.String(), b.Right.String())
 }
 
 // Evaluate implements the BinaryOp interface

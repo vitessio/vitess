@@ -171,7 +171,7 @@ func (u *UserDefinedVariable) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "UserDefinedVariable",
 		Name: u.Name,
-		Expr: u.Expr.String(),
+		Expr: evalengine.FormatExpr(u.Expr),
 	})
 
 }
@@ -412,7 +412,7 @@ func (svss *SysVarSetAware) MarshalJSON() ([]byte, error) {
 	}{
 		Type: "SysVarAware",
 		Name: svss.Name,
-		Expr: svss.Expr.String(),
+		Expr: evalengine.FormatExpr(svss.Expr),
 	})
 }
 

@@ -480,7 +480,7 @@ type vschemaWrapper struct {
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
-	return collations.CollationBinaryID
+	return collations.Unknown
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {

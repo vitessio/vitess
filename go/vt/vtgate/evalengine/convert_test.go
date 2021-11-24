@@ -63,28 +63,28 @@ func TestConvertSimplification(t *testing.T) {
 		simplified ast
 	}{
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
-		{"1 + (1 + 1) * 8", ok("(INT64(1) + ((INT64(1) + INT64(1)) * INT64(8)))"), ok("INT64(17)")},
-		{"1.0 + (1 + 1) * 8.0", ok("(FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8)))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("(VARBINARY(\"pokemon\") like VARBINARY(\"poke%\"))"), ok("INT32(1)")},
+		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
+		{"1.0 + (1 + 1) * 8.0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("INT32(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
-			ok(`(VARBINARY("foo") COLLATE utf8mb4_general_ci in TUPLE(VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz")))`),
+			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci in (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard")))`),
+			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard"))`),
 			ok("INT32(0)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon")))`),
+			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"))`),
 			ok("INT32(1)"),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL))`),
+			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), NULL)`),
 			ok(`INT32(1)`),
 		},
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
-			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL))`),
+			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
 		},
 	}
@@ -107,8 +107,8 @@ func TestConvertSimplification(t *testing.T) {
 				}
 				return
 			}
-			if converted.String() != tc.converted.literal {
-				t.Errorf("mismatch (simplify=false): got %s, expected %s", converted.String(), tc.converted.literal)
+			if FormatExpr(converted) != tc.converted.literal {
+				t.Errorf("mismatch (simplify=false): got %s, expected %s", FormatExpr(converted), tc.converted.literal)
 			}
 
 			simplified, err := ConvertEx(astExpr, dummyCollation(45), true)
@@ -121,8 +121,8 @@ func TestConvertSimplification(t *testing.T) {
 				}
 				return
 			}
-			if simplified.String() != tc.simplified.literal {
-				t.Errorf("mismatch (simplify=true): got %s, expected %s", simplified.String(), tc.simplified.literal)
+			if FormatExpr(simplified) != tc.simplified.literal {
+				t.Errorf("mismatch (simplify=true): got %s, expected %s", FormatExpr(simplified), tc.simplified.literal)
 			}
 		})
 	}
