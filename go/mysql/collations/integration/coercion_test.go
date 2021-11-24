@@ -176,6 +176,14 @@ func TestComparisonSemantics(t *testing.T) {
 							ConvertWithCoercion: true,
 						})
 
+					// for strings that do not coerce, replace with a no-op coercion function
+					if coercionLocal1 == nil {
+						coercionLocal1 = func(_, in []byte) ([]byte, error) { return in, nil }
+					}
+					if coercionLocal2 == nil {
+						coercionLocal2 = func(_, in []byte) ([]byte, error) { return in, nil }
+					}
+
 					remoteTest := tc.make(collA, collB)
 					expr := remoteTest.Expression()
 					query := fmt.Sprintf("SELECT CAST((%s) AS BINARY), COLLATION(%s), COERCIBILITY(%s)", expr, expr, expr)
