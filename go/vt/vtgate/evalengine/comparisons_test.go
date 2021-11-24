@@ -908,6 +908,26 @@ func TestInOp(t *testing.T) {
 			out: &F,
 			op:  &InOp{},
 		}, {
+			name: "integer In tuple - single value",
+			v1:   NewLiteralInt(52), v2: Tuple{NewLiteralInt(52)},
+			out: &T,
+			op:  &InOp{},
+		}, {
+			name: "integer not In tuple - single value",
+			v1:   NewLiteralInt(51), v2: Tuple{NewLiteralInt(52)},
+			out: &F,
+			op:  &InOp{},
+		}, {
+			name: "integer not In tuple - no value",
+			v1:   NewLiteralInt(51), v2: Tuple{},
+			out: &F,
+			op:  &InOp{},
+		}, {
+			name: "integer not In tuple - null value",
+			v1:   NewLiteralInt(51), v2: Tuple{Null{}},
+			out: nil,
+			op:  &InOp{},
+		}, {
 			name: "integer not In tuple but with Null inside",
 			v1:   NewLiteralInt(52), v2: Tuple{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}},
 			out: nil,
@@ -944,6 +964,26 @@ func TestNotInOp(t *testing.T) {
 			name: "integer not In tuple",
 			v1:   NewLiteralInt(51), v2: Tuple{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
+			op:  &NotInOp{},
+		}, {
+			name: "integer In tuple - single value",
+			v1:   NewLiteralInt(52), v2: Tuple{NewLiteralInt(52)},
+			out: &F,
+			op:  &NotInOp{},
+		}, {
+			name: "integer not In tuple - single value",
+			v1:   NewLiteralInt(51), v2: Tuple{NewLiteralInt(52)},
+			out: &T,
+			op:  &NotInOp{},
+		}, {
+			name: "integer not In tuple - no value",
+			v1:   NewLiteralInt(51), v2: Tuple{},
+			out: &T,
+			op:  &NotInOp{},
+		}, {
+			name: "integer not In tuple - null value",
+			v1:   NewLiteralInt(51), v2: Tuple{Null{}},
+			out: nil,
 			op:  &NotInOp{},
 		}, {
 			name: "integer not In tuple but with Null inside",
