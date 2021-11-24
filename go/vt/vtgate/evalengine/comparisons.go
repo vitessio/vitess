@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -61,9 +63,9 @@ type (
 )
 
 var (
-	resultTrue  = EvalResult{typ: sqltypes.Int32, numval: 1}
-	resultFalse = EvalResult{typ: sqltypes.Int32, numval: 0}
-	resultNull  = EvalResult{typ: sqltypes.Null}
+	resultTrue  = EvalResult{typ: sqltypes.Int64, numval: 1, collation: collationNumeric}
+	resultFalse = EvalResult{typ: sqltypes.Int64, numval: 0, collation: collationNumeric}
+	resultNull  = EvalResult{typ: sqltypes.Null, collation: collationNull}
 )
 
 var _ ComparisonOp = (*EqualOp)(nil)
@@ -75,7 +77,28 @@ func (c *ComparisonExpr) Collation() collations.TypedCollation {
 	return c.TypedCollation
 }
 
+func (c *ComparisonExpr) mergeCollations() error {
+	var err error
+
+	leftColl := c.Left.Collation()
+	rightColl := c.Right.Collation()
+
+	if leftColl.Valid() && rightColl.Valid() {
+		env := collations.Local()
+		c.TypedCollation, c.CoerceLeft, c.CoerceRight, err =
+			env.MergeCollations(leftColl, rightColl, collations.CoercionOptions{
+				ConvertToSuperset:   true,
+				ConvertWithCoercion: true,
+			})
+	}
+	return err
+}
+
 func (c *ComparisonExpr) evaluateComparisonExprs(env *ExpressionEnv) (EvalResult, EvalResult, error) {
+	if !c.TypedCollation.Valid() {
+		panic("comparison operator without merged collations")
+	}
+
 	var lVal, rVal EvalResult
 	var err error
 	if lVal, err = c.Left.Evaluate(env); err != nil {
@@ -83,15 +106,15 @@ func (c *ComparisonExpr) evaluateComparisonExprs(env *ExpressionEnv) (EvalResult
 	}
 	if sqltypes.IsText(lVal.typ) && c.CoerceLeft != nil {
 		lVal.bytes, _ = c.CoerceLeft(nil, lVal.bytes)
-		lVal.collation = c.TypedCollation
 	}
+	lVal.collation = c.TypedCollation
 	if rVal, err = c.Right.Evaluate(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
 	if sqltypes.IsText(rVal.typ) && c.CoerceRight != nil {
 		rVal.bytes, _ = c.CoerceRight(nil, rVal.bytes)
-		rVal.collation = c.TypedCollation
 	}
+	rVal.collation = c.TypedCollation
 	return lVal, rVal, nil
 }
 
@@ -142,6 +165,17 @@ func nullSafeCoerceAndCompare(lVal, rVal EvalResult) (comp int, isNull bool, err
 		}
 	}
 	return nullSafeCompare(lVal, rVal)
+}
+
+func nullSafeTypecheck(lVal, rVal EvalResult) error {
+	switch {
+	case lVal.typ == querypb.Type_TUPLE && rVal.typ == querypb.Type_TUPLE:
+	case lVal.typ == querypb.Type_TUPLE:
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
+	case rVal.typ == querypb.Type_TUPLE:
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
+	}
+	return nil
 }
 
 // For more details on comparison expression evaluation and type conversion:
@@ -294,6 +328,13 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 		}
 	} else {
 		for _, rtuple := range *right.tuple {
+			if found {
+				if err := nullSafeTypecheck(left, rtuple); err != nil {
+					return EvalResult{}, err
+				}
+				continue
+			}
+
 			numeric, isNull, err := nullSafeCoerceAndCompare(left, rtuple)
 			if err != nil {
 				return EvalResult{}, err
@@ -304,7 +345,6 @@ func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 			}
 			if numeric == 0 {
 				found = true
-				break
 			}
 		}
 	}
@@ -333,7 +373,8 @@ func (i *InOp) String() string {
 
 func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	if left.collation.Collation != right.collation.Collation {
-		panic("LikeOp: did not coerce")
+		panic(fmt.Sprintf("LikeOp: did not coerce, left=%d right=%d",
+			left.collation.Collation, right.collation.Collation))
 	}
 	var matched bool
 	if l.Match != nil {

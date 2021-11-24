@@ -208,7 +208,7 @@ var collationNull = collations.TypedCollation{
 }
 
 func NewLiteralNull() Expr {
-	return &Literal{Val: EvalResult{typ: querypb.Type_NULL_TYPE, collation: collationNull}}
+	return &Literal{Val: resultNull}
 }
 
 // NewLiteralIntFromBytes returns a literal expression
