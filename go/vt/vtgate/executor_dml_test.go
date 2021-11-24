@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -1425,20 +1427,39 @@ func TestInsertPartialFail2(t *testing.T) {
 	executor, sbc1, _, _ := createLegacyExecutorEnv()
 
 	// Make the second DML fail, it should result in a rollback.
-	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	sbc1.MustFailExecute[sqlparser.StmtInsert] = 1
 
+	safeSession := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err := executor.Execute(
 		context.Background(),
 		"TestExecute",
-		NewSafeSession(&vtgatepb.Session{InTransaction: true}),
+		safeSession,
 		"insert into user(id, v, name) values (1, 2, 'myname')",
 		nil,
 	)
-	//todo: add savepoint
-	want := "revered partial DML execution failure"
+
+	want := "reverted partial DML execution failure"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("insert first DML fail: %v, must start with %s", err, want)
 	}
+
+	assert.True(t, safeSession.InTransaction())
+	wantQueries := []*querypb.BoundQuery{
+		{
+			Sql:           "savepoint x",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}, {
+			Sql: "insert into `user`(id, v, `name`) values (:_Id_0, 2, :_name_0)",
+			BindVariables: map[string]*querypb.BindVariable{
+				"_Id_0":   sqltypes.Int64BindVariable(1),
+				"__seq0":  sqltypes.Int64BindVariable(1),
+				"_name_0": sqltypes.StringBindVariable("myname"),
+			},
+		}, {
+			Sql:           "rollback to x",
+			BindVariables: map[string]*querypb.BindVariable{},
+		}}
+	testQueriesWithSavepoint(t, sbc1, wantQueries)
 }
 
 func TestMultiInsertSharded(t *testing.T) {

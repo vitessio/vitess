@@ -98,15 +98,11 @@ type vcursorImpl struct {
 	collationEnvironment *collations.Environment
 	collation            collations.ID
 
-	// rollbackOnPartialExec is set to true if any DML was successfully
-	// executed. If there was a subsequent failure, the transaction
-	// must be forced to rollback.
-	rollbackOnPartialExec string
-	ignoreMaxMemoryRows   bool
-	vschema               *vindexes.VSchema
-	vm                    VSchemaOperator
-	semTable              *semantics.SemTable
-	warnShardedOnly       bool // when using sharded only features, a warning will be warnings field
+	ignoreMaxMemoryRows bool
+	vschema             *vindexes.VSchema
+	vm                  VSchemaOperator
+	semTable            *semantics.SemTable
+	warnShardedOnly     bool // when using sharded only features, a warning will be warnings field
 
 	warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 }
@@ -438,23 +434,12 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
 
-	uID, err := vc.markSavepoint(rollbackOnError, bindVars)
-	if err != nil {
-		return nil, err
-	}
 	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
-	if err == nil && rollbackOnError && vc.rollbackOnPartialExec == "" {
-		if uID == "" {
-			vc.rollbackOnPartialExec = txRollback
-		} else {
-			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
-		}
-	}
 	return qr, err
 }
 
 func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, bindVars map[string]*querypb.BindVariable) (string, error) {
-	if !rollbackOnError || vc.rollbackOnPartialExec != "" || !vc.safeSession.InsertSavepoints() {
+	if !rollbackOnError || vc.safeSession.rollbackOnPartialExec != "" || !vc.safeSession.InsertSavepoints() {
 		return "", nil
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
@@ -476,11 +461,11 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
-	if len(errs) == 0 && rollbackOnError && vc.rollbackOnPartialExec == "" {
+	if len(errs) == 0 && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
 		if uID == "" {
-			vc.rollbackOnPartialExec = txRollback
+			vc.safeSession.rollbackOnPartialExec = txRollback
 		} else {
-			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
 		}
 	}
 	return qr, errs
@@ -540,11 +525,11 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 
 	errs := vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
 
-	if len(errs) == 0 && rollbackOnError && vc.rollbackOnPartialExec == "" {
+	if len(errs) == 0 && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
 		if uID == "" {
-			vc.rollbackOnPartialExec = txRollback
+			vc.safeSession.rollbackOnPartialExec = txRollback
 		} else {
-			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
 		}
 	}
 

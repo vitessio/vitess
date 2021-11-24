@@ -38,9 +38,13 @@ import (
 type SafeSession struct {
 	mu              sync.Mutex
 	mustRollback    bool
-	savepointState  savepointState
 	autocommitState autocommitState
 	commitOrder     vtgatepb.CommitOrder
+	savepointState  savepointState
+	// rollbackOnPartialExec is set if any DML was successfully
+	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
+	// Otherwise, the transaction is rolled back.
+	rollbackOnPartialExec string
 
 	// this is a signal that found_rows has already been handles by the primitives,
 	// and doesn't have to be updated by the executor
