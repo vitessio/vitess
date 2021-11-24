@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -31,8 +32,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -155,7 +154,7 @@ func startSpanTestable(ctx context.Context, query, label string,
 	match := r.FindStringSubmatch(comments.Leading)
 	span, ctx := getSpan(ctx, match, newSpan, label, newSpanFromString)
 
-	trace.AnnotateSQL(span, query)
+	trace.AnnotateSQL(span, sqlparser.Preview(query))
 
 	return span, ctx, nil
 }
@@ -431,8 +430,8 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if *sqlparser.MySQLServerVersion != "" {
-			mysqlListener.ServerVersion = *sqlparser.MySQLServerVersion
+		if *servenv.MySQLServerVersion != "" {
+			mysqlListener.ServerVersion = *servenv.MySQLServerVersion
 		}
 		if *mysqlSslCert != "" && *mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(*mysqlTLSMinVersion)

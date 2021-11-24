@@ -1076,7 +1076,7 @@ func TestOrderedAggregateCollate(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_0900_ai_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
@@ -1118,7 +1118,7 @@ func TestOrderedAggregateCollateAS(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_0900_as_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_0900_as_ci")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,
@@ -1162,7 +1162,7 @@ func TestOrderedAggregateCollateKS(t *testing.T) {
 		)},
 	}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_ja_0900_as_cs_ks")
+	collationID, _ := collations.Local().LookupID("utf8mb4_ja_0900_as_cs_ks")
 	oa := &OrderedAggregate{
 		Aggregates: []*AggregateParams{{
 			Opcode: AggregateCount,

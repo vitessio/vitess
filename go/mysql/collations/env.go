@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"vitess.io/vitess/go/vt/servenv"
 )
 
 type colldefaults struct {
@@ -229,8 +231,18 @@ func makeEnv(version collver) *Environment {
 	return env
 }
 
-// Default is the default collation Environment for Vitess. This is set to
-// the collation set and defaults available in MySQL 8.0
-func Default() *Environment {
-	return fetchCacheEnvironment(collverMySQL80)
+var defaultEnv *Environment
+var defaultEnvInit sync.Once
+
+// Local is the default collation Environment for Vitess. This depends
+// on the value of the `mysql_server_version` flag passed to this Vitess process.
+func Local() *Environment {
+	defaultEnvInit.Do(func() {
+		if *servenv.MySQLServerVersion == "" {
+			defaultEnv = fetchCacheEnvironment(collverMySQL80)
+		} else {
+			defaultEnv = NewEnvironment(*servenv.MySQLServerVersion)
+		}
+	})
+	return defaultEnv
 }

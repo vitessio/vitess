@@ -234,7 +234,7 @@ func (d *Distinct) description() PrimitiveDescription {
 		other = map[string]interface{}{}
 		var colls []string
 		for _, collation := range d.ColCollations {
-			coll := collations.Default().LookupByID(collation)
+			coll := collations.Local().LookupByID(collation)
 			if coll == nil {
 				colls = append(colls, "UNKNOWN")
 			} else {
