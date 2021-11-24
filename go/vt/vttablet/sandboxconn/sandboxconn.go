@@ -55,6 +55,9 @@ type SandboxConn struct {
 	MustFailStartCommit         int
 	MustFailSetRollback         int
 	MustFailConcludeTransaction int
+	// MustFailExecute is keyed by the statement type and stores the number
+	// of errors to return for that statement type.
+	MustFailExecute map[sqlparser.StatementType]int
 
 	// These Count vars report how often the corresponding
 	// functions were called.
@@ -123,9 +126,10 @@ var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface 
 // NewSandboxConn returns a new SandboxConn targeted to the provided tablet.
 func NewSandboxConn(t *topodatapb.Tablet) *SandboxConn {
 	return &SandboxConn{
-		tablet:        t,
-		MustFailCodes: make(map[vtrpcpb.Code]int),
-		txIDToRID:     make(map[int64]int64),
+		tablet:          t,
+		MustFailCodes:   make(map[vtrpcpb.Code]int),
+		MustFailExecute: make(map[sqlparser.StatementType]int),
+		txIDToRID:       make(map[int64]int64),
 	}
 }
 
@@ -175,6 +179,10 @@ func (sbc *SandboxConn) Execute(ctx context.Context, target *querypb.Target, que
 	}
 
 	stmt, _ := sqlparser.Parse(query) // knowingly ignoring the error
+	if sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] > 0 {
+		sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] = sbc.MustFailExecute[sqlparser.ASTToStatementType(stmt)] - 1
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed query: %v", query)
+	}
 	return sbc.getNextResult(stmt), nil
 }
 

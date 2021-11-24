@@ -273,8 +273,8 @@ func (e *Executor) StreamExecute(
 
 		// Check if there was partial DML execution. If so, rollback the transaction.
 		if err != nil {
-			if !canReturnRows(plan.Type) && safeSession.InTransaction() && vc.rollbackOnPartialExec != "" {
-				_, _, sErr := e.execute(ctx, safeSession, vc.rollbackOnPartialExec, bindVars, logStats)
+			if !canReturnRows(plan.Type) && safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+				_, _, sErr := e.execute(ctx, safeSession, safeSession.rollbackOnPartialExec, bindVars, logStats)
 				if sErr == nil {
 					err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "failed to execute due to partial DML execution: %v", err)
 				} else {
