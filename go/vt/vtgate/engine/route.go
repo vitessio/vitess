@@ -463,7 +463,7 @@ func (route *Route) routeInfoSchemaQuery(vcursor VCursor, bindVars map[string]*q
 		return defaultRoute()
 	}
 
-	env := evalengine.ExpressionEnv{
+	env := &evalengine.ExpressionEnv{
 		BindVars: bindVars,
 		Row:      []sqltypes.Value{},
 	}
