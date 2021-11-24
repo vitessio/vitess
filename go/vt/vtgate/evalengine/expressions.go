@@ -19,6 +19,7 @@ package evalengine
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 
@@ -31,12 +32,13 @@ import (
 
 type (
 	EvalResult struct {
-		typ       querypb.Type
-		ival      int64
-		uval      uint64
-		fval      float64
-		bytes     []byte
-		collation collations.ID
+		typ          querypb.Type
+		ival         int64
+		uval         uint64
+		fval         float64
+		bytes        []byte
+		collation    collations.ID
+		tupleResults []EvalResult
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -67,6 +69,7 @@ type (
 		Offset    int
 		Collation collations.ID
 	}
+	Tuple []Expr
 )
 
 var _ Expr = (*Null)(nil)
@@ -75,6 +78,7 @@ var _ Expr = (*BindVariable)(nil)
 var _ Expr = (*Column)(nil)
 var _ Expr = (*BinaryExpr)(nil)
 var _ Expr = (*ComparisonExpr)(nil)
+var _ Expr = (Tuple)(nil)
 
 // Value allows for retrieval of the value we expose for public consumption
 func (e EvalResult) Value() sqltypes.Value {
@@ -153,6 +157,20 @@ func (l *Literal) Evaluate(ExpressionEnv) (EvalResult, error) {
 }
 
 // Evaluate implements the Expr interface
+func (t Tuple) Evaluate(env ExpressionEnv) (EvalResult, error) {
+	var res EvalResult
+	res.typ = querypb.Type_TUPLE
+	for _, expr := range t {
+		evalRes, err := expr.Evaluate(env)
+		if err != nil {
+			return EvalResult{}, err
+		}
+		res.tupleResults = append(res.tupleResults, evalRes)
+	}
+	return res, nil
+}
+
+// Evaluate implements the Expr interface
 func (b *BindVariable) Evaluate(env ExpressionEnv) (EvalResult, error) {
 	val, ok := env.BindVars[b.Key]
 	if !ok {
@@ -190,6 +208,11 @@ func (l *Literal) Type(ExpressionEnv) (querypb.Type, error) {
 }
 
 // Type implements the Expr interface
+func (t Tuple) Type(env ExpressionEnv) (querypb.Type, error) {
+	return querypb.Type_TUPLE, nil
+}
+
+// Type implements the Expr interface
 func (c *Column) Type(ExpressionEnv) (querypb.Type, error) {
 	return sqltypes.Float64, nil
 }
@@ -202,6 +225,15 @@ func (b *BindVariable) String() string {
 // String implements the Expr interface
 func (l *Literal) String() string {
 	return l.Val.Value().String()
+}
+
+// String implements the Expr interface
+func (t Tuple) String() string {
+	var stringSlice []string
+	for _, expr := range t {
+		stringSlice = append(stringSlice, expr.String())
+	}
+	return "(" + strings.Join(stringSlice, ",") + ")"
 }
 
 // String implements the Expr interface
