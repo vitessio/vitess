@@ -899,47 +899,47 @@ func TestInOp(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "integer In tuple",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &F,
 			op:  &InOp{},
 		}, {
 			name: "integer In tuple - single value",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralInt(52)},
 			out: &T,
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple - single value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52)}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralInt(52)},
 			out: &F,
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple - no value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{},
 			out: &F,
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple - null value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{Null{}}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{Null{}},
 			out: nil,
 			op:  &InOp{},
 		}, {
 			name: "integer not In tuple but with Null inside",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}},
 			out: nil,
 			op:  &InOp{},
 		}, {
 			name: "integer In tuple with null inside",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
 			op:  &InOp{},
 		}, {
 			name: "Null In tuple",
-			v1:   Null{}, v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   Null{}, v2: TupleExpr{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
 			out: nil,
 			op:  &InOp{},
 		},
@@ -957,47 +957,47 @@ func TestNotInOp(t *testing.T) {
 	tests := []testCase{
 		{
 			name: "integer In tuple",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &F,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralInt(52), NewLiteralInt(54)},
 			out: &T,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer In tuple - single value",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{NewLiteralInt(52)},
 			out: &F,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple - single value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{NewLiteralInt(52)}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{NewLiteralInt(52)},
 			out: &T,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple - no value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{},
 			out: &T,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple - null value",
-			v1:   NewLiteralInt(51), v2: &TupleExpr{Exprs: []Expr{Null{}}},
+			v1:   NewLiteralInt(51), v2: TupleExpr{Null{}},
 			out: nil,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer not In tuple but with Null inside",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{Null{}, NewLiteralInt(51), NewLiteralInt(54), Null{}},
 			out: nil,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "integer In tuple with null inside",
-			v1:   NewLiteralInt(52), v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   NewLiteralInt(52), v2: TupleExpr{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
 			out: &F,
 			op:  &InOp{Negate: true},
 		}, {
 			name: "Null In tuple",
-			v1:   Null{}, v2: &TupleExpr{Exprs: []Expr{Null{}, NewLiteralInt(52), NewLiteralInt(54)}},
+			v1:   Null{}, v2: TupleExpr{Null{}, NewLiteralInt(52), NewLiteralInt(54)},
 			out: nil,
 			op:  &InOp{Negate: true},
 		},

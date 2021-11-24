@@ -71,6 +71,22 @@ func TestConvertSimplification(t *testing.T) {
 			ok(`(VARBINARY("foo") COLLATE utf8mb4_general_ci in TUPLE(VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz")))`),
 			err("COLLATION 'latin1_swedish_ci' is not valid for CHARACTER SET 'utf8mb4'"),
 		},
+		{`"pokemon" in ("bulbasaur", "venusaur", "charizard")`,
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("charizard")))`),
+			ok("INT32(0)"),
+		},
+		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon")`,
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon")))`),
+			ok("INT32(1)"),
+		},
+		{`"pokemon" in ("bulbasaur", "venusaur", "pokemon", NULL)`,
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), VARBINARY("pokemon"), null))`),
+			ok(`INT32(1)`),
+		},
+		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
+			ok(`(VARBINARY("pokemon") in TUPLE(VARBINARY("bulbasaur"), VARBINARY("venusaur"), null))`),
+			ok(`NULL`),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -92,7 +108,7 @@ func TestConvertSimplification(t *testing.T) {
 				return
 			}
 			if converted.String() != tc.converted.literal {
-				t.Errorf("mismatch (simplify=false): got %q, expected %q", converted.String(), tc.converted.literal)
+				t.Errorf("mismatch (simplify=false): got %s, expected %s", converted.String(), tc.converted.literal)
 			}
 
 			simplified, err := ConvertEx(astExpr, dummyCollation(45), true)
@@ -106,7 +122,7 @@ func TestConvertSimplification(t *testing.T) {
 				return
 			}
 			if simplified.String() != tc.simplified.literal {
-				t.Errorf("mismatch (simplify=true): got %q, expected %q", simplified.String(), tc.simplified.literal)
+				t.Errorf("mismatch (simplify=true): got %s, expected %s", simplified.String(), tc.simplified.literal)
 			}
 		})
 	}

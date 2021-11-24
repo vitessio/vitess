@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -137,6 +138,68 @@ func simplifyExpr(e Expr) (Expr, error) {
 				coll := collations.Local().LookupByID(node.TypedCollation.Collation)
 				op.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
 			}
+
+		case *InOp:
+			if tuple, ok := node.Right.(TupleExpr); ok {
+				var (
+					collation    collations.ID
+					typ          querypb.Type
+					optimize     = true
+					literalTuple = true
+				)
+
+				for i, expr := range tuple {
+					if lit, ok := expr.(*Literal); ok {
+						thisColl := lit.Val.collation.Collation
+						thisTyp := lit.Val.typ
+						if i == 0 {
+							collation = thisColl
+							typ = thisTyp
+							continue
+						}
+						if collation == thisColl && typ == thisTyp {
+							continue
+						}
+						optimize = false
+						continue
+					}
+					if _, null := expr.(Null); null {
+						optimize = false
+						continue
+					}
+					literalTuple = false
+					break
+				}
+
+				if lit1 != nil && literalTuple {
+					res, err := node.Evaluate(nil)
+					if err != nil {
+						return nil, err
+					}
+					return &Literal{Val: res}, nil
+				}
+
+				if optimize && literalTuple {
+					op.Hashed = make(map[HashCode]int)
+					for i, expr := range tuple {
+						lit := expr.(*Literal)
+						hash, err := lit.Val.nullSafeHashcode()
+						if err != nil {
+							op.Hashed = nil
+							break
+						}
+						if collidx, collision := op.Hashed[hash]; collision {
+							cmp, _, err := nullSafeCompare(lit.Val, tuple[collidx].(*Literal).Val)
+							if cmp != 0 || err != nil {
+								op.Hashed = nil
+								break
+							}
+							continue
+						}
+						op.Hashed[hash] = i
+					}
+				}
+			}
 		}
 
 	case *BinaryExpr:
@@ -168,21 +231,14 @@ func simplifyExpr(e Expr) (Expr, error) {
 			return &Literal{Val: res}, nil
 		}
 
-	case Tuple:
+	case TupleExpr:
 		var err error
-		var literal = true
 		for i, expr := range node {
 			expr, err = simplifyExpr(expr)
 			if err != nil {
 				return nil, err
 			}
-			if _, isLiteral := expr.(*Literal); !isLiteral {
-				literal = false
-			}
 			node[i] = expr
-		}
-		if literal {
-			// TODO: optimize with a set
 		}
 	}
 	return e, nil
@@ -278,15 +334,15 @@ func convertExpr(e sqlparser.Expr, lookup ConverterLookup) (Expr, error) {
 			Right: right,
 		}, nil
 	case sqlparser.ValTuple:
-		var res Tuple
+		var exprs TupleExpr
 		for _, expr := range node {
 			convertedExpr, err := convertExpr(expr, lookup)
 			if err != nil {
 				return nil, err
 			}
-			res = append(res, convertedExpr)
+			exprs = append(exprs, convertedExpr)
 		}
-		return res, nil
+		return exprs, nil
 	case *sqlparser.NullVal:
 		return Null{}, nil
 	case *sqlparser.CollateExpr:
