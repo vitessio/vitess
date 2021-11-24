@@ -164,7 +164,7 @@ func TestPartialQueryFailure(t *testing.T) {
 
 			utils.Exec(t, conn, `begin`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `failed to execute due to partial DML execution`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `revered partial DML execution failure`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `commit`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)

@@ -425,6 +425,8 @@ func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVa
 	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
+const txRollback = "Rollback Transaction"
+
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
@@ -436,24 +438,28 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
 
-	uID, err := vc.markSavepoint(rollbackOnError, session, bindVars)
+	uID, err := vc.markSavepoint(rollbackOnError, false, bindVars)
 	if err != nil {
 		return nil, err
 	}
 	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
 	if err == nil && rollbackOnError && vc.rollbackOnPartialExec == "" {
-		vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		if uID == "" {
+			vc.rollbackOnPartialExec = txRollback
+		} else {
+			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		}
 	}
 	return qr, err
 }
 
-func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, session *SafeSession, bindVars map[string]*querypb.BindVariable) (string, error) {
-	if !rollbackOnError || vc.rollbackOnPartialExec != "" {
+func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, autocommit bool, bindVars map[string]*querypb.BindVariable) (string, error) {
+	if !rollbackOnError || vc.rollbackOnPartialExec != "" || autocommit {
 		return "", nil
 	}
 	uID := fmt.Sprintf("_vt%s", strings.ReplaceAll(uuid.NewString(), "-", "_"))
 	spQuery := fmt.Sprintf("%ssavepoint %s%s", vc.marginComments.Leading, uID, vc.marginComments.Trailing)
-	_, err := vc.executor.Execute(vc.ctx, "markSavepoint", session, spQuery, bindVars)
+	_, err := vc.executor.Execute(vc.ctx, "MarkSavepoint", vc.safeSession, spQuery, bindVars)
 	if err != nil {
 		return "", err
 	}
@@ -463,7 +469,7 @@ func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, session *SafeSession,
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(queries)))
-	uID, err := vc.markSavepoint(rollbackOnError, vc.safeSession, map[string]*querypb.BindVariable{})
+	uID, err := vc.markSavepoint(rollbackOnError, autocommit, map[string]*querypb.BindVariable{})
 	if err != nil {
 		return nil, []error{err}
 	}
@@ -471,7 +477,11 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
 	if len(errs) == 0 && rollbackOnError && vc.rollbackOnPartialExec == "" {
-		vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		if uID == "" {
+			vc.rollbackOnPartialExec = txRollback
+		} else {
+			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		}
 	}
 	return qr, errs
 }
@@ -523,7 +533,7 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
-	uID, err := vc.markSavepoint(rollbackOnError, vc.safeSession, map[string]*querypb.BindVariable{})
+	uID, err := vc.markSavepoint(rollbackOnError, autocommit, map[string]*querypb.BindVariable{})
 	if err != nil {
 		return []error{err}
 	}
@@ -531,7 +541,11 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 	errs := vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
 
 	if len(errs) == 0 && rollbackOnError && vc.rollbackOnPartialExec == "" {
-		vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		if uID == "" {
+			vc.rollbackOnPartialExec = txRollback
+		} else {
+			vc.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
+		}
 	}
 
 	return errs
