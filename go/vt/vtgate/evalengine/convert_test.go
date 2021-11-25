@@ -69,7 +69,7 @@ func TestConvertSimplification(t *testing.T) {
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
 		{"1.0 + (1 + 1) * 8.0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
-		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("INT64(1)")},
+		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("UINT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
 			ok(`VARBINARY("foo") COLLATE utf8mb4_general_ci in (VARBINARY("bar") COLLATE latin1_swedish_ci, VARBINARY("baz"))`),
@@ -90,6 +90,9 @@ func TestConvertSimplification(t *testing.T) {
 		{`"pokemon" in ("bulbasaur", "venusaur", NULL)`,
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
+		},
+		{
+			"0 + NULL", ok("INT64(0) + NULL"), ok("NULL"),
 		},
 	}
 
@@ -170,31 +173,31 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewFloat64(2.2),
 	}, {
 		expression: "42 in (41, 42)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "42 in (41, 43)",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "42 in (null, 41, 43)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((1,2), (2,3))",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewInt64(1),
 	}, {
 		expression: "(1,2) = (1,2)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewUint64(1),
 	}, {
 		expression: "1 = 'sad'",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewUint64(0),
 	}, {
 		expression: "(1,2) = (1,3)",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewUint64(0),
 	}, {
 		expression: "(1,2) = (1,null)",
 		expected:   NULL,
 	}, {
 		expression: "(1,2) in ((4,2), (2,3))",
-		expected:   sqltypes.NewInt32(0),
+		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "(1,2) in ((1,null), (2,3))",
 		expected:   NULL,
@@ -203,7 +206,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   NULL,
 	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
-		expected:   sqltypes.NewInt32(1),
+		expected:   sqltypes.NewUint64(1),
 	}, {
 		expression: "(1,(1,2,3),(1,(1,NULL),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
 		expected:   NULL,
