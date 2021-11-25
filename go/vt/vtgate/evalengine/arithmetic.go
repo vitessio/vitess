@@ -289,7 +289,7 @@ func (er EvalResult) nullSafeHashcode() (HashCode, error) {
 		return HashCode(math.MaxUint64), nil
 	case sqltypes.IsNumber(er.typ):
 		return numericalHashCode(er), nil
-	case sqltypes.IsText(er.typ):
+	case er.textual():
 		coll := collations.Local().LookupByID(er.collation.Collation)
 		if coll == nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "text type with an unknown/unsupported collation cannot be hashed")

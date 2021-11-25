@@ -201,6 +201,10 @@ func (e EvalResult) TupleValues() []sqltypes.Value {
 	return result
 }
 
+func (e EvalResult) textual() bool {
+	return sqltypes.IsText(e.typ) || sqltypes.IsBinary(e.typ)
+}
+
 var collationNull = collations.TypedCollation{
 	Collation:    collations.CollationBinaryID,
 	Coercibility: collations.CoerceIgnorable,
