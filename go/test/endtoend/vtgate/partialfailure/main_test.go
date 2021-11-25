@@ -200,7 +200,7 @@ func TestPartialVindexQueryFailure(t *testing.T) {
 
 			utils.Exec(t, conn, `begin`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `commit`)
@@ -271,7 +271,7 @@ func TestPartialVindexQueryFailureNoAutoCommit(t *testing.T) {
 
 			utils.Exec(t, conn, `set autocommit = off`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `commit`)
@@ -340,7 +340,7 @@ func TestPartialVindexQueryFailureAutoCommit(t *testing.T) {
 			utils.Exec(t, conn, `delete from test`)
 
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `commit`)
@@ -411,7 +411,7 @@ func TestPartialVindexQueryFailureRollback(t *testing.T) {
 
 			utils.Exec(t, conn, `begin`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `rollback`)
@@ -482,7 +482,7 @@ func TestPartialVindexQueryFailureNoAutoCommitRollback(t *testing.T) {
 
 			utils.Exec(t, conn, `set autocommit = off`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `rollback`)
@@ -551,7 +551,7 @@ func TestPartialVindexQueryFailureAutoCommitRollback(t *testing.T) {
 			utils.Exec(t, conn, `delete from test`)
 
 			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
+			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `lookup.Create`)
 			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
 			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
 			utils.Exec(t, conn, `rollback`)
