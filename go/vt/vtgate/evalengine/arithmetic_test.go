@@ -511,7 +511,7 @@ func TestNullSafeAdd(t *testing.T) {
 }
 
 func TestNullsafeCompare(t *testing.T) {
-	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
 	tcases := []struct {
 		v1, v2 sqltypes.Value
 		out    int
@@ -613,7 +613,7 @@ func TestNullsafeCompare(t *testing.T) {
 }
 
 func getCollationID(collation string) collations.ID {
-	id, _ := collations.Default().LookupID(collation)
+	id, _ := collations.Local().LookupID(collation)
 	return id
 }
 
@@ -1015,21 +1015,21 @@ func TestNewNumeric(t *testing.T) {
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 1},
 	}, {
 		v:   NewUint64(1),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		out: EvalResult{typ: querypb.Type_UINT64, numval: 1},
 	}, {
 		v:   NewFloat64(1),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.0)},
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(querypb.Type_VARCHAR, "1"),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 1},
 	}, {
 		// If Int64 can't work, we use Float64.
 		v:   TestValue(querypb.Type_VARCHAR, "1.2"),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2)},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(querypb.Type_INT64, "1.2"),
@@ -1044,7 +1044,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(querypb.Type_VARCHAR, "abcd"),
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 0},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(0)},
 	}}
 	for _, tcase := range tcases {
 		got, err := newEvalResult(tcase.v)
@@ -1066,21 +1066,21 @@ func TestNewIntegralNumeric(t *testing.T) {
 		err error
 	}{{
 		v:   NewInt64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 1},
 	}, {
 		v:   NewUint64(1),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		out: EvalResult{typ: querypb.Type_UINT64, numval: 1},
 	}, {
 		v:   NewFloat64(1),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 1},
 	}, {
 		// For non-number type, Int64 is the default.
 		v:   TestValue(querypb.Type_VARCHAR, "1"),
-		out: EvalResult{typ: querypb.Type_INT64, ival: 1},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 1},
 	}, {
 		// If Int64 can't work, we use Uint64.
 		v:   TestValue(querypb.Type_VARCHAR, "18446744073709551615"),
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 18446744073709551615},
+		out: EvalResult{typ: querypb.Type_UINT64, numval: 18446744073709551615},
 	}, {
 		// Only valid Int64 allowed if type is Int64.
 		v:   TestValue(querypb.Type_INT64, "1.2"),
@@ -1112,48 +1112,48 @@ func TestAddNumeric(t *testing.T) {
 		out    EvalResult
 		err    error
 	}{{
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: EvalResult{typ: querypb.Type_INT64, ival: 3},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: 1},
+		v2:  EvalResult{typ: querypb.Type_INT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_INT64, numval: 3},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 3},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: 1},
+		v2:  EvalResult{typ: querypb.Type_UINT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_UINT64, numval: 3},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: 1},
+		v2:  EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(2)},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(3)},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_UINT64, uval: 3},
+		v1:  EvalResult{typ: querypb.Type_UINT64, numval: 1},
+		v2:  EvalResult{typ: querypb.Type_UINT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_UINT64, numval: 3},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  EvalResult{typ: querypb.Type_UINT64, numval: 1},
+		v2:  EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(2)},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(3)},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_FLOAT64, fval: 1},
-		v2:  EvalResult{typ: querypb.Type_FLOAT64, fval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 3},
+		v1:  EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1)},
+		v2:  EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(2)},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(3)},
 	}, {
 		// Int64 overflow.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: 9223372036854775807},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 9223372036854775809},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: 9223372036854775807},
+		v2:  EvalResult{typ: querypb.Type_INT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(9223372036854775809)},
 	}, {
 		// Int64 underflow.
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -9223372036854775807},
-		v2:  EvalResult{typ: querypb.Type_INT64, ival: -2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: -9223372036854775809},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: castuint64(-9223372036854775807)},
+		v2:  EvalResult{typ: querypb.Type_INT64, numval: castuint64(-2)},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(-9223372036854775809.0)},
 	}, {
-		v1:  EvalResult{typ: querypb.Type_INT64, ival: -1},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 18446744073709551617},
+		v1:  EvalResult{typ: querypb.Type_INT64, numval: castuint64(-1)},
+		v2:  EvalResult{typ: querypb.Type_UINT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(18446744073709551617.0)},
 	}, {
 		// Uint64 overflow.
-		v1:  EvalResult{typ: querypb.Type_UINT64, uval: 18446744073709551615},
-		v2:  EvalResult{typ: querypb.Type_UINT64, uval: 2},
-		out: EvalResult{typ: querypb.Type_FLOAT64, fval: 18446744073709551617},
+		v1:  EvalResult{typ: querypb.Type_UINT64, numval: 18446744073709551615},
+		v2:  EvalResult{typ: querypb.Type_UINT64, numval: 2},
+		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(18446744073709551617.0)},
 	}}
 	for _, tcase := range tcases {
 		got := addNumeric(tcase.v1, tcase.v2)
@@ -1162,10 +1162,14 @@ func TestAddNumeric(t *testing.T) {
 	}
 }
 
+func castuint64(i int64) uint64 {
+	return uint64(i)
+}
+
 func TestPrioritize(t *testing.T) {
-	ival := EvalResult{typ: querypb.Type_INT64, ival: -1}
-	uval := EvalResult{typ: querypb.Type_UINT64, uval: 1}
-	fval := EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2}
+	ival := EvalResult{typ: querypb.Type_INT64, numval: castuint64(-1)}
+	uval := EvalResult{typ: querypb.Type_UINT64, numval: 1}
+	fval := EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2)}
 	textIntval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("-1")}
 	textFloatval := EvalResult{typ: querypb.Type_VARBINARY, bytes: []byte("1.2")}
 
@@ -1230,52 +1234,52 @@ func TestToSqlValue(t *testing.T) {
 		err error
 	}{{
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   EvalResult{typ: querypb.Type_INT64, numval: 1},
 		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   EvalResult{typ: querypb.Type_UINT64, numval: 1},
 		out: NewInt64(1),
 	}, {
 		typ: querypb.Type_INT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
 		out: NewInt64(0),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   EvalResult{typ: querypb.Type_INT64, numval: 1},
 		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   EvalResult{typ: querypb.Type_UINT64, numval: 1},
 		out: NewUint64(1),
 	}, {
 		typ: querypb.Type_UINT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
 		out: NewUint64(0),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   EvalResult{typ: querypb.Type_INT64, numval: 1},
 		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   EvalResult{typ: querypb.Type_UINT64, numval: 1},
 		out: TestValue(querypb.Type_FLOAT64, "1"),
 	}, {
 		typ: querypb.Type_FLOAT64,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
 		out: TestValue(querypb.Type_FLOAT64, "1.2e-16"),
 	}, {
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_INT64, ival: 1},
+		v:   EvalResult{typ: querypb.Type_INT64, numval: 1},
 		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_UINT64, uval: 1},
+		v:   EvalResult{typ: querypb.Type_UINT64, numval: 1},
 		out: TestValue(querypb.Type_DECIMAL, "1"),
 	}, {
 		// For float, we should not use scientific notation.
 		typ: querypb.Type_DECIMAL,
-		v:   EvalResult{typ: querypb.Type_FLOAT64, fval: 1.2e-16},
+		v:   EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.2e-16)},
 		out: TestValue(querypb.Type_DECIMAL, "0.00000000000000012"),
 	}}
 	for _, tcase := range tcases {
@@ -1289,17 +1293,17 @@ func TestToSqlValue(t *testing.T) {
 
 func TestCompareNumeric(t *testing.T) {
 	values := []EvalResult{
-		{typ: querypb.Type_INT64, ival: 1},
-		{typ: querypb.Type_INT64, ival: -1},
-		{typ: querypb.Type_INT64, ival: 0},
-		{typ: querypb.Type_INT64, ival: 2},
-		{typ: querypb.Type_UINT64, uval: 1},
-		{typ: querypb.Type_UINT64, uval: 0},
-		{typ: querypb.Type_UINT64, uval: 2},
-		{typ: querypb.Type_FLOAT64, fval: 1},
-		{typ: querypb.Type_FLOAT64, fval: -1},
-		{typ: querypb.Type_FLOAT64, fval: 0},
-		{typ: querypb.Type_FLOAT64, fval: 2},
+		{typ: querypb.Type_INT64, numval: 1},
+		{typ: querypb.Type_INT64, numval: castuint64(-1)},
+		{typ: querypb.Type_INT64, numval: 0},
+		{typ: querypb.Type_INT64, numval: 2},
+		{typ: querypb.Type_UINT64, numval: 1},
+		{typ: querypb.Type_UINT64, numval: 0},
+		{typ: querypb.Type_UINT64, numval: 2},
+		{typ: querypb.Type_FLOAT64, numval: math.Float64bits(1.0)},
+		{typ: querypb.Type_FLOAT64, numval: math.Float64bits(-1.0)},
+		{typ: querypb.Type_FLOAT64, numval: math.Float64bits(0.0)},
+		{typ: querypb.Type_FLOAT64, numval: math.Float64bits(2.0)},
 	}
 
 	// cmpResults is a 2D array with the comparison expectations if we compare all values with each other
@@ -1618,8 +1622,8 @@ func BenchmarkAddGoInterface(b *testing.B) {
 }
 
 func BenchmarkAddGoNonInterface(b *testing.B) {
-	v1 := EvalResult{typ: querypb.Type_INT64, ival: 1}
-	v2 := EvalResult{typ: querypb.Type_INT64, ival: 12}
+	v1 := EvalResult{typ: querypb.Type_INT64, numval: 1}
+	v2 := EvalResult{typ: querypb.Type_INT64, numval: 12}
 	for i := 0; i < b.N; i++ {
 		if v1.typ != querypb.Type_INT64 {
 			b.Error("type assertion failed")
@@ -1627,7 +1631,7 @@ func BenchmarkAddGoNonInterface(b *testing.B) {
 		if v2.typ != querypb.Type_INT64 {
 			b.Error("type assertion failed")
 		}
-		v1 = EvalResult{typ: querypb.Type_INT64, ival: v1.ival + v2.ival}
+		v1 = EvalResult{typ: querypb.Type_INT64, numval: uint64(int64(v1.numval) + int64(v2.numval))}
 	}
 }
 

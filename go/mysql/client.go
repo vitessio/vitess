@@ -242,7 +242,7 @@ func setCollationForConnection(c *Conn, params *ConnParams) error {
 // getHandshakeCharacterSet returns the collation ID of DefaultCollation in an
 // 8 bits integer which will be used to feed the handshake protocol's packet.
 func getHandshakeCharacterSet() (uint8, error) {
-	coll := collations.Default().LookupByName(DefaultCollation)
+	coll := collations.Local().LookupByName(DefaultCollation)
 	if coll == nil {
 		// theoretically, this should never happen from an end user perspective
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot resolve collation ID for collation: '%s'", DefaultCollation)

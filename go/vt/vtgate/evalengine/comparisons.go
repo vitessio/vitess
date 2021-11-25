@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -33,53 +34,63 @@ type (
 	}
 
 	ComparisonExpr struct {
-		Op          ComparisonOp
-		Left, Right Expr
+		Op                      ComparisonOp
+		Left, Right             Expr
+		CoerceLeft, CoerceRight collations.Coercion
+		TypedCollation          collations.TypedCollation
 	}
 
-	EqualOp         struct{}
-	NotEqualOp      struct{}
+	EqualOp struct {
+		Operator string
+		Compare  func(cmp int) bool
+	}
+
 	NullSafeEqualOp struct{}
-	LessThanOp      struct{}
-	LessEqualOp     struct{}
-	GreaterThanOp   struct{}
-	GreaterEqualOp  struct{}
-	InOp            struct{}
-	NotInOp         struct{}
-	LikeOp          struct{}
-	NotLikeOp       struct{}
-	RegexpOp        struct{}
-	NotRegexpOp     struct{}
+
+	InOp struct {
+		Negate bool
+		Hashed map[uintptr]int
+	}
+	LikeOp struct {
+		Negate bool
+		Match  collations.WildcardPattern
+	}
+	RegexpOp struct {
+		Negate bool
+	}
 )
 
 var (
-	resultTrue  = EvalResult{typ: sqltypes.Int32, ival: 1}
-	resultFalse = EvalResult{typ: sqltypes.Int32, ival: 0}
+	resultTrue  = EvalResult{typ: sqltypes.Int32, numval: 1}
+	resultFalse = EvalResult{typ: sqltypes.Int32, numval: 0}
 	resultNull  = EvalResult{typ: sqltypes.Null}
 )
 
 var _ ComparisonOp = (*EqualOp)(nil)
-var _ ComparisonOp = (*NotEqualOp)(nil)
-var _ ComparisonOp = (*NullSafeEqualOp)(nil)
-var _ ComparisonOp = (*LessThanOp)(nil)
-var _ ComparisonOp = (*LessEqualOp)(nil)
-var _ ComparisonOp = (*GreaterThanOp)(nil)
-var _ ComparisonOp = (*GreaterEqualOp)(nil)
 var _ ComparisonOp = (*InOp)(nil)
-var _ ComparisonOp = (*NotInOp)(nil)
 var _ ComparisonOp = (*LikeOp)(nil)
-var _ ComparisonOp = (*NotLikeOp)(nil)
 var _ ComparisonOp = (*RegexpOp)(nil)
-var _ ComparisonOp = (*NotRegexpOp)(nil)
 
-func (c *ComparisonExpr) evaluateComparisonExprs(env ExpressionEnv) (EvalResult, EvalResult, error) {
+func (c *ComparisonExpr) Collation() collations.TypedCollation {
+	return c.TypedCollation
+}
+
+func (c *ComparisonExpr) evaluateComparisonExprs(env *ExpressionEnv) (EvalResult, EvalResult, error) {
 	var lVal, rVal EvalResult
 	var err error
 	if lVal, err = c.Left.Evaluate(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
+	if sqltypes.IsText(lVal.typ) && c.CoerceLeft != nil {
+		lVal.bytes, _ = c.CoerceLeft(nil, lVal.bytes)
+		lVal.collation = c.TypedCollation
+	}
 	if rVal, err = c.Right.Evaluate(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
+	}
+	if sqltypes.IsText(rVal.typ) && c.CoerceRight != nil {
+		rVal.bytes, _ = c.CoerceRight(nil, rVal.bytes)
+		rVal.collation = c.TypedCollation
 	}
 	return lVal, rVal, nil
 }
@@ -123,9 +134,19 @@ func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
 	return sqltypes.IsDate(l.typ) && sqltypes.IsNumber(r.typ) || sqltypes.IsNumber(l.typ) && sqltypes.IsDate(r.typ)
 }
 
+func nullSafeCoerceAndCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
+	if lVal.collation.Collation != rVal.collation.Collation {
+		lVal, rVal, err = mergeCollations(lVal, rVal)
+		if err != nil {
+			return 0, false, err
+		}
+	}
+	return nullSafeCompare(lVal, rVal)
+}
+
 // For more details on comparison expression evaluation and type conversion:
 // 		- https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-func nullSafeExecuteComparison(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
+func nullSafeCompare(lVal, rVal EvalResult) (comp int, isNull bool, err error) {
 	lVal = foldSingleLenTuples(lVal)
 	rVal = foldSingleLenTuples(rVal)
 	if hasNullEvalResult(lVal, rVal) {
@@ -133,8 +154,8 @@ func nullSafeExecuteComparison(lVal, rVal EvalResult) (comp int, isNull bool, er
 	}
 	switch {
 	case evalResultsAreStrings(lVal, rVal):
-		comp, err = compareStrings(lVal, rVal)
-		return comp, false, err
+		comp = compareStrings(lVal, rVal)
+		return comp, false, nil
 
 	case evalResultsAreSameNumericType(lVal, rVal), needsDecimalHandling(lVal, rVal):
 		comp, err = compareNumeric(lVal, rVal)
@@ -159,7 +180,7 @@ func nullSafeExecuteComparison(lVal, rVal EvalResult) (comp int, isNull bool, er
 	case lVal.typ == querypb.Type_TUPLE && rVal.typ == querypb.Type_TUPLE:
 		return compareTuples(lVal, rVal)
 	case lVal.typ == querypb.Type_TUPLE:
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(lVal.tupleResults))
+		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
 	case rVal.typ == querypb.Type_TUPLE:
 		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain 1 column(s)")
 
@@ -177,14 +198,21 @@ func nullSafeExecuteComparison(lVal, rVal EvalResult) (comp int, isNull bool, er
 }
 
 func foldSingleLenTuples(val EvalResult) EvalResult {
-	if val.typ == querypb.Type_TUPLE && len(val.tupleResults) == 1 {
-		val = val.tupleResults[0]
+	if val.typ == querypb.Type_TUPLE && len(*val.tuple) == 1 {
+		return (*val.tuple)[0]
 	}
 	return val
 }
 
+func boolResult(result, negate bool) EvalResult {
+	if result == !negate {
+		return resultTrue
+	}
+	return resultFalse
+}
+
 // Evaluate implements the Expr interface
-func (c *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
+func (c *ComparisonExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	if c.Op == nil {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a comparison expression needs a comparison operator")
 	}
@@ -198,25 +226,21 @@ func (c *ComparisonExpr) Evaluate(env ExpressionEnv) (EvalResult, error) {
 }
 
 // Type implements the Expr interface
-func (c *ComparisonExpr) Type(ExpressionEnv) (querypb.Type, error) {
+func (c *ComparisonExpr) Type(*ExpressionEnv) (querypb.Type, error) {
 	return querypb.Type_INT32, nil
-}
-
-// String implements the Expr interface
-func (c *ComparisonExpr) String() string {
-	return c.Left.String() + " " + c.Op.String() + " " + c.Right.String()
 }
 
 // Evaluate implements the ComparisonOp interface
 func (e *EqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
+	// No need to coerce here because the caller ComparisonExpr.Evaluate has coerced for us
+	numeric, isNull, err := nullSafeCompare(left, right)
 	if err != nil {
 		return EvalResult{}, err
 	}
 	if isNull {
 		return resultNull, err
 	}
-	if numeric == 0 {
+	if e.Compare(numeric) {
 		return resultTrue, nil
 	}
 	return resultFalse, nil
@@ -229,32 +253,7 @@ func (e *EqualOp) Type() querypb.Type {
 
 // String implements the ComparisonOp interface
 func (e *EqualOp) String() string {
-	return "="
-}
-
-// Evaluate implements the ComparisonOp interface
-func (n *NotEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if isNull {
-		return resultNull, err
-	}
-	if numeric != 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
-}
-
-// Type implements the ComparisonOp interface
-func (n *NotEqualOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (n *NotEqualOp) String() string {
-	return "!="
+	return e.Operator
 }
 
 // Evaluate implements the ComparisonOp interface
@@ -273,125 +272,50 @@ func (n *NullSafeEqualOp) String() string {
 }
 
 // Evaluate implements the ComparisonOp interface
-func (l *LessThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if isNull {
-		return resultNull, err
-	}
-	if numeric < 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
-}
-
-// Type implements the ComparisonOp interface
-func (l *LessThanOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (l *LessThanOp) String() string {
-	return "<"
-}
-
-// Evaluate implements the ComparisonOp interface
-func (l *LessEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if isNull {
-		return resultNull, err
-	}
-	if numeric <= 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
-}
-
-// Type implements the ComparisonOp interface
-func (l *LessEqualOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (l *LessEqualOp) String() string {
-	return "<="
-}
-
-// Evaluate implements the ComparisonOp interface
-func (g *GreaterThanOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if isNull {
-		return resultNull, err
-	}
-	if numeric > 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
-}
-
-// Type implements the ComparisonOp interface
-func (g *GreaterThanOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (g *GreaterThanOp) String() string {
-	return ">"
-}
-
-// Evaluate implements the ComparisonOp interface
-func (g *GreaterEqualOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	numeric, isNull, err := nullSafeExecuteComparison(left, right)
-	if err != nil {
-		return EvalResult{}, err
-	}
-	if isNull {
-		return resultNull, err
-	}
-	if numeric >= 0 {
-		return resultTrue, nil
-	}
-	return resultFalse, nil
-}
-
-// Type implements the ComparisonOp interface
-func (g *GreaterEqualOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (g *GreaterEqualOp) String() string {
-	return ">="
-}
-
-// Evaluate implements the ComparisonOp interface
 func (i *InOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	if right.typ != querypb.Type_TUPLE {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	}
-	returnValue := resultFalse
-	for _, result := range right.tupleResults {
-		res, err := (&EqualOp{}).Evaluate(left, result)
+
+	var foundNull, found bool
+
+	if i.Hashed != nil {
+		hash, err := left.nullSafeHashcode()
 		if err != nil {
 			return EvalResult{}, err
 		}
-		if res.typ == querypb.Type_NULL_TYPE {
-			returnValue = resultNull
-			continue
+		if idx, ok := i.Hashed[hash]; ok {
+			var numeric int
+			numeric, foundNull, err = nullSafeCoerceAndCompare(left, (*right.tuple)[idx])
+			if err != nil {
+				return EvalResult{}, err
+			}
+			found = numeric == 0
 		}
-		if sqltypes.IsIntegral(res.typ) && res.ival == 1 {
-			return resultTrue, nil
+	} else {
+		for _, rtuple := range *right.tuple {
+			numeric, isNull, err := nullSafeCoerceAndCompare(left, rtuple)
+			if err != nil {
+				return EvalResult{}, err
+			}
+			if isNull {
+				foundNull = true
+				continue
+			}
+			if numeric == 0 {
+				found = true
+				break
+			}
 		}
 	}
-	return returnValue, nil
+
+	if found {
+		return boolResult(found, i.Negate), nil
+	}
+	if foundNull {
+		return resultNull, nil
+	}
+	return boolResult(found, i.Negate), nil
 }
 
 // Type implements the ComparisonOp interface
@@ -401,29 +325,25 @@ func (i *InOp) Type() querypb.Type {
 
 // String implements the ComparisonOp interface
 func (i *InOp) String() string {
+	if i.Negate {
+		return "not in"
+	}
 	return "in"
 }
 
-// Evaluate implements the ComparisonOp interface
-func (n *NotInOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	res, err := (&InOp{}).Evaluate(left, right)
-	res.ival = 1 - res.ival
-	return res, err
-}
-
-// Type implements the ComparisonOp interface
-func (n *NotInOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (n *NotInOp) String() string {
-	return "not in"
-}
-
-// Evaluate implements the ComparisonOp interface
 func (l *LikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
+	if left.collation.Collation != right.collation.Collation {
+		panic("LikeOp: did not coerce")
+	}
+	var matched bool
+	if l.Match != nil {
+		matched = l.Match.Match(left.bytes)
+	} else {
+		coll := collations.Local().LookupByID(left.collation.Collation)
+		wc := coll.Wildcard(right.bytes, 0, 0, 0)
+		matched = wc.Match(left.bytes)
+	}
+	return boolResult(matched, l.Negate), nil
 }
 
 // Type implements the ComparisonOp interface
@@ -433,25 +353,12 @@ func (l *LikeOp) Type() querypb.Type {
 
 // String implements the ComparisonOp interface
 func (l *LikeOp) String() string {
+	if l.Negate {
+		return "not like"
+	}
 	return "like"
 }
 
-// Evaluate implements the ComparisonOp interface
-func (n *NotLikeOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
-}
-
-// Type implements the ComparisonOp interface
-func (n *NotLikeOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (n *NotLikeOp) String() string {
-	return "not like"
-}
-
-// Evaluate implements the ComparisonOp interface
 func (r *RegexpOp) Evaluate(left, right EvalResult) (EvalResult, error) {
 	panic("implement me")
 }
@@ -464,19 +371,4 @@ func (r *RegexpOp) Type() querypb.Type {
 // String implements the ComparisonOp interface
 func (r *RegexpOp) String() string {
 	return "regexp"
-}
-
-// Evaluate implements the ComparisonOp interface
-func (n *NotRegexpOp) Evaluate(left, right EvalResult) (EvalResult, error) {
-	panic("implement me")
-}
-
-// Type implements the ComparisonOp interface
-func (n *NotRegexpOp) Type() querypb.Type {
-	return querypb.Type_INT32
-}
-
-// String implements the ComparisonOp interface
-func (n *NotRegexpOp) String() string {
-	return "not regexp"
 }

@@ -12072,7 +12072,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:4121
 		{
-			yyLOCAL = &CollateExpr{Expr: yyDollar[1].exprUnion(), Charset: yyDollar[3].str}
+			yyLOCAL = &CollateExpr{Expr: yyDollar[1].exprUnion(), Collation: yyDollar[3].str}
 		}
 		yyVAL.union = yyLOCAL
 	case 801:

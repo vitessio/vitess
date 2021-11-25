@@ -490,8 +490,8 @@ func (cached *CollateExpr) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Expr.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field Charset string
-	size += hack.RuntimeAllocSize(int64(len(cached.Charset)))
+	// field Collation string
+	size += hack.RuntimeAllocSize(int64(len(cached.Collation)))
 	return size
 }
 func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {

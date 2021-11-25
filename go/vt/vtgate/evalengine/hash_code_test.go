@@ -33,28 +33,26 @@ import (
 func TestHashCodesRandom(t *testing.T) {
 	tested := 0
 	equal := 0
-	collation := collations.Default().LookupByName("utf8mb4_general_ci").ID()
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
 	endTime := time.Now().Add(1 * time.Second)
 	for time.Now().Before(endTime) {
-		t.Run(fmt.Sprintf("test %d", tested), func(t *testing.T) {
-			tested++
-			v1, v2 := randomValues()
-			cmp, err := NullsafeCompare(v1, v2, collation)
-			require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
-			typ, err := CoerceTo(v1.Type(), v2.Type())
-			require.NoError(t, err)
+		tested++
+		v1, v2 := randomValues()
+		cmp, err := NullsafeCompare(v1, v2, collation)
+		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
+		typ, err := CoerceTo(v1.Type(), v2.Type())
+		require.NoError(t, err)
 
-			hash1, err := NullsafeHashcode(v1, collation, typ)
-			require.NoError(t, err)
-			hash2, err := NullsafeHashcode(v2, collation, typ)
-			require.NoError(t, err)
-			if cmp == 0 {
-				equal++
-				require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d", v1.String(), v2.String(), hash1, hash2)
-			}
-		})
+		hash1, err := NullsafeHashcode(v1, collation, typ)
+		require.NoError(t, err)
+		hash2, err := NullsafeHashcode(v2, collation, typ)
+		require.NoError(t, err)
+		if cmp == 0 {
+			equal++
+			require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d", v1.String(), v2.String(), hash1, hash2)
+		}
 	}
-	fmt.Printf("tested %d values, with %d equalities found\n", tested, equal)
+	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
 }
 
 func randomValues() (sqltypes.Value, sqltypes.Value) {

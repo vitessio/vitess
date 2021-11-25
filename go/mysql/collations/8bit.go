@@ -224,12 +224,14 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 	return dst
 }
 
+const CollationBinaryID ID = 63
+
 type Collation_binary struct{}
 
 func (c *Collation_binary) Init() {}
 
 func (c *Collation_binary) ID() ID {
-	return 63
+	return CollationBinaryID
 }
 
 func (c *Collation_binary) Name() string {

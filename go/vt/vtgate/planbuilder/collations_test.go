@@ -65,7 +65,7 @@ func (tc *collationTestCase) addCollationsToSchema(vschema *vschemaWrapper) {
 
 func TestOrderedAggregateCollations(t *testing.T) {
 	collid := func(collname string) collations.ID {
-		return collations.Default().LookupByName(collname).ID()
+		return collations.Local().LookupByName(collname).ID()
 	}
 	testCases := []collationTestCase{
 		{

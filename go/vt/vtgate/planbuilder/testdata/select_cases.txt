@@ -1659,7 +1659,7 @@ Gen4 plan same as above
       "42 + 2"
     ],
     "Expressions": [
-      "INT64(42) + INT64(2)"
+      "INT64(44)"
     ],
     "Inputs": [
       {

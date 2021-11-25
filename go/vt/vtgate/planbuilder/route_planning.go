@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
@@ -1031,14 +1032,14 @@ func canSelectDBAMerge(a, b *route) bool {
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
 	for _, aExpr := range a.eroute.SysTableTableSchema {
 		for _, bExpr := range b.eroute.SysTableTableSchema {
-			if aExpr.String() == bExpr.String() {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
 				return true
 			}
 		}
 	}
 	for _, aExpr := range a.eroute.SysTableTableName {
 		for _, bExpr := range b.eroute.SysTableTableName {
-			if aExpr.String() == bExpr.String() {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
 				return true
 			}
 		}
