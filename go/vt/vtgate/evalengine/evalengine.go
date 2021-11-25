@@ -114,7 +114,7 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 		return math.Float64frombits(num.numval), nil
 	}
 
-	if sqltypes.IsText(num.typ) || sqltypes.IsBinary(num.typ) {
+	if num.textual() {
 		fval, err := strconv.ParseFloat(string(v.Raw()), 64)
 		if err != nil {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
@@ -402,7 +402,7 @@ func compareDateAndString(l, r EvalResult) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ):
+	case l.textual():
 		rTime, err = parseDate(r)
 		if err != nil {
 			return 0, err
@@ -416,7 +416,7 @@ func compareDateAndString(l, r EvalResult) (int, error) {
 }
 
 func mergeCollations(left, right EvalResult) (EvalResult, EvalResult, error) {
-	if !sqltypes.IsText(left.typ) || !sqltypes.IsText(right.typ) {
+	if !left.textual() || !right.textual() {
 		return left, right, nil
 	}
 	env := collations.Local()

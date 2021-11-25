@@ -95,23 +95,19 @@ func (c *ComparisonExpr) mergeCollations() error {
 }
 
 func (c *ComparisonExpr) evaluateComparisonExprs(env *ExpressionEnv) (EvalResult, EvalResult, error) {
-	if !c.TypedCollation.Valid() {
-		panic("comparison operator without merged collations")
-	}
-
 	var lVal, rVal EvalResult
 	var err error
 	if lVal, err = c.Left.Evaluate(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
-	if sqltypes.IsText(lVal.typ) && c.CoerceLeft != nil {
+	if lVal.textual() && c.CoerceLeft != nil {
 		lVal.bytes, _ = c.CoerceLeft(nil, lVal.bytes)
 	}
 	lVal.collation = c.TypedCollation
 	if rVal, err = c.Right.Evaluate(env); err != nil {
 		return EvalResult{}, EvalResult{}, err
 	}
-	if sqltypes.IsText(rVal.typ) && c.CoerceRight != nil {
+	if rVal.textual() && c.CoerceRight != nil {
 		rVal.bytes, _ = c.CoerceRight(nil, rVal.bytes)
 	}
 	rVal.collation = c.TypedCollation
@@ -123,7 +119,7 @@ func hasNullEvalResult(l, r EvalResult) bool {
 }
 
 func evalResultsAreStrings(l, r EvalResult) bool {
-	return (sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ)) && (sqltypes.IsText(r.typ) || sqltypes.IsBinary(r.typ))
+	return l.textual() && r.textual()
 }
 
 func evalResultsAreSameNumericType(l, r EvalResult) bool {
@@ -149,8 +145,7 @@ func evalResultsAreDates(l, r EvalResult) bool {
 }
 
 func evalResultsAreDateAndString(l, r EvalResult) bool {
-	return sqltypes.IsDate(l.typ) && (sqltypes.IsText(r.typ) || sqltypes.IsBinary(r.typ)) ||
-		(sqltypes.IsText(l.typ) || sqltypes.IsBinary(l.typ)) && sqltypes.IsDate(r.typ)
+	return (sqltypes.IsDate(l.typ) && r.textual()) || (l.textual() && sqltypes.IsDate(r.typ))
 }
 
 func evalResultsAreDateAndNumeric(l, r EvalResult) bool {
