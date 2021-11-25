@@ -1627,7 +1627,7 @@ func (node *CurTimeFuncExpr) formatFast(buf *TrackedBuffer) {
 func (node *CollateExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteString(" collate ")
-	buf.WriteString(node.Charset)
+	buf.WriteString(node.Collation)
 }
 
 // formatFast formats the node.

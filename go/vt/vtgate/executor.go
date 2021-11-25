@@ -162,7 +162,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -218,7 +218,7 @@ func (e *Executor) StreamExecute(
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
 	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)

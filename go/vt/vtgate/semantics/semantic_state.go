@@ -92,6 +92,10 @@ type (
 		// if a == b and b == c then a == c
 		ColumnEqualities map[columnName][]sqlparser.Expr
 
+		// DefaultCollation is the default collation for this query, which is usually
+		// inherited from the connection's default collation.
+		DefaultCollation collations.ID
+
 		Warning string
 	}
 
@@ -103,6 +107,7 @@ type (
 	// SchemaInformation is used tp provide table information from Vschema.
 	SchemaInformation interface {
 		FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error)
+		ConnCollation() collations.ID
 	}
 )
 
@@ -214,7 +219,7 @@ func (st *SemTable) CollationFor(e sqlparser.Expr) collations.ID {
 	if found {
 		return typ.Collation
 	}
-	return collations.Unknown
+	return st.DefaultCollation
 }
 
 // dependencies return the table dependencies of the expression. This method finds table dependencies recursively

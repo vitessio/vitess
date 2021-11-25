@@ -4119,7 +4119,7 @@ function_call_keyword
   }
 | simple_expr COLLATE charset %prec UNARY
   {
-	$$ = &CollateExpr{Expr: $1, Charset: $3}
+	$$ = &CollateExpr{Expr: $1, Collation: $3}
   }
 | literal_or_null
   {

@@ -1256,7 +1256,7 @@ func EqualsRefOfCollateExpr(a, b *CollateExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.Charset == b.Charset &&
+	return a.Collation == b.Collation &&
 		EqualsExpr(a.Expr, b.Expr)
 }
 

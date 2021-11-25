@@ -17,6 +17,7 @@ limitations under the License.
 package semantics
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -38,4 +39,8 @@ func (s *FakeSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Tab
 		return table, nil, "", 0, nil, nil
 	}
 	return nil, s.VindexTables[sqlparser.String(tablename)], "", 0, nil, nil
+}
+
+func (FakeSI) ConnCollation() collations.ID {
+	return 45
 }
