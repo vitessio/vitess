@@ -609,6 +609,9 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *Safe
 		var rss []*srvtopo.ResolvedShard
 		var queries []*querypb.BoundQuery
 		for _, shardSession := range safeSession.GetSessions() {
+			if shardSession.TransactionId == 0 {
+				continue
+			}
 			rss = append(rss, &srvtopo.ResolvedShard{
 				Target:  shardSession.Target,
 				Gateway: e.resolver.resolver.GetGateway(),
