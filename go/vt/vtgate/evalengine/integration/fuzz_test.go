@@ -53,6 +53,36 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 	return collations.ID(d)
 }
 
+func TestTypes(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var queries = []string{
+		"1 > 3",
+		"3 > 1",
+		"-1 > -1",
+		"1 = 1",
+		"-1 = 1",
+		"1 IN (1, -2, 3)",
+		"1 LIKE 1",
+		"-1 LIKE -1",
+		"-1 LIKE 1",
+		`"foo" IN ("bar", "FOO", "baz")`,
+		`'pokemon' LIKE 'poke%'`,
+		`(1, 2) = (1, 2)`,
+		`1 = 'sad'`,
+		`(1, 2) = (1, 3)`,
+	}
+
+	for _, query := range queries {
+		remote, err := conn.ExecuteFetch("SELECT "+query, 1, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("%s => %s", query, remote.Rows[0][0])
+	}
+}
+
 func TestGenerateFuzzCases(t *testing.T) {
 	const Total = 100
 	const Seed = 1234

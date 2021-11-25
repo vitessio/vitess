@@ -49,18 +49,19 @@ func TestMySQLGolden(t *testing.T) {
 				eval, err := testSingle(t, tc.Query)
 				if err != nil {
 					if tc.Error == "" {
-						t.Fatalf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
-					}
-					if !strings.Contains(tc.Error, err.Error()) {
-						t.Fatalf("query: %s\nmysql err: %s\nvitess err: %s\n%s", tc.Query, tc.Error, err.Error(), debug)
+						t.Errorf("query: %s\nmysql val: %s\nvitess err: %s\n%s", tc.Query, tc.Value, err.Error(), debug)
+					} else if !strings.Contains(tc.Error, err.Error()) {
+						t.Errorf("query: %s\nmysql err: %s\nvitess err: %s\n%s", tc.Query, tc.Error, err.Error(), debug)
 					}
 					continue
 				}
 				if tc.Error != "" {
-					t.Fatalf("query: %s\nmysql err: %s\nvitess val: %s\n%s", tc.Query, tc.Error, eval.Value(), debug)
+					t.Errorf("query: %s\nmysql err: %s\nvitess val: %s\n%s", tc.Query, tc.Error, eval.Value(), debug)
+					continue
 				}
 				if eval.Value().String() != tc.Value {
-					t.Fatalf("query: %s\nmysql val: %s\nvitess val: %s\n%s", tc.Query, tc.Value, eval.Value(), debug)
+					t.Errorf("query: %s\nmysql val: %s\nvitess val: %s\n%s", tc.Query, tc.Value, eval.Value(), debug)
+					continue
 				}
 			}
 		})
@@ -69,6 +70,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, "SELECT 1 - \"fOo\"")
+	eval, err := testSingle(t, "SELECT -1 LIKE (0 + NULL)")
 	t.Logf("eval=%s err=%s", eval.Value(), err)
 }

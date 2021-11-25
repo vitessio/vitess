@@ -438,24 +438,6 @@ func mergeCollations(left, right EvalResult) (EvalResult, EvalResult, error) {
 	return left, right, nil
 }
 
-func compareTuples(lVal EvalResult, rVal EvalResult) (int, bool, error) {
-	if len(*lVal.tuple) != len(*rVal.tuple) {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", len(*lVal.tuple))
-	}
-	hasSeenNull := false
-	for idx, lResult := range *lVal.tuple {
-		rResult := (*rVal.tuple)[idx]
-		res, isNull, err := nullSafeCoerceAndCompare(lResult, rResult)
-		if isNull {
-			hasSeenNull = true
-		}
-		if res != 0 || err != nil {
-			return res, false, err
-		}
-	}
-	return 0, hasSeenNull, nil
-}
-
 func compareGoTimes(lTime, rTime time.Time) (int, error) {
 	if lTime.Before(rTime) {
 		return -1, nil

@@ -135,7 +135,7 @@ func simplifyExpr(e Expr) (Expr, error) {
 
 		switch op := node.Op.(type) {
 		case *LikeOp:
-			if lit2 != nil {
+			if lit2 != nil && lit2.Val.textual() {
 				coll := collations.Local().LookupByID(node.TypedCollation.Collation)
 				op.Match = coll.Wildcard(lit2.Val.bytes, 0, 0, 0)
 			}
@@ -186,7 +186,7 @@ func simplifyExpr(e Expr) (Expr, error) {
 							break
 						}
 						if collidx, collision := op.Hashed[hash]; collision {
-							cmp, _, err := nullSafeCompare(lit.Val, tuple[collidx].(*Literal).Val)
+							cmp, _, err := evalCompare(lit.Val, tuple[collidx].(*Literal).Val)
 							if cmp != 0 || err != nil {
 								op.Hashed = nil
 								break
