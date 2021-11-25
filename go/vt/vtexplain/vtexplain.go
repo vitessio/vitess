@@ -259,7 +259,7 @@ func Run(sql string) ([]*Explain, error) {
 
 		if sql != "" {
 			// Reset the global time simulator unless there's an open transaction
-			// in the session from the previous staement.
+			// in the session from the previous statement.
 			if vtgateSession == nil || !vtgateSession.GetInTransaction() {
 				batchTime = sync2.NewBatcher(*batchInterval)
 			}
@@ -299,6 +299,9 @@ type outputQuery struct {
 	sql    string
 }
 
+var spMap map[string]string
+var spCount int
+
 // ExplainsAsText returns a text representation of the explains in logical time
 // order
 func ExplainsAsText(explains []*Explain) string {
@@ -310,6 +313,8 @@ func ExplainsAsText(explains []*Explain) string {
 		queries := make([]outputQuery, 0, 4)
 		for tablet, actions := range explain.TabletActions {
 			for _, q := range actions.MysqlQueries {
+				// change savepoint for printing out, that are internal to vitess.
+				specialHandlingOfSavepoints(q)
 				queries = append(queries, outputQuery{
 					tablet: tablet,
 					Time:   q.Time,
@@ -334,6 +339,26 @@ func ExplainsAsText(explains []*Explain) string {
 	}
 	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
 	return b.String()
+}
+
+func specialHandlingOfSavepoints(q *MysqlQuery) {
+	if strings.Contains(q.SQL, "savepoint") {
+		stmt, _ := sqlparser.Parse(q.SQL)
+		sp := stmt.(*sqlparser.Savepoint)
+		if strings.Contains(sp.Name.String(), "_vt") {
+			if spMap == nil {
+				spMap = map[string]string{}
+			}
+			spName := spMap[sp.Name.String()]
+			if spName == "" {
+				spName = fmt.Sprintf("x%d", spCount+1)
+				spMap[sp.Name.String()] = spName
+				spCount++
+			}
+			sp.Name = sqlparser.NewColIdent(spName)
+			q.SQL = sqlparser.String(sp)
+		}
+	}
 }
 
 // ExplainsAsJSON returns a json representation of the explains
