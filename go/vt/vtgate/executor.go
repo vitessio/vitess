@@ -1401,7 +1401,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	statement := stmt
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	bindVarNeeds := &sqlparser.BindVarNeeds{}
-	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
+	if !ignoreMaxPayloadSize(statement) && !isValidPayloadSize(query) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
@@ -1447,6 +1447,18 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	return e.checkThatPlanIsValid(stmt, plan)
+}
+
+func ignoreMaxPayloadSize(stmt sqlparser.Statement) bool {
+	switch stmt.(type) {
+	// For transactional statements, they should always be passed down and
+	// should not come into max payload size requirement.
+	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback,
+		*sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
+		return true
+	default:
+		return sqlparser.IgnoreMaxPayloadSizeDirective(stmt)
+	}
 }
 
 func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
