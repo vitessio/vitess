@@ -317,9 +317,9 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication(ctx context.Context)
 	if err := vsdw.wr.TabletManagerClient().VReplicationWaitForPos(shortCtx, masterInfo.Tablet, int(ss.Uid), mysqlPos); err != nil {
 		return vterrors.Wrapf(err, "VReplicationWaitForPos for %v until %v failed", vsdw.shardInfo.PrimaryAlias, mysqlPos)
 	}
-	masterPos, err := vsdw.wr.TabletManagerClient().MasterPosition(shortCtx, masterInfo.Tablet)
+	masterPos, err := vsdw.wr.TabletManagerClient().PrimaryPosition(shortCtx, masterInfo.Tablet)
 	if err != nil {
-		return vterrors.Wrapf(err, "MasterPosition for %v failed", vsdw.shardInfo.PrimaryAlias)
+		return vterrors.Wrapf(err, "PrimaryPosition for %v failed", vsdw.shardInfo.PrimaryAlias)
 	}
 
 	// 4 - wait until the destination tablet is equal or passed

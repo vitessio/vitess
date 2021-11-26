@@ -91,6 +91,11 @@ func IsDate(t querypb.Type) bool {
 	return t == Datetime || t == Date || t == Timestamp || t == Time
 }
 
+// IsNull returns true if the type is NULL type
+func IsNull(t querypb.Type) bool {
+	return t == Null
+}
+
 // Vitess data types. These are idiomatically
 // named synonyms for the querypb.Type values.
 // Although these constants are interchangeable,

@@ -176,7 +176,7 @@ func TestMergeSortCollation(t *testing.T) {
 		),
 	}}
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 	orderBy := []OrderByParams{{
 		Col:         0,
 		CollationID: collationID,

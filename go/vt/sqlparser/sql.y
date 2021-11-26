@@ -91,6 +91,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   ctes          []*CommonTableExpr
   order         *Order
   limit         *Limit
+
   updateExpr    *UpdateExpr
   setExpr       *SetExpr
   convertType   *ConvertType
@@ -157,6 +158,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   explainType 	  ExplainType
   intervalType	  IntervalTypes
   lockType LockType
+  unaryExprOperator UnaryExprOperator
   referenceDefinition *ReferenceDefinition
 
   columnStorage ColumnStorage
@@ -164,6 +166,9 @@ func bindVariable(yylex yyLexer, bvar string) {
   boolean bool
   boolVal BoolVal
   ignore Ignore
+  partitionOption *PartitionOption
+  exprOrColumns *ExprOrColumns
+  subPartition  *SubPartition
 }
 
 %token LEX_ERROR
@@ -198,13 +203,13 @@ func bindVariable(yylex yyLexer, bvar string) {
 %nonassoc <str> CHARSET
 // Resolve column attribute ambiguity.
 %right <str> UNIQUE KEY
-%left <str> OR
+%left <str> EXPRESSION_PREC_SETTER
+%left <str> OR '|'
 %left <str> XOR
 %left <str> AND
 %right <str> NOT '!'
 %left <str> BETWEEN CASE WHEN THEN ELSE END
 %left <str> '=' '<' '>' LE GE NE NULL_SAFE_EQUAL IS LIKE REGEXP IN
-%left <str> '|'
 %left <str> '&'
 %left <str> SHIFT_LEFT SHIFT_RIGHT
 %left <str> '+' '-'
@@ -294,6 +299,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> AVG_ROW_LENGTH CONNECTION CHECKSUM DELAY_KEY_WRITE ENCRYPTION ENGINE INSERT_METHOD MAX_ROWS MIN_ROWS PACK_KEYS PASSWORD
 %token <str> FIXED DYNAMIC COMPRESSED REDUNDANT COMPACT ROW_FORMAT STATS_AUTO_RECALC STATS_PERSISTENT STATS_SAMPLE_PAGES STORAGE MEMORY DISK
 
+// Partitions tokens
+%token <str> PARTITIONS LINEAR RANGE LIST SUBPARTITION SUBPARTITIONS HASH
+
+%type <str> linear_opt range_or_list partitions_opt subpartitions_opt algorithm_opt
 %type <statement> command
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
@@ -322,17 +331,19 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <explainType> explain_format_opt
 %type <insertAction> insert_or_replace
 %type <str> explain_synonyms
+%type <partitionOption> partitions_options_opt
+%type <exprOrColumns> expr_or_col
+%type <subPartition> subpartition_opt
 %type <intervalType> interval_time_stamp interval
 %type <str> cache_opt separator_opt flush_option for_channel_opt
 %type <matchExprOption> match_option
 %type <boolean> distinct_opt union_op replace_opt local_opt
-%type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
 %type <strs> select_options flush_option_list
 %type <str> select_option algorithm_view security_view security_view_opt
 %type <str> definer_opt user generated_always_opt
-%type <expr> expression
+%type <expr> expression signed_literal signed_literal_or_null null_as_literal now_or_signed_literal signed_literal bit_expr simple_expr literal NUM_literal text_literal bool_pri literal_or_null now predicate tuple_expression
 %type <tableExprs> from_opt table_references from_clause
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
@@ -342,18 +353,16 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
-%type <expr> condition
 %type <boolVal> boolean_value
 %type <comparisonExprOperator> compare
 %type <ins> insert_data
-%type <expr> value value_expression num_val
-%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict func_datetime_precision
+%type <expr> num_val
+%type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <isExprOperator> is_suffix
 %type <colTuple> col_tuple
 %type <exprs> expression_list expression_list_opt
 %type <values> tuple_list
 %type <valTuple> row_tuple tuple_or_empty
-%type <expr> tuple_expression
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
@@ -400,7 +409,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <literal> length_opt
+%type <literal> length_opt func_datetime_precision
 %type <str> charset_opt collate_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
@@ -423,7 +432,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
 %type <constraintInfo> constraint_info check_constraint_info
-%type <partDefs> partition_definitions
+%type <partDefs> partition_definitions partition_definition_opt
 %type <partDef> partition_definition
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
@@ -439,7 +448,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnStorage> column_storage
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
-
+%type <unaryExprOperator> underscore_charsets
 %start any_command
 
 %%
@@ -951,7 +960,7 @@ vindex_type_opt:
   }
 
 vindex_type:
-  id_or_var
+  sql_id
   {
     $$ = $1
   }
@@ -1038,10 +1047,11 @@ database_or_schema:
 | SCHEMA
 
 table_spec:
-  '(' table_column_list ')' table_option_list_opt
+  '(' table_column_list ')' table_option_list_opt partitions_options_opt
   {
     $$ = $2
     $$.Options = $4
+    $$.PartitionOption = $5
   }
 
 create_options_opt:
@@ -1072,7 +1082,7 @@ create_options:
   }
 
 default_optional:
-  /* empty */ %prec LOWER_THAN_CHARSET 
+  /* empty */ %prec LOWER_THAN_CHARSET
   {
     $$ = false
   }
@@ -1162,7 +1172,7 @@ column_definition:
     $2.Options.Reference = $4
     $$ = &ColumnDefinition{Name: $1, Type: $2}
   }
-| sql_id column_type generated_always_opt AS '(' value_expression ')' generated_column_attribute_list_opt reference_definition_opt
+| sql_id column_type generated_always_opt AS '(' expression ')' generated_column_attribute_list_opt reference_definition_opt
   {
     $2.Options = $8
     $2.Options.As = $6
@@ -1199,7 +1209,12 @@ column_attribute_list_opt:
     $1.Null = &val
     $$ = $1
   }
-| column_attribute_list_opt DEFAULT value_expression
+| column_attribute_list_opt DEFAULT openb expression closeb
+  {
+	$1.Default = $4
+	$$ = $1
+  }
+| column_attribute_list_opt DEFAULT now_or_signed_literal
   {
     $1.Default = $3
     $$ = $1
@@ -1223,6 +1238,15 @@ column_attribute_list_opt:
   {
     $1.KeyOpt = $2
     $$ = $1
+  }
+| column_attribute_list_opt COLLATE STRING
+  {
+  	$1.Collate = encodeSQLString($3)
+  }
+| column_attribute_list_opt COLLATE id_or_var
+  {
+	$1.Collate = string($3.String())
+	$$ = $1
   }
 
 column_storage:
@@ -1266,6 +1290,152 @@ generated_column_attribute_list_opt:
     $1.KeyOpt = $2
     $$ = $1
   }
+
+now_or_signed_literal:
+now
+  {
+  	$$ = $1
+  }
+| signed_literal_or_null
+
+now:
+CURRENT_TIMESTAMP func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp: $2}
+  }
+| LOCALTIME func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp: $2}
+  }
+| LOCALTIMESTAMP func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp: $2}
+  }
+| UTC_TIMESTAMP func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
+  }
+
+
+signed_literal_or_null:
+signed_literal
+| null_as_literal
+
+ null_as_literal:
+NULL
+ {
+    $$ = &NullVal{}
+ }
+
+ signed_literal:
+ literal
+| '+' NUM_literal
+   {
+ 	$$= $2
+   }
+| '-' NUM_literal
+   {
+   	$$ = handleUnaryMinus($2)
+   }
+
+literal:
+text_literal
+  {
+   $$= $1
+  }
+| NUM_literal
+  {
+  	$$= $1
+  }
+| boolean_value
+  {
+  	$$ = $1
+  }
+| HEX
+  {
+	$$ = NewHexLiteral($1)
+  }
+| HEXNUM
+  {
+  	$$ = NewHexNumLiteral($1)
+  }
+| BIT_LITERAL
+  {
+	$$ = NewBitLiteral($1)
+  }
+| VALUE_ARG
+  {
+    $$ = NewArgument($1[1:])
+    bindVariable(yylex, $1[1:])
+  }
+| underscore_charsets  BIT_LITERAL %prec UNARY
+  {
+  	$$ = &UnaryExpr{Operator: $1, Expr: NewBitLiteral($2)}
+  }
+| underscore_charsets HEXNUM %prec UNARY
+  {
+  	$$ = &UnaryExpr{Operator: $1, Expr: NewHexNumLiteral($2)}
+  }
+| underscore_charsets HEX %prec UNARY
+  {
+   	$$ = &UnaryExpr{Operator: $1, Expr: NewHexLiteral($2)}
+  }
+| underscore_charsets column_name %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: $1, Expr: $2}
+  }
+| underscore_charsets VALUE_ARG %prec UNARY
+  {
+    bindVariable(yylex, $2[1:])
+    $$ = &UnaryExpr{Operator: $1, Expr: NewArgument($2[1:])}
+  }
+
+underscore_charsets:
+ UNDERSCORE_BINARY
+  {
+  	$$ = UBinaryOp
+  }
+| UNDERSCORE_UTF8
+  {
+  	$$ = Utf8Op
+  }
+| UNDERSCORE_UTF8MB4
+  {
+  	$$ = Utf8mb4Op
+  }
+| UNDERSCORE_LATIN1
+  {
+  	$$ = Latin1Op
+  }
+
+literal_or_null:
+literal
+| null_as_literal
+
+NUM_literal:
+INTEGRAL
+  {
+    $$ = NewIntLiteral($1)
+  }
+| FLOAT
+  {
+    $$ = NewFloatLiteral($1)
+  }
+
+
+text_literal:
+STRING
+  {
+	$$ = NewStrLiteral($1)
+  }
+| NCHAR_STRING
+  {
+	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
+  }
+ | underscore_charsets STRING %prec UNARY
+   {
+   	$$ = &UnaryExpr{Operator: $1, Expr: NewStrLiteral($2)}
+   }
 
 keys:
   PRIMARY KEY
@@ -1400,13 +1570,13 @@ time_type:
   }
 
 char_type:
-  CHAR length_opt charset_opt collate_opt
+  CHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
-| VARCHAR length_opt charset_opt collate_opt
+| VARCHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3, Collate: $4}
+    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | BINARY length_opt
   {
@@ -1416,21 +1586,21 @@ char_type:
   {
     $$ = ColumnType{Type: string($1), Length: $2}
   }
-| TEXT charset_opt collate_opt
+| TEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1), Charset: $2}
   }
-| TINYTEXT charset_opt collate_opt
+| TINYTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1), Charset: $2}
   }
-| MEDIUMTEXT charset_opt collate_opt
+| MEDIUMTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1), Charset: $2}
   }
-| LONGTEXT charset_opt collate_opt
+| LONGTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2, Collate: $3}
+    $$ = ColumnType{Type: string($1), Charset: $2}
   }
 | BLOB
   {
@@ -1452,14 +1622,14 @@ char_type:
   {
     $$ = ColumnType{Type: string($1)}
   }
-| ENUM '(' enum_values ')' charset_opt collate_opt
+| ENUM '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 // need set_values / SetValues ?
-| SET '(' enum_values ')' charset_opt collate_opt
+| SET '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5, Collate: $6}
+    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 
 spatial_type:
@@ -2151,9 +2321,13 @@ alter_option:
   {
     $$ = &AlterColumn{Column: $3, DropDefault:true}
   }
-| ALTER column_opt column_name SET DEFAULT value
+| ALTER column_opt column_name SET DEFAULT signed_literal_or_null
   {
     $$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$6}
+  }
+| ALTER column_opt column_name SET DEFAULT openb expression closeb
+  {
+	$$ = &AlterColumn{Column: $3, DropDefault:false, DefaultVal:$7}
   }
 | CHANGE column_opt column_name column_definition first_opt after_opt
   {
@@ -2408,6 +2582,136 @@ alter_statement:
     }
   }
 
+partitions_options_opt:
+  {
+    $$ = nil
+  }
+| PARTITION BY linear_opt HASH '(' expression ')' partitions_opt
+    subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isHASH: true,
+        Expr: $6,
+        Partitions: $8,
+        SubPartition: $9,
+        Definitions: $10,
+      }
+    }
+| PARTITION BY linear_opt KEY algorithm_opt '(' column_list ')'
+    partitions_opt subpartition_opt partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        Linear: $3,
+        isKEY: true,
+        KeyAlgorithm: $5,
+        KeyColList: $7,
+        Partitions: $9,
+        SubPartition: $10,
+        Definitions: $11,
+      }
+    }
+| PARTITION BY range_or_list expr_or_col partitions_opt subpartition_opt
+    partition_definition_opt
+    {
+      $$ = &PartitionOption {
+        RangeOrList: $3,
+        ExprOrCol: $4,
+        Partitions: $5,
+        SubPartition: $6,
+        Definitions: $7,
+      }
+    }
+
+subpartition_opt:
+  {
+    $$ = nil
+  }
+| SUBPARTITION BY linear_opt HASH '(' expression ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isHASH: true,
+      Expr: $6,
+      SubPartitions: $8,
+    }
+  }
+| SUBPARTITION BY linear_opt KEY algorithm_opt '(' column_list ')' subpartitions_opt
+  {
+    $$ = &SubPartition {
+      Linear: $3,
+      isKEY: true,
+      KeyAlgorithm: $5,
+      KeyColList: $7,
+      SubPartitions: $9,
+    }
+  }
+
+partition_definition_opt:
+  {
+    $$ = nil
+  }
+| '(' partition_definitions ')'
+  {
+    $$ = $2
+  }
+
+linear_opt:
+  {
+    $$ = ""
+  }
+| LINEAR
+  {
+    $$ = string($1)
+  }
+
+algorithm_opt:
+  {
+    $$ = ""
+  }
+| ALGORITHM '=' INTEGRAL
+  {
+    $$ = string($3)
+  }
+
+range_or_list:
+  RANGE
+  {
+    $$ = string($1)
+  }
+| LIST
+  {
+    $$ = string($1)
+  }
+
+expr_or_col:
+  '(' expression ')'
+  {
+    $$ = &ExprOrColumns{Expr: $2}
+  }
+| COLUMNS '(' column_list ')'
+  {
+    $$ = &ExprOrColumns{ColumnList: $3}
+  }
+
+partitions_opt:
+  {
+    $$ = ""
+  }
+| PARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
+subpartitions_opt:
+  {
+    $$ = ""
+  }
+| SUBPARTITIONS INTEGRAL
+  {
+    $$ = string($2)
+  }
+
 partition_operation:
   ADD PARTITION '(' partition_definition ')'
   {
@@ -2523,7 +2827,7 @@ partition_definitions:
   }
 
 partition_definition:
-  PARTITION sql_id VALUES LESS THAN openb value_expression closeb
+  PARTITION sql_id VALUES LESS THAN openb expression closeb
   {
     $$ = &PartitionDefinition{Name: $2, Limit: $7}
   }
@@ -3643,39 +3947,250 @@ where_expression_opt:
     $$ = $2
   }
 
+/* all possible expressions */
 expression:
-  condition
+  expression OR expression %prec OR
   {
-    $$ = $1
+	$$ = &OrExpr{Left: $1, Right: $3}
   }
-| expression AND expression
+| expression XOR expression %prec XOR
   {
-    $$ = &AndExpr{Left: $1, Right: $3}
+	$$ = &XorExpr{Left: $1, Right: $3}
   }
-| expression OR expression
+| expression AND expression %prec AND
   {
-    $$ = &OrExpr{Left: $1, Right: $3}
+	$$ = &AndExpr{Left: $1, Right: $3}
   }
-| expression XOR expression
+| NOT expression %prec NOT
   {
-    $$ = &XorExpr{Left: $1, Right: $3}
+	  $$ = &NotExpr{Expr: $2}
   }
-| NOT expression
+| bool_pri IS is_suffix %prec IS
   {
-    $$ = &NotExpr{Expr: $2}
+	 $$ = &IsExpr{Left: $1, Right: $3}
   }
-| expression IS is_suffix
+| bool_pri %prec EXPRESSION_PREC_SETTER
   {
-    $$ = &IsExpr{Left: $1, Right: $3}
+	$$ = $1
   }
-| value_expression
+
+
+bool_pri:
+bool_pri IS NULL %prec IS
   {
-    $$ = $1
+	 $$ = &IsExpr{Left: $1, Right: IsNullOp}
   }
+| bool_pri IS NOT NULL %prec IS
+  {
+  	$$ = &IsExpr{Left: $1, Right: IsNotNullOp}
+  }
+| bool_pri compare predicate
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
+  }
+| predicate %prec EXPRESSION_PREC_SETTER
+  {
+	$$ = $1
+  }
+
+predicate:
+bit_expr IN col_tuple
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
+  }
+| bit_expr NOT IN col_tuple
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
+  }
+| bit_expr BETWEEN bit_expr AND predicate
+  {
+	 $$ = &BetweenExpr{Left: $1, IsBetween: true, From: $3, To: $5}
+  }
+| bit_expr NOT BETWEEN bit_expr AND predicate
+  {
+	$$ = &BetweenExpr{Left: $1, IsBetween: false, From: $4, To: $6}
+  }
+| bit_expr LIKE simple_expr
+  {
+	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3}
+  }
+| bit_expr NOT LIKE simple_expr
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4}
+  }
+| bit_expr LIKE simple_expr ESCAPE simple_expr %prec LIKE
+  {
+	  $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $5}
+  }
+| bit_expr NOT LIKE simple_expr ESCAPE simple_expr %prec LIKE
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $6}
+  }
+| bit_expr REGEXP bit_expr
+  {
+	$$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
+  }
+| bit_expr NOT REGEXP bit_expr
+  {
+	 $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
+  }
+| bit_expr %prec EXPRESSION_PREC_SETTER
+ {
+	$$ = $1
+ }
+
+bit_expr:
+bit_expr '|' bit_expr %prec '|'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
+  }
+| bit_expr '&' bit_expr %prec '&'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
+  }
+| bit_expr SHIFT_LEFT bit_expr %prec SHIFT_LEFT
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
+  }
+| bit_expr SHIFT_RIGHT bit_expr %prec SHIFT_RIGHT
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
+  }
+| bit_expr '+' bit_expr %prec '+'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
+  }
+| bit_expr '-' bit_expr %prec '-'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
+  }
+| bit_expr '*' bit_expr %prec '*'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
+  }
+| bit_expr '/' bit_expr %prec '/'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
+  }
+| bit_expr '%' bit_expr %prec '%'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+  }
+| bit_expr DIV bit_expr %prec DIV
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
+  }
+| bit_expr MOD bit_expr %prec MOD
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
+  }
+| bit_expr '^' bit_expr %prec '^'
+  {
+	  $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
+  }
+| simple_expr %prec EXPRESSION_PREC_SETTER
+  {
+	$$ = $1
+  }
+
+simple_expr:
+function_call_keyword
+  {
+  	$$ = $1
+  }
+| function_call_nonkeyword
+  {
+  	$$ = $1
+  }
+| function_call_generic
+  {
+  	$$ = $1
+  }
+| function_call_conflict
+  {
+  	$$ = $1
+  }
+| simple_expr COLLATE charset %prec UNARY
+  {
+	$$ = &CollateExpr{Expr: $1, Collation: $3}
+  }
+| literal_or_null
+  {
+  	$$ = $1
+  }
+| column_name
+  {
+  	$$ = $1
+  }
+| '+' simple_expr %prec UNARY
+  {
+	$$= $2; // TODO: do we really want to ignore unary '+' before any kind of literals?
+  }
+| '-' simple_expr %prec UNARY
+  {
+	$$ = handleUnaryMinus($2)
+  }
+| '~' simple_expr %prec UNARY
+  {
+	$$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
+  }
+| '!' simple_expr %prec UNARY
+  {
+    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
+  }
+| subquery
+  {
+	$$= $1
+  }
+| tuple_expression
+  {
+	$$ = $1
+  }
+| EXISTS subquery
+  {
+	$$ = &ExistsExpr{Subquery: $2}
+  }
+| MATCH openb select_expression_list closeb AGAINST openb bit_expr match_option closeb
+  {
+  $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
+  }
+| CAST openb expression AS convert_type closeb
+  {
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CONVERT openb expression ',' convert_type closeb
+  {
+    $$ = &ConvertExpr{Expr: $3, Type: $5}
+  }
+| CONVERT openb expression USING charset closeb
+  {
+    $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
+  }
+| BINARY simple_expr %prec UNARY
+	{
+	  $$ = &UnaryExpr{Operator: BinaryOp, Expr: $2}
+	}
 | DEFAULT default_opt
   {
-    $$ = &Default{ColName: $2}
+	 $$ = &Default{ColName: $2}
   }
+| INTERVAL simple_expr sql_id
+  {
+	// This rule prevents the usage of INTERVAL
+	// as a function. If support is needed for that,
+	// we'll need to revisit this. The solution
+	// will be non-trivial because of grammar conflicts.
+	$$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+  }
+| column_name JSON_EXTRACT_OP STRING
+  {
+	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: NewStrLiteral($3)}
+  }
+| column_name JSON_UNQUOTE_EXTRACT_OP STRING
+  {
+	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: NewStrLiteral($3)}
+  }
+
 
 default_opt:
   /* empty */
@@ -3697,58 +4212,9 @@ boolean_value:
     $$ = BoolVal(false)
   }
 
-condition:
-  value_expression compare value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: $2, Right: $3}
-  }
-| value_expression IN col_tuple
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: InOp, Right: $3}
-  }
-| value_expression NOT IN col_tuple
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotInOp, Right: $4}
-  }
-| value_expression LIKE value_expression like_escape_opt
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: LikeOp, Right: $3, Escape: $4}
-  }
-| value_expression NOT LIKE value_expression like_escape_opt
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotLikeOp, Right: $4, Escape: $5}
-  }
-| value_expression REGEXP value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: RegexpOp, Right: $3}
-  }
-| value_expression NOT REGEXP value_expression
-  {
-    $$ = &ComparisonExpr{Left: $1, Operator: NotRegexpOp, Right: $4}
-  }
-| value_expression BETWEEN value_expression AND value_expression
-  {
-    $$ = &RangeCond{Left: $1, Operator: BetweenOp, From: $3, To: $5}
-  }
-| value_expression NOT BETWEEN value_expression AND value_expression
-  {
-    $$ = &RangeCond{Left: $1, Operator: NotBetweenOp, From: $4, To: $6}
-  }
-| EXISTS subquery
-  {
-    $$ = &ExistsExpr{Subquery: $2}
-  }
 
 is_suffix:
-  NULL
-  {
-    $$ = IsNullOp
-  }
-| NOT NULL
-  {
-    $$ = IsNotNullOp
-  }
-| TRUE
+ TRUE
   {
     $$ = IsTrueOp
   }
@@ -3795,15 +4261,6 @@ compare:
     $$ = NullSafeEqualOp
   }
 
-like_escape_opt:
-  {
-    $$ = nil
-  }
-| ESCAPE value_expression
-  {
-    $$ = $2
-  }
-
 col_tuple:
   row_tuple
   {
@@ -3834,140 +4291,6 @@ expression_list:
   {
     $$ = append($1, $3)
   }
-
-value_expression:
-  value
-  {
-    $$ = $1
-  }
-| boolean_value
-  {
-    $$ = $1
-  }
-| column_name
-  {
-    $$ = $1
-  }
-| tuple_expression
-  {
-    $$ = $1
-  }
-| subquery
-  {
-    $$ = $1
-  }
-| value_expression '&' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitAndOp, Right: $3}
-  }
-| value_expression '|' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitOrOp, Right: $3}
-  }
-| value_expression '^' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: BitXorOp, Right: $3}
-  }
-| value_expression '+' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: PlusOp, Right: $3}
-  }
-| value_expression '-' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MinusOp, Right: $3}
-  }
-| value_expression '*' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: MultOp, Right: $3}
-  }
-| value_expression '/' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: DivOp, Right: $3}
-  }
-| value_expression DIV value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: IntDivOp, Right: $3}
-  }
-| value_expression '%' value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
-  }
-| value_expression MOD value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ModOp, Right: $3}
-  }
-| value_expression SHIFT_LEFT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftLeftOp, Right: $3}
-  }
-| value_expression SHIFT_RIGHT value_expression
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: ShiftRightOp, Right: $3}
-  }
-| column_name JSON_EXTRACT_OP value
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
-  }
-| column_name JSON_UNQUOTE_EXTRACT_OP value
-  {
-    $$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
-  }
-| value_expression COLLATE charset
-  {
-    $$ = &CollateExpr{Expr: $1, Charset: $3}
-  }
-| BINARY value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: BinaryOp, Expr: $2}
-  }
-| UNDERSCORE_BINARY value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: UBinaryOp, Expr: $2}
-  }
-| UNDERSCORE_UTF8 value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: Utf8Op, Expr: $2}
-  }
-| UNDERSCORE_UTF8MB4 value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: Utf8mb4Op, Expr: $2}
-  }
-| UNDERSCORE_LATIN1 value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: Latin1Op, Expr: $2}
-  }
-| NCHAR_STRING
-  {
-	$$ = &UnaryExpr{Operator: NStringOp, Expr: NewStrLiteral($1)}
-  }
-| '+'  value_expression %prec UNARY
-  {
-    $$ = $2
-  }
-| '-'  value_expression %prec UNARY
-  {
-    $$ = handleUnaryMinus($2)
-  }
-| '~'  value_expression
-  {
-    $$ = &UnaryExpr{Operator: TildaOp, Expr: $2}
-  }
-| '!' value_expression %prec UNARY
-  {
-    $$ = &UnaryExpr{Operator: BangOp, Expr: $2}
-  }
-| INTERVAL value_expression sql_id
-  {
-    // This rule prevents the usage of INTERVAL
-    // as a function. If support is needed for that,
-    // we'll need to revisit this. The solution
-    // will be non-trivial because of grammar conflicts.
-    $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
-  }
-| function_call_generic
-| function_call_keyword
-| function_call_nonkeyword
-| function_call_conflict
 
 /*
   Regular function calls without special token or syntax, guaranteed to not
@@ -4004,37 +4327,21 @@ function_call_keyword:
   {
     $$ = &FuncExpr{Name: NewColIdent("right"), Exprs: $3}
   }
-| CONVERT openb expression ',' convert_type closeb
-  {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
-  }
-| CAST openb expression AS convert_type closeb
-  {
-    $$ = &ConvertExpr{Expr: $3, Type: $5}
-  }
-| CONVERT openb expression USING charset closeb
-  {
-    $$ = &ConvertUsingExpr{Expr: $3, Type: $5}
-  }
-| SUBSTR openb column_name FROM value_expression FOR value_expression closeb
+| SUBSTRING openb expression ',' expression ',' expression closeb
   {
     $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
-| SUBSTRING openb column_name FROM value_expression FOR value_expression closeb
+| SUBSTRING openb expression ',' expression closeb
   {
-    $$ = &SubstrExpr{Name: $3, From: $5, To: $7}
+    $$ = &SubstrExpr{Name: $3, From: $5}
   }
-| SUBSTR openb STRING FROM value_expression FOR value_expression closeb
+| SUBSTRING openb expression FROM expression FOR expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrLiteral($3), From: $5, To: $7}
+  	$$ = &SubstrExpr{Name: $3, From: $5, To: $7}
   }
-| SUBSTRING openb STRING FROM value_expression FOR value_expression closeb
+| SUBSTRING openb expression FROM expression closeb
   {
-    $$ = &SubstrExpr{StrVal: NewStrLiteral($3), From: $5, To: $7}
-  }
-| MATCH openb select_expression_list closeb AGAINST openb value_expression match_option closeb
-  {
-  $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
+  	$$ = &SubstrExpr{Name: $3, From: $5}
   }
 | GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
   {
@@ -4058,32 +4365,14 @@ function_call_keyword:
   Dedicated grammar rules are needed because of the special syntax
 */
 function_call_nonkeyword:
-  CURRENT_TIMESTAMP func_paren_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("current_timestamp")}
-  }
-| UTC_TIMESTAMP func_paren_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("utc_timestamp")}
-  }
-| UTC_TIME func_paren_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("utc_time")}
-  }
 /* doesn't support fsp */
-| UTC_DATE func_paren_opt
+UTC_DATE func_paren_opt
   {
     $$ = &FuncExpr{Name:NewColIdent("utc_date")}
   }
-  // now
-| LOCALTIME func_paren_opt
+| now
   {
-    $$ = &FuncExpr{Name:NewColIdent("localtime")}
-  }
-  // now
-| LOCALTIMESTAMP func_paren_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("localtimestamp")}
+  	$$ = $1
   }
   // curdate
 /* doesn't support fsp */
@@ -4091,44 +4380,20 @@ function_call_nonkeyword:
   {
     $$ = &FuncExpr{Name:NewColIdent("current_date")}
   }
-  // curtime
-| CURRENT_TIME func_paren_opt
-  {
-    $$ = &FuncExpr{Name:NewColIdent("current_time")}
-  }
-// these functions can also be called with an optional argument
-|  CURRENT_TIMESTAMP func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_timestamp"), Fsp:$2}
-  }
-| UTC_TIMESTAMP func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_timestamp"), Fsp:$2}
-  }
 | UTC_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp:$2}
-  }
-  // now
-| LOCALTIME func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtime"), Fsp:$2}
-  }
-  // now
-| LOCALTIMESTAMP func_datetime_precision
-  {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("localtimestamp"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("utc_time"), Fsp: $2}
   }
   // curtime
 | CURRENT_TIME func_datetime_precision
   {
-    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp:$2}
+    $$ = &CurTimeFuncExpr{Name:NewColIdent("current_time"), Fsp: $2}
   }
-| TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPADD openb sql_id ',' expression ',' expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
-| TIMESTAMPDIFF openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPDIFF openb sql_id ',' expression ',' expression closeb
   {
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
   }
@@ -4228,9 +4493,17 @@ func_paren_opt:
 | openb closeb
 
 func_datetime_precision:
-  openb value_expression closeb
+  /* empty */
   {
-    $$ = $2
+  	$$ = nil
+  }
+| openb closeb
+  {
+    $$ = nil
+  }
+| openb INTEGRAL closeb
+  {
+  	$$ = NewIntLiteral($2)
   }
 
 /*
@@ -4257,14 +4530,6 @@ function_call_conflict:
 | REPLACE openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("replace"), Exprs: $3}
-  }
-| SUBSTR openb select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
-  }
-| SUBSTRING openb select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: NewColIdent("substr"), Exprs: $3}
   }
 
 match_option:
@@ -4414,41 +4679,6 @@ column_name:
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
-  }
-
-value:
-  STRING
-  {
-    $$ = NewStrLiteral($1)
-  }
-| HEX
-  {
-    $$ = NewHexLiteral($1)
-  }
-| BIT_LITERAL
-  {
-    $$ = NewBitLiteral($1)
-  }
-| INTEGRAL
-  {
-    $$ = NewIntLiteral($1)
-  }
-| FLOAT
-  {
-    $$ = NewFloatLiteral($1)
-  }
-| HEXNUM
-  {
-    $$ = NewHexNumLiteral($1)
-  }
-| VALUE_ARG
-  {
-    $$ = NewArgument($1[1:])
-    bindVariable(yylex, $1[1:])
-  }
-| NULL
-  {
-    $$ = &NullVal{}
   }
 
 num_val:
@@ -4925,9 +5155,8 @@ row_tuple:
   {
     $$ = ValTuple($2)
   }
-
 tuple_expression:
-  row_tuple
+ row_tuple
   {
     if len($1) == 1 {
       $$ = $1[0]
@@ -5192,11 +5421,11 @@ reserved_keyword:
 | LEFT
 | LIKE
 | LIMIT
+| LINEAR
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
 | LOW_PRIORITY
-| MEMBER
 | MATCH
 | MAXVALUE
 | MOD
@@ -5219,6 +5448,7 @@ reserved_keyword:
 | PARTITION
 | PERCENT_RANK
 | PRIMARY
+| RANGE
 | RANK
 | READ
 | RECURSIVE
@@ -5359,6 +5589,7 @@ non_reserved_keyword:
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
 | GTID_EXECUTED
+| HASH
 | HEADER
 | HISTOGRAM
 | HISTORY
@@ -5384,6 +5615,7 @@ non_reserved_keyword:
 | LEVEL
 | LINES
 | LINESTRING
+| LIST
 | LOAD
 | LOCAL
 | LOCKED
@@ -5400,6 +5632,7 @@ non_reserved_keyword:
 | MEDIUMINT
 | MEDIUMTEXT
 | MEMORY
+| MEMBER
 | MERGE
 | MIN_ROWS
 | MODE
@@ -5433,6 +5666,7 @@ non_reserved_keyword:
 | PACK_KEYS
 | PARSER
 | PARTITIONING
+| PARTITIONS
 | PASSWORD
 | PATH
 | PERSIST
@@ -5494,6 +5728,8 @@ non_reserved_keyword:
 | STATUS
 | STORAGE
 | STREAM
+| SUBPARTITION
+| SUBPARTITIONS
 | TABLES
 | TABLESPACE
 | TEMPORARY

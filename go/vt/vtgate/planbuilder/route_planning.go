@@ -21,6 +21,7 @@ import (
 	"sort"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/abstract"
 
@@ -579,11 +580,14 @@ func pushJoinPredicateOnJoin(ctx *planningContext, exprs []sqlparser.Expr, node 
 	if err != nil {
 		return nil, err
 	}
+
 	return &joinTree{
-		lhs:      lhsPlan,
-		rhs:      rhsPlan,
-		leftJoin: node.leftJoin,
-		vars:     node.vars,
+		lhs:                            lhsPlan,
+		rhs:                            rhsPlan,
+		leftJoin:                       node.leftJoin,
+		vars:                           node.vars,
+		predicatesToRemoveFromHashJoin: append(node.predicatesToRemoveFromHashJoin, rhsPreds...),
+		predicates:                     append(node.predicates, exprs...),
 	}, nil
 }
 
@@ -607,6 +611,9 @@ func breakExpressionInLHSandRHS(
 				bvName := node.CompliantName()
 				bvNames = append(bvNames, bvName)
 				arg := sqlparser.NewArgument(bvName)
+				// we are replacing one of the sides of the comparison with an argument,
+				// but we don't want to lose the type information we have, so we copy it over
+				semTable.CopyExprInfo(node, arg)
 				cursor.Replace(arg)
 			}
 		}
@@ -1025,14 +1032,14 @@ func canSelectDBAMerge(a, b *route) bool {
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
 	for _, aExpr := range a.eroute.SysTableTableSchema {
 		for _, bExpr := range b.eroute.SysTableTableSchema {
-			if aExpr.String() == bExpr.String() {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
 				return true
 			}
 		}
 	}
 	for _, aExpr := range a.eroute.SysTableTableName {
 		for _, bExpr := range b.eroute.SysTableTableName {
-			if aExpr.String() == bExpr.String() {
+			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
 				return true
 			}
 		}

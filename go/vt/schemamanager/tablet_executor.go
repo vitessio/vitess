@@ -416,6 +416,9 @@ func (exec *TabletExecutor) executeOneTablet(
 	if viaQueryService {
 		result, err = exec.wr.TabletManagerClient().ExecuteQuery(ctx, tablet, []byte(sql), 10)
 	} else {
+		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
+			sql = fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', ''); %s", sql)
+		}
 		result, err = exec.wr.TabletManagerClient().ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, true)
 	}
 	if err != nil {
@@ -424,7 +427,7 @@ func (exec *TabletExecutor) executeOneTablet(
 	}
 	// Get a replication position that's guaranteed to be after the schema change
 	// was applied on the primary.
-	pos, err := exec.wr.TabletManagerClient().MasterPosition(ctx, tablet)
+	pos, err := exec.wr.TabletManagerClient().PrimaryPosition(ctx, tablet)
 	if err != nil {
 		errChan <- ShardWithError{
 			Shard: tablet.Shard,

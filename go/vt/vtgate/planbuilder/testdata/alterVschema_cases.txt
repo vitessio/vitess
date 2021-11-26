@@ -9,7 +9,7 @@
       "Name": "main",
       "Sharded": false
     },
-    "query": "alter vschema create vindex hash_vdx using hash"
+    "query": "alter vschema create vindex hash_vdx using `hash`"
   }
 }
 Gen4 plan same as above
@@ -25,7 +25,7 @@ Gen4 plan same as above
       "Name": "user",
       "Sharded": true
     },
-    "query": "alter vschema create vindex `user`.hash_vdx using hash"
+    "query": "alter vschema create vindex `user`.hash_vdx using `hash`"
   }
 }
 Gen4 plan same as above
@@ -121,7 +121,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "query": "alter vschema on a add vindex hash (id)"
+    "query": "alter vschema on a add vindex `hash` (id)"
   }
 }
 Gen4 plan same as above
@@ -137,7 +137,7 @@ Gen4 plan same as above
       "Name": "main",
       "Sharded": false
     },
-    "query": "alter vschema on a drop vindex hash"
+    "query": "alter vschema on a drop vindex `hash`"
   }
 }
 Gen4 plan same as above

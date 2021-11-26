@@ -2283,7 +2283,7 @@ func (this *HttpAPI) Recover(params martini.Params, r render.Render, req *http.R
 }
 
 // GracefulPrimaryTakeover gracefully fails over a primary onto its single replica.
-func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User, auto bool) {
+func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
 	if !isAuthorizedForAction(req, user) {
 		Respond(r, &APIResponse{Code: ERROR, Message: "Unauthorized"})
 		return
@@ -2295,7 +2295,7 @@ func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Ren
 	}
 	designatedKey, _ := this.getInstanceKey(params["designatedHost"], params["designatedPort"])
 	// designatedKey may be empty/invalid
-	topologyRecovery, _, err := logic.GracefulPrimaryTakeover(clusterName, &designatedKey, auto)
+	topologyRecovery, err := logic.GracefulPrimaryTakeover(clusterName, &designatedKey)
 	if err != nil {
 		Respond(r, &APIResponse{Code: ERROR, Message: err.Error(), Details: topologyRecovery})
 		return
@@ -2311,12 +2311,12 @@ func (this *HttpAPI) gracefulPrimaryTakeover(params martini.Params, r render.Ren
 // - onto its single replica, or
 // - onto a replica indicated by the user
 func (this *HttpAPI) GracefulPrimaryTakeover(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulPrimaryTakeover(params, r, req, user, false)
+	this.gracefulPrimaryTakeover(params, r, req, user)
 }
 
 // GracefulPrimaryTakeoverAuto gracefully fails over a primary onto a replica of orchestrator's choosing
 func (this *HttpAPI) GracefulPrimaryTakeoverAuto(params martini.Params, r render.Render, req *http.Request, user auth.User) {
-	this.gracefulPrimaryTakeover(params, r, req, user, true)
+	this.gracefulPrimaryTakeover(params, r, req, user)
 }
 
 // ForcePrimaryFailover fails over a primary (even if there's no particular problem with the primary)

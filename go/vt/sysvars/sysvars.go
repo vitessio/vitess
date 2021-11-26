@@ -45,7 +45,6 @@ var (
 
 	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
 	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
-	Collation                   = SystemVariable{Name: "collation", Default: "'utf8mb4_general_ci'", IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	Names                       = SystemVariable{Name: "names", Default: utf8mb4, IdentifierAsString: true}
@@ -79,7 +78,6 @@ var (
 		DDLStrategy,
 		Workload,
 		Charset,
-		Collation,
 		Names,
 		SessionUUID,
 		SessionEnableSystemSettings,

@@ -62,6 +62,7 @@ const (
 	alterSchemaMigrationsTableRemovedUniqueKeys  = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableLogFile            = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
 	alterSchemaMigrationsTableRetainArtifacts    = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTablePostponeCompletion = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -77,9 +78,10 @@ const (
 		migration_context,
 		migration_status,
 		tablet,
-		retain_artifacts_seconds
+		retain_artifacts_seconds,
+		postpone_completion
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, FROM_UNIXTIME(NOW()), %a, %a, %a, %a, %a
 	)`
 
 	sqlScheduleSingleMigration = `UPDATE _vt.schema_migrations
@@ -88,10 +90,13 @@ const (
 			ready_timestamp=NOW()
 		WHERE
 			migration_status='queued'
+			AND (
+				postpone_completion=0 OR ddl_action='alter'
+			)
 		ORDER BY
 			requested_timestamp ASC
 		LIMIT 1
-	`
+	`  // if the migration is CREATE or DROP, and postpone_completion=1, we just don't schedule it
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
 		WHERE
@@ -147,6 +152,12 @@ const (
 			SET retain_artifacts_seconds=-1
 		WHERE
 			migration_uuid=%a
+	`
+	sqlUpdateCompleteMigration = `UPDATE _vt.schema_migrations
+			SET postpone_completion=0
+		WHERE
+			migration_uuid=%a
+			AND postpone_completion != 0
 	`
 	sqlUpdateTablet = `UPDATE _vt.schema_migrations
 			SET tablet=%a
@@ -239,6 +250,7 @@ const (
 			migration_uuid,
 			strategy,
 			options,
+			postpone_completion,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -274,6 +286,13 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
+	`
+	sqlSelectQueuedRevertMigrations = `SELECT
+			migration_uuid
+		FROM _vt.schema_migrations
+		WHERE
+			migration_status='queued'
+			AND ddl_action='revert'
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
@@ -320,7 +339,9 @@ const (
 			tablet,
 			added_unique_keys,
 			removed_unique_keys,
-			migration_context
+			migration_context,
+			retain_artifacts_seconds,
+			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
@@ -349,7 +370,9 @@ const (
 			tablet,
 			added_unique_keys,
 			removed_unique_keys,
-			migration_context
+			migration_context,
+			retain_artifacts_seconds,
+			postpone_completion
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='ready'
@@ -534,4 +557,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTableRemovedUniqueKeys,
 	alterSchemaMigrationsTableLogFile,
 	alterSchemaMigrationsTableRetainArtifacts,
+	alterSchemaMigrationsTablePostponeCompletion,
 }

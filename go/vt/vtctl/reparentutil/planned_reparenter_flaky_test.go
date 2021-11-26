@@ -90,7 +90,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -102,7 +102,7 @@ func TestPlannedReparenter_ReparentShard(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				SetReadWriteResults: map[string]error{
@@ -681,7 +681,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "successful promotion",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -696,7 +696,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -713,7 +713,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -748,7 +748,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "cannot get snapshot of current primary",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -782,7 +782,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "primary-elect fails to catch up to current primary snapshot position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -790,7 +790,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": assert.AnError,
 				},
 			},
@@ -819,7 +819,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "primary-elect times out catching up to current primary snapshot position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -827,10 +827,10 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterDelays: map[string]time.Duration{
+				SetReplicationSourceDelays: map[string]time.Duration{
 					"zone1-0000000200": time.Millisecond * 100,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 			},
@@ -861,7 +861,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -869,7 +869,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 			},
@@ -899,7 +899,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "failed to demote current primary",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -907,7 +907,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: assert.AnError,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -915,7 +915,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 			},
@@ -944,7 +944,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "primary-elect fails to catch up to current primary demotion position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -959,7 +959,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -967,7 +967,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1001,7 +1001,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "primary-elect times out catching up to current primary demotion position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1016,7 +1016,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1024,7 +1024,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionDelays: map[string]time.Duration{
@@ -1063,7 +1063,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "demotion succeeds but parent context times out",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1074,7 +1074,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1096,7 +1096,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionPostDelays: map[string]time.Duration{
@@ -1134,7 +1134,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "rollback fails",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1149,7 +1149,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1157,7 +1157,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1165,7 +1165,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						"position1": assert.AnError,
 					},
 				},
-				UndoDemoteMasterResults: map[string]error{
+				UndoDemotePrimaryResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
 			},
@@ -1190,14 +1190,14 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 			extraAssertions: func(t *testing.T, pos string, err error) {
-				assert.Contains(t, err.Error(), "UndoDemoteMaster", "expected error to include information about failed demotion rollback")
+				assert.Contains(t, err.Error(), "UndoDemotePrimary", "expected error to include information about failed demotion rollback")
 			},
 		},
 		{
 			name: "rollback succeeds",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1212,7 +1212,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1220,7 +1220,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10",
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1228,7 +1228,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						"position1": assert.AnError,
 					},
 				},
-				UndoDemoteMasterResults: map[string]error{
+				UndoDemotePrimaryResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
 			},
@@ -1253,14 +1253,14 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			opts:      PlannedReparentOptions{},
 			shouldErr: true,
 			extraAssertions: func(t *testing.T, pos string, err error) {
-				assert.NotContains(t, err.Error(), "UndoDemoteMaster", "expected error to not include information about failed demotion rollback")
+				assert.NotContains(t, err.Error(), "UndoDemotePrimary", "expected error to not include information about failed demotion rollback")
 			},
 		},
 		{
 			name: "primary-elect fails to promote",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1275,7 +1275,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1291,7 +1291,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: assert.AnError,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1325,7 +1325,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 			name: "promotion succeeds but parent context times out",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1340,7 +1340,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1359,7 +1359,7 @@ func TestPlannedReparenter_performGracefulPromotion(t *testing.T) {
 						Error: nil,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				WaitForPositionResults: map[string]map[string]error{
@@ -1470,7 +1470,7 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 		{
 			name: "successful recovery",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1527,9 +1527,9 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "failed to get MasterPosition from refreshed primary",
+			name: "failed to get PrimaryPosition from refreshed primary",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1551,12 +1551,12 @@ func TestPlannedReparenter_performPartialPromotionRecovery(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "MasterPosition timed out",
+			name: "PrimaryPosition timed out",
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionDelays: map[string]time.Duration{
+				PrimaryPositionDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -1634,7 +1634,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "success",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1706,10 +1706,10 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			shouldErr:   false,
 		},
 		{
-			name: "failed to DemoteMaster on a tablet",
+			name: "failed to DemotePrimary on a tablet",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1741,13 +1741,13 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "timed out during DemoteMaster on a tablet",
+			name: "timed out during DemotePrimary on a tablet",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterDelays: map[string]time.Duration{
+				DemotePrimaryDelays: map[string]time.Duration{
 					"zone1-0000000100": time.Millisecond * 50,
 				},
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1785,7 +1785,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "failed to DecodePosition on a tablet's demote position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1838,7 +1838,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "primary-elect not most at most advanced position",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1903,7 +1903,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -1968,7 +1968,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "failed to promote primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -2042,7 +2042,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			name: "timed out while promoting primary-elect",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -2189,7 +2189,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			name: "success: current primary cannot be determined", // "Case (1)"
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -2218,7 +2218,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // zone1-100 gets reparented under zone1-200
 				},
 			},
@@ -2269,7 +2269,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			name: "success: current primary is desired primary", // "Case (2)"
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -2281,7 +2281,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 				},
 				SetReadWriteResults: map[string]error{
@@ -2344,7 +2344,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			name: "success: graceful promotion", // "Case (3)"
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				DemoteMasterResults: map[string]struct {
+				DemotePrimaryResults: map[string]struct {
 					Status *replicationdatapb.PrimaryStatus
 					Error  error
 				}{
@@ -2356,7 +2356,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error: nil,
 					},
 				},
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -2377,7 +2377,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 						Error:  nil,
 					},
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000100": nil, // called during reparentTablets to make oldPrimary a replica of newPrimary
 					"zone1-0000000200": nil, // called during performGracefulPromotion to ensure newPrimary is caught up
 				},
@@ -2595,7 +2595,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			name: "lost topology lock",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -2666,7 +2666,7 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			name: "failed to reparent tablets",
 			ts:   memorytopo.NewServer("zone1"),
 			tmc: &testutil.TabletManagerClient{
-				MasterPositionResults: map[string]struct {
+				PrimaryPositionResults: map[string]struct {
 					Position string
 					Error    error
 				}{
@@ -2805,7 +2805,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 					"zone1-0000000201": nil,
 					"zone1-0000000202": nil,
@@ -2861,12 +2861,12 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: false,
 		},
 		{
-			name: "SetMaster failed on replica",
+			name: "SetReplicationSource failed on replica",
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 					"zone1-0000000201": assert.AnError,
 					"zone1-0000000202": nil,
@@ -2922,15 +2922,15 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			shouldErr: true,
 		},
 		{
-			name: "SetMaster timed out on replica",
+			name: "SetReplicationSource timed out on replica",
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterDelays: map[string]time.Duration{
+				SetReplicationSourceDelays: map[string]time.Duration{
 					"zone1-0000000201": time.Millisecond * 50,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 					"zone1-0000000201": nil,
 					"zone1-0000000202": nil,
@@ -2994,7 +2994,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": assert.AnError,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 					"zone1-0000000201": nil,
 					"zone1-0000000202": nil,
@@ -3058,7 +3058,7 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
 				},
-				SetMasterResults: map[string]error{
+				SetReplicationSourceResults: map[string]error{
 					"zone1-0000000200": nil,
 					"zone1-0000000201": nil,
 					"zone1-0000000202": nil,

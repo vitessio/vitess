@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"context"
@@ -668,21 +666,6 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	start := time.Now()
 	conn, err := qre.tsv.qe.conns.Get(ctx)
 
-	// We want to ensure that each execution request we get in the tablet is using the
-	// exact same collation as the one used by the tablet.
-	// If the collation we receive does not match with the tablet's, the execution will
-	// continue but a warning will be issued.
-	// The tablet creates its connections with MySQL using the collation defined by the
-	// db_charset and db_collation flags, all the connection in the pool use the same
-	// collation.
-	// We encapsulate this check in a parent if that verifies that the execute options
-	// we receive is not nil, this situation can happen in tests for instance.
-	if qre.options != nil { // nolint
-		if err := conn.MatchCollation(collations.ID(qre.options.Collation)); err != nil { // nolint
-			// TODO: fail the query here
-		}
-	}
-
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -878,7 +861,7 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CompleteMigrationType:
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ALTER VITESS_MIGRATION COMPLETE is not implemented yet")
+		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CancelMigrationType:
 		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
 	case sqlparser.CancelAllMigrationType:
@@ -945,7 +928,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
 	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	callBackClosingSpan := func(result *sqltypes.Result) error {
 		defer span.Finish()
 		return callback(result)

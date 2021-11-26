@@ -27,6 +27,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
@@ -92,6 +93,8 @@ type vcursorImpl struct {
 	resolver       *srvtopo.Resolver
 	topoServer     *topo.Server
 	logStats       *LogStats
+	collation      collations.ID
+
 	// rollbackOnPartialExec is set to true if any DML was successfully
 	// executed. If there was a subsequent failure, the transaction
 	// must be forced to rollback.
@@ -140,6 +143,22 @@ func newVCursorImpl(
 		}
 	}
 
+	// we only support collations for the new TabletGateway implementation
+	collationEnv := collations.Local()
+	var connCollation collations.ID
+	if executor != nil {
+		if gw, isTabletGw := executor.resolver.resolver.GetGateway().(*TabletGateway); isTabletGw {
+			connCollation = gw.DefaultConnCollation()
+		}
+	}
+	if connCollation == collations.Unknown {
+		coll, err := collationEnv.ResolveCollation("", "")
+		if err != nil {
+			panic("should never happen: don't know how to resolve default collation")
+		}
+		connCollation = coll.ID()
+	}
+
 	return &vcursorImpl{
 		ctx:             ctx,
 		safeSession:     safeSession,
@@ -149,12 +168,18 @@ func newVCursorImpl(
 		marginComments:  marginComments,
 		executor:        executor,
 		logStats:        logStats,
+		collation:       connCollation,
 		resolver:        resolver,
 		vschema:         vschema,
 		vm:              vm,
 		topoServer:      ts,
 		warnShardedOnly: warnShardedOnly,
 	}, nil
+}
+
+// ConnCollation returns the collation of this session
+func (vc *vcursorImpl) ConnCollation() collations.ID {
+	return vc.collation
 }
 
 // Context returns the current Context.

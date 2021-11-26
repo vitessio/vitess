@@ -305,7 +305,7 @@ func (erp *EmergencyReparenter) waitForAllRelayLogsToApply(
 	for candidate := range validCandidates {
 		// When we called StopReplicationAndBuildStatusMaps, we got back two
 		// maps: (1) the StopReplicationStatus of any replicas that actually
-		// stopped replication; and (2) the MasterStatus of anything that
+		// stopped replication; and (2) the PrimaryStatus of anything that
 		// returned ErrNotReplica, which is a tablet that is either the current
 		// primary or is stuck thinking it is a MASTER but is not in actuality.
 		//
@@ -450,7 +450,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	event.DispatchUpdate(ev, "reparenting all tablets")
 
 	// Create a context and cancel function to watch for the first successful
-	// SetMaster call on a replica. We use a background context so that this
+	// SetReplicationSource call on a replica. We use a background context so that this
 	// context is only ever Done when its cancel is called by the background
 	// goroutine we're about to spin up.
 	//
@@ -467,7 +467,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 	rec := concurrency.AllErrorRecorder{}
 
 	handlePrimary := func(alias string, tablet *topodatapb.Tablet) error {
-		position, err := erp.tmc.MasterPosition(replCtx, tablet)
+		position, err := erp.tmc.PrimaryPosition(replCtx, tablet)
 		if err != nil {
 			return err
 		}
@@ -495,7 +495,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			forceStart = fs
 		}
 
-		err := erp.tmc.SetMaster(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
+		err := erp.tmc.SetReplicationSource(replCtx, ti.Tablet, newPrimaryTablet.Alias, 0, "", forceStart)
 		if err != nil {
 			err = vterrors.Wrapf(err, "tablet %v SetReplicationSource failed: %v", alias, err)
 			rec.RecordError(err)
@@ -560,7 +560,7 @@ func (erp *EmergencyReparenter) reparentReplicas(
 
 	select {
 	case <-replSuccessCtx.Done():
-		// At least one replica was able to SetMaster successfully
+		// At least one replica was able to SetReplicationSource successfully
 		// Here we do not need to return the replicas which started replicating
 		return nil, nil
 	case <-allReplicasDoneCtx.Done():

@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	fuzz "github.com/AdaLogics/go-fuzz-headers"
 )
 
 var _ semantics.SchemaInformation = (*fakeFuzzSI)(nil)
@@ -43,7 +45,12 @@ func (s *fakeFuzzSI) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes
 
 // FuzzAnalyse implements the fuzzer
 func FuzzAnalyse(data []byte) int {
-	tree, err := sqlparser.Parse(string(data))
+	f := fuzz.NewConsumer(data)
+	query, err := f.GetSQLString()
+	if err != nil {
+		return 0
+	}
+	tree, err := sqlparser.Parse(query)
 	if err != nil {
 		return -1
 	}
