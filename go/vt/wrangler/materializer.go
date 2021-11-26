@@ -65,6 +65,28 @@ const (
 	createDDLAsCopyDropConstraint = "copy:drop_constraint"
 )
 
+func (wr *Wrangler) addTablesToVSchema(ctx context.Context, sourceKeyspace string, vschema *vschemapb.Keyspace, tables []string) error {
+	if vschema.Tables == nil {
+		vschema.Tables = make(map[string]*vschemapb.Table)
+	}
+	srcVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	if srcVSchema == nil {
+		return fmt.Errorf("no vschema found for source keyspace %s", sourceKeyspace)
+	}
+	for _, table := range tables {
+		tbl := &vschemapb.Table{}
+		srcTable, ok := srcVSchema.Tables[table]
+		if ok {
+			tbl.AutoIncrement = srcTable.AutoIncrement
+		}
+		vschema.Tables[table] = tbl
+	}
+	return nil
+}
+
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
@@ -74,7 +96,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 	var externalTopo *topo.Server
 	var err error
 
-	if externalCluster != "" {
+	if externalCluster != "" { // when the source is an external mysql cluster mounted using the Mount command
 		externalTopo, err = wr.ts.OpenExternalVitessClusterServer(ctx, externalCluster)
 		if err != nil {
 			return err
@@ -82,6 +104,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		wr.sourceTs = externalTopo
 		log.Infof("Successfully opened external topo: %+v", externalTopo)
 	}
+
 	var vschema *vschemapb.Keyspace
 	vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
 	if err != nil {
@@ -150,11 +173,8 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		log.Infof("Found tables to move: %s", strings.Join(tables, ","))
 
 		if !vschema.Sharded {
-			if vschema.Tables == nil {
-				vschema.Tables = make(map[string]*vschemapb.Table)
-			}
-			for _, table := range tables {
-				vschema.Tables[table] = &vschemapb.Table{}
+			if err := wr.addTablesToVSchema(ctx, sourceKeyspace, vschema, tables); err != nil {
+				return err
 			}
 		}
 	}

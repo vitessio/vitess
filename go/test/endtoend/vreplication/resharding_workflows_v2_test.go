@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/vt/wrangler"
@@ -244,6 +246,73 @@ func TestBasicV2Workflows(t *testing.T) {
 	log.Flush()
 }
 
+/*
+testVSchemaForSequenceAfterMoveTables checks that the related sequence tag is migrated correctly in the vschema
+while moving a table with an auto-increment from sharded to unsharded.
+*/
+func testVSchemaForSequenceAfterMoveTables(t *testing.T) {
+	// at this point the unsharded product and sharded customer keyspaces are created by previous tests
+
+	// use MoveTables to move customer2 from product to customer using
+	currentWorkflowType = wrangler.MoveTablesWorkflow
+	err := tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"customer2", workflowActionCreate, "", "", "")
+	require.NoError(t, err)
+	time.Sleep(1 * time.Second)
+	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"", workflowActionSwitchTraffic, "", "", "")
+	require.NoError(t, err)
+	err = tstWorkflowExec(t, defaultCellName, "wf2", sourceKs, targetKs,
+		"", workflowActionComplete, "", "", "")
+	require.NoError(t, err)
+
+	// sanity check
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.NotContains(t, output, "customer2\"", "customer2 still found in keyspace product")
+	validateCount(t, vtgateConn, "customer", "customer2", 3)
+
+	// check that customer2 has the sequence tag
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "customer")
+	require.NoError(t, err)
+	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 sequence missing in keyspace customer")
+
+	// ensure sequence is available to vtgate
+	num := 5
+	for i := 0; i < num; i++ {
+		execVtgateQuery(t, vtgateConn, "customer", "insert into customer2(name) values('a')")
+	}
+	validateCount(t, vtgateConn, "customer", "customer2", 3+num)
+
+	// use MoveTables to move customer2 back to product. Note that now the table has an associated sequence
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"customer2", workflowActionCreate, "", "", "")
+	require.NoError(t, err)
+	time.Sleep(1 * time.Second)
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"", workflowActionSwitchTraffic, "", "", "")
+	require.NoError(t, err)
+	err = tstWorkflowExec(t, defaultCellName, "wf3", targetKs, sourceKs,
+		"", workflowActionComplete, "", "", "")
+	require.NoError(t, err)
+
+	// sanity check
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.Contains(t, output, "customer2\"", "customer2 not found in keyspace product ")
+
+	// check that customer2 still has the sequence tag
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput("GetVSchema", "product")
+	require.NoError(t, err)
+	assert.Contains(t, output, "\"sequence\": \"customer_seq2\"", "customer2 still found in keyspace product")
+
+	// ensure sequence is available to vtgate
+	for i := 0; i < num; i++ {
+		execVtgateQuery(t, vtgateConn, "product", "insert into customer2(name) values('a')")
+	}
+	validateCount(t, vtgateConn, "product", "customer2", 3+num+num)
+}
+
 func testReshardV2Workflow(t *testing.T) {
 	currentWorkflowType = wrangler.ReshardWorkflow
 
@@ -276,7 +345,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	output, _ := vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "No workflows found in keyspace customer")
 
-	createMoveTablesWorkflow(t, "customer2")
+	testVSchemaForSequenceAfterMoveTables(t)
+
+	createMoveTablesWorkflow(t, "tenant")
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
 
