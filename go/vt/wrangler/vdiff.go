@@ -1148,6 +1148,10 @@ type contextVCursor struct {
 	ctx context.Context
 }
 
+func (vc *contextVCursor) ConnCollation() collations.ID {
+	return collations.CollationBinaryID
+}
+
 func (vc *contextVCursor) ExecutePrimitive(primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(vc, bindVars, wantfields)
 }

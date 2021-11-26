@@ -70,6 +70,7 @@ func TestShowColumns(t *testing.T) {
 	utils.AssertMatches(t, conn, "show columns from `t5_null_vindex` in `ks`", expected)
 	utils.AssertMatches(t, conn, "SHOW COLUMNS from `t5_null_vindex` in `ks`", expected)
 	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` in `ks`", expected)
+	utils.AssertMatches(t, conn, "SHOW columns FROM `t5_null_vindex` where Field = 'id'", `[[VARCHAR("id") TEXT("bigint(20)") VARCHAR("NO") VARCHAR("PRI") NULL VARCHAR("")]]`)
 }
 
 func TestShowTables(t *testing.T) {
@@ -766,7 +767,6 @@ func TestTransactionsInStreamingMode(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1", `[[INT64(1) INT64(2)]]`)
 
-	utils.Exec(t, conn, "set workload = olap")
 	utils.Exec(t, conn, "begin")
 	utils.Exec(t, conn, "insert into t1(id1, id2) values (2,3)")
 	utils.AssertMatches(t, conn, "select id1, id2 from t1 where id1 = 2", `[[INT64(2) INT64(3)]]`)

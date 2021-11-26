@@ -122,10 +122,6 @@ const (
 	RegexpStr        = "regexp"
 	NotRegexpStr     = "not regexp"
 
-	// RangeCond.Operator
-	BetweenStr    = "between"
-	NotBetweenStr = "not between"
-
 	// IsExpr.Operator
 	IsNullStr     = "is null"
 	IsNotNullStr  = "is not null"
@@ -364,12 +360,6 @@ const (
 	NotLikeOp
 	RegexpOp
 	NotRegexpOp
-)
-
-// Constant for Enum Type - RangeCondOperator
-const (
-	BetweenOp RangeCondOperator = iota
-	NotBetweenOp
 )
 
 // Constant for Enum Type - IsExprOperator

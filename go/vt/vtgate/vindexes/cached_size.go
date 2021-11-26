@@ -404,7 +404,9 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 		}
 	}
 	// field Pinned []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.Pinned)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Pinned)))
+	}
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {

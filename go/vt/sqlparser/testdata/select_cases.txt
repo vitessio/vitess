@@ -1220,7 +1220,7 @@ INPUT
 select SUBPARTITION_METHOD FROM information_schema.partitions WHERE table_schema="test" AND table_name="t1";
 END
 OUTPUT
-select SUBPARTITION_METHOD from information_schema.partitions where table_schema = 'test' and table_name = 't1'
+select SUBPARTITION_METHOD from information_schema.`partitions` where table_schema = 'test' and table_name = 't1'
 END
 INPUT
 select grp,group_concat(a,null) from t1 group by grp;
@@ -2371,8 +2371,8 @@ END
 INPUT
 select collation(substring(_latin2'ab',1)), coercibility(substring(_latin2'ab',1));
 END
-OUTPUT
-select collation(substr(_latin2 as ab, 1)), coercibility(substr(_latin2 as ab, 1)) from dual
+ERROR
+syntax error at position 39 near 'ab'
 END
 INPUT
 select ST_astext(geom), ST_area(geom),ST_area(ST_buffer(geom,2)) from t1;
@@ -2827,8 +2827,8 @@ END
 INPUT
 select collation(substring(_latin2'a',1,1)), coercibility(substring(_latin2'a',1,1));
 END
-OUTPUT
-select collation(substr(_latin2 as a, 1, 1)), coercibility(substr(_latin2 as a, 1, 1)) from dual
+ERROR
+syntax error at position 38 near 'a'
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',4);
@@ -5527,8 +5527,8 @@ END
 INPUT
 select 5 between 0 and 10 between 0 and 1,(5 between 0 and 10) between 0 and 1;
 END
-ERROR
-syntax error at position 34 near 'between'
+OUTPUT
+select 5 between 0 and (10 between 0 and 1), 5 between 0 and 10 between 0 and 1 from dual
 END
 INPUT
 select from (t1 join t2 on t1.b=t2.b) natural join (t3 natural join t4);

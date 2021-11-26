@@ -759,6 +759,36 @@ func TestExecutorShow(t *testing.T) {
 	}
 	utils.MustMatch(t, wantqr, qr, query)
 
+	query = "show vitess_shards like 'TestSharded/%'"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestSharded/e0-"),
+		},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
+	query = "show vitess_shards like 'TestShard%/%'"
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
+	require.NoError(t, err)
+
+	// Just test for first & last.
+	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
+	wantqr = &sqltypes.Result{
+		Fields: buildVarCharFields("Shards"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestSharded/-20"),
+			buildVarCharRow("TestSharded/e0-"),
+		},
+	}
+	utils.MustMatch(t, wantqr, qr, query)
+
 	// The FakeLegacyTablets in FakeLegacyHealthCheck don't have support for these columns/values
 	// So let's just be sure the statement works and we get the expected results (none)
 	query = "show vitess_replication_status"

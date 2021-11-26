@@ -713,7 +713,7 @@ func TestTabletServerStreamExecute(t *testing.T) {
 
 	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	callback := func(*sqltypes.Result) error { return nil }
-	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, 0, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}
@@ -741,7 +741,7 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ch := tabletenv.StatsLogger.Subscribe("test stats logging")
 	defer tabletenv.StatsLogger.Unsubscribe(ch)
 
-	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, nil, callback); err != nil {
+	if err := tsv.StreamExecute(ctx, &target, executeSQL, nil, 0, 0, nil, callback); err != nil {
 		t.Fatalf("TabletServer.StreamExecute should success: %s, but get error: %v",
 			executeSQL, err)
 	}
@@ -2349,7 +2349,7 @@ func TestDatabaseNameReplaceByKeyspaceNameStreamExecuteMethod(t *testing.T) {
 		}
 		return nil
 	}
-	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, &querypb.ExecuteOptions{
+	err := tsv.StreamExecute(ctx, target, executeSQL, nil, 0, 0, &querypb.ExecuteOptions{
 		IncludedFields: querypb.ExecuteOptions_ALL,
 	}, callback)
 	require.NoError(t, err)

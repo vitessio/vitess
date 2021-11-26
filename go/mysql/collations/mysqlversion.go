@@ -20,19 +20,19 @@ func (v collver) String() string {
 	case collverInvalid:
 		return "Invalid"
 	case collverMariaDB100:
-		return "MariaDB100"
+		return "MariaDB 10.0"
 	case collverMariaDB101:
-		return "MariaDB101"
+		return "MariaDB 10.1"
 	case collverMariaDB102:
-		return "MariaDB102"
+		return "MariaDB 10.2"
 	case collverMariaDB103:
-		return "MariaDB103"
+		return "MariaDB 10.3"
 	case collverMySQL56:
-		return "MySQL56"
+		return "MySQL 5.6"
 	case collverMySQL57:
-		return "MySQL57"
+		return "MySQL 5.7"
 	case collverMySQL80:
-		return "MySQL80"
+		return "MySQL 8.0"
 	default:
 		panic("invalid version identifier")
 	}

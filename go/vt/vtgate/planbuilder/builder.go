@@ -20,6 +20,7 @@ import (
 	"errors"
 	"sort"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -53,6 +54,7 @@ type ContextVSchema interface {
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)
+	ConnCollation() collations.ID
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
