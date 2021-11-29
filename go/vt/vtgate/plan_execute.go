@@ -179,6 +179,10 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	// at the beginning, but never after.
 	safeSession.SetAutocommittable(mustCommit)
 
+	// If we want to instantly commit the query, then there is no need to add savepoints.
+	// Any partial failure of the query will be taken care by rollback.
+	safeSession.SetSavepointState(!mustCommit)
+
 	// Execute!
 	err := execPlan()
 	if err != nil {
@@ -212,11 +216,34 @@ func (e *Executor) executePlan(
 	e.setLogStats(logStats, plan, vcursor, execStart, err, qr)
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
-	if err != nil && safeSession.InTransaction() && vcursor.rollbackOnPartialExec {
-		_ = e.txConn.Rollback(ctx, safeSession)
-		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
+	if err != nil && safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+		rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
+		err = vterrors.Wrap(err, rErr.Error())
 	}
 	return qr, err
+}
+
+func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats) error {
+	var err error
+
+	// needs to rollback only once.
+	rQuery := safeSession.rollbackOnPartialExec
+	safeSession.rollbackOnPartialExec = ""
+	if rQuery != txRollback {
+		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
+		if err == nil {
+			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
+		}
+		// not able to rollback changes of the failed query, so have to abort the complete transaction.
+	}
+
+	// abort the transaction.
+	_ = e.txConn.Rollback(ctx, safeSession)
+	var errMsg = "transaction rolled back to reverse changes of partial DML execution"
+	if err != nil {
+		return vterrors.Wrap(err, errMsg)
+	}
+	return vterrors.New(vtrpcpb.Code_ABORTED, errMsg)
 }
 
 func (e *Executor) setLogStats(logStats *LogStats, plan *engine.Plan, vcursor *vcursorImpl, execStart time.Time, err error, qr *sqltypes.Result) {

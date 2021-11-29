@@ -271,7 +271,12 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.Type, qr)
 		})
 
+		// Check if there was partial DML execution. If so, rollback the transaction.
 		if err != nil {
+			if !canReturnRows(plan.Type) && safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
+				rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
+				err = vterrors.Wrap(err, rErr.Error())
+			}
 			return err
 		}
 
@@ -294,11 +299,6 @@ func (e *Executor) StreamExecute(
 
 		e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
-		// Check if there was partial DML execution. If so, rollback the transaction.
-		if err != nil && safeSession.InTransaction() && vc.rollbackOnPartialExec {
-			_ = e.txConn.Rollback(ctx, safeSession)
-			err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
-		}
 		return err
 	}
 
@@ -582,7 +582,7 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
-	if len(safeSession.ShardSessions) == 0 {
+	if !safeSession.isTxOpen() {
 		if safeSession.InTransaction() {
 			// Storing, as this needs to be executed just after starting transaction on the shard.
 			safeSession.StoreSavepoint(sql)
@@ -590,23 +590,42 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		}
 		return nonTxResponse(sql)
 	}
-	var rss []*srvtopo.ResolvedShard
-	for _, shardSession := range safeSession.ShardSessions {
-		rss = append(rss, &srvtopo.ResolvedShard{
-			Target:  shardSession.Target,
-			Gateway: e.resolver.resolver.GetGateway(),
-		})
-	}
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{Sql: sql}
-	}
-	qr, errs := e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
-	err := vterrors.Aggregate(errs)
+	orig := safeSession.commitOrder
+	qr, err := e.executeSPInAllSessions(ctx, safeSession, sql, ignoreMaxMemoryRows)
+	safeSession.SetCommitOrder(orig)
 	if err != nil {
 		return nil, err
 	}
 	safeSession.StoreSavepoint(sql)
+	return qr, nil
+}
+
+// executeSPInAllSessions function executes the savepoint query in all open shard sessions (pre, normal and post)
+// which has non-zero transaction id (i.e. an open transaction on the shard connection).
+func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *SafeSession, sql string, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
+	var qr *sqltypes.Result
+	var errs []error
+	for _, co := range []vtgatepb.CommitOrder{vtgatepb.CommitOrder_PRE, vtgatepb.CommitOrder_NORMAL, vtgatepb.CommitOrder_POST} {
+		safeSession.SetCommitOrder(co)
+
+		var rss []*srvtopo.ResolvedShard
+		var queries []*querypb.BoundQuery
+		for _, shardSession := range safeSession.GetSessions() {
+			if shardSession.TransactionId == 0 {
+				continue
+			}
+			rss = append(rss, &srvtopo.ResolvedShard{
+				Target:  shardSession.Target,
+				Gateway: e.resolver.resolver.GetGateway(),
+			})
+			queries = append(queries, &querypb.BoundQuery{Sql: sql})
+		}
+		qr, errs = e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
+		err := vterrors.Aggregate(errs)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return qr, nil
 }
 
@@ -1669,7 +1688,7 @@ func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.Resolve
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
 	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, session, autocommit, callback)
 }
 
