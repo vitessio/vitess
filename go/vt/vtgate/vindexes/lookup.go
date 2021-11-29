@@ -95,7 +95,11 @@ func (ln *LookupNonUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Des
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
-			ksids = append(ksids, row[0].ToBytes())
+			rowBytes, err := row[0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			ksids = append(ksids, rowBytes)
 		}
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
@@ -247,7 +251,11 @@ func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destin
 		case 0:
 			out = append(out, key.DestinationNone{})
 		case 1:
-			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}

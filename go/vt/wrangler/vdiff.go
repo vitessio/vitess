@@ -638,7 +638,11 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 
 		for _, row := range qr.Rows {
 			var bls binlogdatapb.BinlogSource
-			if err := prototext.Unmarshal(row[0].ToBytes(), &bls); err != nil {
+			rowBytes, err := row[0].ToBytes()
+			if err != nil {
+				return err
+			}
+			if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 				return err
 			}
 			pos, err := binlogplayer.DecodePosition(row[1].ToString())
@@ -1055,7 +1059,15 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []com
 		var c int
 		var err error
 		if sourceRow[compareIndex].IsText() && targetRow[compareIndex].IsText() {
-			c = bytes.Compare(sourceRow[compareIndex].ToBytes(), targetRow[compareIndex].ToBytes())
+			srowBytes, err := sourceRow[compareIndex].ToBytes()
+			if err != nil {
+				return 0, err
+			}
+			trowBytes, err := targetRow[compareIndex].ToBytes()
+			if err != nil {
+				return 0, err
+			}
+			c = bytes.Compare(srowBytes, trowBytes)
 		} else {
 			c, err = evalengine.NullsafeCompare(sourceRow[compareIndex], targetRow[compareIndex])
 		}

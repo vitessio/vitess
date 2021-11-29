@@ -110,7 +110,11 @@ func (lu *ConsistentLookup) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.De
 		}
 		ksids := make([][]byte, 0, len(result.Rows))
 		for _, row := range result.Rows {
-			ksids = append(ksids, row[0].ToBytes())
+			rowBytes, err := row[0].ToBytes()
+			if err != nil {
+				return nil, err
+			}
+			ksids = append(ksids, rowBytes)
 		}
 		out = append(out, key.DestinationKeyspaceIDs(ksids))
 	}
@@ -173,7 +177,11 @@ func (lu *ConsistentLookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]
 		case 0:
 			out = append(out, key.DestinationNone{})
 		case 1:
-			out = append(out, key.DestinationKeyspaceID(result.Rows[0][0].ToBytes()))
+			rowBytes, err := result.Rows[0][0].ToBytes()
+			if err != nil {
+				return out, err
+			}
+			out = append(out, key.DestinationKeyspaceID(rowBytes))
 		default:
 			return nil, fmt.Errorf("Lookup.Map: unexpected multiple results from vindex %s: %v", lu.lkp.Table, ids[i])
 		}
@@ -284,7 +292,10 @@ func (lu *clCommon) handleDup(vcursor VCursor, values []sqltypes.Value, ksid []b
 			return err
 		}
 	case 1:
-		existingksid := qr.Rows[0][0].ToBytes()
+		existingksid, err := qr.Rows[0][0].ToBytes()
+		if err != nil {
+			return err
+		}
 		// Lock the target row using normal transaction priority.
 		qr, err = vcursor.ExecuteKeyspaceID(lu.keyspace, existingksid, lu.lockOwnerQuery, bindVars, false /* rollbackOnError */, false /* autocommit */)
 		if err != nil {

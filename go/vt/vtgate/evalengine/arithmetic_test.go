@@ -679,7 +679,7 @@ func TestCast(t *testing.T) {
 	}, {
 		typ: querypb.Type_VARCHAR,
 		v:   TestValue(sqltypes.Expression, "bad string"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "EXPRESSION(bad string) cannot be cast to VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "expression cannot be converted to bytes"),
 	}}
 	for _, tcase := range tcases {
 		got, err := Cast(tcase.v, tcase.typ)
@@ -1351,7 +1351,8 @@ func TestHashCodes(t *testing.T) {
 }
 
 func printValue(v sqltypes.Value) string {
-	return fmt.Sprintf("%v:%q", v.Type(), v.ToBytes())
+	vBytes, _ := v.ToBytes()
+	return fmt.Sprintf("%v:%q", v.Type(), vBytes)
 }
 
 // These benchmarks show that using existing ASCII representations

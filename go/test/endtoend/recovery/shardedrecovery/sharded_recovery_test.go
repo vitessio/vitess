@@ -331,27 +331,35 @@ func TestShardedRecovery(t *testing.T) {
 
 	qr, err := shard0Primary.VttabletProcess.QueryTablet("select count(*) from vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
-	shard0CountStr := fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+	rowBytes, err := qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	shard0CountStr := string(rowBytes)
 	shard0Count, err := strconv.Atoi(shard0CountStr)
 	require.NoError(t, err)
 	var shard0TestID string
 	if shard0Count > 0 {
 		qr, err := shard0Primary.VttabletProcess.QueryTablet("select id from vt_insert_test", keyspaceName, true)
 		require.NoError(t, err)
-		shard0TestID = fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+		rowBytes, err = qr.Rows[0][0].ToBytes()
+		assert.NoError(t, err)
+		shard0TestID = string(rowBytes)
 		require.NoError(t, err)
 	}
 
 	qr, err = shard1Primary.VttabletProcess.QueryTablet("select count(*) from vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
-	shard1CountStr := fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+	rowBytes, err = qr.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	shard1CountStr := string(rowBytes)
 	shard1Count, err := strconv.Atoi(shard1CountStr)
 	require.NoError(t, err)
 	var shard1TestID string
 	if shard1Count > 0 {
 		qr, err := shard1Primary.VttabletProcess.QueryTablet("select id from vt_insert_test", keyspaceName, true)
 		require.NoError(t, err)
-		shard1TestID = fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+		rowBytes, err := qr.Rows[0][0].ToBytes()
+		assert.NoError(t, err)
+		shard1TestID = string(rowBytes)
 		require.NoError(t, err)
 	}
 

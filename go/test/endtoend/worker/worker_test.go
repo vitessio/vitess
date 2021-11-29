@@ -353,7 +353,9 @@ func assertShardDataEqual(t *testing.T, shardNum string, sourceTablet *cluster.V
 	countQuery := "select count(*) from worker_test"
 	qrDestinationCount, err := destinationTablet.VttabletProcess.QueryTablet(countQuery, keyspaceName, true)
 	assert.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%d", len(qrDestination.Rows)), fmt.Sprintf("%s", qrDestinationCount.Rows[0][0].ToBytes()))
+	rowBytes, err := qrDestinationCount.Rows[0][0].ToBytes()
+	assert.NoError(t, err)
+	assert.Equal(t, fmt.Sprintf("%d", len(qrDestination.Rows)), string(rowBytes))
 
 }
 

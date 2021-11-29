@@ -227,7 +227,11 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		}
 
 		var bls binlogdatapb.BinlogSource
-		if err := prototext.Unmarshal(row[2].ToBytes(), &bls); err != nil {
+		rowBytes, err := row[2].ToBytes()
+		if err != nil {
+			return nil, err
+		}
+		if err := prototext.Unmarshal(rowBytes, &bls); err != nil {
 			return nil, err
 		}
 

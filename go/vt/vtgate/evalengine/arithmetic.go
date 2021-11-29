@@ -210,7 +210,15 @@ func NullsafeCompare(v1, v2 sqltypes.Value) (int, error) {
 		return compareNumeric(lv1, lv2)
 	}
 	if isByteComparable(v1) && isByteComparable(v2) {
-		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
+		v1Bytes, err1 := v1.ToBytes()
+		if err1 != nil {
+			return 0, err1
+		}
+		v2Bytes, err2 := v2.ToBytes()
+		if err2 != nil {
+			return 0, err2
+		}
+		return bytes.Compare(v1Bytes, v2Bytes), nil
 	}
 	return 0, UnsupportedComparisonError{
 		Type1: v1.Type(),
