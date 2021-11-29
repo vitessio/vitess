@@ -219,7 +219,7 @@ func (e *Executor) executePlan(
 	if err != nil {
 		return nil, e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 	}
-	return qr, err
+	return qr, nil
 }
 
 // rollbackExecIfNeeded rollbacks the partial execution if earlier it was detected that it needs partial query execution to be rolled back.
