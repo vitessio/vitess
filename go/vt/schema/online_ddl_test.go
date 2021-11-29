@@ -236,19 +236,21 @@ func TestNewOnlineDDL(t *testing.T) {
 
 	t.Run("explicit UUID", func(t *testing.T) {
 		var err error
+		var onlineDDL *OnlineDDL
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
 		assert.NoError(t, err)
+		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
 		assert.Error(t, err)
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
+		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.Error(t, err)
-
 	})
 }
 
