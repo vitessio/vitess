@@ -351,6 +351,10 @@ func SkipQueryPlanCacheDirective(stmt Statement) bool {
 // directive is set to true.
 func IgnoreMaxPayloadSizeDirective(stmt Statement) bool {
 	switch stmt := stmt.(type) {
+	// For transactional statements, they should always be passed down and
+	// should not come into max payload size requirement.
+	case *Begin, *Commit, *Rollback, *Savepoint, *SRollback, *Release:
+		return true
 	case *Select:
 		directives := ExtractCommentDirectives(stmt.Comments)
 		return directives.IsSet(DirectiveIgnoreMaxPayloadSize)

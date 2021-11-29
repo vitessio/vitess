@@ -637,7 +637,8 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")
 		log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 
-	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet:
+	case sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtSet,
+		sqlparser.StmtSavepoint, sqlparser.StmtSRollback, sqlparser.StmtRelease:
 		result = &sqltypes.Result{}
 	case sqlparser.StmtShow:
 		result = &sqltypes.Result{Fields: sqltypes.MakeTestFields("", "")}

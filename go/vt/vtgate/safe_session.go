@@ -40,6 +40,11 @@ type SafeSession struct {
 	mustRollback    bool
 	autocommitState autocommitState
 	commitOrder     vtgatepb.CommitOrder
+	savepointState  savepointState
+	// rollbackOnPartialExec is set if any DML was successfully
+	// executed. If there was a subsequent failure, if we have a savepoint we rollback to that.
+	// Otherwise, the transaction is rolled back.
+	rollbackOnPartialExec string
 
 	// this is a signal that found_rows has already been handles by the primitives,
 	// and doesn't have to be updated by the executor
@@ -69,6 +74,22 @@ const (
 	notAutocommittable = autocommitState(iota)
 	autocommittable
 	autocommitted
+)
+
+// savepointState keeps track of whether savepoints need to be inserted
+// before running the query. This will help us prevent rolling back the
+// entire transaction in case of partial failures, and be closer to MySQL
+// compatibility, by only reverting the changes from the failed statement
+// If execute is recursively called using the same session,
+// like from a vindex, we should not override the savePointState.
+// It is set the first time and is then permanent for the remainder of the query
+// execution. It should not be affected later by transactions starting or not.
+type savepointState int
+
+const (
+	savepointStateNotSet = savepointState(iota)
+	savepointNeeded
+	savepointNotNeeded
 )
 
 // NewSafeSession returns a new SafeSession based on the Session
@@ -164,6 +185,34 @@ func (session *SafeSession) AutocommitApproval() bool {
 		return true
 	}
 	return false
+}
+
+// SetSavepointState sets the state only once for the complete query execution life.
+// Calling the function multiple times will have no effect, only the first call would be used.
+// Default state is savepointStateNotSet,
+// if savepoint needed (spNeed true) then it will be set to savepointNeeded otherwise savepointNotNeeded.
+
+func (session *SafeSession) SetSavepointState(spNeed bool) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	if session.savepointState != savepointStateNotSet {
+		return
+	}
+
+	if spNeed {
+		session.savepointState = savepointNeeded
+	} else {
+		session.savepointState = savepointNotNeeded
+	}
+}
+
+// InsertSavepoints returns true if we should insert savepoints.
+func (session *SafeSession) InsertSavepoints() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return session.savepointState == savepointNeeded
 }
 
 // SetCommitOrder sets the commit order.
@@ -575,4 +624,25 @@ func (session *SafeSession) getSelectLimit() int {
 	defer session.mu.Unlock()
 
 	return int(session.Options.SqlSelectLimit)
+}
+
+func (session *SafeSession) isTxOpen() bool {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	return len(session.ShardSessions) > 0 || len(session.PreSessions) > 0 || len(session.PostSessions) > 0
+}
+
+func (session *SafeSession) GetSessions() []*vtgatepb.Session_ShardSession {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	switch session.commitOrder {
+	case vtgatepb.CommitOrder_PRE:
+		return session.PreSessions
+	case vtgatepb.CommitOrder_POST:
+		return session.PostSessions
+	default:
+		return session.ShardSessions
+	}
 }
