@@ -345,29 +345,35 @@ func ExplainsAsText(explains []*Explain) (string, error) {
 }
 
 func specialHandlingOfSavepoints(q *MysqlQuery) error {
-	if strings.Contains(q.SQL, "savepoint") {
-		stmt, err := sqlparser.Parse(q.SQL)
-		if err != nil {
-			return err
-		}
-		sp, ok := stmt.(*sqlparser.Savepoint)
-		if !ok {
-			return fmt.Errorf("savepoint expected, got: %s", q.SQL)
-		}
-		if strings.Contains(sp.Name.String(), "_vt") {
-			if spMap == nil {
-				spMap = map[string]string{}
-			}
-			spName := spMap[sp.Name.String()]
-			if spName == "" {
-				spName = fmt.Sprintf("x%d", spCount+1)
-				spMap[sp.Name.String()] = spName
-				spCount++
-			}
-			sp.Name = sqlparser.NewColIdent(spName)
-			q.SQL = sqlparser.String(sp)
-		}
+	if !strings.Contains(q.SQL, "savepoint") {
+		return nil
 	}
+
+	stmt, err := sqlparser.Parse(q.SQL)
+	if err != nil {
+		return err
+	}
+
+	sp, ok := stmt.(*sqlparser.Savepoint)
+	if !ok {
+		return fmt.Errorf("savepoint expected, got: %s", q.SQL)
+	}
+	if !strings.Contains(sp.Name.String(), "_vt") {
+		return nil
+	}
+
+	if spMap == nil {
+		spMap = map[string]string{}
+	}
+	spName := spMap[sp.Name.String()]
+	if spName == "" {
+		spName = fmt.Sprintf("x%d", spCount+1)
+		spMap[sp.Name.String()] = spName
+		spCount++
+	}
+	sp.Name = sqlparser.NewColIdent(spName)
+	q.SQL = sqlparser.String(sp)
+
 	return nil
 }
 
