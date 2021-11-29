@@ -304,7 +304,7 @@ var spCount int
 
 // ExplainsAsText returns a text representation of the explains in logical time
 // order
-func ExplainsAsText(explains []*Explain) string {
+func ExplainsAsText(explains []*Explain) (string, error) {
 	var b bytes.Buffer
 	for _, explain := range explains {
 		fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
@@ -314,7 +314,10 @@ func ExplainsAsText(explains []*Explain) string {
 		for tablet, actions := range explain.TabletActions {
 			for _, q := range actions.MysqlQueries {
 				// change savepoint for printing out, that are internal to vitess.
-				specialHandlingOfSavepoints(q)
+				err := specialHandlingOfSavepoints(q)
+				if err != nil {
+					return "", err
+				}
 				queries = append(queries, outputQuery{
 					tablet: tablet,
 					Time:   q.Time,
@@ -338,13 +341,19 @@ func ExplainsAsText(explains []*Explain) string {
 		fmt.Fprintf(&b, "\n")
 	}
 	fmt.Fprintf(&b, "----------------------------------------------------------------------\n")
-	return b.String()
+	return b.String(), nil
 }
 
-func specialHandlingOfSavepoints(q *MysqlQuery) {
+func specialHandlingOfSavepoints(q *MysqlQuery) error {
 	if strings.Contains(q.SQL, "savepoint") {
-		stmt, _ := sqlparser.Parse(q.SQL)
-		sp := stmt.(*sqlparser.Savepoint)
+		stmt, err := sqlparser.Parse(q.SQL)
+		if err != nil {
+			return err
+		}
+		sp, ok := stmt.(*sqlparser.Savepoint)
+		if !ok {
+			return fmt.Errorf("savepoint expected, got: %s", q.SQL)
+		}
 		if strings.Contains(sp.Name.String(), "_vt") {
 			if spMap == nil {
 				spMap = map[string]string{}
@@ -359,6 +368,7 @@ func specialHandlingOfSavepoints(q *MysqlQuery) {
 			q.SQL = sqlparser.String(sp)
 		}
 	}
+	return nil
 }
 
 // ExplainsAsJSON returns a json representation of the explains

@@ -187,11 +187,12 @@ func (session *SafeSession) AutocommitApproval() bool {
 	return false
 }
 
-// SetSavepointState sets the state to insertSavepoints if true and noInsertSavepoints if false
-// only when the savepointState is not already set.
-// Calling the function multiple times will have no effect, only
-// the first call would be used.
-func (session *SafeSession) SetSavepointState(flag bool) {
+// SetSavepointState sets the state only once for the complete query execution life.
+// Calling the function multiple times will have no effect, only the first call would be used.
+// Default state is savepointStateNotSet,
+// if savepoint needed (spNeed true) then it will be set to savepointNeeded otherwise savepointNotNeeded.
+
+func (session *SafeSession) SetSavepointState(spNeed bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
@@ -199,7 +200,7 @@ func (session *SafeSession) SetSavepointState(flag bool) {
 		return
 	}
 
-	if flag {
+	if spNeed {
 		session.savepointState = savepointNeeded
 	} else {
 		session.savepointState = savepointNotNeeded

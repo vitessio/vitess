@@ -421,8 +421,6 @@ func (vc *vcursorImpl) StreamExecutePrimitive(primitive engine.Primitive, bindVa
 	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
-const txRollback = "Rollback Transaction"
-
 // Execute is part of the engine.VCursor interface.
 func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.safeSession
@@ -450,6 +448,8 @@ func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, bindVars map[string]*
 	}
 	return uID, nil
 }
+
+const txRollback = "Rollback Transaction"
 
 // ExecuteMultiShard is part of the engine.VCursor interface.
 func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, autocommit bool) (*sqltypes.Result, []error) {
