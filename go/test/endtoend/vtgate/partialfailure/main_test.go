@@ -138,7 +138,9 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestPartialQueryFailure(t *testing.T) {
+func testAllModes(t *testing.T, stmts func(conn *mysql.Conn)) {
+	t.Helper()
+
 	tcases := []struct {
 		mode string
 		qs   []string
@@ -163,399 +165,161 @@ func TestPartialQueryFailure(t *testing.T) {
 			// cleanup previous run data from table.
 			utils.Exec(t, conn, `delete from test`)
 
-			utils.Exec(t, conn, `begin`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+			// execute all the test stmts.
+			stmts(conn)
 		})
 	}
 }
+func TestPartialQueryFailureExplicitTx(t *testing.T) {
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+	})
+}
 
-func TestPartialVindexQueryFailure(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `begin`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
-		})
-	}
+func TestPartialVindexQueryFailureExplicitTx(t *testing.T) {
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
+	})
 }
 
 func TestPartialQueryFailureNoAutoCommit(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `set autocommit = off`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		// autocommit is false.
+		utils.Exec(t, conn, `set autocommit = off`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+	})
 }
 
 func TestPartialVindexQueryFailureNoAutoCommit(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `set autocommit = off`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		// autocommit is false.
+		utils.Exec(t, conn, `set autocommit = off`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
+	})
 }
 
 func TestPartialQueryFailureAutoCommit(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		// commit will not have any effect on the state in autocommit mode.
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+	})
 }
 
 func TestPartialVindexQueryFailureAutoCommit(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `commit`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		// commit will not have any effect on the state in autocommit mode.
+		utils.Exec(t, conn, `commit`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
+	})
 }
 
 func TestPartialQueryFailureRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `begin`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
+	})
 }
 
 func TestPartialVindexQueryFailureRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `begin`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `begin`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
+	})
 }
 
 func TestPartialQueryFailureNoAutoCommitRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `set autocommit = off`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		// autocommit is false.
+		utils.Exec(t, conn, `set autocommit = off`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
+	})
 }
 
 func TestPartialVindexQueryFailureNoAutoCommitRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `set autocommit = off`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		// autocommit is false.  y 6
+		utils.Exec(t, conn, `set autocommit = off`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `reverted partial DML execution failure`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[]`)
+	})
 }
 
 func TestPartialQueryFailureAutoCommitRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// primary vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (1,'D'),(4,'E')`, `transaction rolled back to reverse changes of partial DML execution`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		// rollback will not have any effect on the state in autocommit mode.
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+	})
 }
 
 func TestPartialVindexQueryFailureAutoCommitRollback(t *testing.T) {
-	tcases := []struct {
-		mode string
-		qs   []string
-	}{
-		{"oltp", []string{"set workload = oltp"}},
-		{"oltp-reserved", []string{"set workload = oltp", "set sql_mode = ''"}},
-		{"olap", []string{"set workload = olap"}},
-		{"olap-reserved", []string{"set workload = olap", "set sql_mode = ''"}},
-	}
-
-	for _, tc := range tcases {
-		t.Run(tc.mode, func(t *testing.T) {
-			conn, err := mysql.Connect(context.Background(), &vtParams)
-			require.NoError(t, err)
-			defer conn.Close()
-
-			// setup the mode
-			for _, q := range tc.qs {
-				utils.Exec(t, conn, q)
-			}
-
-			// cleanup previous run data from table.
-			utils.Exec(t, conn, `delete from test`)
-
-			utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
-			utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
-			utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
-			utils.Exec(t, conn, `rollback`)
-			utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
-		})
-	}
+	testAllModes(t, func(conn *mysql.Conn) {
+		utils.Exec(t, conn, `insert into test(id, val1) values (1,'A'),(2,'B'),(3,'C')`)
+		// lookup vindex is duplicate, transaction is rolled back as it was an implicit transaction started by vtgate.
+		utils.AssertContainsError(t, conn, `insert into test(id, val1) values (4,'D'),(5,'C')`, `transaction rolled back to reverse changes of partial DML execution`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")]]`)
+		utils.Exec(t, conn, `insert into test(id, val1) values (4,'D'),(5,'E')`)
+		// rollback will not have any effect on the state in autocommit mode.
+		utils.Exec(t, conn, `rollback`)
+		utils.AssertMatches(t, conn, `select id, val1 from test order by id`, `[[INT64(1) VARCHAR("A")] [INT64(2) VARCHAR("B")] [INT64(3) VARCHAR("C")] [INT64(4) VARCHAR("D")] [INT64(5) VARCHAR("E")]]`)
+	})
 }
