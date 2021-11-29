@@ -91,13 +91,27 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 
 func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
 	routePlan, isRoute := plan.(*route)
-	if !isRoute {
-		return false
-	}
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
-	return routePlan.eroute.Opcode == engine.SelectDBA &&
-		len(routePlan.eroute.SysTableTableName) == 0 &&
-		len(routePlan.eroute.SysTableTableSchema) == 0
+	var opcode engine.RouteOpcode
+	var sysTableTableName map[string]evalengine.Expr
+	var sysTableTableSchema []evalengine.Expr
+	if isRoute {
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	}
+	if !isRoute {
+		routePlan, isRoute := plan.(*routeLegacy)
+		if !isRoute {
+			return false
+		}
+		opcode = routePlan.eroute.Opcode
+		sysTableTableName = routePlan.eroute.SysTableTableName
+		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+	}
+	return opcode == engine.SelectDBA &&
+		len(sysTableTableName) == 0 &&
+		len(sysTableTableSchema) == 0
 
 }
 
@@ -174,7 +188,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		return err
 	}
 
-	if rb, ok := pb.plan.(*route); ok {
+	if rb, ok := pb.plan.(*routeLegacy); ok {
 		// TODO(sougou): this can probably be improved.
 		directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 		rb.eroute.QueryTimeout = queryTimeout(directives)
@@ -219,15 +233,16 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 	_, err := visit(in, func(plan logicalPlan) (bool, logicalPlan, error) {
 		switch node := plan.(type) {
+		case *routeLegacy:
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
+			}
+			return true, node, nil
 		case *route:
-			query := sqlparser.GetFirstSelect(node.Select)
-			query.Comments = sel.Comments
-			query.Lock = sel.Lock
-			if sel.Into != nil {
-				if node.eroute.Opcode != engine.SelectUnsharded {
-					return false, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
-				}
-				query.Into = sel.Into
+			err := copyCommentsAndLocks(node.Select, sel, node.eroute.Opcode)
+			if err != nil {
+				return false, nil, err
 			}
 			return true, node, nil
 		}
@@ -236,6 +251,19 @@ func setMiscFunc(in logicalPlan, sel *sqlparser.Select) error {
 
 	if err != nil {
 		return err
+	}
+	return nil
+}
+
+func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Select, opcode engine.RouteOpcode) error {
+	query := sqlparser.GetFirstSelect(statement)
+	query.Comments = sel.Comments
+	query.Lock = sel.Lock
+	if sel.Into != nil {
+		if opcode != engine.SelectUnsharded {
+			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
+		}
+		query.Into = sel.Into
 	}
 	return nil
 }
@@ -380,7 +408,7 @@ func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string, rese
 		if err != nil {
 			return err
 		}
-		rut, isRoute := origin.(*route)
+		rut, isRoute := origin.(*routeLegacy)
 		if isRoute && rut.eroute.Opcode == engine.SelectDBA {
 			err := pb.findSysInfoRoutingPredicates(expr, rut, reservedVars)
 			if err != nil {
@@ -469,7 +497,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 				continue
 			}
 			// We'll allow select * for simple routes.
-			rb, ok := pb.plan.(*route)
+			rb, ok := pb.plan.(*routeLegacy)
 			if !ok {
 				return nil, errors.New("unsupported: '*' expression in cross-shard query")
 			}
@@ -481,7 +509,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		case *sqlparser.Nextval:
-			rb, ok := pb.plan.(*route)
+			rb, ok := pb.plan.(*routeLegacy)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
 				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")

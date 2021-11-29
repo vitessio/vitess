@@ -251,8 +251,8 @@ func (t TupleExpr) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 }
 
 // Evaluate implements the Expr interface
-func (b *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
-	val, ok := env.BindVars[b.Key]
+func (bv *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
+	val, ok := env.BindVars[bv.Key]
 	if !ok {
 		return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Bind variable not found")
 	}
@@ -260,12 +260,12 @@ func (b *BindVariable) Evaluate(env *ExpressionEnv) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	eval.collation = b.collation
+	eval.collation = bv.collation
 	return eval, nil
 }
 
-func (b *BindVariable) Collation() collations.TypedCollation {
-	return b.collation
+func (bv *BindVariable) Collation() collations.TypedCollation {
+	return bv.collation
 }
 
 // Evaluate implements the Expr interface
@@ -281,11 +281,11 @@ func (c *Column) Collation() collations.TypedCollation {
 }
 
 // Type implements the Expr interface
-func (b *BindVariable) Type(env *ExpressionEnv) (querypb.Type, error) {
+func (bv *BindVariable) Type(env *ExpressionEnv) (querypb.Type, error) {
 	e := env.BindVars
-	v, found := e[b.Key]
+	v, found := e[bv.Key]
 	if !found {
-		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", b.Key)
+		return querypb.Type_NULL_TYPE, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key)
 	}
 	return v.Type, nil
 }

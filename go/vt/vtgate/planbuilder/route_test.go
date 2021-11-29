@@ -61,18 +61,18 @@ func TestJoinCanMerge(t *testing.T) {
 		for right, val := range vals {
 			name := fmt.Sprintf("%d:%d", left, right)
 			t.Run(name, func(t *testing.T) {
-				lRoute := &route{
+				lRoute := &routeLegacy{
 					// Setting condition will make SelectEqualUnique match itself.
 					condition: &sqlparser.ColName{},
 				}
 				pb := &primitiveBuilder{
 					plan: lRoute,
 				}
-				rRoute := &route{
+				rRoute := &routeLegacy{
 					condition: &sqlparser.ColName{},
 				}
-				lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
-				rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+				lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
+				rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
 				assert.Equal(t, val, lRoute.JoinCanMerge(pb, rRoute, nil, nil), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 			})
 		}
@@ -94,15 +94,15 @@ func TestSubqueryCanMerge(t *testing.T) {
 	}
 
 	ks := &vindexes.Keyspace{}
-	lRoute := &route{}
+	lRoute := &routeLegacy{}
 	pb := &primitiveBuilder{
 		plan: lRoute,
 	}
-	rRoute := &route{}
+	rRoute := &routeLegacy{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
 			assert.Equal(t, val, lRoute.SubqueryCanMerge(pb, rRoute), fmt.Sprintf("%v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
@@ -122,12 +122,12 @@ func TestUnionCanMerge(t *testing.T) {
 		{false, false, false, false, false, false, false, false, false, false},
 	}
 	ks := &vindexes.Keyspace{}
-	lRoute := &route{}
-	rRoute := &route{}
+	lRoute := &routeLegacy{}
+	rRoute := &routeLegacy{}
 	for left, vals := range testcases {
-		lRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(left), ks)
+		lRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(left), ks)
 		for right, val := range vals {
-			rRoute.eroute = engine.NewSimpleRoute(engine.RouteOpcode(right), ks)
+			rRoute.eroute = engine.NewSimpleRouteLegacy(engine.RouteOpcode(right), ks)
 			assert.Equal(t, val, lRoute.unionCanMerge(rRoute, false), fmt.Sprintf("can't create a single route from these two inputs %v:%v", lRoute.eroute.RouteType(), rRoute.eroute.RouteType()))
 		}
 	}
