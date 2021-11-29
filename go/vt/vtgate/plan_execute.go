@@ -225,8 +225,12 @@ func (e *Executor) executePlan(
 
 func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *SafeSession, bindVars map[string]*querypb.BindVariable, logStats *LogStats) error {
 	var err error
-	if safeSession.rollbackOnPartialExec != txRollback {
-		_, _, err := e.execute(ctx, safeSession, safeSession.rollbackOnPartialExec, bindVars, logStats)
+
+	// needs to rollback only once.
+	rQuery := safeSession.rollbackOnPartialExec
+	safeSession.rollbackOnPartialExec = ""
+	if rQuery != txRollback {
+		_, _, err := e.execute(ctx, safeSession, rQuery, bindVars, logStats)
 		if err == nil {
 			return vterrors.New(vtrpcpb.Code_ABORTED, "reverted partial DML execution failure")
 		}
