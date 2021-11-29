@@ -1416,7 +1416,10 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 		return nil, fmt.Errorf("error running vtexplain: %w", err)
 	}
 
-	response := vtexplain.ExplainsAsText(plans)
+	response, err := vtexplain.ExplainsAsText(plans)
+	if err != nil {
+		return nil, fmt.Errorf("error converting vtexplain to text output: %w", err)
+	}
 	return &vtadminpb.VTExplainResponse{
 		Response: response,
 	}, nil

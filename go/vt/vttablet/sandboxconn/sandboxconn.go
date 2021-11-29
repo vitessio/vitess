@@ -56,7 +56,8 @@ type SandboxConn struct {
 	MustFailSetRollback         int
 	MustFailConcludeTransaction int
 	// MustFailExecute is keyed by the statement type and stores the number
-	// of errors to return for that statement type.
+	// of times to fail when it sees that statement type.
+	// Once, exhausted it will start returning non-error response.
 	MustFailExecute map[sqlparser.StatementType]int
 
 	// These Count vars report how often the corresponding

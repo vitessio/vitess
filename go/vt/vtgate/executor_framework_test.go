@@ -571,7 +571,7 @@ func executorStream(executor *Executor, sql string) (qr *sqltypes.Result, err er
 	return qr, nil
 }
 
-func testQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+func assertQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
 	idx := 0
 	for _, query := range sbc.Queries {
@@ -589,7 +589,7 @@ func testQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*quer
 	}
 }
 
-func testQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
+func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*querypb.BoundQuery) {
 	t.Helper()
 	require.Equal(t, len(wantQueries), len(sbc.Queries), sbc.Queries)
 	savepointStore := make(map[string]string)
