@@ -71,7 +71,7 @@ func (pb *primitiveBuilder) pushLimit(limit *sqlparser.Limit) error {
 	if limit == nil {
 		return nil
 	}
-	rb, ok := pb.plan.(*route)
+	rb, ok := pb.plan.(*routeLegacy)
 	if ok && rb.isSingleShard() {
 		rb.SetLimit(limit)
 		return nil
@@ -121,6 +121,11 @@ func setUpperLimit(plan logicalPlan) (bool, logicalPlan, error) {
 
 		node.underlying = newUnderlying
 		return false, node, nil
+	case *routeLegacy:
+		// The route pushes the limit regardless of the plan.
+		// If it's a scatter query, the rows returned will be
+		// more than the upper limit, but enough for the limit
+		node.Select.SetLimit(&sqlparser.Limit{Rowcount: arg})
 	case *route:
 		// The route pushes the limit regardless of the plan.
 		// If it's a scatter query, the rows returned will be

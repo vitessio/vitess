@@ -128,9 +128,9 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 		return nil, nil, nil, err
 	}
 
-	highestRoute, _ := highestOrigin.(*route)
+	highestRoute, _ := highestOrigin.(*routeLegacy)
 	for _, sqi := range subqueries {
-		subroute, _ := sqi.plan.(*route)
+		subroute, _ := sqi.plan.(*routeLegacy)
 		if highestRoute != nil && subroute != nil && highestRoute.MergeSubquery(pb, subroute) {
 			continue
 		}
@@ -211,7 +211,7 @@ func hasSubquery(node sqlparser.SQLNode) bool {
 
 func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlparser.ReservedVars, nodes ...sqlparser.SQLNode) bool {
 	var keyspace string
-	if rb, ok := pb.plan.(*route); ok {
+	if rb, ok := pb.plan.(*routeLegacy); ok {
 		keyspace = rb.eroute.Keyspace.Name
 	} else {
 		// This code is unreachable because the caller checks.
@@ -235,7 +235,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.plan.(*route)
+				innerRoute, ok := spb.plan.(*routeLegacy)
 				if !ok {
 					samePlan = false
 					return false, dummyErr
@@ -256,7 +256,7 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(reservedVars *sqlpars
 					samePlan = false
 					return false, err
 				}
-				innerRoute, ok := spb.plan.(*route)
+				innerRoute, ok := spb.plan.(*routeLegacy)
 				if !ok {
 					samePlan = false
 					return false, dummyErr

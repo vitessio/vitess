@@ -33,11 +33,11 @@ import (
 // This file has functions to analyze the FROM clause.
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a route.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) (*route, error) {
+func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, reservedVars *sqlparser.ReservedVars, where sqlparser.Expr) (*routeLegacy, error) {
 	if err := pb.processTableExprs(tableExprs, reservedVars, where); err != nil {
 		return nil, err
 	}
-	rb, ok := pb.plan.(*route)
+	rb, ok := pb.plan.(*routeLegacy)
 	if !ok {
 		return nil, errors.New("unsupported: multi-shard or vindex write statement")
 	}
@@ -74,7 +74,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		// If it's a route, preserve the parenthesis so things
 		// don't associate differently when more things are pushed
 		// into it. FROM a, (b, c) should not become FROM a, b, c.
-		if rb, ok := pb.plan.(*route); ok {
+		if rb, ok := pb.plan.(*routeLegacy); ok {
 			sel, ok := rb.Select.(*sqlparser.Select)
 			if !ok {
 				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rb.Select))
@@ -118,7 +118,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
 		}
 
-		subroute, ok := spb.plan.(*route)
+		subroute, ok := spb.plan.(*routeLegacy)
 		if !ok {
 			var err error
 			pb.plan, pb.st, err = newSimpleProjection(tableExpr.As, spb.plan)
@@ -133,7 +133,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// build a route primitive that has the subquery in its
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
-		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
+		rb, st := newRouteLegacy(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
 		rb.substitutions = subroute.substitutions
 		rb.condition = subroute.condition
 		rb.eroute = subroute.eroute
@@ -188,8 +188,8 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		if err != nil {
 			return err
 		}
-		rb, st := newRoute(sel)
-		rb.eroute = engine.NewSimpleRoute(engine.SelectDBA, ks)
+		rb, st := newRouteLegacy(sel)
+		rb.eroute = engine.NewSimpleRouteLegacy(engine.SelectDBA, ks)
 		rb.eroute.TableName = sqlparser.String(tableName)
 		pb.plan, pb.st = rb, st
 		// Add the table to symtab
@@ -212,7 +212,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return nil
 	}
 
-	rb, st := newRoute(sel)
+	rb, st := newRouteLegacy(sel)
 	pb.plan, pb.st = rb, st
 	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
 		return err
@@ -243,23 +243,23 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		rb.substitutions = []*tableSubstitution{sub}
 	}
 
-	var eroute *engine.Route
+	var eroute *engine.RouteLegacy
 	switch {
 	case vschemaTable.Type == vindexes.TypeSequence:
-		eroute = engine.NewSimpleRoute(engine.SelectNext, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRouteLegacy(engine.SelectNext, vschemaTable.Keyspace)
 	case vschemaTable.Type == vindexes.TypeReference:
-		eroute = engine.NewSimpleRoute(engine.SelectReference, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRouteLegacy(engine.SelectReference, vschemaTable.Keyspace)
 	case !vschemaTable.Keyspace.Sharded:
-		eroute = engine.NewSimpleRoute(engine.SelectUnsharded, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRouteLegacy(engine.SelectUnsharded, vschemaTable.Keyspace)
 	case vschemaTable.Pinned == nil:
-		eroute = engine.NewSimpleRoute(engine.SelectScatter, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRouteLegacy(engine.SelectScatter, vschemaTable.Keyspace)
 		eroute.TargetDestination = destTarget
 		eroute.TargetTabletType = destTableType
 	default:
 		// Pinned tables have their keyspace ids already assigned.
 		// Use the Binary vindex, which is the identity function
 		// for keyspace id.
-		eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vschemaTable.Keyspace)
+		eroute = engine.NewSimpleRouteLegacy(engine.SelectEqualUnique, vschemaTable.Keyspace)
 		vindex, _ = vindexes.NewBinary("binary", nil)
 		eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
 		eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vschemaTable.Pinned)}}
@@ -315,8 +315,8 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 		return err
 	}
 
-	lRoute, leftIsRoute := pb.plan.(*route)
-	rRoute, rightIsRoute := rpb.plan.(*route)
+	lRoute, leftIsRoute := pb.plan.(*routeLegacy)
+	rRoute, rightIsRoute := rpb.plan.(*routeLegacy)
 	if !leftIsRoute || !rightIsRoute {
 		return newJoin(pb, rpb, ajoin, reservedVars)
 	}
