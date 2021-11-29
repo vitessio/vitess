@@ -581,7 +581,7 @@ func testQueries(t *testing.T, sbc *sandboxconn.SandboxConn, wantQueries []*quer
 		if len(wantQueries) < idx {
 			t.Errorf("got more queries than expected")
 		}
-		require.Equal(t, query.BindVariables, wantQueries[idx].BindVariables)
+		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
 		idx++
@@ -594,7 +594,7 @@ func testQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, wantQu
 	require.Equal(t, len(wantQueries), len(sbc.Queries), sbc.Queries)
 	savepointStore := make(map[string]string)
 	for idx, query := range sbc.Queries {
-		require.Equal(t, query.BindVariables, wantQueries[idx].BindVariables)
+		require.Equal(t, wantQueries[idx].BindVariables, query.BindVariables)
 		got := query.Sql
 		expected := wantQueries[idx].Sql
 		if strings.HasPrefix(got, "savepoint") {
@@ -670,6 +670,10 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
 	checkEqualQuery := true
+	switch stmtType {
+	case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+		checkEqualQuery = false
+	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {
 		// fields[7] is the total execution time
@@ -687,8 +691,6 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 		// BEGIN, COMMIT, ROLLBACK, etc
 		switch stmtType {
 		case "BEGIN", "COMMIT", "SET", "ROLLBACK":
-		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
-			checkEqualQuery = false
 		default:
 			testNonZeroDuration(t, "ExecuteTime", fields[9])
 		}
