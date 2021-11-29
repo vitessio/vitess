@@ -43,6 +43,7 @@ type TabletExecutor struct {
 	keyspace             string
 	waitReplicasTimeout  time.Duration
 	ddlStrategySetting   *schema.DDLStrategySetting
+	uuid                 string
 	skipPreflight        bool
 }
 
@@ -77,6 +78,24 @@ func (exec *TabletExecutor) SetDDLStrategy(ddlStrategy string) error {
 	}
 	exec.ddlStrategySetting = ddlStrategySetting
 	return nil
+}
+
+// SetUUID sets an explicit UUID for schema migrations
+func (exec *TabletExecutor) SetUUID(uuid string) error {
+	if uuid == "" {
+		// Not specified. This is fine, we'll generate our own.
+		return nil
+	}
+	if !schema.IsOnlineDDLUUID(uuid) {
+		return fmt.Errorf("Not a valid UUID: %s", uuid)
+	}
+	exec.uuid = uuid
+	return nil
+}
+
+// hasExplicitUUID returns true when a UUID was set
+func (exec *TabletExecutor) hasExplicitUUID() bool {
+	return exec.uuid != ""
 }
 
 // SkipPreflight disables preflight checks
@@ -243,36 +262,28 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, execResu
 	switch stmt := stmt.(type) {
 	case sqlparser.DDLStatement:
 		if exec.isOnlineSchemaDDL(stmt) {
-			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext)
+			onlineDDLs, err := schema.NewOnlineDDLs(exec.keyspace, sql, stmt, exec.ddlStrategySetting, exec.requestContext, exec.uuid)
 			if err != nil {
 				execResult.ExecutorErr = err.Error()
 				return err
 			}
 			for _, onlineDDL := range onlineDDLs {
-				if exec.ddlStrategySetting.IsSkipTopo() {
-					exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-					if len(execResult.SuccessShards) > 0 {
-						exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-					}
-				} else {
-					exec.executeOnlineDDL(ctx, execResult, onlineDDL)
+				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+				if len(execResult.SuccessShards) > 0 {
+					exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 				}
 			}
 			return nil
 		}
 	case *sqlparser.RevertMigration:
 		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
-		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext)
+		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.requestContext, exec.uuid)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()
 			return err
 		}
-		if exec.ddlStrategySetting.IsSkipTopo() {
-			exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
-			exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
-		} else {
-			exec.executeOnlineDDL(ctx, execResult, onlineDDL)
-		}
+		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+		exec.wr.Logger().Printf("%s\n", onlineDDL.UUID)
 		return nil
 	}
 	exec.wr.Logger().Infof("Received DDL request. strategy=%+v", schema.DDLStrategyDirect)
@@ -311,6 +322,11 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	// Make sure the schema changes introduce a table definition change.
 	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
 		execResult.ExecutorErr = err.Error()
+		return &execResult
+	}
+
+	if exec.hasExplicitUUID() && len(sqls) > 1 {
+		execResult.ExecutorErr = fmt.Sprintf("explicit UUID %s given but multiple DDLs generated", exec.uuid)
 		return &execResult
 	}
 
