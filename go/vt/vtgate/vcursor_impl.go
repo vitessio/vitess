@@ -461,7 +461,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
 
-	if len(errs) == 0 && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
+	if len(errs) != len(rss) && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
 		if uID == "" {
 			vc.safeSession.rollbackOnPartialExec = txRollback
 		} else {
@@ -525,7 +525,7 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 
 	errs := vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
 
-	if len(errs) == 0 && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
+	if len(errs) != len(rss) && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
 		if uID == "" {
 			vc.safeSession.rollbackOnPartialExec = txRollback
 		} else {
