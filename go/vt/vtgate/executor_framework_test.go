@@ -651,12 +651,24 @@ var testPlannedQueries = map[string]bool{}
 func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int) *LogStats {
 	t.Helper()
 
+	return testQueryLogWithSavepoint(t, logChan, method, stmtType, sql, shardQueries, false /* checkSavepoint */)
+}
+
+func testQueryLogWithSavepoint(t *testing.T, logChan chan interface{}, method, stmtType, sql string, shardQueries int, checkSavepoint bool) *LogStats {
+	t.Helper()
+
 	var logStats *LogStats
-	for {
+
+	if checkSavepoint {
 		logStats = getQueryLog(logChan)
 		require.NotNil(t, logStats)
-		if logStats.Method != "MarkSavepoint" {
-			break
+	} else {
+		for {
+			logStats = getQueryLog(logChan)
+			require.NotNil(t, logStats)
+			if logStats.Method != "MarkSavepoint" {
+				break
+			}
 		}
 	}
 
@@ -670,9 +682,13 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	// fields[1] - fields[6] are the caller id, start/end times, etc
 
 	checkEqualQuery := true
-	switch stmtType {
-	case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
-		checkEqualQuery = false
+	// The internal savepoints are created with uuids so the value of it not known to assert.
+	// Therefore, the equal query check is ignored.
+	if checkSavepoint {
+		switch stmtType {
+		case "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
+			checkEqualQuery = false
+		}
 	}
 	// only test the durations if there is no error (fields[16])
 	if fields[16] == "\"\"" {
@@ -690,7 +706,7 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 		// fields[9] is ExecuteTime which is not set for certain statements SET,
 		// BEGIN, COMMIT, ROLLBACK, etc
 		switch stmtType {
-		case "BEGIN", "COMMIT", "SET", "ROLLBACK":
+		case "BEGIN", "COMMIT", "SET", "ROLLBACK", "SAVEPOINT", "SAVEPOINT_ROLLBACK", "RELEASE":
 		default:
 			testNonZeroDuration(t, "ExecuteTime", fields[9])
 		}

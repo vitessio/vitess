@@ -2078,7 +2078,8 @@ func TestTestPartialVindexInsertQueryFailure(t *testing.T) {
 	wantQ[1].Sql = "insert into t1_lkp_idx(unq_col, keyspace_id) values (:_unq_col_1, :keyspace_id_1)"
 	testQueriesWithSavepoint(t, sbc2, wantQ)
 
-	testQueryLog(t, logChan, "TestExecute", "BEGIN", "begin", 0)
-	testQueryLog(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0)
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0)
+	testQueryLogWithSavepoint(t, logChan, "TestExecute", "BEGIN", "begin", 0, true)
+	testQueryLogWithSavepoint(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 0, true)
+	testQueryLogWithSavepoint(t, logChan, "VindexCreate", "SAVEPOINT_ROLLBACK", "rollback to x", 0, true)
+	testQueryLogWithSavepoint(t, logChan, "TestExecute", "INSERT", "insert into t1(id, unq_col) values (1, 1), (2, 3)", 0, true)
 }
