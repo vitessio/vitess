@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	"vitess.io/vitess/go/hack"
@@ -481,7 +482,7 @@ func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
 }
 
-// EncodeHexValToMySQLQueryFormat encodes the hexval back into the query format
+// encodeHexValToMySQLQueryFormat encodes the hexval back into the query format
 // for passing on to MySQL as a bind var
 func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
 	nb := node.Bytes()
@@ -490,7 +491,11 @@ func (node *Literal) encodeHexValToMySQLQueryFormat() ([]byte, error) {
 	}
 
 	// Let's make this idempotent in case it's called more than once
-	if nb[0] == 'x' && nb[1] == '0' && nb[len(nb)-1] == '\'' {
+	match, err := regexp.Match("^x'.*'$", nb)
+	if err != nil {
+		return nb, err
+	}
+	if match {
 		return nb, nil
 	}
 
