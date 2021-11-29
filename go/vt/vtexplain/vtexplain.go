@@ -345,7 +345,7 @@ func ExplainsAsText(explains []*Explain) (string, error) {
 }
 
 func specialHandlingOfSavepoints(q *MysqlQuery) error {
-	if !strings.Contains(q.SQL, "savepoint") {
+	if !strings.HasPrefix(q.SQL, "savepoint") {
 		return nil
 	}
 

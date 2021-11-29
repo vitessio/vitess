@@ -271,11 +271,10 @@ func (e *Executor) StreamExecute(
 			return srr.storeResultStats(plan.Type, qr)
 		})
 
-		// Check if there was partial DML execution. If so, rollback the transaction.
+		// Check if there was partial DML execution. If so, rollback the effect of the partially executed query.
 		if err != nil {
-			if !canReturnRows(plan.Type) && safeSession.InTransaction() && safeSession.rollbackOnPartialExec != "" {
-				rErr := e.rollbackPartialExec(ctx, safeSession, bindVars, logStats)
-				err = vterrors.Wrap(err, rErr.Error())
+			if !canReturnRows(plan.Type) {
+				return e.rollbackExecIfNeeded(ctx, safeSession, bindVars, logStats, err)
 			}
 			return err
 		}
@@ -582,6 +581,9 @@ func (e *Executor) handleSavepoint(ctx context.Context, safeSession *SafeSession
 		logStats.ExecuteTime = time.Since(execStart)
 	}()
 
+	// If no transaction exists on any of the shard sessions,
+	// then savepoint does not need to be executed, it will be only stored in the session
+	// and later will be executed when a transaction is started.
 	if !safeSession.isTxOpen() {
 		if safeSession.InTransaction() {
 			// Storing, as this needs to be executed just after starting transaction on the shard.
@@ -611,6 +613,8 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *Safe
 		var rss []*srvtopo.ResolvedShard
 		var queries []*querypb.BoundQuery
 		for _, shardSession := range safeSession.GetSessions() {
+			// This will avoid executing savepoint on reserved connections
+			// which has no open transaction.
 			if shardSession.TransactionId == 0 {
 				continue
 			}
