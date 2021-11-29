@@ -612,7 +612,7 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *Safe
 
 		var rss []*srvtopo.ResolvedShard
 		var queries []*querypb.BoundQuery
-		for _, shardSession := range safeSession.GetSessions() {
+		for _, shardSession := range safeSession.getSessions() {
 			// This will avoid executing savepoint on reserved connections
 			// which has no open transaction.
 			if shardSession.TransactionId == 0 {
