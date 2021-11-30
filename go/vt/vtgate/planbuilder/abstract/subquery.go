@@ -29,7 +29,9 @@ type SubQuery struct {
 	Outer Operator
 }
 
-var _ Operator = (*SubQuery)(nil)
+var _ LogicalOperator = (*SubQuery)(nil)
+
+func (*SubQuery) iLogical() {}
 
 // SubQueryInner stores the subquery information for a select statement
 type SubQueryInner struct {

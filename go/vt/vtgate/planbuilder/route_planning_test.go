@@ -132,22 +132,22 @@ func TestCreateRoutePlanForOuter(t *testing.T) {
 	assert := assert.New(t)
 	m1 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: ts(0),
-			Table:   sqlparser.TableName{},
+			ID:    ts(0),
+			Table: sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
 	m2 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: ts(1),
-			Table:   sqlparser.TableName{},
+			ID:    ts(1),
+			Table: sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
 	m3 := &routeTable{
 		qtable: &abstract.QueryTable{
-			TableID: ts(2),
-			Table:   sqlparser.TableName{},
+			ID:    ts(2),
+			Table: sqlparser.TableName{},
 		},
 		vtable: &vindexes.Table{},
 	}
