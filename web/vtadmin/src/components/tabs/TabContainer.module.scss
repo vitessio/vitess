@@ -23,7 +23,7 @@
     position: relative;
 
     &.small {
-        font-size: var(--fontSizeSmall);
+        font-size: theme('fontSize.sm');
     }
 
     &.large {
