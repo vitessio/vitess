@@ -47,9 +47,6 @@
     --lineHeightBody: 1.36;
 
     /* Headings */
-    --fontSizeHeading1: 3.6rem;
-    --fontSizeHeading2: 2.8rem;
-    --fontSizeHeading3: 2rem;
     --lineHeightHeading: 1.36;
 
     /* Inputs + other form controls */
@@ -137,21 +134,21 @@ body {
 /* Typography */
 h1 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading1);
+    font-size: theme('fontSize.3xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
 
 h2 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading2);
+    font-size: theme('fontSize.2xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
 
 h3 {
     color: var(--textColorPrimary);
-    font-size: var(--fontSizeHeading3);
+    font-size: theme('fontSize.xl');
     font-weight: 700;
     line-height: var(--lineHeightHeading);
 }
