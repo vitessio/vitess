@@ -108,7 +108,7 @@ func (d *derivedTable) tableID() semantics.TableSet { return d.tables.tableID() 
 
 func (d *derivedTable) tableNames() []string { return d.tables.tableNames() }
 
-func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.TableID }
+func (rp *routeTable) tableID() semantics.TableSet { return rp.qtable.ID }
 
 func (rp *joinTables) tableID() semantics.TableSet { return rp.lhs.tableID().Merge(rp.rhs.tableID()) }
 

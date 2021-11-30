@@ -30,7 +30,10 @@ type Join struct {
 	LeftJoin  bool
 }
 
-var _ Operator = (*Join)(nil)
+var _ LogicalOperator = (*Join)(nil)
+
+// iLogical implements the LogicalOperator interface
+func (*Join) iLogical() {}
 
 // PushPredicate implements the Operator interface
 func (j *Join) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) error {

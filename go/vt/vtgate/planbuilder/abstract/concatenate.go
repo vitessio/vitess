@@ -32,7 +32,9 @@ type Concatenate struct {
 	Limit       *sqlparser.Limit
 }
 
-var _ Operator = (*Concatenate)(nil)
+var _ LogicalOperator = (*Concatenate)(nil)
+
+func (*Concatenate) iLogical() {}
 
 // TableID implements the Operator interface
 func (c *Concatenate) TableID() semantics.TableSet {

@@ -39,8 +39,23 @@ type (
 		// CheckValid checks if we have a valid operator tree, and returns an error if something is wrong
 		CheckValid() error
 
-		// Compact will optimise the operator tree into a smaller but equivalent version
+		// TODO - Convert to LogicalOperator output
 		Compact(semTable *semantics.SemTable) (Operator, error)
+	}
+
+	LogicalOperator interface {
+		Operator
+		iLogical()
+		// Compact will optimise the operator tree into a smaller but equivalent version
+	}
+
+	PhysicalOperator interface {
+		Operator
+		IPhysical()
+		// Cost is simply the number of routes in the operator tree
+		Cost() int
+		// Clone creates a copy of the operator that can be updated without changing the original
+		Clone() PhysicalOperator
 	}
 )
 
@@ -65,7 +80,7 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 			}
 			qg := newQueryGraph()
 			isInfSchema := tableInfo.IsInfSchema()
-			qt := &QueryTable{Alias: tableExpr, Table: tbl, TableID: tableID, IsInfSchema: isInfSchema}
+			qt := &QueryTable{Alias: tableExpr, Table: tbl, ID: tableID, IsInfSchema: isInfSchema}
 			qg.Tables = append(qg.Tables, qt)
 			return qg, nil
 		case *sqlparser.DerivedTable:
