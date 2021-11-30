@@ -28,14 +28,7 @@ jobs:
       run: |
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
-    # Checkout to the other version of Vitess
-    - name: Check out other version's code
-      uses: actions/checkout@v2
-      with:
-        # TODO: use a not-hardcoded git ref
-        ref: "de06fcaa9252bf36cf4723af40ad05f7e5f214dd"
-
-    - name: Get dependencies for other version
+    - name: Get base dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
@@ -43,7 +36,6 @@ jobs:
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
 
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
@@ -53,6 +45,17 @@ jobs:
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+
+    # Checkout to the other version of Vitess
+    - name: Check out other version's code
+      uses: actions/checkout@v2
+      with:
+        # TODO: use a not-hardcoded git ref
+        ref: "de06fcaa9252bf36cf4723af40ad05f7e5f214dd"
+
+    - name: Get dependencies for other version
+      run: |
+        go mod download
 
     - name: Building other version's binaries
       timeout-minutes: 10
@@ -69,22 +72,7 @@ jobs:
 
     - name: Get dependencies for current version
       run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
-
-        # install JUnit report formatter
-        go get -u github.com/vitessio/go-junit-report@HEAD
-
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
 
     - name: Building current version's binaries
       timeout-minutes: 10
@@ -98,5 +86,5 @@ jobs:
     # Asserting previous operations
     - name: Assert
       run: |
-        ls -l /tmp/vitess-build-current/
-        ls -l /tmp/vitess-build-other/
+        ls -lR /tmp/vitess-build-current/
+        ls -lR /tmp/vitess-build-other/
