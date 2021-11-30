@@ -2436,6 +2436,12 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 129",
 	}, {
+		input: "create table t (c int null primary key)",
+		err:   "cannot have nullable column and primary key at position 40 near 'key'",
+	}, {
+		input: "create table t (c int primary key null)",
+		err:   "cannot have nullable column and primary key at position 39 near 'null'",
+	}, {
 		input: "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		err:   "syntax error at position 22 near 'not'",
 	}, {

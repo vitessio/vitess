@@ -2064,6 +2064,12 @@ func (ct *ColumnType) merge(other ColumnType) error {
 		ct.KeyOpt = other.KeyOpt
 	}
 
+	if other.sawnull && other.NotNull == false {
+		if ct.KeyOpt == colKeyPrimary {
+			return errors.New("cannot have nullable column and primary key")
+		}
+	}
+
 	if other.Comment != nil {
 		if ct.Comment != nil {
 			return errors.New("cannot include more than one comment for a column definition")
