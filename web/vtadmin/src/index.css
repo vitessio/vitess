@@ -44,7 +44,6 @@
     --fontFamilyMonospace: theme('fontFamily.mono');
 
     /* Body text */
-    --fontSizeLarge: 1.6rem;
     --fontSizeSmall: 1.2rem;
     --lineHeightBody: 1.36;
 
