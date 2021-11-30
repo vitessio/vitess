@@ -231,6 +231,7 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 		"-enable_query_plan_field_caching=false",
 		"-dbddl_plugin", "vttest",
 		"-foreign_key_mode", args.ForeignKeyMode,
+		"-planner_version", args.PlannerVersion,
 		fmt.Sprintf("-enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("-enable_direct_ddl=%t", args.EnableDirectDDL),
 	}...)
