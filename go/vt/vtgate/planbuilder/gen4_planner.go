@@ -142,21 +142,21 @@ func newBuildSelectPlan(selStmt sqlparser.SelectStatement, reservedVars *sqlpars
 	}
 
 	ctx := newPlanningContext(reservedVars, semTable, vschema)
-	opTree, err := abstract.CreateOperatorFromAST(selStmt, semTable)
+	logical, err := abstract.CreateOperatorFromAST(selStmt, semTable)
 	if err != nil {
 		return nil, err
 	}
-	err = opTree.CheckValid()
-	if err != nil {
-		return nil, err
-	}
-
-	tree, err := optimizeQuery(ctx, opTree)
+	err = logical.CheckValid()
 	if err != nil {
 		return nil, err
 	}
 
-	plan, err := transformToLogicalPlan(ctx, tree)
+	physical, err := createPhysicalOperator(ctx, logical)
+	if err != nil {
+		return nil, err
+	}
+
+	plan, err := transformOpToLogicalPlan(ctx, physical)
 	if err != nil {
 		return nil, err
 	}

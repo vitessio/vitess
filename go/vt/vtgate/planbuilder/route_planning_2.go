@@ -546,8 +546,8 @@ func canMergeOpsOnFilters(ctx *planningContext, a, b *routeOp, joinPredicates []
 }
 
 // visitOperators visits all the operators.
-func visitOperators(r abstract.Operator, f func(tbl abstract.Operator) (bool, error)) error {
-	kontinue, err := f(r)
+func visitOperators(op abstract.Operator, f func(tbl abstract.Operator) (bool, error)) error {
+	kontinue, err := f(op)
 	if err != nil {
 		return err
 	}
@@ -555,7 +555,7 @@ func visitOperators(r abstract.Operator, f func(tbl abstract.Operator) (bool, er
 		return nil
 	}
 
-	switch r := r.(type) {
+	switch r := op.(type) {
 	case *tableOp:
 		// already visited when entering this method
 	case *routeOp:
@@ -564,7 +564,7 @@ func visitOperators(r abstract.Operator, f func(tbl abstract.Operator) (bool, er
 			return err
 		}
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown operator type while visiting - %T")
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown operator type while visiting - %T", op)
 	}
 	return nil
 }
