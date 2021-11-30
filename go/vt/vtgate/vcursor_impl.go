@@ -434,6 +434,9 @@ func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]
 	return qr, err
 }
 
+// markSavepoint opens an internal savepoint before executing the original query.
+// This happens only when rollback is allowed and no other savepoint was executed
+// and the query is executed in an explicit transaction (i.e. started by the client).
 func (vc *vcursorImpl) markSavepoint(rollbackOnError bool, bindVars map[string]*querypb.BindVariable) (string, error) {
 	if !rollbackOnError || vc.safeSession.rollbackOnPartialExec != "" || !vc.safeSession.InsertSavepoints() {
 		return "", nil
@@ -458,14 +461,8 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 	}
 
 	qr, errs := vc.executor.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.safeSession, autocommit, vc.ignoreMaxMemoryRows)
+	vc.setRollbackOnPartialExecIfRequired(errs, rss, rollbackOnError, uID)
 
-	if len(errs) != len(rss) && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
-		if uID == "" {
-			vc.safeSession.rollbackOnPartialExec = txRollback
-		} else {
-			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
-		}
-	}
 	return qr, errs
 }
 
@@ -522,7 +519,16 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 	}
 
 	errs := vc.executor.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.safeSession, autocommit, callback)
+	vc.setRollbackOnPartialExecIfRequired(errs, rss, rollbackOnError, uID)
 
+	return errs
+}
+
+// setRollbackOnPartialExecIfRequired sets the value on SafeSession.rollbackOnPartialExec
+// when the query gets successfully executed on at least one shard,
+// there does not exist any old savepoint for which rollback is already set
+// and rollback on error is allowed.
+func (vc *vcursorImpl) setRollbackOnPartialExecIfRequired(errs []error, rss []*srvtopo.ResolvedShard, rollbackOnError bool, uID string) {
 	if len(errs) != len(rss) && rollbackOnError && vc.safeSession.rollbackOnPartialExec == "" {
 		if uID == "" {
 			vc.safeSession.rollbackOnPartialExec = txRollback
@@ -530,8 +536,6 @@ func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedS
 			vc.safeSession.rollbackOnPartialExec = fmt.Sprintf("rollback to %s", uID)
 		}
 	}
-
-	return errs
 }
 
 // ExecuteKeyspaceID is part of the engine.VCursor interface.
