@@ -69,14 +69,14 @@
 }
 
 .button.sizeLarge {
-    font-size: var(--fontSizeLarge);
+    font-size: theme('fontSize.lg');
     height: var(--inputHeightLarge);
     padding: 0 16px;
 }
 
 .button.sizeSmall {
     border-width: 1px;
-    font-size: var(--fontSizeSmall);
+    font-size: theme('fontSize.lg');
     height: var(--inputHeightSmall);
     padding: 0 6px;
 }

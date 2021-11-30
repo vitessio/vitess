@@ -27,7 +27,7 @@
     }
 
     &.large {
-        font-size: var(--fontSizeLarge);
+        font-size: theme('fontSize.lg');
     }
 
     &::after {
