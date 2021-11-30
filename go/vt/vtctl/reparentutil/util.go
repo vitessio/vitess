@@ -125,9 +125,14 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 		return mysql.Position{}, err
 	}
 
-	pos, err := mysql.DecodePosition(status.Position)
+	// Use the relay log position if available, otherwise use the executed GTID set (binary log position).
+	positionString := status.Position
+	if status.RelayLogPosition != "" {
+		positionString = status.RelayLogPosition
+	}
+	pos, err := mysql.DecodePosition(positionString)
 	if err != nil {
-		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", positionString, topoproto.TabletAliasString(tablet.Alias), err)
 		return mysql.Position{}, err
 	}
 
