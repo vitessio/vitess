@@ -34,6 +34,9 @@ func buildQuery(op abstract.PhysicalOperator, qb *queryBuilder) {
 	switch op := op.(type) {
 	case *tableOp:
 		qb.addTable(op.qtable.Table.Name.String())
+		for _, pred := range op.qtable.Predicates {
+			qb.addPredicate(pred)
+		}
 	// case *join:
 	// 	buildQuery(op.lhs, qb)
 	// 	qbR := &queryBuilder{}
