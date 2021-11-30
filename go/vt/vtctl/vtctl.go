@@ -3328,6 +3328,14 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag
 			uuid = arg
 			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
 		}
+	case "complete":
+		{
+			if arg == "" {
+				return fmt.Errorf("UUID required")
+			}
+			uuid = arg
+			query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='complete' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		}
 	case "cancel":
 		{
 			if arg == "" {
