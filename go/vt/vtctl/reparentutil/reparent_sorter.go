@@ -80,8 +80,8 @@ func (rs *reparentSorter) Less(i, j int) bool {
 	return !jPromotionRule.BetterThan(iPromotionRule)
 }
 
-// sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard
-// primary sorting is via the tablet positions, and ties are broken by the promotion rules.
+// sortTabletsForReparent sorts the tablets, given their positions for emergency reparent shard and planned reparent shard.
+// Tablets are sorted first by their replication positions, with ties broken by the promotion rules.
 func sortTabletsForReparent(tablets []*topodatapb.Tablet, positions []mysql.Position) error {
 	// throw an error internal error in case of unequal number of tablets and positions
 	// fail-safe code prevents panic in sorting in case the lengths are unequal
