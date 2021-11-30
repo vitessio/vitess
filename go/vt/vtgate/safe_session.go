@@ -191,7 +191,6 @@ func (session *SafeSession) AutocommitApproval() bool {
 // Calling the function multiple times will have no effect, only the first call would be used.
 // Default state is savepointStateNotSet,
 // if savepoint needed (spNeed true) then it will be set to savepointNeeded otherwise savepointNotNeeded.
-
 func (session *SafeSession) SetSavepointState(spNeed bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -626,6 +625,7 @@ func (session *SafeSession) getSelectLimit() int {
 	return int(session.Options.SqlSelectLimit)
 }
 
+// isTxOpen returns true if there is open connection to any of the shard.
 func (session *SafeSession) isTxOpen() bool {
 	session.mu.Lock()
 	defer session.mu.Unlock()
@@ -633,7 +633,8 @@ func (session *SafeSession) isTxOpen() bool {
 	return len(session.ShardSessions) > 0 || len(session.PreSessions) > 0 || len(session.PostSessions) > 0
 }
 
-func (session *SafeSession) GetSessions() []*vtgatepb.Session_ShardSession {
+// getSessions returns the shard session for the current commit order.
+func (session *SafeSession) getSessions() []*vtgatepb.Session_ShardSession {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 
