@@ -70,12 +70,6 @@ func TestOpenAndReload(t *testing.T) {
 			StatusFlags:         0,
 		})
 
-	// pre-advance to above the default 1427325875.
-	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"t",
-		"int64"),
-		"1427325876",
-	))
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 	se := newEngine(10, 10*time.Second, 10*time.Second, db)
@@ -84,14 +78,10 @@ func TestOpenAndReload(t *testing.T) {
 
 	want := initialSchema()
 	mustMatch(t, want, se.GetSchema())
-
-	// Advance time some more.
-	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"t",
-		"int64"),
-		"1427325877",
-	))
+	assert.Equal(t, int64(100), se.tableFileSizeGauge.Counts()["msg"])
+	assert.Equal(t, int64(150), se.tableAllocatedSizeGauge.Counts()["msg"])
 	assert.EqualValues(t, firstReadRowsValue, se.innoDbReadRowsGauge.Get())
+
 	// Modify test_table_03
 	// Add test_table_04
 	// Drop msg
@@ -104,7 +94,7 @@ func TestOpenAndReload(t *testing.T) {
 			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")), // table_name
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),    // table_type
-				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time) // Match the timestamp.
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),      // unix_timestamp(t.create_time)
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),              // table_comment
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")),             // file_size
 				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")),             // allocated_size
@@ -180,6 +170,7 @@ func TestOpenAndReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 		PKColumns:     []int{0, 1},
+		CreateTime:    1427325877,
 		FileSize:      128,
 		AllocatedSize: 256,
 	}
@@ -190,6 +181,7 @@ func TestOpenAndReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 		PKColumns:     []int{0},
+		CreateTime:    1427325875,
 		FileSize:      100,
 		AllocatedSize: 150,
 	}
@@ -217,7 +209,6 @@ func TestOpenAndReload(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
 			mysql.BaseShowTablesRow("test_table_02", false, ""),
-			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
 			mysql.BaseShowTablesRow("test_table_04", false, ""),
 			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
@@ -241,65 +232,159 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, want, se.GetSchema())
 }
 
-func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
+func TestReloadWithSwappedTables(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
-		// Make this query fail by returning 2 values.
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Uint64},
-		},
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarBinary("1427325875")},
-			{sqltypes.NewVarBinary("1427325875")},
-		},
-	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
-	err := se.Open()
-	want := "could not get MySQL time"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
 	}
-}
+	db.AddQueryPattern(baseShowTablesPattern,
+		&sqltypes.Result{
+			Fields:       mysql.BaseShowTablesFields,
+			RowsAffected: 0,
+			InsertID:     0,
+			Rows: [][]sqltypes.Value{
+				mysql.BaseShowTablesRow("test_table_01", false, ""),
+				mysql.BaseShowTablesRow("test_table_02", false, ""),
+				mysql.BaseShowTablesRow("test_table_03", false, ""),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+			},
+			SessionStateChanges: "",
+			StatusFlags:         0,
+		})
+	firstReadRowsValue := 12
+	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
 
-func TestOpenFailedDueToIncorrectMysqlRowNum(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Type: sqltypes.Uint64,
-		}},
-		Rows: [][]sqltypes.Value{
-			// make this query fail by returning NULL
-			{sqltypes.NULL},
-		},
-	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
-	err := se.Open()
-	want := "unexpected result for MySQL time"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
-	}
-}
+	se := newEngine(10, 10*time.Second, 10*time.Second, db)
+	se.Open()
+	defer se.Close()
+	want := initialSchema()
+	mustMatch(t, want, se.GetSchema())
 
-func TestOpenFailedDueToInvalidTimeFormat(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	db.AddQuery("select unix_timestamp()", &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Type: sqltypes.VarChar,
-		}},
+	// Add test_table_04 with a newer timestamp
+	db.ClearQueryPattern()
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
-			// make safety check fail, invalid time format
-			{sqltypes.NewVarBinary("invalid_time")},
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			mysql.BaseShowTablesRow("test_table_03", false, ""),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_04")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")), // unix_timestamp(create_time)
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
+			},
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 		},
 	})
-	se := newEngine(10, 1*time.Second, 1*time.Second, db)
-	err := se.Open()
-	want := "could not parse time"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("se.Open: %v, want %s", err, want)
+	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "mypk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+			mysql.ShowPrimaryRow("test_table_02", "pk"),
+			mysql.ShowPrimaryRow("test_table_03", "pk"),
+			mysql.ShowPrimaryRow("test_table_04", "mypk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+			mysql.ShowPrimaryRow("msg", "id"),
+		},
+	})
+	err := se.Reload(context.Background())
+	require.NoError(t, err)
+	want["test_table_04"] = &Table{
+		Name: sqlparser.NewTableIdent("test_table_04"),
+		Fields: []*querypb.Field{{
+			Name: "mypk",
+			Type: sqltypes.Int32,
+		}},
+		PKColumns:     []int{0},
+		CreateTime:    1427325877,
+		FileSize:      128,
+		AllocatedSize: 256,
 	}
+	assert.Equal(t, want, se.GetSchema())
+
+	// swap test_table_03 and test_table_04
+	db.ClearQueryPattern()
+	db.AddQueryPattern(baseShowTablesPattern, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")), // unix_timestamp(create_time)
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("128")), // file_size
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("256")), // allocated_size
+			},
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+			mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+		},
+	})
+	db.AddQuery("select * from test_table_03 where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "mypk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+			mysql.ShowPrimaryRow("test_table_02", "pk"),
+			mysql.ShowPrimaryRow("test_table_03", "mypk"),
+			mysql.ShowPrimaryRow("test_table_04", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
+			mysql.ShowPrimaryRow("msg", "id"),
+		},
+	})
+	err = se.Reload(context.Background())
+	require.NoError(t, err)
+
+	delete(want, "test_table_03")
+	delete(want, "test_table_04")
+	want["test_table_03"] = &Table{
+		Name: sqlparser.NewTableIdent("test_table_03"),
+		Fields: []*querypb.Field{{
+			Name: "mypk",
+			Type: sqltypes.Int32,
+		}},
+		PKColumns:     []int{0},
+		CreateTime:    1427325877,
+		FileSize:      128,
+		AllocatedSize: 256,
+	}
+	want["test_table_04"] = &Table{
+		Name: sqlparser.NewTableIdent("test_table_04"),
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+		PKColumns:     []int{0},
+		CreateTime:    1427325875,
+		FileSize:      100,
+		AllocatedSize: 150,
+	}
+	assert.Equal(t, want, se.GetSchema())
 }
 
 func TestOpenFailedDueToExecErr(t *testing.T) {
@@ -409,6 +494,7 @@ func initialSchema() map[string]*Table {
 				Type: sqltypes.Int32,
 			}},
 			PKColumns:     []int{0},
+			CreateTime:    1427325875,
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
 		},
@@ -419,6 +505,7 @@ func initialSchema() map[string]*Table {
 				Type: sqltypes.Int32,
 			}},
 			PKColumns:     []int{0},
+			CreateTime:    1427325875,
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
 		},
@@ -429,6 +516,7 @@ func initialSchema() map[string]*Table {
 				Type: sqltypes.Int32,
 			}},
 			PKColumns:     []int{0},
+			CreateTime:    1427325875,
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
 		},
@@ -449,6 +537,7 @@ func initialSchema() map[string]*Table {
 				Type: sqltypes.Int64,
 			}},
 			PKColumns:     []int{0},
+			CreateTime:    1427325875,
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
 			SequenceInfo:  &SequenceInfo{},
@@ -476,6 +565,7 @@ func initialSchema() map[string]*Table {
 				Type: sqltypes.Int64,
 			}},
 			PKColumns:     []int{0},
+			CreateTime:    1427325875,
 			FileSize:      0x64,
 			AllocatedSize: 0x96,
 			MessageInfo: &MessageInfo{

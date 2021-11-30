@@ -60,7 +60,6 @@ type Engine struct {
 	mu         sync.Mutex
 	isOpen     bool
 	tables     map[string]*Table
-	lastChange int64
 	reloadTime time.Duration
 	//the position at which the schema was last loaded. it is only used in conjunction with ReloadAt
 	reloadAtPos mysql.Position
@@ -234,7 +233,6 @@ func (se *Engine) Close() {
 	se.conns.Close()
 
 	se.tables = make(map[string]*Table)
-	se.lastChange = 0
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = false
 	log.Info("Schema Engine: closed")
@@ -302,11 +300,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	}
 	defer conn.Recycle()
 
-	// curTime will be saved into lastChange after schema is loaded.
-	curTime, err := se.mysqlTime(ctx, conn)
-	if err != nil {
-		return err
-	}
 	// if this flag is set, then we don't need table meta information
 	if se.SkipMetaCheck {
 		return nil
@@ -342,7 +335,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		// TODO(sougou); find a better way detect changed tables. This method
 		// seems unreliable. The endtoend test flags all tables as changed.
 		tbl, isInTablesMap := se.tables[tableName]
-		if isInTablesMap && createTime < se.lastChange {
+		if isInTablesMap && createTime == tbl.CreateTime {
 			tbl.FileSize = fileSize
 			tbl.AllocatedSize = allocatedSize
 			continue
@@ -356,6 +349,7 @@ func (se *Engine) reload(ctx context.Context) error {
 		}
 		table.FileSize = fileSize
 		table.AllocatedSize = allocatedSize
+		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {
 			altered = append(altered, tableName)
@@ -381,11 +375,10 @@ func (se *Engine) reload(ctx context.Context) error {
 		return err
 	}
 
-	// Update se.tables and se.lastChange
+	// Update se.tables
 	for k, t := range changedTables {
 		se.tables[k] = t
 	}
-	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Infof("schema engine created %v, altered %v, dropped %v", created, altered, dropped)
 	}
