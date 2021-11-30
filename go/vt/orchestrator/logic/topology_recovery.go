@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 
@@ -1635,171 +1637,134 @@ func ForcePrimaryTakeover(clusterName string, destination *inst.Instance) (topol
 	return topologyRecovery, nil
 }
 
-func getGracefulPrimaryTakeoverDesignatedInstance(clusterPrimaryKey *inst.InstanceKey, designatedKey *inst.InstanceKey, clusterPrimaryDirectReplicas [](*inst.Instance), auto bool) (designatedInstance *inst.Instance, err error) {
-	if designatedKey == nil {
-		// User did not specify a replica to promote
-		if len(clusterPrimaryDirectReplicas) == 1 {
-			// Single replica. That's the one we'll promote
-			return clusterPrimaryDirectReplicas[0], nil
-		}
-		// More than one replica.
-		if !auto {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: target instance not indicated, auto=false, and primary %+v has %+v replicas. orchestrator cannot choose where to failover to. Aborting", *clusterPrimaryKey, len(clusterPrimaryDirectReplicas))
-		}
-		log.Debugf("GracefulPrimaryTakeover: request takeover for primary %+v, no designated replica indicated. orchestrator will attempt to auto deduce replica.", *clusterPrimaryKey)
-		designatedInstance, _, _, _, _, err = inst.GetCandidateReplica(clusterPrimaryKey, false)
-		if err != nil || designatedInstance == nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover: no target instance indicated, failed to auto-detect candidate replica for primary %+v. Aborting", *clusterPrimaryKey)
-		}
-		log.Debugf("GracefulPrimaryTakeover: candidateReplica=%+v", designatedInstance.Key)
-		if _, err := inst.StartReplication(&designatedInstance.Key); err != nil {
-			return nil, fmt.Errorf("GracefulPrimaryTakeover:cannot start replication on designated replica %+v. Aborting", designatedKey)
-		}
-		log.Infof("GracefulPrimaryTakeover: designated primary deduced to be %+v", designatedInstance.Key)
-		return designatedInstance, nil
-	}
-
-	// Verify designated instance is a direct replica of primary
-	for _, directReplica := range clusterPrimaryDirectReplicas {
-		if directReplica.Key.Equals(designatedKey) {
-			designatedInstance = directReplica
-		}
-	}
-	if designatedInstance == nil {
-		return nil, fmt.Errorf("GracefulPrimaryTakeover: indicated designated instance %+v must be directly replicating from the primary %+v", *designatedKey, *clusterPrimaryKey)
-	}
-	log.Infof("GracefulPrimaryTakeover: designated primary instructed to be %+v", designatedInstance.Key)
-	return designatedInstance, nil
-}
-
 // GracefulPrimaryTakeover will demote primary of existing topology and promote its
 // direct replica instead.
 // It expects that replica to have no siblings.
 // This function is graceful in that it will first lock down the primary, then wait
 // for the designated replica to catch up with last position.
 // It will point old primary at the newly promoted primary at the correct coordinates.
-func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey, auto bool) (topologyRecovery *TopologyRecovery, promotedPrimaryCoordinates *inst.BinlogCoordinates, err error) {
+// All of this is accomplished via PlannedReparentShard operation. It is an idempotent operation, look at its documentation for more detail
+func GracefulPrimaryTakeover(clusterName string, designatedKey *inst.InstanceKey) (topologyRecovery *TopologyRecovery, err error) {
 	clusterPrimaries, err := inst.ReadClusterPrimary(clusterName)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v; error: %+v", clusterName, err)
 	}
 	if len(clusterPrimaries) != 1 {
-		return nil, nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
+		return nil, fmt.Errorf("Cannot deduce cluster primary for %+v. Found %+v potential primarys", clusterName, len(clusterPrimaries))
 	}
 	clusterPrimary := clusterPrimaries[0]
 
-	clusterPrimaryDirectReplicas, err := inst.ReadReplicaInstances(&clusterPrimary.Key)
+	analysisEntry, err := forceAnalysisEntry(clusterName, inst.PlannedReparentShard, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
 	if err != nil {
-		return nil, nil, log.Errore(err)
+		return nil, err
+	}
+	topologyRecovery, err = AttemptRecoveryRegistration(&analysisEntry, false /*failIfFailedInstanceInActiveRecovery*/, false /*failIfClusterInActiveRecovery*/)
+	if topologyRecovery == nil || err != nil {
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("could not register recovery on %+v. Unable to issue PlannedReparentShard.", analysisEntry.AnalyzedInstanceKey))
+		return topologyRecovery, err
 	}
 
-	if len(clusterPrimaryDirectReplicas) == 0 {
-		return nil, nil, fmt.Errorf("Primary %+v doesn't seem to have replicas", clusterPrimary.Key)
+	primaryTablet, err := inst.ReadTablet(clusterPrimary.Key)
+	if err != nil {
+		return topologyRecovery, err
 	}
-
 	if designatedKey != nil && !designatedKey.IsValid() {
 		// An empty or invalid key is as good as no key
 		designatedKey = nil
 	}
-	designatedInstance, err := getGracefulPrimaryTakeoverDesignatedInstance(&clusterPrimary.Key, designatedKey, clusterPrimaryDirectReplicas, auto)
-	if err != nil {
-		return nil, nil, log.Errore(err)
+	var designatedTabletAlias *topodatapb.TabletAlias
+	if designatedKey != nil {
+		designatedTablet, err := inst.ReadTablet(*designatedKey)
+		if err != nil {
+			return topologyRecovery, err
+		}
+		designatedTabletAlias = designatedTablet.Alias
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("started PlannedReparentShard, new primary will be %s.", topoproto.TabletAliasString(designatedTabletAlias)))
+	} else {
+		AuditTopologyRecovery(topologyRecovery, "started PlannedReparentShard with automatic primary selection.")
 	}
 
-	if inst.IsBannedFromBeingCandidateReplica(designatedInstance) {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: designated instance %+v cannot be promoted due to promotion rule or it is explicitly ignored in PromotionIgnoreHostnameFilters configuration", designatedInstance.Key)
+	// check for the constraint failure for cross cell promotion
+	if designatedTabletAlias != nil && designatedTabletAlias.Cell != primaryTablet.Alias.Cell && config.Config.PreventCrossDataCenterPrimaryFailover {
+		errorMessage := fmt.Sprintf("GracefulPrimaryTakeover: constraint failure - %s and %s are in different cells", topoproto.TabletAliasString(designatedTabletAlias), topoproto.TabletAliasString(primaryTablet.Alias))
+		AuditTopologyRecovery(topologyRecovery, errorMessage)
+		return topologyRecovery, fmt.Errorf(errorMessage)
 	}
 
-	primaryOfDesignatedInstance, err := inst.GetInstancePrimary(designatedInstance)
-	if err != nil {
-		return nil, nil, err
-	}
-	if !primaryOfDesignatedInstance.Key.Equals(&clusterPrimary.Key) {
-		return nil, nil, fmt.Errorf("Sanity check failure. It seems like the designated instance %+v does not replicate from the primary %+v (designated instance's primary key is %+v). This error is strange. Panicking", designatedInstance.Key, clusterPrimary.Key, designatedInstance.SourceKey)
-	}
-	if !designatedInstance.HasReasonableMaintenanceReplicationLag() {
-		return nil, nil, fmt.Errorf("Desginated instance %+v seems to be lagging to much for thie operation. Aborting.", designatedInstance.Key)
-	}
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmclient.NewTabletManagerClient(), logutil.NewCallbackLogger(func(event *logutilpb.Event) {
+		level := event.GetLevel()
+		value := event.GetValue()
+		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
+		switch level {
+		case logutilpb.Level_WARNING:
+			log.Warningf("PRS - %s", value)
+		case logutilpb.Level_ERROR:
+			log.Errorf("PRS - %s", value)
+		}
+		AuditTopologyRecovery(topologyRecovery, value)
+	})).ReparentShard(context.Background(),
+		primaryTablet.Keyspace,
+		primaryTablet.Shard,
+		reparentutil.PlannedReparentOptions{
+			NewPrimaryAlias:     designatedTabletAlias,
+			WaitReplicasTimeout: time.Duration(config.Config.WaitReplicasTimeoutSeconds) * time.Second,
+		},
+	)
 
-	if len(clusterPrimaryDirectReplicas) > 1 {
-		log.Infof("GracefulPrimaryTakeover: Will let %+v take over its siblings", designatedInstance.Key)
-		relocatedReplicas, _, err, _ := inst.RelocateReplicas(&clusterPrimary.Key, &designatedInstance.Key, "")
-		if len(relocatedReplicas) != len(clusterPrimaryDirectReplicas)-1 {
-			// We are unable to make designated instance primary of all its siblings
-			relocatedReplicasKeyMap := inst.NewInstanceKeyMap()
-			relocatedReplicasKeyMap.AddInstances(relocatedReplicas)
-			// Let's see which replicas have not been relocated
-			for _, directReplica := range clusterPrimaryDirectReplicas {
-				if relocatedReplicasKeyMap.HasKey(directReplica.Key) {
-					// relocated, good
-					continue
-				}
-				if directReplica.Key.Equals(&designatedInstance.Key) {
-					// obviously we skip this one
-					continue
-				}
-				if directReplica.IsDowntimed {
-					// obviously we skip this one
-					log.Warningf("GracefulPrimaryTakeover: unable to relocate %+v below designated %+v, but since it is downtimed (downtime reason: %s) I will proceed", directReplica.Key, designatedInstance.Key, directReplica.DowntimeReason)
-					continue
-				}
-				return nil, nil, fmt.Errorf("Desginated instance %+v cannot take over all of its siblings. Error: %+v", designatedInstance.Key, err)
+	// here we need to forcefully refresh all the tablets otherwise old information is used and failover scenarios are spawned off which are not required
+	// For example, if we do not refresh the tablets forcefully and the new primary is found in the cache then its source key is not updated and this spawns off
+	// PrimaryHasPrimary analysis which runs ERS
+	RefreshTablets(true /* forceRefresh */)
+	var promotedReplica *inst.Instance
+	if ev.NewPrimary != nil {
+		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
+			Hostname: ev.NewPrimary.MysqlHostname,
+			Port:     int(ev.NewPrimary.MysqlPort),
+		})
+	}
+	postPrsCompletion(topologyRecovery, analysisEntry, promotedReplica)
+	return topologyRecovery, err
+}
+
+func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.ReplicationAnalysis, promotedReplica *inst.Instance) {
+	if promotedReplica != nil {
+		message := fmt.Sprintf("promoted replica: %+v", promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, message)
+		inst.AuditOperation("graceful-primary-takeover", &analysisEntry.AnalyzedInstanceKey, message)
+	}
+	// And this is the end; whether successful or not, we're done.
+	resolveRecovery(topologyRecovery, promotedReplica)
+	// Now, see whether we are successful or not. From this point there's no going back.
+	if promotedReplica != nil {
+		// Success!
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("GracefulPrimaryTakeover: successfully promoted %+v", promotedReplica.Key))
+
+		kvPairs := inst.GetClusterPrimaryKVPairs(analysisEntry.ClusterDetails.ClusterAlias, &promotedReplica.Key)
+		AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Writing KV %+v", kvPairs))
+		for _, kvPair := range kvPairs {
+			err := kv.PutKVPair(kvPair)
+			log.Errore(err)
+		}
+		{
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("Distributing KV %+v", kvPairs))
+			err := kv.DistributePairs(kvPairs)
+			log.Errore(err)
+		}
+		func() error {
+			before := analysisEntry.AnalyzedInstanceKey.StringCode()
+			after := promotedReplica.Key.StringCode()
+			AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("- GracefulPrimaryTakeover: updating cluster_alias: %v -> %v", before, after))
+			//~~~inst.ReplaceClusterName(before, after)
+			if alias := analysisEntry.ClusterDetails.ClusterAlias; alias != "" {
+				inst.SetClusterAlias(promotedReplica.Key.StringCode(), alias)
+			} else {
+				inst.ReplaceAliasClusterName(before, after)
 			}
-		}
-	}
-	log.Infof("GracefulPrimaryTakeover: Will demote %+v and promote %+v instead", clusterPrimary.Key, designatedInstance.Key)
+			return nil
+		}()
 
-	analysisEntry, err := forceAnalysisEntry(clusterName, inst.DeadPrimary, inst.GracefulPrimaryTakeoverCommandHint, &clusterPrimary.Key)
-	if err != nil {
-		return nil, nil, err
+		attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
-	preGracefulTakeoverTopologyRecovery := &TopologyRecovery{
-		SuccessorKey:  &designatedInstance.Key,
-		AnalysisEntry: analysisEntry,
-	}
-	if err := executeProcesses(config.Config.PreGracefulTakeoverProcesses, "PreGracefulTakeoverProcesses", preGracefulTakeoverTopologyRecovery, true); err != nil {
-		return nil, nil, fmt.Errorf("Failed running PreGracefulTakeoverProcesses: %+v", err)
-	}
-	demotedPrimarySelfBinlogCoordinates := &clusterPrimary.SelfBinlogCoordinates
-	log.Infof("GracefulPrimaryTakeover: Will wait for %+v to reach primary coordinates %+v", designatedInstance.Key, *demotedPrimarySelfBinlogCoordinates)
-	if designatedInstance, _, err = inst.WaitForExecBinlogCoordinatesToReach(&designatedInstance.Key, demotedPrimarySelfBinlogCoordinates, time.Duration(config.Config.ReasonableMaintenanceReplicationLagSeconds)*time.Second); err != nil {
-		return nil, nil, err
-	}
-	promotedPrimaryCoordinates = &designatedInstance.SelfBinlogCoordinates
-
-	log.Infof("GracefulPrimaryTakeover: attempting recovery")
-	recoveryAttempted, topologyRecovery, err := ForceExecuteRecovery(analysisEntry, &designatedInstance.Key, false)
-	if err != nil {
-		log.Errorf("GracefulPrimaryTakeover: noting an error, and for now proceeding: %+v", err)
-	}
-	if !recoveryAttempted {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: unexpected error: recovery not attempted. This should not happen")
-	}
-	if topologyRecovery == nil {
-		return nil, nil, fmt.Errorf("GracefulPrimaryTakeover: recovery attempted but with no results. This should not happen")
-	}
-	var gtidHint inst.OperationGTIDHint = inst.GTIDHintNeutral
-	if topologyRecovery.RecoveryType == PrimaryRecoveryGTID {
-		gtidHint = inst.GTIDHintForce
-	}
-	clusterPrimary, err = inst.ChangePrimaryTo(&clusterPrimary.Key, &designatedInstance.Key, promotedPrimaryCoordinates, false, gtidHint)
-	if !clusterPrimary.SelfBinlogCoordinates.Equals(demotedPrimarySelfBinlogCoordinates) {
-		log.Errorf("GracefulPrimaryTakeover: sanity problem. Demoted primary's coordinates changed from %+v to %+v while supposed to have been frozen", *demotedPrimarySelfBinlogCoordinates, clusterPrimary.SelfBinlogCoordinates)
-	}
-	_, startReplicationErr := inst.StartReplication(&clusterPrimary.Key)
-	if err == nil {
-		err = startReplicationErr
-	}
-
-	if designatedInstance.AllowTLS {
-		_, enableSSLErr := inst.EnablePrimarySSL(&clusterPrimary.Key)
-		if err == nil {
-			err = enableSSLErr
-		}
-	}
-	executeProcesses(config.Config.PostGracefulTakeoverProcesses, "PostGracefulTakeoverProcesses", topologyRecovery, false)
-
-	return topologyRecovery, promotedPrimaryCoordinates, err
 }
 
 // electNewPrimary elects a new primary while none were present before.

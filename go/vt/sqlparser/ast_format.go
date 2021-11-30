@@ -436,6 +436,91 @@ func (node *PartitionDefinition) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PartitionOption) Format(buf *TrackedBuffer) {
+	buf.WriteString("partition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " %v", node.KeyColList)
+		}
+	}
+	if node.RangeOrList != "" {
+		buf.astPrintf(node, " %s", node.RangeOrList)
+		buf.astPrintf(node, " %v", node.ExprOrCol)
+	}
+	if node.Partitions != "" {
+		buf.astPrintf(node, " partitions %s", node.Partitions)
+	}
+	if node.SubPartition != nil {
+		buf.astPrintf(node, " %v", node.SubPartition)
+	}
+	if node.Definitions != nil {
+		buf.WriteString(" (")
+		for i, pd := range node.Definitions {
+			if i != 0 {
+				buf.WriteString(", ")
+			}
+			buf.astPrintf(node, "%v", pd)
+		}
+		buf.WriteString(")")
+	}
+}
+
+// Format formats the node.
+func (node *SubPartition) Format(buf *TrackedBuffer) {
+	buf.WriteString("subpartition by")
+	if node.isHASH {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" hash")
+		if node.Expr != nil {
+			buf.astPrintf(node, " (%v)", node.Expr)
+		}
+	}
+	if node.isKEY {
+		if node.Linear != "" {
+			buf.astPrintf(node, " %s", node.Linear)
+		}
+		buf.WriteString(" key")
+		if node.KeyAlgorithm != "" {
+			buf.astPrintf(node, " algorithm = %s", node.KeyAlgorithm)
+		}
+		if node.KeyColList != nil {
+			buf.astPrintf(node, " (%v)", node.KeyColList)
+		}
+	}
+	if node.SubPartitions != "" {
+		buf.astPrintf(node, " subpartitions %s", node.SubPartitions)
+	}
+}
+
+// Format formats the node.
+func (node *ExprOrColumns) Format(buf *TrackedBuffer) {
+	if node.Expr != nil {
+		buf.astPrintf(node, "(%v)", node.Expr)
+	}
+	if node.ColumnList != nil {
+		buf.astPrintf(node, "columns %v", node.ColumnList)
+	}
+}
+
+// Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	buf.astPrintf(ts, "(\n")
 	for i, col := range ts.Columns {
@@ -465,6 +550,9 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 		} else {
 			buf.astPrintf(ts, " (%v)", opt.Tables)
 		}
+	}
+	if ts.PartitionOption != nil {
+		buf.astPrintf(ts, " %v", ts.PartitionOption)
 	}
 }
 
@@ -497,8 +585,8 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Charset != "" {
 		buf.astPrintf(ct, " %s %s %s", keywordStrings[CHARACTER], keywordStrings[SET], ct.Charset)
 	}
-	if ct.Collate != "" {
-		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Collate)
+	if ct.Options != nil && ct.Options.Collate != "" {
+		buf.astPrintf(ct, " %s %s", keywordStrings[COLLATE], ct.Options.Collate)
 	}
 	if ct.Options.Null != nil && ct.Options.As == nil {
 		if *ct.Options.Null {
@@ -1010,8 +1098,12 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v %s %l and %r", node.Left, node.Operator.ToString(), node.From, node.To)
+func (node *BetweenExpr) Format(buf *TrackedBuffer) {
+	if node.IsBetween {
+		buf.astPrintf(node, "%v between %l and %r", node.Left, node.From, node.To)
+	} else {
+		buf.astPrintf(node, "%v not between %l and %r", node.Left, node.From, node.To)
+	}
 }
 
 // Format formats the node.
@@ -1119,12 +1211,16 @@ func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s(%v)", node.Name.String(), node.Fsp)
+	if node.Fsp != nil {
+		buf.astPrintf(node, "%s(%v)", node.Name.String(), node.Fsp)
+	} else {
+		buf.astPrintf(node, "%s()", node.Name.String())
+	}
 }
 
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%v collate %s", node.Expr, node.Charset)
+	buf.astPrintf(node, "%v collate %s", node.Expr, node.Collation)
 }
 
 // Format formats the node.
@@ -1164,17 +1260,10 @@ func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *SubstrExpr) Format(buf *TrackedBuffer) {
-	var val SQLNode
-	if node.Name != nil {
-		val = node.Name
-	} else {
-		val = node.StrVal
-	}
-
 	if node.To == nil {
-		buf.astPrintf(node, "substr(%v, %v)", val, node.From)
+		buf.astPrintf(node, "substr(%v, %v)", node.Name, node.From)
 	} else {
-		buf.astPrintf(node, "substr(%v, %v, %v)", val, node.From, node.To)
+		buf.astPrintf(node, "substr(%v, %v, %v)", node.Name, node.From, node.To)
 	}
 }
 

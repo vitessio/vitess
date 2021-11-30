@@ -161,7 +161,7 @@ performPadding:
 	return dst
 }
 
-func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) uintptr {
+func (c *Collation_utf8mb4_uca_0900) Hash(src []byte, _ int) HashCode {
 	var hash = uintptr(c.id)
 
 	it := c.uca.Iterator(src)
@@ -200,6 +200,10 @@ func (c *Collation_utf8mb4_uca_0900) WeightStringLen(numBytes int) int {
 	return weights * 2    // two bytes per weight
 }
 
+func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
+}
+
 type Collation_utf8mb4_0900_bin struct{}
 
 func (c *Collation_utf8mb4_0900_bin) Init() {}
@@ -234,12 +238,19 @@ func (c *Collation_utf8mb4_0900_bin) WeightString(dst, src []byte, numCodepoints
 	return dst
 }
 
-func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) uintptr {
+func (c *Collation_utf8mb4_0900_bin) Hash(src []byte, _ int) HashCode {
 	return memhash(src, 0xb900b900)
 }
 
 func (c *Collation_utf8mb4_0900_bin) WeightStringLen(numBytes int) int {
 	return numBytes
+}
+
+func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	equals := func(a, b rune) bool {
+		return a == b
+	}
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
 type Collation_uca_legacy struct {
@@ -340,7 +351,7 @@ func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) 
 	return dst
 }
 
-func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) uintptr {
+func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) HashCode {
 	it := c.uca.Iterator(src)
 	defer it.Done()
 
@@ -368,4 +379,8 @@ func (c *Collation_uca_legacy) Hash(src []byte, numCodepoints int) uintptr {
 func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
 	// TODO: This is literally the worst case scenario. Improve on this.
 	return numBytes * 8
+}
+
+func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
+	return newUnicodeWildcardMatcher(c.charset, c.uca.WeightsEqual, c.Collate, pat, matchOne, matchMany, escape)
 }

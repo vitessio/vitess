@@ -101,14 +101,14 @@ func isPod(tt types.Type) bool {
 			}
 		}
 		return true
-
+	case *types.Named:
+		return isPod(tt.Underlying())
 	case *types.Basic:
 		switch tt.Kind() {
 		case types.String, types.UnsafePointer:
 			return false
 		}
 		return true
-
 	default:
 		return false
 	}
@@ -333,30 +333,44 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 	case *types.Slice:
 		elemT := node.Elem()
 		elemSize := sizegen.sizes.Sizeof(elemT)
+		var cond *jen.Statement
+		var stmt []jen.Code
+		var flag codeFlag
+
+		if alloc {
+			cond = jen.If(fieldName.Clone().Op("!=").Nil())
+			fieldName = jen.Op("*").Add(fieldName)
+			stmt = append(stmt, jen.Id("size").Op("+=").Lit(hack.RuntimeAllocSize(8*3)))
+		}
 
 		switch elemSize {
 		case 0:
 			return nil, 0
 
 		case 1:
-			return jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))), 0
+			stmt = append(stmt, jen.Id("size").Op("+=").Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)))))
 
 		default:
-			stmt, flag := sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
-			return jen.BlockFunc(func(b *jen.Group) {
-				b.Add(
-					jen.Id("size").
-						Op("+=").
-						Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
-							Op("*").
-							Lit(sizegen.sizes.Sizeof(elemT))),
-						))
+			var nested jen.Code
+			nested, flag = sizegen.sizeStmtForType(jen.Id("elem"), elemT, false)
 
-				if stmt != nil {
-					b.Add(jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(stmt))
-				}
-			}), flag
+			stmt = append(stmt,
+				jen.Id("size").
+					Op("+=").
+					Do(mallocsize(jen.Int64().Call(jen.Cap(fieldName)).
+						Op("*").
+						Lit(sizegen.sizes.Sizeof(elemT))),
+					))
+
+			if nested != nil {
+				stmt = append(stmt, jen.For(jen.List(jen.Id("_"), jen.Id("elem")).Op(":=").Range().Add(fieldName)).Block(nested))
+			}
 		}
+
+		if cond != nil {
+			return cond.Block(stmt...), flag
+		}
+		return jen.Block(stmt...), flag
 
 	case *types.Map:
 		keySize, keyFlag := sizegen.sizeStmtForType(jen.Id("k"), node.Key(), false)
@@ -436,6 +450,11 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 			return nil, 0
 		}
 		return jen.Id("size").Op("+=").Do(mallocsize(jen.Lit(sizegen.sizes.Sizeof(node)))), 0
+
+	case *types.Signature:
+		// assume that function pointers do not allocate (although they might, if they're closures)
+		return nil, 0
+
 	default:
 		log.Printf("unhandled type: %T", node)
 		return nil, 0

@@ -82,6 +82,8 @@ func (cached *Value) CachedSize(alloc bool) int64 {
 		size += int64(32)
 	}
 	// field val []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.val)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.val)))
+	}
 	return size
 }

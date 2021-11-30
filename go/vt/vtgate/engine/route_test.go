@@ -83,7 +83,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	stringListToExprList := func(in []string) []evalengine.Expr {
 		var schema []evalengine.Expr
 		for _, s := range in {
-			schema = append(schema, evalengine.NewLiteralString([]byte(s), 0))
+			schema = append(schema, evalengine.NewLiteralString([]byte(s), collations.TypedCollation{}))
 		}
 		return schema
 	}
@@ -98,7 +98,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	tests := []testCase{{
 		testName:    "both schema and table predicates - routed table",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), 0)},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
 		routed:      true,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -107,7 +107,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	}, {
 		testName:    "both schema and table predicates - not routed",
 		tableSchema: []string{"schema"},
-		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), 0)},
+		tableName:   map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -116,7 +116,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 	}, {
 		testName:    "multiple schema and table predicates",
 		tableSchema: []string{"schema", "schema", "schema"},
-		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), 0), "t2": evalengine.NewLiteralString([]byte("table"), 0), "t3": evalengine.NewLiteralString([]byte("table"), 0)},
+		tableName:   map[string]evalengine.Expr{"t1": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t2": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{}), "t3": evalengine.NewLiteralString([]byte("table"), collations.TypedCollation{})},
 		routed:      false,
 		expectedLog: []string{
 			"FindTable(`schema`.`table`)",
@@ -126,7 +126,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard schema.1: dummy_select {__replacevtschemaname: type:INT64 value:\"1\" t1: type:VARBINARY value:\"table\" t2: type:VARBINARY value:\"table\" t3: type:VARBINARY value:\"table\"} false false"},
 	}, {
 		testName:  "table name predicate - routed table",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), 0)},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
 		routed:    true,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -134,7 +134,7 @@ func TestSelectInformationSchemaWithTableAndSchemaWithRoutedTables(t *testing.T)
 			"ExecuteMultiShard routedKeyspace.1: dummy_select {table_name: type:VARBINARY value:\"routedTable\"} false false"},
 	}, {
 		testName:  "table name predicate - not routed",
-		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), 0)},
+		tableName: map[string]evalengine.Expr{"table_name": evalengine.NewLiteralString([]byte("tableName"), collations.TypedCollation{})},
 		routed:    false,
 		expectedLog: []string{
 			"FindTable(tableName)",
@@ -877,7 +877,7 @@ func TestRouteSort(t *testing.T) {
 		},
 	}
 	_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-	require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+	require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 }
 
 func TestRouteSortWeightStrings(t *testing.T) {
@@ -978,7 +978,7 @@ func TestRouteSortWeightStrings(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, `types are not comparable: VARCHAR vs VARCHAR`)
+		require.EqualError(t, err, `cannot compare strings, collation is unknown or unsupported (collation ID: 0)`)
 	})
 }
 
@@ -993,7 +993,7 @@ func TestRouteSortCollation(t *testing.T) {
 		"dummy_select_field",
 	)
 
-	collationID, _ := collations.Default().LookupID("utf8mb4_hu_0900_ai_ci")
+	collationID, _ := collations.Local().LookupID("utf8mb4_hu_0900_ai_ci")
 
 	sel.OrderBy = []OrderByParams{{
 		Col:         0,
@@ -1083,7 +1083,7 @@ func TestRouteSortCollation(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, "types are not comparable: VARCHAR vs VARCHAR")
+		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 0)")
 	})
 
 	t.Run("Error when Unsupported Collation", func(t *testing.T) {
@@ -1109,7 +1109,7 @@ func TestRouteSortCollation(t *testing.T) {
 			},
 		}
 		_, err = sel.TryExecute(vc, map[string]*querypb.BindVariable{}, false)
-		require.EqualError(t, err, "comparison using collation 1111 isn't possible")
+		require.EqualError(t, err, "cannot compare strings, collation is unknown or unsupported (collation ID: 1111)")
 	})
 }
 

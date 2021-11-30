@@ -140,7 +140,7 @@ func (hp *horizonPlanning) truncateColumnsIfNeeded(plan logicalPlan) error {
 	switch p := plan.(type) {
 	case *route:
 		p.eroute.SetTruncateColumnCount(hp.sel.GetColumnCount())
-	case *joinGen4, *semiJoin:
+	case *joinGen4, *semiJoin, *hashJoin:
 		// since this is a join, we can safely add extra columns and not need to truncate them
 	case *orderedAggregate:
 		p.eaggr.SetTruncateColumnCount(hp.sel.GetColumnCount())
@@ -192,6 +192,51 @@ func pushProjection(expr *sqlparser.AliasedExpr, plan logicalPlan, semTable *sem
 		offset := len(sel.SelectExprs)
 		sel.SelectExprs = append(sel.SelectExprs, expr)
 		return offset, true, nil
+	case *hashJoin:
+		lhsSolves := node.Left.ContainsTables()
+		rhsSolves := node.Right.ContainsTables()
+		deps := semTable.RecursiveDeps(expr.Expr)
+		var column int
+		var appended bool
+		passDownReuseCol := reuseCol
+		if !reuseCol {
+			passDownReuseCol = expr.As.IsEmpty()
+		}
+		switch {
+		case deps.IsSolvedBy(lhsSolves):
+			offset, added, err := pushProjection(expr, node.Left, semTable, inner, passDownReuseCol, hasAggregation)
+			if err != nil {
+				return 0, false, err
+			}
+			column = -(offset + 1)
+			appended = added
+		case deps.IsSolvedBy(rhsSolves):
+			offset, added, err := pushProjection(expr, node.Right, semTable, inner && node.Opcode != engine.LeftJoin, passDownReuseCol, hasAggregation)
+			if err != nil {
+				return 0, false, err
+			}
+			column = offset + 1
+			appended = added
+		default:
+			// if an expression has aggregation, then it should not be split up and pushed to both sides,
+			// for example an expression like count(*) will have dependencies on both sides, but we should not push it
+			// instead we should return an error
+			if hasAggregation {
+				return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			}
+			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: hash join with projection from both sides of the join")
+		}
+		if reuseCol && !appended {
+			for idx, col := range node.Cols {
+				if column == col {
+					return idx, false, nil
+				}
+			}
+			// the column was not appended to either child, but we could not find it in out cols list,
+			// so we'll still add it
+		}
+		node.Cols = append(node.Cols, column)
+		return len(node.Cols) - 1, true, nil
 	case *joinGen4:
 		lhsSolves := node.Left.ContainsTables()
 		rhsSolves := node.Right.ContainsTables()
@@ -399,7 +444,7 @@ func (hp *horizonPlanning) planAggregations(ctx *planningContext, plan logicalPl
 	newPlan := plan
 	var oa *orderedAggregate
 	uniqVindex := hasUniqueVindex(ctx.vschema, ctx.semTable, hp.qp.GroupByExprs)
-	_, joinPlan := plan.(*joinGen4)
+	joinPlan := isJoin(plan)
 	if !uniqVindex || joinPlan {
 		if hp.qp.ProjectionError != nil {
 			return nil, hp.qp.ProjectionError
@@ -576,7 +621,7 @@ func planGroupByGen4(groupExpr abstract.GroupBy, plan logicalPlan, semTable *sem
 			sel.GroupBy = append(sel.GroupBy, weightStringFor(groupExpr.WeightStrExpr))
 		}
 		return false, nil
-	case *joinGen4:
+	case *joinGen4, *hashJoin:
 		_, _, added, err := wrapAndPushExpr(groupExpr.Inner, groupExpr.WeightStrExpr, node, semTable)
 		return added, err
 	case *orderedAggregate:
@@ -640,6 +685,13 @@ func (hp *horizonPlanning) planOrderBy(ctx *planningContext, orderExprs []abstra
 		return newPlan, nil
 	case *joinGen4:
 		newPlan, err := hp.planOrderByForJoin(ctx, orderExprs, plan)
+		if err != nil {
+			return nil, err
+		}
+
+		return newPlan, nil
+	case *hashJoin:
+		newPlan, err := hp.planOrderByForHashJoin(ctx, orderExprs, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -798,6 +850,30 @@ func weightStringFor(expr sqlparser.Expr) sqlparser.Expr {
 
 }
 
+func (hp *horizonPlanning) planOrderByForHashJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *hashJoin) (logicalPlan, error) {
+	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
+		rhs, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Right = rhs
+		return plan, nil
+	}
+	if orderExprsDependsOnTableSet(orderExprs, ctx.semTable, plan.Right.ContainsTables()) {
+		newRight, err := hp.planOrderBy(ctx, orderExprs, plan.Right)
+		if err != nil {
+			return nil, err
+		}
+		plan.Right = newRight
+		return plan, nil
+	}
+	sortPlan, err := hp.createMemorySortPlan(ctx, plan, orderExprs, true)
+	if err != nil {
+		return nil, err
+	}
+	return sortPlan, nil
+}
+
 func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs []abstract.OrderBy, plan *joinGen4) (logicalPlan, error) {
 	if len(orderExprs) == 1 && isSpecialOrderBy(orderExprs[0]) {
 		lhs, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
@@ -812,7 +888,7 @@ func (hp *horizonPlanning) planOrderByForJoin(ctx *planningContext, orderExprs [
 		plan.Right = rhs
 		return plan, nil
 	}
-	if allLeft(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
+	if orderExprsDependsOnTableSet(orderExprs, ctx.semTable, plan.Left.ContainsTables()) {
 		newLeft, err := hp.planOrderBy(ctx, orderExprs, plan.Left)
 		if err != nil {
 			return nil, err
@@ -905,10 +981,10 @@ func (hp *horizonPlanning) createMemorySortPlan(ctx *planningContext, plan logic
 	return ms, nil
 }
 
-func allLeft(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, lhsTables semantics.TableSet) bool {
+func orderExprsDependsOnTableSet(orderExprs []abstract.OrderBy, semTable *semantics.SemTable, ts semantics.TableSet) bool {
 	for _, expr := range orderExprs {
 		exprDependencies := semTable.RecursiveDeps(expr.Inner.Expr)
-		if !exprDependencies.IsSolvedBy(lhsTables) {
+		if !exprDependencies.IsSolvedBy(ts) {
 			return false
 		}
 	}
@@ -1116,4 +1192,13 @@ func pushHaving(expr sqlparser.Expr, plan logicalPlan, semTable *semantics.SemTa
 		return newFilter(semTable, plan, expr)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
+}
+
+func isJoin(plan logicalPlan) bool {
+	switch plan.(type) {
+	case *joinGen4, *hashJoin:
+		return true
+	default:
+		return false
+	}
 }

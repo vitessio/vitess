@@ -606,10 +606,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-        "ResultColumns": 2,
+        "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -622,8 +621,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1) AS count(*)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
+    "GroupBy": "0",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -632,9 +630,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+        "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -651,7 +649,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1) AS count(*)",
-    "GroupBy": "(0|2), (3|4)",
+    "GroupBy": "0, (2|3)",
     "ResultColumns": 2,
     "Inputs": [
       {
@@ -661,9 +659,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` where 1 != 1 group by col, weight_string(col), baz, weight_string(baz)",
-        "OrderBy": "(0|2) ASC, (3|4) ASC",
-        "Query": "select col, count(*), weight_string(col), baz, weight_string(baz) from `user` group by col, weight_string(col), baz, weight_string(baz) order by col asc, baz asc",
+        "FieldQuery": "select col, count(*), baz, weight_string(baz) from `user` where 1 != 1 group by col, baz, weight_string(baz)",
+        "OrderBy": "0 ASC, (2|3) ASC",
+        "Query": "select col, count(*), baz, weight_string(baz) from `user` group by col, baz, weight_string(baz) order by col asc, baz asc",
         "Table": "`user`"
       }
     ]
@@ -965,39 +963,15 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select distinct col, weight_string(col) from `user` order by col asc",
-        "ResultColumns": 1,
+        "FieldQuery": "select col from `user` where 1 != 1",
+        "OrderBy": "0 ASC",
+        "Query": "select distinct col from `user` order by col asc",
         "Table": "`user`"
       }
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select distinct col from user",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "GroupBy": "(0|1)",
-    "ResultColumns": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select distinct col, weight_string(col) from `user` order by col asc",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # scatter aggregate group by select col
 "select col from user group by col"
@@ -1016,39 +990,15 @@ Gen4 error: In aggregated query without GROUP BY, expression of SELECT list cont
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-        "ResultColumns": 1,
+        "FieldQuery": "select col from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
   }
 }
-{
-  "QueryType": "SELECT",
-  "Original": "select col from user group by col",
-  "Instructions": {
-    "OperatorType": "Aggregate",
-    "Variant": "Ordered",
-    "GroupBy": "(0|1)",
-    "ResultColumns": 1,
-    "Inputs": [
-      {
-        "OperatorType": "Route",
-        "Variant": "SelectScatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-        "Table": "`user`"
-      }
-    ]
-  }
-}
+Gen4 plan same as above
 
 # count with distinct group by unique vindex
 "select id, count(distinct col) from user group by id"
@@ -1087,10 +1037,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-        "ResultColumns": 2,
+        "FieldQuery": "select col, count(distinct id) from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(distinct id) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1103,8 +1052,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1) AS count(distinct id)",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
+    "GroupBy": "0",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1113,9 +1061,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(distinct id), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(distinct id), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+        "FieldQuery": "select col, count(distinct id) from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(distinct id) from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1633,10 +1581,9 @@ Gen4 error: Can't group on 'count(*)'
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by 1, weight_string(col)",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by 1, weight_string(col) order by col asc",
-        "ResultColumns": 1,
+        "FieldQuery": "select col from `user` where 1 != 1 group by 1",
+        "OrderBy": "0 ASC",
+        "Query": "select col from `user` group by 1 order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1648,8 +1595,7 @@ Gen4 error: Can't group on 'count(*)'
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
-    "GroupBy": "(0|1)",
-    "ResultColumns": 1,
+    "GroupBy": "0",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -1658,9 +1604,9 @@ Gen4 error: Can't group on 'count(*)'
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|1) ASC",
-        "Query": "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+        "FieldQuery": "select col from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -1963,10 +1909,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
-            "ResultColumns": 2,
+            "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) from `user` group by col order by col asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -1985,8 +1930,7 @@ Gen4 plan same as above
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1) AS count(*)",
-        "GroupBy": "(0|2)",
-        "ResultColumns": 2,
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -1995,9 +1939,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*), weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
+            "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) from `user` group by col order by col asc limit :__upper_limit",
             "Table": "`user`"
           }
         ]
@@ -2182,11 +2126,11 @@ Gen4 plan same as above
 Gen4 plan same as above
 
 # if derived table scatter and ordering, then V3 doesn't allow outer constructs to be pushed down.
-"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
 "unsupported: cross-shard query with aggregates"
 {
   "QueryType": "SELECT",
-  "Original": "select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
+  "Original": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
   "Instructions": {
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
@@ -2199,9 +2143,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
+        "FieldQuery": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where 1 != 1) as a where 1 != 1",
         "OrderBy": "(1|2) ASC",
-        "Query": "select count(*) from (select col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
+        "Query": "select count(*) from (select `user`.col, user_extra.extra, weight_string(user_extra.extra) from `user`, user_extra where `user`.id = user_extra.user_id order by user_extra.extra asc) as a",
         "ResultColumns": 2,
         "Table": "`user`, user_extra"
       }
@@ -2426,13 +2370,12 @@ Gen4 plan same as above
     "OperatorType": "Sort",
     "Variant": "Memory",
     "OrderBy": "1 ASC",
-    "ResultColumns": 2,
     "Inputs": [
       {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
         "Aggregates": "count(1) AS k",
-        "GroupBy": "(0|2)",
+        "GroupBy": "0",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2441,9 +2384,9 @@ Gen4 plan same as above
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+            "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
+            "OrderBy": "0 ASC",
+            "Query": "select col, count(*) as k from `user` group by col order by col asc",
             "Table": "`user`"
           }
         ]
@@ -2470,10 +2413,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
-        "ResultColumns": 2,
+        "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) as k from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]
@@ -2486,8 +2428,7 @@ Gen4 plan same as above
     "OperatorType": "Aggregate",
     "Variant": "Ordered",
     "Aggregates": "count(1) AS k",
-    "GroupBy": "(0|2)",
-    "ResultColumns": 2,
+    "GroupBy": "0",
     "Inputs": [
       {
         "OperatorType": "Route",
@@ -2496,9 +2437,9 @@ Gen4 plan same as above
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select col, count(*) as k, weight_string(col) from `user` where 1 != 1 group by col, weight_string(col)",
-        "OrderBy": "(0|2) ASC",
-        "Query": "select col, count(*) as k, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
+        "FieldQuery": "select col, count(*) as k from `user` where 1 != 1 group by col",
+        "OrderBy": "0 ASC",
+        "Query": "select col, count(*) as k from `user` group by col order by col asc",
         "Table": "`user`"
       }
     ]

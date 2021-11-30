@@ -1,12 +1,9 @@
 /*
-Copyright 2019 The Vitess Authors.
-
+Copyright 2021 The Vitess Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -14,25 +11,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysqlctl
+package fuzzing
 
 import (
-	"encoding/hex"
-	"hash"
-	"hash/crc32"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
 
-// TODO(sougou): this file should be renamed.
-
-// our hasher, implemented using crc32
-type hasher struct {
-	hash.Hash32
-}
-
-func newHasher() *hasher {
-	return &hasher{crc32.NewIEEE()}
-}
-
-func (h *hasher) HashString() string {
-	return hex.EncodeToString(h.Sum(nil))
+func FuzzUnmarshalJSON(data []byte) int {
+	qrs := rules.New()
+	_ = qrs.UnmarshalJSON(data)
+	return 1
 }

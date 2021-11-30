@@ -57,6 +57,20 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
 	return size
 }
+func (cached *CollateExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.Expr.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *Column) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -73,7 +87,7 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(80)
 	}
 	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.ComparisonOp
 	if cc, ok := cached.Op.(cachedObject); ok {
@@ -89,16 +103,62 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *EqualOp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Operator string
+	size += hack.RuntimeAllocSize(int64(len(cached.Operator)))
+	return size
+}
 func (cached *EvalResult) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field bytes []byte
-	size += hack.RuntimeAllocSize(int64(cap(cached.bytes)))
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.bytes)))
+	}
+	// field tuple *[]vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
+	if cached.tuple != nil {
+		size += int64(24)
+		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple)) * int64(48))
+		for _, elem := range *cached.tuple {
+			size += elem.CachedSize(false)
+		}
+	}
+	return size
+}
+func (cached *InOp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+func (cached *LikeOp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Match vitess.io/vitess/go/mysql/collations.WildcardPattern
+	if cc, ok := cached.Match.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *Literal) CachedSize(alloc bool) int64 {
@@ -107,9 +167,19 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Val vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
 	size += cached.Val.CachedSize(false)
+	return size
+}
+func (cached *RegexpOp) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
 	return size
 }

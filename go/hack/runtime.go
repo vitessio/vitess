@@ -51,3 +51,6 @@ func roundupsize(size uintptr) uintptr
 func RuntimeAllocSize(size int64) int64 {
 	return int64(roundupsize(uintptr(size)))
 }
+
+//go:linkname ParseFloatPrefix strconv.parseFloatPrefix
+func ParseFloatPrefix(s string, bitSize int) (float64, int, error)
