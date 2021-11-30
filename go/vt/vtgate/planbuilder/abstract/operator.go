@@ -59,7 +59,7 @@ type (
 	}
 )
 
-func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (Operator, error) {
+func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	switch tableExpr := tableExpr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		switch tbl := tableExpr.Expr.(type) {
@@ -134,8 +134,8 @@ func getOperatorFromTableExpr(tableExpr sqlparser.TableExpr, semTable *semantics
 	}
 }
 
-func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (Operator, error) {
-	var output Operator
+func crossJoin(exprs sqlparser.TableExprs, semTable *semantics.SemTable) (LogicalOperator, error) {
+	var output LogicalOperator
 	for _, tableExpr := range exprs {
 		op, err := getOperatorFromTableExpr(tableExpr, semTable)
 		if err != nil {
@@ -160,7 +160,7 @@ func getSelect(s sqlparser.SelectStatement) *sqlparser.Select {
 }
 
 // CreateOperatorFromAST creates an operator tree that represents the input SELECT or UNION query
-func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op Operator, err error) {
+func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantics.SemTable) (op LogicalOperator, err error) {
 	switch node := selStmt.(type) {
 	case *sqlparser.Select:
 		op, err = createOperatorFromSelect(node, semTable)
@@ -173,10 +173,10 @@ func CreateOperatorFromAST(selStmt sqlparser.SelectStatement, semTable *semantic
 	if err != nil {
 		return nil, err
 	}
-	return op.Compact(semTable)
+	return op, nil // TODO - we should compact
 }
 
-func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (Operator, error) {
+func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable) (LogicalOperator, error) {
 	opLHS, err := CreateOperatorFromAST(node.Left, semTable)
 	if err != nil {
 		return nil, err
@@ -200,7 +200,7 @@ func createOperatorFromUnion(node *sqlparser.Union, semTable *semantics.SemTable
 }
 
 // createOperatorFromSelect creates an operator tree that represents the input SELECT query
-func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (Operator, error) {
+func createOperatorFromSelect(sel *sqlparser.Select, semTable *semantics.SemTable) (LogicalOperator, error) {
 	var resultantOp *SubQuery
 	if len(semTable.SubqueryMap[sel]) > 0 {
 		resultantOp = &SubQuery{}
@@ -252,7 +252,7 @@ func addColumnEquality(semTable *semantics.SemTable, expr sqlparser.Expr) {
 	}
 }
 
-func createJoin(LHS, RHS Operator) Operator {
+func createJoin(LHS, RHS Operator) LogicalOperator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
