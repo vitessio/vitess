@@ -114,7 +114,7 @@ func (w *heartbeatWriter) Open() {
 	}
 	log.Info("Hearbeat Writer: opening")
 
-	w.pool.Open(w.env.Config().DB.DbaWithDB())
+	w.pool.Open(w.env.Config().DB.AppWithDB())
 	w.enableWrites(true)
 	w.isOpen = true
 }
