@@ -8,14 +8,9 @@ concurrency:
 # (vtgate, vttablet, etc) built on different versions.
 
 jobs:
-  get_latest_versions:
-    uses: vitessio/vitess/.github/workflows/get_latest_versions_vitess.yml@upgrade-downgrade
-
   upgrade_downgrade_test:
-    name: Run Upgrade Downgrade Test Environment
+    name: Run Upgrade Downgrade Test
     runs-on: ubuntu-18.04
-    needs:
-      - get_latest_versions
 
     steps:
     - name: Check latest versions
@@ -34,13 +29,13 @@ jobs:
         echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
 
     # Checkout to the other version of Vitess
-    - name: Check out code
+    - name: Check out other version's code
       uses: actions/checkout@v2
       with:
         # TODO: use a not-hardcoded git ref
         ref: "de06fcaa9252bf36cf4723af40ad05f7e5f214dd"
 
-    - name: Get dependencies
+    - name: Get dependencies for other version
       run: |
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
@@ -58,3 +53,50 @@ jobs:
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+
+    - name: Building other version's binaries
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-other/
+        cp -R bin /tmp/vitess-build-other/
+        rm -Rf bin/*
+
+      # Checkout to the current version of Vitess
+    - name: Check out current version's code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies for current version
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+        # install JUnit report formatter
+        go get -u github.com/vitessio/go-junit-report@HEAD
+
+        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
+        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get update
+        sudo apt-get install percona-xtrabackup-24
+
+    - name: Building current version's binaries
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/
+
+
+    # Asserting previous operations
+    - name: Assert
+      run: |
+        ls -l /tmp/vitess-build-current/
+        ls -l /tmp/vitess-build-other/
