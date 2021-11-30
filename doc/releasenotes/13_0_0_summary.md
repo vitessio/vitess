@@ -47,6 +47,19 @@ This command indicates that a migration executed with `-postpone-completion` is 
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
 - For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
 
+### vtctl OnlineDDL ... complete
+
+Complementing the `alter vitess_migration ... complete` query, a migration can also be completed via `vtctl`:
+
+```shell
+vtctl OnlineDDL <keyspace> complete <uuid>
+```
+For example:
+
+```shell
+vtctlclient OnlineDDL commerce complete d08ffe6b_51c9_11ec_9cf2_0a43f95f28a3
+```
+
 ## Incompatible Changes
 
 ## Deprecations
