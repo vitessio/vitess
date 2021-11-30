@@ -47,6 +47,14 @@ This command indicates that a migration executed with `-postpone-completion` is 
 - For running `ALTER`s (`online` and `gh-ost`) which are only partly through the migration: they will cut-over automatically when they complete their work, as if `-postpone-completion` wasn't indicated
 - For queued `CREATE` and `DROP` migrations: "unblock" them from being scheduled. They'll be scheduled at the scheduler's discretion. there is no guarantee that they will be scheduled to run immediately.
 
+### vtctl ApplySchema: ALTER VITESS_MIGRATION
+
+`vtctl ApplySchema` now supports `ALTER VITESS_MIGRATION ...` statements. Example:
+
+```shell
+$ vtctl ApplySchema -skip_preflight -sql "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete" commerce
+```
+
 ## Incompatible Changes
 
 ## Deprecations
