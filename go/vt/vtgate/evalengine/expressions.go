@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -25,12 +26,12 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/sqltypes"
-
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	"github.com/ericlagergren/decimal"
 )
 
 type (
@@ -40,6 +41,12 @@ type (
 		numval    uint64
 		bytes     []byte
 		tuple     *[]EvalResult
+		decimal   *DecimalResult
+	}
+
+	DecimalResult struct {
+		num   decimal.Big
+		scale int
 	}
 
 	// ExpressionEnv contains the environment that the expression
@@ -232,21 +239,38 @@ var collationNumeric = collations.TypedCollation{
 
 // NewLiteralInt returns a literal expression
 func NewLiteralInt(i int64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Int64, numval: uint64(i), collation: collationNumeric}}
+	return &Literal{Val: newEvalInt64(i)}
 }
 
 // NewLiteralFloat returns a literal expression
 func NewLiteralFloat(val float64) Expr {
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(val), collation: collationNumeric}}
+	return &Literal{Val: newEvalFloat(val)}
 }
 
-// NewLiteralFloatFromBytes returns a float literal expression from a slice of bytes
-func NewLiteralFloatFromBytes(val []byte) (Expr, error) {
-	fval, err := strconv.ParseFloat(string(val), 64)
-	if err != nil {
-		return nil, err
+var decimalContextSQL = decimal.Context{
+	MaxScale:     30,
+	MinScale:     0,
+	Precision:    65,
+	Traps:        ^(decimal.Inexact | decimal.Rounded | decimal.Subnormal),
+	RoundingMode: 2,
+}
+
+// NewLiteralRealFromBytes returns a float literal expression from a slice of bytes
+func NewLiteralRealFromBytes(val []byte) (Expr, error) {
+	if bytes.IndexByte(val, 'e') >= 0 || bytes.IndexByte(val, 'E') >= 0 {
+		fval, err := strconv.ParseFloat(string(val), 64)
+		if err != nil {
+			return nil, err
+		}
+		return &Literal{Val: newEvalFloat(fval)}, nil
 	}
-	return &Literal{Val: EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(fval)}}, nil
+	dr := newDecimalResult(0)
+	dr.num.SetString(string(val))
+	if dr.num.Context.Conditions != 0 {
+		return nil, dr.num.Context.Conditions
+	}
+	dr.scale = dr.num.Scale()
+	return &Literal{Val: newEvalDecimal(dr)}, nil
 }
 
 // NewLiteralString returns a literal expression

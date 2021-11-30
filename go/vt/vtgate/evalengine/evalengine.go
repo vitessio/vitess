@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql/collations"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -149,38 +150,39 @@ func ToNative(v sqltypes.Value) (interface{}, error) {
 
 // newEvalResult parses a value and produces an EvalResult containing the value
 func newEvalResult(v sqltypes.Value) (EvalResult, error) {
-	raw := v.Raw()
 	switch {
 	case v.IsBinary() || v.IsText():
 		// TODO: collation
-		return EvalResult{bytes: raw, typ: sqltypes.VarBinary}, nil
+		return EvalResult{bytes: v.Raw(), typ: sqltypes.VarBinary}, nil
 	case v.IsSigned():
-		ival, err := strconv.ParseInt(string(raw), 10, 64)
+		ival, err := strconv.ParseInt(v.RawStr(), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return newEvalInt64(ival), nil
 	case v.IsUnsigned():
-		uval, err := strconv.ParseUint(string(raw), 10, 64)
+		uval, err := strconv.ParseUint(v.RawStr(), 10, 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
 		return newEvalUint64(uval), nil
-	case v.IsFloat() || v.Type() == sqltypes.Decimal:
-		fval, err := strconv.ParseFloat(string(raw), 64)
+	case v.IsFloat():
+		fval, err := strconv.ParseFloat(v.RawStr(), 64)
 		if err != nil {
 			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", err)
 		}
-		if v.Type() == sqltypes.Decimal {
-			return EvalResult{
-				typ:       sqltypes.Decimal,
-				numval:    math.Float64bits(fval),
-				collation: collationNumeric,
-			}, nil
-		}
 		return newEvalFloat(fval), nil
+	case v.Type() == sqltypes.Decimal:
+		dr := newDecimalResult(0)
+		dr.num.SetString(v.RawStr())
+		dr.scale = dr.num.Scale()
+		if dr.num.Context.Conditions != 0 {
+			return EvalResult{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", dr.num.Context.Conditions)
+		}
+		return newEvalDecimal(dr), nil
+
 	default:
-		return EvalResult{typ: v.Type(), bytes: raw}, nil
+		return EvalResult{typ: v.Type(), bytes: v.Raw()}, nil
 	}
 }
 
@@ -242,11 +244,36 @@ func (v EvalResult) toSQLValue(resultType querypb.Type) sqltypes.Value {
 				format = 'f'
 			}
 			return sqltypes.MakeTrusted(resultType, strconv.AppendFloat(nil, math.Float64frombits(v.numval), format, -1, 64))
+		case sqltypes.Decimal:
+			var dfmt decimalFormatter
+			dfmt.precision = v.decimal.scale
+			v.decimal.num.Format(&dfmt, 'f')
+			return sqltypes.MakeTrusted(resultType, dfmt.Bytes())
 		}
 	default:
 		return sqltypes.MakeTrusted(resultType, v.bytes)
 	}
 	return sqltypes.NULL
+}
+
+type decimalFormatter struct {
+	bytes2.Buffer
+	precision int
+}
+
+func (d *decimalFormatter) Width() (wid int, ok bool) {
+	return 0, false
+}
+
+func (d *decimalFormatter) Precision() (prec int, ok bool) {
+	if d.precision < 0 {
+		return 0, false
+	}
+	return d.precision, true
+}
+
+func (d *decimalFormatter) Flag(c int) bool {
+	return false
 }
 
 func numericalHashCode(v EvalResult) HashCode {
@@ -264,8 +291,12 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return -1, nil
 			}
 			v1 = EvalResult{typ: sqltypes.Uint64, numval: uint64(v1.numval)}
-		case sqltypes.Float64, sqltypes.Decimal:
+		case sqltypes.Float64:
 			v1 = EvalResult{typ: v2.typ, numval: math.Float64bits(float64(int64(v1.numval)))}
+		case sqltypes.Decimal:
+			dr := newDecimalResult(0)
+			dr.num.SetMantScale(int64(v1.numval), 0)
+			v1 = newEvalDecimal(dr)
 		}
 	case sqltypes.Uint64:
 		switch v2.typ {
@@ -274,8 +305,12 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 				return 1, nil
 			}
 			v2 = EvalResult{typ: sqltypes.Uint64, numval: uint64(v2.numval)}
-		case sqltypes.Float64, sqltypes.Decimal:
+		case sqltypes.Float64:
 			v1 = EvalResult{typ: v2.typ, numval: math.Float64bits(float64(v1.numval))}
+		case sqltypes.Decimal:
+			dr := newDecimalResult(0)
+			dr.num.SetUint64(v1.numval)
+			v1 = newEvalDecimal(dr)
 		}
 	case sqltypes.Float64:
 		switch v2.typ {
@@ -287,19 +322,28 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 			}
 			v2 = EvalResult{typ: sqltypes.Float64, numval: math.Float64bits(float64(v2.numval))}
 		case sqltypes.Decimal:
-			v2.typ = sqltypes.Float64
+			f, ok := v2.decimal.num.Float64()
+			if !ok {
+				// TODO
+			}
+			v2 = newEvalFloat(f)
 		}
 	case sqltypes.Decimal:
 		switch v2.typ {
 		case sqltypes.Int64:
-			v2 = EvalResult{typ: sqltypes.Decimal, numval: math.Float64bits(float64(int64(v2.numval)))}
+			dr := newDecimalResult(0)
+			dr.num.SetMantScale(int64(v2.numval), 0)
+			v2 = newEvalDecimal(dr)
 		case sqltypes.Uint64:
-			if math.Float64frombits(v1.numval) < 0 {
-				return -1, nil
-			}
-			v2 = EvalResult{typ: sqltypes.Decimal, numval: math.Float64bits(float64(v2.numval))}
+			dr := newDecimalResult(0)
+			dr.num.SetUint64(v2.numval)
+			v2 = newEvalDecimal(dr)
 		case sqltypes.Float64:
-			v1.typ = sqltypes.Float64
+			f, ok := v1.decimal.num.Float64()
+			if !ok {
+				// TODO
+			}
+			v1 = newEvalFloat(f)
 		}
 	}
 
@@ -320,7 +364,7 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1.numval < v2.numval:
 			return -1, nil
 		}
-	case sqltypes.Float64, sqltypes.Decimal:
+	case sqltypes.Float64:
 		v1v, v2v := math.Float64frombits(v1.numval), math.Float64frombits(v2.numval)
 		switch {
 		case v1v == v2v:
@@ -328,6 +372,8 @@ func compareNumeric(v1, v2 EvalResult) (int, error) {
 		case v1v < v2v:
 			return -1, nil
 		}
+	case sqltypes.Decimal:
+		return v1.decimal.num.Cmp(&v2.decimal.num), nil
 	}
 
 	// v1>v2

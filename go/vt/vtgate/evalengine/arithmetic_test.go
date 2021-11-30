@@ -24,8 +24,12 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/cockroachdb/apd/v2"
+	"github.com/ericlagergren/decimal"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/arith"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,6 +48,7 @@ var (
 	NewUint64  = sqltypes.NewUint64
 	NewFloat64 = sqltypes.NewFloat64
 	TestValue  = sqltypes.TestValue
+	NewDecimal = sqltypes.NewDecimal
 
 	maxUint64 uint64 = math.MaxUint64
 )
@@ -295,7 +300,7 @@ func TestArithmetics(t *testing.T) {
 			// case with negative value
 			v1:  NewInt64(-1),
 			v2:  NewInt64(-2),
-			out: NewFloat64(0.5000),
+			out: NewDecimal("0.5000"),
 		}, {
 			// float64 division by zero
 			v1:  NewFloat64(2),
@@ -305,12 +310,12 @@ func TestArithmetics(t *testing.T) {
 			// Lower bound for int64
 			v1:  NewInt64(math.MinInt64),
 			v2:  NewInt64(1),
-			out: NewFloat64(math.MinInt64),
+			out: NewDecimal(strconv.Itoa(math.MinInt64) + ".0000"),
 		}, {
 			// upper bound for uint64
 			v1:  NewUint64(math.MaxUint64),
 			v2:  NewUint64(1),
-			out: NewFloat64(math.MaxUint64),
+			out: NewDecimal(strconv.FormatUint(math.MaxUint64, 10) + ".0000"),
 		}, {
 			// testing for error in types
 			v1:  TestValue(querypb.Type_INT64, "1.2"),
@@ -325,12 +330,12 @@ func TestArithmetics(t *testing.T) {
 			// testing for uint/int
 			v1:  NewUint64(4),
 			v2:  NewInt64(5),
-			out: NewFloat64(0.8),
+			out: NewDecimal("0.8000"),
 		}, {
 			// testing for uint/uint
 			v1:  NewUint64(1),
 			v2:  NewUint64(2),
-			out: NewFloat64(0.5),
+			out: NewDecimal("0.5000"),
 		}, {
 			// testing for float64/int64
 			v1:  TestValue(querypb.Type_FLOAT64, "1.2"),
@@ -1139,33 +1144,35 @@ func TestAddNumeric(t *testing.T) {
 		// Int64 overflow.
 		v1:  newEvalInt64(9223372036854775807),
 		v2:  newEvalInt64(2),
-		out: newEvalFloat(9223372036854775809),
+		err: dataOutOfRangeError(9223372036854775807, 2, "BIGINT", "+"),
 	}, {
 		// Int64 underflow.
 		v1:  newEvalInt64(-9223372036854775807),
 		v2:  newEvalInt64(-2),
-		out: EvalResult{typ: querypb.Type_FLOAT64, numval: math.Float64bits(-9223372036854775809.0)},
+		err: dataOutOfRangeError(-9223372036854775807, -2, "BIGINT", "+"),
 	}, {
 		v1:  newEvalInt64(-1),
 		v2:  newEvalUint64(2),
-		out: newEvalFloat(18446744073709551617.0),
+		out: newEvalUint64(1),
 	}, {
 		// Uint64 overflow.
 		v1:  newEvalUint64(18446744073709551615),
 		v2:  newEvalUint64(2),
-		out: newEvalFloat(18446744073709551617.0),
+		err: dataOutOfRangeError(uint64(18446744073709551615), 2, "BIGINT UNSIGNED", "+"),
 	}}
 	for _, tcase := range tcases {
-		got := addNumeric(tcase.v1, tcase.v2)
-
-		// all EvalResult for numeric types must have a binary collation
-		tcase.out.collation = collationNumeric
+		got, err := addNumericWithError(tcase.v1, tcase.v2)
+		if err != nil {
+			if tcase.err == nil {
+				t.Fatal(err)
+			}
+			if err.Error() != tcase.err.Error() {
+				t.Fatalf("bad error message: got %q want %q", err, tcase.err)
+			}
+			continue
+		}
 		utils.MustMatch(t, tcase.out, got, "addNumeric")
 	}
-}
-
-func castuint64(i int64) uint64 {
-	return uint64(i)
 }
 
 func TestPrioritize(t *testing.T) {
@@ -1677,4 +1684,67 @@ func TestParseStringToFloat(t *testing.T) {
 			require.EqualValues(t, tc.val, got)
 		})
 	}
+}
+
+func TestRunMysql(t *testing.T) {
+
+}
+
+func TestDecimalPrecision2(t *testing.T) {
+	d := decimal.New(9432456, 0)
+	a := decimal.New(14620, 0)
+	b := decimal.New(24250, 0)
+
+	var x, y decimal.Big
+
+	x.Quo(a, d)
+	t.Logf("x = %s DECIMAL(%d, %d)", x.String(), x.Precision(), x.Scale())
+
+	x.Round(4)
+	t.Logf("x = %s DECIMAL(%d, %d)", x.String(), x.Precision(), x.Scale())
+
+	y.Quo(b, d)
+	y.Round(4)
+}
+
+func TestDecimalPrecision(t *testing.T) {
+	pfunc := func(x *apd.Decimal) uint32 {
+		return uint32(arith.BigLength(&x.Coeff) + int(-x.Exponent))
+	}
+
+	d := apd.New(9432456, 0)
+	a := apd.New(14620, 0)
+	b := apd.New(24250, 0)
+	p := pfunc(a)
+
+	x := new(apd.Decimal)
+	_, _ = new(apd.Context).WithPrecision(9).Quo(x, a, d)
+	t.Logf("%s DECIMAL(%d, %d)", x.String(), p, -x.Exponent)
+
+	y := new(apd.Decimal)
+	_, _ = new(apd.Context).WithPrecision(9).Quo(y, b, d)
+	t.Logf("%s DECIMAL(%d, %d)", y.String(), p, -y.Exponent)
+
+	// p2 := pfunc(x)
+	for p2 := uint32(0); p2 < 32; p2++ {
+		z := new(apd.Decimal)
+		ctx := apd.BaseContext.WithPrecision(uint32(p2))
+		_, _ = ctx.Quo(z, x, y)
+		ctx.Quantize(z, z, -8)
+		t.Logf("%s DECIMAL(%d, %d)", z.String(), p2, -z.Exponent)
+	}
+
+	/*
+		y := decimal.WithContext(decimalContextSQL)
+		y.Quo(c, b)
+		//y.Quantize(4)
+
+		z := decimal.WithContext(decimalContextSQL)
+		z.Quo(y, x)
+		z.Quantize(8)
+
+		t.Logf("%s decimal(%d, %d)", x.String(), x.Precision(), x.Scale())
+		t.Logf("%s decimal(%d, %d)", y.String(), y.Precision(), y.Scale())
+		t.Logf("%s decimal(%d, %d)", z.String(), z.Precision(), z.Scale())
+	*/
 }
