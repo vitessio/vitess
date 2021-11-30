@@ -53,6 +53,13 @@ func (d dummyCollation) CollationIDLookup(_ sqlparser.Expr) collations.ID {
 	return collations.ID(d)
 }
 
+func TestSelect(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	select {}
+}
+
 func TestTypes(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()

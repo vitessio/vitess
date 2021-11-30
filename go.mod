@@ -122,6 +122,11 @@ require (
 )
 
 require (
+	github.com/cockroachdb/apd/v2 v2.0.2
+	github.com/ericlagergren/decimal v0.0.0-20211103172832-aca2edc11f73
+)
+
+require (
 	cloud.google.com/go v0.81.0 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/GeertJohan/go.incremental v1.0.0 // indirect

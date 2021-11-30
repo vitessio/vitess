@@ -103,7 +103,7 @@ func (m *Multiplication) Evaluate(left, right EvalResult) (EvalResult, error) {
 
 // Evaluate implements the BinaryOp interface
 func (d *Division) Evaluate(left, right EvalResult) (EvalResult, error) {
-	return divideNumericWithError(left, right)
+	return divideNumericWithError(left, right, true)
 }
 
 // Type implements the BinaryOp interface

@@ -68,7 +68,7 @@ func TestConvertSimplification(t *testing.T) {
 	}{
 		{"42", ok("INT64(42)"), ok("INT64(42)")},
 		{"1 + (1 + 1) * 8", ok("INT64(1) + ((INT64(1) + INT64(1)) * INT64(8))"), ok("INT64(17)")},
-		{"1.0 + (1 + 1) * 8.0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
+		{"1.0e0 + (1 + 1) * 8.0e0", ok("FLOAT64(1) + ((INT64(1) + INT64(1)) * FLOAT64(8))"), ok("FLOAT64(17)")},
 		{"'pokemon' LIKE 'poke%'", ok("VARBINARY(\"pokemon\") like VARBINARY(\"poke%\")"), ok("UINT64(1)")},
 		{
 			"'foo' COLLATE utf8mb4_general_ci IN ('bar' COLLATE latin1_swedish_ci, 'baz')",
@@ -91,9 +91,12 @@ func TestConvertSimplification(t *testing.T) {
 			ok(`VARBINARY("pokemon") in (VARBINARY("bulbasaur"), VARBINARY("venusaur"), NULL)`),
 			ok(`NULL`),
 		},
-		{
-			"0 + NULL", ok("INT64(0) + NULL"), ok("NULL"),
-		},
+		{"0 + NULL", ok("INT64(0) + NULL"), ok("NULL")},
+		{"1.00000 + 2.000", ok("DECIMAL(1.00000) + DECIMAL(2.000)"), ok("DECIMAL(3.00000)")},
+		{"1 + 0.05", ok("INT64(1) + DECIMAL(0.05)"), ok("DECIMAL(1.05)")},
+		{"1 + 0.05e0", ok("INT64(1) + FLOAT64(0.05)"), ok("FLOAT64(1.05)")},
+		{"1 / 1", ok("INT64(1) / INT64(1)"), ok("DECIMAL(1.0000)")},
+		// {"(14620 / 9432456) / (24250 / 9432456)", ok("(INT64(14620) / INT64(9432456)) / (INT64(24250) / INT64(9432456))"), ok("DECIMAL(0.60288653)")},
 	}
 
 	for _, tc := range testCases {
@@ -145,7 +148,7 @@ func TestEvaluate(t *testing.T) {
 		expression: "42",
 		expected:   sqltypes.NewInt64(42),
 	}, {
-		expression: "42.42",
+		expression: "42.42e0",
 		expected:   sqltypes.NewFloat64(42.42),
 	}, {
 		expression: "40+2",
@@ -158,7 +161,7 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewInt64(80),
 	}, {
 		expression: "40/2",
-		expected:   sqltypes.NewFloat64(20),
+		expected:   sqltypes.NewDecimal("20.0000"),
 	}, {
 		expression: ":exp",
 		expected:   sqltypes.NewInt64(66),
@@ -200,9 +203,6 @@ func TestEvaluate(t *testing.T) {
 		expected:   sqltypes.NewInt64(0),
 	}, {
 		expression: "(1,2) in ((1,null), (2,3))",
-		expected:   NULL,
-	}, {
-		expression: "(1,2) in ((3,2), (2,3), null)",
 		expected:   NULL,
 	}, {
 		expression: "(1,(1,2,3),(1,(1,2),4),2) = (1,(1,2,3),(1,(1,2),4),2)",
