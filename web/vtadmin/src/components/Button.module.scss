@@ -6,7 +6,7 @@
     color: var(--textColorInverted);
     cursor: pointer;
     font-family: var(--fontFamilyPrimary);
-    font-size: var(--fontSizeDefault);
+    font-size: theme('fontSize.base');
     font-weight: 500;
     height: var(--inputHeightMedium);
     line-height: 1;
