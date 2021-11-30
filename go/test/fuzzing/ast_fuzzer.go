@@ -17,6 +17,8 @@ limitations under the License.
 package fuzzing
 
 import (
+	fuzz "github.com/AdaLogics/go-fuzz-headers"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -25,16 +27,20 @@ func FuzzEqualsSQLNode(data []byte) int {
 	if len(data) < 10 {
 		return 0
 	}
-	if (len(data) % 2) != 0 {
-		return 0
-	}
-	firstHalf := string(data[:len(data)/2])
-	secondHalf := string(data[(len(data)/2)+1:])
-	inA, err := sqlparser.Parse(firstHalf)
+	f := fuzz.NewConsumer(data)
+	query1, err := f.GetSQLString()
 	if err != nil {
 		return 0
 	}
-	inB, err := sqlparser.Parse(secondHalf)
+	query2, err := f.GetSQLString()
+	if err != nil {
+		return 0
+	}
+	inA, err := sqlparser.Parse(query1)
+	if err != nil {
+		return 0
+	}
+	inB, err := sqlparser.Parse(query2)
 	if err != nil {
 		return 0
 	}
@@ -45,7 +51,14 @@ func FuzzEqualsSQLNode(data []byte) int {
 	// 3) sqlparser.VisitSQLNode
 
 	// Target 1:
-	_ = sqlparser.EqualsSQLNode(inA, inB)
+	identical := sqlparser.EqualsSQLNode(inA, inA)
+	if !identical {
+		panic("Should be identical")
+	}
+	identical = sqlparser.EqualsSQLNode(inB, inB)
+	if !identical {
+		panic("Should be identical")
+	}
 
 	// Target 2:
 	newSQLNode := sqlparser.CloneSQLNode(inA)

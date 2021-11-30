@@ -17,18 +17,15 @@ limitations under the License.
 package connpool
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -197,7 +194,7 @@ func (dbc *DBConn) FetchNext(ctx context.Context, maxrows int, wantfields bool) 
 // Stream executes the query and streams the results.
 func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
 	span, ctx := trace.NewSpan(ctx, "DBConn.Stream")
-	trace.AnnotateSQL(span, query)
+	trace.AnnotateSQL(span, sqlparser.Preview(query))
 	defer span.Finish()
 
 	resultSent := false
@@ -439,11 +436,4 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		log.Warningf("Hung query returned")
 	}()
 	return done, &wg
-}
-
-// MatchCollation uses the Connector MatchCollation method to tells whether this connection's
-// collation matches with the given collation ID.
-// If it does not match an error will be returned explaining why.
-func (dbc *DBConn) MatchCollation(collationID collations.ID) error {
-	return dbc.conn.MatchCollation(collationID)
 }

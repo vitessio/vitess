@@ -58,6 +58,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfAutoIncSpec(parent, node, replacer)
 	case *Begin:
 		return a.rewriteRefOfBegin(parent, node, replacer)
+	case *BetweenExpr:
+		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
 		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
 	case BoolVal:
@@ -128,6 +130,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfExplainStmt(parent, node, replacer)
 	case *ExplainTab:
 		return a.rewriteRefOfExplainTab(parent, node, replacer)
+	case *ExprOrColumns:
+		return a.rewriteRefOfExprOrColumns(parent, node, replacer)
 	case Exprs:
 		return a.rewriteExprs(parent, node, replacer)
 	case *ExtractFuncExpr:
@@ -208,12 +212,12 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfParenTableExpr(parent, node, replacer)
 	case *PartitionDefinition:
 		return a.rewriteRefOfPartitionDefinition(parent, node, replacer)
+	case *PartitionOption:
+		return a.rewriteRefOfPartitionOption(parent, node, replacer)
 	case *PartitionSpec:
 		return a.rewriteRefOfPartitionSpec(parent, node, replacer)
 	case Partitions:
 		return a.rewritePartitions(parent, node, replacer)
-	case *RangeCond:
-		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case ReferenceAction:
 		return a.rewriteReferenceAction(parent, node, replacer)
 	case *ReferenceDefinition:
@@ -266,6 +270,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
+	case *SubPartition:
+		return a.rewriteRefOfSubPartition(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:
@@ -816,6 +822,43 @@ func (a *application) rewriteRefOfBegin(parent SQLNode, node *Begin, replacer re
 			a.cur.parent = parent
 			a.cur.node = node
 		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfBetweenExpr(parent SQLNode, node *BetweenExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
+		parent.(*BetweenExpr).Left = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
+		parent.(*BetweenExpr).From = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
+		parent.(*BetweenExpr).To = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}
@@ -1546,8 +1589,8 @@ func (a *application) rewriteRefOfCurTimeFuncExpr(parent SQLNode, node *CurTimeF
 	}) {
 		return false
 	}
-	if !a.rewriteExpr(node, node.Fsp, func(newNode, parent SQLNode) {
-		parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
+	if !a.rewriteRefOfLiteral(node, node.Fsp, func(newNode, parent SQLNode) {
+		parent.(*CurTimeFuncExpr).Fsp = newNode.(*Literal)
 	}) {
 		return false
 	}
@@ -1887,6 +1930,38 @@ func (a *application) rewriteRefOfExplainTab(parent SQLNode, node *ExplainTab, r
 	}
 	if !a.rewriteTableName(node, node.Table, func(newNode, parent SQLNode) {
 		parent.(*ExplainTab).Table = newNode.(TableName)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfExprOrColumns(parent SQLNode, node *ExprOrColumns, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ExprOrColumns).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteColumns(node, node.ColumnList, func(newNode, parent SQLNode) {
+		parent.(*ExprOrColumns).ColumnList = newNode.(Columns)
 	}) {
 		return false
 	}
@@ -3058,6 +3133,57 @@ func (a *application) rewriteRefOfPartitionDefinition(parent SQLNode, node *Part
 	}
 	return true
 }
+func (a *application) rewriteRefOfPartitionOption(parent SQLNode, node *PartitionOption, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).KeyColList = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfExprOrColumns(node, node.ExprOrCol, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).ExprOrCol = newNode.(*ExprOrColumns)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfSubPartition(node, node.SubPartition, func(newNode, parent SQLNode) {
+		parent.(*PartitionOption).SubPartition = newNode.(*SubPartition)
+	}) {
+		return false
+	}
+	for x, el := range node.Definitions {
+		if !a.rewriteRefOfPartitionDefinition(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*PartitionOption).Definitions[idx] = newNode.(*PartitionDefinition)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPartitionSpec(parent SQLNode, node *PartitionSpec, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -3130,43 +3256,6 @@ func (a *application) rewritePartitions(parent SQLNode, node Partitions, replace
 		}(x)) {
 			return false
 		}
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfRangeCond(parent SQLNode, node *RangeCond, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Left, func(newNode, parent SQLNode) {
-		parent.(*RangeCond).Left = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.From, func(newNode, parent SQLNode) {
-		parent.(*RangeCond).From = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.To, func(newNode, parent SQLNode) {
-		parent.(*RangeCond).To = newNode.(Expr)
-	}) {
-		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -3984,6 +4073,38 @@ func (a *application) rewriteRefOfStream(parent SQLNode, node *Stream, replacer 
 	}
 	return true
 }
+func (a *application) rewriteRefOfSubPartition(parent SQLNode, node *SubPartition, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteColumns(node, node.KeyColList, func(newNode, parent SQLNode) {
+		parent.(*SubPartition).KeyColList = newNode.(Columns)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*SubPartition).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfSubquery(parent SQLNode, node *Subquery, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -4023,13 +4144,8 @@ func (a *application) rewriteRefOfSubstrExpr(parent SQLNode, node *SubstrExpr, r
 			return true
 		}
 	}
-	if !a.rewriteRefOfColName(node, node.Name, func(newNode, parent SQLNode) {
-		parent.(*SubstrExpr).Name = newNode.(*ColName)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfLiteral(node, node.StrVal, func(newNode, parent SQLNode) {
-		parent.(*SubstrExpr).StrVal = newNode.(*Literal)
+	if !a.rewriteExpr(node, node.Name, func(newNode, parent SQLNode) {
+		parent.(*SubstrExpr).Name = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4248,6 +4364,11 @@ func (a *application) rewriteRefOfTableSpec(parent SQLNode, node *TableSpec, rep
 	}
 	if !a.rewriteTableOptions(node, node.Options, func(newNode, parent SQLNode) {
 		parent.(*TableSpec).Options = newNode.(TableOptions)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfPartitionOption(node, node.PartitionOption, func(newNode, parent SQLNode) {
+		parent.(*TableSpec).PartitionOption = newNode.(*PartitionOption)
 	}) {
 		return false
 	}
@@ -5116,6 +5237,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfAndExpr(parent, node, replacer)
 	case Argument:
 		return a.rewriteArgument(parent, node, replacer)
+	case *BetweenExpr:
+		return a.rewriteRefOfBetweenExpr(parent, node, replacer)
 	case *BinaryExpr:
 		return a.rewriteRefOfBinaryExpr(parent, node, replacer)
 	case BoolVal:
@@ -5162,8 +5285,6 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNullVal(parent, node, replacer)
 	case *OrExpr:
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
-	case *RangeCond:
-		return a.rewriteRefOfRangeCond(parent, node, replacer)
 	case *Subquery:
 		return a.rewriteRefOfSubquery(parent, node, replacer)
 	case *SubstrExpr:

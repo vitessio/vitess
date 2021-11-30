@@ -32,18 +32,13 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/discovery"
-
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/sync2"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -86,24 +81,6 @@ func init() {
 	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_PRIMARY, "The default tablet type to set for queries, when one is not explicitly selected")
 }
 
-// ExecutorCollation contains information about the default collation to use by the executor.
-type ExecutorCollation struct {
-	mu   sync.Mutex
-	once sync.Once
-
-	// CollationEnvironment is the collation environment that was used to create
-	// DefaultCollation, it can be used later to lookup collations by name or ID.
-	CollationEnvironment *collations.Environment
-
-	// DefaultCollation is the default collation that will be used for this Executor.
-	// DefaultCollation is expected to match with the one the VTTablets use.
-	// String literals will be treated as if they were using DefaultCollation.
-	DefaultCollation collations.Collation
-
-	// CollationString represents the input collation as a string.
-	CollationString string
-}
-
 // Executor is the engine that executes queries by utilizing
 // the abilities of the underlying vttablets.
 type Executor struct {
@@ -124,8 +101,6 @@ type Executor struct {
 
 	vm            *VSchemaManager
 	schemaTracker SchemaInfo
-
-	collation *ExecutorCollation
 
 	// allowScatter will fail planning if set to false and a plan contains any scatter queries
 	allowScatter bool
@@ -151,7 +126,6 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		streamSize:      streamSize,
 		schemaTracker:   schemaTracker,
 		allowScatter:    !noScatter,
-		collation:       &ExecutorCollation{},
 	}
 
 	vschemaacl.Init()
@@ -188,7 +162,7 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 func (e *Executor) Execute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (result *sqltypes.Result, err error) {
 	span, ctx := trace.NewSpan(ctx, "executor.Execute")
 	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -244,7 +218,7 @@ func (e *Executor) StreamExecute(
 ) error {
 	span, ctx := trace.NewSpan(ctx, "executor.StreamExecute")
 	span.Annotate("method", method)
-	trace.AnnotateSQL(span, sql)
+	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
@@ -374,57 +348,7 @@ func saveSessionStats(safeSession *SafeSession, stmtType sqlparser.StatementType
 	}
 }
 
-// Set sets the ExecutorCollation fields using the given tablet health.
-// This method is meant to be executed only once.
-// If the tablet health does not contain any relevant information for us to
-// figure the default collation and collation environment, we warn the user
-// and use the collation that was specified through VTGate's arguments, or
-// we use the default collation of utf8mb4 if the flag was not specified.
-func (ec *ExecutorCollation) Set(th *discovery.TabletHealth) {
-	ec.once.Do(func() {
-		t := th.Tablet
-		env := collations.NewEnvironment(t.DbServerVersion)
-
-		// if VTGate's -collation flag was not specified, we use the default collation of utf8mb4
-		// given our collation environment.
-		var foundColl collations.Collation
-		if *collation == "" {
-			foundColl = env.DefaultCollationForCharset("utf8mb4")
-		} else {
-			foundColl = env.LookupByName(*collation)
-		}
-
-		ec.mu.Lock()
-		defer ec.mu.Unlock()
-
-		if foundColl == nil {
-			ec.CollationString = *collation
-		} else {
-			ec.CollationString = foundColl.Name()
-		}
-		ec.CollationEnvironment = env
-		ec.DefaultCollation = foundColl
-	})
-}
-
-// setSessionExecuteOptionCollation sets the collation of the given session to the executor's default collation
-func (e *Executor) setSessionExecuteOptionCollation(session *SafeSession) {
-	// locking the session
-	session.mu.Lock()
-	defer session.mu.Unlock()
-
-	// locking the executor's collation
-	e.collation.mu.Lock()
-	defer e.collation.mu.Unlock()
-
-	if session.Options == nil || e.collation.DefaultCollation == nil {
-		return
-	}
-	session.Options.Collation = int32(e.collation.DefaultCollation.ID())
-}
-
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (sqlparser.StatementType, *sqltypes.Result, error) {
-	e.setSessionExecuteOptionCollation(safeSession)
 	var err error
 	var qr *sqltypes.Result
 	var stmtType sqlparser.StatementType
@@ -576,12 +500,6 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.String())
 		case sysvars.Socket.Name:
 			bindVars[key] = sqltypes.StringBindVariable(mysqlSocketPath())
-		case sysvars.Collation.Name:
-			name := ""
-			if e.collation != nil && e.collation.DefaultCollation != nil {
-				name = e.collation.DefaultCollation.Name()
-			}
-			bindVars[key] = sqltypes.StringBindVariable(name)
 		}
 	}
 
@@ -913,10 +831,16 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			filter := show.ShowTablesOpt.Filter
 
 			if filter.Like != "" {
-				likeRexep := sqlparser.LikeToRegexp(filter.Like)
+				shardLikeRexep := sqlparser.LikeToRegexp(filter.Like)
 
+				if strings.Contains(filter.Like, "/") {
+					keyspaceLikeRexep := sqlparser.LikeToRegexp(strings.Split(filter.Like, "/")[0])
+					keyspaceFilters = append(keyspaceFilters, func(ks string) bool {
+						return keyspaceLikeRexep.MatchString(ks)
+					})
+				}
 				shardFilters = append(shardFilters, func(ks string, shard *topodatapb.ShardReference) bool {
-					return likeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
+					return shardLikeRexep.MatchString(topoproto.KeyspaceShardString(ks, shard.Name))
 				})
 
 				return keyspaceFilters, shardFilters
@@ -1679,15 +1603,21 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	switch stmtType {
 	case sqlparser.StmtSelect:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
+	case sqlparser.StmtShow:
+		qr, err := e.handlePrepare(ctx, safeSession, sql, bindVars, logStats)
+		if err == nil {
+			return qr, nil
+		}
+		if err == planbuilder.ErrPlanNotSupported {
+			res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+			if err == nil {
+				return res.Fields, nil
+			}
+		}
+		return nil, err
 	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment, sqlparser.StmtExplain, sqlparser.StmtFlush:
 		return nil, nil
-	case sqlparser.StmtShow:
-		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		if err != nil {
-			return nil, err
-		}
-		return res.Fields, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unrecognized prepare statement: %s", sql)
 }

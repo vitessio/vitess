@@ -60,7 +60,7 @@ func TestTabletGatewayExecuteBatch(t *testing.T) {
 
 func TestTabletGatewayExecuteStream(t *testing.T) {
 	testTabletGatewayGeneric(t, func(tg *TabletGateway, target *querypb.Target) error {
-		err := tg.StreamExecute(context.Background(), target, "query", nil, 0, nil, func(qr *sqltypes.Result) error {
+		err := tg.StreamExecute(context.Background(), target, "query", nil, 0, 0, nil, func(qr *sqltypes.Result) error {
 			return nil
 		})
 		return err

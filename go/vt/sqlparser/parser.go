@@ -25,15 +25,12 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// MySQLServerVersion is what Vitess will present as it's version during the connection handshake,
-// and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
-// a specific MySQL version with the vitess version appended to it
-var MySQLServerVersion = flag.String("mysql_server_version", "", "MySQL server version to advertise.")
 var versionFlagSync sync.Once
 
 // parserPool is a pool for parser objects.
@@ -110,8 +107,8 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			if *MySQLServerVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(*MySQLServerVersion)
+			if *servenv.MySQLServerVersion != "" {
+				convVersion, err := convertMySQLVersionToCommentVersion(*servenv.MySQLServerVersion)
 				if err != nil {
 					log.Error(err)
 				} else {

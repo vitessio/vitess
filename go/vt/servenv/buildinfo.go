@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var (
@@ -87,8 +86,8 @@ func (v *versionInfo) String() string {
 }
 
 func (v *versionInfo) MySQLVersion() string {
-	if *sqlparser.MySQLServerVersion != "" {
-		return *sqlparser.MySQLServerVersion
+	if *MySQLServerVersion != "" {
+		return *MySQLServerVersion
 	}
 	return "5.7.9-vitess-" + v.version
 }

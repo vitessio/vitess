@@ -272,7 +272,7 @@ func waitForCatchUp(
 ) error {
 	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, source.Alias)
 	// Find the primary position of the previous primary
-	pos, err := tmc.MasterPosition(ctx, source)
+	pos, err := tmc.PrimaryPosition(ctx, source)
 	if err != nil {
 		return err
 	}
