@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -37,8 +36,8 @@ import (
 // The criteria for the new primary-elect are (preferably) to be in the same
 // cell as the current primary, and to be different from avoidPrimaryAlias. The
 // tablet with the most advanced replication position is chosen to minimize the
-// amount of time spent catching up with the current primary.
-//
+// amount of time spent catching up with the current primary. Further ties are
+// broken by the durability rules.
 // Note that the search for the most advanced replication position will race
 // with transactions being executed on the current primary, so when all tablets
 // are at roughly the same position, then the choice of new primary-elect will
@@ -63,8 +62,12 @@ func ChooseNewPrimary(
 	}
 
 	var (
-		searcher = topotools.NewMaxReplicationPositionSearcher(tmc, logger, waitReplicasTimeout)
-		wg       sync.WaitGroup
+		wg sync.WaitGroup
+		// mutex to secure the next two fields from concurrent access
+		mu sync.Mutex
+		// tablets that are possible candidates to be the new primary and their positions
+		validTablets    []*topodatapb.Tablet
+		tabletPositions []mysql.Position
 	)
 
 	for _, tablet := range tabletMap {
@@ -81,17 +84,54 @@ func ChooseNewPrimary(
 
 		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
-			searcher.ProcessTablet(ctx, tablet)
+			// find and store the positions for the tablet
+			pos, err := findPositionForTablet(ctx, tablet, logger, tmc, waitReplicasTimeout)
+			mu.Lock()
+			defer mu.Unlock()
+			if err == nil {
+				validTablets = append(validTablets, tablet)
+				tabletPositions = append(tabletPositions, pos)
+			}
 		}(tablet.Tablet)
 	}
 
 	wg.Wait()
 
-	if maxPosTablet := searcher.MaxPositionTablet(); maxPosTablet != nil {
-		return maxPosTablet.Alias, nil
+	// return nothing if there are no valid tablets available
+	if len(validTablets) == 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	// sort the tablets for finding the best primary
+	err := sortTabletsForReparent(validTablets, tabletPositions)
+	if err != nil {
+		return nil, err
+	}
+
+	return validTablets[0].Alias, nil
+}
+
+// findPositionForTablet processes the replication position for a single tablet and
+// returns it. It is safe to call from multiple goroutines.
+func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (mysql.Position, error) {
+	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+
+	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
+	defer cancel()
+
+	status, err := tmc.ReplicationStatus(ctx, tablet)
+	if err != nil {
+		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		return mysql.Position{}, err
+	}
+
+	pos, err := mysql.DecodePosition(status.Position)
+	if err != nil {
+		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		return mysql.Position{}, err
+	}
+
+	return pos, nil
 }
 
 // FindCurrentPrimary returns the current primary tablet of a shard, if any. The

@@ -25,8 +25,8 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// TestErsInterMediateSourceSorter tests that the sorting for ERS works correctly
-func TestErsInterMediateSourceSorter(t *testing.T) {
+// TestReparentSorter tests that the sorting for tablets works correctly
+func TestReparentSorter(t *testing.T) {
 	sid1 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := mysql.SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
 	cell1 := "cell1"
@@ -126,7 +126,7 @@ func TestErsInterMediateSourceSorter(t *testing.T) {
 	require.NoError(t, err)
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := sortTabletsForERS(testcase.tablets, testcase.positions)
+			err := sortTabletsForReparent(testcase.tablets, testcase.positions)
 			if testcase.containsErr != "" {
 				require.EqualError(t, err, testcase.containsErr)
 			} else {
