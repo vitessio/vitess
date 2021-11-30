@@ -129,6 +129,12 @@ var (
 		input:  "CREATE TABLE t2 (b LONGTEXT DEFAULT ('abc'))",
 		output: "create table t2 (\n\tb LONGTEXT default ('abc')\n)",
 	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT null)",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
+		input:  "CREATE TABLE t2 (b JSON DEFAULT (null))",
+		output: "create table t2 (\n\tb JSON default null\n)",
+	}, {
 		input:  "CREATE TABLE t2 (b JSON DEFAULT '{name:abc}')",
 		output: "create table t2 (\n\tb JSON default ('{name:abc}')\n)",
 	}, {

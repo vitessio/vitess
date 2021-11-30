@@ -1586,6 +1586,12 @@ func (es *ExtractedSubquery) updateAlternative() {
 }
 
 func defaultRequiresParens(ct *ColumnType) bool {
+	// in 5.7 null value should be without parenthesis, in 8.0 it is allowed either way.
+	// so it is safe to not keep parenthesis around null.
+	if _, isNullVal := ct.Options.Default.(*NullVal); isNullVal {
+		return false
+	}
+
 	switch strings.ToUpper(ct.Type) {
 	case "TINYTEXT", "TEXT", "MEDIUMTEXT", "LONGTEXT", "TINYBLOB", "BLOB", "MEDIUMBLOB",
 		"LONGBLOB", "JSON", "GEOMETRY", "POINT",
@@ -1596,9 +1602,8 @@ func defaultRequiresParens(ct *ColumnType) bool {
 
 	_, isLiteral := ct.Options.Default.(*Literal)
 	_, isBool := ct.Options.Default.(BoolVal)
-	_, isNullVal := ct.Options.Default.(*NullVal)
 
-	if isLiteral || isNullVal || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
+	if isLiteral || isBool || isExprAliasForCurrentTimeStamp(ct.Options.Default) {
 		return false
 	}
 
